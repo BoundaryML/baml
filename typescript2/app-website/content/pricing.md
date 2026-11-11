@@ -45,9 +45,9 @@ Never billed: spans and their timings, profiles, function names, source and type
 
 A lot of our engineering goes into shrinking what you send over the wire. A few examples of many:
 
-- Repeated values: every value is stored under a hash of its content, so a value sent again is already stored and isn't billed again.
-- Images: images are values too, so the same logo or receipt sent again is stored and billed once.
-- Field names: a class's schema is stored once and never billed; each value points at it with short IDs, so a field's name never reaches the bill.
+- What you pay for: the content of your values, like `4812`, not the field name `ticket_id`. A class's schema is stored once and never billed, and so is each call's timing and identity.
+- Images: images are fingerprinted by their content, so the same logo on every call is stored and billed once.
+- Repeated values: every value is fingerprinted by its content, so a prompt sent again matches what's stored and isn't billed again.
 
 ## Source and license
 

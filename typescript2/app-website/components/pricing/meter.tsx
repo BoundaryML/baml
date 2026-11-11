@@ -428,7 +428,14 @@ function Images({ step }: { step: number }) {
   );
 }
 
-// ---------- field names ----------
+// ---------- what counts ----------
+
+// The call around the value: its timing and identity, recorded and stored, never billed.
+const CALL = [
+  { label: 'function', value: 'draft_reply(ticket)' },
+  { label: 'started', value: '10:42:07.118' },
+  { label: 'took', value: '1.84s' },
+];
 
 const FIELDS = [
   { bytes: 4, name: 'ticket_id', value: '4812' },
@@ -437,21 +444,43 @@ const FIELDS = [
   { bytes: 21, name: 'body', value: '"My refund came twice."' },
 ];
 const LONG = 'customer_email_address_on_file';
-const FIELD_STEPS = FIELDS.length + 1;
+// The call info, one step per field, then the rename.
+const COUNT_STEPS = FIELDS.length + 2;
 
-function Fields({ step }: { step: number }) {
-  const renamed = step > FIELDS.length;
+function Counts({ step }: { step: number }) {
+  const callOn = step >= 1;
+  const fieldsOn = Math.max(0, step - 1);
+  const renamed = step > FIELDS.length + 1;
   const name = (i: number) =>
     renamed && i === 1 ? LONG : (FIELDS[i]?.name ?? '');
-  const billed = FIELDS.slice(0, step).reduce((sum, f) => sum + f.bytes, 0);
+  const billed = FIELDS.slice(0, fieldsOn).reduce((sum, f) => sum + f.bytes, 0);
+  const label = (text: string) => (
+    <p className="font-sans text-[11px] text-muted uppercase tracking-[0.08em]">
+      {text}
+    </p>
+  );
   return (
     <Scene
       billed={billed}
       left={
         <Pane title="What your program records">
-          <div className="text-muted">Ticket {'{'}</div>
+          <div
+            className="flex items-center justify-between gap-3 transition-opacity duration-500"
+            style={{ opacity: callOn ? 1 : 0.25 }}
+          >
+            <span className="min-w-0 truncate text-muted">
+              draft_reply(ticket) · 1.84s
+            </span>
+            <span
+              className="shrink-0 font-sans text-[12px] text-muted transition-opacity duration-300"
+              style={{ opacity: callOn ? 1 : 0 }}
+            >
+              free
+            </span>
+          </div>
+          <div className="text-muted">ticket = Ticket {'{'}</div>
           {FIELDS.map((f, i) => {
-            const on = i < step;
+            const on = i < fieldsOn;
             return (
               <div
                 className="flex items-center justify-between gap-3 transition-opacity duration-500"
@@ -483,34 +512,42 @@ function Fields({ step }: { step: number }) {
       }
       right={
         <Pane title="What we store">
-          <p className="font-sans text-[11px] text-muted uppercase tracking-[0.08em]">
-            Schema, once, free
-          </p>
-          <div className="text-muted">class Ticket {'{'}</div>
-          {FIELDS.map((f, i) => (
-            <div className="whitespace-pre text-muted" key={f.name}>
-              {'  '}
-              <span className="text-ink-2">{i + 1}</span>{' '}
-              <span
-                className={`transition-colors duration-500 ${renamed && i === 1 ? 'text-clover' : ''}`}
-              >
-                {name(i)}
+          {label('The call, free')}
+          <div
+            className="transition-opacity duration-500"
+            style={{ opacity: callOn ? 1 : 0.25 }}
+          >
+            {CALL.map((c) => (
+              <div className="truncate whitespace-pre text-muted" key={c.label}>
+                {c.label.padEnd(9)}
+                <span className="text-ink-2">{c.value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2">{label('The schema, once, free')}</div>
+          <div className="break-words text-muted">
+            class Ticket {'{ '}
+            {FIELDS.map((f, i) => (
+              <span key={f.name}>
+                <span className="text-ink-2">{i + 1}</span>{' '}
+                <span
+                  className={`transition-colors duration-500 ${renamed && i === 1 ? 'text-clover' : ''}`}
+                >
+                  {name(i)}
+                </span>
+                {i < FIELDS.length - 1 ? ', ' : ''}
               </span>
-            </div>
-          ))}
-          <div className="text-muted">{'}'}</div>
-          <p className="mt-2 font-sans text-[11px] text-muted uppercase tracking-[0.08em]">
-            The value, billed
-          </p>
-          <div className="truncate">
-            <span className="text-muted">Ticket {'{ '}</span>
-            {FIELDS.slice(0, step).map((f, i) => (
+            ))}
+            {' }'}
+          </div>
+          <div className="mt-2">{label('The values, billed')}</div>
+          <div className="break-words">
+            <span className="text-muted">{'{ '}</span>
+            {FIELDS.slice(0, fieldsOn).map((f, i) => (
               <span key={f.name}>
                 <span className="text-ink-2">{i + 1}:</span>
                 <span className="text-clover">{f.value}</span>
-                {i < Math.min(step, FIELDS.length) - 1 && (
-                  <span className="text-muted">, </span>
-                )}
+                {i < fieldsOn - 1 && <span className="text-muted">, </span>}
               </span>
             ))}
             <span className="text-muted">{' }'}</span>
@@ -519,8 +556,10 @@ function Fields({ step }: { step: number }) {
       }
       say={
         renamed
-          ? 'Renamed to customer_email_address_on_file: the schema changes once, the value doesn’t, and neither does the bill.'
-          : 'The schema is stored once and never billed. Each value points at it with short IDs, so you pay for 4812, not for ticket_id.'
+          ? 'Renamed to customer_email_address_on_file: the schema changes once, the values don’t, and neither does the bill.'
+          : step <= 1
+            ? 'Every call’s timing and identity are recorded and stored for free.'
+            : 'You pay for the content: 4812, not ticket_id. The schema is stored once, and each value points at it with a short ID.'
       }
     />
   );
@@ -566,9 +605,9 @@ function Scene({
 }
 
 const SCENES = [
-  { steps: SENT.length, title: 'Repeated values', View: Repeated },
+  { steps: COUNT_STEPS, title: 'What you pay for', View: Counts },
   { steps: SHOTS.length, title: 'Images', View: Images },
-  { steps: FIELD_STEPS, title: 'Field names', View: Fields },
+  { steps: SENT.length, title: 'Repeated values', View: Repeated },
 ];
 
 /** The two scenes as tabs: they play in turn while on screen, and a click jumps to one. */
