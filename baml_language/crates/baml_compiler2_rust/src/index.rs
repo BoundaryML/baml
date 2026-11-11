@@ -52,6 +52,9 @@ pub(crate) struct ProgramIndex<'p> {
     /// Byte array literal → its pooled `Object::Uint8Array` template, which
     /// bytecode deep-copies on every evaluation.
     pub(crate) byte_arrays: HashMap<Vec<u8>, usize>,
+    /// Classes declared by a package other than the standard library's:
+    /// their values are always shared-format instances.
+    user_classes: std::collections::HashSet<usize>,
 }
 
 impl<'p> ProgramIndex<'p> {
@@ -75,6 +78,14 @@ impl<'p> ProgramIndex<'p> {
             generic_functions: Vec::new(),
             bigints: HashMap::new(),
             byte_arrays: HashMap::new(),
+            user_classes: program
+                .packages
+                .iter()
+                .filter(|package| {
+                    matches!(package.kind, bex_vm_types::types::PackageKind::Ordinary)
+                })
+                .flat_map(|package| package.classes.values().map(|object| object.raw()))
+                .collect(),
         };
         index.index_objects(program);
         index.index_globals(program);
@@ -279,6 +290,12 @@ impl<'p> ProgramIndex<'p> {
 
     pub(crate) fn class_at(&self, head: &baml_type::DeclName) -> Option<(usize, usize)> {
         self.class_fields(class_head_coords(head))
+    }
+
+    /// Whether `class` is declared by a package other than the standard
+    /// library's.
+    pub(crate) fn is_user_class(&self, class: usize) -> bool {
+        self.user_classes.contains(&class)
     }
 
     pub(crate) fn interface_at(&self, head: &baml_type::DeclName) -> Option<usize> {

@@ -116,6 +116,9 @@ pub(crate) struct Generator<'a, 'db> {
     /// Classes whose class word the body binds in its prologue, for direct
     /// field access (`place::direct_load`).
     pub(crate) class_words: BTreeSet<usize>,
+    /// Classes whose words only debug builds of the generated code read:
+    /// the assertion on a trusted field access (`class_checked!`).
+    pub(crate) debug_class_words: BTreeSet<usize>,
     /// Whether the body suspends where its analysis said it would not: a
     /// virtual call whose targets did not all compile. It is then not plain.
     pub(crate) suspends_late: bool,
@@ -160,6 +163,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             structured: None,
             static_value_sites: Vec::new(),
             class_words: BTreeSet::new(),
+            debug_class_words: BTreeSet::new(),
             suspends_late: false,
         }
     }
@@ -338,7 +342,7 @@ impl<'db> Generator<'_, 'db> {
             .params
             .iter()
             .enumerate()
-            .map(|(i, repr)| coerce(&format!("args[{i}]"), Repr::Value, *repr))
+            .map(|(i, repr)| self.boxed_param(i, *repr))
             .collect();
         self.emit_line(&format!(
             "#[inline]\npub fn {symbol}(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> R<Value> {{"
@@ -400,19 +404,46 @@ impl<'db> Generator<'_, 'db> {
         }
         let prologue = self.out.len();
         self.stmts(&stmts)?;
-        let words = self.class_words.iter().fold(String::new(), |mut out, class| {
-            let _ = writeln!(
-                out,
-                "let k{class}: u64 = bex_vm::compiled_rt::class_word(vm.record_object(fr, ObjectIndex::from_raw({class})));"
-            );
-            out
-        });
+        let words = self.class_word_bindings();
         self.out.insert_str(prologue, &words);
         // Every path ends in an `Exit`; this keeps the body well-typed.
         self.emit_line("#[allow(unreachable_code)]");
         self.emit_line(&format!("Ok({})", signature.ret.default_value()));
         self.emit_line("}");
         Ok(std::mem::take(&mut self.out))
+    }
+
+    /// The prologue's class-word bindings. A word only the debug assertion
+    /// reads is looked up in debug builds of the generated code only.
+    fn class_word_bindings(&self) -> String {
+        let word = |class: &usize| {
+            format!("bex_vm::compiled_rt::class_word(vm.record_object(fr, ObjectIndex::from_raw({class})))")
+        };
+        let words = self.class_words.iter().map(|class| (class, word(class)));
+        let debug_only = self.debug_class_words.difference(&self.class_words);
+        let debug = debug_only.map(|class| {
+            (class, format!("if cfg!(debug_assertions) {{ {} }} else {{ 0 }}", word(class)))
+        });
+        words.chain(debug).fold(String::new(), |mut out, (class, value)| {
+            let _ = writeln!(out, "let k{class}: u64 = {value};");
+            out
+        })
+    }
+
+    /// The boxed entry's argument `i`: a class-typed parameter whose fields
+    /// the body reads in place is checked once here, as it arrives from the
+    /// VM or the host (`BexVm::entering_class`).
+    fn boxed_param(&self, i: usize, repr: Repr) -> String {
+        let arg = format!("args[{i}]");
+        let class = (repr == Repr::Value)
+            .then(|| self.local_class(baml_compiler2_mir::Local(i + 1)))
+            .flatten();
+        match class {
+            Some(class) => format!(
+                "{{ let word = bex_vm::compiled_rt::class_word(vm.record_object(fr, ObjectIndex::from_raw({class}))); vm.entering_class({arg}, word)? }}"
+            ),
+            None => coerce(&arg, Repr::Value, repr),
+        }
     }
 
     /// Hook prologues need their arguments in leading slots across suspension.
@@ -588,7 +619,7 @@ impl<'db> Generator<'_, 'db> {
         let (destination, _) = self.continuation(block)?;
         let request = self.request(block, terminator)?;
         let call = self.fallible(block, &request)?;
-        let store = self.store(block, &destination, &Expr::new(call, Repr::Value))?;
+        let store = self.store_entering(block, &destination, &Expr::new(call, Repr::Value))?;
         self.emit_statement(&store);
         Ok(())
     }

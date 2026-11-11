@@ -64,6 +64,18 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
+    /// Whether a direct call to `callee` runs a compiled body.
+    pub(super) fn calls_compiled(&self, callee: &Operand<'db>) -> bool {
+        let Operand::Constant(Constant::Function(func)) = callee else {
+            return false;
+        };
+        self.index
+            .function(self.db, *func)
+            .is_some_and(|(object, info)| {
+                matches!(info.kind, FunctionKind::Bytecode) && self.symbols.contains_key(&object)
+            })
+    }
+
     /// A builtin call compiled code makes without the builtin's glue: `x ==
     /// null` as a bit test, a scalar body called directly, or a push onto a
     /// list of known element type. `args` are the value arguments.

@@ -618,6 +618,81 @@ pub fn instance_class_word(value: Value) -> u64 {
     }
 }
 
+impl BexVm {
+    /// `value` entering compiled code from a dynamic source (a call the VM
+    /// made, a builtin's result, a boxed entry's argument) into a local typed
+    /// by the class whose [`class_word`] is `class`. Compiled field access
+    /// trusts that type ([`FieldBase::typed`]), so this is where it is
+    /// checked, once. Null passes: the field access rejects it as the
+    /// interpreter's does. So does an omitted argument, which the body
+    /// replaces with the parameter's default before any access.
+    ///
+    /// # Errors
+    /// For a value that is not an instance, the interpreter's `TypeError`
+    /// for a non-instance operand. For an instance of another class, which
+    /// the interpreter does not check, a `CompiledBody` error naming both.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub fn entering_class(&self, value: Value, class: u64) -> Result<Value, Box<VmError>> {
+        if value.is_null()
+            || instance_class_word(value) == class
+            || value.bits() == Value::OMITTED_ARG.bits()
+        {
+            return Ok(value);
+        }
+        Err(self.class_boundary_error(value, class))
+    }
+
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "boxing out of line keeps the allocation off the inlined fast path"
+    )]
+    #[cold]
+    #[inline(never)]
+    fn class_boundary_error(&self, value: Value, class: u64) -> Box<VmError> {
+        let got = instance_class_word(value);
+        if got == 0 {
+            return self.type_error(ObjectType::Instance, value);
+        }
+        Box::new(
+            VmInternalError::CompiledBody {
+                message: format!(
+                    "an instance of `{}` entered compiled code where `{}` was expected",
+                    self.class_word_name(got),
+                    self.class_word_name(class),
+                ),
+            }
+            .into(),
+        )
+    }
+
+    /// The name of the class whose [`class_word`] is `word`.
+    fn class_word_name(&self, word: u64) -> String {
+        // SAFETY: a class word is the bits of a `Value` naming a class.
+        let class = unsafe { Value::from_bits(word) };
+        match class.as_object_ptr().map(|ptr| self.get_object(ptr)) {
+            Some(Object::Class(class)) => class.name().to_string(),
+            _ => String::from("<unknown class>"),
+        }
+    }
+}
+
+/// Compiled code's debug check before a field access it trusts: `value` is
+/// null or an instance of the class whose [`class_word`] is `class`. Release
+/// builds of generated code never call it (`class_checked!` in the
+/// generated prelude).
+///
+/// # Panics
+/// When `value` is another value: a boundary check was missed.
+#[must_use]
+pub fn debug_class(value: Value, class: u64) -> Value {
+    assert!(
+        value.is_null() || instance_class_word(value) == class,
+        "compiled code accessed a field of a value whose class is not its static type",
+    );
+    value
+}
+
 impl FieldBase {
     /// `value` as an instance of the class whose [`class_word`] is `class`,
     /// or `None` (null, another object, another class) for the generic path.

@@ -15,6 +15,16 @@ use bex_vm::{BexVm, NativeFunction, CompiledBodyTable, errors::VmError};
 use bex_vm::compiled_rt::{CompiledEntry, FrameRecord, Step};
 use bex_vm_types::{BinOp, CmpOp, GlobalIndex, ObjectIndex, RealizedTy, Value};
 type R<T> = Result<T, Box<VmError>>;
+/// A value whose static class compiled field access trusts, asserted to be
+/// of that class in debug builds; the class word is unused otherwise.
+#[cfg(debug_assertions)]
+macro_rules! class_checked {
+    ($value:expr, $class:ident) => { bex_vm::compiled_rt::debug_class($value, $class) };
+}
+#[cfg(not(debug_assertions))]
+macro_rules! class_checked {
+    ($value:expr, $class:ident) => { $value };
+}
 ";
 
 pub(crate) fn render_module(

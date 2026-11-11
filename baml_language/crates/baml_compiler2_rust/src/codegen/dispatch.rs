@@ -53,7 +53,7 @@ impl<'db> Generator<'_, 'db> {
             let value = coerce(&call.code, call.repr, repr);
             let _ = write!(code, "if w == {word} {{ {bindings} {value} }} else ");
         }
-        let fallback = self.vm_dispatch(block, terminator)?;
+        let fallback = self.checked_dispatch(block, terminator, &destination, repr)?;
         let _ = write!(code, "{{ {} }}", coerce(&fallback, Repr::Value, repr));
         let result = format!("r{}", self.temps);
         self.temps += 1;
@@ -64,6 +64,28 @@ impl<'db> Generator<'_, 'db> {
         let store = self.store(block, &destination, &Expr::atom(result, repr))?;
         self.emit_statement(&store);
         Ok(true)
+    }
+
+    /// [`Self::vm_dispatch`], whose target is not one of the compiled ones:
+    /// its result enters, checked when `destination` trusts its class.
+    fn checked_dispatch(
+        &mut self,
+        block: BlockId,
+        terminator: &Terminator<'db>,
+        destination: &baml_compiler2_mir::Place,
+        repr: Repr,
+    ) -> Gen<String> {
+        let fallback = self.vm_dispatch(block, terminator)?;
+        let class = match destination {
+            baml_compiler2_mir::Place::Local(local) if repr == Repr::Value => {
+                self.local_class(*local)
+            }
+            _ => None,
+        };
+        match class {
+            Some(class) => self.entering(block, &fallback, class),
+            None => Ok(fallback),
+        }
     }
 
     /// The targets with their bodies' symbols, if every one is compiled.

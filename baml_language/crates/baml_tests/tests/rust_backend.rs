@@ -775,3 +775,53 @@ function Boundary() -> int { let map = { "present": 1 }; map["missing"] }
         }
     }
 }
+
+/// Compiled field access trusts a local's class type, so every place a value
+/// of that type enters from a dynamic source checks it once
+/// (`vm.entering_class`), and every trusted access asserts it in debug builds
+/// (`class_checked!`). The runtime half is `compiled_rt`'s boundary tests.
+#[test]
+fn dynamic_sources_into_class_locals_are_checked_once() {
+    const SOURCE: &str = r#"
+class Point { x int y int }
+interface Maker { function make(self) -> Point throws never }
+class Ones { n int implements Maker { function make(self) -> Point throws never { Point { x: self.n, y: 1 } } } }
+class Twos { n int implements Maker { function make(self) -> Point throws never { Point { x: self.n, y: 2 } } } }
+function from_param(p: Point) -> int { p.x }
+function from_dispatch(m: Maker) -> int { let p = m.make(); p.y }
+function from_json(text: string) -> int { let p = baml.json.decode<Point>(text); p.x }
+function from_compiled() -> int { let p = Point { x: 1, y: 2 }; let q = same(p); q.y }
+function same(p: Point) -> Point { p }
+function uses() -> int { from_dispatch(Ones { n: 1 }) + from_dispatch(Twos { n: 2 }) }
+"#;
+    let db = baml_test_support::setup_test_db(SOURCE);
+    let program = lower(&db, OptLevel::Two);
+    let module = render(&db, &program, OptLevel::Two, None);
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+
+    // The boxed entry, which the VM and the host call, checks the argument.
+    let symbol = &module
+        .functions
+        .iter()
+        .find(|f| f.display == "user.from_param")
+        .expect("compiled")
+        .symbol;
+    let entry_at = module.source.find(&format!("pub fn {symbol}(")).unwrap();
+    let entry = &module.source[entry_at..entry_at + module.source[entry_at..].find("\n}").unwrap()];
+    assert!(entry.contains("vm.entering_class(args[0], word)?"), "{entry}");
+
+    // A trusted access asserts in debug builds only; its word is bound so.
+    let body = body_of(&module, "user.from_param");
+    assert!(body.contains("FieldBase::typed(class_checked!("), "{body}");
+    assert!(body.contains("if cfg!(debug_assertions) { bex_vm::compiled_rt::class_word("), "{body}");
+    assert!(!body.contains("vm.entering_class"), "{body}");
+
+    // A dispatch's VM fallback and a generic callee's `T` enter; a compiled
+    // non-generic callee's result does not.
+    for name in ["user.from_dispatch", "user.from_json"] {
+        let body = body_of(&module, name);
+        assert_eq!(body.matches("vm.entering_class(").count(), 1, "{name}: {body}");
+    }
+    let body = body_of(&module, "user.from_compiled");
+    assert!(!body.contains("vm.entering_class"), "{body}");
+}

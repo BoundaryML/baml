@@ -311,18 +311,7 @@ impl<'db> Generator<'_, 'db> {
                     self.suspension(id)?;
                 }
             }
-            Terminator::Call {
-                callee,
-                args,
-                ntypeargs,
-                argument_layout,
-                destination,
-                ..
-            } => {
-                let call = self.call(id, callee, args, *ntypeargs, argument_layout.as_ref())?;
-                let code = self.store(id, destination, &call)?;
-                self.emit_statement(&code);
-            }
+            terminator @ Terminator::Call { .. } => self.direct_call(id, terminator)?,
             Terminator::ShortCircuit {
                 operand,
                 kind,
@@ -342,6 +331,32 @@ impl<'db> Generator<'_, 'db> {
             | Terminator::Await { .. }
             | Terminator::AwaitAny { .. } => self.suspension(id)?,
         }
+        Ok(())
+    }
+
+    /// A call terminator that does not suspend, stored to its destination.
+    fn direct_call(&mut self, id: BlockId, terminator: &Terminator<'db>) -> Gen<()> {
+        let Terminator::Call {
+            callee,
+            args,
+            ntypeargs,
+            argument_layout,
+            destination,
+            ..
+        } = terminator
+        else {
+            unreachable!("a call terminator");
+        };
+        let call = self.call(id, callee, args, *ntypeargs, argument_layout.as_ref())?;
+        // A compiled callee's result is typed by its body; a builtin's
+        // enters from the VM, and so does a generic callee's `T`
+        // (`json.decode<T>` returns the VM's decode).
+        let code = if self.calls_compiled(callee) && *ntypeargs == 0 {
+            self.store(id, destination, &call)?
+        } else {
+            self.store_entering(id, destination, &call)?
+        };
+        self.emit_statement(&code);
         Ok(())
     }
 

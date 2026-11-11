@@ -1050,8 +1050,12 @@ publish = false
             "lto = false\ncodegen-units = 16\nopt-level = 3\nstrip = \"symbols\"\n\n\
              [profile.release.package.\"*\"]\ncodegen-units = 1\n"
         }
+        // The generated code's own debug assertions (the class check on
+        // every trusted field access) run in the profile tests pack with;
+        // the prebuilt runtime is unchanged.
         RustProfile::Fast => {
-            "lto = false\ncodegen-units = 16\nopt-level = 1\nstrip = \"none\"\ndebug = \"line-tables-only\"\n"
+            "lto = false\ncodegen-units = 16\nopt-level = 1\nstrip = \"none\"\ndebug = \"line-tables-only\"\n\n\
+             [profile.release.package.baml_rust_program]\ndebug-assertions = true\n"
         }
     });
     if profile == RustProfile::Release {
@@ -1744,6 +1748,8 @@ mod tests {
         assert_eq!(release["opt-level"].as_integer(), Some(1));
         assert_eq!(release["debug"].as_str(), Some("line-tables-only"));
         assert_eq!(release["panic"].as_str(), Some("unwind"));
+        let generated = &release["package"]["baml_rust_program"];
+        assert_eq!(generated["debug-assertions"].as_bool(), Some(true));
     }
 
     #[test]

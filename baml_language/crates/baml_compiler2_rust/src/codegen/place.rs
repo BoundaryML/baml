@@ -13,6 +13,8 @@ use crate::{admit::Rejection, analysis::Repr, render::coerce};
 /// A field of a base whose class the emitter knows, by the base's static
 /// type: the field's slot.
 struct KnownField {
+    /// The class's object index.
+    class: usize,
     offset: u32,
     kind: SlotKind,
 }
@@ -211,16 +213,65 @@ impl<'db> Generator<'_, 'db> {
             return None;
         };
         // A nullable base reaches a field access only where it is not null;
-        // the access's class check takes the generic path when it is.
+        // the access's null check takes the generic path when it is.
+        let class = self.local_class(*local)?;
+        let slot = self.index.field_slot(class, field)?;
+        Some(KnownField {
+            class,
+            offset: slot.offset,
+            kind: slot.kind,
+        })
+    }
+
+    /// The class of `local` when its static type is a user class (or a
+    /// nullable one): a local whose fields compiled code reads in place,
+    /// trusting the type. Values reach it from a dynamic source only through
+    /// [`Self::store_entering`], which checks the class. A standard-library
+    /// class may stand for a value that is not an instance (`baml.String`'s
+    /// `self` is a string), so its fields take the generic path.
+    pub(super) fn local_class(&self, local: baml_compiler2_mir::Local) -> Option<usize> {
         let RuntimeTy::Class(name, _) = self.body.locals[local.0].ty.strip_null() else {
             return None;
         };
         let (class, _) = self.index.class_at(&name)?;
-        let slot = self.index.field_slot(class, field)?;
-        Some(KnownField {
-            offset: slot.offset,
-            kind: slot.kind,
-        })
+        self.index.is_user_class(class).then_some(class)
+    }
+
+    /// `base` for a trusted field access: asserted to be an instance of
+    /// `class` in debug builds of the generated code.
+    fn checked_base(&mut self, base: &str, class: usize) -> String {
+        self.debug_class_words.insert(class);
+        format!("class_checked!({base}, k{class})")
+    }
+
+    /// `code`, a `Value` arriving from a dynamic source, checked once against
+    /// the class `class` its destination trusts (`BexVm::entering_class`).
+    pub(super) fn entering(&mut self, block: BlockId, code: &str, class: usize) -> Gen<String> {
+        let word = self.class_word(class);
+        // Bound first: the check borrows the VM the value's code mutates.
+        self.fallible(
+            block,
+            &format!("{{ let entering = {code}; vm.entering_class(entering, {word}) }}"),
+        )
+    }
+
+    /// [`Self::store`] of a value from a dynamic source (a call the VM makes,
+    /// a builtin's result): a local of a trusted class type checks it first.
+    pub(super) fn store_entering(
+        &mut self,
+        block: BlockId,
+        place: &Place,
+        value: &Expr,
+    ) -> Gen<String> {
+        let class = match place {
+            Place::Local(local) if value.repr == Repr::Value => self.local_class(*local),
+            _ => None,
+        };
+        let Some(class) = class else {
+            return self.store(block, place, value);
+        };
+        let checked = self.entering(block, &value.code, class)?;
+        self.store(block, place, &Expr::new(checked, Repr::Value))
     }
 
     /// The bound class word of `class`, bound in the body's prologue.
@@ -240,12 +291,13 @@ impl<'db> Generator<'_, 'db> {
     ) -> Gen<Expr> {
         let base = self.load(block, base)?;
         let base = self.value_arg(&base);
+        let checked = self.checked_base(&base, known.class);
         let (fast, repr) = slot_read(known.kind, known.offset);
         let slow = self.fallible(block, &format!("vm.load_field({base}, {field})"))?;
         let slow = coerce(&slow, Repr::Value, repr);
         Ok(Expr::new(
             format!(
-                "(match unsafe {{ bex_vm::compiled_rt::FieldBase::typed({base}) }} {{ Some(f) => {fast}, None => {slow} }})"
+                "(match unsafe {{ bex_vm::compiled_rt::FieldBase::typed({checked}) }} {{ Some(f) => {fast}, None => {slow} }})"
             ),
             repr,
         ))
@@ -275,8 +327,9 @@ impl<'db> Generator<'_, 'db> {
             &format!("{{ let b = {boxed}; vm.store_field({base}, {field}, b) }}"),
         )?;
         let fast = self.slot_write(block, known.kind, known.offset, &value, &boxed, &slow)?;
+        let checked = self.checked_base(&base, known.class);
         Ok(format!(
-            "match unsafe {{ bex_vm::compiled_rt::FieldBase::typed({base}) }} {{ Some(f) => {{ {fast} }}, None => {{ {slow}; }} }}"
+            "match unsafe {{ bex_vm::compiled_rt::FieldBase::typed({checked}) }} {{ Some(f) => {{ {fast} }}, None => {{ {slow}; }} }}"
         ))
     }
 

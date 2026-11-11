@@ -1762,6 +1762,9 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
 mod error_tests;
 
 #[cfg(not(target_arch = "wasm32"))]
+mod boundary_tests;
+
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn call_safepoints_keep_yielding_under_gc_stress() {
     #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
