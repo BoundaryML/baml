@@ -633,11 +633,11 @@ function Scene({
 }) {
   return (
     <>
-      <div className="grid divide-rule md:grid-cols-2 md:divide-x max-md:divide-y">
+      <div className="grid divide-rule md:min-h-[330px] md:grid-cols-2 md:divide-x max-md:divide-y">
         {left}
         {right}
       </div>
-      <div className="grid gap-4 border-t border-rule bg-white/[0.02] px-5 py-4 sm:grid-cols-[auto_auto_minmax(0,1fr)] sm:items-center sm:gap-8">
+      <div className="grid grid-cols-2 gap-4 border-t border-rule bg-white/[0.02] px-5 py-4 sm:grid-cols-[9.5rem_9.5rem_minmax(0,1fr)] sm:items-center sm:gap-6">
         <div>
           <p className="text-[12px] text-muted">Billed</p>
           <p className="mt-0.5 font-display text-[32px] leading-none font-medium text-clover tabular-nums">
@@ -653,7 +653,10 @@ function Scene({
             {size(free)}
           </p>
         </div>
-        <p className="text-[14px] text-head">{say}</p>
+        {/* Fixed widths and height, so nothing shifts as the numbers count up or the line changes. */}
+        <p className="col-span-2 flex min-h-[3.2em] items-center text-[14px] text-head sm:col-span-1">
+          {say}
+        </p>
       </div>
     </>
   );
