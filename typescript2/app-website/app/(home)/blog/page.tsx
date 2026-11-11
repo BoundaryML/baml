@@ -37,8 +37,7 @@ export const metadata: Metadata = {
 // The blog index. It opens on the newest article, then a hand-picked "Start here" row (posts with
 // `featured: true`), the latest release notes, and every other article by date. A filter
 // (`?tags=research`, `?tags=release`, ...) changes only that last list; the sections above it stay. `?tags=article` is the unfiltered
-// view, kept for old links; /changelog redirects to `?tags=release`. Archived posts aren't listed,
-// and neither is anything dated before INDEX_SINCE (./_lib/topics.ts).
+// view, kept for old links; /changelog redirects to `?tags=release`. Archived posts aren't listed.
 
 type Filter = 'all' | 'release' | Topic;
 
