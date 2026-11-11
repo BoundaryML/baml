@@ -430,6 +430,22 @@ impl BexVm {
         shape
     }
 
+    /// `list.push(value)` for a list with descriptor `descriptor`, whose
+    /// element slot kind the emitter knows: the shared list's own push, with
+    /// this thread's allocator for growth. `None` for any other value or a
+    /// value the slot does not take; the builtin's own path then decides.
+    ///
+    /// Replaces, for such a list, the `Array.push` adapter call, which
+    /// boxed its arguments and re-derived the slot kind from the element type
+    /// on every push.
+    #[inline]
+    pub fn push_known(&mut self, list: Value, descriptor: u32, value: SlotValue) -> Option<i64> {
+        ListBase::of(list, descriptor)?;
+        let list = self.expect_list(list.as_object_ptr()?);
+        let len = list.lock(Access::Shared).push(&mut self.tlab, value).ok()?;
+        i64::try_from(len).ok()
+    }
+
     /// A new instance of `shape`, zeroed but for its class slot. The caller
     /// stores every field through the returned base before its next
     /// safepoint: a zeroed tagged field reads as held until stored.

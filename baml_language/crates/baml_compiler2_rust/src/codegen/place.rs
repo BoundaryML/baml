@@ -295,6 +295,20 @@ impl<'db> Generator<'_, 'db> {
         elems_of(element)
     }
 
+    /// The descriptor and element slot kind of the list `operand` names, when
+    /// it is a local of a list type whose element type is fully known.
+    pub(super) fn known_list(&self, operand: &Operand<'db>) -> Option<(u32, SlotKind)> {
+        let (Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))) = operand
+        else {
+            return None;
+        };
+        let RuntimeTy::List(element) = &self.body.locals[local.0].ty else {
+            return None;
+        };
+        let known = elems_of(element)?;
+        Some((known.descriptor, known.kind))
+    }
+
     /// The length of a list local whose element type is fully known, read in
     /// place; `None` for any other container, which the generic length
     /// takes.

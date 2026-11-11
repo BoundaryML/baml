@@ -3,7 +3,11 @@
 use std::fmt::Write as _;
 
 use baml_compiler2_mir::{BlockId, Constant, Operand, TyTemplateInterface, function_display_name};
-use bex_vm_types::{FunctionKind, types::Function};
+use bex_vm_types::{
+    FunctionKind,
+    layout::{RawKind, SlotKind},
+    types::Function,
+};
 
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
@@ -30,14 +34,20 @@ impl<'db> Generator<'_, 'db> {
         let Some((object, info)) = self.index.function(self.db, *func) else {
             return unsupported(format!("callee `{name}` not found in the program"));
         };
-        if let Some(inline) = self.inline_builtin(block, info, layout, args, ntypeargs)? {
-            return Ok(inline);
-        }
         let shape = call_shape(self.body, args, ntypeargs, &self.analysis.static_types);
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
         let types = self.type_operands("call", type_args)?;
         if let (FunctionKind::Bytecode, Some(symbol)) = (info.kind, self.symbols.get(&object)) {
             return self.compiled_call(block, object, symbol, &name, info, layout, args, &types);
+        }
+        let call = Builtin {
+            name: &name,
+            info,
+            shape,
+            types: &types,
+        };
+        if let Some(inline) = self.inline_builtin(block, &call, layout, args)? {
+            return Ok(inline);
         }
         let values = self.laid_out_args(block, &name, info, layout, args)?;
         let args = format!("&[{}]", values.join(", "));
@@ -55,19 +65,76 @@ impl<'db> Generator<'_, 'db> {
     }
 
     /// A builtin call compiled code makes without the builtin's glue: `x ==
-    /// null` as a bit test, or a scalar body called directly.
+    /// null` as a bit test, a scalar body called directly, or a push onto a
+    /// list of known element type. `args` are the value arguments.
     fn inline_builtin(
         &mut self,
         block: BlockId,
-        info: &Function,
+        call: &Builtin<'_>,
         layout: Option<&baml_type::CallLayout>,
         args: &[Operand<'db>],
-        ntypeargs: usize,
     ) -> Gen<Option<Expr>> {
-        if let Some(test) = self.null_test(block, info, ntypeargs, args)? {
+        let ntypes = call.types.len();
+        if let Some(test) = self.null_test(block, call.info, ntypes, args)? {
             return Ok(Some(test));
         }
-        self.scalar_native_call(block, info, layout, args, ntypeargs)
+        if let Some(native) = self.scalar_native_call(block, call.info, layout, args, ntypes)? {
+            return Ok(Some(native));
+        }
+        self.known_push(block, call, layout, args)
+    }
+
+    /// `xs.push(x)` on a list local whose element type is fully known: the
+    /// shared list's push in place (`BexVm::push_known`), else the builtin's
+    /// own path, which boxes the value there only.
+    fn known_push(
+        &mut self,
+        block: BlockId,
+        call: &Builtin<'_>,
+        layout: Option<&baml_type::CallLayout>,
+        args: &[Operand<'db>],
+    ) -> Gen<Option<Expr>> {
+        let named = layout.is_some_and(|layout| layout.0.iter().any(Option::is_some));
+        let [list, value] = args else {
+            return Ok(None);
+        };
+        if named || call.info.native_key.as_deref() != Some(ARRAY_PUSH) {
+            return Ok(None);
+        }
+        let Some((descriptor, kind)) = self.known_list(list) else {
+            return Ok(None);
+        };
+        let list = self.value_operand(block, list)?;
+        let value = self.operand(block, value)?;
+        let slot_value = match (kind, value.repr) {
+            (SlotKind::Raw(RawKind::Float), Repr::Float) => {
+                format!(
+                    "bex_vm_types::object_format::SlotValue::Float({})",
+                    value.code
+                )
+            }
+            (SlotKind::Raw(RawKind::Float), _) => return Ok(None),
+            _ => format!(
+                "bex_vm_types::object_format::SlotValue::Value({})",
+                coerce(&value.code, value.repr, Repr::Value)
+            ),
+        };
+        let boxed = coerce(&value.code, value.repr, Repr::Value);
+        let fallback = self.builtin_call(
+            block,
+            call.name,
+            call.info,
+            call.shape,
+            call.types,
+            &format!("&[{list}, b]"),
+        )?;
+        let fallback = coerce(&fallback.code, fallback.repr, Repr::Int);
+        Ok(Some(Expr::new(
+            format!(
+                "(match vm.push_known({list}, {descriptor}, {slot_value}) {{ Some(n) => n, None => {{ let b = {boxed}; {fallback} }} }})"
+            ),
+            Repr::Int,
+        )))
     }
 
     /// A builtin whose native body takes and returns only scalars, called
@@ -536,6 +603,18 @@ impl<'db> Generator<'_, 'db> {
              Ok(Some(v)) => Ok(v), Ok(None) => {suspend}, Err(e) => Err(e) }}"
         ))
     }
+}
+
+/// The native key of `Array.push`, which compiled code makes in place on a
+/// list of known element type.
+const ARRAY_PUSH: &str = "baml.Array.push";
+
+/// A call of a builtin, as its glue is called.
+struct Builtin<'a> {
+    name: &'a str,
+    info: &'a Function,
+    shape: crate::analysis::CallShape,
+    types: &'a [String],
 }
 
 /// What every form of a direct call to one compiled callee names.
