@@ -22,7 +22,7 @@ import { SoftwareApplicationStructuredData } from '@/components/structured-data'
 /** A cell: an amount and, for a price, its unit under it. */
 type Cell = [amount: string, unit?: string];
 
-/** A row: Starter's cell, then Pro's. `extra` rows are the paid or optional ones, set under the
+/** A row: Starter's cell, then Volume's. `extra` rows are the paid or optional ones, set under the
  *  bold row they extend. */
 type Row = { cells: [Cell, Cell]; extra?: boolean; label: string };
 
@@ -117,12 +117,18 @@ const BLOCKS: {
   },
 ];
 
+// The paid plan is Volume: a yearly commitment for a lower rate per GB.
 const PLANS = [
-  { name: 'Starter', price: '$0' },
-  { lit: true, name: 'Pro', price: '$250' },
+  { name: 'Starter', price: '$0', unit: 'per month' },
+  {
+    lit: true,
+    name: 'Volume',
+    price: '$250',
+    unit: 'per month, billed annually',
+  },
 ];
 
-// Label, Starter, Pro.
+// Label, Starter, Volume.
 const COLUMNS =
   'grid grid-cols-[minmax(0,1fr)_6rem_8rem] items-center gap-3 px-4 sm:grid-cols-[minmax(0,1fr)_10rem_10rem]';
 
@@ -232,7 +238,7 @@ function Block({ free, note, rows, title }: (typeof BLOCKS)[number]) {
         >
           <span />
           <span className="text-right">Starter</span>
-          <span className="text-right">Pro</span>
+          <span className="text-right">Volume</span>
         </div>
         <dl className="divide-y divide-rule text-[13px]">
           {rows.map((r) => (
@@ -273,7 +279,7 @@ function Block({ free, note, rows, title }: (typeof BLOCKS)[number]) {
   );
 }
 
-/** The pricing page: BAML is free, and Boundary Cloud bills data and retention, on Starter or Pro. */
+/** The pricing page: BAML is free, and Boundary Cloud bills data and retention, on Starter or Volume. */
 export default function PricingPage() {
   return (
     <PageShell>
@@ -332,7 +338,7 @@ export default function PricingPage() {
                   <p className="mt-2 font-display text-[36px] leading-none font-medium text-head tabular-nums">
                     {p.price}
                   </p>
-                  <p className="mt-1 text-[12px] text-muted">per month</p>
+                  <p className="mt-1 text-[12px] text-muted">{p.unit}</p>
                 </div>
                 <Button href={BOOK} variant={p.lit ? 'primary' : 'secondary'}>
                   Get early access

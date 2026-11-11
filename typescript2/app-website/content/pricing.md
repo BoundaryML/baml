@@ -1,6 +1,6 @@
 # BAML Pricing
 
-> BAML is free and open source. Boundary Cloud has Starter at $0 a month and Pro at $250 a month.
+> BAML is free and open source. Boundary Cloud has Starter at $0 a month and Volume at $250 a month, billed annually.
 
 Web page: https://boundaryml.com/pricing
 
@@ -16,9 +16,9 @@ You can install the toolchain, write and run BAML programs, generate SDKs, use t
 
 You pay for data and retention. Spans, seats, queries and profiles are free. Boundary Cloud is in early access.
 
-| | Starter | Pro |
+| | Starter | Volume |
 | --- | --- | --- |
-| Price | $0 a month | $250 a month |
+| Price | $0 a month | $250 a month, billed annually |
 | **Data** | | |
 | Included | 1 GB a month, kept 30 days | 5 GB a month, kept 30 days |
 | Ingestion past that | $4 per GB | $3 per GB |
