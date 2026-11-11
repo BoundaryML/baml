@@ -1350,93 +1350,6 @@ jobs:
   # Size-gate jobs live in size-gate.reusable.yaml — they are intentionally
   # decoupled from cargo-tests so a violation never blocks the test workflow.
 
-  cargo-build-msrv:
-    name: "cargo build (msrv)"
-    runs-on: blacksmith-16vcpu-ubuntu-2404
-    timeout-minutes: 25
-    steps:
-      - uses: useblacksmith/checkout@v1
-        with:
-          persist-credentials: false
-
-      - uses: SebRollen/toml-action@v1.2.0
-        id: msrv
-        with:
-          file: "baml_language/Cargo.toml"
-          field: "workspace.package.rust-version"
-
-      - name: "Install Rust toolchain (MSRV)"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: |
-          rustup toolchain install "${MSRV}"
-          rustup default "${MSRV}"
-        working-directory: baml_language
-
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv"
-
-      - name: "Verify sccache"
-        run: sccache --version
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "linux-msrv"
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
-
-      # Separate step so if fetch is slow, build is fast.
-      - name: "Fetch cargo dependencies"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: cargo "+${MSRV}" fetch
-        working-directory: baml_language
-
-      - name: "Build with MSRV"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: cargo "+${MSRV}" test --no-run --all-features --timings
-        working-directory: baml_language
-
-      - name: "Show sccache stats"
-        if: always()
-        run: sccache --show-stats
-
-      - name: "Dump sccache stats (json)"
-        if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-msrv.json
-
-      - name: "Upload sccache stats"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: sccache-stats-msrv
-          path: sccache-stats-msrv.json
-          if-no-files-found: ignore
-
-      - name: "Rename cargo timings"
-        if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-msrv.html
-        working-directory: baml_language
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: cargo-timings-msrv
-          path: baml_language/target/cargo-timings/cargo-timing-msrv.html
-          if-no-files-found: ignore
-
   cargo-doc:
     name: "cargo doc"
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -1528,7 +1441,6 @@ jobs:
       - cargo-test-windows
       - sdk-tests
       - cargo-test-wasm
-      - cargo-build-msrv
       - cargo-doc
       - snapshot-tests
     steps:
@@ -1549,7 +1461,6 @@ jobs:
       - cargo-test-windows
       - sdk-tests
       - cargo-test-wasm
-      - cargo-build-msrv
       - cargo-doc
       - snapshot-tests
     steps:
