@@ -21,7 +21,7 @@ type Cell = [amount: string, unit?: string];
 
 // The line items in groups, the way Better Stack splits its table by product. Each row is Starter's
 // cell then Pro's. Every non-price fact is from BCS: spans, profiles and seats are never billed,
-// going over never blocks, roles are admin and member, keys can be scoped to an environment.
+// there's no usage cap (billing never blocks ingest or queries), roles are admin and member, keys can be scoped to an environment.
 const SAME = (cell: Cell): [Cell, Cell] => [cell, cell];
 
 const GROUPS: {
@@ -44,7 +44,10 @@ const GROUPS: {
         ],
         label: 'Data after that',
       },
-      { cells: SAME(['Never blocked']), label: 'Going over' },
+      {
+        cells: SAME(['None', 'extra data is billed']),
+        label: 'Usage cap',
+      },
       { cells: SAME(['Unlimited']), label: 'Spans' },
       { cells: SAME(['Unlimited']), label: 'Profiles' },
     ],

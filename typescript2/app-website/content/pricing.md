@@ -22,7 +22,7 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | **Data** | | |
 | Data included | 1 GB a month | 5 GB a month |
 | Data after that | $4 per GB | $3 per GB |
-| Going over | Never blocked | Never blocked |
+| Usage cap | None, extra data is billed | None, extra data is billed |
 | Spans | Unlimited | Unlimited |
 | Profiles | Unlimited | Unlimited |
 | **Retention** | | |
