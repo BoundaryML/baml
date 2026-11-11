@@ -1,0 +1,11 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+class Foo {
+    bar: string @description(
+        `
+            some desc
+            more
+        `,
+    ),
+}

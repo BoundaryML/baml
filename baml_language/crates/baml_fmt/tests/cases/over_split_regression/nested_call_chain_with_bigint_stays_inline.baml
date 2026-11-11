@@ -1,0 +1,3 @@
+function f() -> int throws never {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(100n))
+}

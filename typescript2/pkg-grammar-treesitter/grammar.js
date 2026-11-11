@@ -2,9 +2,9 @@
  * Tree-sitter grammar for BAML (Boundary Markup Language).
  *
  * Source of truth for the language shape:
- *   - baml_language/crates/baml_compiler_lexer/src/tokens.rs   (token forms)
- *   - baml_language/crates/baml_compiler_syntax/src/syntax_kind.rs (node taxonomy)
- *   - baml_language/crates/baml_compiler_parser/src/parser.rs  (precedence table)
+ *   - baml_language/crates/baml_syntax/src/token.rs   (token forms)
+ *   - baml_language/crates/baml_syntax/src/nodes/     (node taxonomy)
+ *   - baml_language/crates/baml_syntax/src/ops.rs     (precedence table)
  *   - typescript2/pkg-grammar/tests/fixtures/*.baml            (the quality bar)
  *
  * Design notes:

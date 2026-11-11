@@ -1,0 +1,6 @@
+function top() => /* result */ int { 1 }
+
+function apply() -> int {
+    let identity = (x: int) => /* body */ { x }
+    identity(1)
+}

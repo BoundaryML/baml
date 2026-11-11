@@ -4,7 +4,7 @@ use text_size::TextRange;
 
 use crate::{
     ids::{FunctionMarker, LocalItemId},
-    item_tree::{ClassAttrs, ClassFieldAttrs, GenericParam, ImplementsBlock},
+    item_tree::{ClassAttrs, ClassFieldAttrs, GenericParam},
 };
 
 /// A class field stored in the `ItemTree`.
@@ -28,16 +28,10 @@ pub struct Class {
     pub generic_params: Vec<GenericParam>,
     /// Fields of the class, in declaration order.
     pub fields: Vec<ClassField>,
-    /// Methods defined inside this class, referencing their `Function` entries
-    /// in the same `ItemTree`. Includes both class-level methods and methods
-    /// declared inside `implements I { ... }` blocks (BEP-044) — flattened so
-    /// downstream code (e.g. signature queries, method dispatch) can iterate
-    /// uniformly.
+    /// Methods defined at the class level, referencing their `Function`
+    /// entries in the same `ItemTree`. A method inside an `implements I { … }`
+    /// block is the impl's (`ImplBlock::methods`), not the class's.
     pub methods: Vec<LocalItemId<FunctionMarker>>,
-    /// `implements I { ... }` blocks, in declaration order. Each block keeps
-    /// the raw target `TypeExpr` so generic parameters like `Container<int>`
-    /// survive name resolution, plus field redeclarations from the block.
-    pub implements: Vec<ImplementsBlock>,
     /// The class's lowered `@@` attributes.
     pub attrs: ClassAttrs,
     /// Joined `///` doc-comment lines preceding this declaration.

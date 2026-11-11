@@ -208,101 +208,66 @@ pub fn impl_facts<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     block: ImplLoc<'db>,
 ) -> ImplHeaderResolution<'db> {
-    use baml_compiler2_hir::item_data::ImplSubjectData;
     let data = baml_compiler2_hir::item_data::impl_block_data(db, block);
     let file = block.file(db);
 
     // Set when the written for-target is not an implementor (E0138); the
     // header still lowers, so the facts stay available to the IDE.
     let mut not_implementor: Option<baml_type::Ty> = None;
-    // The generic frame and for-target, normalized to the free shape.
-    let (params, param_bounds, for_ty_pattern): (Vec<ParamTy>, Vec<Vec<baml_type::Interface>>, _) =
-        match &data.subject {
-            ImplSubjectData::InClass { class, .. } => {
-                let frame = crate::lower::class_generic_frame(db, *class);
-                let class_data = baml_compiler2_hir::item_data::class_data(db, *class);
-                let ctx = crate::lower::lower_ctx_for_file(db, file).with_frame(frame.clone());
-                let bounds = class_data
-                    .generic_params
-                    .iter()
-                    .map(|declared| {
-                        declared
-                            .bounds
-                            .iter()
-                            .filter_map(|&type_ref| {
-                                crate::lower::reject_holes(&ctx.lower_type_ref_at(
-                                    &class_data.type_refs,
-                                    type_ref,
-                                    crate::lower::TypePosition::ConstraintHead,
-                                ))
-                                .as_interface()
-                            })
-                            .collect()
-                    })
-                    .collect();
-                (
-                    frame,
-                    bounds,
-                    ClosedTy::from_plain(&crate::lower::class_self_ty(db, *class)),
-                )
-            }
-            ImplSubjectData::Free {
-                for_target,
-                generics,
-            } => {
-                let frame: Vec<ParamTy> = generics
-                    .iter()
-                    .enumerate()
-                    .map(|(index, param)| {
-                        ParamTy::new(
-                            u32::try_from(index).expect("impl generic index overflow"),
-                            param.name.clone(),
-                        )
-                    })
-                    .collect();
-                let ctx = crate::lower::lower_ctx_for_file(db, file).with_frame(frame.clone());
-                let bounds = generics
-                    .iter()
-                    .map(|param| {
-                        param
-                            .bounds
-                            .iter()
-                            .filter_map(|&type_ref| {
-                                crate::lower::reject_holes(&ctx.lower_type_ref_at(
-                                    &data.type_refs,
-                                    type_ref,
-                                    crate::lower::TypePosition::ConstraintHead,
-                                ))
-                                .as_interface()
-                            })
-                            .collect()
-                    })
-                    .collect();
-                let for_ty_plain =
-                    crate::lower::reject_holes(&ctx.lower_type_ref(&data.type_refs, *for_target));
-                // E0138, decided on the LOWERED form — never the normalized
-                // one. Lowering is exactly the right amount of resolution:
-                // it applies the builtin bridges (so `Future<T>` and `E.A`
-                // are seen for what they denote) and leaves alias heads in
-                // place — the gate expands those itself
-                // (`subject_head_is_implementor`) — while leaving unions
-                // uncollapsed (so `true | false` stays a union rather than
-                // becoming the valid subject `bool`). It is the collapse
-                // that made this gate and coherence disagree.
-                //
-                // The subject is REPLACED by the Error sentinel rather than
-                // withheld: the rest of the header still lowers, so the IDE
-                // keeps a fact set to describe, while every selection path
-                // sees a diagnosed sentinel instead of a subject no value
-                // inhabits.
-                if !subject_head_is_implementor(db, &for_ty_plain) {
-                    not_implementor = Some(for_ty_plain);
-                    (frame, bounds, ClosedTy::from_plain(&baml_type::Ty::error()))
-                } else {
-                    (frame, bounds, ClosedTy::from_plain(&for_ty_plain))
-                }
-            }
-        };
+    // The generic frame and for-target. Both spellings arrive in one shape
+    // (an in-body block carries its class's generics and the class as its
+    // for-target), so this is the one path.
+    let frame: Vec<ParamTy> = data
+        .generics
+        .iter()
+        .enumerate()
+        .map(|(index, param)| {
+            ParamTy::new(
+                u32::try_from(index).expect("impl generic index overflow"),
+                param.name.clone(),
+            )
+        })
+        .collect();
+    let ctx = crate::lower::lower_ctx_for_file(db, file).with_frame(frame.clone());
+    let param_bounds: Vec<Vec<baml_type::Interface>> = data
+        .generics
+        .iter()
+        .map(|param| {
+            param
+                .bounds
+                .iter()
+                .filter_map(|&type_ref| {
+                    crate::lower::reject_holes(&ctx.lower_type_ref_at(
+                        &data.type_refs,
+                        type_ref,
+                        crate::lower::TypePosition::ConstraintHead,
+                    ))
+                    .as_interface()
+                })
+                .collect()
+        })
+        .collect();
+    let for_ty_plain =
+        crate::lower::reject_holes(&ctx.lower_type_ref(&data.type_refs, data.for_target));
+    // E0138, decided on the LOWERED form — never the normalized one.
+    // Lowering is exactly the right amount of resolution: it applies the
+    // builtin bridges (so `Future<T>` and `E.A` are seen for what they
+    // denote) and leaves alias heads in place — the gate expands those itself
+    // (`subject_head_is_implementor`) — while leaving unions uncollapsed (so
+    // `true | false` stays a union rather than becoming the valid subject
+    // `bool`). It is the collapse that made this gate and coherence disagree.
+    //
+    // The subject is REPLACED by the Error sentinel rather than withheld: the
+    // rest of the header still lowers, so the IDE keeps a fact set to
+    // describe, while every selection path sees a diagnosed sentinel instead
+    // of a subject no value inhabits.
+    let for_ty_pattern = if subject_head_is_implementor(db, &for_ty_plain) {
+        ClosedTy::from_plain(&for_ty_plain)
+    } else {
+        not_implementor = Some(for_ty_plain);
+        ClosedTy::from_plain(&baml_type::Ty::error())
+    };
+    let params = frame;
 
     // The impl's own bounds ride along: `type Output = T.Item` must
     // find `Item`'s declaring interface through `T`'s declared bound.

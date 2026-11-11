@@ -1350,8 +1350,8 @@ pub fn native_key_for<'db>(
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> String {
     use baml_compiler2_hir::item_data::{
-        ImplSubjectData, MethodOwner, class_data, function_data, impl_block_data, interface_data,
-        method_owner,
+        MethodOwner, class_data, function_data, impl_block_data, impl_enclosing_class,
+        interface_data, method_owner,
     };
     let pkg_info = file_package(db, func_loc.file(db));
     // A native body is the standard library's own: its package is a language
@@ -1376,12 +1376,17 @@ pub fn native_key_for<'db>(
         Some(MethodOwner::Interface(iface_loc)) => interface_data(db, iface_loc).name.clone(),
         Some(MethodOwner::Impl(impl_loc)) => {
             let block = impl_block_data(db, impl_loc);
-            let for_display = match &block.subject {
-                ImplSubjectData::Free { for_target, .. } => baml_base::native_key_spelling(
+            // An in-body block's natives are keyed by its class's name (the
+            // codegen extractor keys them with the class); a free block's by
+            // its written for-target.
+            let for_display = match impl_enclosing_class(db, impl_loc) {
+                Some(class) if block.origin == baml_compiler2_ast::ImplOrigin::InBody => {
+                    class_data(db, class).name.to_string()
+                }
+                _ => baml_base::native_key_spelling(
                     package.as_str(),
-                    &block.type_refs.display(*for_target).to_string(),
+                    &block.type_refs.display(block.for_target).to_string(),
                 ),
-                ImplSubjectData::InClass { class, .. } => class_data(db, *class).name.to_string(),
             };
             let iface_display = baml_base::native_key_spelling(
                 package.as_str(),
@@ -2174,12 +2179,13 @@ impl<'db> LoweringContext<'db> {
         let DeclRef::Source(class_loc) = layout::class_ref_of(self.db, class_qtn)? else {
             return None;
         };
-        let class_data = baml_compiler2_hir::item_data::class_data(self.db, class_loc);
         let class_params = baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc);
 
-        for impl_block in &class_data.implements {
+        for &impl_loc in baml_compiler2_hir::item_data::class_impls(self.db, class_loc) {
+            let impl_block = baml_compiler2_hir::item_data::impl_block_data(self.db, impl_loc);
             let view = self.resolve_implements_target_view(
-                impl_block.target,
+                &impl_block.type_refs,
+                impl_block.interface_target,
                 &impl_block.associated_type_bindings,
                 class_loc,
             )?;
@@ -4633,17 +4639,13 @@ impl<'db> LoweringContext<'db> {
             let param_ty = if param.name.as_str() == "self"
                 && matches!(param.ty.kind, baml_compiler2_ast::TypeExprKind::Missing)
             {
-                if let Some(imp) = enclosing_impl
-                    && let baml_compiler2_hir::item_data::ImplSubjectData::Free {
-                        for_target, ..
-                    } = &imp.subject
-                {
+                if let Some(imp) = enclosing_impl {
                     let generic_params = self.enclosing_generic_params();
                     let generic_param_bounds = self.enclosing_generic_param_bounds();
                     let tir_ty = lower_ref_in_scope(
                         self.db,
                         &imp.type_refs,
-                        *for_target,
+                        imp.for_target,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &generic_params,
@@ -11897,6 +11899,7 @@ impl<'db> LoweringContext<'db> {
 
     fn resolve_implements_target_view(
         &self,
+        target_store: &baml_compiler2_hir::type_ref::TypeRefStore,
         target: baml_compiler2_hir::type_ref::TypeRefId,
         associated_type_bindings: &[baml_compiler2_hir::item_data::AssociatedTypeBindingData],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
@@ -11904,10 +11907,9 @@ impl<'db> LoweringContext<'db> {
         let class_file = class_loc.file(self.db);
         let class_pkg = baml_compiler2_hir::file_package::file_package(self.db, class_file);
         let class_pkg_items = package_items(self.db, class_pkg.root);
-        let class_data = baml_compiler2_hir::item_data::class_data(self.db, class_loc);
-        // `target` and the class-side `associated_type_bindings` index the class's
-        // own arena; the interface's associated-type defaults index the interface's.
-        let target_store = &class_data.type_refs;
+        // `target` and the block's `associated_type_bindings` index the impl
+        // block's own arena (`target_store`); the interface's associated-type
+        // defaults index the interface's.
         let target_loc = resolve_ref_to_interface_loc(
             self.db,
             target_store,

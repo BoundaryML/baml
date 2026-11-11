@@ -434,9 +434,7 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
+ "baml_parser",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -457,6 +455,7 @@ dependencies = [
  "baml_ide",
  "baml_linker_types",
  "baml_lsp_server",
+ "baml_parser",
  "baml_query_btel",
  "baml_release",
  "baml_sdkgen_types",
@@ -519,14 +518,13 @@ version = "0.1.0"
 dependencies = [
  "baml_base",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
+ "baml_parser",
+ "baml_syntax",
  "baml_type",
  "borsh",
+ "codspeed-divan-compat",
  "la-arena",
  "num-bigint",
- "rowan 0.16.1",
  "smol_str",
  "text-size",
 ]
@@ -561,7 +559,7 @@ dependencies = [
  "baml_base",
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
- "baml_compiler_parser",
+ "baml_parser",
  "baml_type",
  "indexmap",
  "la-arena",
@@ -603,9 +601,9 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
- "baml_compiler_parser",
- "baml_compiler_syntax",
  "baml_db",
+ "baml_parser",
+ "baml_syntax",
  "num-bigint",
  "text-size",
 ]
@@ -658,42 +656,12 @@ name = "baml_compiler_diagnostics"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_compiler_lexer",
+ "baml_parser",
+ "baml_syntax",
  "borsh",
  "miette",
  "owo-colors",
  "text-size",
-]
-
-[[package]]
-name = "baml_compiler_lexer"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "logos 0.15.1",
- "salsa",
- "text-size",
-]
-
-[[package]]
-name = "baml_compiler_parser"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_syntax",
- "rowan 0.16.1",
- "salsa",
- "text-size",
-]
-
-[[package]]
-name = "baml_compiler_syntax"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "rowan 0.16.1",
 ]
 
 [[package]]
@@ -710,11 +678,9 @@ dependencies = [
  "baml_compiler2_mir",
  "baml_compiler2_rust",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
  "baml_linker",
  "baml_linker_types",
+ "baml_parser",
  "baml_project_root",
  "baml_type",
  "bex_vm_types",
@@ -765,10 +731,14 @@ name = "baml_fmt"
 version = "0.0.0-beta"
 dependencies = [
  "baml_db",
+ "baml_parser",
+ "baml_syntax",
+ "insta",
  "ouroboros",
- "rowan 0.16.1",
  "salsa",
+ "text-size",
  "thiserror 2.0.18",
+ "walkdir",
 ]
 
 [[package]]
@@ -792,16 +762,14 @@ dependencies = [
  "baml_compiler2_metrics",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
  "baml_db",
+ "baml_parser",
  "baml_sdkgen_types",
+ "baml_syntax",
  "baml_type",
  "bitflags 2.11.1",
  "insta",
  "la-arena",
- "rowan 0.16.1",
  "salsa",
  "serde",
  "serde_json",
@@ -923,6 +891,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_parser"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_env",
+ "baml_syntax",
+ "bitflags 2.11.1",
+ "insta",
+ "salsa",
+ "text-size",
+ "walkdir",
+]
+
+[[package]]
 name = "baml_path"
 version = "0.0.0-beta"
 dependencies = [
@@ -1002,6 +984,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_syntax"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_syntax_macros",
+ "logos 0.15.1",
+ "text-size",
+ "walkdir",
+]
+
+[[package]]
+name = "baml_syntax_macros"
+version = "0.0.0-beta"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "baml_test_support"
 version = "0.0.0-beta"
 dependencies = [
@@ -1026,10 +1027,13 @@ dependencies = [
  "baml_compiler2_mir",
  "baml_compiler_diagnostics",
  "baml_db",
+ "baml_env",
  "baml_exec",
  "baml_fmt",
  "baml_linker",
  "baml_linker_types",
+ "baml_parser",
+ "baml_syntax",
  "baml_test_support",
  "baml_type",
  "bex_engine",
@@ -1298,12 +1302,11 @@ dependencies = [
  "baml_compiler2_hir_ty",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
  "baml_db",
  "baml_fmt",
+ "baml_parser",
  "baml_path",
+ "baml_syntax",
  "baml_type",
  "baml_version",
  "bex_cache",
@@ -1320,7 +1323,6 @@ dependencies = [
  "paste",
  "percent-encoding",
  "regex",
- "rowan 0.16.1",
  "serde",
  "serde_json",
  "sha2",
@@ -5546,18 +5548,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rowan"
-version = "0.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "417a3a9f582e349834051b8a10c8d71ca88da4211e4093528e36b9845f6b5f21"
-dependencies = [
- "countme",
- "hashbrown 0.14.5",
- "rustc-hash 1.1.0",
- "text-size",
-]
-
-[[package]]
 name = "rsa"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6652,7 +6642,7 @@ dependencies = [
  "itertools 0.10.5",
  "logos 0.12.1",
  "once_cell",
- "rowan 0.15.18",
+ "rowan",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

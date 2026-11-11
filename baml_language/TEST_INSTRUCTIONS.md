@@ -149,7 +149,7 @@ Failing-to-compile projects snapshot under
 
 ### 5. Fix the issue
 
-Edit the relevant crate (`baml_compiler_parser`, `baml_compiler_syntax`, `baml_compiler2_hir`, etc.).
+Edit the relevant crate (`baml_parser`, `baml_syntax`, `baml_compiler2_ast`, `baml_compiler2_hir`, etc.).
 
 ### 6. Re-run and update snapshots
 
@@ -199,10 +199,10 @@ cargo insta review
 
 ## Key Files
 
-- **Lexer**: `crates/baml_compiler_lexer/src/tokens.rs`
-- **Parser**: `crates/baml_compiler_parser/src/parser.rs`
-- **Syntax kinds**: `crates/baml_compiler_syntax/src/syntax_kind.rs`
-- **AST helpers**: `crates/baml_compiler_syntax/src/ast.rs`
+- **Token table and lexer**: `crates/baml_syntax/src/token.rs`, `crates/baml_syntax/src/lexer.rs`
+- **Syntax nodes**: `crates/baml_syntax/src/nodes/`
+- **Parser**: `crates/baml_parser/src/` (`items.rs`, `types.rs`, `expr.rs`, `stmts.rs`, `patterns.rs`, `templates.rs`)
+- **AST lowering**: `crates/baml_compiler2_ast/src/lower_tree/`
 - **HIR lowering**: `crates/baml_compiler2_hir/src/body.rs`
 - **Type checking**: `crates/baml_compiler2_tir/src/builder.rs`
 

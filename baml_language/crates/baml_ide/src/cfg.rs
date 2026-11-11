@@ -407,11 +407,9 @@ fn expand_user_function_calls_in_graph<'db>(
     }
 }
 
-/// Find the `//#` header comment immediately above a function declaration,
-/// if any. Blank lines and regular `//` comments between the header and
-/// the declaration are skipped; any other code stops the search. If multiple
-/// same-named declarations have different headers, do not guess which one a
-/// name-only call resolved to.
+/// The `//#` title of the function `function_name` names, read from its
+/// item data. If several same-named declarations carry different titles,
+/// do not guess which one a name-only call resolved to.
 fn function_header_title(
     db: &dyn baml_compiler2_hir::Db,
     files: &[SourceFile],
@@ -429,14 +427,11 @@ fn function_header_title(
             ) {
                 continue;
             }
-            let func_span = baml_compiler2_hir::item_data::function_source_map(db, func_loc).span;
-            let text = source_file.text(db);
-            let start = usize::from(func_span.start()).min(text.len());
-            if let Some(title) = header_title_above(&text[..start]) {
+            if let Some(title) = &func_data.header_title {
                 match &unique_title {
-                    Some(existing) if existing != &title => return None,
+                    Some(existing) if existing != title => return None,
                     Some(_) => {}
-                    None => unique_title = Some(title),
+                    None => unique_title = Some(title.clone()),
                 }
             }
         }
@@ -448,11 +443,9 @@ fn function_header_title_for_loc(
     db: &dyn baml_compiler2_hir::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
 ) -> Option<String> {
-    let source_file = func_loc.file(db);
-    let func_span = baml_compiler2_hir::item_data::function_source_map(db, func_loc).span;
-    let text = source_file.text(db);
-    let start = usize::from(func_span.start()).min(text.len());
-    header_title_above(&text[..start])
+    baml_compiler2_hir::item_data::function_data(db, func_loc)
+        .header_title
+        .clone()
 }
 
 fn find_function_loc<'db>(
@@ -987,32 +980,6 @@ fn source_span_for_range(
         end_line,
         end_column,
     })
-}
-
-/// Scan backwards through the source text that precedes a declaration and
-/// return the title of the nearest `//#` header comment, if it is separated
-/// from the declaration only by blank lines and regular `//` comments.
-fn header_title_above(before: &str) -> Option<String> {
-    for line in before.lines().rev() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let Some(rest) = trimmed.strip_prefix("//") else {
-            // Reached code — no header directly above the declaration.
-            return None;
-        };
-        if let Some(title) = rest.strip_prefix('#') {
-            let title = title.trim_start_matches('#').trim();
-            if title.is_empty() {
-                return None;
-            }
-            return Some(title.to_string());
-        }
-        // Regular `//` or `///` comment between the header and the
-        // declaration — keep scanning upwards.
-    }
-    None
 }
 
 #[cfg(test)]
@@ -2088,30 +2055,6 @@ test "renders workflow" {
             graph.nodes,
             prepared.nodes
         );
-    }
-
-    #[test]
-    fn test_header_title_above() {
-        assert_eq!(
-            header_title_above("//# process stuff\n"),
-            Some("process stuff".to_string())
-        );
-        assert_eq!(
-            header_title_above("//# process stuff\n\n// note\n/// docs\n"),
-            Some("process stuff".to_string()),
-            "blank lines and comments between header and declaration are skipped"
-        );
-        assert_eq!(
-            header_title_above("//## nested level\n"),
-            Some("nested level".to_string())
-        );
-        assert_eq!(
-            header_title_above("//# old header\n}\n"),
-            None,
-            "code between the header and the declaration stops the search"
-        );
-        assert_eq!(header_title_above("// just a comment\n"), None);
-        assert_eq!(header_title_above(""), None);
     }
 
     #[test]

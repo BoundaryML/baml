@@ -1,0 +1,8 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function h() -> (() -> string throws never) throws never {
+    () -> string throws never {
+        "s"
+    }
+}

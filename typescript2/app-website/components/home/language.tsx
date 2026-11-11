@@ -403,7 +403,9 @@ export function Examples({
         {EXAMPLES.map((e, i) => (
           <button
             aria-pressed={i === shown}
-            className={`focus-ring shrink-0 rounded-md transition-colors ${quiet ? 'px-2 py-1 text-[13px]' : 'v4-caption px-2.5 py-1.5'} ${i === shown ? 'bg-rule text-head' : 'text-muted hover:text-ink-2'}`}
+            // On a touch screen the tabs are taller. Real height, not the .tap overlay: the strip scrolls
+            // sideways, and an overlay taller than it would make it scroll up and down too.
+            className={`focus-ring shrink-0 rounded-md transition-colors pointer-coarse:py-2.5 ${quiet ? 'px-2 py-1 text-[13px]' : 'v4-caption px-2.5 py-1.5'} ${i === shown ? 'bg-rule text-head' : 'text-muted hover:text-ink-2'}`}
             key={e.name}
             onClick={() => setShown(i)}
             type="button"

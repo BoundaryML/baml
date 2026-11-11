@@ -137,9 +137,7 @@ fn highlight_str(text: &str) -> String {
     styled_from_tokens(text, 0, &toks)
 }
 
-fn classify_fragment(
-    text: &str,
-) -> Result<Vec<SemanticToken>, Vec<baml_db::baml_compiler_diagnostics::ParseError>> {
+fn classify_fragment(text: &str) -> Result<Vec<SemanticToken>, Vec<baml_parser::ParseError>> {
     thread_local! {
         static SCRATCH_DB: RefCell<(ProjectDatabase, baml_db::SourceRoot)> = RefCell::new({
             let mut db = ProjectDatabase::new();
@@ -157,9 +155,9 @@ fn classify_fragment(
             Path::new("/baml-fragment-scratch/fragment.baml"),
             text,
         );
-        let errors = baml_db::baml_compiler_parser::parse_errors(db, file);
+        let errors = baml_parser::typed_parse_errors(db, file);
         if !errors.is_empty() {
-            return Err(errors);
+            return Err(errors.to_vec());
         }
         let mut toks = semantic_tokens(db, file).clone();
         toks.sort_by_key(|t| t.range.start());

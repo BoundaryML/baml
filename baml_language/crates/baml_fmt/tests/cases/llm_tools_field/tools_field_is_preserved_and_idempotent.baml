@@ -1,0 +1,9 @@
+function Plan(q: string) -> string {
+    client: "openai/gpt-4o-mini"
+    // the toolbox
+    tools: [search_flights, search_hotels]
+    prompt: `
+        ${q}
+        ${ctx.output_format()}
+    `
+}

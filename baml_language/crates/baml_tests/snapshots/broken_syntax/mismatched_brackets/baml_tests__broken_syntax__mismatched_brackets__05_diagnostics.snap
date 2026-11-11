@@ -110,11 +110,11 @@ source: crates/baml_tests/src/generated_tests.rs
     · ╰── expected `')'`, found `'}'`
     ╰────
 
-  [parse] E0010
+  [parse] E0009
 
-  × unexpected token
+  × unexpected end of file
     ╭─[main.baml:43:2]
  43 │ }
     ·  ▲
-    ·  ╰── expected `']'`, found `EOF`
+    ·  ╰── expected `']'`, found end of file
     ╰────

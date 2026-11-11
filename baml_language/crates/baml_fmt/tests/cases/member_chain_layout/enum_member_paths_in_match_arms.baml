@@ -1,0 +1,7 @@
+function f(r: StopReason) -> int {
+    match (r) {
+        StopReason.Complete => 1,
+        StopReason.MaxTokens => 2,
+        _ => root.some.namespaced.StopReason.Complete.value(),
+    }
+}

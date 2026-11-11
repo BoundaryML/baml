@@ -646,10 +646,19 @@ function Threads({ names, tone }: { names: string[]; tone: 'baml' | 'host' }) {
   );
 }
 
-const BAML_WORKERS = ['baml-worker 1', 'baml-worker 2', 'baml-worker 3'];
+// The runtime's thread pool: one worker per CPU core, every one named baml-worker. The last chip
+// stands for the rest, so the picture never implies a fixed count.
+const BAML_WORKERS = ['baml-worker', 'baml-worker', 'baml-worker', '…'];
+const WORKERS_LABEL = 'BAML runtime, one worker thread per CPU core';
 
 /** Where your side meets BAML's: a call goes across, its result comes back. */
-function Bridge({ label }: { label: string }) {
+function Bridge({
+  label,
+  note = 'A call crosses to BAML’s workers. Its result crosses back.',
+}: {
+  label: string;
+  note?: string;
+}) {
   return (
     <div className="relative flex items-center gap-3 rounded-xl border border-dashed border-clover/50 px-3 py-2.5">
       <span
@@ -660,9 +669,7 @@ function Bridge({ label }: { label: string }) {
       </span>
       <div className="min-w-0">
         <p className="font-mono text-[12px] text-clover">{label}</p>
-        <p className="mt-0.5 text-[12px] text-muted">
-          A call crosses to BAML’s workers. Its result crosses back.
-        </p>
+        <p className="mt-0.5 text-[12px] text-muted">{note}</p>
       </div>
     </div>
   );
@@ -679,7 +686,7 @@ const TARGETS = [
           <Box label="baml_sdk (generated)" sdk />
         </div>
         <Bridge label={HOSTS[lang].runtime} />
-        <Box label="BAML runtime, on its own threads" tone="baml">
+        <Box label={WORKERS_LABEL} tone="baml">
           <Threads names={BAML_WORKERS} tone="baml" />
         </Box>
       </Box>
@@ -691,7 +698,7 @@ const TARGETS = [
   {
     draw: (_lang: number) => (
       <Box label="one binary, from baml pack" tone="host">
-        <Box label="BAML runtime, on its own threads" tone="baml">
+        <Box label={WORKERS_LABEL} tone="baml">
           <Threads names={BAML_WORKERS} tone="baml" />
           <Box label="your program, packed in" sdk tone="baml" />
         </Box>
@@ -710,18 +717,18 @@ const TARGETS = [
           </Box>
           <Box label="baml_sdk (generated)" sdk />
         </div>
-        <Bridge label="the WebAssembly bridge" />
-        <Box label="BAML runtime · WebAssembly" tone="baml">
-          <Threads
-            names={['web worker 1', 'web worker 2', 'web worker 3']}
-            tone="baml"
-          />
+        <Bridge
+          label="the WebAssembly bridge"
+          note="A call runs as a task on your event loop. Its result resolves a promise."
+        />
+        <Box label="BAML runtime · WebAssembly, on your event loop" tone="baml">
+          <Threads names={['BAML tasks']} tone="baml" />
         </Box>
       </Box>
     ),
     name: 'WebAssembly',
     note: () =>
-      'The same program in the browser or on Workers. The runtime starts and runs its own web workers, which is where its concurrency comes from.',
+      'The same program in the browser or on Workers. WebAssembly is single-threaded here, so BAML runs its calls as tasks on your event loop, with no threads of its own.',
   },
 ];
 
@@ -1134,7 +1141,7 @@ function StartupSteps({ beat, steps }: { beat: number; steps: Step[] }) {
         className="px-1 text-[14px] text-ink-2 transition-opacity duration-300"
         style={lit(steps.length)}
       >
-        Every call after this goes straight to BAML’s worker threads.
+        Every call after this goes straight to the runtime.
       </p>
     </div>
   );
@@ -1264,7 +1271,7 @@ const BEHAVIOR: Record<string, Record<Scenario, ReactNode>> = {
       <Steps
         steps={[
           { text: 'The tab closes, or the Worker finishes', tone: 'host' },
-          { text: 'The module and its web workers go with it', tone: 'baml' },
+          { text: 'The WebAssembly module goes with it', tone: 'baml' },
         ]}
       />
     ),
@@ -1279,11 +1286,6 @@ const BEHAVIOR: Record<string, Record<Scenario, ReactNode>> = {
             tone: 'baml',
           },
           { text: 'Decodes your compiled program', tone: 'baml' },
-          {
-            note: 'for concurrency',
-            text: 'Starts BAML’s web workers',
-            tone: 'baml',
-          },
         ]}
         target="WebAssembly"
       />
@@ -1373,9 +1375,16 @@ function Architecture({ at, lang }: { at: number; lang: number }) {
           <Generate beat={beat} build={build} />
         </div>
       </div>
-      <div className="flex items-center justify-center self-stretch">
-        <p className="rounded-full border border-white/15 px-3 py-1 font-mono text-[11px] text-muted lg:[writing-mode:vertical-rl]">
-          ships with your app →
+      <div className="flex items-center justify-center gap-2 self-stretch text-muted lg:flex-col">
+        <span
+          aria-hidden
+          className="text-[22px] leading-none text-clover lg:rotate-0 max-lg:rotate-90"
+        >
+          →
+        </span>
+        <p className="text-center text-[13px] leading-snug">
+          ships with
+          <br className="max-lg:hidden" /> your app
         </p>
       </div>
       <div>
@@ -1774,17 +1783,14 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
   return (
     <>
       <header className="pb-10">
-        <p className="font-mono text-[12px] uppercase tracking-wider text-clover">
-          {embedded ? 'Under the hood' : 'Architecture'}
-        </p>
         {embedded ? (
-          <h2 className="v4-h2 mt-3 text-head">How BAML runs</h2>
+          <h2 className="v4-h2 text-head">How BAML runs</h2>
         ) : (
-          <h1 className="v4-h2 mt-3 text-head">How BAML runs</h1>
+          <h1 className="v4-h2 text-head">How BAML runs</h1>
         )}
         <p className="mt-4 max-w-[42rem] text-[17px] leading-relaxed text-ink-2">
           {embedded
-            ? 'For the curious. BAML compiles when you build and runs inside your app as a library, with no sidecar and no server. Pick where it runs, and the diagrams below follow.'
+            ? 'BAML compiles when you build and runs inside your app as a library, with no sidecar and no server. Pick where it runs, and the diagrams below follow.'
             : 'BAML compiles when you build and runs inside your app as a library. There’s no sidecar and no server. Pick where it runs, and every diagram on this page follows.'}
         </p>
       </header>

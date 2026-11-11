@@ -1,0 +1,66 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== main.baml ===
+SourceFile@248..375
+  items: FunctionDef@248..271
+    kw: Function "function" @248..256
+    name: Name@257..266
+      token: Word "bad_param" @257..266
+    params: ParamList@266..271
+      l: LParen "(" @266..267
+      params: Param@267..271
+        name: Name@267..268
+          token: Word "v" @267..268
+        ascription: TypeAscription@268..271
+          colon: Colon ":" @268..269
+          ty: PathType@270..271
+            head: Name@270..271
+              token: Word "v" @270..271
+      r: <missing @272>
+    ret: <missing @272>
+    body: <missing @272>
+  items: Bogus@272..296
+    tokens: Is "is" @272..274
+    tokens: Whitespace " " @274..275
+    tokens: Word "int" @275..278
+    tokens: RParen ")" @278..279
+    tokens: Whitespace " " @279..280
+    tokens: Arrow "->" @280..282
+    tokens: Whitespace " " @282..283
+    tokens: Word "bool" @283..287
+    tokens: Whitespace " " @287..288
+    tokens: LBrace "{" @288..289
+    tokens: Whitespace " " @289..290
+    tokens: True "true" @290..294
+    tokens: Whitespace " " @294..295
+    tokens: RBrace "}" @295..296
+  items: FunctionDef@333..359
+    kw: Function "function" @333..341
+    name: Name@342..352
+      token: Word "bad_return" @342..352
+    params: ParamList@352..354
+      l: LParen "(" @352..353
+      r: RParen ")" @353..354
+    ret: ReturnType@355..359
+      arrow: Arrow "->" @355..357
+      ty: PathType@358..359
+        head: Name@358..359
+          token: Word "v" @358..359
+    body: <missing @360>
+  items: Bogus@360..375
+    tokens: Is "is" @360..362
+    tokens: Whitespace " " @362..363
+    tokens: Word "int" @363..366
+    tokens: Whitespace " " @366..367
+    tokens: LBrace "{" @367..368
+    tokens: Whitespace " " @368..369
+    tokens: True "true" @369..373
+    tokens: Whitespace " " @373..374
+    tokens: RBrace "}" @374..375
+error @272..274: expected ')', found is
+error @272..274: expected return type (->), found is
+error @272..274: expected function body, found is
+error @272..274: expected top-level declaration, found is
+error @360..362: expected function body, found is
+error @360..362: expected top-level declaration, found is

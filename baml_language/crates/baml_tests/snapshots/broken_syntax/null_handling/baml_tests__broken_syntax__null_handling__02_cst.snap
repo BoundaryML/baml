@@ -1,0 +1,2016 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== null_handling.baml ===
+SourceFile@343..9638
+  items: ClassDef@343..394
+    kw: Class "class" @343..348
+    name: Name@349..356
+      token: Word "Address" @349..356
+    l: LBrace "{" @357..358
+    members: Field@363..376
+      name: Name@363..369
+        token: Word "street" @363..369
+      ty: PathType@370..376
+        head: Name@370..376
+          token: Word "string" @370..376
+    members: Field@381..392
+      name: Name@381..384
+        token: Word "zip" @381..384
+      ty: OptionalType@385..392
+        inner: PathType@385..391
+          head: Name@385..391
+            token: Word "string" @385..391
+        q: Question "?" @391..392
+    r: RBrace "}" @393..394
+  items: ClassDef@396..502
+    kw: Class "class" @396..401
+    name: Name@402..409
+      token: Word "Profile" @402..409
+    l: LBrace "{" @410..411
+    members: Field@416..427
+      name: Name@416..420
+        token: Word "name" @416..420
+      ty: PathType@421..427
+        head: Name@421..427
+          token: Word "string" @421..427
+    members: Field@432..448
+      name: Name@432..439
+        token: Word "address" @432..439
+      ty: OptionalType@440..448
+        inner: PathType@440..447
+          head: Name@440..447
+            token: Word "Address" @440..447
+        q: Question "?" @447..448
+    members: Field@453..466
+      name: Name@453..459
+        token: Word "scores" @453..459
+      ty: OptionalType@460..466
+        inner: ArrayType@460..465
+          inner: PathType@460..463
+            head: Name@460..463
+              token: Word "int" @460..463
+          l: LBracket "[" @463..464
+          r: RBracket "]" @464..465
+        q: Question "?" @465..466
+    members: Field@471..500
+      name: Name@471..479
+        token: Word "settings" @471..479
+      ty: OptionalType@480..500
+        inner: PathType@480..499
+          head: Name@480..483
+            token: Map "map" @480..483
+          args: TypeArgs@483..499
+            l: Less "<" @483..484
+            args: PathType@484..490
+              head: Name@484..490
+                token: Word "string" @484..490
+            args: Comma "," @490..491
+            args: PathType@492..498
+              head: Name@492..498
+                token: Word "string" @492..498
+            r: Greater ">" @498..499
+        q: Question "?" @499..500
+    r: RBrace "}" @501..502
+  items: ClassDef@504..550
+    kw: Class "class" @504..509
+    name: Name@510..514
+      token: Word "User" @510..514
+    l: LBrace "{" @515..516
+    members: Field@521..527
+      name: Name@521..523
+        token: Word "id" @521..523
+      ty: PathType@524..527
+        head: Name@524..527
+          token: Word "int" @524..527
+    members: Field@532..548
+      name: Name@532..539
+        token: Word "profile" @532..539
+      ty: OptionalType@540..548
+        inner: PathType@540..547
+          head: Name@540..547
+            token: Word "Profile" @540..547
+        q: Question "?" @547..548
+    r: RBrace "}" @549..550
+  items: ClassDef@552..646
+    kw: Class "class" @552..557
+    name: Name@558..562
+      token: Word "Node" @558..562
+    l: LBrace "{" @563..564
+    members: Field@569..578
+      name: Name@569..574
+        token: Word "value" @569..574
+      ty: PathType@575..578
+        head: Name@575..578
+          token: Word "int" @575..578
+    members: Field@583..593
+      name: Name@583..587
+        token: Word "next" @583..587
+      ty: OptionalType@588..593
+        inner: PathType@588..592
+          head: Name@588..592
+            token: Word "Node" @588..592
+        q: Question "?" @592..593
+    members: Field@598..614
+      name: Name@598..606
+        token: Word "children" @598..606
+      ty: OptionalType@607..614
+        inner: ArrayType@607..613
+          inner: PathType@607..611
+            head: Name@607..611
+              token: Word "Node" @607..611
+          l: LBracket "[" @611..612
+          r: RBracket "]" @612..613
+        q: Question "?" @613..614
+    members: Field@619..644
+      name: Name@619..625
+        token: Word "labels" @619..625
+      ty: OptionalType@626..644
+        inner: PathType@626..643
+          head: Name@626..629
+            token: Map "map" @626..629
+          args: TypeArgs@629..643
+            l: Less "<" @629..630
+            args: PathType@630..636
+              head: Name@630..636
+                token: Word "string" @630..636
+            args: Comma "," @636..637
+            args: PathType@638..642
+              head: Name@638..642
+                token: Word "Node" @638..642
+            r: Greater ">" @642..643
+        q: Question "?" @643..644
+    r: RBrace "}" @645..646
+  items: FunctionDef@838..2424
+    kw: Function "function" @838..846
+    name: Name@847..863
+      token: Word "OptionalChaining" @847..863
+    params: ParamList@863..908
+      l: LParen "(" @863..864
+      params: Param@864..875
+        name: Name@864..868
+          token: Word "user" @864..868
+        ascription: TypeAscription@868..875
+          colon: Colon ":" @868..869
+          ty: OptionalType@870..875
+            inner: PathType@870..874
+              head: Name@870..874
+                token: Word "User" @870..874
+            q: Question "?" @874..875
+      params: Comma "," @875..876
+      params: Param@877..894
+        name: Name@877..888
+          token: Word "nonNullUser" @877..888
+        ascription: TypeAscription@888..894
+          colon: Colon ":" @888..889
+          ty: PathType@890..894
+            head: Name@890..894
+              token: Word "User" @890..894
+      params: Comma "," @894..895
+      params: Param@896..907
+        name: Name@896..900
+          token: Word "node" @896..900
+        ascription: TypeAscription@900..907
+          colon: Colon ":" @900..901
+          ty: OptionalType@902..907
+            inner: PathType@902..906
+              head: Name@902..906
+                token: Word "Node" @902..906
+            q: Question "?" @906..907
+      r: RParen ")" @907..908
+    ret: ReturnType@909..918
+      arrow: Arrow "->" @909..911
+      ty: PathType@912..918
+        head: Name@912..918
+          token: Word "string" @912..918
+    body: Block@919..2424
+      l: LBrace "{" @919..920
+      stmts: LetStmt@998..1016
+        introducer: Let "let" @998..1001
+        pattern: BindingPattern@1002..1004
+          name: Name@1002..1004
+            token: Word "a1" @1002..1004
+        eq: Equals "=" @1005..1006
+        init: OptionalFieldAccessExpr@1007..1015
+          base: PathExpr@1007..1011
+            head: Name@1007..1011
+              token: Word "user" @1007..1011
+          qdot: QuestionDot "?." @1011..1013
+          name: Name@1013..1015
+            token: Word "id" @1013..1015
+        semi: Semicolon ";" @1015..1016
+      stmts: LetStmt@1046..1075
+        introducer: Let "let" @1046..1049
+        pattern: BindingPattern@1050..1052
+          name: Name@1050..1052
+            token: Word "a2" @1050..1052
+        eq: Equals "=" @1053..1054
+        init: OptionalFieldAccessExpr@1055..1074
+          base: OptionalFieldAccessExpr@1055..1068
+            base: PathExpr@1055..1059
+              head: Name@1055..1059
+                token: Word "user" @1055..1059
+            qdot: QuestionDot "?." @1059..1061
+            name: Name@1061..1068
+              token: Word "profile" @1061..1068
+          qdot: QuestionDot "?." @1068..1070
+          name: Name@1070..1074
+            token: Word "name" @1070..1074
+        semi: Semicolon ";" @1074..1075
+      stmts: LetStmt@1111..1151
+        introducer: Let "let" @1111..1114
+        pattern: BindingPattern@1115..1117
+          name: Name@1115..1117
+            token: Word "a3" @1115..1117
+        eq: Equals "=" @1118..1119
+        init: OptionalFieldAccessExpr@1120..1150
+          base: OptionalFieldAccessExpr@1120..1142
+            base: OptionalFieldAccessExpr@1120..1133
+              base: PathExpr@1120..1124
+                head: Name@1120..1124
+                  token: Word "user" @1120..1124
+              qdot: QuestionDot "?." @1124..1126
+              name: Name@1126..1133
+                token: Word "profile" @1126..1133
+            qdot: QuestionDot "?." @1133..1135
+            name: Name@1135..1142
+              token: Word "address" @1135..1142
+          qdot: QuestionDot "?." @1142..1144
+          name: Name@1144..1150
+            token: Word "street" @1144..1150
+        semi: Semicolon ";" @1150..1151
+      stmts: LetStmt@1312..1340
+        introducer: Let "let" @1312..1315
+        pattern: BindingPattern@1316..1318
+          name: Name@1316..1318
+            token: Word "a4" @1316..1318
+        eq: Equals "=" @1319..1320
+        init: FieldAccessExpr@1321..1339
+          base: OptionalFieldAccessExpr@1321..1334
+            base: PathExpr@1321..1325
+              head: Name@1321..1325
+                token: Word "user" @1321..1325
+            qdot: QuestionDot "?." @1325..1327
+            name: Name@1327..1334
+              token: Word "profile" @1327..1334
+          dot: Dot "." @1334..1335
+          name: Name@1335..1339
+            token: Word "name" @1335..1339
+        semi: Semicolon ";" @1339..1340
+      stmts: LetStmt@1390..1428
+        introducer: Let "let" @1390..1393
+        pattern: BindingPattern@1394..1396
+          name: Name@1394..1396
+            token: Word "a5" @1394..1396
+        eq: Equals "=" @1397..1398
+        init: FieldAccessExpr@1399..1427
+          base: FieldAccessExpr@1399..1420
+            base: OptionalFieldAccessExpr@1399..1412
+              base: PathExpr@1399..1403
+                head: Name@1399..1403
+                  token: Word "user" @1399..1403
+              qdot: QuestionDot "?." @1403..1405
+              name: Name@1405..1412
+                token: Word "profile" @1405..1412
+            dot: Dot "." @1412..1413
+            name: Name@1413..1420
+              token: Word "address" @1413..1420
+          dot: Dot "." @1420..1421
+          name: Name@1421..1427
+            token: Word "street" @1421..1427
+        semi: Semicolon ";" @1427..1428
+      stmts: LetStmt@1591..1630
+        introducer: Let "let" @1591..1594
+        pattern: BindingPattern@1595..1597
+          name: Name@1595..1597
+            token: Word "a6" @1595..1597
+        eq: Equals "=" @1598..1599
+        init: FieldAccessExpr@1600..1629
+          base: OptionalFieldAccessExpr@1600..1622
+            base: OptionalFieldAccessExpr@1600..1613
+              base: PathExpr@1600..1604
+                head: Name@1600..1604
+                  token: Word "user" @1600..1604
+              qdot: QuestionDot "?." @1604..1606
+              name: Name@1606..1613
+                token: Word "profile" @1606..1613
+            qdot: QuestionDot "?." @1613..1615
+            name: Name@1615..1622
+              token: Word "address" @1615..1622
+          dot: Dot "." @1622..1623
+          name: Name@1623..1629
+            token: Word "street" @1623..1629
+        semi: Semicolon ";" @1629..1630
+      stmts: LetStmt@1719..1749
+        introducer: Let "let" @1719..1722
+        pattern: BindingPattern@1723..1725
+          name: Name@1723..1725
+            token: Word "a7" @1723..1725
+        eq: Equals "=" @1726..1727
+        init: FieldAccessExpr@1728..1748
+          base: ParenExpr@1728..1743
+            l: LParen "(" @1728..1729
+            inner: OptionalFieldAccessExpr@1729..1742
+              base: PathExpr@1729..1733
+                head: Name@1729..1733
+                  token: Word "user" @1729..1733
+              qdot: QuestionDot "?." @1733..1735
+              name: Name@1735..1742
+                token: Word "profile" @1735..1742
+            r: RParen ")" @1742..1743
+          dot: Dot "." @1743..1744
+          name: Name@1744..1748
+            token: Word "name" @1744..1748
+        semi: Semicolon ";" @1748..1749
+      stmts: LetStmt@1819..1850
+        introducer: Let "let" @1819..1822
+        pattern: BindingPattern@1823..1825
+          name: Name@1823..1825
+            token: Word "a8" @1823..1825
+        eq: Equals "=" @1826..1827
+        init: ParenExpr@1828..1849
+          l: LParen "(" @1828..1829
+          inner: OptionalFieldAccessExpr@1829..1848
+            base: OptionalFieldAccessExpr@1829..1842
+              base: PathExpr@1829..1833
+                head: Name@1829..1833
+                  token: Word "user" @1829..1833
+              qdot: QuestionDot "?." @1833..1835
+              name: Name@1835..1842
+                token: Word "profile" @1835..1842
+            qdot: QuestionDot "?." @1842..1844
+            name: Name@1844..1848
+              token: Word "name" @1844..1848
+          r: RParen ")" @1848..1849
+        semi: Semicolon ";" @1849..1850
+      stmts: LetStmt@1906..1943
+        introducer: Let "let" @1906..1909
+        pattern: BindingPattern@1910..1912
+          name: Name@1910..1912
+            token: Word "a9" @1910..1912
+        eq: Equals "=" @1913..1914
+        init: OptionalFieldAccessExpr@1915..1942
+          base: OptionalFieldAccessExpr@1915..1937
+            base: OptionalFieldAccessExpr@1915..1928
+              base: PathExpr@1915..1919
+                head: Name@1915..1919
+                  token: Word "user" @1915..1919
+              qdot: QuestionDot "?." @1919..1921
+              name: Name@1921..1928
+                token: Word "profile" @1921..1928
+            qdot: QuestionDot "?." @1928..1930
+            name: Name@1930..1937
+              token: Word "address" @1930..1937
+          qdot: QuestionDot "?." @1937..1939
+          name: Name@1939..1942
+            token: Word "zip" @1939..1942
+        semi: Semicolon ";" @1942..1943
+      stmts: LetStmt@2004..2030
+        introducer: Let "let" @2004..2007
+        pattern: BindingPattern@2008..2011
+          name: Name@2008..2011
+            token: Word "a10" @2008..2011
+        eq: Equals "=" @2012..2013
+        init: OptionalFieldAccessExpr@2014..2029
+          base: PathExpr@2014..2025
+            head: Name@2014..2025
+              token: Word "nonNullUser" @2014..2025
+          qdot: QuestionDot "?." @2025..2027
+          name: Name@2027..2029
+            token: Word "id" @2027..2029
+        semi: Semicolon ";" @2029..2030
+      stmts: AssignStmt@2109..2141
+        target: OptionalFieldAccessExpr@2109..2128
+          base: OptionalFieldAccessExpr@2109..2122
+            base: PathExpr@2109..2113
+              head: Name@2109..2113
+                token: Word "user" @2109..2113
+            qdot: QuestionDot "?." @2113..2115
+            name: Name@2115..2122
+              token: Word "profile" @2115..2122
+          qdot: QuestionDot "?." @2122..2124
+          name: Name@2124..2128
+            token: Word "name" @2124..2128
+        op: Equals "=" @2129..2130
+        value: StringLit@2131..2140
+          token: String "\"updated\"" @2131..2140
+        semi: Semicolon ";" @2140..2141
+      stmts: AssignStmt@2169..2216
+        target: OptionalFieldAccessExpr@2169..2199
+          base: OptionalFieldAccessExpr@2169..2191
+            base: OptionalFieldAccessExpr@2169..2182
+              base: PathExpr@2169..2173
+                head: Name@2169..2173
+                  token: Word "user" @2169..2173
+              qdot: QuestionDot "?." @2173..2175
+              name: Name@2175..2182
+                token: Word "profile" @2175..2182
+            qdot: QuestionDot "?." @2182..2184
+            name: Name@2184..2191
+              token: Word "address" @2184..2191
+          qdot: QuestionDot "?." @2191..2193
+          name: Name@2193..2199
+            token: Word "street" @2193..2199
+        op: Equals "=" @2200..2201
+        value: StringLit@2202..2215
+          token: String "\"123 Main St\"" @2202..2215
+        semi: Semicolon ";" @2215..2216
+      stmts: AssignStmt@2300..2332
+        target: FieldAccessExpr@2300..2318
+          base: OptionalFieldAccessExpr@2300..2313
+            base: PathExpr@2300..2304
+              head: Name@2300..2304
+                token: Word "user" @2300..2304
+            qdot: QuestionDot "?." @2304..2306
+            name: Name@2306..2313
+              token: Word "profile" @2306..2313
+          dot: Dot "." @2313..2314
+          name: Name@2314..2318
+            token: Word "name" @2314..2318
+        op: Equals "=" @2319..2320
+        value: StringLit@2321..2331
+          token: String "\"updated2\"" @2321..2331
+        semi: Semicolon ";" @2331..2332
+      stmts: AssignStmt@2379..2393
+        target: OptionalFieldAccessExpr@2379..2387
+          base: PathExpr@2379..2383
+            head: Name@2379..2383
+              token: Word "user" @2379..2383
+          qdot: QuestionDot "?." @2383..2385
+          name: Name@2385..2387
+            token: Word "id" @2385..2387
+        op: PlusEquals "+=" @2388..2390
+        value: LiteralExpr@2391..2392
+          token: Integer "1" @2391..2392
+        semi: Semicolon ";" @2392..2393
+      stmts: ExprStmt@2399..2422
+        expr: ReturnExpr@2399..2421
+          kw: Return "return" @2399..2405
+          value: BinaryExpr@2406..2421
+            lhs: PathExpr@2406..2408
+              head: Name@2406..2408
+                token: Word "a2" @2406..2408
+            op: Question "?" @2409..2410
+            op: Question "?" @2410..2411
+            rhs: StringLit@2412..2421
+              token: String "\"default\"" @2412..2421
+        semi: Semicolon ";" @2421..2422
+      r: RBrace "}" @2423..2424
+  items: FunctionDef@2519..2634
+    kw: Function "function" @2519..2527
+    name: Name@2528..2559
+      token: Word "OptionalChainingAssignmentValue" @2528..2559
+    params: ParamList@2559..2572
+      l: LParen "(" @2559..2560
+      params: Param@2560..2571
+        name: Name@2560..2564
+          token: Word "user" @2560..2564
+        ascription: TypeAscription@2564..2571
+          colon: Colon ":" @2564..2565
+          ty: OptionalType@2566..2571
+            inner: PathType@2566..2570
+              head: Name@2566..2570
+                token: Word "User" @2566..2570
+            q: Question "?" @2570..2571
+      r: RParen ")" @2571..2572
+    ret: ReturnType@2573..2580
+      arrow: Arrow "->" @2573..2575
+      ty: PathType@2576..2580
+        head: Name@2576..2580
+          token: Null "null" @2576..2580
+    body: Block@2581..2634
+      l: LBrace "{" @2581..2582
+      stmts: LetStmt@2587..2632
+        introducer: Let "let" @2587..2590
+        pattern: BindingPattern@2591..2594
+          name: Name@2591..2594
+            token: Word "a11" @2591..2594
+        eq: Equals "=" @2595..2596
+        init: ParenExpr@2597..2631
+          l: LParen "(" @2597..2598
+          inner: OptionalFieldAccessExpr@2598..2617
+            base: OptionalFieldAccessExpr@2598..2611
+              base: PathExpr@2598..2602
+                head: Name@2598..2602
+                  token: Word "user" @2598..2602
+              qdot: QuestionDot "?." @2602..2604
+              name: Name@2604..2611
+                token: Word "profile" @2604..2611
+            qdot: QuestionDot "?." @2611..2613
+            name: Name@2613..2617
+              token: Word "name" @2613..2617
+          r: RParen ")" @2630..2631
+        semi: Semicolon ";" @2631..2632
+      r: RBrace "}" @2633..2634
+  items: FunctionDef@2844..4393
+    kw: Function "function" @2844..2852
+    name: Name@2853..2866
+      token: Word "OptionalIndex" @2853..2866
+    params: ParamList@2866..2942
+      l: LParen "(" @2866..2867
+      params: Param@2867..2878
+        name: Name@2867..2871
+          token: Word "node" @2867..2871
+        ascription: TypeAscription@2871..2878
+          colon: Colon ":" @2871..2872
+          ty: OptionalType@2873..2878
+            inner: PathType@2873..2877
+              head: Name@2873..2877
+                token: Word "Node" @2873..2877
+            q: Question "?" @2877..2878
+      params: Comma "," @2878..2879
+      params: Param@2880..2893
+        name: Name@2880..2885
+          token: Word "items" @2880..2885
+        ascription: TypeAscription@2885..2893
+          colon: Colon ":" @2885..2886
+          ty: OptionalType@2887..2893
+            inner: ArrayType@2887..2892
+              inner: PathType@2887..2890
+                head: Name@2887..2890
+                  token: Word "int" @2887..2890
+              l: LBracket "[" @2890..2891
+              r: RBracket "]" @2891..2892
+            q: Question "?" @2892..2893
+      params: Comma "," @2893..2894
+      params: Param@2895..2920
+        name: Name@2895..2901
+          token: Word "lookup" @2895..2901
+        ascription: TypeAscription@2901..2920
+          colon: Colon ":" @2901..2902
+          ty: OptionalType@2903..2920
+            inner: PathType@2903..2919
+              head: Name@2903..2906
+                token: Map "map" @2903..2906
+              args: TypeArgs@2906..2919
+                l: Less "<" @2906..2907
+                args: PathType@2907..2913
+                  head: Name@2907..2913
+                    token: Word "string" @2907..2913
+                args: Comma "," @2913..2914
+                args: PathType@2915..2918
+                  head: Name@2915..2918
+                    token: Word "int" @2915..2918
+                r: Greater ">" @2918..2919
+            q: Question "?" @2919..2920
+      params: Comma "," @2920..2921
+      params: Param@2922..2941
+        name: Name@2922..2934
+          token: Word "nonNullItems" @2922..2934
+        ascription: TypeAscription@2934..2941
+          colon: Colon ":" @2934..2935
+          ty: ArrayType@2936..2941
+            inner: PathType@2936..2939
+              head: Name@2936..2939
+                token: Word "int" @2936..2939
+            l: LBracket "[" @2939..2940
+            r: RBracket "]" @2940..2941
+      r: RParen ")" @2941..2942
+    ret: ReturnType@2943..2949
+      arrow: Arrow "->" @2943..2945
+      ty: PathType@2946..2949
+        head: Name@2946..2949
+          token: Word "int" @2946..2949
+    body: Block@2950..4393
+      l: LBrace "{" @2950..2951
+      stmts: LetStmt@3036..3056
+        introducer: Let "let" @3036..3039
+        pattern: BindingPattern@3040..3042
+          name: Name@3040..3042
+            token: Word "b1" @3040..3042
+        eq: Equals "=" @3043..3044
+        init: OptionalIndexExpr@3045..3055
+          base: PathExpr@3045..3050
+            head: Name@3045..3050
+              token: Word "items" @3045..3050
+          qdot: QuestionDot "?." @3050..3052
+          l: LBracket "[" @3052..3053
+          index: LiteralExpr@3053..3054
+            token: Integer "0" @3053..3054
+          r: RBracket "]" @3054..3055
+        semi: Semicolon ";" @3055..3056
+      stmts: LetStmt@3106..3135
+        introducer: Let "let" @3106..3109
+        pattern: BindingPattern@3110..3112
+          name: Name@3110..3112
+            token: Word "b2" @3110..3112
+        eq: Equals "=" @3113..3114
+        init: OptionalIndexExpr@3115..3134
+          base: OptionalFieldAccessExpr@3115..3129
+            base: PathExpr@3115..3119
+              head: Name@3115..3119
+                token: Word "node" @3115..3119
+            qdot: QuestionDot "?." @3119..3121
+            name: Name@3121..3129
+              token: Word "children" @3121..3129
+          qdot: QuestionDot "?." @3129..3131
+          l: LBracket "[" @3131..3132
+          index: LiteralExpr@3132..3133
+            token: Integer "0" @3132..3133
+          r: RBracket "]" @3133..3134
+        semi: Semicolon ";" @3134..3135
+      stmts: LetStmt@3222..3257
+        introducer: Let "let" @3222..3225
+        pattern: BindingPattern@3226..3228
+          name: Name@3226..3228
+            token: Word "b3" @3226..3228
+        eq: Equals "=" @3229..3230
+        init: FieldAccessExpr@3231..3256
+          base: OptionalIndexExpr@3231..3250
+            base: OptionalFieldAccessExpr@3231..3245
+              base: PathExpr@3231..3235
+                head: Name@3231..3235
+                  token: Word "node" @3231..3235
+              qdot: QuestionDot "?." @3235..3237
+              name: Name@3237..3245
+                token: Word "children" @3237..3245
+            qdot: QuestionDot "?." @3245..3247
+            l: LBracket "[" @3247..3248
+            index: LiteralExpr@3248..3249
+              token: Integer "0" @3248..3249
+            r: RBracket "]" @3249..3250
+          dot: Dot "." @3250..3251
+          name: Name@3251..3256
+            token: Word "value" @3251..3256
+        semi: Semicolon ";" @3256..3257
+      stmts: LetStmt@3300..3341
+        introducer: Let "let" @3300..3303
+        pattern: BindingPattern@3304..3306
+          name: Name@3304..3306
+            token: Word "b4" @3304..3306
+        eq: Equals "=" @3307..3308
+        init: OptionalFieldAccessExpr@3309..3340
+          base: FieldAccessExpr@3309..3333
+            base: OptionalIndexExpr@3309..3328
+              base: OptionalFieldAccessExpr@3309..3323
+                base: PathExpr@3309..3313
+                  head: Name@3309..3313
+                    token: Word "node" @3309..3313
+                qdot: QuestionDot "?." @3313..3315
+                name: Name@3315..3323
+                  token: Word "children" @3315..3323
+              qdot: QuestionDot "?." @3323..3325
+              l: LBracket "[" @3325..3326
+              index: LiteralExpr@3326..3327
+                token: Integer "0" @3326..3327
+              r: RBracket "]" @3327..3328
+            dot: Dot "." @3328..3329
+            name: Name@3329..3333
+              token: Word "next" @3329..3333
+          qdot: QuestionDot "?." @3333..3335
+          name: Name@3335..3340
+            token: Word "value" @3335..3340
+        semi: Semicolon ";" @3340..3341
+      stmts: LetStmt@3376..3403
+        introducer: Let "let" @3376..3379
+        pattern: BindingPattern@3380..3382
+          name: Name@3380..3382
+            token: Word "b5" @3380..3382
+        eq: Equals "=" @3383..3384
+        init: OptionalIndexExpr@3385..3402
+          base: PathExpr@3385..3391
+            head: Name@3385..3391
+              token: Word "lookup" @3385..3391
+          qdot: QuestionDot "?." @3391..3393
+          l: LBracket "[" @3393..3394
+          index: StringLit@3394..3401
+            token: String "\"total\"" @3394..3401
+          r: RBracket "]" @3401..3402
+        semi: Semicolon ";" @3402..3403
+      stmts: LetStmt@3429..3461
+        introducer: Let "let" @3429..3432
+        pattern: BindingPattern@3433..3435
+          name: Name@3433..3435
+            token: Word "b6" @3433..3435
+        eq: Equals "=" @3436..3437
+        init: OptionalIndexExpr@3438..3460
+          base: OptionalFieldAccessExpr@3438..3450
+            base: PathExpr@3438..3442
+              head: Name@3438..3442
+                token: Word "node" @3438..3442
+            qdot: QuestionDot "?." @3442..3444
+            name: Name@3444..3450
+              token: Word "labels" @3444..3450
+          qdot: QuestionDot "?." @3450..3452
+          l: LBracket "[" @3452..3453
+          index: StringLit@3453..3459
+            token: String "\"main\"" @3453..3459
+          r: RBracket "]" @3459..3460
+        semi: Semicolon ";" @3460..3461
+      stmts: LetStmt@3514..3552
+        introducer: Let "let" @3514..3517
+        pattern: BindingPattern@3518..3520
+          name: Name@3518..3520
+            token: Word "b7" @3518..3520
+        eq: Equals "=" @3521..3522
+        init: FieldAccessExpr@3523..3551
+          base: OptionalIndexExpr@3523..3545
+            base: OptionalFieldAccessExpr@3523..3535
+              base: PathExpr@3523..3527
+                head: Name@3523..3527
+                  token: Word "node" @3523..3527
+              qdot: QuestionDot "?." @3527..3529
+              name: Name@3529..3535
+                token: Word "labels" @3529..3535
+            qdot: QuestionDot "?." @3535..3537
+            l: LBracket "[" @3537..3538
+            index: StringLit@3538..3544
+              token: String "\"main\"" @3538..3544
+            r: RBracket "]" @3544..3545
+          dot: Dot "." @3545..3546
+          name: Name@3546..3551
+            token: Word "value" @3546..3551
+        semi: Semicolon ";" @3551..3552
+      stmts: LetStmt@3628..3659
+        introducer: Let "let" @3628..3631
+        pattern: BindingPattern@3632..3634
+          name: Name@3632..3634
+            token: Word "b8" @3632..3634
+        eq: Equals "=" @3635..3636
+        init: OptionalIndexExpr@3637..3658
+          base: ParenExpr@3637..3653
+            l: LParen "(" @3637..3638
+            inner: OptionalFieldAccessExpr@3638..3652
+              base: PathExpr@3638..3642
+                head: Name@3638..3642
+                  token: Word "node" @3638..3642
+              qdot: QuestionDot "?." @3642..3644
+              name: Name@3644..3652
+                token: Word "children" @3644..3652
+            r: RParen ")" @3652..3653
+          qdot: QuestionDot "?." @3653..3655
+          l: LBracket "[" @3655..3656
+          index: LiteralExpr@3656..3657
+            token: Integer "0" @3656..3657
+          r: RBracket "]" @3657..3658
+        semi: Semicolon ";" @3658..3659
+      stmts: LetStmt@3664..3698
+        introducer: Let "let" @3664..3667
+        pattern: BindingPattern@3668..3670
+          name: Name@3668..3670
+            token: Word "b9" @3668..3670
+        eq: Equals "=" @3671..3672
+        init: CallExpr@3673..3697
+          callee: FieldAccessExpr@3673..3695
+            base: ParenExpr@3673..3685
+              l: LParen "(" @3673..3674
+              inner: OptionalIndexExpr@3674..3684
+                base: PathExpr@3674..3679
+                  head: Name@3674..3679
+                    token: Word "items" @3674..3679
+                qdot: QuestionDot "?." @3679..3681
+                l: LBracket "[" @3681..3682
+                index: LiteralExpr@3682..3683
+                  token: Integer "0" @3682..3683
+                r: RBracket "]" @3683..3684
+              r: RParen ")" @3684..3685
+            dot: Dot "." @3685..3686
+            name: Name@3686..3695
+              token: Word "to_string" @3686..3695
+          args: ArgList@3695..3697
+            l: LParen "(" @3695..3696
+            r: RParen ")" @3696..3697
+        semi: Semicolon ";" @3697..3698
+      stmts: LetStmt@3790..3830
+        introducer: Let "let" @3790..3793
+        pattern: BindingPattern@3794..3797
+          name: Name@3794..3797
+            token: Word "b10" @3794..3797
+        eq: Equals "=" @3798..3799
+        init: OptionalIndexExpr@3800..3829
+          base: OptionalFieldAccessExpr@3800..3814
+            base: PathExpr@3800..3804
+              head: Name@3800..3804
+                token: Word "node" @3800..3804
+            qdot: QuestionDot "?." @3804..3806
+            name: Name@3806..3814
+              token: Word "children" @3806..3814
+          qdot: QuestionDot "?." @3814..3816
+          l: LBracket "[" @3816..3817
+          index: OptionalFieldAccessExpr@3817..3828
+            base: PathExpr@3817..3821
+              head: Name@3817..3821
+                token: Word "node" @3817..3821
+            qdot: QuestionDot "?." @3821..3823
+            name: Name@3823..3828
+              token: Word "value" @3823..3828
+          r: RBracket "]" @3828..3829
+        semi: Semicolon ";" @3829..3830
+      stmts: LetStmt@3879..3923
+        introducer: Let "let" @3879..3882
+        pattern: BindingPattern@3883..3886
+          name: Name@3883..3886
+            token: Word "b11" @3883..3886
+        eq: Equals "=" @3887..3888
+        init: OptionalIndexExpr@3889..3922
+          base: OptionalFieldAccessExpr@3889..3903
+            base: PathExpr@3889..3893
+              head: Name@3889..3893
+                token: Word "node" @3889..3893
+            qdot: QuestionDot "?." @3893..3895
+            name: Name@3895..3903
+              token: Word "children" @3895..3903
+          qdot: QuestionDot "?." @3903..3905
+          l: LBracket "[" @3905..3906
+          index: BinaryExpr@3906..3921
+            lhs: OptionalIndexExpr@3906..3916
+              base: PathExpr@3906..3911
+                head: Name@3906..3911
+                  token: Word "items" @3906..3911
+              qdot: QuestionDot "?." @3911..3913
+              l: LBracket "[" @3913..3914
+              index: LiteralExpr@3914..3915
+                token: Integer "0" @3914..3915
+              r: RBracket "]" @3915..3916
+            op: Question "?" @3917..3918
+            op: Question "?" @3918..3919
+            rhs: LiteralExpr@3920..3921
+              token: Integer "0" @3920..3921
+          r: RBracket "]" @3921..3922
+        semi: Semicolon ";" @3922..3923
+      stmts: LetStmt@3977..4005
+        introducer: Let "let" @3977..3980
+        pattern: BindingPattern@3981..3984
+          name: Name@3981..3984
+            token: Word "b12" @3981..3984
+        eq: Equals "=" @3985..3986
+        init: OptionalIndexExpr@3987..4004
+          base: PathExpr@3987..3999
+            head: Name@3987..3999
+              token: Word "nonNullItems" @3987..3999
+          qdot: QuestionDot "?." @3999..4001
+          l: LBracket "[" @4001..4002
+          index: LiteralExpr@4002..4003
+            token: Integer "0" @4002..4003
+          r: RBracket "]" @4003..4004
+        semi: Semicolon ";" @4004..4005
+      stmts: AssignStmt@4080..4096
+        target: OptionalIndexExpr@4080..4090
+          base: PathExpr@4080..4085
+            head: Name@4080..4085
+              token: Word "items" @4080..4085
+          qdot: QuestionDot "?." @4085..4087
+          l: LBracket "[" @4087..4088
+          index: LiteralExpr@4088..4089
+            token: Integer "0" @4088..4089
+          r: RBracket "]" @4089..4090
+        op: Equals "=" @4091..4092
+        value: LiteralExpr@4093..4095
+          token: Integer "42" @4093..4095
+        semi: Semicolon ";" @4095..4096
+      stmts: AssignStmt@4132..4163
+        target: FieldAccessExpr@4132..4157
+          base: OptionalIndexExpr@4132..4151
+            base: OptionalFieldAccessExpr@4132..4146
+              base: PathExpr@4132..4136
+                head: Name@4132..4136
+                  token: Word "node" @4132..4136
+              qdot: QuestionDot "?." @4136..4138
+              name: Name@4138..4146
+                token: Word "children" @4138..4146
+            qdot: QuestionDot "?." @4146..4148
+            l: LBracket "[" @4148..4149
+            index: LiteralExpr@4149..4150
+              token: Integer "0" @4149..4150
+            r: RBracket "]" @4150..4151
+          dot: Dot "." @4151..4152
+          name: Name@4152..4157
+            token: Word "value" @4152..4157
+        op: Equals "=" @4158..4159
+        value: LiteralExpr@4160..4162
+          token: Integer "99" @4160..4162
+        semi: Semicolon ";" @4162..4163
+      stmts: AssignStmt@4184..4208
+        target: OptionalIndexExpr@4184..4201
+          base: PathExpr@4184..4190
+            head: Name@4184..4190
+              token: Word "lookup" @4184..4190
+          qdot: QuestionDot "?." @4190..4192
+          l: LBracket "[" @4192..4193
+          index: StringLit@4193..4200
+            token: String "\"total\"" @4193..4200
+          r: RBracket "]" @4200..4201
+        op: Equals "=" @4202..4203
+        value: LiteralExpr@4204..4207
+          token: Integer "100" @4204..4207
+        semi: Semicolon ";" @4207..4208
+      stmts: AssignStmt@4243..4277
+        target: FieldAccessExpr@4243..4271
+          base: OptionalIndexExpr@4243..4265
+            base: OptionalFieldAccessExpr@4243..4255
+              base: PathExpr@4243..4247
+                head: Name@4243..4247
+                  token: Word "node" @4243..4247
+              qdot: QuestionDot "?." @4247..4249
+              name: Name@4249..4255
+                token: Word "labels" @4249..4255
+            qdot: QuestionDot "?." @4255..4257
+            l: LBracket "[" @4257..4258
+            index: StringLit@4258..4264
+              token: String "\"main\"" @4258..4264
+            r: RBracket "]" @4264..4265
+          dot: Dot "." @4265..4266
+          name: Name@4266..4271
+            token: Word "value" @4266..4271
+        op: Equals "=" @4272..4273
+        value: LiteralExpr@4274..4276
+          token: Integer "50" @4274..4276
+        semi: Semicolon ";" @4276..4277
+      stmts: AssignStmt@4325..4342
+        target: OptionalIndexExpr@4325..4335
+          base: PathExpr@4325..4330
+            head: Name@4325..4330
+              token: Word "items" @4325..4330
+          qdot: QuestionDot "?." @4330..4332
+          l: LBracket "[" @4332..4333
+          index: LiteralExpr@4333..4334
+            token: Integer "0" @4333..4334
+          r: RBracket "]" @4334..4335
+        op: PlusEquals "+=" @4336..4338
+        value: LiteralExpr@4339..4341
+          token: Integer "10" @4339..4341
+        semi: Semicolon ";" @4341..4342
+      stmts: AssignStmt@4347..4370
+        target: OptionalIndexExpr@4347..4364
+          base: PathExpr@4347..4353
+            head: Name@4347..4353
+              token: Word "lookup" @4347..4353
+          qdot: QuestionDot "?." @4353..4355
+          l: LBracket "[" @4355..4356
+          index: StringLit@4356..4363
+            token: String "\"total\"" @4356..4363
+          r: RBracket "]" @4363..4364
+        op: PlusEquals "+=" @4365..4367
+        value: LiteralExpr@4368..4369
+          token: Integer "5" @4368..4369
+        semi: Semicolon ";" @4369..4370
+      stmts: ExprStmt@4376..4391
+        expr: ReturnExpr@4376..4390
+          kw: Return "return" @4376..4382
+          value: BinaryExpr@4383..4390
+            lhs: PathExpr@4383..4385
+              head: Name@4383..4385
+                token: Word "b1" @4383..4385
+            op: Question "?" @4386..4387
+            op: Question "?" @4387..4388
+            rhs: LiteralExpr@4389..4390
+              token: Integer "0" @4389..4390
+        semi: Semicolon ";" @4390..4391
+      r: RBrace "}" @4392..4393
+  items: FunctionDef@4491..4588
+    kw: Function "function" @4491..4499
+    name: Name@4500..4528
+      token: Word "OptionalIndexAssignmentValue" @4500..4528
+    params: ParamList@4528..4543
+      l: LParen "(" @4528..4529
+      params: Param@4529..4542
+        name: Name@4529..4534
+          token: Word "items" @4529..4534
+        ascription: TypeAscription@4534..4542
+          colon: Colon ":" @4534..4535
+          ty: OptionalType@4536..4542
+            inner: ArrayType@4536..4541
+              inner: PathType@4536..4539
+                head: Name@4536..4539
+                  token: Word "int" @4536..4539
+              l: LBracket "[" @4539..4540
+              r: RBracket "]" @4540..4541
+            q: Question "?" @4541..4542
+      r: RParen ")" @4542..4543
+    ret: ReturnType@4544..4551
+      arrow: Arrow "->" @4544..4546
+      ty: PathType@4547..4551
+        head: Name@4547..4551
+          token: Null "null" @4547..4551
+    body: Block@4552..4588
+      l: LBrace "{" @4552..4553
+      stmts: LetStmt@4558..4586
+        introducer: Let "let" @4558..4561
+        pattern: BindingPattern@4562..4565
+          name: Name@4562..4565
+            token: Word "b13" @4562..4565
+        eq: Equals "=" @4566..4567
+        init: ParenExpr@4568..4585
+          l: LParen "(" @4568..4569
+          inner: OptionalIndexExpr@4569..4579
+            base: PathExpr@4569..4574
+              head: Name@4569..4574
+                token: Word "items" @4569..4574
+            qdot: QuestionDot "?." @4574..4576
+            l: LBracket "[" @4576..4577
+            index: LiteralExpr@4577..4578
+              token: Integer "0" @4577..4578
+            r: RBracket "]" @4578..4579
+          r: RParen ")" @4584..4585
+        semi: Semicolon ";" @4585..4586
+      r: RBrace "}" @4587..4588
+  items: FunctionDef@4778..5803
+    kw: Function "function" @4778..4786
+    name: Name@4787..4799
+      token: Word "OptionalCall" @4787..4799
+    params: ParamList@4799..4870
+      l: LParen "(" @4799..4800
+      params: Param@4800..4826
+        name: Name@4800..4808
+          token: Word "callback" @4800..4808
+        ascription: TypeAscription@4808..4826
+          colon: Colon ":" @4808..4809
+          ty: FunctionType@4810..4826
+            l: LParen "(" @4810..4811
+            params: FunctionTypeParam@4811..4814
+              ty: PathType@4811..4814
+                head: Name@4811..4814
+                  token: Word "int" @4811..4814
+            r: RParen ")" @4814..4815
+            arrow: Arrow "->" @4816..4818
+            ret: OptionalType@4819..4826
+              inner: PathType@4819..4825
+                head: Name@4819..4825
+                  token: Word "string" @4819..4825
+              q: Question "?" @4825..4826
+      params: Comma "," @4826..4827
+      params: Param@4828..4854
+        name: Name@4828..4837
+          token: Word "nonNullCb" @4828..4837
+        ascription: TypeAscription@4837..4854
+          colon: Colon ":" @4837..4838
+          ty: FunctionType@4839..4854
+            l: LParen "(" @4839..4840
+            params: FunctionTypeParam@4840..4843
+              ty: PathType@4840..4843
+                head: Name@4840..4843
+                  token: Word "int" @4840..4843
+            r: RParen ")" @4843..4844
+            arrow: Arrow "->" @4845..4847
+            ret: PathType@4848..4854
+              head: Name@4848..4854
+                token: Word "string" @4848..4854
+      params: Comma "," @4854..4855
+      params: Param@4856..4869
+        name: Name@4856..4860
+          token: Word "name" @4856..4860
+        ascription: TypeAscription@4860..4869
+          colon: Colon ":" @4860..4861
+          ty: OptionalType@4862..4869
+            inner: PathType@4862..4868
+              head: Name@4862..4868
+                token: Word "string" @4862..4868
+            q: Question "?" @4868..4869
+      r: RParen ")" @4869..4870
+    ret: ReturnType@4871..4880
+      arrow: Arrow "->" @4871..4873
+      ty: PathType@4874..4880
+        head: Name@4874..4880
+          token: Word "string" @4874..4880
+    body: Block@4881..5803
+      l: LBrace "{" @4881..4882
+      stmts: LetStmt@4978..5002
+        introducer: Let "let" @4978..4981
+        pattern: BindingPattern@4982..4984
+          name: Name@4982..4984
+            token: Word "c1" @4982..4984
+        eq: Equals "=" @4985..4986
+        init: OptionalCallExpr@4987..5001
+          callee: PathExpr@4987..4995
+            head: Name@4987..4995
+              token: Word "callback" @4987..4995
+          qdot: QuestionDot "?." @4995..4997
+          args: ArgList@4997..5001
+            l: LParen "(" @4997..4998
+            args: Arg@4998..5000
+              value: LiteralExpr@4998..5000
+                token: Integer "42" @4998..5000
+            r: RParen ")" @5000..5001
+        semi: Semicolon ";" @5001..5002
+      stmts: LetStmt@5084..5115
+        introducer: Let "let" @5084..5087
+        pattern: BindingPattern@5088..5090
+          name: Name@5088..5090
+            token: Word "c2" @5088..5090
+        eq: Equals "=" @5091..5092
+        init: FieldAccessExpr@5093..5114
+          base: OptionalCallExpr@5093..5107
+            callee: PathExpr@5093..5101
+              head: Name@5093..5101
+                token: Word "callback" @5093..5101
+            qdot: QuestionDot "?." @5101..5103
+            args: ArgList@5103..5107
+              l: LParen "(" @5103..5104
+              args: Arg@5104..5106
+                value: LiteralExpr@5104..5106
+                  token: Integer "42" @5104..5106
+              r: RParen ")" @5106..5107
+          dot: Dot "." @5107..5108
+          name: Name@5108..5114
+            token: Word "length" @5108..5114
+        semi: Semicolon ";" @5114..5115
+      stmts: LetStmt@5309..5342
+        introducer: Let "let" @5309..5312
+        pattern: BindingPattern@5313..5315
+          name: Name@5313..5315
+            token: Word "c3" @5313..5315
+        eq: Equals "=" @5316..5317
+        init: FieldAccessExpr@5318..5341
+          base: ParenExpr@5318..5334
+            l: LParen "(" @5318..5319
+            inner: OptionalCallExpr@5319..5333
+              callee: PathExpr@5319..5327
+                head: Name@5319..5327
+                  token: Word "callback" @5319..5327
+              qdot: QuestionDot "?." @5327..5329
+              args: ArgList@5329..5333
+                l: LParen "(" @5329..5330
+                args: Arg@5330..5332
+                  value: LiteralExpr@5330..5332
+                    token: Integer "42" @5330..5332
+                r: RParen ")" @5332..5333
+            r: RParen ")" @5333..5334
+          dot: Dot "." @5334..5335
+          name: Name@5335..5341
+            token: Word "length" @5335..5341
+        semi: Semicolon ";" @5341..5342
+      stmts: LetStmt@5408..5428
+        introducer: Let "let" @5408..5411
+        pattern: BindingPattern@5412..5414
+          name: Name@5412..5414
+            token: Word "c4" @5412..5414
+        eq: Equals "=" @5415..5416
+        init: OptionalCallExpr@5417..5427
+          callee: PathExpr@5417..5421
+            head: Name@5417..5421
+              token: Word "name" @5417..5421
+          qdot: QuestionDot "?." @5421..5423
+          args: ArgList@5423..5427
+            l: LParen "(" @5423..5424
+            args: Arg@5424..5426
+              value: LiteralExpr@5424..5426
+                token: Integer "42" @5424..5426
+            r: RParen ")" @5426..5427
+        semi: Semicolon ";" @5427..5428
+      stmts: LetStmt@5491..5516
+        introducer: Let "let" @5491..5494
+        pattern: BindingPattern@5495..5497
+          name: Name@5495..5497
+            token: Word "c5" @5495..5497
+        eq: Equals "=" @5498..5499
+        init: OptionalCallExpr@5500..5515
+          callee: PathExpr@5500..5509
+            head: Name@5500..5509
+              token: Word "nonNullCb" @5500..5509
+          qdot: QuestionDot "?." @5509..5511
+          args: ArgList@5511..5515
+            l: LParen "(" @5511..5512
+            args: Arg@5512..5514
+              value: LiteralExpr@5512..5514
+                token: Integer "42" @5512..5514
+            r: RParen ")" @5514..5515
+        semi: Semicolon ";" @5515..5516
+      stmts: ExprStmt@5778..5801
+        expr: ReturnExpr@5778..5800
+          kw: Return "return" @5778..5784
+          value: BinaryExpr@5785..5800
+            lhs: PathExpr@5785..5787
+              head: Name@5785..5787
+                token: Word "c1" @5785..5787
+            op: Question "?" @5788..5789
+            op: Question "?" @5789..5790
+            rhs: StringLit@5791..5800
+              token: String "\"default\"" @5791..5800
+        semi: Semicolon ";" @5800..5801
+      r: RBrace "}" @5802..5803
+  items: FunctionDef@5993..7686
+    kw: Function "function" @5993..6001
+    name: Name@6002..6016
+      token: Word "NullCoalescing" @6002..6016
+    params: ParamList@6016..6059
+      l: LParen "(" @6016..6017
+      params: Param@6017..6028
+        name: Name@6017..6021
+          token: Word "user" @6017..6021
+        ascription: TypeAscription@6021..6028
+          colon: Colon ":" @6021..6022
+          ty: OptionalType@6023..6028
+            inner: PathType@6023..6027
+              head: Name@6023..6027
+                token: Word "User" @6023..6027
+            q: Question "?" @6027..6028
+      params: Comma "," @6028..6029
+      params: Param@6030..6046
+        name: Name@6030..6038
+          token: Word "fallback" @6030..6038
+        ascription: TypeAscription@6038..6046
+          colon: Colon ":" @6038..6039
+          ty: PathType@6040..6046
+            head: Name@6040..6046
+              token: Word "string" @6040..6046
+      params: Comma "," @6046..6047
+      params: Param@6048..6058
+        name: Name@6048..6053
+          token: Word "count" @6048..6053
+        ascription: TypeAscription@6053..6058
+          colon: Colon ":" @6053..6054
+          ty: PathType@6055..6058
+            head: Name@6055..6058
+              token: Word "int" @6055..6058
+      r: RParen ")" @6058..6059
+    ret: ReturnType@6060..6069
+      arrow: Arrow "->" @6060..6062
+      ty: PathType@6063..6069
+        head: Name@6063..6069
+          token: Word "string" @6063..6069
+    body: Block@6070..7686
+      l: LBrace "{" @6070..6071
+      stmts: LetStmt@6139..6183
+        introducer: Let "let" @6139..6142
+        pattern: BindingPattern@6143..6145
+          name: Name@6143..6145
+            token: Word "d1" @6143..6145
+        eq: Equals "=" @6146..6147
+        init: BinaryExpr@6148..6182
+          lhs: OptionalFieldAccessExpr@6148..6167
+            base: OptionalFieldAccessExpr@6148..6161
+              base: PathExpr@6148..6152
+                head: Name@6148..6152
+                  token: Word "user" @6148..6152
+              qdot: QuestionDot "?." @6152..6154
+              name: Name@6154..6161
+                token: Word "profile" @6154..6161
+            qdot: QuestionDot "?." @6161..6163
+            name: Name@6163..6167
+              token: Word "name" @6163..6167
+          op: Question "?" @6168..6169
+          op: Question "?" @6169..6170
+          rhs: StringLit@6171..6182
+            token: String "\"Anonymous\"" @6171..6182
+        semi: Semicolon ";" @6182..6183
+      stmts: LetStmt@6218..6294
+        introducer: Let "let" @6218..6221
+        pattern: BindingPattern@6222..6224
+          name: Name@6222..6224
+            token: Word "d2" @6222..6224
+        eq: Equals "=" @6225..6226
+        init: BinaryExpr@6227..6293
+          lhs: BinaryExpr@6227..6280
+            lhs: OptionalFieldAccessExpr@6227..6246
+              base: OptionalFieldAccessExpr@6227..6240
+                base: PathExpr@6227..6231
+                  head: Name@6227..6231
+                    token: Word "user" @6227..6231
+                qdot: QuestionDot "?." @6231..6233
+                name: Name@6233..6240
+                  token: Word "profile" @6233..6240
+              qdot: QuestionDot "?." @6240..6242
+              name: Name@6242..6246
+                token: Word "name" @6242..6246
+            op: Question "?" @6247..6248
+            op: Question "?" @6248..6249
+            rhs: OptionalFieldAccessExpr@6250..6280
+              base: OptionalFieldAccessExpr@6250..6272
+                base: OptionalFieldAccessExpr@6250..6263
+                  base: PathExpr@6250..6254
+                    head: Name@6250..6254
+                      token: Word "user" @6250..6254
+                  qdot: QuestionDot "?." @6254..6256
+                  name: Name@6256..6263
+                    token: Word "profile" @6256..6263
+                qdot: QuestionDot "?." @6263..6265
+                name: Name@6265..6272
+                  token: Word "address" @6265..6272
+              qdot: QuestionDot "?." @6272..6274
+              name: Name@6274..6280
+                token: Word "street" @6274..6280
+          op: Question "?" @6281..6282
+          op: Question "?" @6282..6283
+          rhs: StringLit@6284..6293
+            token: String "\"Unknown\"" @6284..6293
+        semi: Semicolon ";" @6293..6294
+      stmts: LetStmt@6362..6411
+        introducer: Let "let" @6362..6365
+        pattern: BindingPattern@6366..6376
+          name: Name@6366..6368
+            token: Word "d3" @6366..6368
+          colon: Colon ":" @6368..6369
+          pattern: TypePattern@6370..6376
+            ty: PathType@6370..6376
+              head: Name@6370..6376
+                token: Word "string" @6370..6376
+        eq: Equals "=" @6377..6378
+        init: BinaryExpr@6379..6410
+          lhs: OptionalFieldAccessExpr@6379..6398
+            base: OptionalFieldAccessExpr@6379..6392
+              base: PathExpr@6379..6383
+                head: Name@6379..6383
+                  token: Word "user" @6379..6383
+              qdot: QuestionDot "?." @6383..6385
+              name: Name@6385..6392
+                token: Word "profile" @6385..6392
+            qdot: QuestionDot "?." @6392..6394
+            name: Name@6394..6398
+              token: Word "name" @6394..6398
+          op: Question "?" @6399..6400
+          op: Question "?" @6400..6401
+          rhs: PathExpr@6402..6410
+            head: Name@6402..6410
+              token: Word "fallback" @6402..6410
+        semi: Semicolon ";" @6410..6411
+      stmts: LetStmt@6461..6530
+        introducer: Let "let" @6461..6464
+        pattern: BindingPattern@6465..6476
+          name: Name@6465..6467
+            token: Word "d4" @6465..6467
+          colon: Colon ":" @6467..6468
+          pattern: TypePattern@6469..6476
+            ty: OptionalType@6469..6476
+              inner: PathType@6469..6475
+                head: Name@6469..6475
+                  token: Word "string" @6469..6475
+              q: Question "?" @6475..6476
+        eq: Equals "=" @6477..6478
+        init: BinaryExpr@6479..6529
+          lhs: OptionalFieldAccessExpr@6479..6498
+            base: OptionalFieldAccessExpr@6479..6492
+              base: PathExpr@6479..6483
+                head: Name@6479..6483
+                  token: Word "user" @6479..6483
+              qdot: QuestionDot "?." @6483..6485
+              name: Name@6485..6492
+                token: Word "profile" @6485..6492
+            qdot: QuestionDot "?." @6492..6494
+            name: Name@6494..6498
+              token: Word "name" @6494..6498
+          op: Question "?" @6499..6500
+          op: Question "?" @6500..6501
+          rhs: OptionalFieldAccessExpr@6502..6529
+            base: OptionalFieldAccessExpr@6502..6524
+              base: OptionalFieldAccessExpr@6502..6515
+                base: PathExpr@6502..6506
+                  head: Name@6502..6506
+                    token: Word "user" @6502..6506
+                qdot: QuestionDot "?." @6506..6508
+                name: Name@6508..6515
+                  token: Word "profile" @6508..6515
+              qdot: QuestionDot "?." @6515..6517
+              name: Name@6517..6524
+                token: Word "address" @6517..6524
+            qdot: QuestionDot "?." @6524..6526
+            name: Name@6526..6529
+              token: Word "zip" @6526..6529
+        semi: Semicolon ";" @6529..6530
+      stmts: LetStmt@6563..6604
+        introducer: Let "let" @6563..6566
+        pattern: BindingPattern@6567..6569
+          name: Name@6567..6569
+            token: Word "d5" @6567..6569
+        eq: Equals "=" @6570..6571
+        init: BinaryExpr@6572..6603
+          lhs: OptionalIndexExpr@6572..6598
+            base: OptionalFieldAccessExpr@6572..6593
+              base: OptionalFieldAccessExpr@6572..6585
+                base: PathExpr@6572..6576
+                  head: Name@6572..6576
+                    token: Word "user" @6572..6576
+                qdot: QuestionDot "?." @6576..6578
+                name: Name@6578..6585
+                  token: Word "profile" @6578..6585
+              qdot: QuestionDot "?." @6585..6587
+              name: Name@6587..6593
+                token: Word "scores" @6587..6593
+            qdot: QuestionDot "?." @6593..6595
+            l: LBracket "[" @6595..6596
+            index: LiteralExpr@6596..6597
+              token: Integer "0" @6596..6597
+            r: RBracket "]" @6597..6598
+          op: Question "?" @6599..6600
+          op: Question "?" @6600..6601
+          rhs: LiteralExpr@6602..6603
+            token: Integer "0" @6602..6603
+        semi: Semicolon ";" @6603..6604
+      stmts: LetStmt@6811..6852
+        introducer: Let "let" @6811..6814
+        pattern: BindingPattern@6815..6817
+          name: Name@6815..6817
+            token: Word "d6" @6815..6817
+        eq: Equals "=" @6818..6819
+        init: BinaryExpr@6820..6851
+          lhs: OptionalFieldAccessExpr@6820..6839
+            base: OptionalFieldAccessExpr@6820..6833
+              base: PathExpr@6820..6824
+                head: Name@6820..6824
+                  token: Word "user" @6820..6824
+              qdot: QuestionDot "?." @6824..6826
+              name: Name@6826..6833
+                token: Word "profile" @6826..6833
+            qdot: QuestionDot "?." @6833..6835
+            name: Name@6835..6839
+              token: Word "name" @6835..6839
+          op: Question "?" @6840..6841
+          op: Question "?" @6841..6842
+          rhs: PathExpr@6843..6851
+            head: Name@6843..6851
+              token: Word "fallback" @6843..6851
+        semi: Semicolon ";" @6851..6852
+      stmts: AssignStmt@6974..7042
+        target: OptionalFieldAccessExpr@6974..6993
+          base: OptionalFieldAccessExpr@6974..6987
+            base: PathExpr@6974..6978
+              head: Name@6974..6978
+                token: Word "user" @6974..6978
+            qdot: QuestionDot "?." @6978..6980
+            name: Name@6980..6987
+              token: Word "profile" @6980..6987
+          qdot: QuestionDot "?." @6987..6989
+          name: Name@6989..6993
+            token: Word "name" @6989..6993
+        op: Equals "=" @6994..6995
+        value: BinaryExpr@6996..7041
+          lhs: OptionalFieldAccessExpr@6996..7026
+            base: OptionalFieldAccessExpr@6996..7018
+              base: OptionalFieldAccessExpr@6996..7009
+                base: PathExpr@6996..7000
+                  head: Name@6996..7000
+                    token: Word "user" @6996..7000
+                qdot: QuestionDot "?." @7000..7002
+                name: Name@7002..7009
+                  token: Word "profile" @7002..7009
+              qdot: QuestionDot "?." @7009..7011
+              name: Name@7011..7018
+                token: Word "address" @7011..7018
+            qdot: QuestionDot "?." @7018..7020
+            name: Name@7020..7026
+              token: Word "street" @7020..7026
+          op: Question "?" @7027..7028
+          op: Question "?" @7028..7029
+          rhs: StringLit@7030..7041
+            token: String "\"no street\"" @7030..7041
+        semi: Semicolon ";" @7041..7042
+      stmts: LetStmt@7326..7369
+        introducer: Let "let" @7326..7329
+        pattern: BindingPattern@7330..7332
+          name: Name@7330..7332
+            token: Word "d7" @7330..7332
+        eq: Equals "=" @7333..7334
+        init: ParenExpr@7335..7368
+          l: LParen "(" @7335..7336
+          inner: BinaryExpr@7336..7367
+            lhs: OptionalFieldAccessExpr@7336..7355
+              base: OptionalFieldAccessExpr@7336..7349
+                base: PathExpr@7336..7340
+                  head: Name@7336..7340
+                    token: Word "user" @7336..7340
+                qdot: QuestionDot "?." @7340..7342
+                name: Name@7342..7349
+                  token: Word "profile" @7342..7349
+              qdot: QuestionDot "?." @7349..7351
+              name: Name@7351..7355
+                token: Word "name" @7351..7355
+            op: Question "?" @7356..7357
+            op: Question "?" @7357..7358
+            rhs: PathExpr@7359..7367
+              head: Name@7359..7367
+                token: Word "fallback" @7359..7367
+          r: RParen ")" @7367..7368
+        semi: Semicolon ";" @7368..7369
+      stmts: LetStmt@7433..7453
+        introducer: Let "let" @7433..7436
+        pattern: BindingPattern@7437..7439
+          name: Name@7437..7439
+            token: Word "d8" @7437..7439
+        eq: Equals "=" @7440..7441
+        init: BinaryExpr@7442..7452
+          lhs: PathExpr@7442..7447
+            head: Name@7442..7447
+              token: Word "count" @7442..7447
+          op: Question "?" @7448..7449
+          op: Question "?" @7449..7450
+          rhs: LiteralExpr@7451..7452
+            token: Integer "0" @7451..7452
+        semi: Semicolon ";" @7452..7453
+      stmts: LetStmt@7514..7551
+        introducer: Let "let" @7514..7517
+        pattern: BindingPattern@7518..7520
+          name: Name@7518..7520
+            token: Word "d9" @7518..7520
+        eq: Equals "=" @7521..7522
+        init: BinaryExpr@7523..7550
+          lhs: OptionalFieldAccessExpr@7523..7542
+            base: OptionalFieldAccessExpr@7523..7536
+              base: PathExpr@7523..7527
+                head: Name@7523..7527
+                  token: Word "user" @7523..7527
+              qdot: QuestionDot "?." @7527..7529
+              name: Name@7529..7536
+                token: Word "profile" @7529..7536
+            qdot: QuestionDot "?." @7536..7538
+            name: Name@7538..7542
+              token: Word "name" @7538..7542
+          op: Question "?" @7543..7544
+          op: Question "?" @7544..7545
+          rhs: LiteralExpr@7546..7550
+            token: Null "null" @7546..7550
+        semi: Semicolon ";" @7550..7551
+      stmts: LetStmt@7623..7668
+        introducer: Let "let" @7623..7626
+        pattern: BindingPattern@7627..7630
+          name: Name@7627..7630
+            token: Word "d10" @7627..7630
+        eq: Equals "=" @7631..7632
+        init: BinaryExpr@7633..7667
+          lhs: OptionalFieldAccessExpr@7633..7652
+            base: OptionalFieldAccessExpr@7633..7646
+              base: PathExpr@7633..7637
+                head: Name@7633..7637
+                  token: Word "user" @7633..7637
+              qdot: QuestionDot "?." @7637..7639
+              name: Name@7639..7646
+                token: Word "profile" @7639..7646
+            qdot: QuestionDot "?." @7646..7648
+            name: Name@7648..7652
+              token: Word "name" @7648..7652
+          op: OrOr "||" @7653..7655
+          rhs: StringLit@7656..7667
+            token: String "\"Anonymous\"" @7656..7667
+        semi: Semicolon ";" @7667..7668
+      stmts: ExprStmt@7674..7684
+        expr: ReturnExpr@7674..7683
+          kw: Return "return" @7674..7680
+          value: PathExpr@7681..7683
+            head: Name@7681..7683
+              token: Word "d1" @7681..7683
+        semi: Semicolon ";" @7683..7684
+      r: RBrace "}" @7685..7686
+  items: FunctionDef@7894..9447
+    kw: Function "function" @7894..7902
+    name: Name@7903..7911
+      token: Word "Combined" @7903..7911
+    params: ParamList@7911..7952
+      l: LParen "(" @7911..7912
+      params: Param@7912..7923
+        name: Name@7912..7916
+          token: Word "user" @7912..7916
+        ascription: TypeAscription@7916..7923
+          colon: Colon ":" @7916..7917
+          ty: OptionalType@7918..7923
+            inner: PathType@7918..7922
+              head: Name@7918..7922
+                token: Word "User" @7918..7922
+            q: Question "?" @7922..7923
+      params: Comma "," @7923..7924
+      params: Param@7925..7936
+        name: Name@7925..7929
+          token: Word "node" @7925..7929
+        ascription: TypeAscription@7929..7936
+          colon: Colon ":" @7929..7930
+          ty: OptionalType@7931..7936
+            inner: PathType@7931..7935
+              head: Name@7931..7935
+                token: Word "Node" @7931..7935
+            q: Question "?" @7935..7936
+      params: Comma "," @7936..7937
+      params: Param@7938..7951
+        name: Name@7938..7943
+          token: Word "items" @7938..7943
+        ascription: TypeAscription@7943..7951
+          colon: Colon ":" @7943..7944
+          ty: OptionalType@7945..7951
+            inner: ArrayType@7945..7950
+              inner: PathType@7945..7948
+                head: Name@7945..7948
+                  token: Word "int" @7945..7948
+              l: LBracket "[" @7948..7949
+              r: RBracket "]" @7949..7950
+            q: Question "?" @7950..7951
+      r: RParen ")" @7951..7952
+    ret: ReturnType@7953..7962
+      arrow: Arrow "->" @7953..7955
+      ty: PathType@7956..7962
+        head: Name@7956..7962
+          token: Word "string" @7956..7962
+    body: Block@7963..9447
+      l: LBrace "{" @7963..7964
+      stmts: LetStmt@8017..8070
+        introducer: Let "let" @8017..8020
+        pattern: BindingPattern@8021..8023
+          name: Name@8021..8023
+            token: Word "e1" @8021..8023
+        eq: Equals "=" @8024..8025
+        init: BinaryExpr@8026..8069
+          lhs: OptionalFieldAccessExpr@8026..8056
+            base: OptionalFieldAccessExpr@8026..8048
+              base: OptionalFieldAccessExpr@8026..8039
+                base: PathExpr@8026..8030
+                  head: Name@8026..8030
+                    token: Word "user" @8026..8030
+                qdot: QuestionDot "?." @8030..8032
+                name: Name@8032..8039
+                  token: Word "profile" @8032..8039
+              qdot: QuestionDot "?." @8039..8041
+              name: Name@8041..8048
+                token: Word "address" @8041..8048
+            qdot: QuestionDot "?." @8048..8050
+            name: Name@8050..8056
+              token: Word "street" @8050..8056
+          op: Question "?" @8057..8058
+          op: Question "?" @8058..8059
+          rhs: StringLit@8060..8069
+            token: String "\"unknown\"" @8060..8069
+        semi: Semicolon ";" @8069..8070
+      stmts: LetStmt@8145..8189
+        introducer: Let "let" @8145..8148
+        pattern: BindingPattern@8149..8151
+          name: Name@8149..8151
+            token: Word "e2" @8149..8151
+        eq: Equals "=" @8152..8153
+        init: OptionalIndexExpr@8154..8188
+          base: OptionalFieldAccessExpr@8154..8168
+            base: PathExpr@8154..8158
+              head: Name@8154..8158
+                token: Word "node" @8154..8158
+            qdot: QuestionDot "?." @8158..8160
+            name: Name@8160..8168
+              token: Word "children" @8160..8168
+          qdot: QuestionDot "?." @8168..8170
+          l: LBracket "[" @8170..8171
+          index: BinaryExpr@8171..8187
+            lhs: OptionalFieldAccessExpr@8171..8182
+              base: PathExpr@8171..8175
+                head: Name@8171..8175
+                  token: Word "node" @8171..8175
+              qdot: QuestionDot "?." @8175..8177
+              name: Name@8177..8182
+                token: Word "value" @8177..8182
+            op: Question "?" @8183..8184
+            op: Question "?" @8184..8185
+            rhs: LiteralExpr@8186..8187
+              token: Integer "0" @8186..8187
+          r: RBracket "]" @8187..8188
+        semi: Semicolon ";" @8188..8189
+      stmts: LetStmt@8247..8351
+        introducer: Let "let" @8247..8250
+        pattern: BindingPattern@8251..8253
+          name: Name@8251..8253
+            token: Word "e3" @8251..8253
+        eq: Equals "=" @8254..8255
+        init: BinaryExpr@8256..8350
+          lhs: BinaryExpr@8256..8328
+            lhs: OptionalFieldAccessExpr@8256..8275
+              base: OptionalFieldAccessExpr@8256..8269
+                base: PathExpr@8256..8260
+                  head: Name@8256..8260
+                    token: Word "user" @8256..8260
+                qdot: QuestionDot "?." @8260..8262
+                name: Name@8262..8269
+                  token: Word "profile" @8262..8269
+              qdot: QuestionDot "?." @8269..8271
+              name: Name@8271..8275
+                token: Word "name" @8271..8275
+            op: Question "?" @8284..8285
+            op: Question "?" @8285..8286
+            rhs: CallExpr@8287..8328
+              callee: FieldAccessExpr@8287..8326
+                base: OptionalFieldAccessExpr@8287..8316
+                  base: OptionalIndexExpr@8287..8309
+                    base: OptionalFieldAccessExpr@8287..8299
+                      base: PathExpr@8287..8291
+                        head: Name@8287..8291
+                          token: Word "node" @8287..8291
+                      qdot: QuestionDot "?." @8291..8293
+                      name: Name@8293..8299
+                        token: Word "labels" @8293..8299
+                    qdot: QuestionDot "?." @8299..8301
+                    l: LBracket "[" @8301..8302
+                    index: StringLit@8302..8308
+                      token: String "\"name\"" @8302..8308
+                    r: RBracket "]" @8308..8309
+                  qdot: QuestionDot "?." @8309..8311
+                  name: Name@8311..8316
+                    token: Word "value" @8311..8316
+                dot: Dot "." @8316..8317
+                name: Name@8317..8326
+                  token: Word "to_string" @8317..8326
+              args: ArgList@8326..8328
+                l: LParen "(" @8326..8327
+                r: RParen ")" @8327..8328
+          op: Question "?" @8337..8338
+          op: Question "?" @8338..8339
+          rhs: StringLit@8340..8350
+            token: String "\"fallback\"" @8340..8350
+        semi: Semicolon ";" @8350..8351
+      stmts: AssignStmt@8412..8460
+        target: OptionalFieldAccessExpr@8412..8443
+          base: FieldAccessExpr@8412..8436
+            base: OptionalIndexExpr@8412..8431
+              base: OptionalFieldAccessExpr@8412..8426
+                base: PathExpr@8412..8416
+                  head: Name@8412..8416
+                    token: Word "node" @8412..8416
+                qdot: QuestionDot "?." @8416..8418
+                name: Name@8418..8426
+                  token: Word "children" @8418..8426
+              qdot: QuestionDot "?." @8426..8428
+              l: LBracket "[" @8428..8429
+              index: LiteralExpr@8429..8430
+                token: Integer "0" @8429..8430
+              r: RBracket "]" @8430..8431
+            dot: Dot "." @8431..8432
+            name: Name@8432..8436
+              token: Word "next" @8432..8436
+          qdot: QuestionDot "?." @8436..8438
+          name: Name@8438..8443
+            token: Word "value" @8438..8443
+        op: Equals "=" @8444..8445
+        value: BinaryExpr@8446..8459
+          lhs: OptionalFieldAccessExpr@8446..8454
+            base: PathExpr@8446..8450
+              head: Name@8446..8450
+                token: Word "user" @8446..8450
+            qdot: QuestionDot "?." @8450..8452
+            name: Name@8452..8454
+              token: Word "id" @8452..8454
+          op: Question "?" @8455..8456
+          op: Question "?" @8456..8457
+          rhs: LiteralExpr@8458..8459
+            token: Integer "0" @8458..8459
+        semi: Semicolon ";" @8459..8460
+      stmts: AssignStmt@8513..8544
+        target: OptionalFieldAccessExpr@8513..8524
+          base: PathExpr@8513..8517
+            head: Name@8513..8517
+              token: Word "node" @8513..8517
+          qdot: QuestionDot "?." @8517..8519
+          name: Name@8519..8524
+            token: Word "value" @8519..8524
+        op: PlusEquals "+=" @8525..8527
+        value: BinaryExpr@8528..8543
+          lhs: OptionalIndexExpr@8528..8538
+            base: PathExpr@8528..8533
+              head: Name@8528..8533
+                token: Word "items" @8528..8533
+            qdot: QuestionDot "?." @8533..8535
+            l: LBracket "[" @8535..8536
+            index: LiteralExpr@8536..8537
+              token: Integer "0" @8536..8537
+            r: RBracket "]" @8537..8538
+          op: Question "?" @8539..8540
+          op: Question "?" @8540..8541
+          rhs: LiteralExpr@8542..8543
+            token: Integer "1" @8542..8543
+        semi: Semicolon ";" @8543..8544
+      stmts: LetStmt@8596..8663
+        introducer: Let "let" @8596..8599
+        pattern: BindingPattern@8600..8602
+          name: Name@8600..8602
+            token: Word "e5" @8600..8602
+        eq: Equals "=" @8603..8604
+        init: FieldAccessExpr@8605..8662
+          base: OptionalIndexExpr@8605..8656
+            base: OptionalFieldAccessExpr@8605..8619
+              base: PathExpr@8605..8609
+                head: Name@8605..8609
+                  token: Word "node" @8605..8609
+              qdot: QuestionDot "?." @8609..8611
+              name: Name@8611..8619
+                token: Word "children" @8611..8619
+            qdot: QuestionDot "?." @8619..8621
+            l: LBracket "[" @8621..8622
+            index: ParenExpr@8622..8655
+              l: LParen "(" @8622..8623
+              inner: BinaryExpr@8623..8654
+                lhs: OptionalIndexExpr@8623..8649
+                  base: OptionalFieldAccessExpr@8623..8644
+                    base: OptionalFieldAccessExpr@8623..8636
+                      base: PathExpr@8623..8627
+                        head: Name@8623..8627
+                          token: Word "user" @8623..8627
+                      qdot: QuestionDot "?." @8627..8629
+                      name: Name@8629..8636
+                        token: Word "profile" @8629..8636
+                    qdot: QuestionDot "?." @8636..8638
+                    name: Name@8638..8644
+                      token: Word "scores" @8638..8644
+                  qdot: QuestionDot "?." @8644..8646
+                  l: LBracket "[" @8646..8647
+                  index: LiteralExpr@8647..8648
+                    token: Integer "0" @8647..8648
+                  r: RBracket "]" @8648..8649
+                op: Question "?" @8650..8651
+                op: Question "?" @8651..8652
+                rhs: LiteralExpr@8653..8654
+                  token: Integer "0" @8653..8654
+              r: RParen ")" @8654..8655
+            r: RBracket "]" @8655..8656
+          dot: Dot "." @8656..8657
+          name: Name@8657..8662
+            token: Word "value" @8657..8662
+        semi: Semicolon ";" @8662..8663
+      stmts: LetStmt@8704..8758
+        introducer: Let "let" @8704..8707
+        pattern: BindingPattern@8708..8710
+          name: Name@8708..8710
+            token: Word "e6" @8708..8710
+        eq: Equals "=" @8711..8712
+        init: FieldAccessExpr@8713..8757
+          base: OptionalIndexExpr@8713..8751
+            base: OptionalFieldAccessExpr@8713..8746
+              base: OptionalIndexExpr@8713..8736
+                base: OptionalFieldAccessExpr@8713..8725
+                  base: PathExpr@8713..8717
+                    head: Name@8713..8717
+                      token: Word "node" @8713..8717
+                  qdot: QuestionDot "?." @8717..8719
+                  name: Name@8719..8725
+                    token: Word "labels" @8719..8725
+                qdot: QuestionDot "?." @8725..8727
+                l: LBracket "[" @8727..8728
+                index: StringLit@8728..8735
+                  token: String "\"first\"" @8728..8735
+                r: RBracket "]" @8735..8736
+              qdot: QuestionDot "?." @8736..8738
+              name: Name@8738..8746
+                token: Word "children" @8738..8746
+            qdot: QuestionDot "?." @8746..8748
+            l: LBracket "[" @8748..8749
+            index: LiteralExpr@8749..8750
+              token: Integer "0" @8749..8750
+            r: RBracket "]" @8750..8751
+          dot: Dot "." @8751..8752
+          name: Name@8752..8757
+            token: Word "value" @8752..8757
+        semi: Semicolon ";" @8757..8758
+      stmts: AssignStmt@8820..8876
+        target: FieldAccessExpr@8820..8851
+          base: OptionalIndexExpr@8820..8845
+            base: OptionalFieldAccessExpr@8820..8832
+              base: PathExpr@8820..8824
+                head: Name@8820..8824
+                  token: Word "node" @8820..8824
+              qdot: QuestionDot "?." @8824..8826
+              name: Name@8826..8832
+                token: Word "labels" @8826..8832
+            qdot: QuestionDot "?." @8832..8834
+            l: LBracket "[" @8834..8835
+            index: StringLit@8835..8844
+              token: String "\"counter\"" @8835..8844
+            r: RBracket "]" @8844..8845
+          dot: Dot "." @8845..8846
+          name: Name@8846..8851
+            token: Word "value" @8846..8851
+        op: Equals "=" @8852..8853
+        value: BinaryExpr@8854..8875
+          lhs: ParenExpr@8854..8871
+            l: LParen "(" @8854..8855
+            inner: BinaryExpr@8855..8870
+              lhs: OptionalIndexExpr@8855..8865
+                base: PathExpr@8855..8860
+                  head: Name@8855..8860
+                    token: Word "items" @8855..8860
+                qdot: QuestionDot "?." @8860..8862
+                l: LBracket "[" @8862..8863
+                index: LiteralExpr@8863..8864
+                  token: Integer "0" @8863..8864
+                r: RBracket "]" @8864..8865
+              op: Question "?" @8866..8867
+              op: Question "?" @8867..8868
+              rhs: LiteralExpr@8869..8870
+                token: Integer "0" @8869..8870
+            r: RParen ")" @8870..8871
+          op: Plus "+" @8872..8873
+          rhs: LiteralExpr@8874..8875
+            token: Integer "1" @8874..8875
+        semi: Semicolon ";" @8875..8876
+      stmts: AssignStmt@8935..8986
+        target: FieldAccessExpr@8935..8966
+          base: OptionalIndexExpr@8935..8960
+            base: OptionalFieldAccessExpr@8935..8947
+              base: PathExpr@8935..8939
+                head: Name@8935..8939
+                  token: Word "node" @8935..8939
+              qdot: QuestionDot "?." @8939..8941
+              name: Name@8941..8947
+                token: Word "labels" @8941..8947
+            qdot: QuestionDot "?." @8947..8949
+            l: LBracket "[" @8949..8950
+            index: StringLit@8950..8959
+              token: String "\"counter\"" @8950..8959
+            r: RBracket "]" @8959..8960
+          dot: Dot "." @8960..8961
+          name: Name@8961..8966
+            token: Word "value" @8961..8966
+        op: PlusEquals "+=" @8967..8969
+        value: BinaryExpr@8970..8985
+          lhs: OptionalIndexExpr@8970..8980
+            base: PathExpr@8970..8975
+              head: Name@8970..8975
+                token: Word "items" @8970..8975
+            qdot: QuestionDot "?." @8975..8977
+            l: LBracket "[" @8977..8978
+            index: LiteralExpr@8978..8979
+              token: Integer "0" @8978..8979
+            r: RBracket "]" @8979..8980
+          op: Question "?" @8981..8982
+          op: Question "?" @8982..8983
+          rhs: LiteralExpr@8984..8985
+            token: Integer "0" @8984..8985
+        semi: Semicolon ";" @8985..8986
+      stmts: AssignStmt@9229..9296
+        target: OptionalFieldAccessExpr@9229..9276
+          base: OptionalFieldAccessExpr@9229..9269
+            base: OptionalIndexExpr@9229..9263
+              base: OptionalFieldAccessExpr@9229..9243
+                base: PathExpr@9229..9233
+                  head: Name@9229..9233
+                    token: Word "node" @9229..9233
+                qdot: QuestionDot "?." @9233..9235
+                name: Name@9235..9243
+                  token: Word "children" @9235..9243
+              qdot: QuestionDot "?." @9243..9245
+              l: LBracket "[" @9245..9246
+              index: BinaryExpr@9246..9262
+                lhs: OptionalFieldAccessExpr@9246..9257
+                  base: PathExpr@9246..9250
+                    head: Name@9246..9250
+                      token: Word "node" @9246..9250
+                  qdot: QuestionDot "?." @9250..9252
+                  name: Name@9252..9257
+                    token: Word "value" @9252..9257
+                op: Question "?" @9258..9259
+                op: Question "?" @9259..9260
+                rhs: LiteralExpr@9261..9262
+                  token: Integer "0" @9261..9262
+              r: RBracket "]" @9262..9263
+            qdot: QuestionDot "?." @9263..9265
+            name: Name@9265..9269
+              token: Word "next" @9265..9269
+          qdot: QuestionDot "?." @9269..9271
+          name: Name@9271..9276
+            token: Word "value" @9271..9276
+        op: Equals "=" @9277..9278
+        value: BinaryExpr@9279..9295
+          lhs: OptionalFieldAccessExpr@9279..9290
+            base: PathExpr@9279..9283
+              head: Name@9279..9283
+                token: Word "node" @9279..9283
+            qdot: QuestionDot "?." @9283..9285
+            name: Name@9285..9290
+              token: Word "value" @9285..9290
+          op: Question "?" @9291..9292
+          op: Question "?" @9292..9293
+          rhs: LiteralExpr@9294..9295
+            token: Integer "0" @9294..9295
+        semi: Semicolon ";" @9295..9296
+      stmts: ExprStmt@9435..9445
+        expr: ReturnExpr@9435..9444
+          kw: Return "return" @9435..9441
+          value: PathExpr@9442..9444
+            head: Name@9442..9444
+              token: Word "e3" @9442..9444
+        semi: Semicolon ";" @9444..9445
+      r: RBrace "}" @9446..9447
+  items: FunctionDef@9542..9638
+    kw: Function "function" @9542..9550
+    name: Name@9551..9574
+      token: Word "CombinedAssignmentValue" @9551..9574
+    params: ParamList@9574..9587
+      l: LParen "(" @9574..9575
+      params: Param@9575..9586
+        name: Name@9575..9579
+          token: Word "node" @9575..9579
+        ascription: TypeAscription@9579..9586
+          colon: Colon ":" @9579..9580
+          ty: OptionalType@9581..9586
+            inner: PathType@9581..9585
+              head: Name@9581..9585
+                token: Word "Node" @9581..9585
+            q: Question "?" @9585..9586
+      r: RParen ")" @9586..9587
+    ret: ReturnType@9588..9595
+      arrow: Arrow "->" @9588..9590
+      ty: PathType@9591..9595
+        head: Name@9591..9595
+          token: Null "null" @9591..9595
+    body: Block@9596..9638
+      l: LBrace "{" @9596..9597
+      stmts: LetStmt@9602..9636
+        introducer: Let "let" @9602..9605
+        pattern: BindingPattern@9606..9608
+          name: Name@9606..9608
+            token: Word "e4" @9606..9608
+        eq: Equals "=" @9609..9610
+        init: ParenExpr@9611..9635
+          l: LParen "(" @9611..9612
+          inner: OptionalFieldAccessExpr@9612..9629
+            base: OptionalFieldAccessExpr@9612..9622
+              base: PathExpr@9612..9616
+                head: Name@9612..9616
+                  token: Word "node" @9612..9616
+              qdot: QuestionDot "?." @9616..9618
+              name: Name@9618..9622
+                token: Word "next" @9618..9622
+            qdot: QuestionDot "?." @9622..9624
+            name: Name@9624..9629
+              token: Word "value" @9624..9629
+          r: RParen ")" @9634..9635
+        semi: Semicolon ";" @9635..9636
+      r: RBrace "}" @9637..9638
+error @2598..2630: assignment is not allowed in expression position; assignment is a statement
+error @4569..4584: assignment is not allowed in expression position; assignment is a statement
+error @9612..9634: assignment is not allowed in expression position; assignment is a statement

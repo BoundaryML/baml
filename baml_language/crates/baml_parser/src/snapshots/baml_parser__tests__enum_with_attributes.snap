@@ -1,0 +1,53 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"enum E {\\n  @@alias(\\\"e\\\")\\n  A @alias(\\\"a\\\") @description({{ this }}),\\n  B;\\n}\")"
+---
+SourceFile@0..72
+  items: EnumDef@0..72
+    kw: Enum "enum" @0..4
+    name: Name@5..6
+      token: Word "E" @5..6
+    l: LBrace "{" @7..8
+    members: BlockAttr@11..23
+      at: AtAt "@@" @11..13
+      path: DottedName@13..18
+        head: Name@13..18
+          token: Word "alias" @13..18
+      args: AttrArgs@18..23
+        l: LParen "(" @18..19
+        args: StringLit@19..22
+          token: String "\"e\"" @19..22
+        r: RParen ")" @22..23
+    members: EnumVariant@26..65
+      name: Name@26..27
+        token: Word "A" @26..27
+      attrs: Attribute@28..39
+        at: At "@" @28..29
+        path: DottedName@29..34
+          head: Name@29..34
+            token: Word "alias" @29..34
+        args: AttrArgs@34..39
+          l: LParen "(" @34..35
+          args: StringLit@35..38
+            token: String "\"a\"" @35..38
+          r: RParen ")" @38..39
+      attrs: Attribute@40..64
+        at: At "@" @40..41
+        path: DottedName@41..52
+          head: Name@41..52
+            token: Word "description" @41..52
+        args: AttrArgs@52..64
+          l: LParen "(" @52..53
+          args: JinjaArg@53..63
+            l1: LBrace "{" @53..54
+            l2: LBrace "{" @54..55
+            tokens: Word "this" @56..60
+            r1: RBrace "}" @61..62
+            r2: RBrace "}" @62..63
+          r: RParen ")" @63..64
+      sep: Comma "," @64..65
+    members: EnumVariant@68..70
+      name: Name@68..69
+        token: Word "B" @68..69
+      sep: Semicolon ";" @69..70
+    r: RBrace "}" @71..72

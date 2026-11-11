@@ -229,11 +229,6 @@ fn format_file(path: &Path, mode: Mode) -> (FileStatus, Option<String>) {
             crate::reporter::print_error(format_args!("formatting {}: {err:?}", path.display()));
             return (FileStatus::Failed, None);
         }
-        Err(baml_fmt::FormatterError::StrongAstError(err)) => {
-            let err = err.print_with_file_context(path, &source);
-            crate::reporter::print_error(format_args!("while formatting: {err}"));
-            return (FileStatus::Failed, None);
-        }
     };
     let changed = formatted != source;
     match mode {

@@ -14,7 +14,7 @@
 //!
 //! ## Per-file pipeline
 //!
-//! 1. **Parse errors** — via `baml_compiler_parser::parse_errors`. Always fast
+//! 1. **Parse errors** — via `baml_parser::typed_parse_errors`. Always fast
 //!    because parsing is Salsa-cached per file.
 //! 2. **HIR2 diagnostics** — stored in `file_semantic_index(...).extra`. These
 //!    cover duplicate field/variant/binding names found during scope tree
@@ -40,7 +40,7 @@ use std::collections::{HashMap, HashSet};
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{
     Diagnostic, DiagnosticId, DiagnosticIdentifierKind, DiagnosticPhase, DiagnosticText,
-    ParseError, ToDiagnostic, runtime_type,
+    runtime_type, typed_parse_error_diagnostic,
 };
 use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_hir_ty::diagnostics::{ScopedTypeEscapeKind, TirTypeError};
@@ -438,11 +438,11 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
 
     // ── 1. Parse errors ───────────────────────────────────────────────────────
     //
-    // `parse_errors` is Salsa-cached per file. Calling it here is cheap after
-    // the first call for a given file revision.
-    let parse_errors = baml_compiler_parser::parse_errors(db, file);
-    for err in &parse_errors {
-        diagnostics.push(err.to_diagnostic());
+    // The parse is Salsa-cached per file. Reading its errors here is cheap
+    // after the first call for a given file revision.
+    let parse_errors = baml_parser::typed_parse_errors(db, file);
+    for err in parse_errors.iter() {
+        diagnostics.push(typed_parse_error_diagnostic(err, file_id));
     }
 
     // ── 2. HIR2 diagnostics ───────────────────────────────────────────────────
@@ -910,18 +910,11 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
 /// are ignored here, leaving genuine type errors elsewhere in the file intact.
 fn parse_error_tainted_scopes(
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
-    parse_errors: &[ParseError],
+    parse_errors: &[baml_parser::ParseError],
 ) -> HashSet<usize> {
     let mut tainted = HashSet::new();
     for err in parse_errors {
-        let span = match err {
-            ParseError::UnexpectedToken { span, .. }
-            | ParseError::UnexpectedEof { span, .. }
-            | ParseError::InvalidSyntax { span, .. }
-            | ParseError::AmbiguousUnion { span, .. }
-            | ParseError::RemovedFeature { span, .. } => span,
-        };
-        let fsid = index.scope_at_offset(span.range.start(), None);
+        let fsid = index.scope_at_offset(err.range().start(), None);
         let scope = &index.scopes[fsid.index() as usize];
         if !matches!(
             scope.kind,
@@ -1131,12 +1124,7 @@ dependency's `{partner}`)"
                     ));
                 }
             }
-            let out_of_body = match &block.subject {
-                baml_compiler2_hir::item_data::ImplSubjectData::InClass { out_of_body, .. } => {
-                    *out_of_body
-                }
-                baml_compiler2_hir::item_data::ImplSubjectData::Free { .. } => true,
-            };
+            let out_of_body = block.origin == baml_compiler2_ast::ImplOrigin::OutOfBody;
             if out_of_body && !fields.is_empty() {
                 mounted_structural.push((
                     TirTypeError::OutOfBodyImplementsFieldInterface {
@@ -1272,19 +1260,6 @@ fn validate_associated_type_bindings_in_items(
                         namespace_path,
                         &mut diagnostics,
                     );
-                }
-                for block in &class.implements {
-                    for method in &block.methods {
-                        validate_associated_type_bindings_in_function(
-                            db,
-                            file_id,
-                            method,
-                            &outer_bounds,
-                            pkg_items,
-                            namespace_path,
-                            &mut diagnostics,
-                        );
-                    }
                 }
             }
             baml_compiler2_ast::Item::Interface(iface) => {
@@ -2473,7 +2448,7 @@ mod tests {
     fn b_1681_if_let_function_return_and_throws_unions_compile_without_parse_errors() {
         let source = "function Demo(x: unknown) -> int { if let callback: (int, image) -> string | int throws unknown = x { 1 } else { 0 } }";
         let (db, file) = single_file(source);
-        let parse_errors = baml_compiler_parser::parse_errors(&db, file);
+        let parse_errors = baml_parser::typed_parse_errors(&db, file);
         assert!(
             parse_errors.is_empty(),
             "unparenthesized bare return and throws unions must parse: {parse_errors:#?}"
@@ -2942,7 +2917,7 @@ interface Pair<A, B> {
         );
 
         let index = file_semantic_index(&db, file);
-        let parse_errors = baml_compiler_parser::parse_errors(&db, file);
+        let parse_errors = baml_parser::typed_parse_errors(&db, file);
         assert!(
             !parse_errors.is_empty(),
             "missing right-hand operand should produce a parse error"
@@ -2988,7 +2963,7 @@ interface Pair<A, B> {
             single_file("class 123Bad {\n  field string\n}\n\nfunction Good() -> int {\n  42\n}\n");
 
         let index = file_semantic_index(&db, file);
-        let parse_errors = baml_compiler_parser::parse_errors(&db, file);
+        let parse_errors = baml_parser::typed_parse_errors(&db, file);
         assert!(
             !parse_errors.is_empty(),
             "invalid class name should produce a parse error"

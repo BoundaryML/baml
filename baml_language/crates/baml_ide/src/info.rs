@@ -34,7 +34,6 @@
 //! - `ResolvedName::Unknown` or cursor not on a WORD token — returns `None`.
 
 use baml_base::{Name, SourceFile, SourceRoot};
-use baml_compiler_syntax::{SyntaxKind, SyntaxToken};
 use baml_compiler2_hir::{
     contributions::Definition,
     item_data,
@@ -42,11 +41,20 @@ use baml_compiler2_hir::{
     package::ROOT_SEGMENT,
 };
 use baml_compiler2_hir_ty::package_interface::ExportedFunction;
+use baml_syntax::{
+    index::TreeIndex,
+    nodes::{Attribute, BlockAttr, DottedName, Name as NameNode, TemplateInterp},
+    token::{TokenKind, TokenSet as _, sets::StringToken},
+    tree::AnyNodeIdOf,
+};
 use baml_type::BuiltinTypeName;
 use serde::Serialize;
 use text_size::{TextRange, TextSize};
 
-use crate::render::{self, FnSigParts, SigSlot, SigStyle, TypeForm};
+use crate::{
+    render::{self, FnSigParts, SigSlot, SigStyle, TypeForm},
+    syntax::TokenRef,
+};
 
 // ── TypeInfo ──────────────────────────────────────────────────────────────────
 
@@ -401,8 +409,9 @@ pub fn type_at(
 ) -> Option<TypeInfo> {
     // ── Step 1: find the token at the cursor ─────────────────────────────────
     let token = crate::syntax::find_token_at_offset(db, file, offset)?;
+    let index = baml_parser::tree_index(db, file);
 
-    if let Some(info) = literal_type_info(&token) {
+    if let Some(info) = literal_type_info(&token, &index) {
         return Some(info);
     }
 
@@ -410,11 +419,7 @@ pub fn type_at(
         return Some(info);
     }
 
-    if let Some(info) = client_config_key_type_info(&token) {
-        return Some(info);
-    }
-
-    if let Some(info) = attribute_type_info(&token) {
+    if let Some(info) = attribute_type_info(&token, &index) {
         return Some(info);
     }
 
@@ -438,14 +443,21 @@ form stringifies each value and produces a `string`."
         };
     }
 
-    if token.kind().is_keyword() {
+    // A contextual keyword (`type` in `let type`) is a keyword where it is
+    // not a name: its token then belongs to the statement, not a `Name`.
+    let as_keyword = token.kind().is_keyword()
+        || (token.kind().is_contextual_keyword()
+            && token
+                .owner(&index)
+                .is_none_or(|owner| owner.cast::<NameNode>().is_none()));
+    if as_keyword {
         return keyword_type_info(token.text());
     }
 
     // Only WORD tokens can be names — but an operator token addresses its
     // dispatch method through the same layer as go-to-definition, so hover
     // and navigation provably agree on `+`/`<`/`[` too.
-    if token.kind() != SyntaxKind::WORD {
+    if !token.is_ident() {
         let target = crate::resolve::symbol_at(db, file, offset)?;
         return target_type_info(db, file, target);
     }
@@ -726,122 +738,87 @@ fn local_target_type_info(
     }
 }
 
-fn client_config_key_type_info(token: &SyntaxToken) -> Option<TypeInfo> {
-    let config_item = token.parent()?;
-    if config_item.kind() != SyntaxKind::CONFIG_ITEM
-        || !config_item
-            .ancestors()
-            .any(|ancestor| ancestor.kind() == SyntaxKind::CLIENT_DEF)
-    {
-        return None;
-    }
-
-    let key = config_item
-        .children_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .find(|candidate| {
-            matches!(
-                candidate.kind(),
-                SyntaxKind::WORD | SyntaxKind::KW_RETRY_POLICY
-            )
-        })?;
-    if key.text_range() != token.text_range() {
-        return None;
-    }
-
-    let spec = baml_base::client_config_key_spec(token.text());
-    let label = spec.map_or(token.text(), |spec| spec.signature);
-    let detail = spec
-        .and_then(|spec| baml_builtins2::language_topic(spec.name))
-        .or_else(|| baml_builtins2::language_topic("client_option"))
-        .map(|topic| topic.summary.as_str())?;
-
-    Some(TypeInfo::Documentation {
-        label: label.to_string(),
-        detail: detail.to_string(),
-    })
-}
-
-fn attribute_type_info(token: &SyntaxToken) -> Option<TypeInfo> {
-    let attribute = token.parent()?;
-    let prefix = match attribute.kind() {
-        SyntaxKind::ATTRIBUTE => "@",
-        SyntaxKind::BLOCK_ATTRIBUTE => "@@",
-        _ => return None,
+/// Hover on the head of a `@attr`/`@@attr`: the attribute's signature and
+/// its language topic.
+fn attribute_type_info(token: &TokenRef, index: &TreeIndex) -> Option<TypeInfo> {
+    let tree = token.tree();
+    let name = token.owner(index)?.cast::<NameNode>()?;
+    let any = |id: &dyn AnyNodeIdOf| {
+        id.any_node_id()
+            .unwrap_or_else(|| unreachable!("a typed id is a node"))
     };
-
-    let name = attribute
-        .children_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .find(|candidate| candidate.kind() == SyntaxKind::WORD)?;
-    if name.text_range() != token.text_range() {
+    let dotted = index.parent(any(&name))?.cast::<DottedName>()?;
+    if tree.get(dotted).head != name {
         return None;
     }
-
+    let attribute = index.parent(any(&dotted))?;
+    let prefix = if attribute.cast::<Attribute>().is_some() {
+        "@"
+    } else if attribute.cast::<BlockAttr>().is_some() {
+        "@@"
+    } else {
+        return None;
+    };
     let spec = baml_base::schema_attribute_spec(token.text())?;
     let detail = baml_builtins2::language_topic(spec.name)?.summary.clone();
-
     Some(TypeInfo::Documentation {
         label: format!("{prefix}{}", spec.signature()),
         detail,
     })
 }
 
-fn literal_type_info(token: &SyntaxToken) -> Option<TypeInfo> {
-    let (label, ty, detail) = match (token.kind(), token.text()) {
-        (_, "true" | "false") => (token.text().to_string(), "bool", "A boolean literal type."),
-        (_, "null") => (token.text().to_string(), "null", "The `null` literal type."),
-        (SyntaxKind::INTEGER_LITERAL, _) => (
+/// Hover on a literal: its exact literal type and base type. Code inside a
+/// `${…}` interpolation of a template is not a literal of the template.
+fn literal_type_info(token: &TokenRef, index: &TreeIndex) -> Option<TypeInfo> {
+    let (label, ty, detail) = match token.kind() {
+        TokenKind::True | TokenKind::False => {
+            (token.text().to_string(), "bool", "A boolean literal type.")
+        }
+        TokenKind::Null => (token.text().to_string(), "null", "The `null` literal type."),
+        TokenKind::Integer => (
             token.text().to_string(),
             "int",
             "An exact `int` literal type.",
         ),
-        (SyntaxKind::BIGINT_LITERAL, _) => (
+        TokenKind::Bigint => (
             token.text().to_string(),
             "bigint",
             "An exact arbitrary-precision `bigint` literal type.",
         ),
-        (SyntaxKind::FLOAT_LITERAL, _) => (
+        TokenKind::Float => (
             token.text().to_string(),
             "float",
             "An exact `float` literal type.",
         ),
-        _ => {
-            if token
-                .parent_ancestors()
-                .any(|node| matches!(node.kind(), SyntaxKind::BACKTICK_INTERPOLATION))
+        kind if StringToken::KINDS.contains(kind) => {
+            let owner = token.owner(index)?;
+            if index
+                .ancestors(owner)
+                .any(|ancestor| ancestor.cast::<TemplateInterp>().is_some())
             {
                 return None;
             }
-            let string = token.parent_ancestors().find(|node| {
-                matches!(
-                    node.kind(),
-                    SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
-                        | SyntaxKind::BYTE_STRING_LITERAL
-                )
-            })?;
-            let label = string.text().to_string();
-            let (ty, detail) = if string.kind() == SyntaxKind::BYTE_STRING_LITERAL {
-                ("uint8array", "A byte-string literal type.")
-            } else {
-                ("string", "An exact `string` literal type.")
-            };
+            let label = token.text().to_string();
+            let (ty, detail) =
+                if matches!(kind, TokenKind::ByteString | TokenKind::UnclosedByteString) {
+                    ("uint8array", "A byte-string literal type.")
+                } else {
+                    ("string", "An exact `string` literal type.")
+                };
             return Some(TypeInfo::Documentation {
                 label,
                 detail: format!("{detail} Its base type is `{ty}`."),
             });
         }
+        _ => return None,
     };
-
     Some(TypeInfo::Documentation {
         label,
         detail: format!("{detail} Its base type is `{ty}`."),
     })
 }
 
-fn builtin_type_info(db: &dyn baml_compiler2_hir::Db, token: &SyntaxToken) -> Option<TypeInfo> {
+fn builtin_type_info(db: &dyn baml_compiler2_hir::Db, token: &TokenRef) -> Option<TypeInfo> {
     let builtin = BuiltinTypeName::from_alias(token.text())?;
     let detail = match builtin {
         BuiltinTypeName::Primitive(_) => {
@@ -1095,10 +1072,7 @@ fn generic_type_parameter_info_at(
             continue;
         }
         let data = item_data::impl_block_data(db, *impl_loc);
-        let item_data::ImplSubjectData::Free { generics, .. } = &data.subject else {
-            continue;
-        };
-        if let Some(declared) = generics.iter().find(|param| &param.name == name) {
+        if let Some(declared) = data.generics.iter().find(|param| &param.name == name) {
             let subject = baml_compiler2_hir_ty::impls::impl_facts(db, *impl_loc)
                 .resolved()
                 .map_or_else(
@@ -2324,33 +2298,6 @@ mod tests {
     }
 
     #[test]
-    fn client_config_hover_only_documents_the_key_token() {
-        let key = CursorTest::new(
-            r#"client<llm> Example {
-  prov<[CURSOR]ider openai
-}"#,
-        );
-        let TypeInfo::Documentation { label, .. } = info_at(&key) else {
-            panic!("config key hovers as documentation");
-        };
-        assert!(label.contains("provider <name>"));
-
-        let value = CursorTest::new(
-            r#"client<llm> Example {
-  provider open<[CURSOR]ai
-}"#,
-        );
-        let value_info = type_at(&value.db, value.cursor.file, value.cursor.offset);
-        assert!(
-            !matches!(
-                &value_info,
-                Some(TypeInfo::Documentation { label, .. }) if label.contains("provider <name>")
-            ),
-            "the value token must not document the key, got: {value_info:?}"
-        );
-    }
-
-    #[test]
     fn schema_attribute_hover_only_documents_the_attribute_name() {
         let name = CursorTest::new(
             r#"class Example {
@@ -2862,6 +2809,42 @@ implements Yielding for Widget {
             "`<=` names `Compare.le`, got: {declaration}"
         );
         assert_eq!(owner.as_deref(), Some("baml.ops.Compare"));
+    }
+
+    /// `>=` is a `>` token and an `=` token joined by adjacency: a cursor on
+    /// the `=` is on the operator.
+    #[test]
+    fn cursor_on_the_tail_of_a_joined_operator_hovers_the_operator() {
+        let test = CursorTest::new(
+            r#"function example(a: int, b: int) -> bool {
+    a ><[CURSOR]= b
+}"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("function ge(self"),
+            "`>=` names `Compare.ge`, got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("baml.ops.Compare"));
+    }
+
+    /// The end of a file without a trailing newline belongs to its last
+    /// token: a cursor there hovers that token.
+    #[test]
+    fn cursor_at_the_end_of_the_file_hovers_the_last_token() {
+        let test = CursorTest::new(
+            r#"enum Status {
+    Active
+}
+
+let current = Status.Active<[CURSOR]"#,
+        );
+        let (declaration, owner, _) = symbol_parts(info_at(&test));
+        assert!(
+            declaration.starts_with("Active"),
+            "the variant under the cursor, got: {declaration}"
+        );
+        assert_eq!(owner.as_deref(), Some("Status"));
     }
 
     #[test]

@@ -1,0 +1,1 @@
+interface Marker {@@internal}

@@ -11,6 +11,17 @@ use std::io::Write as _;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {
+    // `check` lowers and type-checks files on rayon's workers, and the
+    // compiler recurses once per nesting level (the parser bounds nesting;
+    // lowering and type checking follow the same shape). The default 2 MiB
+    // worker stack is tight for that in a debug build: reserve 16 MiB per
+    // worker, virtual and committed lazily. `RUST_MIN_STACK` in
+    // `.cargo/config.toml` gives tests the same figure.
+    rayon::ThreadPoolBuilder::new()
+        .stack_size(16 << 20)
+        .build_global()
+        .unwrap_or_else(|error| unreachable!("the global pool is built once, first: {error}"));
+
     if let Err(error) = warn_if_direct_invocation() {
         let _ = writeln!(std::io::stderr(), "error: {error}");
         std::process::exit(baml_cli::ExitCode::Failure.into());

@@ -1,0 +1,9 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(p: string?) -> int {
+    if (p == null) {
+        // nothing to do
+    }
+    0
+}

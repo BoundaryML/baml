@@ -9,7 +9,7 @@
   and escape rules are derived from:
 
     - typescript2/pkg-grammar/src/baml.ts             (the TextMate source)
-    - baml_language/crates/baml_compiler_lexer/src/tokens.rs (the lexer)
+    - baml_language/crates/baml_syntax/src/token.rs (the token table)
 
   Consumers: Kate, KWrite, KDevelop, Qt apps via KSyntaxHighlighting, and
   Pandoc via skylighting.

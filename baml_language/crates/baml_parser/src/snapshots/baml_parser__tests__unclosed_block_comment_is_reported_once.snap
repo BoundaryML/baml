@@ -1,0 +1,19 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"class A { a int }\\n/* never closed\\nclass B { b int }\\n\")"
+---
+SourceFile@0..17
+  items: ClassDef@0..17
+    kw: Class "class" @0..5
+    name: Name@6..7
+      token: Word "A" @6..7
+    l: LBrace "{" @8..9
+    members: Field@10..15
+      name: Name@10..11
+        token: Word "a" @10..11
+      ty: PathType@12..15
+        head: Name@12..15
+          token: Word "int" @12..15
+    r: RBrace "}" @16..17
+---
+InvalidSyntax { message: "unclosed block comment: expected `*/` before the end of the file", range: 18..52 }

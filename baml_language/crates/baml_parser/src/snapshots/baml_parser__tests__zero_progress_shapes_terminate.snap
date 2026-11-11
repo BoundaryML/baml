@@ -1,0 +1,124 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f() -> int {\\n  let m = map { < };\\n  let o = Foo { catch_all_panics a: 1 };\\n  x catch (e) { - => 1 }\\n}\\nclass A { x: int, implements I { @@dynamic } }\\nimplements I for A { @@ }\\n\")"
+---
+SourceFile@0..183
+  items: FunctionDef@0..110
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..12
+      l: LParen "(" @10..11
+      r: RParen ")" @11..12
+    ret: ReturnType@13..19
+      arrow: Arrow "->" @13..15
+      ty: PathType@16..19
+        head: Name@16..19
+          token: Word "int" @16..19
+    body: Block@20..110
+      l: LBrace "{" @20..21
+      stmts: LetStmt@24..42
+        introducer: Let "let" @24..27
+        pattern: BindingPattern@28..29
+          name: Name@28..29
+            token: Word "m" @28..29
+        eq: Equals "=" @30..31
+        init: MapLiteral@32..41
+          map_kw: Map "map" @32..35
+          l: LBrace "{" @36..37
+          r: RBrace "}" @40..41
+        semi: Semicolon ";" @41..42
+      stmts: LetStmt@45..56
+        introducer: Let "let" @45..48
+        pattern: BindingPattern@49..50
+          name: Name@49..50
+            token: Word "o" @49..50
+        eq: Equals "=" @51..52
+        init: PathExpr@53..56
+          head: Name@53..56
+            token: Word "Foo" @53..56
+      stmts: ExprStmt@57..83
+        expr: MapLiteral@57..82
+          l: LBrace "{" @57..58
+          entries: MapEntry@76..80
+            key: PathExpr@76..77
+              head: Name@76..77
+                token: Word "a" @76..77
+            colon: Colon ":" @77..78
+            value: LiteralExpr@79..80
+              token: Integer "1" @79..80
+          r: RBrace "}" @81..82
+        semi: Semicolon ";" @82..83
+      tail: CatchExpr@86..108
+        body: PathExpr@86..87
+          head: Name@86..87
+            token: Word "x" @86..87
+        clauses: CatchClause@88..108
+          kw: Catch "catch" @88..93
+          l: LParen "(" @94..95
+          binding: Name@95..96
+            token: Word "e" @95..96
+          r: RParen ")" @96..97
+          lbrace: LBrace "{" @98..99
+          arms: CatchArm@<empty>
+            pattern: <missing @100>
+            arrow: <missing @100>
+            body: <missing @100>
+          arms: CatchArm@105..106
+            pattern: TypePattern@105..106
+              ty: LiteralType@105..106
+                value: Integer "1" @105..106
+            arrow: <missing @107>
+            body: <missing @107>
+          rbrace: RBrace "}" @107..108
+      r: RBrace "}" @109..110
+  items: ClassDef@111..157
+    kw: Class "class" @111..116
+    name: Name@117..118
+      token: Word "A" @117..118
+    l: LBrace "{" @119..120
+    members: Field@121..128
+      name: Name@121..122
+        token: Word "x" @121..122
+      colon: Colon ":" @122..123
+      ty: PathType@124..127
+        head: Name@124..127
+          token: Word "int" @124..127
+      sep: Comma "," @127..128
+    members: ImplementsBlock@129..155
+      kw: Implements "implements" @129..139
+      target: PathType@140..141
+        head: Name@140..141
+          token: Word "I" @140..141
+      l: LBrace "{" @142..143
+      members: Bogus@144..146
+        tokens: AtAt "@@" @144..146
+      members: Field@146..153
+        name: Name@146..153
+          token: Dynamic "dynamic" @146..153
+        ty: <missing @146>
+      r: RBrace "}" @154..155
+    r: RBrace "}" @156..157
+  items: ImplementsFor@158..183
+    kw: Implements "implements" @158..168
+    target: PathType@169..170
+      head: Name@169..170
+        token: Word "I" @169..170
+    for_kw: For "for" @171..174
+    self_ty: PathType@175..176
+      head: Name@175..176
+        token: Word "A" @175..176
+    l: LBrace "{" @177..178
+    members: Bogus@179..181
+      tokens: AtAt "@@" @179..181
+    r: RBrace "}" @182..183
+---
+UnexpectedToken { expected: "map key or '}'", found: "'<'", range: 38..39 }
+UnexpectedToken { expected: "map key or '}'", found: "identifier", range: 59..75 }
+UnexpectedToken { expected: "type", found: "'-'", range: 100..101 }
+UnexpectedToken { expected: "'=>' after catch pattern", found: "'-'", range: 100..101 }
+UnexpectedToken { expected: "pattern", found: "'=>'", range: 102..104 }
+UnexpectedToken { expected: "'=>' after catch pattern", found: "'}'", range: 107..108 }
+UnexpectedToken { expected: "field or method definition expected in `implements` block", found: "'@@'", range: 144..146 }
+InvalidSyntax { message: "field 'dynamic' is missing a type annotation", range: 146..153 }
+UnexpectedToken { expected: "field or method definition expected in `implements` block", found: "'@@'", range: 179..181 }

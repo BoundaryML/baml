@@ -1,0 +1,7 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+#!/usr/bin/env -S baml run --file
+function main() -> string {
+    "hi"
+}
