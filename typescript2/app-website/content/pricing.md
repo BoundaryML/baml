@@ -14,37 +14,18 @@ You can install the toolchain, write and run BAML programs, generate SDKs, use t
 
 ## Boundary Cloud
 
-Boundary Cloud is in early access.
+You pay for data and retention. Spans, seats, queries and profiles are free. Boundary Cloud is in early access.
 
-| Plan | Price | Data included | Data after that | Retention |
-| --- | --- | --- | --- | --- |
-| Starter | $0 a month | 1 GB a month | $4 per GB | 30 days |
-| Pro | $250 a month | 5 GB a month | $3 per GB | Custom, $0.10 per GB per 30 days |
+| Plan | Price | Data included | After that | Retention | Longer retention | Your own cloud |
+| --- | --- | --- | --- | --- | --- | --- |
+| Starter | $0 a month | 1 GB a month | $4 per GB | 30 days | No | No |
+| Pro | $250 a month | 5 GB a month | $3 per GB | 30 days | $0.10 per GB per 30 days | Add-on |
 
-Pro can add bring your own cloud: Boundary Cloud runs in your cloud account and your data stays there.
+Free on both plans: spans, profiles, queries, dashboards, members, projects, API keys.
 
-### Included in every Cloud plan
+60-day money-back guarantee. Going over your included data never blocks ingest or queries.
 
-- Unlimited spans
-- Profiles
-- SQL queries and `baml query`
-- Dashboards
-- Unlimited members
-- Unlimited projects and environments
-- API keys
-
-### How billing works
-
-- What counts: the values your programs record (inputs, outputs, logs and network payloads).
-- What doesn't: spans, profiles, queries and seats.
-- Repeats: a value your programs record again is billed once.
-- Retries: an upload that's retried is counted once.
-- Retention: 30 days included. Longer, on Pro, is $0.10 per GB for each extra 30 days, rounded to the nearest 30.
-- Going over: never blocks ingest or queries.
-- Upgrading: takes effect right away, prorated to your billing date.
-- Canceling: ends at the close of your billing month.
-
-Boundary Cloud is not required to run BAML locally. [Get early access](https://calendly.com/boundary-founders/boundary-unified-stack-set-up).
+[Get early access](https://calendly.com/boundary-founders/boundary-unified-stack-set-up).
 
 ## Source and license
 
