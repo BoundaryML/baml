@@ -529,6 +529,18 @@ impl BexVm {
         };
         let template = declaration.fields.get(field)?.field_template.clone();
         let ty = self.realize_field_ty(&template, &[]);
+        // The cached type is never forwarded: a compile-time class's field
+        // names compile-time declarations only.
+        if cfg!(debug_assertions) {
+            let mut compile_time = true;
+            ty.visit_heads(&mut |head: &bex_vm_types::TypeHead| {
+                compile_time &= !head.is_resolved() || self.heap.is_compile_time_ptr(head.ptr());
+            });
+            debug_assert!(
+                compile_time,
+                "a runtime declaration in the compiled JSON field-type cache"
+            );
+        }
         self.compiled
             .json_field_types
             .insert((class, field), ty.clone());

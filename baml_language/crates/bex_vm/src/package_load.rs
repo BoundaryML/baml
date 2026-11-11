@@ -577,7 +577,31 @@ fn fill_package_slots(
             }
         }
     }
+    index.debug_assert_compile_time(heap);
     index
+}
+
+impl PackageIndex {
+    /// The index is never a root nor forwarded (see the type docs), which is
+    /// sound only while every pointer in it is compile-time: checked where
+    /// the index is built, and where a VM takes the tables derived from it.
+    pub fn debug_assert_compile_time(&self, heap: &BexHeap) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
+        let compile_time = |ptr: &HeapPtr| ptr.is_null() || heap.is_compile_time_ptr(*ptr);
+        debug_assert!(
+            self.packages.iter().chain(&self.lang).all(compile_time)
+                && compile_time(&self.root),
+            "a runtime package in the static PackageIndex"
+        );
+        debug_assert!(
+            self.impl_rules
+                .iter()
+                .all(|(iface, rules)| compile_time(iface) && rules.iter().all(compile_time)),
+            "a runtime impl rule in the static PackageIndex"
+        );
+    }
 }
 
 impl crate::BexVm {
@@ -783,6 +807,27 @@ impl StdlibHeads {
         self.classes
             .iter()
             .any(|(known, head)| *known == class && head.tag() == tag)
+    }
+
+    /// The heads are shared by every VM and never forwarded, which is sound
+    /// only while each names a compile-time declaration.
+    pub fn debug_assert_compile_time(&self, heap: &BexHeap) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
+        let heads = self
+            .time
+            .iter()
+            .map(|(_, head)| head)
+            .chain(self.media.iter().map(|(_, head)| head))
+            .chain(self.classes.iter().map(|(_, head)| head))
+            .chain(self.json.as_ref());
+        for head in heads {
+            debug_assert!(
+                heap.is_compile_time_ptr(head.ptr()),
+                "a runtime declaration in the shared StdlibHeads"
+            );
+        }
     }
 }
 

@@ -80,6 +80,11 @@ impl BexVm {
         }
         let ptr = self.tlab.alloc_type(TypeValue::new(ty));
         if let Some(key) = key {
+            // The key is never forwarded: it must be a compile-time function.
+            debug_assert!(
+                self.heap.is_compile_time_ptr(frame.function()),
+                "a runtime function keys the compiled static type cache"
+            );
             self.compiled.static_type_cache.insert(key, Weak::new(ptr));
         }
         Value::object(ptr)

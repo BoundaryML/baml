@@ -421,6 +421,11 @@ impl BexVm {
     #[cold]
     #[inline(never)]
     fn find_instance_shape(&mut self, index: usize, class: HeapPtr) -> Option<InstanceShape> {
+        // The cached shape holds `class` and is never forwarded.
+        debug_assert!(
+            self.heap.is_compile_time_ptr(class),
+            "a runtime class in the compiled instance-shape cache"
+        );
         let shape = self.instance_shape(class);
         let shapes = &mut self.compiled.shapes;
         if shapes.len() <= index {

@@ -2430,7 +2430,19 @@ impl BexVm {
 
         // `error_class_ptrs` / `panic_class_ptrs` / `stdlib_heads` are resolved
         // once from `packages` by the caller (`StdlibTables::resolve`) and
-        // shared across spawned VMs.
+        // shared across spawned VMs. None of them is a root or forwarded
+        // (`visit_roots` skips them), so every pointer must be compile-time.
+        if cfg!(debug_assertions) {
+            packages.debug_assert_compile_time(&heap);
+            stdlib_heads.debug_assert_compile_time(&heap);
+            debug_assert!(
+                error_class_ptrs
+                    .iter()
+                    .chain(panic_class_ptrs.iter())
+                    .all(|ptr| heap.is_compile_time_ptr(*ptr)),
+                "a runtime class in the shared error/panic class tables"
+            );
+        }
 
         let early_yield = EarlyYieldCheck::new(
             #[cfg(not(target_arch = "wasm32"))]
