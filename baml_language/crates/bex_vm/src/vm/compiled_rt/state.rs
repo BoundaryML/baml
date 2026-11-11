@@ -20,6 +20,9 @@ pub(crate) struct CompiledState {
     )]
     pub(crate) yielder: Option<YielderPtr>,
     pub(crate) on_fiber: bool,
+    /// The stack pointer of the innermost `suspend` while the fiber is
+    /// parked; the conservative range starts there.
+    pub(crate) parked_sp: usize,
     pub(crate) builtin_type_args: Vec<RealizedTy>,
     pub(crate) call_type_args: Vec<RealizedTy>,
     pub(crate) saved_call_types: Vec<SavedCallTypes>,
@@ -41,6 +44,7 @@ impl Default for CompiledState {
             fiber_floor: 0,
             yielder: None,
             on_fiber: false,
+            parked_sp: 0,
             builtin_type_args: Vec::new(),
             call_type_args: Vec::new(),
             saved_call_types: Vec::new(),
@@ -62,12 +66,11 @@ impl RootHaver for CompiledState {
     fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
         let Self {
             static_type_cache,
-            // Holds no heap pointer across a collection: a body spills its
-            // values to the VM stack before it suspends.
-            fiber: _,
+            fiber,
             fiber_floor: _,
             yielder: _,
             on_fiber: _,
+            parked_sp,
             builtin_type_args,
             call_type_args,
             saved_call_types,
@@ -76,6 +79,11 @@ impl RootHaver for CompiledState {
             records,
             direct_calls: _,
         } = self;
+        // Parked bodies keep their values in Rust locals and registers, all
+        // on the fiber's stack while it is parked.
+        if let Some(range) = fiber.as_ref().and_then(|f| f.parked_range(*parked_sp)) {
+            visitor.conservative(range);
+        }
         static_type_cache.retain(|_, ty| ty.visit(visitor));
         records.visit_roots(visitor);
         builtin_type_args.visit_roots(visitor);

@@ -126,11 +126,9 @@ impl<'db> Generator<'_, 'db> {
         if !self.pauses || !self.analysis.loop_headers.contains(&id.0) {
             return Ok(());
         }
-        let live = self.header_locals(id.0);
         let at = pc_arg(pc);
         let request = format!("{{ fr.note_pc({at}); vm.suspend(Step::Yield) }}");
-        let call = self.rooted(&live, &request);
-        let code = self.fallible(id, &call)?;
+        let code = self.fallible(id, &request)?;
         self.emit_line("iterations = iterations.wrapping_add(1);");
         self.emit_line(&format!(
             "if iterations % {YIELD_EVERY} == 0 && vm.should_yield() {{ {code}; }}"

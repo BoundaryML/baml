@@ -76,16 +76,12 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) object: usize,
     pub(crate) package: Option<u32>,
     pub(crate) symbols: &'a HashMap<usize, String>,
-    pub(crate) pausing: &'a BTreeSet<usize>,
     /// Functions whose bodies run with a VM frame, never a frame record.
     pub(crate) framed: &'a BTreeSet<usize>,
     pub(crate) signatures: &'a HashMap<usize, Signature>,
     /// The locality-mask bits some caller can set ([`ProgramContext::masks`]).
     pub(crate) mask_bits: u64,
-    /// First spill slot used to root values across a suspension.
-    pub(crate) spill_base: usize,
-    /// Whether this body may suspend: it then polls at loop back edges and
-    /// keeps live heap values in frame slots across every suspension.
+    /// Whether this body may suspend: it then polls at loop back edges.
     pub(crate) pauses: bool,
     pub(crate) recursive: bool,
     pub(crate) builtins: &'a mut BTreeMap<String, usize>,
@@ -101,7 +97,6 @@ pub(crate) struct Generator<'a, 'db> {
     /// Bind non-atomic operands before calls to avoid overlapping VM borrows.
     pub(crate) pending: Vec<String>,
     pub(crate) temps: usize,
-    pub(crate) live_in: Vec<Vec<bool>>,
     pub(crate) slots: usize,
     /// Active handler context used by the VM cause chain.
     pub(crate) cause_slot: Option<usize>,
@@ -132,11 +127,9 @@ impl<'a, 'db> Generator<'a, 'db> {
             object,
             package: unit.package,
             symbols: program.symbols,
-            pausing: program.pausing,
             framed: program.framed,
             signatures: program.signatures,
             mask_bits: program.masks.get(&object).copied().unwrap_or(0),
-            spill_base: 0,
             pauses: program.pausing.contains(&object),
             recursive: unit.recursive,
             builtins,
@@ -149,7 +142,6 @@ impl<'a, 'db> Generator<'a, 'db> {
             out: String::new(),
             pending: Vec::new(),
             temps: 0,
-            live_in: Vec::new(),
             slots: 0,
             cause_slot: None,
             cause_changes: Vec::new(),
@@ -486,99 +478,11 @@ impl<'db> Generator<'_, 'db> {
                 .iter()
                 .filter(|block| block.landing.is_some())
                 .count();
-        self.spill_base = self.slots;
-        if !self.pauses {
-            return;
-        }
-        self.live_in = baml_compiler2_mir::live_in_precise(self.body);
-        // Spill slots for the values live across a suspension: as many as the
-        // widest site keeps.
-        let at_sites = (0..blocks.len())
-            .filter(|&block| self.continuation(BlockId(block)).is_ok())
-            .filter_map(|block| self.rooted_locals(BlockId(block)).ok())
-            .map(|live| live.len());
-        let at_headers = self
-            .analysis
-            .loop_headers
-            .iter()
-            .map(|&header| self.header_locals(header).len());
-        let at_entry = self
-            .recursive
-            .then(|| self.header_locals(self.body.entry.0).len());
-        self.slots += at_sites
-            .chain(at_headers)
-            .chain(at_entry)
-            .max()
-            .unwrap_or(0);
     }
 
+    /// Poll at entry of a recursive body so deep recursion can yield.
     fn recursion_check(&mut self) {
-        let live = self.header_locals(self.body.entry.0);
-        let call = self.rooted(&live, "vm.suspend(Step::Yield)");
-        self.emit_line(&format!("if vm.should_yield_at_call() {{ {call}?; }}"));
-    }
-
-    fn header_locals(&self, header: usize) -> Vec<usize> {
-        self.saved(|i| self.live_in[header][i])
-    }
-
-    /// Root the caller's live values across `call`, a suspending callee or
-    /// request, reloading them whatever its outcome.
-    pub(super) fn rooted_call(&mut self, block: BlockId, call: &str) -> Gen<String> {
-        let live = self.rooted_locals(block)?;
-        let call = self.rooted(&live, call);
-        self.fallible(block, &call)
-    }
-
-    /// `call` with `live` written to the spill slots before and read back after.
-    fn rooted(&self, live: &[usize], call: &str) -> String {
-        if live.is_empty() {
-            return call.to_string();
-        }
-        let mut out = String::from("{ ");
-        for (j, i) in live.iter().enumerate() {
-            let _ = write!(out, "vm.set_slot(fr, {}, l{i}); ", self.spill_base + j);
-        }
-        let _ = write!(out, "let r = {call}; ");
-        for (j, i) in live.iter().enumerate() {
-            let _ = write!(out, "l{i} = vm.slot(fr, {}); ", self.spill_base + j);
-        }
-        out.push_str("r }");
-        out
-    }
-
-    /// Keep what the continuation reads except the result, plus what the
-    /// handler reads.
-    fn rooted_locals(&self, block: BlockId) -> Gen<Vec<usize>> {
-        let (destination, target) = self.continuation(block)?;
-        let overwritten = match destination {
-            Place::Local(local) => Some(local.0),
-            _ => None,
-        };
-        let handler = self.body.blocks[block.0].unwind;
-        Ok(self.saved(|i| {
-            (self.live_in[target.0][i] && overwritten != Some(i))
-                || handler.is_some_and(|handler| self.live_in[handler.0][i])
-        }))
-    }
-
-    /// Handler contexts stay live so leaving a nested handler can restore its cause.
-    fn saved(&self, live: impl Fn(usize) -> bool) -> Vec<usize> {
-        let kept = |i| {
-            live(i)
-                || (self.cause_slot.is_some()
-                    && self
-                        .body
-                        .blocks
-                        .iter()
-                        .filter_map(|block| block.landing)
-                        .any(|landing| landing.context_local.0 == i))
-        };
-        (0..self.analysis.reprs.len())
-            .filter(|&i| {
-                kept(i) && !self.analysis.is_type_local(i) && self.repr(Local(i)) == Repr::Value
-            })
-            .collect()
+        self.emit_line("if vm.should_yield_at_call() { vm.suspend(Step::Yield)?; }");
     }
 
     pub(super) fn suspension(&mut self, block: BlockId) -> Gen<()> {
@@ -588,7 +492,7 @@ impl<'db> Generator<'_, 'db> {
             .expect("checked");
         let (destination, _) = self.continuation(block)?;
         let request = self.request(block, terminator)?;
-        let call = self.rooted_call(block, &request)?;
+        let call = self.fallible(block, &request)?;
         let store = self.store(block, &destination, &Expr::new(call, Repr::Value))?;
         self.emit_statement(&store);
         Ok(())

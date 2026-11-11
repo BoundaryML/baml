@@ -153,7 +153,7 @@ impl<'db> Generator<'_, 'db> {
                     "(if vm.direct_calls_typed({type_args}) {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
                 )
             };
-            let code = self.call_code(block, object, &call)?;
+            let code = self.call_code(block, &call)?;
             return Ok(Expr::new(code, Repr::Value));
         };
         // Arguments are bound once, as the callee holds them.
@@ -217,18 +217,14 @@ impl<'db> Generator<'_, 'db> {
             format!("vm.direct_calls_typed({type_args})")
         };
         let call = format!("(if {allowed} {{ {direct} }} else {boxed})");
-        let code = self.call_code(block, object, &call)?;
+        let code = self.call_code(block, &call)?;
         Ok(Expr::new(code, signature.ret))
     }
 
-    /// Route a compiled call's error, rooting the caller's live values when
-    /// the callee may suspend.
-    fn call_code(&mut self, block: BlockId, object: usize, call: &str) -> Gen<String> {
-        if self.pausing.contains(&object) {
-            self.rooted_call(block, call)
-        } else {
-            self.fallible(block, call)
-        }
+    /// Route a compiled call's error. A callee that suspends parks this
+    /// body's live values on the fiber stack, which the collector scans.
+    fn call_code(&mut self, block: BlockId, call: &str) -> Gen<String> {
+        self.fallible(block, call)
     }
 
     /// The operands of a call in callee slot order; `None` for a slot left to

@@ -15,6 +15,12 @@ pub trait RootVisitor {
     /// always `true` while roots are being collected, since nothing has died
     /// yet.
     fn visit_weak(&mut self, root: &mut HeapPtr) -> bool;
+
+    /// A range of words any of which may point into the heap, such as a
+    /// parked fiber's stack: each keeps alive the object whose bytes contain
+    /// it. Nothing in the range moves or is repointed, so only the root scan
+    /// records it.
+    fn conservative(&mut self, _range: std::ops::Range<*const usize>) {}
 }
 
 /// Whether a pointer absent from the forwarding map still names a live object.
@@ -48,6 +54,26 @@ impl RootVisitor for CollectRoots<'_> {
 
     fn visit_weak(&mut self, _root: &mut HeapPtr) -> bool {
         true
+    }
+}
+
+/// The root scan of a collection that also scans conservative ranges.
+pub struct CollectRootsAndRanges<'a> {
+    pub roots: &'a mut Vec<HeapPtr>,
+    pub ranges: &'a mut Vec<std::ops::Range<*const usize>>,
+}
+
+impl RootVisitor for CollectRootsAndRanges<'_> {
+    fn visit(&mut self, root: &mut HeapPtr) {
+        self.roots.push(*root);
+    }
+
+    fn visit_weak(&mut self, _root: &mut HeapPtr) -> bool {
+        true
+    }
+
+    fn conservative(&mut self, range: std::ops::Range<*const usize>) {
+        self.ranges.push(range);
     }
 }
 
@@ -146,6 +172,13 @@ pub trait RootHaverExt: RootHaver {
     /// Record every strong root.
     fn collect_roots(&mut self, roots: &mut Vec<HeapPtr>);
 
+    /// Record every strong root, and every conservative range.
+    fn collect_roots_and_ranges(
+        &mut self,
+        roots: &mut Vec<HeapPtr>,
+        ranges: &mut Vec<std::ops::Range<*const usize>>,
+    );
+
     /// Repoint every root after a collection, then
     /// [`relocated`](RootHaver::relocated).
     fn forward_roots(&mut self, forward: &mut ForwardRoots<'_>);
@@ -154,6 +187,14 @@ pub trait RootHaverExt: RootHaver {
 impl<T: RootHaver + ?Sized> RootHaverExt for T {
     fn collect_roots(&mut self, roots: &mut Vec<HeapPtr>) {
         self.visit_roots(&mut CollectRoots(roots));
+    }
+
+    fn collect_roots_and_ranges(
+        &mut self,
+        roots: &mut Vec<HeapPtr>,
+        ranges: &mut Vec<std::ops::Range<*const usize>>,
+    ) {
+        self.visit_roots(&mut CollectRootsAndRanges { roots, ranges });
     }
 
     fn forward_roots(&mut self, forward: &mut ForwardRoots<'_>) {

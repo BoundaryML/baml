@@ -32,7 +32,7 @@ use bex_vm_types::{FutureRead, HeapPtr, Object, RootHaverExt};
 use crate::{
     BexHeap, HeapGuard,
     descriptor::{HEADER_BYTES, OBJECT_DESC, RUST_PAYLOAD_OFFSET},
-    root_source::{BothRoots, PreciseRoots, RootSource},
+    root_source::{BothRoots, ConservativeRanges, PreciseRoots, RootSource},
     space::{block::BlockHeader, large::LargeSpace, mark::Marker, pool::BlockPool, sweep::sweep},
 };
 
@@ -91,11 +91,15 @@ impl BexHeap {
         extra: &mut dyn RootSource,
     ) -> (GcStats, Restamp) {
         let mut roots = self.collect_handle_roots();
-        guard.collect_roots(&mut roots);
+        // Parked fibers report their stacks as conservative ranges.
+        let mut ranges = Vec::new();
+        guard.collect_roots_and_ranges(&mut roots, &mut ranges);
+        let mut held = BothRoots(PreciseRoots(&roots), ConservativeRanges(&ranges));
         // SAFETY: the guard holds every permit, so no mutator runs, and every
         // holder of heap pointers outside the heap is in its registry or the
-        // handle table, or reported by `extra`.
-        unsafe { self.collect(&mut BothRoots(PreciseRoots(&roots), extra)) }
+        // handle table, or reported by `extra`. Each range is a parked
+        // fiber's stack, unwritten until its VM resumes.
+        unsafe { self.collect(&mut BothRoots(&mut held, extra)) }
     }
 
     /// The collector.

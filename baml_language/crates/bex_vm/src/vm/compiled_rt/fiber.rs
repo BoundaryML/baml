@@ -1,5 +1,7 @@
 //! Compiled bodies run on a lazy, VM-owned fiber. Suspensions return control
-//! to the VM driver; values surviving a suspension must live in GC-visible slots.
+//! to the VM driver. A parked fiber's stack, from the stack pointer `suspend`
+//! records to the stack's base, is a conservative root range, so a body's
+//! values stay in its Rust locals across a suspension.
 //! Nested bytecode-to-compiled calls enter below the waiting Rust frames.
 //! wasm and Windows/aarch64 cannot enter compiled bodies.
 
@@ -104,7 +106,7 @@ pub(crate) use stackless::{Fiber, YielderPtr};
 
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 mod stackful {
-    use std::ptr::NonNull;
+    use std::{ops::Range, ptr::NonNull};
 
     use bex_vm_types::Value;
     use corosensei::{
@@ -133,6 +135,8 @@ mod stackful {
     pub(crate) struct Fiber {
         coroutine: Coroutine<Message, Request, ()>,
         floor: usize,
+        /// The highest address of the stack: frames grow down from it.
+        base: usize,
         /// Zero means no Rust body remains, so `Stop` can finish without unwinding.
         bodies: usize,
     }
@@ -151,10 +155,12 @@ mod stackful {
         pub(crate) fn new() -> std::io::Result<Self> {
             let stack = DefaultStack::new(STACK_SIZE)?;
             let floor = stack.limit().get() + STACK_RED_ZONE;
+            let base = stack.base().get();
             let coroutine = Coroutine::with_stack(stack, fiber_main);
             Ok(Self {
                 coroutine,
                 floor,
+                base,
                 bodies: 0,
             })
         }
@@ -181,7 +187,78 @@ mod stackful {
         pub(crate) fn floor(&self) -> usize {
             self.floor
         }
+
+        /// The words a collection scans conservatively while bodies are
+        /// parked: from `sp`, recorded by the innermost `suspend`, to the
+        /// stack's base. `None` with no body on the fiber.
+        pub(crate) fn parked_range(&self, sp: usize) -> Option<Range<*const usize>> {
+            (self.bodies != 0 && sp != 0).then(|| (sp as *const usize)..(self.base as *const usize))
+        }
     }
+
+    /// Store the callee-saved registers to `regs` and return the stack
+    /// pointer. A caller's value held only in a callee-saved register is then
+    /// in this frame, above the returned pointer, when the fiber switches.
+    #[cfg(target_arch = "aarch64")]
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn spill_registers(regs: &mut [usize; SPILLED]) -> usize {
+        let sp: usize;
+        // SAFETY: stores into `regs`, which has room for 11 words, and reads
+        // the stack pointer.
+        unsafe {
+            std::arch::asm!(
+                "stp x19, x20, [{b}]",
+                "stp x21, x22, [{b}, #16]",
+                "stp x23, x24, [{b}, #32]",
+                "stp x25, x26, [{b}, #48]",
+                "stp x27, x28, [{b}, #64]",
+                "str x29, [{b}, #80]",
+                "mov {sp}, sp",
+                b = in(reg) regs.as_mut_ptr(),
+                sp = out(reg) sp,
+                options(nostack, preserves_flags),
+            );
+        }
+        sp
+    }
+
+    /// As on aarch64; `rdi` and `rsi` are callee-saved on Windows.
+    #[cfg(target_arch = "x86_64")]
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn spill_registers(regs: &mut [usize; SPILLED]) -> usize {
+        let sp: usize;
+        // SAFETY: stores into `regs`, which has room for 8 words, and reads
+        // the stack pointer.
+        unsafe {
+            std::arch::asm!(
+                "mov [{b}], rbx",
+                "mov [{b} + 8], rbp",
+                "mov [{b} + 16], r12",
+                "mov [{b} + 24], r13",
+                "mov [{b} + 32], r14",
+                "mov [{b} + 40], r15",
+                "mov [{b} + 48], rdi",
+                "mov [{b} + 56], rsi",
+                "mov {sp}, rsp",
+                b = in(reg) regs.as_mut_ptr(),
+                sp = out(reg) sp,
+                options(nostack, preserves_flags),
+            );
+        }
+        sp
+    }
+
+    /// Other targets do not name their registers here: scan the whole
+    /// stack, which the switch itself spilled into.
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    fn spill_registers(_regs: &mut [usize; SPILLED]) -> usize {
+        1
+    }
+
+    /// Words of callee-saved registers `spill_registers` stores.
+    const SPILLED: usize = 11;
 
     impl Drop for Fiber {
         fn drop(&mut self) {
@@ -240,6 +317,16 @@ mod stackful {
     #[allow(unsafe_code)]
     unsafe impl Send for YielderPtr {}
 
+    /// The scan start for a park at `sp`: `sp`, or the stack's lowest usable
+    /// address where `spill_registers` does not know the registers.
+    fn parked_sp(sp: usize, vm: &BexVm) -> usize {
+        if cfg!(any(target_arch = "aarch64", target_arch = "x86_64")) {
+            sp
+        } else {
+            vm.compiled.fiber_floor
+        }
+    }
+
     #[inline]
     fn stack_address() -> usize {
         let marker = 0u8;
@@ -258,10 +345,18 @@ mod stackful {
             let mut vm = NonNull::from(self);
             let mut request = Request::Step(step);
             loop {
+                // Every caller's live value is now in this stack or `regs`, at
+                // or above `sp`: a collection while parked scans from there.
+                let mut regs = [0usize; SPILLED];
+                let sp = spill_registers(&mut regs);
                 // SAFETY: only the fiber touches the VM until it suspends.
-                unsafe { vm.as_mut() }.compiled.on_fiber = false;
+                let parked = unsafe { vm.as_mut() };
+                parked.compiled.on_fiber = false;
+                let scan_from = parked_sp(sp, parked);
+                parked.compiled.parked_sp = scan_from;
                 // SAFETY: a yielder lives as long as its fiber, and this body is on it.
                 let message = unsafe { yielder.0.as_ref() }.suspend(request);
+                std::hint::black_box(&regs);
                 let resumed_vm = match &message {
                     Message::Resume { vm, .. } | Message::Enter { vm, .. } => *vm,
                     Message::Stop => unreachable!("a fiber is stopped only with no body on it"),
@@ -337,6 +432,10 @@ mod stackless {
 
         pub(crate) fn floor(&self) -> usize {
             unreachable!("{NEVER}")
+        }
+
+        pub(crate) fn parked_range(&self, _sp: usize) -> Option<std::ops::Range<*const usize>> {
+            None
         }
 
         pub(crate) fn resume(&mut self, _: Message) -> Request {
