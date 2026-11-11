@@ -20,8 +20,7 @@ import { SoftwareApplicationStructuredData } from '@/components/structured-data'
 type Cell = [amount: string, unit?: string];
 
 // The line items in groups, the way Better Stack splits its table by product. Each row is Starter's
-// cell then Pro's. Every non-price fact is from BCS: spans, profiles and seats are never billed,
-// usage caps are coming, roles are admin and member, keys can be scoped to an environment.
+// cell then Pro's. Spans, profiles and seats are never billed (BCS); usage caps are coming.
 const SAME = (cell: Cell): [Cell, Cell] => [cell, cell];
 
 const GROUPS: {
@@ -70,13 +69,11 @@ const GROUPS: {
     rows: [
       { cells: SAME(['Unlimited']), label: 'Members' },
       { cells: SAME(['Unlimited']), label: 'Projects and environments' },
-      { cells: SAME(['Admin and member']), label: 'Roles' },
     ],
     title: 'Team',
   },
   {
     rows: [
-      { cells: SAME(['Unlimited']), label: 'API keys, scoped by environment' },
       { cells: [['—'], ['Add-on']], label: 'Bring your own cloud' },
       { cells: SAME(['Coming soon']), label: 'Usage caps' },
     ],

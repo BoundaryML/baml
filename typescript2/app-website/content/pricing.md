@@ -33,9 +33,7 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | **Team** | | |
 | Members | Unlimited | Unlimited |
 | Projects and environments | Unlimited | Unlimited |
-| Roles | Admin and member | Admin and member |
 | **Governance** | | |
-| API keys, scoped by environment | Unlimited | Unlimited |
 | Bring your own cloud | No | Add-on |
 | Usage caps | Coming soon | Coming soon |
 
