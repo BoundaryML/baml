@@ -204,9 +204,11 @@ function HowBilling() {
         We never want our pricing to stop us from doing the right thing. So
         every way we make your data smaller makes your bill smaller too.
       </p>
-      <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="mt-8">
         <Meter />
-        <div className="grid gap-4 text-[13px]">
+      </div>
+      <div className="mt-4">
+        <div className="grid gap-4 text-[13px] sm:grid-cols-2">
           <div className="rounded-lg border border-rule bg-raised p-5">
             <p className="font-medium text-head">Billed</p>
             <ul className="mt-3 space-y-2 text-ink-2">

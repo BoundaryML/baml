@@ -1,132 +1,139 @@
 'use client';
 
-import { Check } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion, useVisible } from '@/components/home/pinned';
 
-// One made-up call, recorded piece by piece, with the meter deciding each piece as it arrives: the
-// values it records are billed at their size, the structure around them is free, a prompt sent again
-// folds into the first copy, and a retried upload counts once. The rules are BCS's billing code
-// (control-plane/src/projector/billing.rs), except billing a repeated value once, which is the
-// founders' decision. The sizes are illustrative.
+// What a captured value is billed for, played line by line: the values light up and add to the bill;
+// the field names, type names and definitions around them stay gray and add nothing. Then a field
+// gets a much longer name and the bill doesn't move. It's a picture of the runtime's size model
+// (`logical_bytes_approx_v1` in baml_language/crates/btel_snapshot/src/logical_bytes.rs: a field is a
+// fixed-size ID, never its name; definitions and names count zero), with the byte counts rounded to
+// what a reader can follow rather than its exact accounting.
 
-type Piece = {
-  /** Bytes billed, or 0 for free. */
-  bytes: number;
-  kind: string;
-  /** Why it costs what it costs, shown once it's decided. */
-  why: string;
-  what: string;
-};
+type Line = { bytes: number; key?: string; value?: string; text?: string };
 
-const PIECES: Piece[] = [
-  { bytes: 0, kind: 'span', what: 'draft_reply · 1.84s', why: 'structure' },
-  { bytes: 2100, kind: 'input', what: 'ticket { id, body, … }', why: '2.1 KB' },
-  {
-    bytes: 1200,
-    kind: 'prompt',
-    what: '"You are a support agent…"',
-    why: '1.2 KB',
-  },
-  { bytes: 800, kind: 'output', what: '"Hi Sam, your refund…"', why: '0.8 KB' },
-  {
-    bytes: 0,
-    kind: 'profile',
-    what: 'call tree and timings',
-    why: 'structure',
-  },
-  { bytes: 100, kind: 'log', what: 'drafted', why: '0.1 KB' },
-  {
-    bytes: 0,
-    kind: 'prompt',
-    what: '"You are a support agent…"',
-    why: 'already stored',
-  },
-  {
-    bytes: 0,
-    kind: 'retry',
-    what: 'same upload, sent twice',
-    why: 'counted once',
-  },
+const SHORT = 'customer_email';
+const LONG = 'customer_email_address_on_file';
+
+const LINES: Line[] = [
+  { bytes: 0, text: 'Ticket {' },
+  { bytes: 4, key: 'ticket_id', value: '4812' },
+  { bytes: 11, key: SHORT, value: '"sam@acme.co"' },
+  { bytes: 4, key: 'priority', value: 'Priority.High' },
+  { bytes: 21, key: 'body', value: '"My refund came twice."' },
+  { bytes: 0, text: '}' },
 ];
 
-// Everything the call recorded, billed or not, to set the bill against.
-const RECORDED = 9800;
-const STEP_MS = 1100;
-const HOLD_MS = 4000;
+const STEPS = LINES.length + 2; // the lines, the definitions, the rename
+const RENAME = STEPS;
+const STEP_MS = 1000;
+const HOLD_MS = 4500;
 
-const kb = (bytes: number) => `${(bytes / 1000).toFixed(1)} KB`;
-
-/** The meter, playing through the pieces while it's on screen, then holding and starting over. */
 export function Meter() {
   const ref = useRef<HTMLDivElement>(null);
   const visible = useVisible(ref);
   const reduce = useReducedMotion();
-  const [shown, setShown] = useState(0);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     if (reduce) {
-      setShown(PIECES.length);
+      setStep(STEPS);
       return;
     }
     if (!visible) return;
+    const wait = step === 0 ? 500 : step >= STEPS ? HOLD_MS : STEP_MS;
     const timer = setTimeout(
-      () => setShown((n) => (n >= PIECES.length ? 0 : n + 1)),
-      shown >= PIECES.length ? HOLD_MS : shown === 0 ? 400 : STEP_MS,
+      () => setStep((n) => (n >= STEPS ? 0 : n + 1)),
+      wait,
     );
     return () => clearTimeout(timer);
-  }, [shown, visible, reduce]);
+  }, [step, visible, reduce]);
 
-  const billed = PIECES.slice(0, shown).reduce((sum, p) => sum + p.bytes, 0);
+  const renamed = step >= RENAME;
+  const billed = LINES.slice(0, step).reduce((sum, l) => sum + l.bytes, 0);
+  const defs = step > LINES.length;
 
   return (
     <div
       className="overflow-hidden rounded-lg border border-rule bg-raised"
       ref={ref}
     >
-      <div className="flex items-center justify-between border-b border-rule px-4 py-2.5 text-[12px] text-muted">
-        <span className="font-mono">support.baml · one call</span>
-        <span>recorded → billed</span>
-      </div>
-      <ul className="divide-y divide-rule font-mono text-[12.5px]">
-        {PIECES.map((p, i) => {
-          const on = i < shown;
-          const free = p.bytes === 0;
-          return (
-            <li
-              className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2 transition-[opacity,transform] duration-500"
-              // biome-ignore lint/suspicious/noArrayIndexKey: fixed list
-              key={i}
-              style={{
-                opacity: on ? 1 : 0.18,
-                transform: on ? 'none' : 'translateX(-6px)',
-              }}
+      <div className="grid gap-0 md:grid-cols-[minmax(0,1fr)_14rem]">
+        <div className="px-5 py-4 font-mono text-[13px] leading-[2]">
+          {LINES.map((l, i) => {
+            const on = i < step;
+            if (l.text)
+              return (
+                <div className="text-muted" key={l.text}>
+                  {l.text}
+                </div>
+              );
+            const key = renamed && l.key === SHORT ? LONG : l.key;
+            return (
+              <div
+                className="flex items-center justify-between gap-4"
+                key={l.key}
+              >
+                <span className="min-w-0 truncate whitespace-pre">
+                  <span
+                    className={`transition-colors duration-500 ${renamed && l.key === SHORT ? 'text-ink-2' : 'text-muted'}`}
+                  >
+                    {'  '}
+                    {key}:{' '}
+                  </span>
+                  <span
+                    className="rounded px-1 transition-[background-color,color] duration-500"
+                    style={{
+                      background: on ? 'rgba(202,170,242,0.18)' : 'transparent',
+                      color: on ? 'var(--color-clover)' : 'var(--color-ink)',
+                    }}
+                  >
+                    {l.value}
+                  </span>
+                </span>
+                <span
+                  className="shrink-0 font-sans text-[12px] text-clover transition-opacity duration-300"
+                  style={{ opacity: on ? 1 : 0 }}
+                >
+                  +{l.bytes} B
+                </span>
+              </div>
+            );
+          })}
+          <div
+            className="mt-3 border-t border-dashed border-rule pt-3 text-muted transition-opacity duration-500"
+            style={{ opacity: defs ? 1 : 0.35 }}
+          >
+            class Ticket {'{ … }'}
+            <span className="ml-3 font-sans text-[12px]">free</span>
+          </div>
+        </div>
+
+        {/* The bill, and what each color means. */}
+        <div className="flex flex-col justify-between gap-6 border-t border-rule px-5 py-4 md:border-t-0 md:border-l">
+          <div>
+            <p className="text-[12px] text-muted">Billed</p>
+            <p className="mt-1 font-display text-[40px] leading-none font-medium text-clover tabular-nums">
+              {billed} B
+            </p>
+            <p
+              className="mt-3 text-[12.5px] text-head transition-opacity duration-500"
+              style={{ opacity: renamed ? 1 : 0 }}
             >
-              <span className="text-muted">{p.kind}</span>
-              <span
-                className={`truncate ${on && free ? 'text-ink-2 line-through decoration-white/25' : 'text-ink'}`}
-              >
-                {p.what}
-              </span>
-              <span
-                className={`flex items-center gap-1.5 whitespace-nowrap font-sans text-[12px] transition-opacity duration-300 ${free ? 'text-clover' : 'text-head'}`}
-                style={{ opacity: on ? 1 : 0 }}
-              >
-                {free && <Check aria-hidden="true" className="size-3.5" />}
-                {free ? `free, ${p.why}` : p.why}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      <div className="flex items-baseline justify-between gap-4 border-t border-rule bg-white/[0.02] px-4 py-3">
-        <span className="text-[12px] text-muted">Recorded {kb(RECORDED)}</span>
-        <span className="text-[13px] text-head">
-          Billed{' '}
-          <span className="font-mono tabular-nums text-clover">
-            {kb(billed)}
-          </span>
-        </span>
+              Longer field name, same bill.
+            </p>
+          </div>
+          <div className="space-y-2 text-[12.5px]">
+            <p className="flex items-center gap-2 text-ink-2">
+              <span className="size-3 rounded-sm bg-clover/40" />
+              Values: billed
+            </p>
+            <p className="flex items-center gap-2 text-ink-2">
+              <span className="size-3 rounded-sm bg-white/15" />
+              Names, types, structure: free
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
