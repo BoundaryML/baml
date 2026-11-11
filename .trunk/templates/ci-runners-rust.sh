@@ -17,7 +17,7 @@ export CARGO_INCREMENTAL=0
 BAML_GIT_SHA=$(git -C "${SRC}" rev-parse HEAD)
 export BAML_GIT_SHA
 echo "${BAML_GIT_SHA}" >/cache/trunk-template-basis-sha
-echo "trunk-warm-template-v11" >/cache/trunk-template-variant
+echo "trunk-warm-template-v12" >/cache/trunk-template-variant
 
 # The packages with wasm_support, as the wasm32 and pre-commit jobs select them.
 metadata=$(cargo metadata --no-deps --format-version 1)
