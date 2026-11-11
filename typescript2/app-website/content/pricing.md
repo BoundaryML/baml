@@ -22,7 +22,6 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | **Data** | | |
 | Data included | 1 GB a month | 5 GB a month |
 | Data after that | $4 per GB | $3 per GB |
-| Usage cap | None, extra data is billed | None, extra data is billed |
 | Spans | Unlimited | Unlimited |
 | Profiles | Unlimited | Unlimited |
 | **Retention** | | |
@@ -38,6 +37,7 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | **Governance** | | |
 | API keys, scoped by environment | Unlimited | Unlimited |
 | Bring your own cloud | No | Add-on |
+| Usage caps | Coming soon | Coming soon |
 
 Every Boundary Cloud plan comes with a 60-day money-back guarantee. [Get early access](https://calendly.com/boundary-founders/boundary-unified-stack-set-up).
 
