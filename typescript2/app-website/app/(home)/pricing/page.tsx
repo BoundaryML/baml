@@ -172,17 +172,8 @@ function HowBilling() {
       <h3 className="font-display text-[20px] font-medium text-head">
         How ingestion is billed
       </h3>
-      <p className="mt-2 max-w-[34rem] text-[14px] text-ink-2">
-        You pay for the values your programs record, never for the metadata
-        around them.
-      </p>
-      {/* The culture line: pricing should never give us a reason to do the wrong thing. */}
-      <p className="mt-6 max-w-[40rem] border-l-2 border-clover pl-4 text-[15px] text-head">
-        We never want our pricing to stop us from doing the right thing. So
-        every way we make your data smaller makes your bill smaller too.
-      </p>
       {/* The examples are framed as examples: the point is the effort, not these two tricks. */}
-      <div className="mt-8 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <p className="text-[15px] font-medium text-head">
           A lot of our engineering goes into shrinking what you send over the
           wire.
