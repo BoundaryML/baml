@@ -24,6 +24,7 @@ import { useReducedMotion, useVisible } from '@/components/home/pinned';
 // Sizes are kept round enough to follow; the hashes are made up.
 
 const STEP_MS = 1300;
+const HOLD_MS = 5000;
 
 const size = (bytes: number) =>
   bytes >= 1_000_000
@@ -663,6 +664,8 @@ export function Meter() {
   const [step, setStep] = useState(0);
   // Plays a scene once, then stops on it so it can be read; a click pauses or plays it.
   const [playing, setPlaying] = useState(true);
+  // Until the reader takes over (a pause, a step, a tab), a finished scene holds, then moves on.
+  const [auto, setAuto] = useState(true);
   const current = SCENES[scene] ?? SCENES[0];
   const last = current.steps;
   const done = step >= last;
@@ -672,15 +675,24 @@ export function Meter() {
       setStep(last);
       return;
     }
-    if (!visible || !playing || done) return;
+    if (!visible || !playing) return;
+    if (done) {
+      if (!auto) return;
+      const hold = setTimeout(() => {
+        setScene((n) => (n + 1) % SCENES.length);
+        setStep(0);
+      }, HOLD_MS);
+      return () => clearTimeout(hold);
+    }
     const timer = setTimeout(
       () => setStep((n) => n + 1),
       step === 0 ? 600 : STEP_MS,
     );
     return () => clearTimeout(timer);
-  }, [step, last, visible, reduce, playing, done]);
+  }, [step, last, visible, reduce, playing, done, auto]);
 
   const go = (i: number) => {
+    setAuto(false);
     setScene(i);
     setStep(reduce ? SCENES[i].steps : 0);
     setPlaying(true);
@@ -714,6 +726,7 @@ export function Meter() {
       <div
         className="cursor-pointer"
         onClick={() => {
+          setAuto(false);
           if (done) setStep(0);
           setPlaying((p) => (done ? true : !p));
         }}
@@ -725,6 +738,7 @@ export function Meter() {
           aria-label={done ? 'Replay' : playing ? 'Pause' : 'Play'}
           className="focus-ring grid size-7 cursor-pointer place-items-center rounded-full bg-white/[0.06] text-ink hover:bg-white/10"
           onClick={() => {
+            setAuto(false);
             if (done) setStep(0);
             setPlaying((p) => (done ? true : !p));
           }}
@@ -747,6 +761,7 @@ export function Meter() {
               // biome-ignore lint/suspicious/noArrayIndexKey: steps
               key={i}
               onClick={() => {
+                setAuto(false);
                 setStep(i + 1);
                 setPlaying(false);
               }}
