@@ -817,6 +817,10 @@ mod tests {
 
     #[tokio::test]
     async fn trace_heap_omits_cyclic_back_edges() {
+        use bex_vm_types::{
+            ListRef,
+            object_format::{Access, SlotValue},
+        };
         let heap = BexHeap::new(Vec::new());
         let manager = HeapPermitManager::new();
         let mut permit = manager
@@ -829,10 +833,6 @@ mod tests {
         let array_ptr = permit
             .tlab_mut()
             .alloc_array(bex_vm_types::RealizedTy::unknown(), vec![]);
-        use bex_vm_types::{
-            ListRef,
-            object_format::{Access, SlotValue},
-        };
         let values = [Value::int(1), Value::object(array_ptr)].map(SlotValue::Value);
         unsafe { ListRef::of(array_ptr) }
             .expect("a list")

@@ -920,7 +920,7 @@ mod tests {
             generic_param_count: 1,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact: false,
         })));
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
@@ -1082,7 +1082,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact,
         })))
     }

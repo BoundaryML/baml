@@ -36,6 +36,12 @@
 //! `LockedContainer` did.
 
 #![allow(unsafe_code)]
+#![allow(
+    clippy::cast_ptr_alignment,
+    clippy::cast_possible_truncation,
+    reason = "slot and field addresses are header-relative offsets the layout keeps 8-byte \
+              (tagged: 16-byte) aligned, and capacities and offsets fit their words"
+)]
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -273,7 +279,7 @@ impl ListRef {
         ListGuard {
             list: self,
             access,
-            _guard: guard,
+            held: guard,
         }
     }
 
@@ -367,7 +373,7 @@ pub fn backing_bytes(elem: ElemKind, cap: usize) -> usize {
 pub struct ListGuard {
     list: ListRef,
     access: Access,
-    _guard: Option<AccessGuard<'static>>,
+    held: Option<AccessGuard<'static>>,
 }
 
 impl ListGuard {
@@ -415,7 +421,7 @@ impl ListGuard {
     /// The list's lock for a many-element mutation, unless already held or
     /// the list is thread-local.
     fn exclusive(&self) -> Option<AccessGuard<'static>> {
-        (self._guard.is_none() && self.access == Access::Shared).then(|| self.list.mutex().enter())
+        (self.held.is_none() && self.access == Access::Shared).then(|| self.list.mutex().enter())
     }
 
     /// Element `index`, or `None` past the end.

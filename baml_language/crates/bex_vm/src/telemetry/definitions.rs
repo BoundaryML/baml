@@ -411,7 +411,7 @@ mod tests {
             owner: Owner::anonymous(),
             methods: IndexMap::new(),
             telemetry_definition: DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact: false,
         }))
     }

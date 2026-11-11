@@ -83,7 +83,7 @@ impl BamlPackageBaml for PackageBamlImpl {
         // sort a snapshot of the backing Vec, then swap it back in. One Vec
         // (re)allocation; still no per-element BAML round trips or re-push.
         let mut values = match vm.as_array(arr) {
-            Ok(guard) => guard.to_vec(),
+            Ok(guard) => guard,
             Err(e) => return NativeCallResult::Error(e.into()),
         };
         values.sort_by(|left, right| compare_natural_values(vm, domain, *left, *right));

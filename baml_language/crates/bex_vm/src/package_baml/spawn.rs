@@ -211,7 +211,7 @@ pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalEr
             Ok::<_, VmInternalError>(limits.with(&limit_inner(vm, limit)?))
         })?;
     let mut cancel = Vec::new();
-    for &token in plan.cancel_tokens(vm).iter() {
+    for &token in &plan.cancel_tokens(vm) {
         cancel.extend(cancel_token_members(vm, token).ok_or_else(|| {
             VmInternalError::TypeError {
                 expected: ObjectType::RustData.into(),

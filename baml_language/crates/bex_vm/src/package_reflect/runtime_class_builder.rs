@@ -249,7 +249,6 @@ fn instance_array_field(vm: &BexVm, value: Value, index: usize) -> Result<Vec<Va
         .as_instance(&value)
         .map_err(|_| "expected an instance".to_string())?;
     vm.as_array(&vm.field(instance, index))
-        .map(|array| array.to_vec())
         .map_err(|_| "native roots field is not an array".to_string())
 }
 
@@ -1003,7 +1002,7 @@ fn build_group(
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact: false,
         })));
         let ty = bex_vm_types::RealizedTy::Class(

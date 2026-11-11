@@ -961,20 +961,14 @@ mod tests {
         let new_outer = remapped[0];
         if let Some(arr) = unsafe { bex_vm_types::ListRef::of(new_outer) }
             && let Some(map_ptr) = arr.get(0).and_then(|v| v.as_object_ptr())
+            && let Some(m) = unsafe { bex_vm_types::MapRef::of(map_ptr) }
+            && let Some(inner_arr_ptr) = m.snapshot_entries()[0].1.as_object_ptr()
+            && let Some(inner_arr) = unsafe { bex_vm_types::ListRef::of(inner_arr_ptr) }
+            && let Some(str_ptr) = inner_arr.get(0).and_then(|__v| __v.as_object_ptr())
+            && let Object::String(s) = (unsafe { str_ptr.get() })
         {
-            if let Some(m) = unsafe { bex_vm_types::MapRef::of(map_ptr) }
-                && let Some(inner_arr_ptr) = m.snapshot_entries()[0].1.as_object_ptr()
-            {
-                if let Some(inner_arr) = unsafe { bex_vm_types::ListRef::of(inner_arr_ptr) }
-                    && let Some(str_ptr) = inner_arr.get(0).and_then(|__v| __v.as_object_ptr())
-                {
-                    let str_obj = unsafe { str_ptr.get() };
-                    if let Object::String(s) = str_obj {
-                        assert_eq!(s, "leaf");
-                        return; // Success!
-                    }
-                }
-            }
+            assert_eq!(s, "leaf");
+            return; // Success!
         }
         panic!("Reference chain broken after GC");
     }
@@ -1201,7 +1195,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact: false,
         })));
         let field_str = tlab.alloc_string("field_value".to_string());
@@ -1449,7 +1443,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact: false,
         })));
 
@@ -1601,7 +1595,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact: false,
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Class(
@@ -1995,7 +1989,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact: false,
         })));
         let instance_container = tlab.alloc_instance(class_ptr, vec![Value::object(leaf_string)]);
@@ -2511,7 +2505,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact: false,
         }))
     }

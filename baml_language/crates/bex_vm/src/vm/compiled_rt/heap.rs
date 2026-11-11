@@ -412,6 +412,15 @@ fn object_type_error(expected: ObjectType, got: &Object) -> Box<VmError> {
     .into()
 }
 
+/// The slot access a `THREAD_LOCAL` entry point uses.
+const fn access<const THREAD_LOCAL: bool>() -> Access {
+    if THREAD_LOCAL {
+        Access::ThreadLocal
+    } else {
+        Access::Shared
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use bex_vm_types::{
@@ -467,14 +476,5 @@ mod tests {
         let red = vm.new_variant(color, 0);
         assert_eq!(vm.discriminant(red).unwrap(), 0);
         assert_ne!(red, green, "each literal is a fresh object");
-    }
-}
-
-/// The slot access a `THREAD_LOCAL` entry point uses.
-const fn access<const THREAD_LOCAL: bool>() -> Access {
-    if THREAD_LOCAL {
-        Access::ThreadLocal
-    } else {
-        Access::Shared
     }
 }

@@ -327,7 +327,7 @@ fn opt_string_list(vm: &BexVm, v: Value) -> Result<Option<Vec<String>>, VmRustFn
     if v.is_null() || v.is_omitted() {
         return Ok(None);
     }
-    let arr = vm.as_array(&v)?.to_vec();
+    let arr = vm.as_array(&v)?;
     let mut out = Vec::with_capacity(arr.len());
     for item in &arr {
         out.push(vm.as_string(item)?.as_str().to_string());

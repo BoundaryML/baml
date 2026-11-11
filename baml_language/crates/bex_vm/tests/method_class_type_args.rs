@@ -122,7 +122,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         generic_param_count: 1,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
-        layout: Default::default(),
+        layout: std::sync::OnceLock::default(),
         redact: false,
     })));
 
@@ -178,7 +178,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
-        layout: Default::default(),
+        layout: std::sync::OnceLock::default(),
         redact: false,
     })));
 

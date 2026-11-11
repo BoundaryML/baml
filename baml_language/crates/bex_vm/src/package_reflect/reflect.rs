@@ -1132,7 +1132,7 @@ impl Continuation for FinishPackageTests {
             }
         };
         let registrations = match vm.as_array(&tests_value) {
-            Ok(tests) => tests.to_vec(),
+            Ok(tests) => tests,
             Err(error) => return error.into(),
         };
         let mut tests = IndexMap::new();

@@ -36,6 +36,12 @@
 //! every operation hold the lock, as the old container did.
 
 #![allow(unsafe_code)]
+#![allow(
+    clippy::cast_ptr_alignment,
+    clippy::cast_possible_truncation,
+    reason = "slot and field addresses are header-relative offsets the layout keeps 8-byte \
+              (tagged: 16-byte) aligned, and capacities and offsets fit their words"
+)]
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -256,7 +262,7 @@ impl MapRef {
         MapGuard {
             map: self,
             access,
-            _guard: guard,
+            held: guard,
         }
     }
 }
@@ -343,7 +349,7 @@ fn table_len_for(cap: usize) -> usize {
 pub struct MapGuard {
     map: MapRef,
     access: Access,
-    _guard: Option<AccessGuard<'static>>,
+    held: Option<AccessGuard<'static>>,
 }
 
 impl MapGuard {
@@ -403,7 +409,7 @@ impl MapGuard {
     /// The map's lock for an insertion, removal or clear, unless already held
     /// or the map is thread-local.
     fn exclusive(&self) -> Option<AccessGuard<'static>> {
-        (self._guard.is_none() && self.access == Access::Shared).then(|| self.map.mutex().enter())
+        (self.held.is_none() && self.access == Access::Shared).then(|| self.map.mutex().enter())
     }
 
     /// The backings when entry `pos` is in the map and in every backing; a

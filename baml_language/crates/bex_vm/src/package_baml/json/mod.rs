@@ -231,9 +231,7 @@ fn string_keyed(vm: &BexVm, map: bex_vm_types::MapRef) -> bool {
 /// The value under `key` (whose map hash is `hash`) in the string-keyed map
 /// at `ptr`.
 fn object_get(vm: &BexVm, ptr: HeapPtr, hash: u64, key: &str) -> Option<Value> {
-    let Some(map) = vm.map_at(ptr) else {
-        return None;
-    };
+    let map = vm.map_at(ptr)?;
     vm.map_get_hashed(
         map,
         bex_vm_types::object_format::Access::Shared,

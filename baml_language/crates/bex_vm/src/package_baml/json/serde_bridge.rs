@@ -138,7 +138,7 @@ fn value_to_serde_at(
         ValueKind::Object(ptr) => {
             let is_container = matches!(
                 vm.get_object(ptr),
-                Object::Shared(SharedKind::List) | Object::Shared(_)
+                Object::Shared(SharedKind::List | SharedKind::Map)
             );
             if is_container {
                 if active.contains(&ptr) {

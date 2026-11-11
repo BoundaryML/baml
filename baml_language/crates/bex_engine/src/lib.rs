@@ -8169,7 +8169,7 @@ mod type_identity_tests {
                 generic_param_count: 0,
                 owner: bex_vm_types::types::Owner::anonymous(),
                 telemetry_definition: bex_vm_types::DefinitionCell::default(),
-                layout: Default::default(),
+                layout: std::sync::OnceLock::default(),
                 redact: false,
             })));
         let head = bex_vm_types::TypeHead::new(class, tag);
@@ -8296,7 +8296,7 @@ mod type_identity_tests {
                     generic_param_count: 0,
                     owner: bex_vm_types::types::Owner::anonymous(),
                     telemetry_definition: bex_vm_types::DefinitionCell::default(),
-                    layout: Default::default(),
+                    layout: std::sync::OnceLock::default(),
                     redact: false,
                 })));
         let original = source_thread

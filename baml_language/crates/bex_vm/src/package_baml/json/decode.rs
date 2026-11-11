@@ -1087,7 +1087,7 @@ fn first_invalid(vm: &BexVm, json: Value) -> Option<(&'static str, String)> {
         value.as_object_ptr().filter(|&ptr| {
             matches!(
                 vm.get_object(ptr),
-                Object::Shared(SharedKind::List) | Object::Shared(_)
+                Object::Shared(SharedKind::List | SharedKind::Map)
             )
         })
     };

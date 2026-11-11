@@ -271,9 +271,7 @@ pub(super) fn tagged_member(
     ptr: HeapPtr,
     plans: &mut Plans,
 ) -> Option<Result<RealizedTy, Refused>> {
-    if vm.map_at(ptr).is_none() {
-        return None;
-    }
+    vm.map_at(ptr)?;
     let tags = union_tags(vm, members, plans)?;
     let mut node = match &tags.tree {
         Ok(tree) => tree,

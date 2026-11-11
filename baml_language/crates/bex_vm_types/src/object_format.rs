@@ -26,6 +26,12 @@
 //! the object) uses Relaxed loads and stores and never takes a tag.
 
 #![allow(unsafe_code)]
+#![allow(
+    clippy::cast_ptr_alignment,
+    clippy::cast_possible_truncation,
+    reason = "slot and field addresses are header-relative offsets the layout keeps 8-byte \
+              (tagged: 16-byte) aligned, and capacities and offsets fit their words"
+)]
 
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 
@@ -716,7 +722,7 @@ mod tests {
                 match read {
                     SlotValue::Value(value) if value.as_bool().is_some() || value.is_null() => {}
                     SlotValue::Value(value) => {
-                        assert!(value.as_int().is_some_and(|int| int >= 1_000))
+                        assert!(value.as_int().is_some_and(|int| int >= 1_000));
                     }
                     SlotValue::Float(_) => panic!("no float was written"),
                 }

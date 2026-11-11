@@ -404,7 +404,7 @@ fn mint_class(
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
-        layout: Default::default(),
+        layout: std::sync::OnceLock::default(),
         redact: false,
     })));
     // The head is built off the declaration that was just allocated, so the
@@ -1577,9 +1577,7 @@ pub(super) struct WithMetaRow {
 
 /// Read `value` as a `reflect.WithMeta` wrapper. `None` when it is not one.
 pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaRow, String>> {
-    let Some(instance) = vm.instance_at(value.as_object_ptr()?) else {
-        return None;
-    };
+    let instance = vm.instance_at(value.as_object_ptr()?)?;
     let Object::Class(class) = vm.get_object(instance.class()) else {
         unreachable!("Instance.class must point to Object::Class")
     };
@@ -1705,9 +1703,7 @@ pub(crate) fn check_kind_invariant(
 /// (no kind check — callers that accept `reflect.TypeView` accept any kind).
 pub(crate) fn as_view_type_value(vm: &BexVm, value: Value) -> Option<Value> {
     let ptr = value.as_object_ptr()?;
-    let Some(instance) = vm.instance_at(ptr) else {
-        return None;
-    };
+    let instance = vm.instance_at(ptr)?;
     let is_view = baml_type::type_kind::TypeKind::ALL
         .iter()
         .any(|kind| vm.lang_declaration(kind.class()) == Some(instance.class()));

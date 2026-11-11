@@ -33,7 +33,6 @@ impl BexVm {
         let Ok(calls) = self.as_array(&calls) else {
             return Vec::new();
         };
-        let calls: Vec<Value> = calls.iter().copied().collect();
         calls
             .into_iter()
             .filter_map(|call| {

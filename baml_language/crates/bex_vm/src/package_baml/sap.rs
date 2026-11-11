@@ -1502,9 +1502,7 @@ fn build_function(vm: &BexVm) -> Result<HeapPtr, VmRustFnError> {
 /// `from_llm_output` threw.
 fn refusal(vm: &BexVm, value: Value) -> Option<String> {
     let ptr = value.as_object_ptr()?;
-    let Some(instance) = vm.instance_at(ptr) else {
-        return None;
-    };
+    let instance = vm.instance_at(ptr)?;
     if instance.class() != vm.lang_object(crate::lang_items::BAML_SAP_REJECTED) {
         return None;
     }

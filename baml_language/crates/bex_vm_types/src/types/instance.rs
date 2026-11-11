@@ -20,6 +20,12 @@
 //! run time is collectible, and its instances keep it alive.
 
 #![allow(unsafe_code)]
+#![allow(
+    clippy::cast_ptr_alignment,
+    clippy::cast_possible_truncation,
+    reason = "slot and field addresses are header-relative offsets the layout keeps 8-byte \
+              (tagged: 16-byte) aligned, and capacities and offsets fit their words"
+)]
 
 use crate::{
     HeapPtr, Object, RealizedTy, RuntimeTy, Value,
@@ -204,7 +210,7 @@ impl InstanceRef {
             unsafe { instance.write_hidden(TYPE_ARGS_OFFSET, Value::object(type_args)) };
         }
         // A zeroed tagged slot reads as held (tag 0); every one starts null.
-        for slot in instance.layout().fields.iter() {
+        for slot in &instance.layout().fields {
             if slot.kind == SlotKind::Tagged16 {
                 // SAFETY: the layout's slot lies inside the fresh cell.
                 unsafe {

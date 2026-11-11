@@ -483,6 +483,10 @@ mod tests {
         object: crate::Object,
     }
 
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "the object's address must stay put while heads point at it"
+    )]
     fn headed(object: crate::Object) -> Box<Headed> {
         Box::new(Headed {
             _header: crate::object_format::Header::new(crate::object_format::OBJECT_DESC, 0),
@@ -648,7 +652,7 @@ mod tests {
             generic_param_count: 0,
             owner: crate::types::Owner::Package(ptr_to(&mut package.object)),
             telemetry_definition: crate::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact: false,
         }));
 
@@ -692,7 +696,7 @@ mod tests {
             generic_param_count: 0,
             owner: crate::types::Owner::anonymous(),
             telemetry_definition: crate::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
             redact: false,
         }));
         let mut declaration = headed(declaration);

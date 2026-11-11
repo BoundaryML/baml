@@ -71,7 +71,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::Package(package_ptr),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            layout: Default::default(),
+            layout: std::sync::OnceLock::default(),
         })));
         let ty = RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, type_tag),
@@ -620,7 +620,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
-        layout: Default::default(),
+        layout: std::sync::OnceLock::default(),
     })));
 
     // Root only the outer class: the enum survives through the field type's
@@ -824,7 +824,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::Package(package_ptr),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
-        layout: Default::default(),
+        layout: std::sync::OnceLock::default(),
     })));
 
     let mut roots = vec![class_ptr];
@@ -909,7 +909,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
-        layout: Default::default(),
+        layout: std::sync::OnceLock::default(),
     })));
     let returns = RealizedTy::Class(
         bex_vm_types::TypeHead::new(class_ptr, type_tag),
@@ -1084,7 +1084,7 @@ fn class_with_cleanup(name: &str, cleanup: bex_vm_types::HeapPtr) -> Class {
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
-        layout: Default::default(),
+        layout: std::sync::OnceLock::default(),
     }
 }
 

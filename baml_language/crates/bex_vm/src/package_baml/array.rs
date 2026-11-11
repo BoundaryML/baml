@@ -728,7 +728,7 @@ impl Continuation for FlatMapContinuation {
         // `value` is the inner array returned for `array[idx]`. Append its
         // contents to the accumulated results.
         let inner = match vm.as_array(&value) {
-            Ok(slice) => slice.to_vec(),
+            Ok(slice) => slice,
             Err(e) => return NativeCallResult::Error(e.into()),
         };
         self.results.extend(inner);
@@ -924,7 +924,7 @@ impl BamlClassArray for PackageBamlImpl {
             Err(e) => return e,
         };
         let items = match vm.as_array(array) {
-            Ok(array) => array.to_vec(),
+            Ok(array) => array,
             Err(e) => return NativeCallResult::Error(e.into()),
         };
         if items.len() <= 1 {
@@ -1390,7 +1390,7 @@ pub(crate) mod shared {
         _locality: Locality,
     ) -> NativeCallResult {
         let elements = match vm.as_array(&args[0]) {
-            Ok(array) => array.to_vec(),
+            Ok(array) => array,
             Err(error) => return NativeCallResult::Error(error.into()),
         };
         let separator = match vm.as_string(&args[1]) {
