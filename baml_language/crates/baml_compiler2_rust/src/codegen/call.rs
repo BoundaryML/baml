@@ -30,8 +30,8 @@ impl<'db> Generator<'_, 'db> {
         let Some((object, info)) = self.index.function(self.db, *func) else {
             return unsupported(format!("callee `{name}` not found in the program"));
         };
-        if let Some(test) = self.null_test(block, info, ntypeargs, args)? {
-            return Ok(test);
+        if let Some(inline) = self.inline_builtin(block, info, layout, args, ntypeargs)? {
+            return Ok(inline);
         }
         let shape = call_shape(self.body, args, ntypeargs, &self.analysis.static_types);
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
@@ -52,6 +52,59 @@ impl<'db> Generator<'_, 'db> {
                 "sys op `{name}` emitted inline"
             ))),
         }
+    }
+
+    /// A builtin call compiled code makes without the builtin's glue: `x ==
+    /// null` as a bit test, or a scalar body called directly.
+    fn inline_builtin(
+        &mut self,
+        block: BlockId,
+        info: &Function,
+        layout: Option<&baml_type::CallLayout>,
+        args: &[Operand<'db>],
+        ntypeargs: usize,
+    ) -> Gen<Option<Expr>> {
+        if let Some(test) = self.null_test(block, info, ntypeargs, args)? {
+            return Ok(Some(test));
+        }
+        self.scalar_native_call(block, info, layout, args, ntypeargs)
+    }
+
+    /// A builtin whose native body takes and returns only scalars, called
+    /// directly with unboxed arguments (`baml_builtins2_codegen::
+    /// scalar_native_entry`); `None` for any other builtin or a call that
+    /// passes type arguments or names its arguments.
+    fn scalar_native_call(
+        &mut self,
+        block: BlockId,
+        info: &Function,
+        layout: Option<&baml_type::CallLayout>,
+        args: &[Operand<'db>],
+        ntypes: usize,
+    ) -> Gen<Option<Expr>> {
+        let native = info
+            .native_key
+            .as_deref()
+            .and_then(baml_builtins2_codegen::scalar_native_entry);
+        let named = layout.is_some_and(|layout| layout.0.iter().any(Option::is_some));
+        let Some(native) = native.filter(|n| !named && ntypes == 0 && n.params.len() == args.len())
+        else {
+            return Ok(None);
+        };
+        let repr = |ty: &str| match ty {
+            "i64" => Repr::Int,
+            "f64" => Repr::Float,
+            _ => Repr::Bool,
+        };
+        let mut values = Vec::with_capacity(args.len());
+        for (arg, ty) in args.iter().zip(&native.params) {
+            let expr = self.operand(block, arg)?;
+            values.push(coerce(&expr.code, expr.repr, repr(ty)));
+        }
+        Ok(Some(Expr::new(
+            format!("{}({})", native.call, values.join(", ")),
+            repr(&native.ret),
+        )))
     }
 
     /// A call to a builtin: its generated compiled entry when it has an

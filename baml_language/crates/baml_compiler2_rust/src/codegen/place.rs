@@ -39,6 +39,18 @@ struct KnownElems {
     kind: SlotKind,
 }
 
+/// The element layout of a list of `element`, when the type is fully known.
+fn elems_of(element: &RuntimeTy) -> Option<KnownElems> {
+    let element = baml_compiler2_mir::RealizedTy::try_from(element).ok()?;
+    let kind = SlotKind::of_type(&element);
+    let stride = u32::try_from(kind.elem_kind().stride()).ok()?;
+    Some(KnownElems {
+        descriptor: list_descriptor(kind).0,
+        stride,
+        kind,
+    })
+}
+
 /// The value representation a raw slot stores without a check, if any.
 fn raw_repr(raw: RawKind) -> Repr {
     match raw {
@@ -256,8 +268,12 @@ impl<'db> Generator<'_, 'db> {
         });
         let base = self.load(block, base)?;
         let base = self.value_arg(&base);
-        let boxed = self.value_arg(&value);
-        let slow = self.fallible(block, &format!("vm.store_field({base}, {field}, {boxed})"))?;
+        // Boxed only on the generic path: a float boxes by allocating.
+        let boxed = coerce(&value.code, value.repr, Repr::Value);
+        let slow = self.fallible(
+            block,
+            &format!("{{ let b = {boxed}; vm.store_field({base}, {field}, b) }}"),
+        )?;
         let fast = self.slot_write(block, known.kind, known.offset, &value, &boxed, &slow)?;
         Ok(format!(
             "match unsafe {{ bex_vm::compiled_rt::FieldBase::typed({base}) }} {{ Some(f) => {{ {fast} }}, None => {{ {slow}; }} }}"
@@ -276,14 +292,62 @@ impl<'db> Generator<'_, 'db> {
         if self.repr(index) != Repr::Int {
             return None;
         }
-        let element = baml_compiler2_mir::RealizedTy::try_from(element.as_ref()).ok()?;
-        let kind = SlotKind::of_type(&element);
-        let stride = u32::try_from(kind.elem_kind().stride()).ok()?;
-        Some(KnownElems {
-            descriptor: list_descriptor(kind).0,
-            stride,
-            kind,
-        })
+        elems_of(element)
+    }
+
+    /// The length of a list local whose element type is fully known, read in
+    /// place; `None` for any other container, which the generic length
+    /// takes.
+    pub(super) fn known_len(&mut self, block: BlockId, place: &Place) -> Gen<Option<Expr>> {
+        let Place::Local(local) = place else {
+            return Ok(None);
+        };
+        let RuntimeTy::List(element) = &self.body.locals[local.0].ty else {
+            return Ok(None);
+        };
+        let Some(known) = elems_of(element) else {
+            return Ok(None);
+        };
+        let list = self.load(block, place)?;
+        let list = self.value_arg(&list);
+        let slow = self.fallible(block, &format!("vm.container_len({list})"))?;
+        let slow = coerce(&slow, Repr::Value, Repr::Int);
+        Ok(Some(Expr::new(
+            format!(
+                "(match bex_vm::compiled_rt::ListBase::of({list}, {}) {{ Some(l) => l.len(), None => {slow} }})",
+                known.descriptor
+            ),
+            Repr::Int,
+        )))
+    }
+
+    /// The element read of an array walk's step: element `i{iter}` of the
+    /// list `l{iter}` when the walked list's element type is fully known,
+    /// `None` for the generic walk.
+    pub(super) fn walk_elem(&self, iter: usize) -> Option<(String, Repr)> {
+        // The walk's setup (`xs.iter()`) names the list it walks.
+        let array = self.body.blocks.iter().find_map(|block| {
+            let (walked, array) = crate::analysis::array_iter_walk(
+                self.db,
+                self.body,
+                self.analysis.arity,
+                block.terminator.as_ref()?,
+                &self.analysis.array_iters,
+            )?;
+            (walked == iter).then_some(array)
+        })?;
+        let RuntimeTy::List(element) = &self.body.locals[array].ty else {
+            return None;
+        };
+        let known = elems_of(element)?;
+        let (read, repr) = slot_read(known.kind, 0);
+        let (descriptor, stride) = (known.descriptor, known.stride);
+        Some((
+            format!(
+                "bex_vm::compiled_rt::ListBase::of(l{iter}, {descriptor}).and_then(|l| l.elem(i{iter}, {stride})).map(|f| {read})"
+            ),
+            repr,
+        ))
     }
 
     /// The element at a non-negative, in-bounds index read in place, else the
@@ -331,11 +395,13 @@ impl<'db> Generator<'_, 'db> {
         });
         let base = self.load(block, base)?;
         let base = self.value_arg(&base);
-        let boxed = self.value_arg(&value);
-        let boxed_index = self.value_arg(&Expr::atom(format!("l{}", index.0), Repr::Int));
+        let boxed = coerce(&value.code, value.repr, Repr::Value);
         let slow = self.fallible(
             block,
-            &format!("vm.store_array_element({base}, {boxed_index}, {boxed})"),
+            &format!(
+                "{{ let b = {boxed}; vm.store_array_element({base}, Value::int(l{}), b) }}",
+                index.0
+            ),
         )?;
         let fast = self.slot_write(block, known.kind, 0, &value, &boxed, &slow)?;
         let (descriptor, stride) = (known.descriptor, known.stride);
@@ -345,8 +411,9 @@ impl<'db> Generator<'_, 'db> {
         ))
     }
 
-    /// The store of `value` (`boxed` as a `Value`) to the slot at `offset` of
-    /// `f`, or `slow` when the value needs a check the slot does not make.
+    /// The store of `value` (`boxed`, an expression of it as a `Value`) to the
+    /// slot at `offset` of `f`, or `slow` when the value needs a check the
+    /// slot does not make.
     fn slot_write(
         &mut self,
         block: BlockId,
@@ -371,7 +438,9 @@ impl<'db> Generator<'_, 'db> {
             SlotKind::Tagged16 => {
                 let store = self.fallible(
                     block,
-                    &format!("unsafe {{ vm.store_tagged_at(f, {offset}, {boxed}) }}"),
+                    &format!(
+                        "{{ let t = {boxed}; unsafe {{ vm.store_tagged_at(f, {offset}, t) }} }}"
+                    ),
                 )?;
                 format!("{store};")
             }

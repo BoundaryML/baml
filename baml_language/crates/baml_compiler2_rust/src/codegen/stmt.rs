@@ -404,12 +404,17 @@ impl<'db> Generator<'_, 'db> {
             let Some((done, _)) = done else {
                 return unsupported("`baml.iter.Done` not found in the program");
             };
+            // `Done` has no fields: allocated in place, as a literal is.
+            let done_class = format!("vm.record_object(fr, ObjectIndex::from_raw({done}))");
+            let done_value = format!(
+                "(match vm.instance_shape({done_class}) {{ Some(s) => vm.alloc_shaped(s).0, None => vm.new_instance({done_class}, Vec::new()) }})"
+            );
             // The walk reads the iterator's array, its contents.
             let walk = |local: &str| {
                 format!(
                     "if i{iter} < bex_vm::compiled_rt::expect_int(vm.container_len{local}(l{iter})?)? {{ \
                      let v = vm.load_array_element{local}(l{iter}, Value::int(i{iter}))?; i{iter} += 1; v }} \
-                     else {{ vm.new_instance(vm.record_object(fr, ObjectIndex::from_raw({done})), Vec::new()) }}"
+                     else {{ {done_value} }}"
                 )
             };
             let step = self.by_locality(
@@ -417,6 +422,17 @@ impl<'db> Generator<'_, 'db> {
                 &walk("_local"),
                 &walk(""),
             );
+            // A known list's element is read in place; the generic step ends
+            // the walk or rereads past a racing grow.
+            let step = match self.walk_elem(iter) {
+                Some((fast, repr)) => {
+                    let read = coerce("v", repr, Repr::Value);
+                    format!(
+                        "(match {fast} {{ Some(v) => {{ i{iter} += 1; {read} }} None => {step} }})"
+                    )
+                }
+                None => step,
+            };
             let code = self.store(id, destination, &Expr::new(step, Repr::Value))?;
             self.emit_statement(&code);
         } else {

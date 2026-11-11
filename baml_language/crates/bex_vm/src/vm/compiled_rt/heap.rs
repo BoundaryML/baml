@@ -791,6 +791,14 @@ impl ListBase {
         unsafe { &*base.add(offset as usize).cast::<AtomicU64>() }
     }
 
+    /// The list's length, an Acquire load as the element reads make it.
+    #[allow(clippy::inline_always, clippy::cast_possible_wrap)]
+    #[inline(always)]
+    #[must_use]
+    pub fn len(self) -> i64 {
+        Self::word(self.0, LIST_LEN_OFFSET).load(Ordering::Acquire) as i64
+    }
+
     /// Element `index` (`stride` bytes apart), or `None` when it is negative
     /// or past the end; the generic path then decides.
     #[allow(

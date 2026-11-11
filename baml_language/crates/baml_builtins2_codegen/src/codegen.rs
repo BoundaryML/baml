@@ -795,6 +795,81 @@ pub fn generate_native_trait_for(
     out
 }
 
+/// A builtin compiled code calls as its one native body with unboxed
+/// scalars; see [`scalar_native_entries`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScalarNative {
+    /// The body's Rust path, `<PackageBamlImpl as {trait}>::{method}`.
+    pub call: String,
+    /// Parameter types in call order, the receiver first: `i64`, `f64` or
+    /// `bool`.
+    pub params: Vec<String>,
+    /// The result type: `i64`, `f64` or `bool`.
+    pub ret: String,
+}
+
+/// Every class method of the `baml` package whose required trait method
+/// takes and returns only `i64`, `f64` and `bool`, takes no VM, never yields
+/// and cannot fail, by native key. Compiled code calls its body directly
+/// with unboxed arguments, in place of the interpreter glue that boxes them.
+/// Builtins with a shared-format adapter keep their adapter.
+pub fn scalar_native_entries(builtins: &[NativeBuiltin]) -> BTreeMap<String, ScalarNative> {
+    let mut out = BTreeMap::new();
+    collect_scalar_natives(&build_namespace_tree(builtins, "baml"), "", &mut out);
+    out
+}
+
+fn collect_scalar_natives(
+    node: &NamespaceNode,
+    namespace_prefix: &str,
+    out: &mut BTreeMap<String, ScalarNative>,
+) {
+    for (class_name, entries) in &node.classes {
+        let trait_name = class_trait_name(namespace_prefix, class_name);
+        for entry in entries {
+            if let Some(native) = scalar_native(&trait_name, entry) {
+                out.insert(entry.builtin.path.clone(), native);
+            }
+        }
+    }
+    for (ns_name, sub_node) in &node.sub_namespaces {
+        let child_prefix = if namespace_prefix.is_empty() {
+            ns_name.clone()
+        } else {
+            format!("{namespace_prefix}.{ns_name}")
+        };
+        collect_scalar_natives(sub_node, &child_prefix, out);
+    }
+}
+
+/// `entry` as a [`ScalarNative`] of `trait_name`, from the same parameter
+/// and return types its required method is declared with.
+fn scalar_native(trait_name: &str, entry: &BuiltinEntry) -> Option<ScalarNative> {
+    let b = entry.builtin;
+    let adapted = crate::triage::row_for(&b.path).is_some_and(|row| row.form.has_adapter());
+    if adapted || b.may_yield || b.vm_usage != VmUsage::None || !b.generics.is_empty() {
+        return None;
+    }
+    let scalar = |ty: &str| matches!(ty, "i64" | "f64" | "bool").then(|| ty.to_owned());
+    let params = clean_param_list(b);
+    let params = if params.is_empty() {
+        Vec::new()
+    } else {
+        params
+            .split(", ")
+            .map(|param| scalar(param.split_once(": ")?.1))
+            .collect::<Option<Vec<_>>>()?
+    };
+    Some(ScalarNative {
+        call: format!(
+            "<bex_vm::package_baml::PackageBamlImpl as bex_vm::package_baml::{trait_name}>::{}",
+            entry.rust_method_name
+        ),
+        params,
+        ret: scalar(&clean_return_type(b))?,
+    })
+}
+
 /// Recursively emit class traits and namespace traits (bottom-up).
 fn emit_subtree_traits(out: &mut String, node: &NamespaceNode, namespace_prefix: &str) {
     for (class_name, entries) in &node.classes {

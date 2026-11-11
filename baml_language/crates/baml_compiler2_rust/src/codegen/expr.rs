@@ -28,6 +28,9 @@ impl<'db> Generator<'_, 'db> {
                 return self.unary(block, *op, &operand);
             }
             Rvalue::Len(place) => {
+                if let Some(len) = self.known_len(block, place)? {
+                    return Ok(len);
+                }
                 let needs = self.analysis.escape.object_needs(place);
                 let container = self.load(block, place)?;
                 let container = self.value_arg(&container);
@@ -322,8 +325,11 @@ impl<'db> Generator<'_, 'db> {
                     return unsupported(format!("class `{name}` not found in the program"));
                 };
                 if args.is_empty() {
+                    // An instance of the class: its class slot holds the
+                    // class's word (`BexVm::is_instance_of`).
+                    let word = self.class_word(object);
                     return Ok(format!(
-                        "vm.is_instance_of({value}, vm.record_object(fr, ObjectIndex::from_raw({object})))"
+                        "(bex_vm::compiled_rt::instance_class_word({value}) == {word})"
                     ));
                 }
                 // Class type arguments are invariant.
