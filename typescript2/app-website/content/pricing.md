@@ -14,7 +14,7 @@ You can install the toolchain, write and run BAML programs, generate SDKs, use t
 
 ## Boundary Cloud
 
-You pay for data and retention. Spans, seats, queries and profiles are free. Boundary Cloud is in early access.
+Boundary Cloud is in early access.
 
 | | Starter | Volume |
 | --- | --- | --- |

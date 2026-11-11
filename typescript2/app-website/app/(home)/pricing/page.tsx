@@ -30,7 +30,6 @@ const SAME = (cell: Cell): [Cell, Cell] => [cell, cell];
 
 const BLOCKS: {
   free: string[];
-  note: string;
   rows: Row[];
   title: string;
 }[] = [
@@ -41,7 +40,6 @@ const BLOCKS: {
       'Unlimited queries, up to 90 seconds each',
       'Unlimited dashboards',
     ],
-    note: 'What your programs record: every function’s inputs, outputs, logs and network calls.',
     // Named the way Better Stack names its line items: what's included, then ingestion and
     // retention past it.
     rows: [
@@ -75,7 +73,6 @@ const BLOCKS: {
   },
   {
     free: [],
-    note: 'Single sign-on and audit logs are on the way.',
     rows: [
       { cells: SAME(['Unlimited']), label: 'Members' },
       { cells: SAME(['Unlimited']), label: 'Projects and environments' },
@@ -104,7 +101,6 @@ const BLOCKS: {
   },
   {
     free: [],
-    note: 'We host it, or it runs in your own cloud account and your data stays there.',
     rows: [
       { cells: SAME(['Included']), label: 'Hosted by Boundary' },
       {
@@ -225,13 +221,12 @@ function HowBilling() {
 }
 
 /** One topic: a heading and a line, the table, then what's free as a checklist. */
-function Block({ free, note, rows, title }: (typeof BLOCKS)[number]) {
+function Block({ free, rows, title }: (typeof BLOCKS)[number]) {
   return (
     <div className="border-t border-rule pt-10">
       <h3 className="font-display text-[20px] font-medium text-head">
         {title}
       </h3>
-      <p className="mt-2 max-w-[34rem] text-[14px] text-ink-2">{note}</p>
       <div className="mt-6 overflow-hidden rounded-lg border border-rule bg-raised">
         <div
           className={`${COLUMNS} border-b border-rule py-2 text-[12px] text-muted`}
@@ -323,26 +318,22 @@ export default function PricingPage() {
           </div>
 
           <h2 className="mt-20 v4-h3 text-head">Boundary Cloud</h2>
-          <p className="mt-2 text-[15px] text-ink-2">
-            You pay for data and retention. Spans, seats, queries and profiles
-            are free.
-          </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {PLANS.map((p) => (
               <div
-                className={`flex flex-wrap items-center justify-between gap-6 rounded-xl border p-6 ${p.lit ? 'border-clover/60 bg-clover/[0.07]' : 'border-rule bg-raised'}`}
+                className={`flex flex-col rounded-xl border p-6 ${p.lit ? 'border-clover/60 bg-clover/[0.07]' : 'border-rule bg-raised'}`}
                 key={p.name}
               >
-                <div>
-                  <p className="text-[14px] font-medium text-head">{p.name}</p>
-                  <p className="mt-2 font-display text-[36px] leading-none font-medium text-head tabular-nums">
-                    {p.price}
-                  </p>
-                  <p className="mt-1 text-[12px] text-muted">{p.unit}</p>
+                <p className="text-[14px] font-medium text-head">{p.name}</p>
+                <p className="mt-2 font-display text-[36px] leading-none font-medium text-head tabular-nums">
+                  {p.price}
+                </p>
+                <p className="mt-1 text-[12px] text-muted">{p.unit}</p>
+                <div className="mt-6">
+                  <Button href={BOOK} variant={p.lit ? 'primary' : 'secondary'}>
+                    Get early access
+                  </Button>
                 </div>
-                <Button href={BOOK} variant={p.lit ? 'primary' : 'secondary'}>
-                  Get early access
-                </Button>
               </div>
             ))}
           </div>
