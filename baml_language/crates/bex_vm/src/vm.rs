@@ -2603,10 +2603,7 @@ impl BexVm {
             .pop_if(|active| active.record == level)
         {
             self.restore_activation(previous);
-            let context = self.current_context().clone();
-            if let Some(telemetry) = &mut self.telemetry {
-                telemetry.set_context(context);
-            }
+            self.publish_context();
         }
     }
 
@@ -2651,7 +2648,23 @@ impl BexVm {
         }))
     }
 
+    /// Hand the current context to telemetry, if it is on. Without
+    /// telemetry nothing reads it, so the frame walk and clone are skipped.
+    #[inline]
+    fn publish_context(&mut self) {
+        if self.telemetry.is_some() {
+            let context = self.current_context().clone();
+            if let Some(telemetry) = &mut self.telemetry {
+                telemetry.set_context(context);
+            }
+        }
+    }
+
+    #[inline]
     pub fn current_context(&self) -> &Context {
+        if let Some(Frame::Bytecode(frame)) = self.frames.last() {
+            return &frame.context;
+        }
         self.frames
             .iter()
             .rev()
@@ -7910,6 +7923,7 @@ impl BexVm {
     /// `LoadArrayElement` on a list: element `index` (negative counts from
     /// the end), or the index and length to report.
     #[inline]
+    #[expect(clippy::unused_self, reason = "an element op of this VM's heap, called as one")]
     pub(crate) fn load_list_element(
         &self,
         ptr: HeapPtr,
@@ -7925,6 +7939,7 @@ impl BexVm {
 
     /// `StoreArrayElement` on a list, under its lock.
     #[inline]
+    #[expect(clippy::unused_self, reason = "an element op of this VM's heap, called as one")]
     pub(crate) fn store_list_element(
         &self,
         ptr: HeapPtr,
@@ -10133,9 +10148,7 @@ impl BexVm {
                                 self.reserve_call_frame()?;
                                 self.reserve_stack(callee.real_local_count)?;
                                 let context = self.current_context().clone();
-                                if let Some(telemetry) = &mut self.telemetry {
-                                    telemetry.set_context(context.clone());
-                                }
+                                self.publish_context();
                                 let frame_telemetry = if self.telemetry.is_some() {
                                     let actual_caller = self.frame_function_identity(*frame_idx);
                                     let caller_is_observed = matches!(
@@ -10616,10 +10629,7 @@ impl BexVm {
                         // SAFETY: this instruction is executing the bytecode frame
                         // accessed above; stack operations cannot remove that frame.
                         self.frames.pop();
-                        let context = self.current_context().clone();
-                        if let Some(telemetry) = &mut self.telemetry {
-                            telemetry.set_context(context);
-                        }
+                        self.publish_context();
                         // Select the restored caller. Native continuations and
                         // early yields still hand this frame back to the outer loop.
                         if !self.frames.is_empty() {
