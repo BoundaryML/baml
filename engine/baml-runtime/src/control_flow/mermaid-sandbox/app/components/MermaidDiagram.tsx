@@ -28,7 +28,7 @@ const sanitizeSvgForError = (error: unknown) => {
 export default function MermaidDiagram({ chart, className }: MermaidDiagramProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [svg, setSvg] = useState<string>("");
-  const idRef = useRef<string>();
+  const idRef = useRef<string | undefined>(undefined);
 
   if (!idRef.current) {
     idRef.current = `mermaid-${Math.random().toString(36).slice(2, 11)}`;
