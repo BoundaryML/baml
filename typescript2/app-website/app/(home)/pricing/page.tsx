@@ -19,39 +19,69 @@ import { SoftwareApplicationStructuredData } from '@/components/structured-data'
 /** A table cell: an amount and, for a price, its unit under it. */
 type Cell = [amount: string, unit?: string];
 
-// The line items, Starter then Pro.
-const ROWS: { cells: [Cell, Cell]; label: string }[] = [
-  {
-    cells: [
-      ['1 GB', 'per month'],
-      ['5 GB', 'per month'],
-    ],
-    label: 'Data included',
-  },
-  {
-    cells: [
-      ['$4', 'per GB'],
-      ['$3', 'per GB'],
-    ],
-    label: 'Data after that',
-  },
-  { cells: [['30 days'], ['30 days']], label: 'Retention included' },
-  {
-    cells: [['—'], ['$0.10', 'per GB per 30 days']],
-    label: 'Longer retention',
-  },
-  { cells: [['—'], ['Add-on']], label: 'Bring your own cloud' },
-];
+// The line items in groups, the way Better Stack splits its table by product. Each row is Starter's
+// cell then Pro's. Every non-price fact is from BCS: spans, profiles and seats are never billed,
+// going over never blocks, roles are admin and member, keys can be scoped to an environment.
+const SAME = (cell: Cell): [Cell, Cell] => [cell, cell];
 
-// Never billed, on either plan.
-const FREE = [
-  'Spans',
-  'Profiles',
-  'Queries',
-  'Dashboards',
-  'Members',
-  'Projects',
-  'API keys',
+const GROUPS: {
+  rows: { cells: [Cell, Cell]; label: string }[];
+  title: string;
+}[] = [
+  {
+    rows: [
+      {
+        cells: [
+          ['1 GB', 'per month'],
+          ['5 GB', 'per month'],
+        ],
+        label: 'Data included',
+      },
+      {
+        cells: [
+          ['$4', 'per GB'],
+          ['$3', 'per GB'],
+        ],
+        label: 'Data after that',
+      },
+      { cells: SAME(['Never blocked']), label: 'Going over' },
+      { cells: SAME(['Unlimited']), label: 'Spans' },
+      { cells: SAME(['Unlimited']), label: 'Profiles' },
+    ],
+    title: 'Data',
+  },
+  {
+    rows: [
+      { cells: SAME(['30 days']), label: 'Included' },
+      {
+        cells: [['—'], ['$0.10', 'per GB per 30 days']],
+        label: 'Longer retention',
+      },
+    ],
+    title: 'Retention',
+  },
+  {
+    rows: [
+      { cells: SAME(['Included']), label: 'SQL queries and baml query' },
+      { cells: SAME(['Unlimited']), label: 'Dashboards' },
+    ],
+    title: 'Capabilities',
+  },
+  {
+    rows: [
+      { cells: SAME(['Unlimited']), label: 'Members' },
+      { cells: SAME(['Unlimited']), label: 'Projects and environments' },
+      { cells: SAME(['Admin and member']), label: 'Roles' },
+    ],
+    title: 'Team',
+  },
+  {
+    rows: [
+      { cells: SAME(['Unlimited']), label: 'API keys, scoped by environment' },
+      { cells: [['—'], ['Add-on']], label: 'Bring your own cloud' },
+    ],
+    title: 'Governance',
+  },
 ];
 
 const PLANS = [
@@ -170,28 +200,28 @@ export default function PricingPage() {
                 <span className="text-right">Starter</span>
                 <span className="text-right">Pro</span>
               </div>
-              <dl className="divide-y divide-rule text-[15px]">
-                {ROWS.map((r) => (
-                  <div
-                    className={`${COLUMNS} items-baseline py-3`}
-                    key={r.label}
+              {GROUPS.map((g) => (
+                <div className="[&:last-child_dl]:border-b-0" key={g.title}>
+                  <p
+                    className={`${COLUMNS} border-b border-rule bg-white/[0.02] py-2.5 font-mono text-[12px] uppercase tracking-[0.08em] text-muted`}
                   >
-                    <dt className="text-ink-2">{r.label}</dt>
-                    <Amount cell={r.cells[0]} />
-                    <Amount cell={r.cells[1]} />
-                  </div>
-                ))}
-              </dl>
-            </div>
-            {/* What's never billed, as Better Stack lists features under each table. */}
-            <ul className="mt-6 grid grid-cols-2 gap-x-6 gap-y-2.5 px-1 text-[15px] text-ink-2 sm:grid-cols-3">
-              {FREE.map((f) => (
-                <Tick key={f}>{`${f} included`}</Tick>
+                    {g.title}
+                  </p>
+                  <dl className="divide-y divide-rule border-b border-rule text-[15px]">
+                    {g.rows.map((r) => (
+                      <div
+                        className={`${COLUMNS} items-baseline py-3`}
+                        key={r.label}
+                      >
+                        <dt className="text-ink-2">{r.label}</dt>
+                        <Amount cell={r.cells[0]} />
+                        <Amount cell={r.cells[1]} />
+                      </div>
+                    ))}
+                  </dl>
+                </div>
               ))}
-            </ul>
-            <p className="mt-6 px-1 text-[14px] text-muted">
-              Going over your included data never blocks ingest or queries.
-            </p>
+            </div>
           </div>
         </div>
       </section>
