@@ -163,8 +163,6 @@ const NOT_BILLED = [
   'Profiles',
   'Function names, source and types',
   'A value your programs record again',
-  'Retried uploads',
-  'Uploads that never arrive',
 ];
 
 /** The bottom of the page: what ingestion bills, what it doesn't, and how the meter keeps it down. */
