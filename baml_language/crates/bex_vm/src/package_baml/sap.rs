@@ -122,17 +122,17 @@ impl BamlNamespaceSap for PackageBamlImpl {
 }
 
 impl BamlNamespaceSap_ParseCache for PackageBamlImpl {
-    fn _parse_final(vm: &mut BexVm, cache: &Value, json: &BexStr) -> NativeCallResult {
+    fn _parse_final(vm: &mut BexVm, cache: &Value, json: &str) -> NativeCallResult {
         text_read(vm, *cache, json, Mode::Final)
     }
 
-    fn _parse_partial(vm: &mut BexVm, cache: &Value, json: &BexStr) -> NativeCallResult {
+    fn _parse_partial(vm: &mut BexVm, cache: &Value, json: &str) -> NativeCallResult {
         text_read(vm, *cache, json, Mode::Partial)
     }
 }
 
 /// Parse `text` with the model in `cache`.
-fn text_read(vm: &mut BexVm, cache: Value, text: &BexStr, mode: Mode) -> NativeCallResult {
+fn text_read(vm: &mut BexVm, cache: Value, text: &str, mode: Mode) -> NativeCallResult {
     let cache = vm
         .rust_data_field::<ParseCache>(&cache, 0)
         .map_err(VmRustFnError::from)
@@ -149,13 +149,13 @@ fn text_read(vm: &mut BexVm, cache: Value, text: &BexStr, mode: Mode) -> NativeC
         (Ok(cache), Ok(target)) => read(
             vm,
             &cache.model,
-            Input::Text(text.as_str()),
+            Input::Text(text),
             cache.has_shapes,
             target,
             mode,
             || Source::Text {
                 cache: Arc::clone(&cache),
-                text: text.as_str().to_string(),
+                text: text.to_string(),
             },
         ),
         (Err(error), _) | (_, Err(error)) => NativeCallResult::Error(error),

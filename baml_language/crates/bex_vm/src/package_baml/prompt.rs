@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use bex_heap::TlabHolder;
-use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, PromptAst, PromptAstSimple, RootHaver, RootVisitor,
     types::{Object, Value},
@@ -342,12 +341,12 @@ impl Continuation for PromptAssembly {
 }
 
 impl BamlClassPrompt for PackageAiImpl {
-    fn text(vm: &BexVm, prompt: &ai_view::Prompt<'_>) -> bex_str::BexStr {
+    fn text(vm: &BexVm, prompt: &ai_view::Prompt<'_>) -> String {
         let data = vm.field(prompt.instance, 0);
         let prompt = vm
             .as_rust_data::<PromptAst>(&data)
             .expect("ai.Prompt._data must contain bex_vm_types::PromptAst");
-        bex_str::BexStr::from(prompt.render_text())
+        prompt.render_text()
     }
 
     fn messages(vm: &mut BexVm, prompt: &Value) -> Vec<Value> {
@@ -455,33 +454,25 @@ fn describe_unreadable_credential_file(
 }
 
 impl BamlNamespaceInternal for PackageAiImpl {
-    fn _sanitize_text(text: &BexStr) -> BexStr {
-        BexStr::from(btel_settings::network::sanitize_text(
-            text.as_str(),
-            btel_settings::network::Scrub::Log,
-        ))
+    fn _sanitize_text(text: &str) -> String {
+        btel_settings::network::sanitize_text(text, btel_settings::network::Scrub::Log)
     }
 
     fn _describe_unreadable_credential_file(
-        setting: &BexStr,
-        value: &BexStr,
-        read_error: &BexStr,
-        document_option: &BexStr,
-    ) -> BexStr {
-        BexStr::from(describe_unreadable_credential_file(
-            setting.as_str(),
-            value.as_str(),
-            read_error.as_str(),
-            document_option.as_str(),
-        ))
+        setting: &str,
+        value: &str,
+        read_error: &str,
+        document_option: &str,
+    ) -> String {
+        describe_unreadable_credential_file(setting, value, read_error, document_option)
     }
 
-    fn _sanitize_request_header(name: &BexStr, value: &BexStr) -> BexStr {
-        BexStr::from(btel_settings::network::sanitize_request_header(
-            name.as_str(),
-            value.as_str(),
+    fn _sanitize_request_header(name: &str, value: &str) -> String {
+        btel_settings::network::sanitize_request_header(
+            name,
+            value,
             btel_settings::network::Scrub::Log,
-        ))
+        )
     }
 
     fn assemble_prompt(vm: &mut BexVm, parts: &[Value], values: &[Value]) -> NativeCallResult {

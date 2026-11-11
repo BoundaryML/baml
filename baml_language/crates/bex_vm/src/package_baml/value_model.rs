@@ -678,8 +678,7 @@ impl Strings for ValueModel<'_> {
     }
 
     fn str_char_bytes(&self, string: ObjPtr, chars: Range<usize>) -> Range<usize> {
-        let text = self.string(string);
-        text.char_to_byte(chars.start)..text.char_to_byte(chars.end)
+        self.string(string).char_bytes(chars)
     }
 
     fn str_alloc(&mut self, text: &str) -> ObjPtr {

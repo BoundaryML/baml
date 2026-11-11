@@ -1371,14 +1371,14 @@ fn clean_param_list(b: &NativeBuiltin) -> String {
         parts.push(format!(
             "{}: {}",
             receiver_param_name(recv),
-            receiver_input_type_with_vm_usage(recv, b.vm_usage)
+            receiver_input_type_with_vm_usage(recv, b.vm_usage, b.str_ref)
         ));
     }
     for p in &b.params {
         parts.push(format!(
             "{}: {}",
             rust_field_ident(&p.name),
-            baml_type_to_input(&p.ty, false)
+            baml_type_to_input(&p.ty, false, b.str_ref)
         ));
     }
 
@@ -1463,6 +1463,7 @@ fn emit_single_extraction_indented(
     indent: &str,
     needs_owned: bool,
     arraymap_needs_owned: bool,
+    str_ref: bool,
 ) {
     let name = rust_field_ident(&param.name).to_string();
     if param.empty_map_default {
@@ -1483,6 +1484,7 @@ fn emit_single_extraction_indented(
         false,
         needs_owned,
         arraymap_needs_owned,
+        str_ref,
     );
     writeln!(out, "{indent}let {name} = {rhs};").unwrap();
 }
@@ -1495,6 +1497,7 @@ fn emit_immut_receiver_extraction_indented(
     indent: &str,
     needs_owned: bool,
     arraymap_needs_owned: bool,
+    str_ref: bool,
 ) {
     match recv.builtin_name() {
         // A read array receiver is passed as an `ArrayView` carrying its element
@@ -1583,6 +1586,7 @@ fn emit_immut_receiver_extraction_indented(
                 recv,
                 needs_owned,
                 arraymap_needs_owned,
+                str_ref,
             );
             writeln!(out, "{indent}let {name} = {rhs};").unwrap();
         }
@@ -1604,7 +1608,7 @@ fn emit_mut_receiver_extraction_indented(
     let expr = match recv.builtin_name() {
         "Array" => "vm.as_array_mut(&args[0])?".to_string(),
         "Map" => "vm.as_map_mut(&args[0])?".to_string(),
-        "String" => "&mut vm.as_string(&args[0])?.to_bex_str()".to_string(),
+        "String" => panic!("baml codegen error: strings are immutable; no `//baml:mut_self` on String"),
         "Uint8Array" => "vm.as_uint8array_mut(&args[0])?".to_string(),
         _ => "vm.as_value_mut(&args[0])?".to_string(),
     };
@@ -1639,6 +1643,7 @@ fn emit_arg_extractions_indented(
             indent,
             needs_owned,
             arraymap_needs_owned,
+            b.str_ref,
         );
     }
     for (i, param) in b.params.iter().enumerate() {
@@ -1649,6 +1654,7 @@ fn emit_arg_extractions_indented(
             indent,
             needs_owned,
             arraymap_needs_owned,
+            b.str_ref,
         );
     }
     if let Some(recv) = receiver.filter(|recv| recv.receiver_type.is_mut()) {
@@ -1671,6 +1677,7 @@ fn receiver_immut_extraction_expr(
     recv: &Receiver,
     needs_owned: bool,
     arraymap_needs_owned: bool,
+    str_ref: bool,
 ) -> String {
     match recv.builtin_name() {
         // `vm.as_array(...)?` is an owned snapshot, so it outlives any later
@@ -1684,14 +1691,8 @@ fn receiver_immut_extraction_expr(
                 format!("vm.as_map({val})?")
             }
         }
-        // See `extraction_expr`: natives still take `&BexStr`.
-        "String" => {
-            if needs_owned {
-                format!("vm.as_string({val})?.to_bex_str()")
-            } else {
-                format!("&vm.as_string({val})?.to_bex_str()")
-            }
-        }
+        // See `extraction_expr`.
+        "String" => string_extraction_expr(val, needs_owned, str_ref),
         "Uint8Array" => {
             if arraymap_needs_owned {
                 format!("vm.as_uint8array({val})?.clone()")
@@ -1749,18 +1750,12 @@ fn extraction_expr(
     is_mut: bool,
     needs_owned: bool,
     arraymap_needs_owned: bool,
+    str_ref: bool,
 ) -> String {
     match ty {
-        // Natives still take `&BexStr`; the flat cell's text is copied out
-        // for them until they read `StrRef` directly.
         BamlType::String => {
-            if is_mut {
-                format!("&mut vm.as_string({val})?.to_bex_str()")
-            } else if needs_owned {
-                format!("vm.as_string({val})?.to_bex_str()")
-            } else {
-                format!("&vm.as_string({val})?.to_bex_str()")
-            }
+            assert!(!is_mut, "baml codegen error: strings are immutable");
+            string_extraction_expr(val, needs_owned, str_ref)
         }
         // The local `__v: &Value` binding lets the `Value::as_*` methods
         // (which take `&self`) resolve without an explicit borrow that
@@ -1813,8 +1808,14 @@ fn extraction_expr(
             }
         }
         BamlType::Optional(inner) => {
-            let inner_expr =
-                extraction_expr("other", inner, false, needs_owned, arraymap_needs_owned);
+            let inner_expr = extraction_expr(
+                "other",
+                inner,
+                false,
+                needs_owned,
+                arraymap_needs_owned,
+                str_ref,
+            );
             // Bind `other` so `.is_null()` (Value method) resolves through
             // the `&Value` without triggering `clippy::needless_borrow`.
             // An omitted optional argument arrives as the `OmittedArg`
@@ -1843,6 +1844,24 @@ fn extraction_expr(
             }
         }
         BamlType::Named(_) | BamlType::Null | BamlType::RustType => val.to_string(),
+    }
+}
+
+/// How a `string` argument reaches a native. The text is borrowed straight
+/// from the heap cell (`StrRef::as_str`); a glue that later needs `&mut vm`
+/// (`needs_owned`) copies it out first, since the borrow would conflict.
+/// Under `//baml:str_ref` (`str_ref`) the native gets the cell handle itself.
+fn string_extraction_expr(val: &str, needs_owned: bool, str_ref: bool) -> String {
+    if str_ref {
+        assert!(
+            !needs_owned,
+            "baml codegen error: `//baml:str_ref` with a glue that needs `&mut vm`"
+        );
+        format!("vm.as_string({val})?")
+    } else if needs_owned {
+        format!("vm.as_string({val})?.as_str().to_owned()")
+    } else {
+        format!("vm.as_string({val})?.as_str()")
     }
 }
 
@@ -1940,7 +1959,7 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
             } else {
                 // Extraction returned Option<T> (owned) — current behavior
                 match inner.as_ref() {
-                    BamlType::String => format!("{name}.as_ref()"),
+                    BamlType::String => format!("{name}.as_deref()"),
                     BamlType::List(_) => format!("{name}.as_deref()"),
                     BamlType::Uint8Array => format!("{name}.as_deref()"),
                     _ => {
@@ -2210,14 +2229,11 @@ fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> Str
 // Type mapping helpers
 // ============================================================================
 
-fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
+fn baml_type_to_input(ty: &BamlType, is_mut: bool, str_ref: bool) -> String {
     match ty {
         BamlType::String => {
-            if is_mut {
-                "&mut bex_str::BexStr".to_string()
-            } else {
-                "&bex_str::BexStr".to_string()
-            }
+            assert!(!is_mut, "baml codegen error: strings are immutable");
+            string_input_type(str_ref)
         }
         BamlType::Int => "i64".to_string(),
         BamlType::Bigint => "std::sync::Arc<num_bigint::BigInt>".to_string(),
@@ -2242,7 +2258,7 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
             }
         }
         BamlType::Optional(inner) => {
-            let inner_str = baml_type_to_input(inner, false);
+            let inner_str = baml_type_to_input(inner, false, str_ref);
             format!("Option<{inner_str}>")
         }
         BamlType::Uint8Array => "&[u8]".to_string(),
@@ -2257,16 +2273,25 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
     }
 }
 
+/// The Rust type of a `string` argument: see `string_extraction_expr`.
+fn string_input_type(str_ref: bool) -> String {
+    if str_ref {
+        "bex_vm_types::StrRef<'_>".to_string()
+    } else {
+        "&str".to_string()
+    }
+}
+
 fn baml_type_to_output(ty: &BamlType) -> String {
     match ty {
-        BamlType::String => "bex_str::BexStr".to_string(),
+        BamlType::String => "String".to_string(),
         BamlType::Int => "i64".to_string(),
         BamlType::Bigint => "std::sync::Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
         BamlType::List(inner) => match inner.as_ref() {
-            BamlType::String => "Vec<bex_str::BexStr>".to_string(),
+            BamlType::String => "Vec<String>".to_string(),
             _ => "Vec<Value>".to_string(),
         },
         BamlType::Map(_, _) => "IndexMap<bex_str::BexStr, Value>".to_string(),
@@ -2310,7 +2335,7 @@ fn receiver_view_path(recv: &Receiver) -> String {
 /// `&Instance` borrowed from `vm`, which would conflict with the `&mut BexVm`
 /// parameter required for mutating-VM methods.  Passing the raw `Value` (which
 /// is `Copy`) instead avoids the split-borrow.
-fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> String {
+fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage, str_ref: bool) -> String {
     match recv.builtin_name() {
         "Array" => {
             if recv.receiver_type.is_mut() && matches!(vm_usage, VmUsage::MutRef) {
@@ -2335,13 +2360,11 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
             }
         }
         "String" => {
-            if recv.receiver_type.is_mut() && matches!(vm_usage, VmUsage::MutRef) {
-                "&Value".to_string()
-            } else if recv.receiver_type.is_mut() {
-                "&mut bex_str::BexStr".to_string()
-            } else {
-                "&bex_str::BexStr".to_string()
-            }
+            assert!(
+                !recv.receiver_type.is_mut(),
+                "baml codegen error: strings are immutable"
+            );
+            string_input_type(str_ref)
         }
         "Uint8Array" => {
             if recv.receiver_type.is_mut() && matches!(vm_usage, VmUsage::MutRef) {
@@ -2530,7 +2553,7 @@ mod tests {
             "BamlClassArray should have bare `filled` method:\n{output}"
         );
         assert!(
-            output.contains("fn to_lower_case(string: &bex_str::BexStr) -> bex_str::BexStr;"),
+            output.contains("fn to_lower_case(string: &str) -> String;"),
             "BamlClassString should have bare `to_lower_case` method:\n{output}"
         );
         assert!(
@@ -2747,7 +2770,7 @@ mod tests {
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains("fn from_url(url: &bex_str::BexStr, mime_type: Option<&bex_str::BexStr>) -> copy::media::Pdf;"),
+            output.contains("fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Pdf;"),
             "BamlClassMediaPdf should have from_url static constructor returning copy::media::Pdf:\n{output}"
         );
     }

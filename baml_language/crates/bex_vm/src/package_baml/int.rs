@@ -75,8 +75,7 @@ impl BamlClassInt for PackageBamlImpl {
         }
     }
 
-    fn parse(text: &bex_str::BexStr) -> Result<i64, VmRustFnError> {
-        let s = text.as_str();
+    fn parse(s: &str) -> Result<i64, VmRustFnError> {
         let v: i64 = s.parse::<i64>().map_err(|e| -> VmRustFnError {
             VmBamlError::ParseError {
                 message: format!("int.parse: cannot parse {s:?} as int: {e}"),

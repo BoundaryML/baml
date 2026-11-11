@@ -19,8 +19,8 @@ use bex_vm_types::types::SharedKind;
 impl super::BamlNamespaceToml for PackageBamlImpl {}
 
 impl super::BamlClassTomlTable for PackageBamlImpl {
-    fn parse(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
-        match ::toml::Table::from_str(s.as_str()) {
+    fn parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
+        match ::toml::Table::from_str(s) {
             Ok(table) => {
                 let value = convert_toml_value(vm, ::toml::Value::Table(table))?;
                 let source = Value::object(vm.alloc_string(s.clone()));
@@ -34,7 +34,7 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
         }
     }
 
-    fn _to_string_impl(vm: &mut BexVm, table: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
+    fn _to_string_impl(vm: &mut BexVm, table: &Value) -> Result<String, VmRustFnError> {
         let source = vm.as_instance(table)?.load(1).expect_value();
         let mut document = if source.is_null() {
             DocumentMut::new()

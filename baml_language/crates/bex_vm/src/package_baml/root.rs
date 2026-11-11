@@ -113,7 +113,7 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// `baml._to_string_primitive(value)` renders an `int`, `float`, `bool` or
     /// `null` exactly as `_to_string_default` does. The compiler calls it only
     /// for those types; any other value still renders, structurally.
-    fn _to_string_primitive(vm: &BexVm, value: &Value) -> bex_str::BexStr {
+    fn _to_string_primitive(vm: &BexVm, value: &Value) -> String {
         if let Some(text) = primitive_text(vm, *value) {
             return text.into();
         }

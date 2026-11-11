@@ -1,7 +1,7 @@
 use std::ops::Range;
 
-use bex_str::BexStr;
 use bex_vm_types::{
+    StrRef,
     layout::{Fault, ListOf, Lists, ObjPtr, RawWord, Strings},
     types::Value,
 };
@@ -14,85 +14,67 @@ use crate::{
 
 impl BamlClassString for PackageBamlImpl {
     #[expect(clippy::cast_possible_wrap)]
-    fn byte_length(string: &BexStr) -> i64 {
-        string.byte_len() as i64
+    fn byte_length(string: &str) -> i64 {
+        string.len() as i64
     }
 
-    fn to_lower_case(string: &BexStr) -> BexStr {
-        BexStr::from(string.as_str().to_lowercase())
+    fn to_lower_case(string: &str) -> String {
+        string.to_lowercase()
     }
 
-    fn to_upper_case(string: &BexStr) -> BexStr {
-        BexStr::from(string.as_str().to_uppercase())
+    fn to_upper_case(string: &str) -> String {
+        string.to_uppercase()
     }
 
-    // Zero-copy: returns a Slice into the original string when whitespace is trimmed.
-    fn trim(string: &BexStr) -> BexStr {
-        let s = string.as_str();
-        let trimmed = s.trim();
-        if trimmed.len() == s.len() {
-            return string.clone();
-        }
-        let start = trimmed.as_ptr() as usize - s.as_ptr() as usize;
-        string.byte_slice(start..start + trimmed.len())
+    fn trim(string: &str) -> String {
+        string.trim().to_owned()
     }
 
-    fn trim_start(string: &BexStr) -> BexStr {
-        let s = string.as_str();
-        let trimmed = s.trim_start();
-        if trimmed.len() == s.len() {
-            return string.clone();
-        }
-        let start = trimmed.as_ptr() as usize - s.as_ptr() as usize;
-        string.byte_slice(start..string.byte_len())
+    fn trim_start(string: &str) -> String {
+        string.trim_start().to_owned()
     }
 
-    fn trim_end(string: &BexStr) -> BexStr {
-        let s = string.as_str();
-        let trimmed = s.trim_end();
-        if trimmed.len() == s.len() {
-            return string.clone();
-        }
-        string.byte_slice(0..trimmed.len())
+    fn trim_end(string: &str) -> String {
+        string.trim_end().to_owned()
     }
 
-    fn includes(string: &BexStr, search: &BexStr) -> bool {
-        string.as_str().contains(search.as_str())
+    fn includes(string: &str, search: &str) -> bool {
+        string.contains(search)
     }
 
-    fn starts_with(string: &BexStr, prefix: &BexStr) -> bool {
-        string.as_str().starts_with(prefix.as_str())
+    fn starts_with(string: &str, prefix: &str) -> bool {
+        string.starts_with(prefix)
     }
 
-    fn ends_with(string: &BexStr, suffix: &BexStr) -> bool {
-        string.as_str().ends_with(suffix.as_str())
+    fn ends_with(string: &str, suffix: &str) -> bool {
+        string.ends_with(suffix)
     }
-    fn _replace_literal(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
-        BexStr::from(
-            string
-                .as_str()
-                .replacen(search.as_str(), replacement.as_str(), 1),
-        )
+
+    fn _replace_literal(string: &str, search: &str, replacement: &str) -> String {
+        string.replacen(search, replacement, 1)
     }
+
+    // The char-indexed methods take the cell (`//baml:str_ref`): its lengths
+    // make the ASCII case O(1).
 
     #[expect(clippy::cast_possible_wrap)]
-    fn index_of(string: &BexStr, search: &BexStr) -> Option<i64> {
+    fn index_of(string: StrRef<'_>, search: StrRef<'_>) -> Option<i64> {
         string.char_find(search.as_str()).map(|i| i as i64)
     }
 
     #[expect(clippy::cast_possible_wrap)]
-    fn last_index_of(string: &BexStr, search: &BexStr) -> Option<i64> {
+    fn last_index_of(string: StrRef<'_>, search: StrRef<'_>) -> Option<i64> {
         string.char_rfind(search.as_str()).map(|i| i as i64)
     }
 
-    fn at(string: &BexStr, index: i64) -> Option<BexStr> {
+    fn at(string: StrRef<'_>, index: i64) -> Option<String> {
         // Codepoint-indexed, not byte-indexed. A negative index counts from the
         // end; an index still outside the string after that yields `null`, so a
         // non-null result is always exactly one codepoint.
-        resolve_index(index, string.char_len()).map(|i| string.char_slice(i..i + 1))
+        resolve_index(index, string.char_len()).map(|i| string.char_slice(i..i + 1).to_owned())
     }
 
-    fn code_point_at(string: &BexStr, index: i64) -> Option<i64> {
+    fn code_point_at(string: StrRef<'_>, index: i64) -> Option<i64> {
         // The numeric counterpart of `at`: same codepoint-indexing and bounds
         // rules (negative counts from the end, out of range yields `null`), but
         // yields the code point's value rather than a one-character string. A
@@ -103,17 +85,13 @@ impl BamlClassString for PackageBamlImpl {
             .map(|c| i64::from(u32::from(c)))
     }
 
-    fn repeat(string: &BexStr, count: i64) -> BexStr {
+    fn repeat(string: &str, count: i64) -> String {
         let count = usize::try_from(count.max(0)).unwrap_or(0);
         string.repeat(count)
     }
 
-    fn _replace_all_literal(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
-        BexStr::from(
-            string
-                .as_str()
-                .replace(search.as_str(), replacement.as_str()),
-        )
+    fn _replace_all_literal(string: &str, search: &str, replacement: &str) -> String {
+        string.replace(search, replacement)
     }
 
     // ── Unicode-aware predicates ──────────────────────────────────────────────
@@ -121,87 +99,84 @@ impl BamlClassString for PackageBamlImpl {
     // All predicates use `chars().all(...)`, which returns true on the empty
     // string per the universal-quantifier convention.
 
-    fn is_numeric(string: &BexStr) -> bool {
-        string.as_str().chars().all(char::is_numeric)
+    fn is_numeric(string: &str) -> bool {
+        string.chars().all(char::is_numeric)
     }
 
-    fn is_alphabetic(string: &BexStr) -> bool {
-        string.as_str().chars().all(char::is_alphabetic)
+    fn is_alphabetic(string: &str) -> bool {
+        string.chars().all(char::is_alphabetic)
     }
 
-    fn is_alphanumeric(string: &BexStr) -> bool {
-        string.as_str().chars().all(char::is_alphanumeric)
+    fn is_alphanumeric(string: &str) -> bool {
+        string.chars().all(char::is_alphanumeric)
     }
 
-    fn is_uppercase(string: &BexStr) -> bool {
-        string.as_str().chars().all(char::is_uppercase)
+    fn is_uppercase(string: &str) -> bool {
+        string.chars().all(char::is_uppercase)
     }
 
-    fn is_lowercase(string: &BexStr) -> bool {
-        string.as_str().chars().all(char::is_lowercase)
+    fn is_lowercase(string: &str) -> bool {
+        string.chars().all(char::is_lowercase)
     }
 
-    fn is_whitespace(string: &BexStr) -> bool {
-        string.as_str().chars().all(char::is_whitespace)
+    fn is_whitespace(string: &str) -> bool {
+        string.chars().all(char::is_whitespace)
     }
 
-    fn is_control(string: &BexStr) -> bool {
-        string.as_str().chars().all(char::is_control)
+    fn is_control(string: &str) -> bool {
+        string.chars().all(char::is_control)
     }
 
     /// "Graphic" = visible / printing character: not control, not whitespace.
     /// Note this is a convenience definition — Unicode does not have a single
     /// `Graphic` property. We exclude `Cc` (control) and `White_Space`.
-    fn is_graphic(string: &BexStr) -> bool {
-        string
-            .as_str()
-            .chars()
-            .all(|c| !c.is_control() && !c.is_whitespace())
+    fn is_graphic(string: &str) -> bool {
+        string.chars().all(|c| !c.is_control() && !c.is_whitespace())
     }
 
     // ── ASCII-only predicates ─────────────────────────────────────────────────
 
-    fn is_ascii(string: &BexStr) -> bool {
-        string.as_str().is_ascii()
+    fn is_ascii(string: &str) -> bool {
+        string.is_ascii()
     }
 
-    fn is_ascii_numeric(string: &BexStr) -> bool {
-        string.as_str().chars().all(|c| c.is_ascii_digit())
+    fn is_ascii_numeric(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_digit())
     }
 
-    fn is_ascii_alphabetic(string: &BexStr) -> bool {
-        string.as_str().chars().all(|c| c.is_ascii_alphabetic())
+    fn is_ascii_alphabetic(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_alphabetic())
     }
 
-    fn is_ascii_alphanumeric(string: &BexStr) -> bool {
-        string.as_str().chars().all(|c| c.is_ascii_alphanumeric())
+    fn is_ascii_alphanumeric(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_alphanumeric())
     }
 
-    fn is_ascii_uppercase(string: &BexStr) -> bool {
-        string.as_str().chars().all(|c| c.is_ascii_uppercase())
+    fn is_ascii_uppercase(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_uppercase())
     }
 
-    fn is_ascii_lowercase(string: &BexStr) -> bool {
-        string.as_str().chars().all(|c| c.is_ascii_lowercase())
+    fn is_ascii_lowercase(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_lowercase())
     }
 
-    fn is_ascii_whitespace(string: &BexStr) -> bool {
-        string.as_str().chars().all(|c| c.is_ascii_whitespace())
+    fn is_ascii_whitespace(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_whitespace())
     }
 
-    fn is_ascii_control(string: &BexStr) -> bool {
-        string.as_str().chars().all(|c| c.is_ascii_control())
+    fn is_ascii_control(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_control())
     }
 
-    fn is_ascii_graphic(string: &BexStr) -> bool {
-        string.as_str().chars().all(|c| c.is_ascii_graphic())
+    fn is_ascii_graphic(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_graphic())
     }
 
-    fn is_ascii_hex(string: &BexStr) -> bool {
-        string.as_str().chars().all(|c| c.is_ascii_hexdigit())
+    fn is_ascii_hex(string: &str) -> bool {
+        string.chars().all(|c| c.is_ascii_hexdigit())
     }
-    fn from_utf8(utf8: &[u8]) -> Result<BexStr, VmRustFnError> {
-        std::str::from_utf8(utf8).map(BexStr::from).map_err(|e| {
+    fn from_utf8(utf8: &[u8]) -> Result<String, VmRustFnError> {
+        std::str::from_utf8(utf8).map(str::to_owned).map_err(|e| {
             VmBamlError::InvalidArgument {
                 message: format!(
                     "string.from_utf8: invalid UTF-8 at byte {}: {e}",
@@ -211,7 +186,7 @@ impl BamlClassString for PackageBamlImpl {
             .into()
         })
     }
-    fn from_code_points(unicode: &[Value]) -> Result<BexStr, VmRustFnError> {
+    fn from_code_points(unicode: &[Value]) -> Result<String, VmRustFnError> {
         let mut result = String::with_capacity(unicode.len());
         for (i, val) in unicode.iter().enumerate() {
             let Some(n) = val.as_int() else {
@@ -231,7 +206,7 @@ impl BamlClassString for PackageBamlImpl {
             })?;
             result.push(cp);
         }
-        Ok(BexStr::from(result))
+        Ok(result)
     }
 }
 

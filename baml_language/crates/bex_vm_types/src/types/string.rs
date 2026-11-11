@@ -29,6 +29,7 @@
 use std::{
     fmt,
     marker::PhantomData,
+    ops::Range,
     sync::atomic::{AtomicU32, AtomicU64, Ordering},
 };
 
@@ -212,13 +213,141 @@ impl<'a> StrRef<'a> {
         bex_str::BexStr::from(self.as_str())
     }
 
-    /// The byte offset of char `n`: `byte_len` when `n` is past the end.
-    pub fn char_to_byte(self, n: usize) -> usize {
-        let text = self.as_str();
-        text.char_indices()
-            .nth(n)
-            .map_or(text.len(), |(byte, _)| byte)
+    /// Whether every byte is ASCII, so char `n` starts at byte `n`. O(1):
+    /// the cell keeps both lengths.
+    #[inline]
+    pub fn is_ascii(self) -> bool {
+        self.byte_len() == self.char_len()
     }
+
+    /// Whether `other` is the same cell.
+    #[inline]
+    pub fn ptr_eq(self, other: Self) -> bool {
+        self.ptr == other.ptr
+    }
+
+    /// The byte offset of char `n`: `byte_len` when `n` is past the end.
+    /// O(1) for ASCII text; otherwise a scan of the first `n` chars.
+    pub fn char_to_byte(self, n: usize) -> usize {
+        char_to_byte_in(self.as_str(), self.char_len(), n)
+    }
+
+    /// The char index of the char starting at byte `b` (a char boundary);
+    /// `char_len` when `b` is past the end. Inverse of [`Self::char_to_byte`].
+    pub fn byte_to_char(self, b: usize) -> usize {
+        byte_to_char_in(self.as_str(), self.char_len(), b)
+    }
+
+    /// The byte range of the chars `chars`, both ends clamped to the string
+    /// (and the end to at least the start), scanned once.
+    pub fn char_bytes(self, chars: Range<usize>) -> Range<usize> {
+        char_bytes_in(self.as_str(), self.char_len(), chars)
+    }
+
+    /// The substring at the chars `chars`, clamped like [`Self::char_bytes`].
+    pub fn char_slice(self, chars: Range<usize>) -> &'a str {
+        &self.as_str()[self.char_bytes(chars)]
+    }
+
+    /// The char at index `n`, if there is one.
+    pub fn char_at(self, n: usize) -> Option<char> {
+        self.as_str()[self.char_to_byte(n)..].chars().next()
+    }
+
+    /// The char index where `needle` first occurs.
+    pub fn char_find(self, needle: &str) -> Option<usize> {
+        self.char_find_from(needle, 0)
+    }
+
+    /// The char index where `needle` first occurs at or after char `start`.
+    /// A start past the end finds nothing, even an empty needle. Counts
+    /// chars only between `start` and the match.
+    pub fn char_find_from(self, needle: &str, start: usize) -> Option<usize> {
+        char_find_from_in(self.as_str(), self.char_len(), needle, start)
+    }
+
+    /// The char index where `needle` last occurs.
+    pub fn char_rfind(self, needle: &str) -> Option<usize> {
+        let byte = self.as_str().rfind(needle)?;
+        Some(self.byte_to_char(byte))
+    }
+}
+
+/// The byte width of the UTF-8 sequence `lead` begins.
+#[inline]
+const fn utf8_width(lead: u8) -> usize {
+    if lead < 0x80 {
+        1
+    } else if lead < 0xE0 {
+        2
+    } else if lead < 0xF0 {
+        3
+    } else {
+        4
+    }
+}
+
+/// `char_to_byte` over `text` of `char_len` chars; O(1) when all ASCII.
+fn char_to_byte_in(text: &str, char_len: usize, n: usize) -> usize {
+    if char_len == text.len() {
+        return n.min(text.len());
+    }
+    scan_char_to_byte(text, (0, 0), n)
+}
+
+/// `byte_to_char` over `text` of `char_len` chars; O(1) when all ASCII.
+fn byte_to_char_in(text: &str, char_len: usize, b: usize) -> usize {
+    if char_len == text.len() {
+        return b.min(text.len());
+    }
+    scan_byte_to_char(text, (0, 0), b)
+}
+
+/// `char_bytes` over `text` of `char_len` chars; O(1) when all ASCII.
+fn char_bytes_in(text: &str, char_len: usize, chars: Range<usize>) -> Range<usize> {
+    let end = chars.end.max(chars.start);
+    if char_len == text.len() {
+        return chars.start.min(text.len())..end.min(text.len());
+    }
+    let byte_start = scan_char_to_byte(text, (0, 0), chars.start);
+    byte_start..scan_char_to_byte(text, (chars.start, byte_start), end)
+}
+
+/// `char_find_from` over `text` of `char_len` chars.
+fn char_find_from_in(text: &str, char_len: usize, needle: &str, start: usize) -> Option<usize> {
+    if start > char_len {
+        return None;
+    }
+    let byte_start = char_to_byte_in(text, char_len, start);
+    let found = byte_start + text[byte_start..].find(needle)?;
+    if char_len == text.len() {
+        return Some(found);
+    }
+    Some(scan_byte_to_char(text, (start, byte_start), found))
+}
+
+/// The byte offset of char `n`, scanning forward from char `known.0` at
+/// byte `known.1`: `text.len()` when `n` is past the end.
+fn scan_char_to_byte(text: &str, known: (usize, usize), n: usize) -> usize {
+    let bytes = text.as_bytes();
+    let (mut chars, mut byte) = known;
+    while chars < n && byte < bytes.len() {
+        byte += utf8_width(bytes[byte]);
+        chars += 1;
+    }
+    byte.min(bytes.len())
+}
+
+/// The char index of byte `b` (a char boundary), counting forward from
+/// char `known.0` at byte `known.1`.
+fn scan_byte_to_char(text: &str, known: (usize, usize), b: usize) -> usize {
+    let bytes = text.as_bytes();
+    let end = b.min(bytes.len());
+    let starts = bytes[known.1..end]
+        .iter()
+        .filter(|&&byte| byte & 0xC0 != 0x80)
+        .count();
+    known.0 + starts
 }
 
 impl fmt::Debug for StrRef<'_> {
@@ -288,5 +417,57 @@ mod tests {
         assert_eq!(str_cell_bytes(8), 32);
         assert_eq!(str_cell_bytes(9), 48);
         assert_eq!(STR_BYTES_OFFSET, 24);
+    }
+
+    fn chars_of(text: &str) -> usize {
+        text.chars().count()
+    }
+
+    #[test]
+    fn char_and_byte_offsets_agree_with_a_scan() {
+        for text in ["", "abc", "héllo wörld", "日本語テキスト", "a日b本c"] {
+            let n = chars_of(text);
+            for i in 0..=n + 2 {
+                let expected = text
+                    .char_indices()
+                    .nth(i)
+                    .map_or(text.len(), |(byte, _)| byte);
+                assert_eq!(char_to_byte_in(text, n, i), expected, "{text:?}[{i}]");
+                assert_eq!(byte_to_char_in(text, n, expected), i.min(n), "{text:?}[{i}]");
+            }
+            assert_eq!(char_to_byte_in(text, n, usize::MAX), text.len());
+            assert_eq!(byte_to_char_in(text, n, usize::MAX), n);
+        }
+    }
+
+    #[test]
+    fn char_ranges_clamp_and_slice_on_boundaries() {
+        for text in ["abcdef", "héllo wörld", "日本語テキスト"] {
+            let n = chars_of(text);
+            let chars: Vec<char> = text.chars().collect();
+            for start in 0..=n + 1 {
+                for end in 0..=n + 1 {
+                    let range = char_bytes_in(text, n, start..end);
+                    let expected: String = chars[start.min(n)..end.max(start).min(n)]
+                        .iter()
+                        .collect();
+                    assert_eq!(&text[range], expected, "{text:?}[{start}..{end}]");
+                }
+            }
+            assert_eq!(char_bytes_in(text, n, usize::MAX - 1..usize::MAX), text.len()..text.len());
+        }
+    }
+
+    #[test]
+    fn char_find_counts_chars_not_bytes() {
+        let text = "héllo wörld, héllo";
+        let n = chars_of(text);
+        assert_eq!(char_find_from_in(text, n, "llo", 0), Some(2));
+        assert_eq!(char_find_from_in(text, n, "llo", 3), Some(15));
+        assert_eq!(char_find_from_in(text, n, "llo", 16), None);
+        assert_eq!(char_find_from_in(text, n, "", n), Some(n));
+        assert_eq!(char_find_from_in(text, n, "", n + 1), None);
+        assert_eq!(char_find_from_in("plain", 5, "", 6), None);
+        assert_eq!(char_find_from_in("plain", 5, "in", 1), Some(3));
     }
 }

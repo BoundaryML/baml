@@ -73,17 +73,15 @@ fn type_arg(vm: &BexVm, native: &str) -> Result<RealizedTy, VmRustFnError> {
 }
 
 impl BamlNamespaceJson for PackageBamlImpl {
-    fn parse(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
-        let s = s.as_str();
+    fn parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
         text::parse(vm, s).map_err(|text::Stop| text::syntax_error(vm, s))
     }
 
-    fn _decode(vm: &mut BexVm, s: &bex_str::BexStr, aliased: bool) -> NativeCallResult {
+    fn _decode(vm: &mut BexVm, s: &str, aliased: bool) -> NativeCallResult {
         let ty = match type_arg(vm, "_decode") {
             Ok(ty) => ty,
             Err(error) => return NativeCallResult::Error(error),
         };
-        let s = s.as_str();
         let mut decoder = Decoder::new(JsonNaming::new(aliased));
         // With no override in reach, `T` reads the text in one pass.
         if !decoder.lookups.reaches_override(vm, &ty)
@@ -134,12 +132,12 @@ impl BamlNamespaceJson for PackageBamlImpl {
     fn _path(
         vm: &mut BexVm,
         j: &Value,
-        selector: &bex_str::BexStr,
+        selector: &str,
     ) -> Result<Value, VmRustFnError> {
-        path::select(vm, *j, selector.as_str())
+        path::select(vm, *j, selector)
     }
 
-    fn field(vm: &mut BexVm, j: &Value, key: &bex_str::BexStr) -> Value {
+    fn field(vm: &mut BexVm, j: &Value, key: &str) -> Value {
         // The public throws-never API accepts `json`, not arbitrary maps.
         let Some(ptr) = j.as_object_ptr() else {
             return Value::NULL;
@@ -151,8 +149,8 @@ impl BamlNamespaceJson for PackageBamlImpl {
                     string_keyed(vm, map),
                     "baml.json.field received invalid json: {STRING_MAP_REQUIRED}"
                 );
-                let hash = bex_vm_types::map_string_hash(key.as_str());
-                object_get(vm, ptr, hash, key.as_str()).unwrap_or(Value::NULL)
+                let hash = bex_vm_types::map_string_hash(key);
+                object_get(vm, ptr, hash, key).unwrap_or(Value::NULL)
             }
             _ => Value::NULL,
         }

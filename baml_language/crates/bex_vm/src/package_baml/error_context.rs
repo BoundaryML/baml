@@ -28,7 +28,7 @@ impl BamlClassErrorsContext for PackageBamlImpl {
     // Calls the generated `StackTrace::_to_string_impl` to render each link's
     // trace; the underscore prefix is the native-builtin convention.
     #[allow(clippy::used_underscore_items)]
-    fn _to_string_impl(vm: &BexVm, ctx: &view::errors::Context<'_>) -> bex_str::BexStr {
+    fn _to_string_impl(vm: &BexVm, ctx: &view::errors::Context<'_>) -> String {
         // Collect the chain head-first (newest → oldest).
         let mut links: Vec<(Value, Value)> = vec![(ctx.error(), ctx.stack_trace())];
         let mut cause = ctx.cause(vm);
@@ -59,6 +59,6 @@ impl BamlClassErrorsContext for PackageBamlImpl {
             let _ = write!(out, "\n{}", render_error_value(vm, *error));
         }
 
-        bex_str::BexStr::from(out.trim_end().to_string())
+        out.trim_end().to_string()
     }
 }

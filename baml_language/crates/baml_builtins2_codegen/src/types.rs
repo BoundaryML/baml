@@ -44,6 +44,11 @@ pub struct NativeBuiltin {
     /// `//baml:fallible` directive — for builtins that can raise a *panic*
     /// (e.g. `AllocFailure`) rather than a catchable `throws` error.
     pub fallible: bool,
+    /// When true, every `string` argument (receiver included) arrives as the
+    /// heap cell's handle, `bex_vm_types::StrRef<'_>`, instead of `&str`, for
+    /// natives that index by char and want the cell's O(1) lengths. Set by
+    /// the `//baml:str_ref` directive; excludes `//baml:mut_vm`.
+    pub str_ref: bool,
     /// Generate a lock-free receiver accessor twin.
     pub local_twin: bool,
     /// Which pipeline this builtin belongs to.
@@ -223,6 +228,7 @@ mod tests {
                 vm_usage: super::VmUsage::None,
                 may_yield: false,
                 fallible: false,
+                str_ref: false,
                 local_twin: false,
                 pipeline: super::BuiltinPipeline::Vm,
                 throws: None,

@@ -11,8 +11,8 @@ use serde::Deserialize;
 use crate::{BexVm, errors::VmRustFnError, package_baml::PackageBamlImpl};
 
 impl super::BamlNamespaceYaml for PackageBamlImpl {
-    fn parse(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
-        parse_yaml(vm, s.as_str())
+    fn parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
+        parse_yaml(vm, s)
     }
 }
 

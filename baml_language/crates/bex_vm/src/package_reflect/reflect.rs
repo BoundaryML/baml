@@ -723,10 +723,10 @@ fn find_interface(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
 fn find_function(
     vm: &mut BexVm,
     package: Value,
-    name: &bex_str::BexStr,
+    name: &str,
 ) -> Result<Option<Value>, VmRustFnError> {
     let package_ptr = package_ptr(vm, package)?;
-    let Some(local) = local_name(name.as_str()) else {
+    let Some(local) = local_name(name) else {
         return Ok(None);
     };
     // The package the function lives in: a view answers with its base's.
@@ -772,7 +772,7 @@ fn find_function(
             super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
         ));
     }
-    check_function_contract(vm, package_ptr, name.as_str(), &signature)?;
+    check_function_contract(vm, package_ptr, name, &signature)?;
     Ok(Some(function_value))
 }
 
@@ -801,10 +801,10 @@ fn global_cell(vm: &BexVm, package: &Package, ordinal: u32) -> Option<GlobalCell
 fn find_global(
     vm: &mut BexVm,
     package: Value,
-    name: &bex_str::BexStr,
+    name: &str,
 ) -> Result<Option<Value>, VmRustFnError> {
     let package_ptr = package_ptr(vm, package)?;
-    let Some(local) = local_name(name.as_str()) else {
+    let Some(local) = local_name(name) else {
         return Ok(None);
     };
     let path = DeclPath::Let(local);
@@ -843,7 +843,7 @@ fn find_global(
         );
         let message = Value::object(vm.alloc_string(format!(
             "global `{}` has type `{got}`, expected `{expected}`",
-            name.as_str()
+            name
         )));
         return Err(VmRustFnError::thrown_fresh(
             copy::errors::TypeMismatch { message }.to_value(vm),
@@ -854,9 +854,9 @@ fn find_global(
 
 /// The `reflect.errors.NotFound` a `get_*` lookup throws where its `find_*`
 /// counterpart returns `null`.
-fn not_found(vm: &mut BexVm, kind: &str, name: &bex_str::BexStr) -> VmRustFnError {
+fn not_found(vm: &mut BexVm, kind: &str, name: &str) -> VmRustFnError {
     let message = Value::object(
-        vm.alloc_string(format!("no {kind} named {} in this package", name.as_str())),
+        vm.alloc_string(format!("no {kind} named {} in this package", name)),
     );
     VmRustFnError::thrown_fresh(copy::errors::NotFound { message }.to_value(vm))
 }
@@ -1254,43 +1254,43 @@ impl BamlClassPackage for PackageReflectImpl {
     fn get_class(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, VmRustFnError> {
         let ptr = package_ptr(vm, *package)?;
-        find_class(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "class", name))
+        find_class(vm, ptr, name).ok_or_else(|| not_found(vm, "class", name))
     }
 
-    fn find_class(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+    fn find_class(vm: &mut BexVm, package: &Value, name: &str) -> Option<Value> {
         let ptr = package_object(vm, *package).ok()?;
-        find_class(vm, ptr, name.as_str())
+        find_class(vm, ptr, name)
     }
 
     fn get_enum(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, VmRustFnError> {
         let ptr = package_ptr(vm, *package)?;
-        find_enum(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "enum", name))
+        find_enum(vm, ptr, name).ok_or_else(|| not_found(vm, "enum", name))
     }
 
-    fn find_enum(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+    fn find_enum(vm: &mut BexVm, package: &Value, name: &str) -> Option<Value> {
         let ptr = package_object(vm, *package).ok()?;
-        find_enum(vm, ptr, name.as_str())
+        find_enum(vm, ptr, name)
     }
 
     fn get_interface(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, VmRustFnError> {
         let ptr = package_ptr(vm, *package)?;
-        find_interface(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "interface", name))
+        find_interface(vm, ptr, name).ok_or_else(|| not_found(vm, "interface", name))
     }
 
-    fn find_interface(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+    fn find_interface(vm: &mut BexVm, package: &Value, name: &str) -> Option<Value> {
         let ptr = package_object(vm, *package).ok()?;
-        find_interface(vm, ptr, name.as_str())
+        find_interface(vm, ptr, name)
     }
 
     fn _with_types(
@@ -1427,7 +1427,7 @@ impl BamlClassPackage for PackageReflectImpl {
     fn get_function(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, VmRustFnError> {
         find_function(vm, *package, name)?.ok_or_else(|| not_found(vm, "function", name))
     }
@@ -1435,7 +1435,7 @@ impl BamlClassPackage for PackageReflectImpl {
     fn find_function(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Option<Value>, VmRustFnError> {
         find_function(vm, *package, name)
     }
@@ -1552,7 +1552,7 @@ impl BamlClassPackage for PackageReflectImpl {
     fn get_global(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, VmRustFnError> {
         find_global(vm, *package, name)?.ok_or_else(|| not_found(vm, "global", name))
     }
@@ -1560,7 +1560,7 @@ impl BamlClassPackage for PackageReflectImpl {
     fn find_global(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Option<Value>, VmRustFnError> {
         find_global(vm, *package, name)
     }

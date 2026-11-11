@@ -2,7 +2,6 @@
 //! call: public collector arrays and registration names can change in place.
 
 use bex_heap::TlabHolder;
-use bex_str::BexStr;
 use bex_vm_types::types::Value;
 
 use crate::{
@@ -37,7 +36,7 @@ pub use generated::*;
 pub struct PackageTestingImpl;
 
 impl BamlPackageTesting for PackageTestingImpl {
-    fn _test_name_count(vm: &BexVm, entries: &[Value], full_name: &BexStr) -> i64 {
+    fn _test_name_count(vm: &BexVm, entries: &[Value], full_name: &str) -> i64 {
         registration_name_count(
             entries.iter().map(|entry| {
                 view::TestRegistration::new(
@@ -49,7 +48,7 @@ impl BamlPackageTesting for PackageTestingImpl {
         )
     }
 
-    fn _testset_name_count(vm: &BexVm, entries: &[Value], full_name: &BexStr) -> i64 {
+    fn _testset_name_count(vm: &BexVm, entries: &[Value], full_name: &str) -> i64 {
         registration_name_count(
             entries.iter().map(|entry| {
                 view::TestSetRegistration::new(
