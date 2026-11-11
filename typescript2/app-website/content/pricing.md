@@ -25,7 +25,7 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | Retention past 30 days | No | $0.10 per GB per 30 days |
 | Usage caps | Coming soon | Coming soon |
 | **Team and security** | | |
-| Sign in with Google | Included | Included |
+| SSO with Google | Included | Included |
 | SAML and OIDC single sign-on | No | Coming soon |
 | SCIM directory sync | No | Coming soon |
 | Audit logs | Coming soon | Coming soon |

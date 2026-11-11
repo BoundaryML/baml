@@ -479,7 +479,7 @@ const RECORD: Rec[] = [
   { bytes: 19, key: 'function  draft_reply(ticket)', kind: 'call' },
   { bytes: 16, key: 'started   10:42:07.118', kind: 'call' },
   { bytes: 8, key: 'took      1.84s', kind: 'call' },
-  { bytes: 64, key: 'type      class Ticket { … }', kind: 'call' },
+  { bytes: 64, key: 'type info class Ticket { … }', kind: 'call' },
   { bytes: 4, kind: 'field', name: 'ticket_id', nameBytes: 9, value: '4812' },
   {
     bytes: 11,
@@ -566,7 +566,7 @@ function Counts({ step }: { step: number }) {
           <ul className="font-sans text-[13px] leading-relaxed text-ink-2">
             {[
               ['The call: name, start, duration', step >= 3],
-              ['The type, stored once for every call', step >= 4],
+              ['Type information, stored once for every call', step >= 4],
               ['Field names, as short IDs', fieldsSeen.length > 0],
             ].map(([text, on]) => (
               <li
@@ -599,7 +599,7 @@ function Counts({ step }: { step: number }) {
           </div>
         </Pane>
       }
-      say="You pay for the values. The call’s name, timing and types, and every field name, come along free."
+      say="You pay for the values. The call’s name, timing, type information and every field name come along free."
     />
   );
 }

@@ -1,5 +1,5 @@
 // CONTENT PARITY: keep substantive copy in sync with content/pricing.md.
-import { Check, ChevronDown, Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { section } from '@/components/home/analytics';
 import { BOOK } from '@/components/home/links';
@@ -28,14 +28,12 @@ type Row = { cells: [Cell, Cell]; extra?: boolean; label: string };
 const SAME = (cell: Cell): [Cell, Cell] => [cell, cell];
 
 const BLOCKS: {
-  billed?: boolean;
   free: string[];
   note: string;
   rows: Row[];
   title: string;
 }[] = [
   {
-    billed: true,
     free: [
       'Unlimited spans',
       'Unlimited profiles',
@@ -76,9 +74,9 @@ const BLOCKS: {
   },
   {
     free: ['Unlimited members', 'Unlimited projects and environments'],
-    note: 'Sign in with Google today; single sign-on for your identity provider is coming.',
+    note: 'SSO with Google today; SSO with your own identity provider is coming.',
     rows: [
-      { cells: SAME(['Included']), label: 'Sign in with Google' },
+      { cells: SAME(['Included']), label: 'SSO with Google' },
       {
         cells: [['—'], ['Coming soon']],
         extra: true,
@@ -214,7 +212,7 @@ function HowBilling() {
 }
 
 /** One topic: a heading and a line, the table, then what's free as a checklist. */
-function Block({ billed, free, note, rows, title }: (typeof BLOCKS)[number]) {
+function Block({ free, note, rows, title }: (typeof BLOCKS)[number]) {
   return (
     <div className="border-t border-rule pt-10">
       <h3 className="font-display text-[20px] font-medium text-head">
@@ -241,6 +239,15 @@ function Block({ billed, free, note, rows, title }: (typeof BLOCKS)[number]) {
                   </span>
                 )}
                 {r.label}
+                {/* Ingestion's question, faded beside it, links down to the explanation. */}
+                {r.label === 'Ingestion' && (
+                  <a
+                    className="font-normal text-muted underline decoration-dotted underline-offset-2 transition-colors hover:text-ink"
+                    href="#billing"
+                  >
+                    What counts?
+                  </a>
+                )}
               </dt>
               <Amount cell={r.cells[0]} strong={!r.extra} />
               <Amount cell={r.cells[1]} strong={!r.extra} />
@@ -248,15 +255,6 @@ function Block({ billed, free, note, rows, title }: (typeof BLOCKS)[number]) {
           ))}
         </dl>
       </div>
-      {billed && (
-        <a
-          className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-clover hover:underline"
-          href="#billing"
-        >
-          What counts as ingestion?
-          <ChevronDown aria-hidden="true" className="size-3.5" />
-        </a>
-      )}
       {free.length > 0 && (
         <ul className="mt-5 grid grid-cols-1 gap-x-6 gap-y-2 text-[13px] text-ink-2 sm:grid-cols-3">
           {free.map((f) => (
