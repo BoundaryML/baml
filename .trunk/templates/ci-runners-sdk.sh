@@ -41,3 +41,8 @@ sdk_leg ruby_sorbet ruby
 find "${SRC}" -path "${SRC}/baml_language/target" -prune -o -type d -name node_modules -prune \
 	-exec rm -rf {} +
 rm -rf "${SRC}/.pnpm-store" "${SRC}/baml_language/target/pnpm-store"
+
+df -h /
+du -sh "${SRC}/baml_language/target" "${MISE_DATA_DIR}"
+echo "sdk legs that failed:"
+cat /cache/trunk-template-skipped

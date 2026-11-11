@@ -12,9 +12,12 @@ export PATH="${MISE_DATA_DIR}/bin:${PATH}" MISE_TRUSTED_CONFIG_PATHS="${SRC}"
 # Every job sets CARGO_INCREMENTAL=0.
 export CARGO_INCREMENTAL=0
 # build.rs puts BAML_GIT_SHA in the artifacts. Each job reads the basis marker and sets the
-# same value, so the baked units stay fresh.
+# same value, so the baked units stay fresh. The jobs print the variant: change it on every
+# edit of the template or its scripts.
 BAML_GIT_SHA=$(git -C "${SRC}" rev-parse HEAD)
 export BAML_GIT_SHA
+echo "${BAML_GIT_SHA}" >/cache/trunk-template-basis-sha
+echo "trunk-warm-template-v10" >/cache/trunk-template-variant
 
 # The packages with wasm_support, as the wasm32 and pre-commit jobs select them.
 metadata=$(cargo metadata --no-deps --format-version 1)

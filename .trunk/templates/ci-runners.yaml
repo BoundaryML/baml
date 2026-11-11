@@ -24,5 +24,3 @@ steps:
   - script: { name: Toolchains, on: build, run: ./ci-runners-toolchains.sh }
   - script: { name: Rust builds, on: build, run: ./ci-runners-rust.sh }
   - script: { name: SDK test legs, on: build, run: ./ci-runners-sdk.sh }
-  # Last: a bake that stops before this step publishes no snapshot.
-  - script: { name: Markers, on: build, run: ./ci-runners-markers.sh }
