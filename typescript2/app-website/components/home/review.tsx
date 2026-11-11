@@ -621,53 +621,25 @@ const POST = {
   slug: 'teaching-agents-to-write-maintainable-code',
 };
 
-/** The post that measured it, as a feature of its own: the before and after from the post, what the
- *  eval ran, and what it found. Every number is the post's. */
+/** The post that measured it: its before-and-after drawing says the result, so the card is just the
+ *  drawing, the title and who wrote it. */
 function Research() {
   return (
     <a
-      className="focus-ring group mt-10 grid overflow-hidden rounded-xl border border-rule bg-raised transition-colors hover:border-white/25 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]"
+      className="focus-ring group mt-10 grid max-w-[880px] items-center gap-6 rounded-xl border border-rule bg-raised p-3 transition-colors hover:border-white/25 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]"
       href={POST.href}
     >
-      <div className="flex items-center border-rule p-3 max-md:border-b md:border-r">
-        <PostDrawing
-          alt="An agent's chess move generator with a cognitive complexity of 50, beside the version written with the new skill, with a cognitive complexity of 2."
-          className="rounded-lg"
-          slug={POST.slug}
-        />
-      </div>
-      <div className="flex flex-col p-6 md:p-8">
-        <p className="text-[13px] uppercase tracking-[0.08em] text-muted">
-          The research
-        </p>
-        <p className="mt-3 font-display text-[24px] leading-tight font-medium text-head md:text-[28px]">
+      <PostDrawing
+        alt="An agent's chess move generator with a cognitive complexity of 50, beside the version written with the new skill, with a cognitive complexity of 2."
+        className="rounded-lg"
+        slug={POST.slug}
+      />
+      <div className="px-3 pb-3 md:px-2 md:pb-0">
+        <p className="font-display text-[22px] leading-tight font-medium text-head">
           Teaching Agents to Write Maintainable Code
         </p>
-        <p className="mt-2 text-[15px] text-ink-2">Avery Townsend</p>
-        <dl className="mt-6 grid grid-cols-3 gap-4 border-y border-rule py-4">
-          {[
-            ['4', 'programs'],
-            ['10', 'runs each'],
-            ['4', 'skill setups'],
-          ].map(([n, what]) => (
-            <div key={what}>
-              <dt className="sr-only">{what}</dt>
-              <dd className="font-mono text-[26px] text-head tabular-nums">
-                {n}
-              </dd>
-              <dd className="text-[13px] text-muted">{what}</dd>
-            </div>
-          ))}
-        </dl>
-        <p className="mt-5 text-[15px] leading-relaxed text-ink-2">
-          With the new skill and{' '}
-          <code className="font-mono text-[14px] text-ink">
-            baml codequality
-          </code>
-          , the worst function beat the old skill on cognitive complexity,
-          cyclomatic complexity, NPath and nesting, on all four programs.
-        </p>
-        <p className="mt-auto pt-6 text-[15px] font-medium text-clover">
+        <p className="mt-2 text-[15px] text-muted">Avery Townsend</p>
+        <p className="mt-5 text-[15px] text-clover">
           Read the post{' '}
           <span className="inline-block transition-transform group-hover:translate-x-1">
             →
