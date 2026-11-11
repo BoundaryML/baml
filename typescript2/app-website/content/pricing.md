@@ -26,6 +26,7 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | Usage caps | Coming soon | Coming soon |
 | **Team and security** | | |
 | Members | Unlimited | Unlimited |
+| Projects and environments | Unlimited | Unlimited |
 | SSO with Google | Coming soon | Coming soon |
 | SAML and OIDC single sign-on | No | Coming soon |
 | SCIM directory sync | No | Coming soon |

@@ -74,10 +74,11 @@ const BLOCKS: {
     title: 'Data',
   },
   {
-    free: ['Unlimited projects and environments'],
+    free: [],
     note: 'Single sign-on and audit logs are on the way.',
     rows: [
       { cells: SAME(['Unlimited']), label: 'Members' },
+      { cells: SAME(['Unlimited']), label: 'Projects and environments' },
       {
         cells: SAME(['Coming soon']),
         extra: true,
