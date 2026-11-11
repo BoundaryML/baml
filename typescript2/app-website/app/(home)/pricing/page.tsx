@@ -6,11 +6,11 @@ import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { Button } from '@/components/home/ui';
 import { SoftwareApplicationStructuredData } from '@/components/structured-data';
 
-// The pricing page, in the homepage's BAML lane. The nav links it. Every number and claim is from
-// Boundary Cloud's code (BCS, origin/main): the plans and rates in config/bcs.toml and
-// control-plane/README.md, what's metered in control-plane/src/projector/billing.rs. Enterprise is a
-// sales plan with no catalog entry; its one line beyond Pro, bring your own cloud, is BCS's BYOC
-// placement (docs/design/production-architecture.md). Change this page when those change.
+// The pricing page, in the homepage's BAML lane. The nav links it. The plans, rates and what's
+// metered are Boundary Cloud's code (BCS, origin/main: config/bcs.toml, control-plane/README.md,
+// control-plane/src/projector/billing.rs). Retention, volume discounts, the BYOC add-on and billing a
+// repeated value once are the founders' decisions, not yet in that code. Change this page when
+// either changes.
 
 type Plan = {
   data?: [included: string, after: string];
@@ -30,28 +30,24 @@ const PLANS: Plan[] = [
   },
   {
     data: ['1 GB of data a month', '$4 per GB after'],
-    features: ['Unlimited spans', 'Every Cloud feature'],
+    features: ['14-day retention', 'Unlimited spans', 'Every Cloud feature'],
     name: 'Starter',
     price: '$0',
     unit: 'per month',
   },
   {
     data: ['5 GB of data a month', '$3 per GB after'],
-    features: ['Unlimited spans', 'Every Cloud feature'],
+    features: [
+      'Volume discounts',
+      '30-day retention, or custom',
+      'Bring your own cloud, as an add-on',
+      'Unlimited spans',
+      'Every Cloud feature',
+    ],
+    lit: true,
     name: 'Pro',
     price: '$250',
     unit: 'per month',
-  },
-  {
-    features: [
-      'Everything in Pro',
-      'Bring your own cloud',
-      'Your data stays in your account',
-    ],
-    lit: true,
-    name: 'Enterprise',
-    price: 'Custom',
-    unit: 'talk to us',
   },
 ];
 
@@ -73,6 +69,7 @@ const BILLING: [string, string][] = [
     'The values your programs record: inputs, outputs, logs and network payloads.',
   ],
   ['What doesn’t', 'Spans, profiles, queries and seats.'],
+  ['Repeats', 'A value your programs record again is billed once.'],
   ['Retries', 'An upload that’s retried is counted once.'],
   ['Going over', 'Never blocks ingest or queries.'],
   ['Upgrading', 'Takes effect right away, prorated to your billing date.'],
@@ -92,7 +89,7 @@ function Tick({ children }: { children: string }) {
   );
 }
 
-/** The pricing page: BAML is free, and Boundary Cloud has Starter, Pro and Enterprise. */
+/** The pricing page: BAML is free, and Boundary Cloud has Starter and Pro. */
 export default function PricingPage() {
   return (
     <PageShell>
@@ -103,7 +100,7 @@ export default function PricingPage() {
       >
         <h1 className="v4-h1 max-w-[12em]">Pricing</h1>
 
-        <div className="mt-12 md:mt-16 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-12 md:mt-16 grid gap-4 md:grid-cols-3">
           {PLANS.map((p) => (
             <div
               className={`flex flex-col rounded-xl border p-6 ${p.lit ? 'border-clover/60 bg-clover/[0.07]' : 'border-rule bg-raised'}`}
