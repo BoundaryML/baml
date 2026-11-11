@@ -52,18 +52,14 @@ type Case = { kind: Kind; outcome: string; when: string };
 // (sdks/*/sdkgen_*), the bridges (sdks/*, crates/bridge_cffi) and each SDK's runtime and exit hook.
 // Every one loads the program through bridge_cffi's initialize_runtime_from_blob, which checks the
 // toolchain version and starts the baml-worker threads.
-const SHARED_LOAD: Step[] = [
-  {
-    once: 'process',
-    text: 'Checks the toolchain version',
-    tone: 'baml',
-  },
-  {
-    once: 'process',
-    text: 'Starts BAML’s worker threads',
-    tone: 'baml',
-  },
-];
+// Toolchain check, then decode: prepare_runtime_from_blob checks the version first
+// (crates/bridge_cffi/src/lib.rs). The worker pool isn't started here; the first call builds it
+// (lib_native.rs shared_tokio_runtime), so Python's threads never start before a fork().
+const CHECK_STEP: Step = {
+  once: 'process',
+  text: 'Checks the toolchain version',
+  tone: 'baml',
+};
 const SYSOPS_STEP: Step = {
   once: 'process',
   sysops: true,
@@ -73,7 +69,7 @@ const SYSOPS_STEP: Step = {
 const BUG: Case = {
   kind: 'bug',
   outcome:
-    'You get an SdkPanic, and your program keeps running. A crash during garbage collection still aborts.',
+    'You get your language’s BAML panic, carrying an SdkPanic, and your program keeps running. A crash during garbage collection still aborts.',
   when: 'The BAML runtime itself fails',
 };
 const drain = (hook: string, host: string, exits: string): Step[] => [
@@ -111,7 +107,7 @@ const HOSTS: {
       {
         kind: 'unhandled',
         outcome:
-          'BAML prints it and exits, like any uncaught exception. Change that with set_unhandled_spawn_error_handler.',
+          'BAML prints it and exits right away, skipping atexit and finally. Change that with set_unhandled_spawn_error_handler.',
         when: 'A background task throws, and nothing waits for it',
       },
       {
@@ -137,7 +133,7 @@ const HOSTS: {
       { text: 'Reports errors nothing observed', tone: 'baml' },
       { text: 'Finishes writing recordings', tone: 'baml' },
       {
-        note: 'optional timeout cancels the rest',
+        note: 'no time limit, unless you call shutdown_runtime(timeout=…)',
         text: 'Python exits',
         tone: 'host',
       },
@@ -150,12 +146,12 @@ const HOSTS: {
         tone: 'baml',
       },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -209,12 +205,12 @@ const HOSTS: {
         tone: 'baml',
       },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -250,7 +246,8 @@ const HOSTS: {
     ],
     loads: 'on the first call',
     process: 'your Go program',
-    runtime: 'baml-go · the BAML library, opened with dlopen',
+    runtime:
+      'baml-go · the BAML library, opened with dlopen (LoadLibrary on Windows)',
     shutdown: [
       {
         note: 'Go has no exit hook',
@@ -279,12 +276,12 @@ const HOSTS: {
         tone: 'baml',
       },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -335,12 +332,12 @@ const HOSTS: {
       },
       { once: 'process', text: 'Opens it', tone: 'baml' },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -382,18 +379,19 @@ const HOSTS: {
         tone: 'host',
       },
       {
+        note: 'unless you point it at one',
         once: 'process',
         text: 'Unpacks the JNI library from the jar',
         tone: 'baml',
       },
       { once: 'process', text: 'Loads it', tone: 'baml' },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -444,12 +442,12 @@ const HOSTS: {
       },
       { once: 'process', text: 'Opens it', tone: 'baml' },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -499,12 +497,12 @@ const HOSTS: {
         tone: 'baml',
       },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
 ];
@@ -702,14 +700,14 @@ const TARGETS = [
     draw: (_lang: number) => (
       <Box label="one binary, from baml pack" tone="host">
         <Box label={WORKERS_LABEL} tone="baml">
-          <Threads names={BAML_WORKERS} tone="baml" />
+          <Threads names={['worker', 'worker', 'worker', '…']} tone="baml" />
           <Box label="your program, packed in" sdk tone="baml" />
         </Box>
       </Box>
     ),
     name: 'Standalone',
     note: () =>
-      'No host language at all. baml pack builds one binary with your program inside, and each function becomes a subcommand.',
+      'No host language at all. baml pack builds one binary with your program inside, and each function you pick with -f becomes a subcommand.',
   },
   {
     draw: (_lang: number) => (
@@ -882,7 +880,7 @@ function Exceptions({ cases }: { cases: Case[] }) {
 // Checked in the code: native hosts run BAML's own Rust (crates/sys_native) on the shared process,
 // so env vars, the working directory and exit are your process's; HTTP is BAML's own client
 // (reqwest), which reads the proxy env vars; your functions are reached through call_host_value.
-// The web build (crates/sys_wasm) takes fetch and readFileSync from JavaScript and has nothing else.
+// The web build (crates/sys_wasm) takes fetch and readFileSync from JavaScript, plus the clock.
 type Via = 'baml' | 'none' | 'process' | 'yours';
 // `code` is the BAML that makes the call, so each row reads as a line you'd write.
 type Route = {
@@ -929,6 +927,12 @@ function routesFor(target: string, lang: number): Route[] {
         code: callback,
         need: 'Call your code',
         uses: 'your JavaScript functions',
+        via: 'yours',
+      },
+      {
+        code: 'baml.time.now()',
+        need: 'Read the clock',
+        uses: 'the browser’s clock',
         via: 'yours',
       },
       {
@@ -1207,7 +1211,7 @@ const BEHAVIOR: Record<string, Record<Scenario, ReactNode>> = {
           {
             kind: 'bug',
             outcome:
-              'BAML reports an SdkPanic instead of crashing. A crash during garbage collection still aborts.',
+              'The binary crashes. Packed binaries don’t catch runtime bugs yet.',
             when: 'The BAML runtime itself fails',
           },
         ]}
@@ -1264,7 +1268,8 @@ const BEHAVIOR: Record<string, Record<Scenario, ReactNode>> = {
           },
           {
             kind: 'bug',
-            outcome: 'WebAssembly can’t recover from it, so the module stops.',
+            outcome:
+              'WebAssembly can’t recover from it: the module traps, and your JavaScript sees an exception.',
             when: 'The BAML runtime itself fails',
           },
         ]}
@@ -1774,17 +1779,19 @@ const STANDALONE_LIFE: Record<'call' | 'shutdown' | 'startup', Step[]> = {
   ],
   shutdown: [
     { text: 'The function you ran returns', tone: 'baml' },
+    { text: 'Waits for spawned work and recordings', tone: 'baml' },
+    { text: 'Reports errors nothing observed', tone: 'baml' },
     { text: 'The binary exits', tone: 'host' },
   ],
   startup: [
     { text: 'You run the binary', tone: 'host' },
-    { sysops: true, text: 'Sets up its sysops', tone: 'baml' },
     {
       note: 'packed into the binary',
       text: 'Reads your program from inside itself',
       tone: 'baml',
     },
-    { text: 'Starts BAML’s worker threads', tone: 'baml' },
+    { sysops: true, text: 'Sets up its sysops', tone: 'baml' },
+    { text: 'Starts its worker threads', tone: 'baml' },
   ],
 };
 const WASM_LIFE: Record<'call' | 'shutdown' | 'startup', Step[]> = {
@@ -1823,7 +1830,7 @@ function lifeFor(target: string, lang: number) {
     call: [
       { text: 'Your code calls classify_ticket', tone: 'host' },
       {
-        note: h.runtime,
+        note: 'the first call starts the pool',
         text: 'The bridge hands it to a BAML worker thread',
         tone: 'baml',
       },
@@ -1949,15 +1956,15 @@ function Life({
       target === 'WebAssembly'
         ? 'Your event loop keeps running while BAML works.'
         : target === 'Standalone'
-          ? 'Each function is a subcommand.'
+          ? 'Each function you pack with -f is a subcommand.'
           : 'BAML does the work on its own threads, not yours.',
     shutdown:
       target === 'WebAssembly'
         ? 'Nothing to clean up: it goes with the page.'
-        : 'BAML finishes its work before your program exits.',
+        : 'BAML finishes its work before your program exits, as long as its exit hook runs.',
     startup:
       target === 'In your app'
-        ? 'Only the first call pays for this. After that, calls go straight to the runtime.'
+        ? `This happens ${HOSTS[lang].loads}, once. After that, calls go straight to the runtime.`
         : 'Once, when it starts.',
   }[moment];
   const scenes: SceneDef[] = [
@@ -2022,21 +2029,43 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
           <EnvChange at={at} lang={lang} />
         </div>
       </Section>
-      {/* The question readers ask after a page like this one, answered plainly. */}
+      {/* The question readers ask after a page like this one, answered plainly, and by the founder. */}
       <Section title="Why don’t you have docs?">
         <p className="max-w-[40rem] text-[16px] leading-relaxed text-ink-2">
           Boundary is still in early access, and right now nearly all of our
-          effort goes into engineering. Docs will catch up. Until then, we’re
-          happy to help directly.
+          effort goes into engineering and working directly with our
+          early-access customers. Docs will catch up.
         </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Button href={BOOK}>Get on a call</Button>
-          <Button href={LINKS.discord} variant="secondary">
-            Ask on Discord
-          </Button>
-          <Button href="mailto:hello@boundaryml.com" variant="secondary">
-            Email us
-          </Button>
+        <div className="mt-8 flex max-w-[44rem] flex-col gap-5 rounded-xl border border-rule bg-raised p-6 sm:flex-row sm:items-start">
+          {/* biome-ignore lint/performance/noImgElement: a small static photo */}
+          <img
+            alt="Vaibhav Gupta"
+            className="size-16 shrink-0 rounded-full object-cover"
+            height={64}
+            src="/profile-vbv.jpeg"
+            width={64}
+          />
+          <div>
+            <p className="text-[16px] leading-relaxed text-head">
+              I know how big a bet a new programming language is. We’re
+              engineers too, and we’re happy to talk it through with you. Email
+              me directly.
+            </p>
+            <p className="mt-2 text-[14px] text-muted">
+              Vaibhav Gupta, co-founder and CEO
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Button href="mailto:vbv@boundaryml.com">
+                vbv@boundaryml.com
+              </Button>
+              <Button href={BOOK} variant="secondary">
+                Get on a call
+              </Button>
+              <Button href={LINKS.discord} variant="secondary">
+                Ask on Discord
+              </Button>
+            </div>
+          </div>
         </div>
       </Section>
     </>
