@@ -8,7 +8,7 @@ import { SoftwareApplicationStructuredData } from '@/components/structured-data'
 
 // The pricing page, in the homepage's BAML lane. The nav links it. The plans, rates and what's
 // metered are Boundary Cloud's code (BCS, origin/main: config/bcs.toml, control-plane/README.md,
-// control-plane/src/projector/billing.rs). Retention, volume discounts, the BYOC add-on and billing a
+// control-plane/src/projector/billing.rs). Retention, the BYOC add-on and billing a
 // repeated value once are the founders' decisions, not yet in that code. Change this page when
 // either changes.
 
@@ -37,12 +37,12 @@ const PLANS: Plan[] = [
   },
   {
     data: ['5 GB of data a month', '$3 per GB after'],
+    // Same rows in the same order as Starter's, so the two read across; the add-on comes last.
     features: [
-      'Volume discounts',
-      '30-day retention, or custom',
-      'Bring your own cloud, as an add-on',
+      'Custom retention',
       'Unlimited spans',
       'Every Cloud feature',
+      'Bring your own cloud, as an add-on',
     ],
     lit: true,
     name: 'Pro',

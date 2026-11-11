@@ -19,7 +19,7 @@ Boundary Cloud is in early access.
 | Plan | Price | Data included | Data after that | Retention |
 | --- | --- | --- | --- | --- |
 | Starter | $0 a month | 1 GB a month | $4 per GB | 14 days |
-| Pro | $250 a month | 5 GB a month | $3 per GB, with volume discounts | 30 days, or custom |
+| Pro | $250 a month | 5 GB a month | $3 per GB | Custom |
 
 Pro can add bring your own cloud: Boundary Cloud runs in your cloud account and your data stays there.
 
