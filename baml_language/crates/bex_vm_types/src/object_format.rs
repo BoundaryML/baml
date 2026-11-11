@@ -292,10 +292,25 @@ fn has_lse2() -> bool {
     {
         true
     }
+    // A Relaxed load of a plain static: a `OnceLock`'s Acquire load (`ldar`)
+    // on every tagged access measured as most of a field-heavy loop's time.
+    // Detection is idempotent, so racing first calls agree.
     #[cfg(all(target_arch = "aarch64", not(baml_lse2)))]
     {
-        static LSE2: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        *LSE2.get_or_init(|| std::arch::is_aarch64_feature_detected!("lse2"))
+        use std::sync::atomic::AtomicU8;
+        const UNKNOWN: u8 = 0;
+        const ABSENT: u8 = 1;
+        const PRESENT: u8 = 2;
+        static LSE2: AtomicU8 = AtomicU8::new(UNKNOWN);
+        match LSE2.load(Ordering::Relaxed) {
+            PRESENT => true,
+            ABSENT => false,
+            _ => {
+                let present = std::arch::is_aarch64_feature_detected!("lse2");
+                LSE2.store(if present { PRESENT } else { ABSENT }, Ordering::Relaxed);
+                present
+            }
+        }
     }
     #[cfg(not(target_arch = "aarch64"))]
     {
@@ -473,6 +488,7 @@ fn raw_bits(raw: RawKind, value: Value) -> Option<u64> {
 }
 
 /// The tag and payload for `value` in a tagged slot.
+#[inline]
 fn tagged_parts(value: Value) -> Option<(TaggedKind, u64)> {
     if value.is_null() {
         return Some((TaggedKind::Null, 0));
@@ -493,6 +509,7 @@ fn tagged_parts(value: Value) -> Option<(TaggedKind, u64)> {
     value.is_object().then_some((TaggedKind::Ptr, value.bits()))
 }
 
+#[inline]
 fn tagged_value(tag: TaggedKind, payload: u64) -> SlotValue {
     match tag {
         TaggedKind::Ptr => SlotValue::Value(pointer_value(payload)),
@@ -546,6 +563,34 @@ unsafe fn read_tagged(addr: *const u8, access: Access) -> SlotValue {
     let slot = unsafe { &*addr.cast::<TaggedSlot>() };
     let (tag, payload) = slot.read(access);
     tagged_value(tag, payload)
+}
+
+/// [`read_tagged`] inline, for compiled code, whose tagged field and element
+/// accesses are few and hot. One protocol: the same [`TaggedSlot`] read.
+///
+/// # Safety
+/// `addr` addresses a tagged slot inside a live object.
+#[inline]
+pub unsafe fn read_tagged_inline(addr: *const u8) -> SlotValue {
+    // SAFETY: forwarded to the caller.
+    let slot = unsafe { &*addr.cast::<TaggedSlot>() };
+    let (tag, payload) = slot.read(Access::Shared);
+    tagged_value(tag, payload)
+}
+
+/// [`write_tagged`] inline, for compiled code (see [`read_tagged_inline`]).
+///
+/// # Safety
+/// `addr` addresses a tagged slot inside a live object.
+#[inline]
+pub unsafe fn write_tagged_inline(addr: *const u8, value: Value) -> Result<(), SlotMismatch> {
+    let (tag, payload) = tagged_parts(value).ok_or(SlotMismatch {
+        slot: SlotKind::Tagged16,
+        value,
+    })?;
+    // SAFETY: forwarded to the caller.
+    unsafe { &*addr.cast::<TaggedSlot>() }.write(tag, payload, Access::Shared);
+    Ok(())
 }
 
 /// Write `value` to the tagged slot at `addr`, out of line (see

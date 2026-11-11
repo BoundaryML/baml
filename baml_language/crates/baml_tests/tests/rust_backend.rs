@@ -288,7 +288,7 @@ fn body_of<'a>(module: &'a RustModule, name: &str) -> &'a str {
         .unwrap_or_else(|| panic!("{name} should compile: {:?}", module.rejected));
     let start = module
         .source
-        .find(&format!("pub fn {}_d(", function.symbol))
+        .find(&format!("fn {}_b(", function.symbol))
         .unwrap();
     let source = &module.source[start..];
     let end = source
@@ -753,13 +753,13 @@ function Boundary() -> int { let map = { "present": 1 }; map["missing"] }
                 .unwrap();
             let body: String = body_of(&module, name).split_whitespace().collect();
             if name == "user.Boundary" {
-                let expected = format!("Err(e)=>{{pc={pc};returnErr(e);}}");
+                let expected = format!("Err(e)=>{{*pc={pc};returnErr(e);}}");
                 assert!(body.contains(&expected), "{name} at {opt:?}: {body}");
             } else {
                 let marker = if name == "user.Throw" {
                     "returnErr(bex_vm::compiled_rt::throw("
                 } else {
-                    "fr.note_pc(pc);"
+                    "fr.note_pc(*pc);"
                 };
                 // Operand temporaries may separate the PC assignment and raise.
                 let before = body.split_once(marker).unwrap().0;

@@ -171,7 +171,7 @@ const YIELD_EVERY: u32 = 16;
 /// A PC argument of generated code: the position's own, or the last one the
 /// body set (`pc`) for a position the bytecode emitted nothing for.
 fn pc_arg(pc: Option<usize>) -> String {
-    pc.map_or_else(|| "pc".to_string(), |pc| pc.to_string())
+    pc.map_or_else(|| "*pc".to_string(), |pc| pc.to_string())
 }
 
 /// Whether a generated body keeps state in its own frame record, so a call
@@ -323,16 +323,30 @@ impl<'db> Generator<'_, 'db> {
                     let _ = write!(out, ", arg{i}: {}", repr.rust_type());
                     out
                 });
-        // Every closure exit records the current PC before returning an error.
-        // `mask` has bit `i` set when the caller proved argument `i`, and all
-        // it reaches, thread-local (`escape::EscapeFacts::needs`).
+        // The body reports its position through `pc`, which the direct entry
+        // records when an error leaves; it is always inlined into that entry,
+        // where `pc` is a local. `mask` has bit `i` set when the caller
+        // proved argument `i`, and all it reaches, thread-local
+        // (`escape::EscapeFacts::needs`).
+        let args = (0..signature.params.len()).fold(String::new(), |mut out, i| {
+            let _ = write!(out, ", arg{i}");
+            out
+        });
         self.emit_line(&format!(
-            "#[inline]\n#[allow(unused_variables)]\npub fn {symbol}_d(vm: &mut BexVm, fr: &FrameRecord{typed}, mask: u64) -> R<{ret}> {{"
+            "#[inline]\npub fn {symbol}_d(vm: &mut BexVm, fr: &FrameRecord{typed}, mask: u64) -> R<{ret}> {{"
         ));
         self.emit_line("let mut pc: u32 = 0;");
-        // A scalar closure argument keeps LLVM from reloading a captured mask
-        // across VM calls when the result body is outlined.
-        self.emit_line(&format!("let result = (|mask: u64| -> R<{ret}> {{"));
+        self.emit_line(&format!(
+            "let result = {symbol}_b(vm, fr, &mut pc{args}, mask);"
+        ));
+        self.emit_line("if result.is_err() {");
+        self.emit_line("fr.note_pc(pc);");
+        self.emit_line("}");
+        self.emit_line("result");
+        self.emit_line("}");
+        self.emit_line(&format!(
+            "#[inline(always)]\n#[allow(unused_variables, unused_assignments)]\nfn {symbol}_b(vm: &mut BexVm, fr: &FrameRecord, pc: &mut u32{typed}, mask: u64) -> R<{ret}> {{"
+        ));
         self.declare_locals(!self.analysis.loop_headers.is_empty());
         // The call path leaves the arguments in a hooked body's leading slots.
         if self.slots > self.slot_base() {
@@ -354,14 +368,9 @@ impl<'db> Generator<'_, 'db> {
             out
         });
         self.out.insert_str(prologue, &words);
-        // Every path ends in an `Exit`; this keeps the closure well-typed.
+        // Every path ends in an `Exit`; this keeps the body well-typed.
         self.emit_line("#[allow(unreachable_code)]");
         self.emit_line(&format!("Ok({})", signature.ret.default_value()));
-        self.emit_line("})(mask);");
-        self.emit_line("if result.is_err() {");
-        self.emit_line("fr.note_pc(pc);");
-        self.emit_line("}");
-        self.emit_line("result");
         self.emit_line("}");
         Ok(std::mem::take(&mut self.out))
     }
@@ -807,7 +816,7 @@ impl<'db> Generator<'_, 'db> {
         );
         if self.current_mark != Some(mark) {
             self.current_mark = Some(mark);
-            self.emit_line(&format!("pc = {pc};"));
+            self.emit_line(&format!("*pc = {pc};"));
         }
     }
 

@@ -1,8 +1,8 @@
 //! Emit structured control flow, block statements, and error handling.
 
 use baml_compiler2_mir::{
-    BlockId, IntrinsicOp, Local, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
-    Terminator, class_display_name,
+    BlockId, IntrinsicOp, Local, Operand, Place, Rvalue, ShortCircuitKind, StatementKind,
+    SwitchKey, Terminator, class_display_name,
 };
 
 use super::{Expr, Gen, Generator, YIELD_EVERY, pc_arg, unsupported};
@@ -328,19 +328,7 @@ impl<'db> Generator<'_, 'db> {
                 kind,
                 destination,
                 ..
-            } => {
-                let operand = self.operand(id, operand)?;
-                let value = self.value_arg(&operand);
-                self.emit_statement(&format!("let lhs = {value};"));
-                let short = match kind {
-                    ShortCircuitKind::And => "!vm.is_truthy(lhs)",
-                    ShortCircuitKind::Or => "vm.is_truthy(lhs)",
-                    ShortCircuitKind::Coalesce => "!lhs.is_null()",
-                };
-                self.emit_statement(&format!("c{} = {short};", id.0));
-                let store = self.store(id, destination, &Expr::atom("lhs", Repr::Value))?;
-                self.emit_statement(&format!("if c{} {{ {store} }}", id.0));
-            }
+            } => self.short_circuit(id, operand, *kind, destination)?,
             terminator @ Terminator::VirtualCall { destination, .. } => {
                 self.array_iteration_call(id, terminator, destination)?;
             }
@@ -354,6 +342,37 @@ impl<'db> Generator<'_, 'db> {
             | Terminator::Await { .. }
             | Terminator::AwaitAny { .. } => self.suspension(id)?,
         }
+        Ok(())
+    }
+
+    /// `&&`, `||` or `??`: the left operand is the result when it decides
+    /// it (`c{id}`), else the right side runs.
+    fn short_circuit(
+        &mut self,
+        id: BlockId,
+        operand: &Operand<'db>,
+        kind: ShortCircuitKind,
+        destination: &Place,
+    ) -> Gen<()> {
+        let operand = self.operand(id, operand)?;
+        // A `bool` operand of `&&` or `||` is its own truth value.
+        let (lhs, repr, short) = match (kind, operand.repr) {
+            (ShortCircuitKind::And, Repr::Bool) => (operand.code, Repr::Bool, "!lhs"),
+            (ShortCircuitKind::Or, Repr::Bool) => (operand.code, Repr::Bool, "lhs"),
+            (ShortCircuitKind::And, _) => {
+                (self.value_arg(&operand), Repr::Value, "!vm.is_truthy(lhs)")
+            }
+            (ShortCircuitKind::Or, _) => {
+                (self.value_arg(&operand), Repr::Value, "vm.is_truthy(lhs)")
+            }
+            (ShortCircuitKind::Coalesce, _) => {
+                (self.value_arg(&operand), Repr::Value, "!lhs.is_null()")
+            }
+        };
+        self.emit_statement(&format!("let lhs: {} = {lhs};", repr.rust_type()));
+        self.emit_statement(&format!("c{} = {short};", id.0));
+        let store = self.store(id, destination, &Expr::atom("lhs", repr))?;
+        self.emit_statement(&format!("if c{} {{ {store} }}", id.0));
         Ok(())
     }
 
@@ -446,7 +465,7 @@ impl<'db> Generator<'_, 'db> {
             self.out.push_str(&jump);
         } else {
             if let Some(pc) = self.current_pc {
-                self.emit_line(&format!("pc = {pc};"));
+                self.emit_line(&format!("*pc = {pc};"));
             }
             self.emit_statement(&format!("return Err({error});"));
         }
@@ -478,9 +497,9 @@ impl<'db> Generator<'_, 'db> {
         )?;
         let saved = std::mem::take(&mut self.out);
         if let Some(pc) = self.current_pc {
-            self.emit_line(&format!("pc = {pc};"));
+            self.emit_line(&format!("*pc = {pc};"));
         }
-        self.emit_line("fr.note_pc(pc);");
+        self.emit_line("fr.note_pc(*pc);");
         let slot = self.slot_base()
             + usize::from(self.cause_slot.is_some())
             + self
@@ -515,7 +534,7 @@ impl<'db> Generator<'_, 'db> {
         if self.body.blocks[block.0].unwind.is_none() {
             let mark = self
                 .current_pc
-                .map_or_else(String::new, |pc| format!("pc = {pc}; "));
+                .map_or_else(String::new, |pc| format!("*pc = {pc}; "));
             return Ok(format!(
                 "(match {code} {{ Ok(v) => v, Err(e) => {{ {mark}return Err(e); }} }})"
             ));

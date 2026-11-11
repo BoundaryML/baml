@@ -5,8 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use bex_vm_types::{
     HeapPtr, Object, ObjectType, RealizedTy, Value,
-    layout::SlotKind,
-    object_format::{Access, FIRST_INSTANCE_DESC, HEADER_BYTES, read_slot, write_slot},
+    object_format::{
+        Access, FIRST_INSTANCE_DESC, HEADER_BYTES, read_tagged_inline, write_tagged_inline,
+    },
     types::{
         BACKING_CAP_OFFSET, BACKING_ELEMS_OFFSET, CLASS_OFFSET, Closure, LIST_BACKING_OFFSET,
         LIST_LEN_OFFSET, Type,
@@ -598,6 +599,23 @@ impl FieldBase {
         }
     }
 
+    /// `value` as an instance of the class its static type names, or `None`
+    /// for null, which the generic path rejects. Compiled code trusts a
+    /// local's class type, as the interpreter's checker does: only a value
+    /// of the class reaches a local typed by it.
+    ///
+    /// # Safety
+    /// `value` is null or an instance of the class whose layout the caller
+    /// reads it by.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    #[must_use]
+    pub unsafe fn typed(value: Value) -> Option<Self> {
+        let ptr = value.as_object_ptr()?;
+        // SAFETY: an object pointer names the byte after its header.
+        Some(Self(unsafe { ptr.as_ptr().cast::<u8>().sub(HEADER_BYTES) }))
+    }
+
     #[allow(clippy::inline_always, unsafe_code)]
     #[inline(always)]
     unsafe fn word(self, offset: u32) -> &'static AtomicU64 {
@@ -712,13 +730,7 @@ impl BexVm {
     #[inline]
     pub unsafe fn load_tagged_at(&mut self, base: FieldBase, offset: u32) -> Value {
         // SAFETY: forwarded to the caller.
-        let value = unsafe {
-            read_slot(
-                base.0.add(offset as usize),
-                SlotKind::Tagged16,
-                Access::Shared,
-            )
-        };
+        let value = unsafe { read_tagged_inline(base.0.add(offset as usize)) };
         self.slot_value(value)
     }
 
@@ -735,14 +747,7 @@ impl BexVm {
         value: Value,
     ) -> Result<(), Box<VmError>> {
         // SAFETY: forwarded to the caller.
-        let stored = unsafe {
-            write_slot(
-                base.0.add(offset as usize),
-                SlotKind::Tagged16,
-                value,
-                Access::Shared,
-            )
-        };
+        let stored = unsafe { write_tagged_inline(base.0.add(offset as usize), value) };
         stored.map_err(|mismatch| {
             Box::new(VmError::from(VmInternalError::CompiledBody {
                 message: mismatch.to_string(),

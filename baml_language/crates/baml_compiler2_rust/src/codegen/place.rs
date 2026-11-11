@@ -10,10 +10,9 @@ use bex_vm_types::{
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{admit::Rejection, analysis::Repr, render::coerce};
 
-/// A field of a base whose class the emitter knows: the class object, so the
-/// body can bind its class word, and the field's slot.
+/// A field of a base whose class the emitter knows, by the base's static
+/// type: the field's slot.
 struct KnownField {
-    class: usize,
     offset: u32,
     kind: SlotKind,
 }
@@ -207,7 +206,6 @@ impl<'db> Generator<'_, 'db> {
         let (class, _) = self.index.class_at(&name)?;
         let slot = self.index.field_slot(class, field)?;
         Some(KnownField {
-            class,
             offset: slot.offset,
             kind: slot.kind,
         })
@@ -230,13 +228,12 @@ impl<'db> Generator<'_, 'db> {
     ) -> Gen<Expr> {
         let base = self.load(block, base)?;
         let base = self.value_arg(&base);
-        let class = self.class_word(known.class);
         let (fast, repr) = slot_read(known.kind, known.offset);
         let slow = self.fallible(block, &format!("vm.load_field({base}, {field})"))?;
         let slow = coerce(&slow, Repr::Value, repr);
         Ok(Expr::new(
             format!(
-                "(match bex_vm::compiled_rt::FieldBase::of({base}, {class}) {{ Some(f) => {fast}, None => {slow} }})"
+                "(match unsafe {{ bex_vm::compiled_rt::FieldBase::typed({base}) }} {{ Some(f) => {fast}, None => {slow} }})"
             ),
             repr,
         ))
@@ -259,12 +256,11 @@ impl<'db> Generator<'_, 'db> {
         });
         let base = self.load(block, base)?;
         let base = self.value_arg(&base);
-        let class = self.class_word(known.class);
         let boxed = self.value_arg(&value);
         let slow = self.fallible(block, &format!("vm.store_field({base}, {field}, {boxed})"))?;
         let fast = self.slot_write(block, known.kind, known.offset, &value, &boxed, &slow)?;
         Ok(format!(
-            "match bex_vm::compiled_rt::FieldBase::of({base}, {class}) {{ Some(f) => {{ {fast} }}, None => {{ {slow}; }} }}"
+            "match unsafe {{ bex_vm::compiled_rt::FieldBase::typed({base}) }} {{ Some(f) => {{ {fast} }}, None => {{ {slow}; }} }}"
         ))
     }
 
