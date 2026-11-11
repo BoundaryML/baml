@@ -7990,6 +7990,78 @@ impl BexVm {
         Ok(self.slot_value(loaded))
     }
 
+    /// `LoadField`'s fast path, inlined into the dispatch loop: an instance
+    /// on top of the stack whose field slot is cached and holds no float is
+    /// replaced by the field. Anything else (a miss, a float to box, an
+    /// error to report) returns `false` with the stack untouched, for
+    /// [`Self::op_load_field`].
+    #[expect(
+        clippy::inline_always,
+        reason = "the fast path must sit in the dispatch loop; the slow path is out of line"
+    )]
+    #[inline(always)]
+    fn load_field_fast(&mut self, idx: usize, local: bool) -> bool {
+        let top = self.stack.ensure_slot_from_top(0);
+        let Some(ptr) = self.stack.get_at(top).as_object_ptr() else {
+            return false;
+        };
+        // SAFETY: the VM holds a heap permit, so a pointer it holds is live.
+        let Some(instance) = (unsafe { InstanceRef::of(ptr) }) else {
+            return false;
+        };
+        let Some(slot) = self.field_slots.get(instance.descriptor(), idx) else {
+            return false;
+        };
+        let access = if local {
+            Access::ThreadLocal
+        } else {
+            Access::Shared
+        };
+        // SAFETY: the cache holds slots resolved for this descriptor's layout.
+        match unsafe { instance.load_slot(slot, access) } {
+            SlotValue::Value(value) => {
+                self.stack.set_at(top, value);
+                true
+            }
+            SlotValue::Float(_) => false,
+        }
+    }
+
+    /// `StoreField`'s fast path (see [`Self::load_field_fast`]): an instance
+    /// and a value on top of the stack, the field's slot cached and the
+    /// value fitting it.
+    #[expect(
+        clippy::inline_always,
+        reason = "the fast path must sit in the dispatch loop; the slow path is out of line"
+    )]
+    #[inline(always)]
+    fn store_field_fast(&mut self, idx: usize, local: bool) -> bool {
+        let value = self.stack.get_at(self.stack.ensure_slot_from_top(0));
+        let target = self.stack.get_at(self.stack.ensure_slot_from_top(1));
+        let Some(ptr) = target.as_object_ptr() else {
+            return false;
+        };
+        // SAFETY: as in `load_field_fast`.
+        let Some(instance) = (unsafe { InstanceRef::of(ptr) }) else {
+            return false;
+        };
+        let Some(slot) = self.field_slots.get(instance.descriptor(), idx) else {
+            return false;
+        };
+        let access = if local {
+            Access::ThreadLocal
+        } else {
+            Access::Shared
+        };
+        // SAFETY: as in `load_field_fast`.
+        if unsafe { instance.store_slot(slot, value, access) }.is_err() {
+            return false;
+        }
+        // SAFETY: the two operands just read are on the stack.
+        unsafe { self.stack.truncate_suffix(2) };
+        true
+    }
+
     /// The slot of field `idx` of `instance`, from the cache when it holds
     /// it; an index past the last field throws `InvalidFieldAccess`.
     #[inline]
@@ -10113,12 +10185,18 @@ impl BexVm {
                     // so the slot needs no ordering.
                     OpCode::LoadField | OpCode::LoadFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
-                        self.op_load_field(idx, op == OpCode::LoadFieldLocal)?;
+                        let local = op == OpCode::LoadFieldLocal;
+                        if !self.load_field_fast(idx, local) {
+                            self.op_load_field(idx, local)?;
+                        }
                     }
 
                     OpCode::StoreField | OpCode::StoreFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
-                        self.op_store_field(idx, op == OpCode::StoreFieldLocal)?;
+                        let local = op == OpCode::StoreFieldLocal;
+                        if !self.store_field_fast(idx, local) {
+                            self.op_store_field(idx, local)?;
+                        }
                     }
 
                     // ── VirtualLoadField / VirtualStoreField ──────────────────────
