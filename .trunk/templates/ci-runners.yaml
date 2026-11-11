@@ -483,23 +483,6 @@ steps:
         }
         best_effort "build and run the wasm-pack tests (wasm-pack-test)" bake_wasm_pack_test
 
-        # cargo build (msrv): the job reads workspace.package.rust-version, then runs
-        # `cargo +MSRV test --no-run --all-features` on the whole workspace, with the opt-level
-        # env. It also runs `rustup default MSRV`; the bake does not, because the steps after
-        # this one need the pinned toolchain as the default. This step adds a second full debug
-        # tree (another rustc gives every unit a new hash): on the 160 GiB default disk it filled
-        # the disk in all 8 bakes of 2026-11-03 and 2026-11-04, so it needs the 400 GiB disk.
-        bake_msrv() {
-                cd baml_language
-                local msrv
-                msrv="$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^rust-version *= *"\([^"]*\)".*/\1/p}' Cargo.toml | head -n1)"
-                [ -n "${msrv}" ]
-                echo "MSRV=${msrv}"
-                rustup toolchain install "${msrv}"
-                cargo "+${msrv}" test --no-run --all-features
-        }
-        best_effort "build the MSRV test binaries (cargo-build-msrv)" bake_msrv
-
         # The sdk legs. Each job runs `cargo test --no-run -p sdk_test_<sdk> --all-features`, then
         # runs the leg's setup.sh as a nextest setup script. The bake runs both, as they are, so the
         # commands and the feature sets match by construction. The setup scripts keep their package

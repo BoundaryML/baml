@@ -684,7 +684,10 @@ jobs:
   size-gate:
     name: "Size Gate"
     needs: determine_changes
-    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    # Disabled: two fat-LTO release builds per push for an advisory comment.
+    # To re-enable, restore the condition below and the schedule in
+    # size-gate-baseline-refresh.yml.
+    if: false # needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/size-gate.reusable.yaml
     # Structural mapping only; see cargo-tests above.
     secrets:
