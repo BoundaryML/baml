@@ -46,44 +46,68 @@ impl<'db> Generator<'_, 'db> {
                 "call to uncompiled `{name}` emitted directly"
             ))),
             FunctionKind::NativeUnresolved | FunctionKind::Native(..) => {
-                let Some(key) = info.native_key.as_deref() else {
-                    return unsupported(format!("builtin `{name}` has no native key"));
-                };
-                if !builtin_is_callable(key, shape) {
-                    return Err(Rejection::Invalid(format!(
-                        "yielding builtin `{key}` emitted inline"
-                    )));
-                }
-                let call = |ordinal: usize| {
-                    if types.is_empty() {
-                        format!("vm.call_builtin(builtin_{ordinal}()?, {args})")
-                    } else {
-                        format!(
-                            "vm.call_builtin_typed(builtin_{ordinal}()?, &[{}], {args})",
-                            types.join(", ")
-                        )
-                    }
-                };
-                // A thread-local receiver takes the builtin's lock-free twin.
-                let needs = if matches!(info.kind, FunctionKind::Native(_, Some(_))) {
-                    self.analysis.escape.twin_needs(block)
-                } else {
-                    baml_compiler2_mir::escape::NEVER
-                };
-                let locked = (needs != 0).then(|| call(self.builtin_ordinal(key)));
-                let local = (needs != baml_compiler2_mir::escape::NEVER)
-                    .then(|| call(self.builtin_ordinal(&format!("{key}$local"))));
-                let call = self.by_locality(
-                    needs,
-                    local.as_deref().unwrap_or_default(),
-                    locked.as_deref().unwrap_or_default(),
-                );
-                self.fallible_expr(block, &call, Repr::Value)
+                self.builtin_call(block, &name, info, shape, &types, &args)
             }
             FunctionKind::SysOp(_) => Err(Rejection::Invalid(format!(
                 "sys op `{name}` emitted inline"
             ))),
         }
+    }
+
+    /// A call to a builtin: its generated compiled entry when it has an
+    /// adapter, else its interpreter glue (the thread-local twin where the
+    /// receiver is proved thread-local).
+    fn builtin_call(
+        &mut self,
+        block: BlockId,
+        name: &str,
+        info: &bex_vm_types::types::Function,
+        shape: crate::analysis::CallShape,
+        types: &[String],
+        args: &str,
+    ) -> Gen<Expr> {
+        let Some(key) = info.native_key.as_deref() else {
+            return unsupported(format!("builtin `{name}` has no native key"));
+        };
+        if !builtin_is_callable(key, shape) {
+            return Err(Rejection::Invalid(format!(
+                "yielding builtin `{key}` emitted inline"
+            )));
+        }
+        let call = |ordinal: usize| {
+            if types.is_empty() {
+                format!("vm.call_builtin(builtin_{ordinal}()?, {args})")
+            } else {
+                format!(
+                    "vm.call_builtin_typed(builtin_{ordinal}()?, &[{}], {args})",
+                    types.join(", ")
+                )
+            }
+        };
+        // A thread-local receiver takes the builtin's lock-free twin.
+        let needs = if matches!(info.kind, FunctionKind::Native(_, Some(_))) {
+            self.analysis.escape.twin_needs(block)
+        } else {
+            baml_compiler2_mir::escape::NEVER
+        };
+        let locked = (needs != 0).then(|| call(self.builtin_ordinal(key)));
+        let local = (needs != baml_compiler2_mir::escape::NEVER)
+            .then(|| call(self.builtin_ordinal(&format!("{key}$local"))));
+        let call = self.by_locality(
+            needs,
+            local.as_deref().unwrap_or_default(),
+            locked.as_deref().unwrap_or_default(),
+        );
+        // An adapted builtin runs its one body over the compiled
+        // object model; the interpreter call is the fallback when
+        // the body defers.
+        let call = match baml_builtins2_codegen::compiled_adapter_entry(key) {
+            Some(entry) => format!(
+                "vm.call_adapter(bex_vm::adapters::generated::{entry}, {args}, |vm| {call})"
+            ),
+            None => call,
+        };
+        self.fallible_expr(block, &call, Repr::Value)
     }
 
     /// Use a typed direct entry when the callee has no VM-frame state and the VM allows it.

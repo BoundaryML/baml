@@ -2,6 +2,7 @@
 
 mod arith;
 mod call;
+pub use call::CompiledAdapter;
 #[cfg(test)]
 pub(crate) use call::{FORCE_CALL_FUNNEL, FORCE_VM_FRAMES};
 mod cell;

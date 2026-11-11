@@ -12,7 +12,9 @@ mod triage_table;
 mod types;
 
 pub use codegen::{generate_native_trait, generate_native_trait_for};
-pub use codegen_adapters::{AdapterGenError, AdapterProblem, generate_adapters};
+pub use codegen_adapters::{
+    AdapterGenError, AdapterProblem, compiled_adapter_entry, generate_adapters,
+};
 pub use codegen_errors::generate_error_enums;
 pub use codegen_io::{
     generate_io_adapter, generate_io_structs, generate_io_traits, generate_runtime_io,

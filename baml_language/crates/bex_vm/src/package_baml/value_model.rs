@@ -7,6 +7,10 @@
 //! `Value` is the 16-byte tagged slot of today's format, so elements move
 //! without conversion and boxed floats keep their identity.
 //!
+//! Compiled code runs the same bodies through the generated adapters over
+//! [`ValueModel::compiled`], whose containers report their declared slot
+//! kinds ([`run_compiled`]).
+//!
 //! This replaces the `Value` bodies those builtins had in `array.rs`,
 //! `map.rs`, `string.rs` and `ops.rs`; the generated `__glue_*` methods call
 //! [`run`] / [`run_thread_local`] with the body and, for builtins that may
@@ -44,10 +48,10 @@ enum View {
     /// Every element is a tagged `Value`: today's format, used by the
     /// interpreter.
     Values,
-    /// Slots follow each container's declared element type, so tests can run
-    /// the raw and pointer instantiations of the bodies on this heap.
-    #[cfg(test)]
-    Typed,
+    /// Slots follow each container's declared element type: compiled code's
+    /// view, under which the generated adapters run the raw, pointer and
+    /// tagged instantiations of the bodies on the shared layouts.
+    Declared,
 }
 
 /// The ABI view of one VM's heap.
@@ -88,6 +92,21 @@ impl From<Fault> for GlueError {
         let error = vm_error(&fault)
             .unwrap_or_else(|| unreachable!("the value model never reports {fault:?}"));
         GlueError::Vm(error)
+    }
+}
+
+/// Run compiled code's glue: `body` over the [`ValueModel::compiled`] model.
+/// `None` when the body deferred: the caller then takes the builtin's
+/// interpreter path, which may yield.
+pub(crate) fn run_compiled(
+    vm: &mut BexVm,
+    args: &[Value],
+    body: impl FnOnce(&mut ValueModel<'_>, &[Value]) -> Result<Value, GlueError>,
+) -> Option<NativeCallResult> {
+    match body(&mut ValueModel::compiled(vm), args) {
+        Ok(value) => Some(NativeCallResult::Done(value)),
+        Err(GlueError::Vm(error)) => Some(NativeCallResult::Error(error)),
+        Err(GlueError::Defer) => None,
     }
 }
 
@@ -215,11 +234,11 @@ impl<'vm> ValueModel<'vm> {
         Self::with(vm, Locality::Shared, View::Values)
     }
 
-    /// A model whose containers report slots from their declared element
-    /// types, for running the raw and pointer instantiations in tests.
-    #[cfg(test)]
-    pub(crate) fn typed(vm: &'vm mut BexVm) -> Self {
-        Self::with(vm, Locality::Shared, View::Typed)
+    /// The model compiled code runs the generated adapters over: containers
+    /// report slots from their declared element types, so each adapter
+    /// takes its raw, pointer or tagged instantiation.
+    pub(crate) fn compiled(vm: &'vm mut BexVm) -> Self {
+        Self::with(vm, Locality::Shared, View::Declared)
     }
 
     /// The universal form of an interpreter value.
@@ -327,15 +346,10 @@ impl<'vm> ValueModel<'vm> {
     /// dispatch. Element conversions use the declared type's slot instead
     /// (`SlotKind::of_type`), which is what a raw or pointer representation
     /// stands for in either view.
-    #[cfg_attr(
-        not(test),
-        expect(unused_variables, reason = "only the test view reads it")
-    )]
     fn slot_of(&self, ty: &RealizedTy) -> SlotKind {
         match self.view {
             View::Values => SlotKind::Tagged16,
-            #[cfg(test)]
-            View::Typed => SlotKind::of_type(ty),
+            View::Declared => SlotKind::of_type(ty),
         }
     }
 
@@ -363,17 +377,11 @@ impl<'vm> ValueModel<'vm> {
             (ListOf::Ints, _) => RealizedTy::int(),
             (ListOf::SameAs(_), View::Values) => type_arg(0),
             (ListOf::ValuesOf(_), View::Values) => type_arg(1),
-            #[cfg(test)]
-            (ListOf::SameAs(list), View::Typed) => self.array(list).element_ty().clone(),
-            #[cfg(test)]
-            (ListOf::ValuesOf(map), View::Typed) => self.map(map).value_ty().clone(),
+            (ListOf::SameAs(list), View::Declared) => self.array(list).element_ty().clone(),
+            (ListOf::ValuesOf(map), View::Declared) => self.map(map).value_ty().clone(),
         }
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(unused_variables, reason = "only the test view reads it")
-    )]
     fn key_list_ty(&self, map: ObjPtr) -> RealizedTy {
         match self.view {
             View::Values => self
@@ -382,8 +390,7 @@ impl<'vm> ValueModel<'vm> {
                 .first()
                 .cloned()
                 .unwrap_or_else(RealizedTy::unknown),
-            #[cfg(test)]
-            View::Typed => self.map(map).key_ty().clone(),
+            View::Declared => self.map(map).key_ty().clone(),
         }
     }
 

@@ -29,6 +29,10 @@ thread_local! {
     pub(crate) static FORCE_VM_FRAMES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
+/// A generated compiled entry of an adapted builtin; `None` when its body
+/// deferred to the interpreter's glue.
+pub type CompiledAdapter = fn(&mut BexVm, &[Value]) -> Option<NativeCallResult>;
+
 impl BexVm {
     /// Convert an indirect callee as `CallIndirect` does, including scalar type errors.
     pub fn indirect_callee(&self, value: Value) -> Result<HeapPtr, Box<VmError>> {
@@ -52,6 +56,31 @@ impl BexVm {
                 }
                 .into(),
             )),
+        }
+    }
+
+    /// Call an adapted builtin through its generated compiled entry
+    /// (`bex_vm::adapters::generated::compiled_*`): the builtin's one body
+    /// over the compiled object model. `fallback` is the builtin's
+    /// interpreter call, taken when the body defers (it may yield).
+    ///
+    /// Replaces, for the adapted builtins, the native-function dispatch of
+    /// [`Self::call_builtin`], which stays the path of every other builtin.
+    #[inline]
+    pub fn call_adapter(
+        &mut self,
+        adapter: CompiledAdapter,
+        args: &[Value],
+        fallback: impl FnOnce(&mut Self) -> Result<Value, Box<VmError>>,
+    ) -> Result<Value, Box<VmError>> {
+        let Some(outcome) = adapter(self, args) else {
+            return fallback(self);
+        };
+        self.settle();
+        match outcome {
+            NativeCallResult::Done(value) => Ok(value),
+            NativeCallResult::Error(error) => Err(Box::new(self.native_error_to_vm_error(error))),
+            NativeCallResult::YieldToCall { .. } => unreachable!("an adapter body never yields"),
         }
     }
 

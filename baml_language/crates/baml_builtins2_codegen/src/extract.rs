@@ -949,7 +949,7 @@ fn namespace_only(namespace_prefix: &str) -> String {
 /// - `"baml.deep_copy"` → `"baml_deep_copy"`
 /// - `"baml.sys.argv"` → `"baml_sys_argv"`
 /// - `"baml.media.Pdf.url"` → `"baml_media_pdf_url"`
-fn path_to_fn_name(path: &str) -> String {
+pub(crate) fn path_to_fn_name(path: &str) -> String {
     // `$` appears in impl-block method paths (`{iface}$for${Class}.method`)
     // and is not a valid identifier character.
     path.replace(['.', '$'], "_").to_lowercase()

@@ -594,7 +594,7 @@ fn run(case: &Case, receiver: &Receiver, args: &[Arg]) -> [(Outcome, String); 2]
     let mut vm = test_vm(Vec::new());
     let vm_side = run_vm(&mut vm, case, receiver, args);
     let adapter_args = build_args(&mut vm, receiver, args);
-    let adapter_result = (case.adapter)(&mut ValueModel::typed(&mut vm), &adapter_args);
+    let adapter_result = (case.adapter)(&mut ValueModel::compiled(&mut vm), &adapter_args);
     let adapter_side = (
         adapter_outcome(&vm, adapter_result),
         dump(&vm, adapter_args[0]),
@@ -719,7 +719,7 @@ fn specialized_list_adapters_take_the_slot_representation() {
     let strings = ptr(list(&mut vm, &LISTS[4]));
     let optionals = ptr(list(&mut vm, &LISTS[5]));
     let z = obj_ptr(lit(&mut vm, Lit::Str("z")));
-    let mut m = ValueModel::typed(&mut vm);
+    let mut m = ValueModel::compiled(&mut vm);
 
     let seven = bex_vm_types::layout::RawWord::from_int(7);
     assert_eq!(adapters::baml_array_push_raw8(&mut m, ints, seven), Ok(4));
@@ -761,7 +761,7 @@ fn specialized_map_adapters_take_the_slot_representation() {
     let optionals = ptr(map(&mut vm, &MAPS[3]));
     let key = obj_ptr(lit(&mut vm, Lit::Str("a")));
     let w = obj_ptr(lit(&mut vm, Lit::Str("w")));
-    let mut m = ValueModel::typed(&mut vm);
+    let mut m = ValueModel::compiled(&mut vm);
     let one = bex_vm_types::layout::RawWord::from_int(1);
     let nine = bex_vm_types::layout::RawWord::from_int(9);
 
@@ -807,7 +807,7 @@ fn specialized_string_adapters_take_pointers() {
     let mut vm = test_vm(Vec::new());
     let hello = obj_ptr(lit(&mut vm, Lit::Str("héllo")));
     let other = obj_ptr(lit(&mut vm, Lit::Str("héllo")));
-    let mut m = ValueModel::typed(&mut vm);
+    let mut m = ValueModel::compiled(&mut vm);
     assert_eq!(adapters::baml_string_char_count_ptr(&mut m, hello), Ok(5));
     assert_eq!(
         adapters::baml_ops_equals_for_string_eq_ptr(&mut m, hello, other),
@@ -823,7 +823,7 @@ fn specialized_string_adapters_take_pointers() {
 fn a_non_string_map_key_defers_to_the_vm() {
     let mut vm = test_vm(Vec::new());
     let ints = ptr(map(&mut vm, &MAPS[0]));
-    let mut m = ValueModel::typed(&mut vm);
+    let mut m = ValueModel::compiled(&mut vm);
     assert_eq!(
         adapters::baml_map_get(&mut m, ints, Tagged::Int(1)),
         Err(Fault::NeedsVm(NeedsVm::KeyHash))
@@ -836,7 +836,7 @@ fn joining_a_non_string_object_defers_to_the_vm() {
     let inner = list(&mut vm, &LISTS[0]);
     let nested = Value::object(vm.alloc_array(RealizedTy::unknown(), vec![inner]));
     let separator = obj_ptr(lit(&mut vm, Lit::Str(",")));
-    let mut m = ValueModel::typed(&mut vm);
+    let mut m = ValueModel::compiled(&mut vm);
     assert_eq!(
         adapters::baml_array_join(&mut m, ptr(nested), separator),
         Err(Fault::NeedsVm(NeedsVm::Render))
@@ -849,7 +849,7 @@ fn a_receiver_of_another_kind_is_rejected_like_the_vm() {
     let text = lit(&mut vm, Lit::Str("not a list"));
     let vm_result = <PackageBamlImpl as BamlClassArray>::__glue_length(&mut vm, &[text]);
     let vm_side = vm_outcome(&vm, vm_result);
-    let mut m = ValueModel::typed(&mut vm);
+    let mut m = ValueModel::compiled(&mut vm);
     let fault = adapters::baml_array_length(&mut m, ptr(text)).unwrap_err();
     assert_eq!(
         fault,
@@ -865,7 +865,7 @@ fn a_receiver_of_another_kind_is_rejected_like_the_vm() {
 fn a_generic_argument_must_fit_the_receiver_slot() {
     let mut vm = test_vm(Vec::new());
     let ints = ptr(list(&mut vm, &LISTS[0]));
-    let mut m = ValueModel::typed(&mut vm);
+    let mut m = ValueModel::compiled(&mut vm);
     let slot = SlotKind::Raw(RawKind::Int);
     assert_eq!(
         adapters::baml_array_push(&mut m, ints, Tagged::Bool(true)),

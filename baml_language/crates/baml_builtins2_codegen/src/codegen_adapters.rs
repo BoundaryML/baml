@@ -296,6 +296,30 @@ impl Abi {
     }
 }
 
+impl Abi {
+    /// Compiled glue's extraction of `args[index]` for the generic adapter:
+    /// elements and keys in their universal form.
+    fn compiled_arg(self, index: usize) -> TokenStream {
+        match self {
+            Abi::Elem | Abi::Key => quote!(m.tagged(args[#index])),
+            other => other.value_arg(index),
+        }
+    }
+
+    /// Compiled glue's `Value` for the generic adapter's `result`; a float
+    /// element is boxed.
+    fn compiled_result(self) -> TokenStream {
+        match self {
+            Abi::Elem => quote!(Ok(m.value(result))),
+            Abi::OptElem => quote!(Ok(match result {
+                Some(elem) => m.value(elem),
+                None => Value::NULL,
+            })),
+            other => other.value_result(),
+        }
+    }
+}
+
 impl std::fmt::Debug for Abi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
@@ -497,7 +521,44 @@ impl<'a> AdapterSig<'a> {
             .iter()
             .map(|&arm| self.per_kind_fn(arm));
         let generic = self.generic_fn();
-        quote! { #generic #(#per_kind)* }
+        let compiled = self.compiled_glue_fn();
+        quote! { #generic #(#per_kind)* #compiled }
+    }
+
+    /// Compiled code's entry for this builtin: the generic adapter over the
+    /// compiled model (`ValueModel::compiled`), which dispatches on the
+    /// receiver's descriptor to the raw, pointer or tagged instantiation of
+    /// the one body. `None` when the body deferred; the caller then takes the
+    /// interpreter's glue, which may yield.
+    fn compiled_glue_fn(&self) -> TokenStream {
+        let name = format_ident!("compiled_{}", self.decl.fn_name);
+        let adapter = self.name();
+        let receiver = self.receiver.param();
+        let kind = self.receiver.kind();
+        let extractions = self.params.iter().enumerate().map(|(i, (name, abi))| {
+            let value = abi.compiled_arg(i + 1);
+            quote!(let #name = #value;)
+        });
+        let args = self.params.iter().map(|(name, _)| name);
+        let bind = self
+            .ret
+            .bind_result(&quote!(#adapter(m, #receiver, #(#args),*)));
+        let result = self.ret.compiled_result();
+        let doc = format!(" Compiled code's entry for `{}`.", self.decl.path);
+        quote! {
+            #[doc = #doc]
+            pub fn #name(
+                vm: &mut crate::BexVm,
+                args: &[Value],
+            ) -> Option<crate::package_baml::NativeCallResult> {
+                crate::package_baml::value_model::run_compiled(vm, args, |m, args| {
+                    let #receiver = m.receiver(args[0], bex_vm_types::layout::Kind::#kind)?;
+                    #(#extractions)*
+                    #bind
+                    #result
+                })
+            }
+        }
     }
 
     /// The interpreter's `__glue_{method}` (and thread-local twin) for this
@@ -618,6 +679,16 @@ pub(crate) fn value_glue_methods(decl: &NativeBuiltin, method: &str) -> Option<S
     Some(methods.join("\n") + "\n")
 }
 
+/// The compiled-code entry the adapters module exports for the builtin with
+/// native key `path` (`bex_vm::adapters::generated::compiled_{fn}`), or
+/// `None` when its triage row has no adapter. The Rust emitter calls it in
+/// place of the builtin's interpreter glue.
+pub fn compiled_adapter_entry(path: &str) -> Option<String> {
+    crate::triage::row_for(path)
+        .filter(|row| row.form.has_adapter())
+        .map(|_| format!("compiled_{}", crate::extract::path_to_fn_name(path)))
+}
+
 /// Emit adapters for every `rows` entry with an adapter form, resolved
 /// against `declarations` (VM natives).
 pub fn generate_adapters(
@@ -643,8 +714,9 @@ pub fn generate_adapters(
     let paths = sigs.iter().map(|sig| sig.decl.path.as_str());
     let adapters = sigs.iter().map(AdapterSig::emit);
     let tokens = quote! {
-        use bex_vm_types::layout::{
-            Fault, ObjPtr, ObjectModel, RawWord, SlotKind, Slots, Tagged, string_key,
+        use bex_vm_types::{
+            Value,
+            layout::{Fault, ObjPtr, ObjectModel, RawWord, SlotKind, Slots, Tagged, string_key},
         };
 
         use crate::package_baml::bodies;

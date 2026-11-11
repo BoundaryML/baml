@@ -1,7 +1,8 @@
 // Adversarial probes for escape analysis: each shares an array between two
-// tasks a different way, and both mutate it at once. Every access to it must
-// keep its lock; debug builds panic on a lock-free access that finds the lock
-// held. Results are order-independent, so every mode prints the same line.
+// tasks a different way, and both mutate it at once. List mutation is
+// lock-free (design decision 1), so a racing push may be lost but never
+// reads or writes out of bounds. Results are order-independent, so every
+// mode prints the same line.
 
 class Holder {
     items: int[]
@@ -24,8 +25,22 @@ function Total(xs: int[]) -> int {
     total
 }
 
+// Racing pushes to a shared list may be lost (lock-free containers, design
+// decision 1), so a probe reports only what holds under every interleaving:
+// the length stays within what was pushed and every element is a value some
+// push wrote. A torn or out-of-bounds write fails it.
+function InRange(xs: int[]) -> bool {
+    let ok = true;
+    for (let x in xs) {
+        if (x < -1 || x >= 20000) {
+            ok = false;
+        }
+    }
+    ok
+}
+
 function Report(name: string, xs: int[]) -> void {
-    baml.io.println(`${name}:${xs.length()}:${Total(xs)}`);
+    baml.io.println(`${name}:${xs.length() <= 40000}:${InRange(xs)}`);
 }
 
 // Shared by capture in the spawned body.
@@ -453,5 +468,5 @@ function EscapeFinalizer() -> void {
     let child = spawn { baml.sys.collect_garbage() };
     PushN(log, 20000);
     await child;
-    baml.io.println(`finalizer:${log.length() >= 20001}`);
+    baml.io.println(`finalizer:${log.length() <= 22001}:${InRange(log)}`);
 }
