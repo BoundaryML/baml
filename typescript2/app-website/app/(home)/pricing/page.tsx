@@ -167,27 +167,6 @@ const NOT_BILLED = [
   'Uploads that never arrive',
 ];
 
-// How the meter keeps the bill down, each a fact of BCS's billing code (README "Usage ledger",
-// projector/billing.rs), except billing a repeated value once, which is the founders' decision.
-const SAVINGS: [string, string][] = [
-  [
-    'Logical size, not storage',
-    'We count each value at its size in your program. Compression, storage layout and overhead never reach your bill.',
-  ],
-  [
-    'Each value once',
-    'Values are stored by content, so a prompt your programs send a thousand times is stored once and billed once.',
-  ],
-  [
-    'Structure is free',
-    'Spans, timings, profiles, function names, source and types are never billed, so you never sample to save money.',
-  ],
-  [
-    'Retries count once',
-    'A retried upload is counted once, and an upload that never arrives counts as nothing.',
-  ],
-];
-
 /** The bottom of the page: what ingestion bills, what it doesn't, and how the meter keeps it down. */
 function HowBilling() {
   return (
@@ -233,14 +212,6 @@ function HowBilling() {
           </div>
         </div>
       </div>
-      <dl className="mt-8 grid gap-x-8 gap-y-6 text-[13px] sm:grid-cols-2">
-        {SAVINGS.map(([title, body]) => (
-          <div key={title}>
-            <dt className="font-medium text-head">{title}</dt>
-            <dd className="mt-1 text-ink-2">{body}</dd>
-          </div>
-        ))}
-      </dl>
     </div>
   );
 }

@@ -47,10 +47,8 @@ Billed: function inputs and outputs, logs, network requests and responses, proce
 
 Never billed: spans and their timings, profiles, function names, source and types, a value your programs record again, retried uploads, uploads that never arrive.
 
-- Logical size, not storage: each value is counted at its size in your program. Compression, storage layout and overhead never reach your bill.
-- Each value once: values are stored by content, so a prompt your programs send a thousand times is stored once and billed once.
-- Structure is free: spans, timings, profiles, function names, source and types are never billed, so you never sample to save money.
-- Retries count once: a retried upload is counted once, and an upload that never arrives counts as nothing.
+- Repeated values: every value is stored under a hash of its content, so a value sent again is already stored and isn't billed again.
+- Field names: a class's schema is stored once and never billed; each value points at it with short IDs, so a field's name never reaches the bill.
 
 ## Source and license
 
