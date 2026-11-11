@@ -525,9 +525,9 @@ function Bounce(d: Depths, n: int) -> int {
 // Recursion to the stack limit is a catchable `StackOverflow` wherever the
 // handler is. Compiled bodies run on a fiber with its own limit, so the
 // probe compares depths within a run rather than printing them. The limit is
-// in bytes and `Bounce`'s frame is bigger than a `Descend` frame, so the
-// second descent may stop one frame earlier, depending on how much room the
-// first one left.
+// in bytes and `Bounce`'s frame, which holds a handler, is bigger than a
+// `Descend` frame, which a plain call keeps small: the second descent may
+// stop as many frames earlier as `Bounce`'s frame holds `Descend` frames.
 function FrameLimit() -> void {
     let d = Depths { deepest: 0 };
     let a = Descend(d, 0) catch (e) {
@@ -535,7 +535,7 @@ function FrameLimit() -> void {
     };
     let first = d.deepest;
     let b = Bounce(d, 0);
-    let same_limit = d.deepest <= first && first - d.deepest <= 1;
+    let same_limit = d.deepest <= first && first - d.deepest <= 16;
     baml.io.println(`${a}:${first > 1000}:${b}:${same_limit}`);
 }
 
