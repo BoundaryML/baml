@@ -124,6 +124,12 @@ pub fn backing_elem_of(id: DescriptorId) -> Option<ElemKind> {
 /// heap's allocator, which this crate cannot name.
 pub trait BackingAlloc {
     fn alloc_backing(&mut self, elem: ElemKind, cap: usize) -> HeapPtr;
+
+    /// A backing of `bytes` was replaced by a larger one and is garbage from
+    /// now on. It cannot be freed while a reader may hold it, so it waits for
+    /// the collector; the allocator charges its bytes to the collection
+    /// budget again, so the collection that reclaims it comes sooner.
+    fn retire_backing(&mut self, bytes: usize);
 }
 
 /// A list on the heap.
@@ -526,7 +532,8 @@ impl ListGuard {
             ptr: alloc.alloc_backing(slot.elem_kind(), cap),
             stride: slot.elem_kind().stride(),
         };
-        if let (Some(old), usable) = self.view() {
+        let (old, usable) = self.view();
+        if let Some(old) = old {
             for index in 0..usable.min(cap) {
                 // SAFETY: below both backings' capacities.
                 unsafe { copy_slot(old.elem(index), fresh.elem(index), slot, self.access) };
@@ -535,6 +542,9 @@ impl ListGuard {
         self.list
             .word(LIST_BACKING_OFFSET)
             .store(Value::object(fresh.ptr).bits(), Ordering::Release);
+        if let Some(old) = old {
+            alloc.retire_backing(backing_bytes(slot.elem_kind(), old.cap()));
+        }
         fresh
     }
 

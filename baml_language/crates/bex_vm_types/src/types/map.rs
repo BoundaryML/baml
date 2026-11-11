@@ -312,6 +312,14 @@ struct Columns {
 }
 
 impl Columns {
+    /// Bytes of the three backings.
+    fn bytes(self) -> usize {
+        [self.keys, self.values, self.index]
+            .into_iter()
+            .map(|column| BACKING_ELEMS_OFFSET as usize + column.cap() * column.stride)
+            .sum()
+    }
+
     /// Entries the index has hash words for.
     fn cap(self) -> usize {
         self.index.word(0).load(Ordering::Relaxed) as usize
@@ -610,7 +618,8 @@ impl MapGuard {
         };
         fresh.index.word(0).store(cap as u64, Ordering::Relaxed);
         let mut len = 0;
-        if let Some(old) = self.columns() {
+        let old = self.columns();
+        if let Some(old) = old {
             len = self
                 .len()
                 .min(old.cap())
@@ -640,6 +649,9 @@ impl MapGuard {
             self.map
                 .word(offset)
                 .store(Value::object(column.ptr).bits(), Ordering::Release);
+        }
+        if let Some(old) = old {
+            alloc.retire_backing(old.bytes());
         }
         fresh
     }

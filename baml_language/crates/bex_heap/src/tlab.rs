@@ -620,6 +620,17 @@ impl BackingAlloc for Tlab {
         unsafe { init_backing(ptr, cap, elem) };
         ptr
     }
+
+    fn retire_backing(&mut self, bytes: usize) {
+        // The cell's size as `alloc_cell` took it.
+        let bytes = granule_align(bytes);
+        let cell_bytes = if bytes > LARGE_OBJECT_THRESHOLD {
+            bytes
+        } else {
+            cell_size(bytes)
+        };
+        self.spend(cell_bytes);
+    }
 }
 
 pub trait TlabHolder {
