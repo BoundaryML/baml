@@ -67,7 +67,7 @@ baml generate
   --embed-telemetry [default: false]
   --show-all-skips [default: false]
   -F, --features <FEATURES>
-  -o, --output-dir <PATH>
+  -o, --output <PATH>
 baml generate add
   --sdk-import-path <IMPORT_PATH>
   <output_type>
@@ -122,7 +122,7 @@ baml ide
 baml ide install
   --code [default: false]
   --cursor [default: false]
-  --output-dir <PATH>
+  -d, --output <PATH>
 baml agent
 baml agent install
 baml telemetry

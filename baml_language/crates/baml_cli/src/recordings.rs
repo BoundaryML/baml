@@ -223,7 +223,6 @@ impl QueryReport {
 impl Command for Query<'_> {
     type Output = QueryReport;
 
-    #[allow(clippy::print_stderr, reason = "the outcome summary is status output")]
     fn run(&self, cx: &CommandContext) -> anyhow::Result<Outcome<QueryReport>> {
         let sql = if self.args.sql == "-" {
             let mut text = String::new();
@@ -236,16 +235,16 @@ impl Command for Query<'_> {
         match self.cloud_session(&root)? {
             Some(session) => {
                 if matches!(self.backend, Backend::Auto) {
-                    eprintln!(
-                        "note: querying Boundary Cloud; `baml local recordings query` queries this project's local recordings"
+                    crate::reporter::print_note(
+                        "note: querying Boundary Cloud; `baml local recordings query` queries this project's local recordings",
                     );
                 }
                 self.run_cloud(session, sql)
             }
             None => {
                 if matches!(self.backend, Backend::Auto) {
-                    eprintln!(
-                        "note: querying local recordings; `baml cloud auth login` to query Boundary Cloud"
+                    crate::reporter::print_note(
+                        "note: querying local recordings; `baml cloud auth login` to query Boundary Cloud",
                     );
                 }
                 self.run_local(&root, sql)
@@ -327,7 +326,6 @@ impl Query<'_> {
         }))
     }
 
-    #[allow(clippy::print_stderr, reason = "the outcome summary is status output")]
     fn run_local(&self, root: &Path, sql: String) -> anyhow::Result<Outcome<QueryReport>> {
         let request = QueryRequest {
             sql,
@@ -350,7 +348,7 @@ impl Query<'_> {
         };
         let outcome = &result.outcome;
         let indexed: i64 = outcome.recordings.iter().map(|r| r.indexed_sequence).sum();
-        eprintln!(
+        crate::reporter::print_note(format_args!(
             "{} row(s); {}; {} recording(s), {indexed} file(s) indexed{}",
             result.rows.len(),
             match outcome.status {
@@ -364,7 +362,7 @@ impl Query<'_> {
             } else {
                 ""
             },
-        );
+        ));
         for diagnostic in &outcome.diagnostics {
             crate::reporter::print_warning(format_args!(
                 "[{}] x{}: {}",
@@ -372,10 +370,10 @@ impl Query<'_> {
             ));
         }
         if outcome.source_missing {
-            eprintln!(
+            crate::reporter::print_note(format_args!(
                 "note: no recordings at {}; run BAML code in this project to record some",
                 root.join(".baml/btel/recordings").display()
-            );
+            ));
         }
         let report = QueryReport {
             columns: result
@@ -389,7 +387,6 @@ impl Query<'_> {
         Ok(Outcome::ok(report))
     }
 
-    #[allow(clippy::print_stderr, reason = "the outcome summary is status output")]
     fn run_cloud(
         &self,
         session: CloudSession,
@@ -428,7 +425,7 @@ impl Query<'_> {
             })
             .map_err(|error| diagnostic_context.report(error, Failure::QueryFailed))?;
 
-        eprintln!("{} row(s)", report.rows.len());
+        crate::reporter::print_note(format_args!("{} row(s)", report.rows.len()));
         let status = match report.outcome["status"].as_str() {
             Some("complete") => ExitCode::Success,
             Some("incomplete") => {

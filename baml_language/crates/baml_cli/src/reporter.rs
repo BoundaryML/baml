@@ -34,6 +34,14 @@ pub(crate) fn quiet() -> bool {
     QUIET.load(Ordering::Relaxed)
 }
 
+/// Print a plain status line on stderr, unless `-q` was given.
+#[allow(clippy::print_stderr)]
+pub(crate) fn print_note(message: impl std::fmt::Display) {
+    if !quiet() {
+        eprintln!("{message}");
+    }
+}
+
 pub(crate) fn accent_style() -> Style {
     Style::new().fg(VERB_COLOR).bold()
 }

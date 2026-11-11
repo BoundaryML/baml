@@ -47,7 +47,7 @@ fn generated_status(name: &str, files: usize, renames: usize, output_dir: &Path)
 /// Generate client code from BAML definitions.
 ///
 /// Reads every `[generator.<name>]` section in `baml.toml`, validates the
-/// project, and writes each configured client. Use `--output-dir` to override the
+/// project, and writes each configured client. Use `--output` to override the
 /// configured output directory for every generator in this invocation.
 #[derive(Args, Clone, Debug)]
 #[command(after_long_help = "\
@@ -59,7 +59,7 @@ Examples:
     baml generate --project-dir ./my-project
 
   Override the output directory:
-    baml generate --output-dir ./generated")]
+    baml generate --output ./generated")]
 pub struct GenerateArgs {
     #[command(flatten)]
     pub telemetry: crate::embed_telemetry::EmbedTelemetryArgs,
@@ -71,13 +71,7 @@ pub struct GenerateArgs {
 
     /// Write each SDK to exactly this directory, overriding both
     /// `output_dir` and the directory `package_name` selects
-    #[arg(
-        long = "output-dir",
-        alias = "output",
-        short = 'o',
-        value_name = "PATH",
-        help_heading = "Generation options"
-    )]
+    #[arg(long, short, value_name = "PATH", help_heading = "Generation options")]
     pub output: Option<PathBuf>,
 
     /// List every symbol a generator skips, including the standard
@@ -426,7 +420,7 @@ impl GenerateArgs {
 
         let mut total_files = 0;
 
-        // `--output-dir` names the final directory as given; nothing derived
+        // `--output` names the final directory as given; nothing derived
         // from `package_name` is appended to it.
         let destinations = generators
             .iter()

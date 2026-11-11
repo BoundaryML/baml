@@ -62,7 +62,7 @@ fn assert_api_key_rejection(
         "error"
     };
     let local_and_outcome = if query {
-        r#"    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+        r#"    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
     } else if recording_off_allowed {
@@ -461,7 +461,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
 
   To continue, choose one:
     • Use a credential with query permission for the selected project and environment.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
                 ),
@@ -471,7 +471,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
 
   To continue, choose one:
     • Check the command inputs and requested project/environment.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
                 ),
@@ -481,7 +481,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
 
   To continue, choose one:
     • Check the endpoint and requested project/environment, then retry.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
                 ),
@@ -491,7 +491,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
 
   To continue, choose one:
     • Retry the command after Boundary becomes available.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
                 ),
@@ -536,7 +536,7 @@ async fn cloud_query_distinguishes_bad_responses_from_connection_failures() {
 
   To continue, choose one:
     • Check that the endpoint is a Boundary API compatible with this BAML client.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         )
@@ -557,7 +557,7 @@ async fn cloud_query_distinguishes_bad_responses_from_connection_failures() {
 
   To continue, choose one:
     • Check the endpoint and network connection, then retry the command.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
     );
@@ -591,8 +591,8 @@ async fn cloud_query_displays_structured_error_codes_and_optional_messages() {
   Select an environment: this credential can query multiple environments.
 
   To continue, choose one:
-    • Select an environment with --environment <name> and, when needed, --project <org/project>.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Select an environment with --env <name> and, when needed, --project <org/project>.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
             )
@@ -603,8 +603,8 @@ async fn cloud_query_displays_structured_error_codes_and_optional_messages() {
   Code: ENVIRONMENT_REQUIRED
 
   To continue, choose one:
-    • Select an environment with --environment <name> and, when needed, --project <org/project>.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Select an environment with --env <name> and, when needed, --project <org/project>.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
             )
@@ -666,7 +666,7 @@ fn cloud_configuration_errors_share_diagnostics_without_exposing_invalid_url_cre
 
   To continue, choose one:
     • Fix BOUNDARY_API_URL or boundary.api_url in baml.toml.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         } else {
@@ -892,7 +892,7 @@ fn corrupt_saved_login_errors_for_query_and_execution_but_explicit_local_recordi
         (
             ["query", "SELECT 7"],
             "Query failed.",
-            "    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.",
+            "    • Query local recordings: run `baml local recordings query`.",
         ),
     ] {
         let output = Command::new(common::baml_cli())

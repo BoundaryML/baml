@@ -394,7 +394,7 @@ impl fmt::Display for Diagnostic {
                 match operation {
                     Operation::Query => writeln!(
                         f,
-                        "    • Select an environment with --environment <name> and, when needed, --project <org/project>."
+                        "    • Select an environment with --env <name> and, when needed, --project <org/project>."
                     ),
                     Operation::Ingest => {
                         if let RecordingOverride::Artifact {
@@ -532,7 +532,7 @@ impl fmt::Display for Diagnostic {
             }
             Operation::Query => writeln!(
                 f,
-                "    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local."
+                "    • Query local recordings: run `baml local recordings query`."
             )?,
             Operation::Authentication => {}
         }
@@ -569,7 +569,7 @@ mod tests {
   To continue, choose one:
     • Run `baml cloud auth login` again.
     • Set BOUNDARY_API_KEY to a valid API key.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
             );
@@ -589,7 +589,7 @@ mod tests {
   To continue, choose one:
     • Run `baml cloud auth login` again.
     • Set BOUNDARY_API_KEY to a valid API key.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         );
@@ -715,8 +715,8 @@ mod tests {
   Select an environment: this credential can query multiple environments.
 
   To continue, choose one:
-    • Select an environment with --environment <name> and, when needed, --project <org/project>.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Select an environment with --env <name> and, when needed, --project <org/project>.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -726,8 +726,8 @@ mod tests {
   Code: ENVIRONMENT_REQUIRED
 
   To continue, choose one:
-    • Select an environment with --environment <name> and, when needed, --project <org/project>.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Select an environment with --env <name> and, when needed, --project <org/project>.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -800,7 +800,7 @@ mod tests {
   To continue, choose one:
     • Run `baml cloud auth login` again.
     • Set BOUNDARY_API_KEY to a valid API key.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         );
@@ -813,7 +813,7 @@ mod tests {
 
   To continue, choose one:
     • Use a credential with query permission for the selected project and environment.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         );
@@ -829,7 +829,7 @@ mod tests {
 
   To continue, choose one:
     • Check the command inputs and requested project/environment.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -839,7 +839,7 @@ mod tests {
 
   To continue, choose one:
     • Use a credential with query permission for the selected project and environment.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -849,7 +849,7 @@ mod tests {
 
   To continue, choose one:
     • Check the endpoint and requested project/environment, then retry.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -859,7 +859,7 @@ mod tests {
 
   To continue, choose one:
     • Retry the command after Boundary becomes available.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -869,7 +869,7 @@ mod tests {
 
   To continue, choose one:
     • Retry the command after Boundary becomes available.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -900,7 +900,7 @@ mod tests {
 
   To continue, choose one:
     • Check the endpoint and network connection, then retry the command.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         );
@@ -915,7 +915,7 @@ mod tests {
 
   To continue, choose one:
     • Check that the endpoint is a Boundary API compatible with this BAML client.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         );
