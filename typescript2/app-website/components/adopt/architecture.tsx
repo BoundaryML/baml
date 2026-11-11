@@ -7,8 +7,10 @@ import {
   SDK_LANGS,
   usePinnedLang,
 } from '@/components/home/lang-pick';
+import { BOOK } from '@/components/home/links';
 import { useReducedMotion } from '@/components/home/pinned';
 import { type SceneDef, ScenePlayer } from '@/components/home/scene-player';
+import { Button, LINKS } from '@/components/home/ui';
 
 // How BAML works, the /how-baml-works page, for anyone who wants the detail: what
 // `baml generate` makes, where the runtime lives in each target and language, and what happens at
@@ -1678,28 +1680,6 @@ function EnvChange({ at, lang }: { at: number; lang: number }) {
   );
 }
 
-const MOMENTS: {
-  lead: string;
-  name: Exclude<Scenario, 'A call'>;
-  title: string;
-}[] = [
-  {
-    lead: 'Only the first call pays for this. Along the way the runtime sets up its sysops: the way BAML reaches the outside world, like env vars, files and the network.',
-    name: 'Startup',
-    title: 'What happens at startup',
-  },
-  {
-    lead: 'What if your BAML code has an error? It depends on the kind.',
-    name: 'An exception',
-    title: 'What happens when BAML throws an exception',
-  },
-  {
-    lead: 'BAML finishes its work before your program exits.',
-    name: 'Shutdown',
-    title: 'What happens at shutdown',
-  },
-];
-
 /** The page's two choices: what BAML runs in, and for an app, its language. Pinned to the top so
  *  every diagram below follows it. */
 /** How far down a sticky bar has to sit to clear the site's own sticky nav, if the page has one,
@@ -1951,49 +1931,45 @@ function Lanes({
   );
 }
 
-/** Startup, a call and shutdown, played in the shared scene player for the target picked. */
-function Life({ at, lang }: { at: number; lang: number }) {
+/** One moment of a program's life, startup, a call or shutdown, played for the target picked. */
+function Life({
+  at,
+  lang,
+  moment,
+}: {
+  at: number;
+  lang: number;
+  moment: 'call' | 'shutdown' | 'startup';
+}) {
   const target = TARGETS[at].name;
-  const life = lifeFor(target, lang);
+  const steps = lifeFor(target, lang)[moment];
   const host = hostLabel(target, lang);
-  const scene = (steps: Step[], say: string) => ({
-    steps: steps.length,
-    View: ({ step }: { step: number }) => (
-      <Lanes host={host} say={say} step={step} steps={steps} />
-    ),
-  });
+  const say = {
+    call:
+      target === 'WebAssembly'
+        ? 'Your event loop keeps running while BAML works.'
+        : target === 'Standalone'
+          ? 'Each function is a subcommand.'
+          : 'BAML does the work on its own threads, not yours.',
+    shutdown:
+      target === 'WebAssembly'
+        ? 'Nothing to clean up: it goes with the page.'
+        : 'BAML finishes its work before your program exits.',
+    startup:
+      target === 'In your app'
+        ? 'Only the first call pays for this. After that, calls go straight to the runtime.'
+        : 'Once, when it starts.',
+  }[moment];
   const scenes: SceneDef[] = [
     {
-      title: 'Startup',
-      ...scene(
-        life.startup,
-        target === 'In your app'
-          ? 'Only the first call pays for this. After that, calls go straight to the runtime.'
-          : 'Once, when it starts.',
-      ),
-    },
-    {
-      title: 'A call',
-      ...scene(
-        life.call,
-        target === 'WebAssembly'
-          ? 'Your event loop keeps running while BAML works.'
-          : target === 'Standalone'
-            ? 'Each function is a subcommand.'
-            : 'Your thread waits for the result; BAML does the work on its own threads.',
-      ),
-    },
-    {
-      title: 'Shutdown',
-      ...scene(
-        life.shutdown,
-        target === 'WebAssembly'
-          ? 'Nothing to clean up: it goes with the page.'
-          : 'BAML finishes its work before your program exits.',
+      steps: steps.length,
+      title: moment,
+      View: ({ step }) => (
+        <Lanes host={host} say={say} step={step} steps={steps} />
       ),
     },
   ];
-  return <ScenePlayer key={`${target}-${lang}`} scenes={scenes} />;
+  return <ScenePlayer key={`${target}-${lang}-${moment}`} scenes={scenes} />;
 }
 
 /** The page as it would ship: the architecture first, then one diagram per moment in a program's
@@ -2016,28 +1992,51 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
         </p>
       </header>
       <ControlBar at={at} lang={lang} setAt={setAt} setLang={setLang} />
-      <Section title="Build, then run">
+      <Section title="What happens when you build?">
         <Architecture at={at} lang={lang} />
       </Section>
-      <Section id="release" title="What happens at release">
+      <Section id="release" title="What happens at release?">
         <div key={`${target.name}-${lang}`}>
           <ReleaseView at={at} lang={lang} />
         </div>
       </Section>
-      <Section title="Startup, a call, shutdown">
-        <Life at={at} lang={lang} />
+      <Section title="What happens at startup?">
+        <Life at={at} lang={lang} moment="startup" />
       </Section>
-      <Section title={MOMENTS[1].title}>
+      <Section title="What happens when you call a BAML function?">
+        <Life at={at} lang={lang} moment="call" />
+      </Section>
+      <Section title="What happens when BAML throws an exception?">
         <div key={`${target.name}-${lang}`}>
           {behaviorFor(target.name, lang)['An exception']}
         </div>
       </Section>
+      <Section title="What happens at shutdown?">
+        <Life at={at} lang={lang} moment="shutdown" />
+      </Section>
       <Section
         lead="The simplest way to see sysops at work: BAML reads the environment when it needs a value, instead of keeping its own copy."
-        title="What happens when you change an environment variable"
+        title="What happens when you change an environment variable?"
       >
         <div key={`${target.name}-${lang}`}>
           <EnvChange at={at} lang={lang} />
+        </div>
+      </Section>
+      {/* The question readers ask after a page like this one, answered plainly. */}
+      <Section title="Why don’t you have docs?">
+        <p className="max-w-[40rem] text-[16px] leading-relaxed text-ink-2">
+          Boundary is still in early access, and right now nearly all of our
+          effort goes into engineering. Docs will catch up. Until then, we’re
+          happy to help directly.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Button href={BOOK}>Get on a call</Button>
+          <Button href={LINKS.discord} variant="secondary">
+            Ask on Discord
+          </Button>
+          <Button href="mailto:hello@boundaryml.com" variant="secondary">
+            Email us
+          </Button>
         </div>
       </Section>
     </>

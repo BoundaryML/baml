@@ -35,6 +35,8 @@ export function ScenePlayer({ scenes: SCENES }: { scenes: SceneDef[] }) {
   const current = SCENES[scene] ?? SCENES[0];
   const last = current.steps;
   const done = step >= last;
+  // A single scene is a plain animation: no tabs, no next, and it stops when done.
+  const single = SCENES.length === 1;
 
   useEffect(() => {
     if (reduce) {
@@ -43,7 +45,7 @@ export function ScenePlayer({ scenes: SCENES }: { scenes: SceneDef[] }) {
     }
     if (!visible || !playing) return;
     if (done) {
-      if (!auto) return;
+      if (!auto || single) return;
       const hold = setTimeout(() => {
         setScene((n) => (n + 1) % SCENES.length);
         setStep(0);
@@ -55,7 +57,7 @@ export function ScenePlayer({ scenes: SCENES }: { scenes: SceneDef[] }) {
       step === 0 ? 600 : STEP_MS,
     );
     return () => clearTimeout(timer);
-  }, [step, last, visible, reduce, playing, done, auto, SCENES.length]);
+  }, [step, last, visible, reduce, playing, done, auto, single, SCENES.length]);
 
   const go = (i: number) => {
     setAuto(false);
@@ -73,7 +75,9 @@ export function ScenePlayer({ scenes: SCENES }: { scenes: SceneDef[] }) {
       className="overflow-hidden rounded-lg border border-rule bg-raised"
       ref={ref}
     >
-      <div className="flex gap-1 border-b border-rule px-2 pt-2">
+      <div
+        className={`flex gap-1 border-b border-rule px-2 pt-2 ${single ? 'hidden' : ''}`}
+      >
         {SCENES.map((sc, i) => (
           <button
             className={`relative cursor-pointer whitespace-nowrap px-3 pt-1.5 pb-2.5 text-[13px] transition-colors ${i === scene ? 'text-head' : 'text-muted hover:text-ink'}`}
@@ -141,7 +145,7 @@ export function ScenePlayer({ scenes: SCENES }: { scenes: SceneDef[] }) {
             />
           ))}
           {/* One more bar, twice a step's length, that fills on the way to the next scene. */}
-          {auto && (
+          {auto && !single && (
             <span className="relative h-1.5 flex-[2] overflow-hidden rounded-full bg-white/10">
               {done && playing && visible && (
                 <span
@@ -161,7 +165,7 @@ export function ScenePlayer({ scenes: SCENES }: { scenes: SceneDef[] }) {
         {/* Shown only once the scene is done, with the last bar; it keeps its room so nothing moves. */}
         <button
           aria-hidden={!done}
-          className={`cursor-pointer whitespace-nowrap text-ink-2 transition-[opacity,color] duration-300 hover:text-head ${done ? '' : 'invisible opacity-0'}`}
+          className={`cursor-pointer whitespace-nowrap text-ink-2 transition-[opacity,color] duration-300 hover:text-head ${done ? '' : 'invisible opacity-0'} ${single ? 'hidden' : ''}`}
           onClick={() => go(nextIndex)}
           tabIndex={done ? 0 : -1}
           type="button"

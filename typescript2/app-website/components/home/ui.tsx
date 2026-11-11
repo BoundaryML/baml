@@ -58,6 +58,10 @@ export function Button({
     <a
       className={`inline-flex items-center px-5 h-[46px] rounded-lg text-[15px] font-medium active:translate-y-px transition ${VARIANTS[variant]}`}
       href={href}
+      // A link off the site opens in a new tab, so the reader keeps their place here.
+      {...(href.startsWith('http')
+        ? { rel: 'noopener', target: '_blank' }
+        : {})}
     >
       {children}
     </a>
