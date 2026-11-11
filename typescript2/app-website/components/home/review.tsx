@@ -621,12 +621,12 @@ const POST = {
   slug: 'teaching-agents-to-write-maintainable-code',
 };
 
-/** The post that measured it: its before-and-after drawing says the result, so the card is just the
- *  drawing, the title and who wrote it. */
+/** The section's closing claim, with the post that backs it: its before-and-after drawing, then the
+ *  claim and a link to the post. */
 function Research() {
   return (
     <a
-      className="focus-ring group mt-10 grid max-w-[880px] items-center gap-6 rounded-xl border border-rule bg-raised p-3 transition-colors hover:border-white/25 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]"
+      className="focus-ring group mt-8 grid max-w-[880px] items-center gap-6 rounded-xl border border-rule bg-raised p-3 transition-colors hover:border-white/25 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]"
       href={POST.href}
     >
       <PostDrawing
@@ -635,16 +635,17 @@ function Research() {
         slug={POST.slug}
       />
       <div className="px-3 pb-3 md:px-2 md:pb-0">
-        <p className="font-display text-[22px] leading-tight font-medium text-head">
-          Teaching Agents to Write Maintainable Code
+        <p className="v4-body text-ink">
+          There's no bad BAML in the training data to learn from. And we make
+          sure the only BAML that gets checked in is great BAML.
         </p>
-        <p className="mt-2 text-[15px] text-muted">Avery Townsend</p>
         <p className="mt-5 text-[15px] text-clover">
-          Read the post{' '}
+          Teaching Agents to Write Maintainable Code{' '}
           <span className="inline-block transition-transform group-hover:translate-x-1">
             →
           </span>
         </p>
+        <p className="mt-1 text-[14px] text-muted">Avery Townsend</p>
       </div>
     </a>
   );
@@ -1419,10 +1420,6 @@ export default function Review() {
           <p className="v4-h2 text-head max-w-[22em]">
             So yes, agents can write high-quality <Hyper>BAML</Hyper>. By
             design.
-          </p>
-          <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-            There's no bad BAML in the training data to learn from. And we make
-            sure the only BAML that gets checked in is great BAML.
           </p>
         </div>
         <Research />
