@@ -188,11 +188,14 @@ mod stackful {
             self.floor
         }
 
-        /// The words a collection scans conservatively while bodies are
+        /// The words a collection scans conservatively while the fiber is
         /// parked: from `sp`, recorded by the innermost `suspend`, to the
-        /// stack's base. `None` with no body on the fiber.
+        /// stack's base. Not only while a compiled body is on the fiber: a
+        /// fiber parked inside a native that re-entered BAML holds raw
+        /// pointers in Rust locals with no body counted. `None` until a
+        /// first park records an `sp`.
         pub(crate) fn parked_range(&self, sp: usize) -> Option<Range<*const usize>> {
-            (self.bodies != 0 && sp != 0).then(|| (sp as *const usize)..(self.base as *const usize))
+            (sp != 0).then(|| (sp as *const usize)..(self.base as *const usize))
         }
     }
 

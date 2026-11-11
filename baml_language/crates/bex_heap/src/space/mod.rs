@@ -1,8 +1,8 @@
 //! The non-moving mark-sweep space.
 //!
 //! Small objects live in 32 KiB [blocks](block), at 16-byte granules. Each
-//! block starts with a header holding two side tables, an object-start
-//! bitmap and a mark bitmap (one bit per granule), and the state of the
+//! block starts with a header holding three side tables, an object-start
+//! bitmap, a mark bitmap and a pin bitmap (one bit per granule), and the state of the
 //! small-object policy ([`small`]: size classes, one class per block, a free
 //! list per block). Cells above [`LARGE_OBJECT_THRESHOLD`] get an allocation
 //! of their own ([`large`]). Nothing ever moves.
@@ -70,6 +70,49 @@ pub(crate) unsafe fn region_kind(base: usize) -> RegionKind {
 
 pub(crate) mod mark;
 pub(crate) mod sweep;
+
+/// Pin the allocated cell `cell`: a conservative root names it, so it must
+/// not move this collection.
+///
+/// # Safety
+/// `cell` is an allocated cell.
+#[inline]
+pub(crate) unsafe fn pin_cell(cell: usize) {
+    let base = region_base(cell);
+    // SAFETY: forwarded to the caller.
+    match unsafe { region_kind(base) } {
+        // SAFETY: as above.
+        RegionKind::Block => unsafe { block::BlockHeader::at(base) }.pin(base, cell),
+        // SAFETY: as above.
+        RegionKind::Large => unsafe { large::LargeSpace::pin(cell) },
+    }
+}
+
+/// Whether the allocated cell `cell` was pinned by the latest collection.
+///
+/// # Safety
+/// `cell` is an allocated cell.
+#[cfg_attr(not(test), allow(dead_code, reason = "read once the collector moves cells"))]
+pub(crate) unsafe fn is_cell_pinned(cell: usize) -> bool {
+    let base = region_base(cell);
+    // SAFETY: forwarded to the caller.
+    match unsafe { region_kind(base) } {
+        // SAFETY: as above.
+        RegionKind::Block => unsafe { block::BlockHeader::at(base) }.is_pinned(base, cell),
+        // SAFETY: as above.
+        RegionKind::Large => unsafe { large::LargeSpace::is_pinned(cell) },
+    }
+}
+
+/// Forget every pin of the previous collection, in every block and large
+/// cell.
+pub(crate) fn clear_pins(pool: &pool::BlockPool, large: &large::LargeSpace) {
+    for &base in pool.blocks() {
+        // SAFETY: the pool's blocks are initialized.
+        unsafe { block::BlockHeader::at(base) }.clear_pins();
+    }
+    large.clear_pins();
+}
 
 /// The size of the cell `cell`.
 ///

@@ -117,6 +117,7 @@ impl BexHeap {
         // SAFETY: nothing has been marked or swept yet.
         unsafe { self.refresh_finalizable_instances(small.pool(), &large) };
         clear_marks(small.pool(), &large);
+        crate::space::clear_pins(small.pool(), &large);
         small.begin_collection();
         profile.finish_phase(crate::gc_profile::HeapPhase::Prepare);
 

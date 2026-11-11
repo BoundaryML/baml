@@ -17,6 +17,8 @@ use super::{BLOCK_BYTES, GRANULE_BYTES, RegionKind, region_base};
 struct LargePrefix {
     kind: RegionKind,
     marked: AtomicBool,
+    /// A conservative root named the cell during the latest collection.
+    pinned: AtomicBool,
     cell_bytes: usize,
 }
 
@@ -59,6 +61,7 @@ impl LargeSpace {
             (base as *mut LargePrefix).write(LargePrefix {
                 kind: RegionKind::Large,
                 marked: AtomicBool::new(false),
+                pinned: AtomicBool::new(false),
                 cell_bytes,
             });
             ((base + PREFIX_BYTES) as *mut u8).write_bytes(0, cell_bytes);
@@ -74,6 +77,14 @@ impl LargeSpace {
         let &cell = self.cells.range(..=address).next_back()?;
         // SAFETY: every member is a live cell.
         (address < cell + unsafe { Self::cell_bytes(cell) }).then_some(cell)
+    }
+
+    /// The large cell whose bytes end exactly at `address`, if any. Only
+    /// the nearest cell at or below `address` can: allocations never overlap.
+    pub(crate) fn cell_ending_at(&self, address: usize) -> Option<usize> {
+        let &cell = self.cells.range(..address).next_back()?;
+        // SAFETY: every member is a live cell.
+        (address == cell + unsafe { Self::cell_bytes(cell) }).then_some(cell)
     }
 
     pub(crate) fn contains_cell(&self, cell: usize) -> bool {
@@ -110,6 +121,32 @@ impl LargeSpace {
             // SAFETY: every member is a live cell.
             unsafe { prefix(cell) }
                 .marked
+                .store(false, Ordering::Relaxed);
+        }
+    }
+
+    /// Pin `cell`: a conservative root names it.
+    ///
+    /// # Safety
+    /// `cell` is a live large cell.
+    pub(crate) unsafe fn pin(cell: usize) {
+        // SAFETY: forwarded to the caller.
+        unsafe { prefix(cell) }.pinned.store(true, Ordering::Relaxed);
+    }
+
+    /// # Safety
+    /// `cell` is a live large cell.
+    #[cfg_attr(not(test), allow(dead_code, reason = "read once the collector moves cells"))]
+    pub(crate) unsafe fn is_pinned(cell: usize) -> bool {
+        // SAFETY: forwarded to the caller.
+        unsafe { prefix(cell) }.pinned.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn clear_pins(&self) {
+        for &cell in &self.cells {
+            // SAFETY: every member is a live cell.
+            unsafe { prefix(cell) }
+                .pinned
                 .store(false, Ordering::Relaxed);
         }
     }

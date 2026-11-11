@@ -304,6 +304,47 @@ fn a_body_paused_at_a_yield_survives_a_collection() {
 
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 #[test]
+fn a_parked_fiber_with_no_compiled_body_still_reports_its_stack() {
+    use crate::compiled_rt::Step;
+
+    fn body(vm: &mut BexVm, _: &FrameRecord, _: &[Value]) -> BodyResult {
+        vm.suspend(Step::Yield)?;
+        Ok(vm.string_value("done"))
+    }
+    let mut vm = vm_with_main(body, 0, false);
+    assert!(parked_ranges(&mut vm).1.is_empty(), "nothing parked yet");
+    assert!(matches!(vm.exec().unwrap(), VmExecState::EarlyYield));
+    let (sp, ranges) = parked_ranges(&mut vm);
+    assert_eq!(ranges.len(), 1, "the body's park is scanned");
+    assert!(matches!(vm.exec().unwrap(), VmExecState::Complete(_)));
+    // The body is done, so the fiber counts none; it is still parked, and
+    // its stack still holds whatever the last park left there.
+    let (sp_after, ranges) = parked_ranges(&mut vm);
+    assert_eq!(sp_after, sp, "the park's `sp` is kept");
+    assert_eq!(ranges.len(), 1, "an idle parked fiber is scanned too");
+    let fiber = vm.compiled.fiber.as_ref().unwrap();
+    assert_eq!(fiber.parked_range(sp), Some(ranges[0].clone()));
+    assert_eq!(ranges[0].start as usize, sp);
+    assert!(ranges[0].start < ranges[0].end);
+}
+
+/// The parked `sp` and the conservative ranges the VM's roots report.
+#[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
+fn parked_ranges(vm: &mut BexVm) -> (usize, Vec<std::ops::Range<*const usize>>) {
+    let mut roots = Vec::new();
+    let mut ranges = Vec::new();
+    bex_vm_types::RootHaver::visit_roots(
+        &mut vm.compiled,
+        &mut bex_vm_types::CollectRootsAndRanges {
+            roots: &mut roots,
+            ranges: &mut ranges,
+        },
+    );
+    (vm.compiled.parked_sp, ranges)
+}
+
+#[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
+#[test]
 fn a_panicking_compiled_body_clears_fiber_state() {
     fn body(_: &mut BexVm, _: &FrameRecord, _: &[Value]) -> BodyResult {
         panic!("compiled body panic");

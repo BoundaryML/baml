@@ -9,8 +9,8 @@ use bex_vm_types::{HeapPtr, Object};
 use super::{
     BLOCK_BYTES, GRANULE_BYTES, LARGE_OBJECT_THRESHOLD,
     block::{BlockHeader, FIRST_CELL_OFFSET},
-    cell_of,
-    mark::Marker,
+    cell_of, is_cell_pinned,
+    mark::{Marker, Resolved},
     region_base,
     small::{SIZE_CLASSES, cell_size, class_of},
 };
@@ -91,7 +91,7 @@ fn string_at(ptr: HeapPtr) -> String {
 }
 
 /// Resolve `address` as a conservative root would.
-fn resolve(heap: &BexHeap, address: usize) -> Option<usize> {
+fn resolve(heap: &BexHeap, address: usize) -> Resolved {
     let small = heap.small.lock();
     let large = heap.large.lock();
     Marker::new(
@@ -141,15 +141,18 @@ fn conservative_lookup_resolves_interior_pointers_and_ignores_the_rest() {
     ] {
         for offset in [0, 1, HEADER_BYTES, bytes / 2, bytes - 1] {
             assert_eq!(
-                resolve(&f.heap, cell + offset),
+                resolve(&f.heap, cell + offset).containing,
                 Some(cell),
                 "{offset} bytes into a {bytes}-byte cell"
             );
         }
-        assert_ne!(
-            resolve(&f.heap, cell + bytes),
-            Some(cell),
-            "one past the end"
+        let past = resolve(&f.heap, cell + bytes);
+        assert_ne!(past.containing, Some(cell), "one past the end");
+        assert_eq!(past.ending, Some(cell), "one past the end names the cell");
+        assert_eq!(
+            resolve(&f.heap, cell + bytes - 8).ending,
+            None,
+            "a word inside the cell ends no cell"
         );
     }
 
@@ -168,7 +171,56 @@ fn conservative_lookup_resolves_interior_pointers_and_ignores_the_rest() {
         usize::MAX,
     ];
     for address in outside {
-        assert_eq!(resolve(&f.heap, address), None, "{address:#x}");
+        assert_eq!(resolve(&f.heap, address), Resolved::default(), "{address:#x}");
+    }
+}
+
+#[test]
+fn a_word_at_a_cells_end_keeps_and_pins_it() {
+    let f = fixture();
+    let mut tlab = Tlab::new(Arc::clone(&f.heap));
+    let large = tlab.alloc_zeroed(f.backing, LARGE_BACKING_BYTES).as_ptr() as usize;
+    let kept = tlab.alloc_string("ends here");
+    let small = cell_of_ptr(kept);
+    // Nothing is allocated after `small`, so its end is in no other cell.
+    let stack: [usize; 2] = [small + OBJECT_CELL_BYTES, large + LARGE_BACKING_BYTES];
+    let range: Range<*const usize> = stack.as_ptr_range();
+    // SAFETY: no mutator runs; the range is readable for the collection.
+    let (stats, _) = unsafe { f.heap.collect(&mut ConservativeRanges(&[range])) };
+    assert_eq!(stats.live_count, 2, "both cells, by their end addresses");
+    assert_eq!(stats.collected_count, 0);
+    assert_eq!(string_at(kept), "ends here");
+    // SAFETY: both survived.
+    unsafe {
+        assert!(is_cell_pinned(small));
+        assert!(is_cell_pinned(large));
+    }
+}
+
+#[test]
+fn pins_are_cleared_at_the_next_collection() {
+    let f = fixture();
+    let mut tlab = Tlab::new(Arc::clone(&f.heap));
+    let kept = tlab.alloc_string("kept");
+    let large = tlab.alloc_zeroed(f.backing, LARGE_BACKING_BYTES).as_ptr() as usize;
+    let stack: [usize; 2] = [kept.as_ptr() as usize + 8, large + 64];
+    let range: Range<*const usize> = stack.as_ptr_range();
+    // SAFETY: no mutator runs; the range is readable for the collection.
+    let (stats, _) = unsafe { f.heap.collect(&mut ConservativeRanges(&[range])) };
+    assert_eq!(stats.live_count, 2);
+    // SAFETY: both survived.
+    unsafe {
+        assert!(is_cell_pinned(cell_of_ptr(kept)));
+        assert!(is_cell_pinned(large));
+    }
+
+    // SAFETY: no mutator runs; precise roots only.
+    let (stats, _, _) = unsafe { f.heap.collect_garbage(&[kept, heap_ptr_at(large)]) };
+    assert_eq!(stats.live_count, 2);
+    // SAFETY: both survived again.
+    unsafe {
+        assert!(!is_cell_pinned(cell_of_ptr(kept)), "no conservative root this time");
+        assert!(!is_cell_pinned(large));
     }
 }
 
@@ -191,6 +243,8 @@ fn a_conservative_root_keeps_its_object_and_only_its_object() {
     assert_eq!(stats.live_count, 1);
     assert_eq!(stats.collected_count, 1);
     assert_eq!(string_at(kept), "kept");
+    // SAFETY: `kept` survived.
+    assert!(unsafe { is_cell_pinned(cell_of_ptr(kept)) }, "an interior word pins");
 }
 
 #[test]

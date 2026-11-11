@@ -6,8 +6,8 @@ use std::ops::Range;
 use bex_vm_types::HeapPtr;
 
 use super::{
-    RegionKind, block::BlockHeader, cell_bytes, cell_of, large::LargeSpace, pool::BlockPool,
-    region_base, region_kind, small::SmallSpace,
+    RegionKind, block::BlockHeader, cell_bytes, cell_of, large::LargeSpace, pin_cell,
+    pool::BlockPool, region_base, region_kind, small::SmallSpace,
 };
 use crate::descriptor::{DescriptorTable, Header, RUST_PAYLOAD_OFFSET, Trace, trace_slots};
 
@@ -16,6 +16,23 @@ use crate::descriptor::{DescriptorTable, Header, RUST_PAYLOAD_OFFSET, Trace, tra
 pub(crate) struct Live {
     pub(crate) cells: usize,
     pub(crate) bytes: usize,
+}
+
+/// What a conservative word resolves to; see
+/// [`Marker::resolve_conservative`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Resolved {
+    /// The cell whose bytes contain the word.
+    pub(crate) containing: Option<usize>,
+    /// The cell whose bytes end exactly at the word.
+    pub(crate) ending: Option<usize>,
+}
+
+impl Resolved {
+    /// The resolved cells, containing first.
+    pub(crate) fn cells(self) -> impl Iterator<Item = usize> {
+        [self.containing, self.ending].into_iter().flatten()
+    }
 }
 
 pub(crate) struct Marker<'a> {
@@ -64,18 +81,29 @@ impl<'a> Marker<'a> {
         self.compile_time.contains(&(ptr.as_ptr() as usize))
     }
 
-    /// The cell whose bytes contain `word`, if `word` points into an
-    /// allocated cell at all.
-    pub(crate) fn resolve_conservative(&self, word: usize) -> Option<usize> {
+    /// The cells a conservative `word` may name: the one whose bytes
+    /// contain it, and the one ending exactly at it (a one-past-the-end
+    /// pointer, as an iterator or slice end holds). Both are kept.
+    pub(crate) fn resolve_conservative(&self, word: usize) -> Resolved {
         let Some(base) = self.pool.block_containing(word) else {
-            return self.large.cell_containing(word);
+            return Resolved {
+                containing: self.large.cell_containing(word),
+                ending: self.large.cell_ending_at(word),
+            };
         };
         // SAFETY: the pool initialized every block it holds, and every set
         // start bit names a cell with a written header.
-        unsafe { BlockHeader::at(base).cell_containing(base, word) }
+        let header = unsafe { BlockHeader::at(base) };
+        Resolved {
+            // SAFETY: as above.
+            containing: unsafe { header.cell_containing(base, word) },
+            // SAFETY: as above.
+            ending: unsafe { header.cell_ending_at(base, word) },
+        }
     }
 
-    /// Queue every cell a word of `range` points into.
+    /// Queue, and pin, every cell a word of `range` points into or just
+    /// past.
     ///
     /// # Safety
     /// `range` is word-aligned and readable, and nothing writes it meanwhile.
@@ -84,7 +112,9 @@ impl<'a> Marker<'a> {
         while word < range.end {
             // SAFETY: the caller guarantees the range is readable.
             let value = unsafe { word.read() };
-            if let Some(cell) = self.resolve_conservative(value) {
+            for cell in self.resolve_conservative(value).cells() {
+                // SAFETY: resolved from a set start bit, so allocated.
+                unsafe { pin_cell(cell) };
                 self.push(crate::object_trace::heap_ptr_at(cell));
             }
             // SAFETY: stays within, or one past, the range.
