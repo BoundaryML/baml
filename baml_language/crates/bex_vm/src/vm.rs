@@ -215,6 +215,7 @@ impl Drop for ListEdit<'_> {
     }
 }
 
+mod field_cache;
 pub(crate) mod frame_stack;
 mod map_access;
 use frame_stack::ThreadStackBudget;
@@ -559,6 +560,7 @@ pub(crate) mod tests {
             heap: Arc::clone(&heap),
             early_yield: early_yield_for_test(),
             float_boxes: std::sync::Mutex::new(Tlab::new_empty(Arc::clone(&heap))),
+            field_slots: super::field_cache::FieldSlotCache::new(),
             tlab: Tlab::new(heap),
             globals: VmGlobals::Owned(GlobalPool::new()),
             pending_globals: None,
@@ -1607,6 +1609,9 @@ pub struct BexVm {
     /// [`Self::box_slot`]): a second allocator of this VM's, locked because a
     /// shared borrow cannot reach `tlab`.
     float_boxes: std::sync::Mutex<Tlab>,
+    /// Resolved field slots for `LoadField`/`StoreField` (see
+    /// [`field_cache`]).
+    field_slots: field_cache::FieldSlotCache,
 
     /// Global variables.
     ///
@@ -2439,6 +2444,7 @@ impl BexVm {
             heap,
             early_yield,
             float_boxes,
+            field_slots: field_cache::FieldSlotCache::new(),
             tlab,
             globals,
             pending_globals: None,
@@ -7978,10 +7984,29 @@ impl BexVm {
         access: Access,
     ) -> Result<Value, VmError> {
         let instance = self.instance_operand(value)?;
-        match instance.try_load_with(idx, access) {
-            Some(slot) => Ok(self.slot_value(slot)),
-            None => Err(self.invalid_field_access_error(idx, instance.field_len())),
+        let slot = self.field_slot(instance, idx)?;
+        // SAFETY: `field_slot` resolved the slot for this instance's layout.
+        let loaded = unsafe { instance.load_slot(slot, access) };
+        Ok(self.slot_value(loaded))
+    }
+
+    /// The slot of field `idx` of `instance`, from the cache when it holds
+    /// it; an index past the last field throws `InvalidFieldAccess`.
+    #[inline]
+    fn field_slot(
+        &mut self,
+        instance: InstanceRef,
+        idx: usize,
+    ) -> Result<bex_vm_types::types::FieldSlot, VmError> {
+        let descriptor = instance.descriptor();
+        if let Some(slot) = self.field_slots.get(descriptor, idx) {
+            return Ok(slot);
         }
+        let Some(slot) = instance.field_slot(idx) else {
+            return Err(self.invalid_field_access_error(idx, instance.field_len()));
+        };
+        self.field_slots.insert(descriptor, idx, slot);
+        Ok(slot)
     }
 
     /// `StoreField`: store `new_value` to field `idx` of the instance `value`.
@@ -7994,10 +8019,12 @@ impl BexVm {
         access: Access,
     ) -> Result<(), VmError> {
         let instance = self.instance_operand(value)?;
-        if idx >= instance.field_len() {
-            return Err(self.invalid_field_access_error(idx, instance.field_len()));
+        let slot = self.field_slot(instance, idx)?;
+        // SAFETY: `field_slot` resolved the slot for this instance's layout.
+        if unsafe { instance.store_slot(slot, new_value, access) }.is_err() {
+            // The value does not fit the field: report it as `store_with` does.
+            instance.store_with(idx, new_value, access);
         }
-        instance.store_with(idx, new_value, access);
         Ok(())
     }
 
@@ -12153,6 +12180,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             // Its cached cursor is layout, not a pointer; see `relocated`.
             tlab: _,
             float_boxes: _,
+            field_slots: _,
             globals,
             pending_globals: _,
             // The shared tables name compile-time objects only (the static

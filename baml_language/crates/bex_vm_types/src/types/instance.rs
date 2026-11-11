@@ -326,6 +326,46 @@ impl InstanceRef {
         self.layout().fields.get(idx).copied()
     }
 
+    /// The slot of field `idx`, or `None` past the last field. It depends
+    /// only on [`Self::descriptor`]: instance descriptors are interned per
+    /// layout, so a cache keyed by descriptor and index may keep it.
+    #[inline]
+    pub fn field_slot(self, idx: usize) -> Option<FieldSlot> {
+        self.slot(idx)
+    }
+
+    /// The instance's descriptor, which names its layout.
+    #[inline]
+    pub fn descriptor(self) -> DescriptorId {
+        self.header().descriptor
+    }
+
+    /// Read the field at `slot`.
+    ///
+    /// # Safety
+    /// `slot` is a field slot of this instance's layout: one
+    /// [`Self::field_slot`] gave for an instance with the same descriptor.
+    #[inline]
+    pub unsafe fn load_slot(self, slot: FieldSlot, access: Access) -> SlotValue {
+        // SAFETY: forwarded to the caller.
+        unsafe { read_slot(self.addr(slot.offset), slot.kind, access) }
+    }
+
+    /// Store `value` to the field at `slot`.
+    ///
+    /// # Safety
+    /// As for [`Self::load_slot`].
+    #[inline]
+    pub unsafe fn store_slot(
+        self,
+        slot: FieldSlot,
+        value: Value,
+        access: Access,
+    ) -> Result<(), SlotMismatch> {
+        // SAFETY: forwarded to the caller.
+        unsafe { write_slot(self.addr(slot.offset), slot.kind, value, access) }
+    }
+
     /// Read field `idx` with `access`, or `None` past the last field.
     #[inline]
     pub fn try_load_with(self, idx: usize, access: Access) -> Option<SlotValue> {
