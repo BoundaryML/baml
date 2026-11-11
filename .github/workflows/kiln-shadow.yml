@@ -25,33 +25,33 @@ jobs:
     continue-on-error: true
     outputs:
       # Flag that is raised when any code in baml_language is changed
-      code: 'true'
+      code: ${{ steps.check_code.outputs.changed }}
       # Flag for lexer changes
-      lexer: 'true'
+      lexer: ${{ steps.check_lexer.outputs.changed }}
       # Flag for parser changes
-      parser: 'true'
+      parser: ${{ steps.check_parser.outputs.changed }}
       # Flag for HIR changes
-      hir: 'true'
+      hir: ${{ steps.check_hir.outputs.changed }}
       # Flag for THIR changes
-      thir: 'true'
+      thir: ${{ steps.check_thir.outputs.changed }}
       # Flag for codegen changes
-      codegen: 'true'
+      codegen: ${{ steps.check_codegen.outputs.changed }}
       # Docs example changes need the CLI, but not the full platform/SDK matrix.
-      documentation_snippets: 'true'
+      documentation_snippets: ${{ steps.check_documentation_snippets.outputs.changed }}
       # Flag for docs/frontend changes
-      docs: 'true'
+      docs: ${{ steps.check_docs.outputs.changed }}
       # Flag for typescript2/webview changes
-      webview: 'true'
+      webview: ${{ steps.check_webview.outputs.changed }}
       # Flag for typescript2 grammar changes
-      grammar: 'true'
+      grammar: ${{ steps.check_grammar.outputs.changed }}
       # Flag for unsafe code changes (bex_heap) - triggers Miri tests
-      unsafe: 'true'
+      unsafe: ${{ steps.check_unsafe.outputs.changed }}
       # Flag for proto codegen changes - triggers generated file sync check
-      proto: 'true'
+      proto: ${{ steps.check_proto.outputs.changed }}
       # Flag for inputs that can change the shipping bridge_cffi binaries
-      bridge_cffi_release: 'true'
+      bridge_cffi_release: ${{ steps.check_bridge_cffi_release.outputs.changed }}
       # Flag for SDK test changes - triggers the SDK parity analysis pipeline
-      sdk_tests: 'true'
+      sdk_tests: ${{ steps.check_sdk_tests.outputs.changed }}
       # Flag that is raised when perf benchmarks (CodSpeed) should run: always
       # after merge (push to main/canary) and on manual dispatch; on PRs only
       # when the PR title/body or a commit message opts in.
