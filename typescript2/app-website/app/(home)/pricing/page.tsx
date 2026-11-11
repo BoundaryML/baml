@@ -183,7 +183,15 @@ function HowBilling() {
         We never want our pricing to stop us from doing the right thing. So
         every way we make your data smaller makes your bill smaller too.
       </p>
-      <div className="mt-8">
+      {/* The examples are framed as examples: the point is the effort, not these two tricks. */}
+      <div className="mt-8 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+        <p className="text-[15px] font-medium text-head">
+          A lot of our engineering goes into shrinking what you send over the
+          wire.
+        </p>
+        <p className="text-[13px] text-muted">Two examples of many</p>
+      </div>
+      <div className="mt-4">
         <Meter />
       </div>
       <div className="mt-4">

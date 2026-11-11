@@ -47,6 +47,8 @@ Billed: function inputs and outputs, logs, network requests and responses, proce
 
 Never billed: spans and their timings, profiles, function names, source and types, a value your programs record again, retried uploads, uploads that never arrive.
 
+A lot of our engineering goes into shrinking what you send over the wire. Two examples of many:
+
 - Repeated values: every value is stored under a hash of its content, so a value sent again is already stored and isn't billed again.
 - Field names: a class's schema is stored once and never billed; each value points at it with short IDs, so a field's name never reaches the bill.
 
