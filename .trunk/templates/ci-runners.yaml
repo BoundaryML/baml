@@ -433,28 +433,6 @@ steps:
         }
         best_effort "build the musl test binaries (cargo-test-linux-musl)" bake_musl
 
-        # measure-baml-size (linux) is the slowest job of the run (12.7 min on `medium`).
-        # cargo-size-gate runs exactly these two commands (crates/tools_size_gate/src/measure.rs);
-        # they are two commands because the second one's feature set is the union of two packages.
-        # The job sets no opt-level overrides; they do not reach the release profile, but the
-        # size-gate tool itself builds on the dev profile, so drop them for this step.
-        bake_size_gate_linux() {
-                cd baml_language
-                unset CARGO_PROFILE_DEV_OPT_LEVEL CARGO_PROFILE_TEST_OPT_LEVEL
-                cargo build -p cargo-size-gate
-                build_without_lto size-gate-cli --release -p baml_cli --bin baml-cli
-                build_without_lto size-gate-pack --release -p baml_cli --bin baml-cli -p baml_pack_host --bin baml-pack-host
-        }
-        best_effort "build the size-gate release dependencies (measure-baml-size linux)" bake_size_gate_linux
-
-        # measure-baml-size (wasm): the size gate's cdylib command for bridge_wasm.
-        bake_size_gate_wasm() {
-                cd baml_language
-                unset CARGO_PROFILE_DEV_OPT_LEVEL CARGO_PROFILE_TEST_OPT_LEVEL
-                build_without_lto size-gate-wasm --release -p bridge_wasm --target wasm32-unknown-unknown --no-default-features
-        }
-        best_effort "build the size-gate wasm dependencies (measure-baml-size wasm)" bake_size_gate_wasm
-
         # cargo test (wasm32-unknown-unknown): one command over every wasm_support package, as the
         # job runs it. The job keeps the opt-level env, but it does not reach the release profile.
         bake_wasm32_release() {
@@ -482,23 +460,6 @@ steps:
                 mise exec node -- wasm-pack test --node
         }
         best_effort "build and run the wasm-pack tests (wasm-pack-test)" bake_wasm_pack_test
-
-        # cargo build (msrv): the job reads workspace.package.rust-version, then runs
-        # `cargo +MSRV test --no-run --all-features` on the whole workspace, with the opt-level
-        # env. It also runs `rustup default MSRV`; the bake does not, because the steps after
-        # this one need the pinned toolchain as the default. This step adds a second full debug
-        # tree (another rustc gives every unit a new hash): on the 160 GiB default disk it filled
-        # the disk in all 8 bakes of 2026-11-03 and 2026-11-04, so it needs the 400 GiB disk.
-        bake_msrv() {
-                cd baml_language
-                local msrv
-                msrv="$(sed -n '/^\[workspace\.package\]/,/^\[/{s/^rust-version *= *"\([^"]*\)".*/\1/p}' Cargo.toml | head -n1)"
-                [ -n "${msrv}" ]
-                echo "MSRV=${msrv}"
-                rustup toolchain install "${msrv}"
-                cargo "+${msrv}" test --no-run --all-features
-        }
-        best_effort "build the MSRV test binaries (cargo-build-msrv)" bake_msrv
 
         # The sdk legs. Each job runs `cargo test --no-run -p sdk_test_<sdk> --all-features`, then
         # runs the leg's setup.sh as a nextest setup script. The bake runs both, as they are, so the
