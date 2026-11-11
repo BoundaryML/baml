@@ -8003,6 +8003,18 @@ impl BexVm {
         Ok(())
     }
 
+    /// After a spread literal stores field `stored`: the emitter stores the
+    /// fields in index order and covers every one, so storing the last field
+    /// completes the construction `AllocInstance` began, and the instance is
+    /// registered for finalization only now.
+    fn seal_if_constructed(&mut self, value: Value, stored: usize) -> Result<(), VmError> {
+        let instance = self.instance_operand(value)?;
+        if stored + 1 == instance.field_len() {
+            self.tlab.seal_instance(instance);
+        }
+        Ok(())
+    }
+
     fn init_spread(
         &mut self,
         dest_value: Value,
@@ -9805,6 +9817,7 @@ impl BexVm {
                         let new_value = self.stack.ensure_pop();
                         let instance_value = self.stack.ensure_pop();
                         self.store_field_op(instance_value, idx, new_value, Access::Shared)?;
+                        self.seal_if_constructed(instance_value, idx)?;
                         self.push_stack(instance_value)?;
                     }
 
@@ -9813,11 +9826,11 @@ impl BexVm {
                         let source_value = self.stack.ensure_pop();
                         let dest_slot = self.stack.ensure_slot_from_top(0);
                         let dest_value = self.stack[dest_slot];
-                        self.init_spread(
-                            dest_value,
-                            source_value,
-                            &function.bytecode.field_copy_sets[idx],
-                        )?;
+                        let copies = &function.bytecode.field_copy_sets[idx];
+                        self.init_spread(dest_value, source_value, copies)?;
+                        if let Some(last) = copies.fields.iter().map(|copy| copy.dest).max() {
+                            self.seal_if_constructed(dest_value, last)?;
+                        }
                     }
 
                     // ── Pop / Copy ────────────────────────────────────────────────
@@ -9907,7 +9920,14 @@ impl BexVm {
                             }
                             .into());
                         }
-                        let instance = self.tlab.alloc_instance_cell(class_ptr, class_type_args);
+                        // Sealed by the store of its last field (see
+                        // `seal_if_constructed`), or now if it has none.
+                        let instance = self
+                            .tlab
+                            .alloc_unsealed_instance_cell(class_ptr, class_type_args);
+                        if instance.field_len() == 0 {
+                            self.tlab.seal_instance(instance);
+                        }
                         self.push_stack(Value::object(instance.ptr()))?;
                     }
 

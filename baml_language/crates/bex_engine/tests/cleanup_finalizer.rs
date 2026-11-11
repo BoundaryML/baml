@@ -216,3 +216,61 @@ async fn cleanup_runs_once_for_an_instance_that_survived_collections() {
         .unwrap();
     assert_eq!(expect_strings(&after), vec!["cleaned"]);
 }
+
+// A spread literal allocates its instance (`AllocInstance`) and then stores
+// the fields one at a time; an initialiser between those stores can throw
+// (`xs[5]` here), dropping the half-built instance. Its `int`, `float` and
+// `bool` slots were never written: before the fix the collector finalized it
+// anyway, and `cleanup` read them as `0`/`0.0`/`false` (the enum VM read
+// `null`). The instance is registered for finalization only once its last
+// field is stored, so `cleanup` never sees it.
+const HALF_BUILT_SOURCE: &str = r#"
+class Spread {
+  log string[]
+  n int
+  x float
+  b bool
+  function cleanup(self) -> void {
+    self.log.push(`n=${self.n} x=${self.x} b=${self.b}`);
+  }
+}
+function make_log() -> string[] { [] }
+function build(log: string[]) -> int {
+  let xs: int[] = [];
+  let base = Spread { log: log, n: 1, x: 1.5, b: true };
+  base.cleanup();
+  let built = Spread { ...base, n: xs[5], x: 2.5, b: true };
+  built.n
+}
+function read_log(log: string[]) -> string[] { log }
+"#;
+
+#[tokio::test]
+async fn cleanup_never_sees_a_half_built_instance() {
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(HALF_BUILT_SOURCE),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+    let log = engine
+        .call_function("make_log", vec![], ctx(), false)
+        .await
+        .unwrap();
+    let built = engine
+        .call_function("build", vec![log.clone()], ctx(), false)
+        .await;
+    assert!(built.is_err(), "the spread initialiser throws: {built:?}");
+
+    engine.collect_garbage().await;
+    engine.collect_garbage().await;
+    let after = engine
+        .call_function("read_log", vec![log], ctx(), true)
+        .await
+        .unwrap();
+    // Only `base`'s explicit cleanup; the collector skips `base` (already
+    // cleaned) and never registered the half-built instance.
+    assert_eq!(expect_strings(&after), vec!["n=1 x=1.5 b=true"]);
+}

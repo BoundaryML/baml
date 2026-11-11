@@ -354,8 +354,25 @@ impl Tlab {
     }
 
     /// Allocate an instance of `class` whose fields are all null (zero), for
-    /// the caller to store before it publishes the instance.
+    /// the caller to store before it publishes the instance. The caller runs
+    /// no user code before every field is stored, so the instance is
+    /// registered for finalization at once.
     pub fn alloc_instance_cell(
+        &mut self,
+        class: HeapPtr,
+        type_args: Box<[RealizedTy]>,
+    ) -> InstanceRef {
+        let instance = self.alloc_unsealed_instance_cell(class, type_args);
+        self.seal_instance(instance);
+        instance
+    }
+
+    /// [`Self::alloc_instance_cell`] for a construction that runs user code
+    /// between field stores (a spread literal's `AllocInstance` and
+    /// `InitField`/`InitSpread`), so it can throw with fields unset. The
+    /// instance is not registered for finalization until
+    /// [`Self::seal_instance`]: a `cleanup` never sees a half-built instance.
+    pub fn alloc_unsealed_instance_cell(
         &mut self,
         class: HeapPtr,
         type_args: Box<[RealizedTy]>,
@@ -373,13 +390,15 @@ impl Tlab {
         let ptr = self.payload_ptr(cell);
         // SAFETY: a fresh cell of the class's layout; the type object exists
         // exactly when the layout has type arguments.
-        let instance = unsafe { InstanceRef::init(ptr, class, type_object) };
-        // BEP-042: an instance of a class with a finalizer joins the
-        // collector's finalizable list.
+        unsafe { InstanceRef::init(ptr, class, type_object) }
+    }
+
+    /// An instance's construction is complete: BEP-042, an instance of a
+    /// class with a finalizer joins the collector's finalizable list.
+    pub fn seal_instance(&self, instance: InstanceRef) {
         if BexHeap::needs_finalizer_registration(instance) {
-            self.heap.register_finalizable(ptr);
+            self.heap.register_finalizable(instance.ptr());
         }
-        instance
     }
 
     /// The type object a generic instance points to: its class applied to
