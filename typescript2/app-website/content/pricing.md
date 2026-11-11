@@ -23,6 +23,7 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | Included | 1 GB a month, kept 30 days | 5 GB a month, kept 30 days |
 | Ingestion past that | $4 per GB | $3 per GB |
 | Retention past 30 days | No | $0.10 per GB per 30 days |
+| Usage caps | Coming soon | Coming soon |
 | **Team and security** | | |
 | Sign in with Google | Included | Included |
 | SAML and OIDC single sign-on | No | Coming soon |
@@ -31,7 +32,6 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | **Deployment** | | |
 | Hosted by Boundary | Included | Included |
 | Bring your own cloud | No | Add-on |
-| Usage caps | Coming soon | Coming soon |
 
 Free on both plans: unlimited spans, profiles, dashboards, members, projects and environments, and SQL queries with `baml query`.
 

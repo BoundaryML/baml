@@ -58,6 +58,11 @@ const BLOCKS: { free: string[]; note: string; rows: Row[]; title: string }[] = [
         extra: true,
         label: 'Retention',
       },
+      {
+        cells: SAME(['Coming soon']),
+        extra: true,
+        label: 'Usage caps',
+      },
     ],
     title: 'Data',
   },
@@ -93,11 +98,6 @@ const BLOCKS: { free: string[]; note: string; rows: Row[]; title: string }[] = [
         cells: [['—'], ['Add-on']],
         extra: true,
         label: 'Bring your own cloud',
-      },
-      {
-        cells: SAME(['Coming soon']),
-        extra: true,
-        label: 'Usage caps',
       },
     ],
     title: 'Deployment',
