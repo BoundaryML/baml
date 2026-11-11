@@ -1423,21 +1423,19 @@ fn emit_immut_receiver_extraction_indented(
 ) {
     match recv.builtin_name() {
         // A read array receiver is passed as an `ArrayView` carrying its element
-        // type alongside the data. The data is owned (`to_vec`) when the glue
-        // later needs `&mut vm` (may_yield / mut_vm), else a cheap read guard;
-        // both deref to `&[Value]` so slice-only builtins are unchanged.
+        // type alongside the data, an owned snapshot (`as_array`) that derefs
+        // to `&[Value]`, so slice-only builtins are unchanged.
         "Array" => {
             writeln!(
                 out,
                 "{indent}let __{name}_ty = vm.array_element_ty(&args[{idx}]);"
             )
             .unwrap();
-            let data_expr = if arraymap_needs_owned {
-                format!("vm.as_array(&args[{idx}])?.to_vec()")
-            } else {
-                format!("vm.as_array(&args[{idx}])?")
-            };
-            writeln!(out, "{indent}let __{name}_data = {data_expr};").unwrap();
+            writeln!(
+                out,
+                "{indent}let __{name}_data = vm.as_array(&args[{idx}])?;"
+            )
+            .unwrap();
             writeln!(
                 out,
                 "{indent}let {name} = ArrayView {{ ty: &__{name}_ty, data: &__{name}_data }};"
@@ -1600,17 +1598,10 @@ fn receiver_immut_extraction_expr(
     arraymap_needs_owned: bool,
 ) -> String {
     match recv.builtin_name() {
-        // Clone for container read receivers when the glue function would
-        // later need `&mut vm` after extraction (per `arraymap_needs_owned`).
-        // Otherwise `vm.as_array(...)?` returns a guard whose lock is
-        // released on drop — the cheap path.
-        "Array" => {
-            if arraymap_needs_owned {
-                format!("vm.as_array({val})?.to_vec()")
-            } else {
-                format!("vm.as_array({val})?")
-            }
-        }
+        // `vm.as_array(...)?` is an owned snapshot, so it outlives any later
+        // `&mut vm` use. Maps clone when the glue later needs `&mut vm` (per
+        // `arraymap_needs_owned`).
+        "Array" => format!("vm.as_array({val})?"),
         "Map" => {
             if arraymap_needs_owned {
                 format!("(*vm.as_map({val})?).clone()")
@@ -1726,13 +1717,8 @@ fn extraction_expr(
         BamlType::List(_) => {
             if is_mut {
                 format!("vm.as_array_mut({val})?")
-            } else if arraymap_needs_owned {
-                // `as_array` returns an owned snapshot; the extra copy keeps
-                // the shape the map arm below needs.
-                format!("vm.as_array({val})?.to_vec()")
             } else {
-                // No `&mut vm` access after extraction — keep the guard
-                // alive (cheap fetch_add/fetch_sub pair, no allocation).
+                // An owned snapshot, whatever the glue does with `vm` later.
                 format!("vm.as_array({val})?")
             }
         }
