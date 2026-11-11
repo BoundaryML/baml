@@ -1,35 +1,98 @@
 // CONTENT PARITY: keep substantive copy in sync with content/pricing.md.
+import { Check } from 'lucide-react';
 import { section } from '@/components/home/analytics';
 import { BOOK } from '@/components/home/links';
 import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
-import { Button, LINKS } from '@/components/home/ui';
+import { Button } from '@/components/home/ui';
 import { SoftwareApplicationStructuredData } from '@/components/structured-data';
 
-// The pricing page, in the homepage's BAML lane. The nav links it. The plans and their numbers are
-// Boundary Cloud's billing catalog (BCS: config/bcs.toml and control-plane/README.md); change them
-// here when that catalog changes.
+// The pricing page, in the homepage's BAML lane. The nav links it. Every number and claim is from
+// Boundary Cloud's code (BCS, origin/main): the plans and rates in config/bcs.toml and
+// control-plane/README.md, what's metered in control-plane/src/projector/billing.rs. Enterprise is a
+// sales plan with no catalog entry; its one line beyond Pro, bring your own cloud, is BCS's BYOC
+// placement (docs/design/production-architecture.md). Change this page when those change.
 
-const PLANS: {
-  data: string;
-  included: string;
+type Plan = {
+  data?: [included: string, after: string];
+  features: string[];
+  lit?: boolean;
   name: string;
   price: string;
-}[] = [
+  unit: string;
+};
+
+const PLANS: Plan[] = [
   {
-    data: '$4 per GB after that',
-    included: '1 GB of data a month',
-    name: 'Starter',
-    price: '$0',
+    features: ['The language and toolchain', 'Runs on your machine'],
+    name: 'BAML',
+    price: 'Free',
+    unit: 'open source',
   },
   {
-    data: '$3 per GB after that',
-    included: '5 GB of data a month',
+    data: ['1 GB of data a month', '$4 per GB after'],
+    features: ['Unlimited spans', 'Every Cloud feature'],
+    name: 'Starter',
+    price: '$0',
+    unit: 'per month',
+  },
+  {
+    data: ['5 GB of data a month', '$3 per GB after'],
+    features: ['Unlimited spans', 'Every Cloud feature'],
     name: 'Pro',
     price: '$250',
+    unit: 'per month',
+  },
+  {
+    features: [
+      'Everything in Pro',
+      'Bring your own cloud',
+      'Your data stays in your account',
+    ],
+    lit: true,
+    name: 'Enterprise',
+    price: 'Custom',
+    unit: 'talk to us',
   },
 ];
 
-/** The pricing page: BAML itself is free, and Boundary Cloud has two plans. */
+// No charge for any of these on any Boundary Cloud plan: only data is metered.
+const INCLUDED = [
+  'Unlimited spans',
+  'Profiles',
+  'SQL queries and baml query',
+  'Dashboards',
+  'Unlimited members',
+  'Unlimited projects and environments',
+  'API keys',
+];
+
+// How the meter works, one fact a line.
+const BILLING: [string, string][] = [
+  [
+    'What counts',
+    'The values your programs record: inputs, outputs, logs and network payloads.',
+  ],
+  ['What doesn’t', 'Spans, profiles, queries and seats.'],
+  ['Retries', 'An upload that’s retried is counted once.'],
+  ['Going over', 'Never blocks ingest or queries.'],
+  ['Upgrading', 'Takes effect right away, prorated to your billing date.'],
+  ['Canceling', 'Ends at the close of your billing month.'],
+];
+
+function Tick({ children }: { children: string }) {
+  return (
+    <li className="flex items-start gap-2">
+      <Check
+        aria-hidden="true"
+        className="mt-[3px] size-4 shrink-0 text-clover"
+        strokeWidth={2.25}
+      />
+      {children}
+    </li>
+  );
+}
+
+/** The pricing page: BAML is free, and Boundary Cloud has Starter, Pro and Enterprise. */
 export default function PricingPage() {
   return (
     <PageShell>
@@ -40,54 +103,65 @@ export default function PricingPage() {
       >
         <h1 className="v4-h1 max-w-[12em]">Pricing</h1>
 
-        <div className="mt-12 md:mt-16 grid gap-4 md:grid-cols-3">
-          <div className="flex flex-col rounded-xl border border-rule bg-raised p-6">
-            <p className="font-display text-[20px] font-medium text-head">
-              BAML
-            </p>
-            <p className="mt-4 font-display text-[40px] leading-none font-medium text-head">
-              Free
-            </p>
-            <p className="mt-1 text-[14px] text-muted">open source</p>
-            <ul className="mt-6 space-y-2 text-[15px] text-ink-2">
-              <li>The language and the whole toolchain</li>
-              <li>Runs on your machine, never calls our servers</li>
-            </ul>
-            <div className="mt-auto pt-8">
-              <Button href={LINKS.quickstart} variant="secondary">
-                Install BAML
-              </Button>
-            </div>
-          </div>
-
+        <div className="mt-12 md:mt-16 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {PLANS.map((p) => (
             <div
-              className="flex flex-col rounded-xl border border-rule bg-raised p-6"
+              className={`flex flex-col rounded-xl border p-6 ${p.lit ? 'border-clover/60 bg-clover/[0.07]' : 'border-rule bg-raised'}`}
               key={p.name}
             >
-              <p className="font-display text-[20px] font-medium text-head">
-                Boundary Cloud <span className="text-clover">{p.name}</span>
+              <p className="flex items-center justify-between gap-3 font-display text-[20px] font-medium text-head">
+                {p.name}
+                {p.lit && (
+                  <span className="rounded-full bg-clover px-2.5 py-0.5 text-[12px] font-medium text-black">
+                    Recommended
+                  </span>
+                )}
               </p>
               <p className="mt-4 font-display text-[40px] leading-none font-medium text-head tabular-nums">
                 {p.price}
               </p>
-              <p className="mt-1 text-[14px] text-muted">per month</p>
+              <p className="mt-1 text-[14px] text-muted">{p.unit}</p>
               <ul className="mt-6 space-y-2 text-[15px] text-ink-2">
-                <li>Unlimited spans</li>
-                <li>{p.included}</li>
-                <li>{p.data}</li>
+                {p.data?.map((d) => (
+                  <Tick key={d}>{d}</Tick>
+                ))}
+                {p.features.map((f) => (
+                  <Tick key={f}>{f}</Tick>
+                ))}
               </ul>
               <div className="mt-auto pt-8">
-                <Button href={BOOK}>Get early access</Button>
+                <Button href={BOOK} variant={p.lit ? 'primary' : 'secondary'}>
+                  Get early access
+                </Button>
               </div>
             </div>
           ))}
         </div>
 
-        <p className="mt-8 max-w-[40rem] text-[15px] leading-[1.5] text-muted">
-          Boundary Cloud is in early access. Data is what your programs send to
-          it, counted in decimal GB each billing month.
-        </p>
+        <div className="mt-20 md:mt-28 grid gap-12 lg:grid-cols-2">
+          <div>
+            <h2 className="v4-h3 text-head">Included in every Cloud plan</h2>
+            <ul className="mt-6 grid gap-x-6 gap-y-3 text-[16px] text-ink-2 sm:grid-cols-2">
+              {INCLUDED.map((f) => (
+                <Tick key={f}>{f}</Tick>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h2 className="v4-h3 text-head">How billing works</h2>
+            <dl className="mt-6 divide-y divide-rule border-y border-rule">
+              {BILLING.map(([term, fact]) => (
+                <div
+                  className="grid gap-1 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4"
+                  key={term}
+                >
+                  <dt className="text-[15px] text-head">{term}</dt>
+                  <dd className="text-[15px] text-ink-2">{fact}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
       </section>
     </PageShell>
   );

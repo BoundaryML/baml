@@ -3,7 +3,7 @@ import { createMetadata } from '@/app/_lib/metadata';
 // The page's metadata lives in this server layout.
 export const metadata = createMetadata({
   description:
-    'BAML is free and open source. Boundary Cloud has a Starter plan at $0 a month and a Pro plan at $250 a month, both with unlimited spans.',
+    'BAML is free and open source. Boundary Cloud has Starter at $0 a month, Pro at $250 a month and Enterprise, all with unlimited spans.',
   ogTitle: 'Pricing',
   path: '/pricing',
   title: 'Pricing',
