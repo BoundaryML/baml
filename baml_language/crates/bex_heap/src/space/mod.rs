@@ -3,13 +3,12 @@
 //! Small objects live in 32 KiB [blocks](block), at 16-byte granules. Each
 //! block starts with a header holding four side tables, an object-start
 //! bitmap, a mark bitmap, a pin bitmap and a hooked bitmap (one bit per
-//! granule), and the state of the small-object policy ([`small`]: size
-//! classes, one class per block, a free list per block, and the collector's
-//! bump-filled to-space blocks). Cells above [`LARGE_OBJECT_THRESHOLD`] get
-//! an allocation of their own ([`large`]) and never move. A collection
-//! ([`mark`]) copies every unpinned live small cell into to-space and
-//! repoints every pointer to it; a cell a conservative root names is pinned
-//! and stays, and so does its block ([`sweep`]).
+//! granule). A block is bump-filled with cells of mixed sizes, once, by a
+//! mutator or by the collector as to-space ([`blocks`]). Cells above
+//! [`LARGE_OBJECT_THRESHOLD`] get an allocation of their own ([`large`]) and
+//! never move. A collection ([`mark`]) copies every unpinned live small cell
+//! into to-space and repoints every pointer to it; a cell a conservative
+//! root names is pinned and stays, and so does its block ([`sweep`]).
 //!
 //! Every allocation, small or large, is a *cell*: a
 //! [`Header`](crate::Header) followed by the object's bytes. A pointer to an
@@ -18,9 +17,9 @@
 
 pub(crate) mod bitmap;
 pub(crate) mod block;
+pub(crate) mod blocks;
 pub(crate) mod large;
 pub(crate) mod pool;
-pub(crate) mod small;
 
 /// Bytes in one block. Blocks are aligned to their size, so masking an
 /// address finds the block (or large-object region) holding it.
@@ -96,7 +95,10 @@ pub(crate) unsafe fn pin_cell(cell: usize) {
 ///
 /// # Safety
 /// `cell` is an allocated cell.
-#[cfg_attr(not(test), allow(dead_code, reason = "the collector reads the bitmaps directly"))]
+#[cfg_attr(
+    not(test),
+    allow(dead_code, reason = "the collector reads the bitmaps directly")
+)]
 pub(crate) unsafe fn is_cell_pinned(cell: usize) -> bool {
     let base = region_base(cell);
     // SAFETY: forwarded to the caller.

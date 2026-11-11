@@ -1,10 +1,11 @@
-//! Reclaiming after the mark: a from-space block with neither a pin nor an
-//! owner goes back to the pool empty; one with a pin, or one a mutator still
-//! allocates into, is swept in place: dead cells and moved cells' old copies
-//! lose their start bits, pinned survivors keep theirs, and the size-class
-//! policy rewinds its cursor. To-space blocks hold only copies and keep
-//! their bits. Only the Rust-valued cells (the block's `hooked` bitmap) are
-//! dropped and measured; a dead instance, list or map is never read.
+//! Reclaiming after the mark: a from-space block with no pin goes back to
+//! the pool empty; one with a pin is retained: dead cells and moved cells'
+//! old copies lose their start bits and pinned survivors keep theirs. A
+//! mutator's current block is from-space like any other; its allocator sees
+//! the collection's epoch and takes a fresh block. To-space blocks hold only
+//! copies and keep their bits. Only the Rust-valued cells (the block's
+//! `hooked` bitmap) are dropped and measured; a dead instance, list or map is
+//! never read.
 //!
 //! A moved cell's old copy is marked and never dropped: its bytes went with
 //! the copy, and the copy's destructor runs when that dies.
@@ -15,9 +16,9 @@ use bex_vm_types::Meter;
 use super::{
     BLOCK_BYTES, GRANULE_BYTES,
     block::{BlockHeader, FIRST_CELL_OFFSET},
+    blocks::BlockSpace,
     large::LargeSpace,
     mark::is_cell_marked,
-    small::SmallSpace,
 };
 use crate::descriptor::{DescriptorTable, Header, OBJECT_DESC, RUST_PAYLOAD_OFFSET, Trace};
 
@@ -41,14 +42,14 @@ pub(crate) const POISON_BYTE: u8 = 0xD5;
 /// # Safety
 /// No mutator runs, and the marks are those of a complete mark.
 pub(crate) unsafe fn reclaim(
-    small: &mut SmallSpace,
+    blocks: &mut BlockSpace,
     large: &mut LargeSpace,
     descriptors: &DescriptorTable,
     poison: bool,
 ) -> Swept {
     let mut census = Meter::census();
     let mut swept = Swept::default();
-    for &base in small.pool().blocks() {
+    for &base in blocks.pool().blocks() {
         // SAFETY: forwarded to the caller.
         unsafe { reclaim_block(base, descriptors, poison, &mut census, &mut swept) };
     }
@@ -60,7 +61,7 @@ pub(crate) unsafe fn reclaim(
         unsafe { measure_cell(descriptors, cell, &mut census) };
     }
     // SAFETY: forwarded to the caller.
-    unsafe { small.end_sweep() };
+    unsafe { blocks.end_sweep() };
     swept.live_payload_bytes = census.total();
     swept
 }
@@ -79,7 +80,7 @@ unsafe fn reclaim_block(
     if header.starts.is_empty() {
         return;
     }
-    if !header.policy.is_from_space() {
+    if !header.is_from_space() {
         // To-space of this collection: every cell is a live copy.
         swept.live_cells += header.starts.count_ones();
         for granule in header.hooked.ones() {
@@ -93,7 +94,7 @@ unsafe fn reclaim_block(
         // SAFETY: an allocated Rust-valued cell the mark did not reach.
         unsafe { drop_cell(descriptors, base + granule * GRANULE_BYTES, poison) };
     }
-    let retained = !header.pins.is_empty() || header.policy.is_owned();
+    let retained = !header.pins.is_empty();
     if !retained {
         // Every cell is dead or moved: the block goes back to the pool.
         if poison {

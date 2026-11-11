@@ -36,7 +36,7 @@ fn forward_roots_keeps_the_tlab_blocks() {
     let remaining = vm.tlab.remaining();
 
     vm.forward_roots(&mut ForwardRoots::new(&HashMap::new(), &NothingCollected));
-    assert!(vm.tlab.is_valid(), "objects never move, so the block stays");
+    assert!(vm.tlab.is_valid(), "no collection ran, so the block stays");
     assert_eq!(vm.tlab.remaining(), remaining);
 }
 

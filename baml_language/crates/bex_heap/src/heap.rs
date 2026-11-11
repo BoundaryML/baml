@@ -29,8 +29,8 @@ use crate::{
     HeapDebuggerConfig, HeapDebuggerState,
     descriptor::{Descriptor, DescriptorError, DescriptorId, DescriptorTable},
     space::{
-        BLOCK_BYTES, block::BlockHeader, cell_of, large::LargeSpace, mark::is_cell_marked,
-        small::SmallSpace,
+        BLOCK_BYTES, block::BlockHeader, blocks::BlockSpace, cell_of, large::LargeSpace,
+        mark::is_cell_marked,
     },
 };
 
@@ -69,15 +69,15 @@ pub struct HeapStats {
     pub active_handles: usize,
     /// Blocks carved from the system, free ones included.
     pub blocks: usize,
-    /// Empty blocks in the shared pool, available to any size class.
+    /// Empty blocks in the pool, waiting to be bumped into.
     pub free_blocks: usize,
     /// Objects above the large-object threshold.
     pub large_objects: usize,
     /// Bytes held from the system: every block plus every large object.
     pub reserved_bytes: usize,
-    /// Bytes the heap occupies for objects: every block dedicated to a size
-    /// class, plus every large object. Over `live_bytes`, this is the
-    /// fragmentation a long run accumulates.
+    /// Bytes the heap occupies for objects: every block with a cell in it
+    /// (or a mutator's cursor), plus every large object. Over `live_bytes`,
+    /// this is the fragmentation a long run accumulates.
     pub heap_bytes: usize,
     /// Bytes of the cells the last collection found live, large ones
     /// included. Zero before the first collection.
@@ -173,7 +173,7 @@ pub struct BexHeap {
     /// Blocks of the mark-region space and the small-object policy's lists.
     /// Locked to take or return a block, and by a collection for its whole
     /// pause.
-    pub(crate) small: parking_lot::Mutex<SmallSpace>,
+    pub(crate) blocks: parking_lot::Mutex<BlockSpace>,
 
     /// Bytes the last collection found live: survivors' cells, large ones
     /// included. Excludes what objects keep alive outside the heap.
@@ -287,7 +287,7 @@ impl bex_vm_types::Survival for BexHeap {
             return true;
         }
         let cell = cell_of(ptr.as_ptr() as usize);
-        if let Some(base) = self.small.lock().pool().block_containing(cell) {
+        if let Some(base) = self.blocks.lock().pool().block_containing(cell) {
             // SAFETY: an initialized block; only its tables are read.
             let header = unsafe { BlockHeader::at(base) };
             let granule = BlockHeader::granule(base, cell);
@@ -368,7 +368,7 @@ impl BexHeap {
             compile_time,
             functions: btel_types::FunctionLookup::default(),
             span_definitions: std::sync::Mutex::default(),
-            small: parking_lot::Mutex::new(SmallSpace::default()),
+            blocks: parking_lot::Mutex::new(BlockSpace::default()),
             live_bytes: AtomicUsize::new(0),
             large: parking_lot::Mutex::new(LargeSpace::default()),
             descriptors: DescriptorTable::new(),
@@ -720,7 +720,7 @@ impl BexHeap {
     /// Runtime cells allocated and not yet swept.
     fn runtime_objects(&self) -> usize {
         let blocks: usize = self
-            .small
+            .blocks
             .lock()
             .pool()
             .blocks()
@@ -748,17 +748,16 @@ impl BexHeap {
         obj
     }
 
-    /// Blocks, capacity and allocated cells of every size class, in
-    /// [`SIZE_CLASSES`](crate::SIZE_CLASSES) order.
-    pub fn class_occupancy(&self) -> Vec<crate::ClassOccupancy> {
-        self.small.lock().occupancy()
+    /// Blocks and cells, from a walk of every block's tables.
+    pub fn block_occupancy(&self) -> crate::BlockOccupancy {
+        self.blocks.lock().occupancy()
     }
 
     /// Get statistics about heap usage.
     pub fn stats(&self) -> HeapStats {
         let ct_len = self.compile_time.len();
         let runtime = self.runtime_objects();
-        let small = self.small.lock().stats();
+        let blocks = self.blocks.lock().stats();
         let (large_objects, large_bytes) = {
             let large = self.large.lock();
             (large.len(), large.bytes())
@@ -768,11 +767,11 @@ impl BexHeap {
             compile_time_objects: ct_len,
             runtime_objects: runtime,
             active_handles: self.handles.read().expect("handles lock poisoned").len(),
-            blocks: small.blocks,
-            free_blocks: small.free_blocks,
+            blocks: blocks.blocks,
+            free_blocks: blocks.free_blocks,
             large_objects,
-            reserved_bytes: small.blocks * BLOCK_BYTES + large_bytes,
-            heap_bytes: small.in_use_bytes + large_bytes,
+            reserved_bytes: blocks.blocks * BLOCK_BYTES + large_bytes,
+            heap_bytes: (blocks.blocks - blocks.free_blocks) * BLOCK_BYTES + large_bytes,
             live_bytes: self.live_bytes.load(Ordering::Relaxed),
         }
     }
@@ -821,9 +820,10 @@ impl BexHeap {
             }
         }
         let old = std::mem::take(&mut *by_ptr);
-        by_ptr.extend(old.into_iter().map(|(ptr, entry)| {
-            (restamp.get(&ptr).copied().unwrap_or(ptr), entry)
-        }));
+        by_ptr.extend(
+            old.into_iter()
+                .map(|(ptr, entry)| (restamp.get(&ptr).copied().unwrap_or(ptr), entry)),
+        );
     }
 
     /// BEP-042: a class with a `cleanup` finalizer now lives on this heap — a
@@ -1002,11 +1002,11 @@ impl Drop for BexHeap {
     /// Drop every runtime object still allocated: they own Rust storage
     /// (strings, vectors, host values) that must be released with the heap.
     fn drop(&mut self) {
-        let small = self.small.get_mut();
+        let blocks = self.blocks.get_mut();
         let large = self.large.get_mut();
         // SAFETY: `&mut self`: no mutator or collector can run.
         unsafe {
-            Self::for_each_runtime_object(small.pool(), large, |object| {
+            Self::for_each_runtime_object(blocks.pool(), large, |object| {
                 std::ptr::drop_in_place(object);
             });
         }

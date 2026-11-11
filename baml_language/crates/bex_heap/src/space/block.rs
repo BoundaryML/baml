@@ -1,8 +1,10 @@
 //! One 32 KiB block and the side tables at its start.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use super::{
     BLOCK_BYTES, GRANULE_BYTES, GRANULES_PER_BLOCK, LARGE_OBJECT_THRESHOLD, RegionKind,
-    bitmap::Bitmap, granule_align, small::BlockMeta,
+    bitmap::Bitmap, granule_align,
 };
 use crate::descriptor::CellHeader as _;
 use crate::descriptor::Header;
@@ -30,8 +32,11 @@ pub(crate) struct BlockHeader {
     /// storage. Only these cells' descriptors are read by the sweep; a dead
     /// instance, list or map is reclaimed from the bitmaps alone.
     pub(crate) hooked: Bitmap<GRANULE_WORDS>,
-    /// The small-object policy's state for this block.
-    pub(crate) policy: BlockMeta,
+    /// Held a cell when the current collection began, so its unpinned live
+    /// cells are copied out. Set by
+    /// [`BlockSpace::begin_collection`](super::blocks::BlockSpace::begin_collection),
+    /// cleared by [`end_sweep`](super::blocks::BlockSpace::end_sweep).
+    from_space: AtomicBool,
 }
 
 /// Where a block's first cell goes; the header is before it.
@@ -40,7 +45,7 @@ pub(crate) const FIRST_CELL_OFFSET: usize = granule_align(size_of::<BlockHeader>
 pub(crate) const USABLE_BLOCK_BYTES: usize = BLOCK_BYTES - FIRST_CELL_OFFSET;
 pub(crate) const FIRST_GRANULE: usize = FIRST_CELL_OFFSET / GRANULE_BYTES;
 
-// Four granule bitmaps and the policy state: a sixteenth of the block at most.
+// Four granule bitmaps and a flag: a sixteenth of the block at most.
 const _: () = assert!(FIRST_CELL_OFFSET <= BLOCK_BYTES / 16);
 const _: () = assert!(LARGE_OBJECT_THRESHOLD < USABLE_BLOCK_BYTES);
 
@@ -57,7 +62,7 @@ impl BlockHeader {
             marks: Bitmap::default(),
             pins: Bitmap::default(),
             hooked: Bitmap::default(),
-            policy: BlockMeta::default(),
+            from_space: AtomicBool::new(false),
         };
         // SAFETY: the caller hands over the block's memory.
         unsafe { (base as *mut Self).write(header) };
@@ -79,6 +84,16 @@ impl BlockHeader {
         (address - base) / GRANULE_BYTES
     }
 
+    /// Whether the block held a cell when the current collection began.
+    #[inline]
+    pub(crate) fn is_from_space(&self) -> bool {
+        self.from_space.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn set_from_space(&self, from_space: bool) {
+        self.from_space.store(from_space, Ordering::Relaxed);
+    }
+
     /// Forget the previous collection's marks.
     pub(crate) fn clear_marks(&self) {
         self.marks.clear_all();
@@ -96,7 +111,10 @@ impl BlockHeader {
         self.pins.set(Self::granule(base, cell));
     }
 
-    #[cfg_attr(not(test), allow(dead_code, reason = "the collector reads the bitmap directly"))]
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "the collector reads the bitmap directly")
+    )]
     #[inline]
     pub(crate) fn is_pinned(&self, base: usize, cell: usize) -> bool {
         self.pins.get(Self::granule(base, cell))

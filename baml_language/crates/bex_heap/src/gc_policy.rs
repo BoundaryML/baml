@@ -85,6 +85,13 @@ impl AllocationBudget {
         isize::try_from(budget).unwrap_or(isize::MAX)
     }
 
+    /// Full collections so far: the epoch every per-mutator cache of heap
+    /// state (a TLAB's block, its type objects) is keyed by.
+    #[inline]
+    pub(crate) fn full_collections(&self) -> usize {
+        self.full_collections.load(Ordering::Relaxed)
+    }
+
     /// Called with all mutators parked, after a full collection. `live_bytes`
     /// is what the survivors occupy: their cells and what they keep alive
     /// outside them.
@@ -118,7 +125,7 @@ impl BexHeap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Tlab, descriptor::OBJECT_CELL_BYTES};
+    use crate::{Tlab, descriptor::OBJECT_CELL_BYTES, space::block::USABLE_BLOCK_BYTES};
 
     const BUDGET: isize = MIN_FULL_BUDGET as isize;
     /// What one `Object` cell spends.
@@ -220,23 +227,23 @@ mod tests {
         assert_eq!(heap.gc_budget().bytes_since_full_gc, 11 * CELL);
     }
 
-    /// A collection retains the allocator's block; its survivors are copied
-    /// out and the block's slots go on its free list for reuse.
+    /// A collection stales the allocator's block and zeroes the budget; the
+    /// next allocation takes a fresh block and is the only spend since.
     #[test]
-    fn a_collection_keeps_the_block_and_frees_its_dead_cells() {
+    fn a_collection_stales_the_block_and_the_next_cell_starts_the_budget() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new_empty(heap.clone());
         for _ in 0..65 {
             tlab.alloc_string("inline");
         }
-        let remaining = tlab.remaining();
         // SAFETY: single-threaded heap with no surviving roots.
         unsafe {
             heap.collect_garbage(&[]);
         }
         tlab.invalidate();
-        assert_eq!(tlab.remaining(), remaining + 65 * OBJECT_CELL_BYTES);
+        assert_eq!(tlab.remaining(), 0, "the block is stale");
         tlab.alloc_string("inline");
+        assert_eq!(tlab.remaining(), USABLE_BLOCK_BYTES - OBJECT_CELL_BYTES);
         drop(tlab);
         assert_eq!(heap.gc_budget().bytes_since_full_gc, CELL);
     }

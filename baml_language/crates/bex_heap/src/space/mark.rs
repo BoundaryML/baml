@@ -15,14 +15,14 @@ use std::{collections::HashMap, ops::Range};
 use bex_vm_types::HeapPtr;
 
 use super::{
-    BLOCK_BYTES, RegionKind,
-    block::{BlockHeader, FIRST_CELL_OFFSET},
+    RegionKind,
+    block::BlockHeader,
+    blocks::{BlockSpace, Bump},
     cell_bytes, cell_of,
     large::LargeSpace,
     pin_cell,
     pool::BlockPool,
     region_base, region_kind,
-    small::SmallSpace,
 };
 use crate::{
     descriptor::{
@@ -57,13 +57,8 @@ impl Resolved {
 }
 
 /// The to-space block being filled: a bump cursor and the block's end.
-struct ToSpace {
-    cursor: usize,
-    end: usize,
-}
-
 pub(crate) struct Marker<'a> {
-    small: &'a mut SmallSpace,
+    blocks: &'a mut BlockSpace,
     large: &'a LargeSpace,
     descriptors: &'a DescriptorTable,
     /// Addresses of the compile-time objects: never collected, never traced.
@@ -71,7 +66,8 @@ pub(crate) struct Marker<'a> {
     /// Cells reached and not yet traced: a pinned cell, a large cell or the
     /// to-space copy of a moved one. Never a moved cell's old copy.
     stack: Vec<usize>,
-    to_space: Option<ToSpace>,
+    /// The block copies are bumped into, until it is full.
+    to_space: Bump,
     live: Live,
     /// Every moved pointer, old to new: how holders outside the heap follow
     /// their objects.
@@ -83,18 +79,18 @@ pub(crate) struct Marker<'a> {
 
 impl<'a> Marker<'a> {
     pub(crate) fn new(
-        small: &'a mut SmallSpace,
+        blocks: &'a mut BlockSpace,
         large: &'a LargeSpace,
         descriptors: &'a DescriptorTable,
         compile_time: Range<usize>,
     ) -> Self {
         Self {
-            small,
+            blocks,
             large,
             descriptors,
             compile_time,
             stack: Vec::new(),
-            to_space: None,
+            to_space: Bump::default(),
             live: Live::default(),
             moved: HashMap::new(),
             #[cfg(feature = "heap_debug")]
@@ -107,7 +103,7 @@ impl<'a> Marker<'a> {
     }
 
     pub(crate) fn pool(&self) -> &BlockPool {
-        self.small.pool()
+        self.blocks.pool()
     }
 
     pub(crate) fn large(&self) -> &LargeSpace {
@@ -220,7 +216,7 @@ impl<'a> Marker<'a> {
         );
         let pinned = header.pins.get(granule);
         if header.marks.get(granule) {
-            if pinned || !header.policy.is_from_space() {
+            if pinned || !header.is_from_space() {
                 return ptr;
             }
             // SAFETY: a marked, unpinned from-space cell was copied.
@@ -234,7 +230,7 @@ impl<'a> Marker<'a> {
             return ptr;
         }
         debug_assert!(
-            header.policy.is_from_space(),
+            header.is_from_space(),
             "an unmarked cell in a to-space block: the copy did not mark it"
         );
         let new_cell = self.alloc_to_space(bytes);
@@ -294,9 +290,8 @@ impl<'a> Marker<'a> {
         // SAFETY: as above.
         let header = unsafe { BlockHeader::at(base) };
         let granule = BlockHeader::granule(base, cell);
-        let moved = header.marks.get(granule)
-            && !header.pins.get(granule)
-            && header.policy.is_from_space();
+        let moved =
+            header.marks.get(granule) && !header.pins.get(granule) && header.is_from_space();
         if moved {
             // SAFETY: marked, unpinned and in from-space: copied.
             unsafe { Self::copy_of(cell, address) }
@@ -319,21 +314,13 @@ impl<'a> Marker<'a> {
     /// `bytes` of to-space: the current block's bump cursor, or a fresh
     /// block from the pool.
     fn alloc_to_space(&mut self, bytes: usize) -> usize {
-        if let Some(space) = &mut self.to_space
-            && space.cursor + bytes <= space.end
-        {
-            let cell = space.cursor;
-            space.cursor += bytes;
+        if let Some(cell) = self.to_space.try_alloc(bytes) {
             return cell;
         }
-        // SAFETY: the marker runs only while every mutator is parked.
-        let base = unsafe { self.small.take_to_space() };
-        let cell = base + FIRST_CELL_OFFSET;
-        self.to_space = Some(ToSpace {
-            cursor: cell + bytes,
-            end: base + BLOCK_BYTES,
-        });
-        cell
+        self.to_space.refill(self.blocks);
+        self.to_space
+            .try_alloc(bytes)
+            .expect("an empty block holds any small cell")
     }
 
     /// Trace everything queued, forwarding each pointer slot as it is
@@ -389,7 +376,9 @@ impl<'a> Marker<'a> {
             },
             // SAFETY: laid out by `descriptor`.
             Trace::Slots => unsafe {
-                forward_slots(descriptor, cell, cell_bytes(cell), &mut |ptr| self.forward(ptr));
+                forward_slots(descriptor, cell, cell_bytes(cell), &mut |ptr| {
+                    self.forward(ptr)
+                });
             },
         }
     }

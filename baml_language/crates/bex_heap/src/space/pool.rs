@@ -1,6 +1,6 @@
 //! Where blocks come from: slabs of [`BLOCKS_PER_SLAB`] blocks, allocated
 //! block-aligned and kept for the heap's lifetime. Which blocks are handed
-//! out, and when, is the [small-object policy](super::small)'s business.
+//! out, and when, is [`BlockSpace`](super::blocks::BlockSpace)'s business.
 
 use std::alloc::{Layout, alloc, dealloc};
 

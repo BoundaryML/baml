@@ -1,6 +1,6 @@
-//! Per-mutator allocation: each mutator (a VM, the future manager) owns one
-//! block per size class and takes cells from it, so the common path takes no
-//! lock and touches no shared state.
+//! Per-mutator allocation: each mutator (a VM, the future manager) bumps
+//! cells into a block of its own, so the common path takes no lock and
+//! touches no shared state but the collection epoch.
 //!
 //! Every cell spends its size of the GC budget, and what each object keeps
 //! alive outside its cell is measured as it is allocated. Both go into a
@@ -35,10 +35,8 @@ use crate::{
         RUST_PAYLOAD_OFFSET,
     },
     space::{
-        GRANULE_BYTES, LARGE_OBJECT_THRESHOLD,
-        block::BlockHeader,
-        granule_align, region_base,
-        small::{SmallAllocator, cell_size},
+        GRANULE_BYTES, LARGE_OBJECT_THRESHOLD, block::BlockHeader, blocks::Bump, granule_align,
+        region_base,
     },
 };
 
@@ -49,13 +47,19 @@ pub const SETTLE_QUANTUM: isize = 64 * 1024;
 
 /// A mutator's allocation buffer.
 ///
-/// Small cells come from the current block of their size class (see
-/// [`crate::space::small`]); large cells are allocated individually.
+/// Small cells are bumped into the current block (see
+/// [`crate::space::blocks`]); large cells are allocated individually.
 ///
-/// A collection leaves the buffer valid: a block this allocator owns is
-/// retained, its survivors copied out and its free list rebuilt.
+/// The current block is from-space at a collection like any other: its
+/// survivors are copied out and, with no pin in it, it is freed and may be
+/// handed to another allocator. So the block is valid only under the
+/// collection epoch it was taken in (`block_epoch`); the fast path compares
+/// that with the heap's and the slow path takes a fresh block when it is
+/// stale. Nothing has to be told that a collection ran.
 pub struct Tlab {
-    small: SmallAllocator,
+    bump: Bump,
+    /// The heap's full-collection count when `bump`'s block was taken.
+    block_epoch: usize,
 
     /// Reference to the shared heap.
     heap: Arc<BexHeap>,
@@ -90,14 +94,15 @@ impl Tlab {
     /// `Tlab::new` is retained for standalone heap tests.
     pub fn new(heap: Arc<BexHeap>) -> Self {
         let mut tlab = Self::new_empty(heap);
-        tlab.small.prepare(&tlab.heap.small, OBJECT_CELL_BYTES);
+        tlab.refill(tlab.heap.gc_policy.full_collections());
         tlab
     }
 
     /// Create an allocator that takes its first block on first allocation.
     pub fn new_empty(heap: Arc<BexHeap>) -> Self {
         Self {
-            small: SmallAllocator::default(),
+            bump: Bump::default(),
+            block_epoch: heap.gc_policy.full_collections(),
             debt: AllocDebt::new(),
             debt_epoch: heap.gc_budget().full_collections,
             budget_crossed: false,
@@ -129,7 +134,7 @@ impl Tlab {
     pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
         self.charge(&mut obj);
 
-        let (cell, _) = self.alloc_cell(OBJECT_DESC, OBJECT_CELL_BYTES, true);
+        let cell = self.alloc_cell(OBJECT_DESC, OBJECT_CELL_BYTES, true);
         let payload = (cell + RUST_PAYLOAD_OFFSET) as *mut Object;
         // SAFETY: a fresh cell of this allocator's, sized and aligned for an
         // `Object` after its header.
@@ -156,7 +161,8 @@ impl Tlab {
             "a cell of {bytes} bytes for a {size}-byte descriptor"
         );
         let hooked = matches!(entry.trace, crate::Trace::Rust(_));
-        let (cell, cell_bytes) = self.alloc_cell(descriptor, granule_align(bytes), hooked);
+        let cell_bytes = granule_align(bytes);
+        let cell = self.alloc_cell(descriptor, cell_bytes, hooked);
         self.spend(cell_bytes);
         // SAFETY: a fresh cell of `cell_bytes`; the header stays intact.
         unsafe { ((cell + HEADER_BYTES) as *mut u8).write_bytes(0, cell_bytes - HEADER_BYTES) };
@@ -180,7 +186,8 @@ impl Tlab {
             bytes,
             "an instance cell is its layout's size"
         );
-        let (cell, cell_bytes) = self.alloc_cell(descriptor, granule_align(bytes), false);
+        let cell_bytes = granule_align(bytes);
+        let cell = self.alloc_cell(descriptor, cell_bytes, false);
         self.spend(cell_bytes);
         // SAFETY: a fresh cell of `cell_bytes`; the header stays intact, and
         // the class slot lies inside the instance.
@@ -194,26 +201,23 @@ impl Tlab {
 
     /// Place a cell for `bytes` (granule-aligned) and write its header.
     /// `hooked`: the descriptor traces a Rust value, which the sweep must
-    /// drop and measure. Returns the cell and its size, `bytes` rounded to
-    /// its size class.
+    /// drop and measure. Returns the cell.
     #[inline]
-    fn alloc_cell(
-        &mut self,
-        descriptor: DescriptorId,
-        bytes: usize,
-        hooked: bool,
-    ) -> (usize, usize) {
+    fn alloc_cell(&mut self, descriptor: DescriptorId, bytes: usize, hooked: bool) -> usize {
         debug_assert!(bytes.is_multiple_of(GRANULE_BYTES));
         if bytes > LARGE_OBJECT_THRESHOLD {
-            return (self.alloc_large(descriptor, bytes), bytes);
+            return self.alloc_large(descriptor, bytes);
         }
-        let cell_bytes = cell_size(bytes);
-        let cell = match self.small.try_alloc(cell_bytes) {
-            Some(cell) => cell,
-            None => self.alloc_small_slow(cell_bytes),
+        let epoch = self.heap.gc_policy.full_collections();
+        let cell = if epoch == self.block_epoch
+            && let Some(cell) = self.bump.try_alloc(bytes)
+        {
+            cell
+        } else {
+            self.alloc_small_slow(bytes, epoch)
         };
         let block = region_base(cell);
-        // SAFETY: a cell this allocator just took from a block it owns.
+        // SAFETY: a cell this allocator just bumped in a block of its own.
         unsafe {
             let header = BlockHeader::at(block);
             let granule = BlockHeader::granule(block, cell);
@@ -221,19 +225,35 @@ impl Tlab {
             if hooked {
                 header.hooked.set(granule);
             }
-            (cell as *mut Header).write(Header::for_cell(descriptor, cell_bytes, false));
+            (cell as *mut Header).write(Header::for_cell(descriptor, bytes, false));
         }
-        (cell, cell_bytes)
+        cell
     }
 
-    /// The class's current block is full: the size-class policy finds
-    /// another. Taking a block is when the balance settles.
+    /// The current block is full, or a collection ran since it was taken:
+    /// take a fresh one. Taking a block is when the balance settles.
     #[cold]
     #[inline(never)]
-    fn alloc_small_slow(&mut self, cell_bytes: usize) -> usize {
-        let cell = self.small.alloc_slow(&self.heap.small, cell_bytes);
+    fn alloc_small_slow(&mut self, bytes: usize, epoch: usize) -> usize {
+        self.refill(epoch);
         self.flush_alloc_debt();
-        cell
+        self.bump
+            .try_alloc(bytes)
+            .expect("an empty block holds any small cell")
+    }
+
+    /// Take a fresh block under `epoch`, the heap's current collection
+    /// count. The old block is left to the next collection: full, or from
+    /// a stale epoch and so no longer this allocator's.
+    fn refill(&mut self, epoch: usize) {
+        self.bump.refill(&mut self.heap.blocks.lock());
+        self.block_epoch = epoch;
+    }
+
+    /// Whether the current block was taken since the latest collection.
+    #[inline]
+    fn block_is_current(&self) -> bool {
+        self.block_epoch == self.heap.gc_policy.full_collections()
     }
 
     /// A cell above the large-object threshold, allocated on its own. The
@@ -464,7 +484,7 @@ impl Tlab {
     /// The `Object::Type` holding `ty`, shared by every container this
     /// allocator makes of that type until the next collection.
     pub fn type_object(&mut self, ty: RealizedTy) -> HeapPtr {
-        let epoch = self.heap.gc_budget().full_collections;
+        let epoch = self.heap.gc_policy.full_collections();
         if epoch != self.types_epoch {
             self.types.clear();
             self.types_epoch = epoch;
@@ -563,10 +583,14 @@ impl Tlab {
 }
 
 impl Tlab {
-    /// Bytes of `Object` cells the current block of their class can still
-    /// take. Walks that block's free list.
+    /// Bytes the current block can still take; zero when a collection ran
+    /// since it was taken, so the next allocation takes a fresh block.
     pub fn remaining(&self) -> usize {
-        self.small.room_for(OBJECT_CELL_BYTES) * OBJECT_CELL_BYTES
+        if self.block_is_current() {
+            self.bump.remaining()
+        } else {
+            0
+        }
     }
 
     /// Get a reference to the heap.
@@ -574,12 +598,11 @@ impl Tlab {
         &self.heap
     }
 
-    /// A collection ran. A block this allocator owns is retained by the
-    /// collection (its survivors were copied out, its slots freed), so the
-    /// owned blocks stay valid; only the balance can be stale.
+    /// A collection ran. The block is handled by the epoch check on the
+    /// allocation path; only the balance needs resetting here.
     pub fn invalidate(&mut self) {
         // A full collection counted everything this balance covers.
-        let full_collections = self.heap.gc_budget().full_collections;
+        let full_collections = self.heap.gc_policy.full_collections();
         if full_collections == self.debt_epoch {
             return;
         }
@@ -606,9 +629,10 @@ impl Tlab {
         std::mem::take(&mut self.budget_crossed)
     }
 
-    /// Whether the current block of the `Object` class has room for another.
+    /// Whether the current block has room for an `Object` under the current
+    /// epoch.
     pub fn is_valid(&self) -> bool {
-        self.small.room_for(OBJECT_CELL_BYTES) > 0
+        self.remaining() >= OBJECT_CELL_BYTES
     }
 
     /// Read an object by HeapPtr.
@@ -625,7 +649,11 @@ impl Tlab {
 
 impl Drop for Tlab {
     fn drop(&mut self) {
-        self.small.release(&mut self.heap.small.lock());
+        // A block from a stale epoch was freed or retained by a collection
+        // and is no longer this allocator's to give back.
+        if self.block_is_current() {
+            self.bump.release(&mut self.heap.blocks.lock());
+        }
         // What this allocator spent must not vanish with it.
         self.flush_alloc_debt();
     }
@@ -633,7 +661,7 @@ impl Drop for Tlab {
 
 impl std::fmt::Debug for Tlab {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Tlab").field("small", &self.small).finish()
+        f.debug_struct("Tlab").field("bump", &self.bump).finish()
     }
 }
 
@@ -671,13 +699,7 @@ impl BackingAlloc for Tlab {
 
     fn retire_backing(&mut self, bytes: usize) {
         // The cell's size as `alloc_cell` took it.
-        let bytes = granule_align(bytes);
-        let cell_bytes = if bytes > LARGE_OBJECT_THRESHOLD {
-            bytes
-        } else {
-            cell_size(bytes)
-        };
-        self.spend(cell_bytes);
+        self.spend(granule_align(bytes));
     }
 }
 
@@ -1061,28 +1083,34 @@ mod tests {
     // - Concurrent TLAB allocation patterns
     // ========================================================================
 
-    /// A collection leaves the allocator its block: the survivors are
-    /// copied out of it, so their slots come back, and allocation continues
-    /// in it.
+    /// A collection makes the allocator's block stale: the survivors are
+    /// copied out, the block is freed, and the next allocation goes into a
+    /// fresh block.
     #[test]
-    fn test_miri_tlab_survives_collection() {
+    fn test_miri_tlab_takes_a_fresh_block_after_a_collection() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let obj1 = tlab.alloc_string("before_gc_1".to_string());
         let obj2 = tlab.alloc_string("before_gc_2".to_string());
-        let remaining = tlab.remaining();
+        let block = crate::space::region_base(obj1.as_ptr() as usize);
 
         let (stats, roots, _) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
         assert_eq!(stats.live_count, 2);
 
         // What bex_engine does after GC.
         tlab.invalidate();
-        assert!(tlab.is_valid());
-        assert_eq!(tlab.remaining(), remaining + 2 * OBJECT_CELL_BYTES);
+        assert!(!tlab.is_valid(), "the block is from a stale epoch");
+        assert_eq!(tlab.remaining(), 0);
 
         let obj3 = tlab.alloc_string("after_gc_1".to_string());
+        assert!(tlab.is_valid());
         assert_ne!(roots[0], obj1, "the survivor moved out of the block");
+        assert_ne!(
+            crate::space::region_base(roots[0].as_ptr() as usize),
+            block,
+            "into a to-space block"
+        );
         assert!(matches!(unsafe { roots[0].get() }, Object::String(s) if s == "before_gc_1"));
         assert!(matches!(unsafe { obj3.get() }, Object::String(s) if s == "after_gc_1"));
     }

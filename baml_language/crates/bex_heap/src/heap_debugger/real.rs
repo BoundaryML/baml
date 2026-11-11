@@ -125,11 +125,11 @@ impl BexHeap {
         // checks look pointers up in the space, which takes its locks.
         let mut objects = Vec::new();
         {
-            let small = self.small.lock();
+            let blocks = self.blocks.lock();
             let large = self.large.lock();
             // SAFETY: verification runs with every mutator parked.
             unsafe {
-                Self::for_each_runtime_object(small.pool(), &large, |object| objects.push(object));
+                Self::for_each_runtime_object(blocks.pool(), &large, |object| objects.push(object));
             }
         }
         self.verify_slot_cells();
@@ -156,11 +156,11 @@ impl BexHeap {
     fn verify_slot_cells(&self) {
         let mut cells = Vec::new();
         {
-            let small = self.small.lock();
+            let blocks = self.blocks.lock();
             let large = self.large.lock();
             // SAFETY: verification runs with every mutator parked.
             unsafe {
-                Self::for_each_runtime_cell(small.pool(), &large, |cell| cells.push(cell));
+                Self::for_each_runtime_cell(blocks.pool(), &large, |cell| cells.push(cell));
             }
         }
         let mut edges = Vec::new();
@@ -290,7 +290,7 @@ impl BexHeap {
             return true;
         }
         let cell = cell_of(ptr.as_ptr() as usize);
-        if let Some(base) = self.small.lock().pool().block_containing(cell) {
+        if let Some(base) = self.blocks.lock().pool().block_containing(cell) {
             // SAFETY: an initialized block; only its tables are read.
             let header = unsafe { BlockHeader::at(base) };
             return header.starts.get(BlockHeader::granule(base, cell));

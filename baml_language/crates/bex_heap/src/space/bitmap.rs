@@ -160,7 +160,10 @@ mod tests {
         let also = Bitmap::<2>::default();
         also.set(64);
         also.set(127);
-        assert_eq!(bits.ones_in_both(&keep, &also).collect::<Vec<_>>(), vec![64]);
+        assert_eq!(
+            bits.ones_in_both(&keep, &also).collect::<Vec<_>>(),
+            vec![64]
+        );
         bits.retain_in_both(&keep, &also);
         assert_eq!(bits.ones().collect::<Vec<_>>(), vec![64]);
         bits.clear_all();

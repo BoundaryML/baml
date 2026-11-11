@@ -118,17 +118,17 @@ impl BexHeap {
         // SAFETY: the caller guarantees exclusive heap access.
         let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self) };
         self.bump_epoch();
-        let mut small = self.small.lock();
+        let mut blocks = self.blocks.lock();
         let mut large = self.large.lock();
         // SAFETY: nothing has been marked or copied yet.
-        unsafe { self.refresh_finalizable_instances(small.pool(), &large) };
-        clear_marks(small.pool(), &large);
-        crate::space::clear_pins(small.pool(), &large);
-        small.begin_collection();
+        unsafe { self.refresh_finalizable_instances(blocks.pool(), &large) };
+        clear_marks(blocks.pool(), &large);
+        crate::space::clear_pins(blocks.pool(), &large);
+        blocks.begin_collection();
         profile.finish_phase(crate::gc_profile::HeapPhase::Prepare);
 
         let mut marker = Marker::new(
-            &mut small,
+            &mut blocks,
             &large,
             self.descriptors(),
             self.compile_time_range(),
@@ -164,9 +164,9 @@ impl BexHeap {
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
         // SAFETY: mutators are parked and the mark is complete.
-        let swept = unsafe { reclaim(&mut small, &mut large, self.descriptors(), gc_poison()) };
+        let swept = unsafe { reclaim(&mut blocks, &mut large, self.descriptors(), gc_poison()) };
         drop(large);
-        drop(small);
+        drop(blocks);
         profile.finish_phase(crate::gc_profile::HeapPhase::Reclaim);
 
         self.update_handles(&restamp);
@@ -270,9 +270,7 @@ impl BexHeap {
                 !unsafe { marker.is_marked(ptr) }
             })
             // SAFETY: as above, the instance is intact.
-            .filter_map(|ptr| {
-                unsafe { Self::uncleaned_finalizer(marker, ptr) }.map(|f| (ptr, f))
-            })
+            .filter_map(|ptr| unsafe { Self::uncleaned_finalizer(marker, ptr) }.map(|f| (ptr, f)))
             .collect()
     }
 
@@ -823,7 +821,11 @@ mod tests {
         assert_eq!(Arc::strong_count(&shared), 2, "a move drops nothing");
 
         unsafe { heap.collect_garbage(&[]) };
-        assert_eq!(Arc::strong_count(&shared), 1, "the copy dropped once it died");
+        assert_eq!(
+            Arc::strong_count(&shared),
+            1,
+            "the copy dropped once it died"
+        );
         let _ = roots;
     }
 
@@ -2322,7 +2324,7 @@ mod tests {
         // survivors remain allocated.
         unsafe {
             BexHeap::for_each_runtime_object(
-                heap.small.lock().pool(),
+                heap.blocks.lock().pool(),
                 &heap.large.lock(),
                 |object| {
                     (*object).measure(&mut independent);

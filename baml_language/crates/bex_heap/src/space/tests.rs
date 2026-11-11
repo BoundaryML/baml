@@ -1,5 +1,5 @@
-//! The space itself: start bitmap, conservative lookup, size classes and
-//! free lists, large objects, descriptor-driven tracing and the counters.
+//! The space itself: start bitmap, conservative lookup, bump blocks and
+//! their reuse, large objects, descriptor-driven tracing and the counters.
 
 use crate::descriptor::CellHeader as _;
 use std::{borrow::Cow, ops::Range, sync::Arc};
@@ -12,7 +12,6 @@ use super::{
     cell_of, is_cell_pinned,
     mark::{Marker, Resolved},
     region_base,
-    small::{SIZE_CLASSES, cell_size, class_of},
 };
 use crate::{
     BexHeap, ConservativeRanges, Descriptor, DescriptorId, ElemKind, Kind, SlotKind, TaggedKind,
@@ -92,10 +91,10 @@ fn string_at(ptr: HeapPtr) -> String {
 
 /// Resolve `address` as a conservative root would.
 fn resolve(heap: &BexHeap, address: usize) -> Resolved {
-    let mut small = heap.small.lock();
+    let mut blocks = heap.blocks.lock();
     let large = heap.large.lock();
     Marker::new(
-        &mut small,
+        &mut blocks,
         &large,
         heap.descriptors(),
         heap.compile_time_range(),
@@ -171,7 +170,11 @@ fn conservative_lookup_resolves_interior_pointers_and_ignores_the_rest() {
         usize::MAX,
     ];
     for address in outside {
-        assert_eq!(resolve(&f.heap, address), Resolved::default(), "{address:#x}");
+        assert_eq!(
+            resolve(&f.heap, address),
+            Resolved::default(),
+            "{address:#x}"
+        );
     }
 }
 
@@ -220,7 +223,10 @@ fn pins_are_cleared_at_the_next_collection() {
     assert_ne!(roots[0], kept, "unpinned this time, so copied");
     // SAFETY: both survived again.
     unsafe {
-        assert!(!is_cell_pinned(cell_of_ptr(roots[0])), "no conservative root this time");
+        assert!(
+            !is_cell_pinned(cell_of_ptr(roots[0])),
+            "no conservative root this time"
+        );
         assert!(!is_cell_pinned(large));
     }
 }
@@ -246,8 +252,15 @@ fn a_pinned_cell_stays_and_retains_its_block() {
     assert!(bex_vm_types::Survival::survived(&*heap, kept));
     // SAFETY: an initialized block of this heap.
     let header = unsafe { BlockHeader::at(block) };
-    assert_eq!(header.cells(block).collect::<Vec<_>>(), vec![cell_of_ptr(kept)]);
-    assert_eq!(heap.stats().free_blocks, free_blocks, "the block is retained");
+    assert_eq!(
+        header.cells(block).collect::<Vec<_>>(),
+        vec![cell_of_ptr(kept)]
+    );
+    assert_eq!(
+        heap.stats().free_blocks,
+        free_blocks,
+        "the block is retained"
+    );
 }
 
 /// A from-space block with no pin goes back to the pool empty, its
@@ -271,7 +284,11 @@ fn an_unpinned_from_space_block_is_empty_in_the_pool() {
     assert!(header.starts.is_empty() && header.hooked.is_empty());
     // Back in the pool, where the to-space block holding the copy came from.
     assert_eq!(heap.stats().free_blocks, free_blocks);
-    assert_eq!(heap.stats().heap_bytes, BLOCK_BYTES, "one to-space block in use");
+    assert_eq!(
+        heap.stats().heap_bytes,
+        BLOCK_BYTES,
+        "one to-space block in use"
+    );
     assert!(!bex_vm_types::Survival::survived(&*heap, kept));
     assert!(bex_vm_types::Survival::survived(&*heap, roots[0]));
 }
@@ -296,59 +313,102 @@ fn a_conservative_root_keeps_its_object_and_only_its_object() {
     assert_eq!(stats.collected_count, 1);
     assert_eq!(string_at(kept), "kept");
     // SAFETY: `kept` survived.
-    assert!(unsafe { is_cell_pinned(cell_of_ptr(kept)) }, "an interior word pins");
-}
-
-#[test]
-fn requests_round_up_to_the_smallest_class_that_fits() {
-    assert!(SIZE_CLASSES.is_sorted());
-    for (class, &size) in SIZE_CLASSES.iter().enumerate() {
-        assert!(size.is_multiple_of(GRANULE_BYTES));
-        assert_eq!(class_of(size), class, "a class size is its own class");
-    }
-    for bytes in (GRANULE_BYTES..=LARGE_OBJECT_THRESHOLD).step_by(GRANULE_BYTES) {
-        let size = cell_size(bytes);
-        assert!(size >= bytes);
-        let smaller = SIZE_CLASSES[..class_of(bytes)].iter().all(|&c| c < bytes);
-        assert!(smaller, "{bytes} bytes go in the smallest class that fits");
-        assert!(size - bytes <= bytes / 5, "{bytes} rounds to {size}");
-    }
-    assert_eq!(
-        cell_size(OBJECT_CELL_BYTES),
-        OBJECT_CELL_BYTES,
-        "VM objects round to nothing"
+    assert!(
+        unsafe { is_cell_pinned(cell_of_ptr(kept)) },
+        "an interior word pins"
     );
-    assert_eq!(cell_size(272), 288);
-    assert_eq!(cell_size(4112), 4864);
 }
 
-/// A block a mutator owns is retained: its survivors are copied out and
-/// every slot, dead or moved, is free again from the bitmaps alone.
+/// Cells of different sizes follow one another in one block, each at the
+/// previous one's end: no size classes, no rounding past the granule.
 #[test]
-fn an_owned_block_has_every_slot_back_after_a_collection() {
-    let heap = BexHeap::new(vec![]);
-    let mut tlab = Tlab::new(Arc::clone(&heap));
-    let cells: Vec<HeapPtr> = (0..10)
-        .map(|i| tlab.alloc_string(format!("cell {i}")))
+fn mixed_size_cells_bump_contiguously_in_one_block() {
+    let f = fixture();
+    let mut tlab = Tlab::new(Arc::clone(&f.heap));
+    let sizes = [
+        OBJECT_CELL_BYTES,
+        NODE.size as usize,
+        MEDIUM_BYTES,
+        NODE.size as usize + 8,
+        OBJECT_CELL_BYTES,
+        LARGE_OBJECT_THRESHOLD,
+    ];
+    let cells: Vec<(usize, usize)> = sizes
+        .iter()
+        .map(|&bytes| {
+            let cell = if bytes == OBJECT_CELL_BYTES {
+                cell_of_ptr(tlab.alloc_string("object"))
+            } else {
+                tlab.alloc_zeroed(f.backing, bytes).as_ptr() as usize
+            };
+            (cell, bytes)
+        })
         .collect();
-    let kept: Vec<HeapPtr> = cells.iter().copied().step_by(2).collect();
-    let room = tlab.remaining();
-
-    // SAFETY: no mutator runs.
-    let (stats, roots, _) = unsafe { heap.collect_garbage(&kept) };
-    assert_eq!((stats.live_count, stats.collected_count), (5, 5));
-    assert_eq!(tlab.remaining(), room + 10 * OBJECT_CELL_BYTES);
-
-    // The freed slots come back first, lowest address first.
-    let reused: Vec<usize> = (0..10)
-        .map(|i| cell_of_ptr(tlab.alloc_string(format!("again {i}"))))
-        .collect();
-    let all: Vec<usize> = cells.iter().map(|&ptr| cell_of_ptr(ptr)).collect();
-    assert_eq!(reused, all);
-    for (i, &ptr) in roots.iter().enumerate() {
-        assert_ne!(ptr, kept[i]);
-        assert_eq!(string_at(ptr), format!("cell {}", 2 * i));
+    let block = region_base(cells[0].0);
+    assert_eq!(
+        cells[0].0,
+        block + FIRST_CELL_OFFSET,
+        "the first cell starts the block"
+    );
+    for pair in cells.windows(2) {
+        let ((cell, bytes), (next, _)) = (pair[0], pair[1]);
+        // SAFETY: an allocated cell.
+        assert_eq!(
+            unsafe { Header::at(cell) }.cell_bytes(),
+            crate::space::granule_align(bytes)
+        );
+        assert_eq!(
+            next,
+            cell + crate::space::granule_align(bytes),
+            "the next cell starts at this one's end"
+        );
+        assert_eq!(region_base(next), block);
     }
+    // SAFETY: an initialized block of this heap.
+    let header = unsafe { BlockHeader::at(block) };
+    let starts: Vec<usize> = header.cells(block).collect();
+    assert_eq!(
+        starts,
+        cells.iter().map(|&(cell, _)| cell).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        tlab.remaining(),
+        block + BLOCK_BYTES - cells.last().unwrap().0 - LARGE_OBJECT_THRESHOLD
+    );
+}
+
+/// A mutator's block is from-space like any other: with nothing pinned in
+/// it the collection frees it, and the pool may hand it to another
+/// allocator. The first allocator's epoch is stale, so its next allocation
+/// takes a fresh block and never writes into the one it lost.
+#[test]
+fn a_stale_tlab_takes_a_fresh_block_and_never_writes_into_a_freed_one() {
+    let heap = BexHeap::new(vec![]);
+    let mut first = Tlab::new(Arc::clone(&heap));
+    let lost = region_base(first.alloc_string("garbage").as_ptr() as usize);
+    assert!(first.is_valid());
+
+    // SAFETY: no mutator runs; nothing is rooted.
+    let (stats, _, _) = unsafe { heap.collect_garbage(&[]) };
+    assert_eq!(stats.collected_count, 1);
+    assert_eq!(first.remaining(), 0, "a collection ran: the block is stale");
+    assert!(!first.is_valid());
+
+    let mut second = Tlab::new_empty(Arc::clone(&heap));
+    let taken = region_base(second.alloc_string("second's").as_ptr() as usize);
+    assert_eq!(taken, lost, "the freed block is the lowest free one");
+
+    let again = first.alloc_string("first's again");
+    let fresh = region_base(again.as_ptr() as usize);
+    assert_ne!(fresh, taken, "the stale allocator took a fresh block");
+    assert!(first.is_valid() && second.is_valid());
+    for _ in 0..100 {
+        assert_ne!(
+            region_base(first.alloc_string("more").as_ptr() as usize),
+            taken
+        );
+    }
+    assert_eq!(string_at(again), "first's again");
 }
 
 #[test]
@@ -358,7 +418,10 @@ fn a_sweep_never_reads_a_dead_slot_cell() {
     let mut node = || {
         let cell = tlab.alloc_zeroed(f.node, NODE.size as usize).as_ptr();
         // SAFETY: a fresh cell of this heap; its payload follows the header.
-        unsafe { f.heap.make_heap_ptr(cell.add(HEADER_BYTES).cast::<Object>()) }
+        unsafe {
+            f.heap
+                .make_heap_ptr(cell.add(HEADER_BYTES).cast::<Object>())
+        }
     };
     let nodes: Vec<HeapPtr> = (0..6).map(|_| node()).collect();
     let kept = [nodes[0], nodes[3]];
@@ -375,18 +438,21 @@ fn a_sweep_never_reads_a_dead_slot_cell() {
     let (stats, roots, _) = unsafe { f.heap.collect_garbage(&kept) };
     assert_eq!((stats.live_count, stats.collected_count), (2, 4));
     assert!(roots.iter().zip(&kept).all(|(new, old)| new != old));
-    // The kept nodes were copied out too: every slot is free, and the
-    // freed slots come back lowest address first.
+    // The kept nodes were copied out too: the block is empty, back in the
+    // pool, and the lowest free one, so it is bumped into again from its
+    // start.
+    let block = region_base(dead[0]);
+    // SAFETY: an initialized block of this heap.
+    assert!(unsafe { BlockHeader::at(block) }.starts.is_empty());
     let reused: Vec<usize> = (0..4)
         .map(|_| tlab.alloc_zeroed(f.node, NODE.size as usize).as_ptr() as usize)
         .collect();
     let first_four: Vec<usize> = nodes[..4].iter().map(|&ptr| cell_of_ptr(ptr)).collect();
     assert_eq!(reused, first_four);
-    let _ = dead;
 }
 
 #[test]
-fn an_empty_block_returns_to_the_pool_and_serves_another_class() {
+fn an_empty_block_returns_to_the_pool_and_is_bumped_into_again() {
     let f = fixture();
     let mut tlab = Tlab::new(Arc::clone(&f.heap));
     let first = tlab.alloc_string("only cell");
@@ -404,15 +470,72 @@ fn an_empty_block_returns_to_the_pool_and_serves_another_class() {
 
     let mut tlab = Tlab::new_empty(Arc::clone(&f.heap));
     let node = tlab.alloc_zeroed(f.node, NODE.size as usize).as_ptr() as usize;
-    assert_ne!(
-        cell_size(NODE.size as usize),
-        OBJECT_CELL_BYTES,
-        "a different class"
-    );
     assert_eq!(
-        region_base(node),
-        block,
-        "the emptied block serves the new class"
+        node,
+        block + FIRST_CELL_OFFSET,
+        "the emptied block is bumped from its start"
+    );
+}
+
+/// A block with a pinned cell is retained: no allocator bumps into it, and
+/// the first later collection that finds no pin in it copies its survivors
+/// out and frees it.
+#[test]
+fn a_retained_block_is_not_allocated_into_and_is_freed_once_its_pin_goes() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let kept = tlab.alloc_string("kept");
+    tlab.alloc_string("garbage");
+    let retained = region_base(kept.as_ptr() as usize);
+    drop(tlab);
+    let stack: [usize; 1] = [kept.as_ptr() as usize + 8];
+    let range: Range<*const usize> = stack.as_ptr_range();
+    // SAFETY: no mutator runs; the range is readable for the collection.
+    let (stats, _) = unsafe { heap.collect(&mut ConservativeRanges(&[range])) };
+    assert_eq!((stats.live_count, stats.collected_count), (1, 1));
+    assert_eq!(heap.block_occupancy().retained_blocks, 1);
+
+    // Three blocks' worth of allocation, none of it in the retained block,
+    // which is the lowest address.
+    let mut other = Tlab::new_empty(Arc::clone(&heap));
+    let mut blocks = std::collections::BTreeSet::new();
+    while blocks.len() < 3 {
+        blocks.insert(region_base(
+            other.alloc_string("elsewhere").as_ptr() as usize
+        ));
+    }
+    assert!(
+        !blocks.contains(&retained),
+        "nothing is allocated into a retained block"
+    );
+    assert!(blocks.iter().all(|&block| block > retained));
+    drop(other);
+
+    // SAFETY: no mutator runs; precise roots only, so nothing is pinned.
+    let (stats, roots, _) = unsafe { heap.collect_garbage(&[kept]) };
+    assert_eq!(stats.live_count, 1);
+    assert_ne!(
+        region_base(roots[0].as_ptr() as usize),
+        retained,
+        "copied out"
+    );
+    assert_eq!(string_at(roots[0]), "kept");
+    // SAFETY: an initialized block of this heap.
+    assert!(
+        unsafe { BlockHeader::at(retained) }.starts.is_empty(),
+        "freed whole"
+    );
+    assert_eq!(heap.block_occupancy().retained_blocks, 0);
+    assert_eq!(
+        heap.stats().heap_bytes,
+        BLOCK_BYTES,
+        "only the to-space block is in use"
+    );
+    let mut next = Tlab::new_empty(Arc::clone(&heap));
+    assert_eq!(
+        region_base(next.alloc_string("reused").as_ptr() as usize),
+        retained,
+        "the freed block is the lowest free one again"
     );
 }
 
@@ -493,7 +616,7 @@ fn slot_descriptors_trace_pointers_and_tagged_pointers_only() {
 }
 
 #[test]
-fn heap_live_and_class_counters_follow_allocation_and_collection() {
+fn heap_live_and_block_counters_follow_allocation_and_collection() {
     let f = fixture();
     let mut tlab = Tlab::new(Arc::clone(&f.heap));
     let stats = f.heap.stats();
@@ -513,13 +636,12 @@ fn heap_live_and_class_counters_follow_allocation_and_collection() {
             + (stats.reserved_bytes - stats.blocks * BLOCK_BYTES),
     );
 
-    let object_class = class_of(OBJECT_CELL_BYTES);
-    let occupancy = f.heap.class_occupancy();
-    assert_eq!(occupancy[object_class].cells, 1_001);
+    let occupancy = f.heap.block_occupancy();
+    assert_eq!(occupancy.cells, 1_001, "the large cell is in no block");
+    assert_eq!(occupancy.retained_blocks, 0);
     assert_eq!(
-        occupancy.iter().map(|class| class.cells).sum::<usize>(),
-        1_001,
-        "the large cell is in no class"
+        (occupancy.blocks, occupancy.free_blocks),
+        (stats.blocks, stats.free_blocks)
     );
 
     // SAFETY: no mutator runs.
@@ -529,15 +651,10 @@ fn heap_live_and_class_counters_follow_allocation_and_collection() {
         f.heap.stats().live_bytes,
         OBJECT_CELL_BYTES + LARGE_BACKING_BYTES
     );
-    let objects = f.heap.class_occupancy()[object_class];
-    assert_eq!(objects.cell_bytes, OBJECT_CELL_BYTES);
     assert_eq!(
-        objects.cells, 0,
-        "the survivor was copied to a to-space block, which is in no class"
-    );
-    assert_eq!(
-        objects.capacity,
-        objects.blocks * ((BLOCK_BYTES - FIRST_CELL_OFFSET) / OBJECT_CELL_BYTES)
+        f.heap.block_occupancy().cells,
+        1,
+        "the survivor's copy, in a to-space block"
     );
     assert_eq!(
         f.heap.stats().runtime_objects,

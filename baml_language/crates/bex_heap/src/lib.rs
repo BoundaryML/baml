@@ -4,13 +4,12 @@
 //!
 //! - **Block space with a copying collector**: 32 KiB blocks of 16-byte
 //!   granules with object-start, mark, pin and hooked bitmaps per block,
-//!   small cells segregated by size class for the mutator (one class per
-//!   block, a free list per block), and separately allocated large objects
-//!   ([`space`]). A collection copies every unpinned live small cell into
-//!   bump-filled to-space blocks; a cell a conservative root names is
-//!   pinned and stays.
-//! - **Per-mutator allocation**: each VM owns one block per size class and
-//!   takes cells from it without locking ([`Tlab`]).
+//!   bump-filled with small cells of mixed sizes, and separately allocated
+//!   large objects ([`space`]). A collection copies every unpinned live
+//!   small cell into bump-filled to-space blocks; a cell a conservative root
+//!   names is pinned and stays, and so does its block.
+//! - **Per-mutator allocation**: each VM bumps into a block of its own
+//!   without locking ([`Tlab`]).
 //! - **Descriptors**: every cell starts with a [`Header`] naming the
 //!   [`Descriptor`] that says where its pointers are. The VM's `Object` enum
 //!   is one descriptor, traced by its existing enum-specific code.
@@ -60,5 +59,5 @@ pub use heap_guard::{
     ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit,
 };
 pub use root_source::{BothRoots, ConservativeRanges, NoRoots, PreciseRoots, RootSource};
-pub use space::small::{ClassOccupancy, SIZE_CLASSES};
+pub use space::blocks::BlockOccupancy;
 pub use tlab::{Reservation, SETTLE_QUANTUM, Tlab, TlabHolder};
