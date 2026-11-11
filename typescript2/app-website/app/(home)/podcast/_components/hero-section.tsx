@@ -50,7 +50,7 @@ export function HeroSection({
   const stats = [
     [views, 'views on YouTube'],
     [String(episodes), 'episodes'],
-    ['Mostly weekly', `since ${since}`],
+    ['Weekly', `since ${since}`],
   ];
   return (
     <section
