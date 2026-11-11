@@ -61,6 +61,15 @@ pub struct ValueModel<'vm> {
     view: View,
 }
 
+/// Whether `ty` has null among its values: `null` itself or a union with it.
+fn admits_null(ty: &RealizedTy) -> bool {
+    match ty {
+        RealizedTy::Null => true,
+        RealizedTy::Union(members) => members.iter().any(admits_null),
+        _ => false,
+    }
+}
+
 /// A yielding `Value` path taken when a body reports [`Fault::NeedsVm`].
 pub(crate) type Yielding = fn(&mut BexVm, &[Value], Locality) -> NativeCallResult;
 
@@ -346,10 +355,16 @@ impl<'vm> ValueModel<'vm> {
     /// dispatch. Element conversions use the declared type's slot instead
     /// (`SlotKind::of_type`), which is what a raw or pointer representation
     /// stands for in either view.
+    ///
+    /// An optional reference type (`Class?`, `string?`) takes a pointer slot
+    /// whose null is the zero word, which the pointer representation
+    /// ([`ObjPtr`], never null) cannot hold: it dispatches as tagged, which
+    /// reads and writes the pointer slot with null as `Tagged::Null`.
     fn slot_of(&self, ty: &RealizedTy) -> SlotKind {
-        match self.view {
-            View::Values => SlotKind::Tagged16,
-            View::Declared => SlotKind::of_type(ty),
+        match (self.view, SlotKind::of_type(ty)) {
+            (View::Values, _) => SlotKind::Tagged16,
+            (View::Declared, SlotKind::Ptr) if admits_null(ty) => SlotKind::Tagged16,
+            (View::Declared, kind) => kind,
         }
     }
 

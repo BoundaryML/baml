@@ -138,7 +138,7 @@ impl Analysis {
         }
         let values = value_reprs(body);
         let reprs = slot_reprs(body, &values);
-        let (static_types, deferred_types, intrinsics) = type_locals(index, body);
+        let (static_types, deferred_types, intrinsics) = type_locals(index, body, arity);
         let array_iters = array_iterators(db, body, arity);
         let mut cfg = Cfg {
             entry: body.entry.0,
@@ -236,6 +236,7 @@ fn slot_reprs(body: &MirFunctionBody<'_>, values: &[Repr]) -> Vec<Repr> {
 fn type_locals(
     index: &ProgramIndex,
     body: &MirFunctionBody<'_>,
+    arity: usize,
 ) -> (
     HashMap<usize, StaticTy>,
     HashMap<usize, TyTemplate>,
@@ -246,8 +247,9 @@ fn type_locals(
     let mut deferred_types = HashMap::new();
     // Where each frame-derived type is loaded, as (block, statement).
     let mut loads: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
-    // Reused type temporaries need ordinary value bindings.
-    let mut written = HashSet::new();
+    // Reused type temporaries need ordinary value bindings, and so do
+    // parameters: the caller writes them, even one with a default type.
+    let mut written: HashSet<usize> = (1..=arity).collect();
     for (b, block) in body.blocks.iter().enumerate() {
         for (s, statement) in block.statements.iter().enumerate() {
             if let StatementKind::Intrinsic { op, args } = &statement.kind {

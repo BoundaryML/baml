@@ -10,10 +10,29 @@ use crate::{
 };
 
 impl<'db> Generator<'_, 'db> {
+    /// The float bytecode loads for the literal `f`: the function's
+    /// constant pool keeps the first of floats `==` to each other (`0.0`
+    /// and `-0.0`), so compiled code loads that one too.
+    fn pooled_float(&self, f: f64) -> f64 {
+        self.positions
+            .constants
+            .iter()
+            .find_map(|constant| match constant {
+                bex_vm_types::ConstValue::Float(pooled) if *pooled == f => Some(*pooled),
+                _ => None,
+            })
+            .unwrap_or(f)
+    }
+
     pub(super) fn constant(&mut self, block: BlockId, constant: &Constant<'db>) -> Gen<Expr> {
         let code = match constant {
             Constant::Int(n) => return Ok(Expr::atom(format!("{n}i64"), Repr::Int)),
-            Constant::Float(f) => return Ok(Expr::atom(float_literal(*f), Repr::Float)),
+            Constant::Float(f) => {
+                return Ok(Expr::atom(
+                    float_literal(self.pooled_float(*f)),
+                    Repr::Float,
+                ));
+            }
             Constant::Bool(b) => return Ok(Expr::atom(format!("{b}"), Repr::Bool)),
             Constant::Null => return Ok(Expr::atom("Value::NULL", Repr::Value)),
             Constant::OmittedArg => return Ok(Expr::atom("Value::OMITTED_ARG", Repr::Value)),
