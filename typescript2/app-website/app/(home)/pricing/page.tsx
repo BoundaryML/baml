@@ -72,6 +72,19 @@ const GROUPS: {
     ],
     title: 'Team',
   },
+  // Sign-in is WorkOS AuthKit, so what it supports is what we offer: Google by default, and SAML or
+  // OIDC SSO and SCIM for teams. Audit logs and SOC 2 aren't done yet.
+  {
+    rows: [
+      { cells: SAME(['Included']), label: 'Sign in with Google' },
+      { cells: SAME(['Included']), label: 'Passkeys and two-factor' },
+      { cells: [['—'], ['Included']], label: 'SAML and OIDC single sign-on' },
+      { cells: [['—'], ['Included']], label: 'SCIM directory sync' },
+      { cells: SAME(['Coming soon']), label: 'Audit logs' },
+      { cells: SAME(['In progress']), label: 'SOC 2' },
+    ],
+    title: 'Security',
+  },
   {
     rows: [
       { cells: [['—'], ['Add-on']], label: 'Bring your own cloud' },

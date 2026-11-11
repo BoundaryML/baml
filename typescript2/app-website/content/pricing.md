@@ -33,6 +33,13 @@ You pay for data and retention. Spans, seats, queries and profiles are free. Bou
 | **Team** | | |
 | Members | Unlimited | Unlimited |
 | Projects and environments | Unlimited | Unlimited |
+| **Security** | | |
+| Sign in with Google | Included | Included |
+| Passkeys and two-factor | Included | Included |
+| SAML and OIDC single sign-on | No | Included |
+| SCIM directory sync | No | Included |
+| Audit logs | Coming soon | Coming soon |
+| SOC 2 | In progress | In progress |
 | **Governance** | | |
 | Bring your own cloud | No | Add-on |
 | Usage caps | Coming soon | Coming soon |
