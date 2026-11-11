@@ -62,7 +62,10 @@ Examples:
     baml pack --function Extract --function Classify --output ./baml-tools
 
   Package a function from a standalone file:
-    baml pack --file script.baml main")]
+    baml pack --file script.baml main
+
+  Package the project's tests:
+    baml pack --tests --output ./tests")]
 pub struct PackArgs {
     #[command(flatten)]
     pub telemetry: crate::embed_telemetry::EmbedTelemetryArgs,
@@ -87,6 +90,11 @@ pub struct PackArgs {
     )]
     pub functions: Vec<String>,
 
+    /// Package the project's tests instead of a function. The binary runs
+    /// them as a bare `baml test` would and prints a byte-stable report.
+    #[arg(long, help_heading = "Target options")]
+    pub tests: bool,
+
     /// Load one standalone source file instead of discovering a project.
     ///
     /// Mutually exclusive with `--project`.
@@ -104,6 +112,11 @@ pub struct PackArgs {
     /// Builds a host with cargo from `--rust-workspace`.
     #[arg(long, help_heading = "Build options")]
     pub rust: bool,
+
+    /// With `--rust`, fail the pack when a reached function would fall back
+    /// to bytecode, listing each with the reason.
+    #[arg(long, requires = "rust", help_heading = "Build options")]
+    pub strict: bool,
 
     /// The `baml_language` workspace checkout the generated host is built from.
     #[arg(
@@ -228,7 +241,7 @@ impl PackArgs {
         )
         .map_err(|e| anyhow!("failed to initialize engine for resolution: {e:?}"))?;
 
-        let (mode, targets) = self.resolve_targets(&engine)?;
+        let (mode, targets) = self.pack_mode(&engine)?;
         for t in &targets {
             validate_help_param(&engine, &t.qualified_name)?;
         }
@@ -256,31 +269,23 @@ impl PackArgs {
 
         let compiled = if self.rust {
             reporter.spin("Compiling", "BAML to Rust");
-            let callables = envelope.program.rendered_callables();
-            let entries: Option<Vec<usize>> = targets
-                .iter()
-                .map(|target| {
-                    callables
-                        .get(&target.qualified_name)
-                        .map(|callable| callable.object.raw())
-                })
-                .collect();
-            let module = baml_db::rust_backend::compile_program(
+            Some(self.compile_rust(
                 &db,
                 root,
                 &envelope.program,
-                crate::bytecode_cache::CLI_OPT_LEVEL,
-                "program.bexa",
+                &targets,
                 fingerprint,
-                entries.as_deref(),
-            )
-            .map_err(|error| anyhow!(error))?;
-            Some(module)
+                reporter,
+            )?)
         } else {
             None
         };
         drop(db);
-        let label = label_for(&targets);
+        let label = if self.tests {
+            "tests".to_string()
+        } else {
+            label_for(&targets)
+        };
         reporter.spin("Packaging", &label);
         let target_triple = self.resolved_target_triple()?;
         let basename = self.resolve_output_basename()?;
@@ -332,6 +337,78 @@ impl PackArgs {
         // combination up front instead of silently preferring one. Same rule
         // as `baml run`.
         validate_file_project_flags(self.file.as_deref(), self.from.as_deref())?;
+        self.validate_targets()?;
+        if self.rust && !bex_engine::STACKFUL_FIBERS_SUPPORTED {
+            anyhow::bail!(
+                "`--rust` requires stackful fibers, which are unsupported on this target"
+            );
+        }
+        if self.rust && self.resolved_target_triple()? != release_host_target_triple()? {
+            anyhow::bail!("`--rust` builds for this machine only; drop `--target`");
+        }
+        Ok(())
+    }
+
+    /// The dispatch shape and entry points: the project's tests, or the
+    /// requested functions.
+    fn pack_mode(
+        &self,
+        engine: &BexEngine,
+    ) -> Result<(baml_exec::PackMode, Vec<ResolvedPackTarget>)> {
+        if !self.tests {
+            return self.resolve_targets(engine);
+        }
+        let (profile_include, profile_exclude) = self.test_profile_selectors()?;
+        Ok((
+            baml_exec::PackMode::Tests {
+                profile_include,
+                profile_exclude,
+            },
+            Vec::new(),
+        ))
+    }
+
+    /// Compile the reached functions to Rust and report admission. A test
+    /// binary's entries are every test body: compile all.
+    fn compile_rust(
+        &self,
+        db: &ProjectDatabase,
+        root: baml_db::SourceRoot,
+        program: &Program,
+        targets: &[ResolvedPackTarget],
+        fingerprint: [u8; 32],
+        reporter: &Reporter,
+    ) -> Result<baml_db::rust_backend::RustModule> {
+        let callables = program.rendered_callables();
+        let entries: Option<Vec<usize>> = if self.tests {
+            None
+        } else {
+            targets
+                .iter()
+                .map(|target| {
+                    callables
+                        .get(&target.qualified_name)
+                        .map(|callable| callable.object.raw())
+                })
+                .collect()
+        };
+        let module = baml_db::rust_backend::compile_program(
+            db,
+            root,
+            program,
+            crate::bytecode_cache::CLI_OPT_LEVEL,
+            "program.bexa",
+            fingerprint,
+            entries.as_deref(),
+        )
+        .map_err(|error| anyhow!(error))?;
+        self.report_admission(&module, reporter)?;
+        Ok(module)
+    }
+
+    /// Validate the target flags: a positional function, `-f` functions, or
+    /// `--tests`, exactly one of them.
+    fn validate_targets(&self) -> Result<()> {
         if let Some(target) = self.target.as_deref() {
             if looks_like_path(target) {
                 anyhow::bail!(
@@ -349,22 +426,86 @@ impl PackArgs {
                 );
             }
         }
-        if self.target.is_none() && self.functions.is_empty() {
+        if self.tests && (self.target.is_some() || !self.functions.is_empty()) {
+            anyhow::bail!(
+                "`--tests` packs the project's tests, not a function — drop the \
+                 positional `<TARGET>` / `-f <NAME>`, or drop `--tests`."
+            );
+        }
+        if self.target.is_none() && self.functions.is_empty() && !self.tests {
             anyhow::bail!(
                 "no target specified. Pass a positional `<TARGET>` to pack one \
                  function as the binary's only entry point, or one or more \
                  `-f <NAME>` flags to pack a subcommand binary."
             );
         }
-        if self.rust && !bex_engine::STACKFUL_FIBERS_SUPPORTED {
+        Ok(())
+    }
+
+    /// Report how many reached functions compile to Rust and how many fall
+    /// back to bytecode; under `--strict`, a fallback fails the pack.
+    fn report_admission(
+        &self,
+        module: &baml_db::rust_backend::RustModule,
+        reporter: &Reporter,
+    ) -> Result<()> {
+        let fallback: Vec<_> = module
+            .rejected
+            .iter()
+            .filter(|(_, rejection)| {
+                !matches!(rejection, baml_db::rust_backend::Rejection::Unreached)
+            })
+            .collect();
+        reporter.finish(
+            "Admitted",
+            format!(
+                "{} compiled, {} fallback to bytecode",
+                module.functions.len(),
+                fallback.len()
+            ),
+        );
+        if let Some(path) = baml_env::raw_var("BAML_PACK_ADMISSION_REPORT") {
+            let mut text = String::new();
+            for function in &module.functions {
+                text.push_str(&format!("compiled\t{}\n", function.display));
+            }
+            for (name, rejection) in &fallback {
+                text.push_str(&format!("fallback\t{name}\t{rejection}\n"));
+            }
+            std::fs::write(&path, text).with_context(|| format!("failed to write {path}"))?;
+        }
+        if self.strict && !fallback.is_empty() {
+            let list = fallback
+                .iter()
+                .map(|(name, rejection)| format!("  {name}: {rejection}"))
+                .collect::<Vec<_>>()
+                .join("\n");
             anyhow::bail!(
-                "`--rust` requires stackful fibers, which are unsupported on this target"
+                "`--strict`: {} reached functions would run as bytecode:\n{list}",
+                fallback.len()
             );
         }
-        if self.rust && self.resolved_target_triple()? != release_host_target_triple()? {
-            anyhow::bail!("`--rust` builds for this machine only; drop `--target`");
-        }
         Ok(())
+    }
+
+    /// The selectors a `--tests` binary bakes in: those of the project's
+    /// default test profile, as a bare `baml test` applies them.
+    fn test_profile_selectors(&self) -> Result<(Vec<String>, Vec<String>)> {
+        if self.file.is_some() {
+            return Ok(Default::default());
+        }
+        let Some(root) = crate::project_load::find_project_root_from(self.from.as_deref())? else {
+            return Ok(Default::default());
+        };
+        let path = root.join("baml.toml");
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => Some(text),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => {
+                return Err(error).with_context(|| format!("failed to read {}", path.display()));
+            }
+        };
+        crate::test_command::default_profile_selectors(text.as_deref(), &root)
     }
 
     fn resolved_target_triple(&self) -> Result<&str> {
@@ -999,9 +1140,11 @@ mod tests {
             compiler: crate::commands::CompilerArgs::default(),
             target: None,
             functions: Vec::new(),
+            tests: false,
             file: None,
             output: None,
             rust: false,
+            strict: false,
             rust_workspace: None,
             rust_build_dir: None,
             rust_profile: RustProfile::Release,

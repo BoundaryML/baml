@@ -11,10 +11,16 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
-    FunctionCallContextBuilder, WireTy, logger::TraceLogger,
+    FunctionCallContextBuilder, logger::TraceLogger,
 };
 use clap::{Args, FromArgMatches};
 use sys_native::CallId;
+
+#[cfg(test)]
+use baml_exec::test_report::FlatReport;
+use baml_exec::test_report::{
+    consume_flat_report, parse_flat_report, pluralize, string_array, string_array_values,
+};
 
 use crate::{
     bytecode_cache::CacheContext,
@@ -318,6 +324,36 @@ fn finish_engine(
             .saturating_add(1);
     }
     ctx.unhandled_spawn_failures.load(Ordering::SeqCst)
+}
+
+/// The selectors of the project's default test profile, as a bare `baml
+/// test` applies them: what a `baml pack --tests` binary bakes in. No
+/// manifest, or no default profile, selects everything.
+pub(crate) fn default_profile_selectors(
+    manifest_text: Option<&str>,
+    project_root: &std::path::Path,
+) -> Result<(Vec<String>, Vec<String>)> {
+    let Some(text) = manifest_text else {
+        return Ok(Default::default());
+    };
+    let manifest = baml_db::manifest::parse(text).with_context(|| {
+        format!(
+            "failed to read test profiles from {}",
+            project_root.join("baml.toml").display()
+        )
+    })?;
+    let Some(name) = manifest.test.default.as_deref() else {
+        return Ok(Default::default());
+    };
+    let profile = manifest
+        .test
+        .profiles
+        .get(name)
+        .ok_or_else(|| anyhow!("default test profile `{name}` is not defined"))?;
+    let parsed = TestArgs::parse_profile_args(name, &profile.args)?;
+    Ok(parsed
+        .map(|parsed| (parsed.test.include, parsed.test.exclude))
+        .unwrap_or_default())
 }
 
 impl TestArgs {
@@ -910,241 +946,6 @@ fn list_selected_testset_names(
         ))
         .map_err(|e| anyhow!("list_filtered failed: {e}"))?;
     Ok(string_array_values(&value))
-}
-
-/// Print a flat report and fold its counts into the running totals.
-///
-/// Print the aggregate testset result and fold its counts into the running
-/// totals. Both filtered and unfiltered runs go through the same aggregate path
-/// (filtered selections still run under their testset runners), so a failing
-/// leaf whose runner still passes the suite is reported as a *tolerated* failure
-/// — kept out of the hard `failed` count and not failing the command. Every
-/// leaf line uses the same canonical ID emitted by `baml test --list`; aggregate
-/// runner verdicts are labeled as aggregates rather than presented as test IDs.
-fn consume_flat_report(
-    flat: &FlatReport,
-    passed: &mut usize,
-    failed: &mut usize,
-    tolerated: &mut usize,
-    total: &mut usize,
-    command_failed: &mut bool,
-) {
-    *passed += flat.passed;
-    *failed += flat.failed;
-    *tolerated += flat.tolerated;
-    *total += flat.total;
-
-    // An empty selection (a filter that matched no testset tests) aggregates
-    // to a vacuous `pass` over zero tests. Printing a green aggregate pass
-    // for that contradicts the `NoTestsRun` exit the caller then returns and
-    // reads as success to anything parsing stdout, so skip the aggregate line
-    // entirely and let the caller's "no tests selected" guard speak.
-    //
-    // Guard *only* the vacuous-pass case: a zero-test report with a non-pass
-    // outcome must still fall through to the FAIL branch so it prints, sets
-    // `command_failed`, and synthesizes a displayed failure — a real failure
-    // is never silently dropped just because it carried no leaves.
-    if flat.total == 0 && flat.outcome == "pass" {
-        return;
-    }
-
-    // Duration suffixes come from the parallel `*_ms` arrays; a missing or
-    // negative entry (fallback-correlated identities, expansion sentinels)
-    // prints the bare line the output always had.
-    let with_ms = |ms: &[i64], i: usize| -> String {
-        match ms.get(i) {
-            Some(ms) if *ms >= 0 => format!(" ({ms}ms)"),
-            _ => String::new(),
-        }
-    };
-    for (i, name) in flat.passed_names.iter().enumerate() {
-        println!("PASS {name}{}", with_ms(&flat.passed_ms, i));
-    }
-    for (i, name) in flat.tolerated_names.iter().enumerate() {
-        println!("TOLERATED {name}{}", with_ms(&flat.tolerated_ms, i));
-    }
-    for (i, name) in flat.failed_names.iter().enumerate() {
-        println!("FAIL {name}{}", with_ms(&flat.failed_ms, i));
-    }
-
-    if flat.outcome == "pass" {
-        if flat.tolerated > 0 {
-            println!(
-                "AGGREGATE PASS [outcome=pass; {} tolerated {}]",
-                flat.tolerated,
-                pluralize(flat.tolerated, "failure", "failures")
-            );
-        }
-    } else {
-        println!("AGGREGATE FAIL [outcome={}]", flat.outcome);
-        for message in &flat.messages {
-            eprintln!("  => {message}");
-        }
-        // A testset runner can fail the aggregate without marking any child
-        // failed. Count that verdict as one displayed failure so the summary
-        // does not read "0 failed" when the aggregate itself failed.
-        if flat.failed == 0 {
-            *failed += 1;
-            *total += 1;
-        }
-        *command_failed = true;
-    }
-}
-
-fn pluralize(n: usize, singular: &str, plural: &str) -> String {
-    if n == 1 {
-        singular.to_string()
-    } else {
-        plural.to_string()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Flat report parsing
-//
-// `FlatTestReport` (baml_std/testing/types.baml) is intentionally shallow:
-// primitive fields only, already aggregated (including the tolerated-failure
-// split), so the driver reads it directly instead of walking a nested,
-// union-wrapped `TestReport | TestSetReport` tree.
-// ---------------------------------------------------------------------------
-
-struct FlatReport {
-    outcome: String,
-    passed: usize,
-    failed: usize,
-    tolerated: usize,
-    total: usize,
-    passed_names: Vec<String>,
-    failed_names: Vec<String>,
-    tolerated_names: Vec<String>,
-    /// Per-leaf durations parallel to the matching name arrays; may be
-    /// shorter (or empty) when identities came from the registry's fallback
-    /// correlation, and `-1` marks a leaf with no measured run — print the
-    /// duration only when a non-negative entry exists at the name's index.
-    passed_ms: Vec<i64>,
-    failed_ms: Vec<i64>,
-    tolerated_ms: Vec<i64>,
-    messages: Vec<String>,
-}
-
-fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
-    let BexExternalValue::Instance { fields, .. } = unwrap_union(value) else {
-        return None;
-    };
-    let outcome = fields
-        .get("outcome")
-        .and_then(|v| as_string(unwrap_union(v)))?
-        .to_string();
-    // Counts are always present in a well-formed FlatTestReport; treat a missing
-    // one as an FFI contract break (parse fails -> reported, not silently zeroed).
-    let passed = fields.get("passed").and_then(as_usize)?;
-    let failed = fields.get("failed").and_then(as_usize)?;
-    let tolerated = fields.get("tolerated").and_then(as_usize)?;
-    let total = fields.get("total").and_then(as_usize)?;
-    let passed_names = fields
-        .get("passed_names")
-        .map(string_array_values)
-        .unwrap_or_default();
-    let failed_names = fields
-        .get("failed_names")
-        .map(string_array_values)
-        .unwrap_or_default();
-    let tolerated_names = fields
-        .get("tolerated_names")
-        .map(string_array_values)
-        .unwrap_or_default();
-    let passed_ms = fields
-        .get("passed_ms")
-        .map(int_array_values)
-        .unwrap_or_default();
-    let failed_ms = fields
-        .get("failed_ms")
-        .map(int_array_values)
-        .unwrap_or_default();
-    let tolerated_ms = fields
-        .get("tolerated_ms")
-        .map(int_array_values)
-        .unwrap_or_default();
-    let messages = fields
-        .get("messages")
-        .map(string_array_values)
-        .unwrap_or_default();
-    Some(FlatReport {
-        outcome,
-        passed,
-        failed,
-        tolerated,
-        total,
-        passed_names,
-        failed_names,
-        tolerated_names,
-        passed_ms,
-        failed_ms,
-        tolerated_ms,
-        messages,
-    })
-}
-
-// ---------------------------------------------------------------------------
-// FFI value helpers
-// ---------------------------------------------------------------------------
-
-fn string_array(items: &[String]) -> BexExternalValue {
-    BexExternalValue::Array {
-        element_type: WireTy::string(),
-        items: items
-            .iter()
-            .map(|s| BexExternalValue::String(s.as_str().into()))
-            .collect(),
-    }
-}
-
-fn int_array_values(value: &BexExternalValue) -> Vec<i64> {
-    match unwrap_union(value) {
-        BexExternalValue::Array { items, .. } => items
-            .iter()
-            .filter_map(|item| match unwrap_union(item) {
-                BexExternalValue::Int(i) => Some(*i),
-                _ => None,
-            })
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
-fn string_array_values(value: &BexExternalValue) -> Vec<String> {
-    match unwrap_union(value) {
-        BexExternalValue::Array { items, .. } => items
-            .iter()
-            .filter_map(|item| as_string(unwrap_union(item)).map(str::to_string))
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
-/// Strip a leading `Union { value, … }` wrapper. Union-typed values (e.g. the
-/// `Outcome = "pass" | "fail" | "error"` field) come back wrapped when
-/// deep-copied across the FFI boundary.
-fn unwrap_union(value: &BexExternalValue) -> &BexExternalValue {
-    match value {
-        BexExternalValue::Union { value, .. } => unwrap_union(value),
-        other => other,
-    }
-}
-
-fn as_string(value: &BexExternalValue) -> Option<&str> {
-    match value {
-        BexExternalValue::String(s) => Some(s.as_str()),
-        BexExternalValue::Union { value, .. } => as_string(value),
-        _ => None,
-    }
-}
-
-fn as_usize(value: &BexExternalValue) -> Option<usize> {
-    match unwrap_union(value) {
-        BexExternalValue::Int(i) => usize::try_from(*i).ok(),
-        _ => None,
-    }
 }
 
 #[cfg(test)]

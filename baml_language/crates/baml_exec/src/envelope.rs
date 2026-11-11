@@ -46,6 +46,16 @@ pub enum PackMode {
     /// Also used when the user passes a single `-f/--function`: the
     /// subcommand layer is forced so signature changes are visible.
     Subcommand,
+    /// The project's tests rather than a function (`baml pack --tests`):
+    /// `./tests [FILTER]... -x <SELECTOR>` runs the packed test registry
+    /// the way `baml test` does and prints a byte-stable report. No
+    /// `targets`. The selectors are the project's default `baml test`
+    /// profile, resolved at pack time; the binary's own selectors narrow
+    /// them the way command-line selectors narrow a profile's.
+    Tests {
+        profile_include: Vec<String>,
+        profile_exclude: Vec<String>,
+    },
 }
 
 /// Wire format embedded into a packaged binary.
