@@ -391,4 +391,40 @@ export default defineSchema({
   })
     .index("by_bep", ["bepId"])
     .index("by_bep_status", ["bepId", "status"]),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // BCS DESIGN PROPOSALS (team only)
+  // ─────────────────────────────────────────────────────────────────────────
+  // System design proposals for Boundary Cloud, each a whole HTML page (diagrams, styles),
+  // shown in a sandboxed frame. Team only: every function in bcs.ts takes the server secret,
+  // which only this app's server holds after checking the viewer, so the browser never reads
+  // these tables. Kept apart from `beps` so that nothing that reads every BEP (Slack, export,
+  // AI analysis, the agent pull API) can reach them.
+  bcsDocs: defineTable({
+    number: v.number(),
+    title: v.string(),
+    status: bepStatus,
+    // GitHub logins of who wrote it and who saved each version.
+    authors: v.array(v.string()),
+    currentVersion: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_number", ["number"]),
+
+  // A version's metadata, listed without its page so that reading a proposal never loads every
+  // version's HTML.
+  bcsDocVersions: defineTable({
+    docId: v.id("bcsDocs"),
+    version: v.number(),
+    note: v.optional(v.string()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+  }).index("by_doc_version", ["docId", "version"]),
+
+  // A version's page, read one at a time.
+  bcsVersionPages: defineTable({
+    docId: v.id("bcsDocs"),
+    version: v.number(),
+    html: v.string(),
+  }).index("by_doc_version", ["docId", "version"]),
 });
