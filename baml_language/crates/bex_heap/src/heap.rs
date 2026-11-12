@@ -1168,8 +1168,9 @@ mod tests {
         assert_eq!(heap.compile_time_boundary(), 2);
     }
 
-    /// A string literal is laid out as a flat string cell among the enum
-    /// cells, at a stable address, readable like a runtime string.
+    /// A string literal is laid out as a string cell among the enum cells,
+    /// at a stable address, readable like a runtime string: a flat in its
+    /// slot, or a view over a spilled flat when too long for one.
     #[test]
     fn compile_time_strings_are_flat_cells() {
         let heap = BexHeap::new(vec![
@@ -1189,8 +1190,16 @@ mod tests {
         unsafe {
             let literal = bex_vm_types::StrRef::of(literal).expect("a flat string cell");
             assert_eq!(literal.as_str(), "literal");
+            assert_eq!(literal.kind(), bex_vm_types::types::StrKind::Flat, "a short literal fits its slot");
+            // Too long for a slot: a view in the slot over a flat spilled
+            // after the slots, both inside the arena.
             let long = bex_vm_types::StrRef::of(heap.compile_time_ptr(2)).unwrap();
+            assert_eq!(long.kind(), bex_vm_types::types::StrKind::View);
             assert_eq!(long.byte_len(), 1000);
+            assert_eq!(long.as_str(), "x".repeat(1000));
+            let (flat, offset) = long.flat().expect("a view's base is its flat");
+            assert_eq!((flat.kind(), offset), (bex_vm_types::types::StrKind::Flat, 0));
+            assert!(heap.is_compile_time_ptr(flat.ptr()));
             assert!(matches!(heap.compile_time_ptr(3).get(), Object::Float(f) if *f == 2.5));
         }
     }
