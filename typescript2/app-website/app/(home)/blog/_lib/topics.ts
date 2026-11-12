@@ -55,9 +55,23 @@ const INDEX_MONTHS = 2;
 /** Whether a post shows on the blog index: a listed post from the last INDEX_MONTHS months. Older
  *  posts keep their URLs and stay in the feed and in "Read next"; only the index leaves them out. */
 export function isOnIndex(post: Post, now = new Date()) {
-  const cutoff = new Date(now);
-  cutoff.setMonth(cutoff.getMonth() - INDEX_MONTHS);
-  return isListed(post) && new Date(post.date) >= cutoff;
+  return (
+    isListed(post) && new Date(post.date) >= monthsBefore(now, INDEX_MONTHS)
+  );
+}
+
+/** The same day and time `months` months before `date`. When that month is shorter, it is the
+ *  month's last day: two months before April 30 is February 28, not March 2, which is where
+ *  `setMonth` alone lands by rolling the extra days forward. */
+function monthsBefore(date: Date, months: number) {
+  const out = new Date(date);
+  const day = out.getDate();
+  // Move to the 1st first, so changing the month can't overflow.
+  out.setDate(1);
+  out.setMonth(out.getMonth() - months);
+  const lastDay = new Date(out.getFullYear(), out.getMonth() + 1, 0).getDate();
+  out.setDate(Math.min(day, lastDay));
+  return out;
 }
 
 /** Launch Week is six short posts in one week of January 2025, listed as one group. */
