@@ -539,10 +539,8 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
         Err(error) => return Err(error.into()),
     };
     let base = None;
-    // Explicit targets acquire only the requested toolchain, after validation.
-    // List/status inspect local state (status still refreshes release metadata);
-    // status --install requires acquisition in the operation itself. Update and
-    // uninstall retain their existing active-target preparation.
+    // Preflight only validates prerequisites. Each operation acquires its own
+    // target, if needed, without first installing the active toolchain.
     match &parsed.command {
         ToolchainCommand::Use { .. } => {}
         ToolchainCommand::Update => {
@@ -550,7 +548,6 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
             if is_channel(&selected.selector) {
                 preflight_state()?;
             }
-            best_effort_install(paths, base);
         }
         ToolchainCommand::Install {
             selector: Some(selector),
@@ -560,7 +557,6 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
         }
         ToolchainCommand::Uninstall { version } => {
             validate_version(version)?;
-            best_effort_install(paths, base);
         }
         ToolchainCommand::Install { selector: None, .. }
         | ToolchainCommand::Status { .. }
@@ -575,65 +571,33 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
             }
         }
         ToolchainCommand::Install { selector, force } => {
-            if let Some(selector) = selector {
-                let selector = if is_channel(&selector) && read_channel(&selector)?.is_some() {
-                    concrete_version_for_selector_with_base(
-                        &ResolvedSelector {
-                            selector,
-                            source: SelectorSource::Config,
-                        },
-                        &manifest_base_url(base),
-                    )?
+            // Omission resolves a target through the same selector precedence as
+            // delegation; both explicit and resolved targets use one install path.
+            let activate_channel = selector.is_none();
+            let selected = match selector {
+                Some(selector) => ResolvedSelector {
+                    selector,
+                    source: SelectorSource::Config,
+                },
+                None => active_selector(paths)?,
+            };
+            let requested =
+                if is_channel(&selected.selector) && read_channel(&selected.selector)?.is_some() {
+                    concrete_version_for_selector_with_base(&selected, &manifest_base_url(base))?
                 } else {
-                    selector
+                    selected.selector
                 };
-                install_toolchain(&selector, false, base, force)
-            } else {
-                let selected = active_selector(paths)?;
-                anyhow::ensure!(
-                    !is_path_selector(&selected.selector),
-                    "active toolchain is a local path; there is nothing to install"
-                );
-                if force {
-                    let concrete = concrete_version_for_selector_with_base(
-                        &selected,
-                        &manifest_base_url(base),
-                    )
-                    .or_else(|error| {
-                        if is_channel(&selected.selector)
-                            && read_channel(&selected.selector)?.is_none()
-                        {
-                            Ok(selected.selector.clone())
-                        } else {
-                            Err(error)
-                        }
-                    })?;
-                    install_toolchain(&concrete, is_channel(&concrete), base, true)
-                } else {
-                    ensure_selected_toolchain(&selected, base).map(|_| ())
-                }
-            }
+            install_toolchain(
+                &requested,
+                activate_channel && is_channel(&requested),
+                base,
+                force,
+            )
         }
         ToolchainCommand::Status { install, json } => status_toolchain(base, paths, install, json),
         ToolchainCommand::Update => update_toolchain(base, paths),
         ToolchainCommand::List => list_toolchains(paths),
         ToolchainCommand::Uninstall { version } => uninstall_toolchain(&version),
-    }
-}
-
-fn best_effort_install(paths: &InvocationPaths, override_url: Option<&str>) {
-    let result = (|| -> Result<()> {
-        let selected = active_selector(paths)?;
-        if let Some(cli) = path_selector(&selected.selector) {
-            let origin = path_selector_origin(&selected.source);
-            verify_path_toolchain(cli, &origin)?;
-            reject_self_exec(cli, &origin)
-        } else {
-            ensure_selected_toolchain(&selected, override_url).map(|_| ())
-        }
-    })();
-    if let Err(error) = result {
-        eprintln!("warning: could not ensure active baml-cli is installed: {error:#}");
     }
 }
 

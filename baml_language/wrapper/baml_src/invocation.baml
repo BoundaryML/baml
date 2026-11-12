@@ -254,18 +254,6 @@ class WrapperInvocation {
         null
     }
 
-    function best_effort_install(self) -> null {
-        self.selection().ensure_installed(telemetry = self.telemetry) catch (error) {
-            WrapperFailure => {
-                baml.io.eprintln(
-                    `warning: could not ensure active baml-cli is installed: ${error_message(error)}`,
-                );
-                null
-            }
-        };
-        null
-    }
-
     function list_toolchains(self) -> null {
         let config = document(config_path());
         let defaults = "canary";
@@ -342,19 +330,6 @@ class WrapperInvocation {
         let command = management_command(args);
         command.preflight(self, $trace = trace.span(inputs = false, output = false, error = false));
         command.execute(self, $trace = trace.span(inputs = false, output = false, error = false))
-    }
-
-    function install_selector(self) -> string {
-        let active = self.selection();
-        ensure(
-            !is_path(active.selector.to_string()),
-            "active toolchain is a local path; there is nothing to install",
-        );
-        if (channel(active.selector.to_string())) {
-            // Keep an already-resolved channel on its recorded concrete version.
-            return ChannelState.new().recorded(active.selector.to_string()) ?? active.selector.to_string();
-        }
-        active.selector.to_string()
     }
 
     function parse(raw: string[]) -> WrapperInvocation {

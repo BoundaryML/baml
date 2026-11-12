@@ -975,8 +975,8 @@ testset "toolchain management" {
         fixture.project(BASE_VERSION);
         let config = fixture.read(USER_CONFIG_FILE);
         let project = fixture.read(PROJECT_MANIFEST_FILE);
-        fixture.absent(BASE_VERSION);
         fixture.manage(candidate, ["toolchain", "uninstall", BASE_VERSION]);
+        root.harness.require(!fixture.requests(), "uninstall acquired an executable");
         root.harness.require(
             !baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}`),
             "uninstall reinstalled its target",
@@ -1058,17 +1058,103 @@ testset "toolchain management" {
         root.harness.require(fixture.requests().length() == 0, "damaged installation was repaired automatically");
     }
 
-    test "update and uninstall retain active toolchain preparation" {
-        let fixture = root.harness.Fixture.start();
-        defer { fixture.close(); }
+    test "non-channel update and uninstall do not acquire active toolchain" {
         for (let args in [["toolchain", "update"], ["toolchain", "uninstall", LATEST_VERSION]]) {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
             fixture.project(BASE_VERSION);
             fixture.absent(BASE_VERSION);
+            let state = fixture.read(CHANNEL_STATE_FILE);
+            let project = fixture.read(PROJECT_MANIFEST_FILE);
+            let config = fixture.read(USER_CONFIG_FILE);
             fixture.manage(candidate, args);
+            root.harness.require(!fixture.requests(), `management acquired the active toolchain: ${args.join(" ")}`);
+            root.harness.require(!baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}`), "management installed absent active version");
             root.harness.require(
-                baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}/VERSION`),
-                `toolchain command skipped installation: ${args.join(" ")}`,
+                fixture.read(CHANNEL_STATE_FILE) == state
+                    && fixture.read(PROJECT_MANIFEST_FILE) == project
+                    && fixture.read(USER_CONFIG_FILE) == config,
+                "management changed selection or channel mapping",
             );
+        }
+    }
+
+    test "uninstall rejects absent active version without acquisition" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.project(BASE_VERSION);
+        fixture.absent(BASE_VERSION);
+        let tree = fixture.tree("baml");
+        fixture.manage(candidate, ["toolchain", "uninstall", BASE_VERSION], success = false, diagnostic = "not installed");
+        root.harness.require(!fixture.requests(), "uninstall downloaded its absent target");
+        root.harness.require(fixture.tree("baml") == tree, "uninstall modified absent target or selection");
+    }
+
+    test "uninstall does not resolve or validate active selection" {
+        for (let selection in ["unrecorded channel", "invalid environment", "damaged version"]) {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            if (selection == "unrecorded channel") {
+                fixture.project("canary", key = "channel");
+                fixture.remove(CHANNEL_STATE_FILE);
+                fixture.absent(BASE_VERSION);
+            } else if (selection == "invalid environment") {
+                fixture.env["BAML_TOOLCHAIN"] = "not-a-version";
+            } else {
+                fixture.project(BASE_VERSION);
+                fixture.write(`baml/toolchains/${BASE_VERSION}/VERSION`, "damaged-version");
+            }
+            fixture.manage(candidate, ["toolchain", "uninstall", NEXT_VERSION]);
+            root.harness.require(!fixture.requests(), "uninstall resolved or installed the active selection");
+            root.harness.require(!baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`), "uninstall left its requested target installed");
+            if (selection == "unrecorded channel") {
+                root.harness.require(!baml.fs.exists(`${fixture.root}/${CHANNEL_STATE_FILE}`), "uninstall recorded an active channel");
+                root.harness.require(!baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}`), "uninstall installed the active channel");
+            }
+        }
+    }
+
+    test "channel update acquires only its requested release" {
+        for (let recorded in [true, false]) {
+            for (let succeeds in [true, false]) {
+                let fixture = root.harness.Fixture.start();
+                defer { fixture.close(); }
+                fixture.project("canary", key = "channel");
+                fixture.channel("canary", NEXT_VERSION);
+                fixture.absent(BASE_VERSION);
+                fixture.absent(NEXT_VERSION);
+                let state = fixture.read(CHANNEL_STATE_FILE);
+                let project = fixture.read(PROJECT_MANIFEST_FILE);
+                let config = fixture.read(USER_CONFIG_FILE);
+                if (!recorded) {
+                    fixture.remove(CHANNEL_STATE_FILE);
+                }
+                let extension = if (fixture.windows) { ".zip" } else { ".tar.gz" };
+                if (!succeeds) {
+                    fixture.write(`server/${NEXT_VERSION}${extension}.status`, "404");
+                }
+                fixture.manage(candidate, ["toolchain", "update"], success = succeeds);
+                root.harness.require(
+                    fixture.requests() == ["/canary.json", `/${NEXT_VERSION}${extension}`],
+                    "update bootstrapped the old version or duplicated requested acquisition",
+                );
+                root.harness.require(!baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}`), "update installed old active version");
+                root.harness.require(
+                    fixture.read(PROJECT_MANIFEST_FILE) == project && fixture.read(USER_CONFIG_FILE) == config,
+                    "update changed selectors",
+                );
+                if (succeeds) {
+                    root.harness.require(fixture.channel_version("canary") == NEXT_VERSION, "update did not record requested release");
+                    fixture.check(candidate, NEXT_VERSION);
+                } else {
+                    root.harness.require(!baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`), "failed update published a release");
+                    if (recorded) {
+                        root.harness.require(fixture.read(CHANNEL_STATE_FILE) == state, "failed update changed channel mapping");
+                    } else {
+                        root.harness.require(!baml.fs.exists(`${fixture.root}/${CHANNEL_STATE_FILE}`), "failed update recorded a new channel");
+                    }
+                }
+            }
         }
     }
 

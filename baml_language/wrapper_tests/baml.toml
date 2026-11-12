@@ -34,6 +34,11 @@ args = [
     "--include", "root::toolchain installation::archive link entry is rejected",
     "--include", "root::toolchain installation::failed install can be retried after server recovery",
     "--include", "root::toolchain installation::concurrent installs publish reusable manifest cache",
+    "--include", "root::toolchain installation::install resolves omitted project target through normal installation",
+    "--include", "root::toolchain installation::bare install records unrecorded selected channel once",
+    "--include", "root::toolchain installation::bare install uses environment selection",
+    "--include", "root::toolchain installation::bare install preserves recorded channel version",
+    "--include", "root::toolchain installation::bare forced install replaces recorded channel version",
     # toolchain management
     "--include", "root::toolchain management::use updates project and preserves global default",
     "--include", "root::toolchain management::global use preserves project selection",
@@ -46,6 +51,10 @@ args = [
     "--include", "root::toolchain management::same target acquisition failure is attempted once",
     "--include", "root::toolchain management::list observes absent active toolchain without acquisition",
     "--include", "root::toolchain management::list leaves unrecorded channel unresolved",
+    "--include", "root::toolchain management::non-channel update and uninstall do not acquire active toolchain",
+    "--include", "root::toolchain management::uninstall rejects absent active version without acquisition",
+    "--include", "root::toolchain management::uninstall does not resolve or validate active selection",
+    "--include", "root::toolchain management::channel update acquires only its requested release",
     # configuration validation
     "--include", "root::configuration validation::project edits preserve restricted permissions",
     "--include", "root::configuration validation::project edits made during downloads are preserved",
