@@ -21,6 +21,7 @@ import type * as issues from "../issues.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as migrations from "../migrations.js";
 import type * as presence from "../presence.js";
+import type * as serverSecret from "../serverSecret.js";
 import type * as slack from "../slack.js";
 import type * as userStances from "../userStances.js";
 import type * as users from "../users.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   "lib/prompts": typeof lib_prompts;
   migrations: typeof migrations;
   presence: typeof presence;
+  serverSecret: typeof serverSecret;
   slack: typeof slack;
   userStances: typeof userStances;
   users: typeof users;

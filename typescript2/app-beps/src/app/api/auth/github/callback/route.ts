@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { api } from "../../../../../../convex/_generated/api";
 import { BCS_COOKIE, isBcsOrgMember, sessionCookie, signSession } from "@/lib/bcs-auth";
+import { bcsCall } from "@/lib/bcs-convex";
 
 const PRODUCTION_URL = "https://beps.boundaryml.com";
 const ALLOWED_PREVIEW_PATTERNS = [
@@ -147,6 +149,24 @@ export async function GET(request: NextRequest) {
       }
     } catch (error) {
       console.warn("Failed to fetch GitHub emails:", error);
+    }
+
+    // Record the sign-in with what GitHub verified, so a team email (and the Slack link it brings)
+    // never comes from the browser, which only learns its user ID below.
+    const recorded = await bcsCall((convex, secret) =>
+      convex.mutation(api.users.recordGitHubSignIn, {
+        secret,
+        githubId: githubUser.id.toString(),
+        name: githubUser.name || githubUser.login,
+        avatarUrl: githubUser.avatar_url,
+        boundaryEmail,
+      })
+    );
+    if (!recorded.ok) {
+      // Without the server's record the account would stay unlinked from GitHub (and get no API
+      // token), so stop here rather than finish a half sign-in.
+      console.error("Could not record the GitHub sign-in:", recorded.failure.message);
+      return NextResponse.redirect(new URL("/login?error=sign_in_not_recorded", baseUrl));
     }
 
     const userData = {

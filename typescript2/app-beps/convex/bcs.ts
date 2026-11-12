@@ -13,6 +13,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { bepStatus } from "./schema";
+import { requireServerSecret } from "./serverSecret";
 
 /**
  * Why a BCS call was refused. `not_configured`: the deployments' BCS_CONVEX_SECRET is missing or
@@ -33,21 +34,9 @@ function fail(kind: BcsFailure["kind"], message: string, currentVersion?: number
 /** The longest HTML page a version may hold, under Convex's 1 MiB document limit. */
 export const MAX_HTML_BYTES = 900_000;
 
-/** Refuses a call without the server secret, comparing in constant time. */
-function guard(given: string) {
-  // Trimmed on both sides: a secret pasted into a dashboard often gains a trailing newline.
-  const expected = process.env.BCS_CONVEX_SECRET?.trim();
-  if (!expected || expected.length < 32) {
-    fail("not_configured", "BCS_CONVEX_SECRET is not set in Convex (32 characters or more).");
-  }
-  const secret = given.trim();
-  let difference = secret.length === expected.length ? 0 : 1;
-  for (let i = 0; i < expected.length; i++) {
-    difference |= expected.charCodeAt(i) ^ (i < secret.length ? secret.charCodeAt(i) : 0);
-  }
-  if (difference !== 0) {
-    fail("not_configured", "BCS_CONVEX_SECRET differs between the site and Convex.");
-  }
+/** Refuses a call without the server secret. */
+function guard(secret: string) {
+  requireServerSecret(secret);
 }
 
 function checkHtml(html: string) {

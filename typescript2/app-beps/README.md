@@ -60,7 +60,7 @@ A standalone web application for managing BAML Enhancement Proposals (BEPs) and 
 - **Slack**: each proposal gets a thread in `BCS_SLACK_CHANNEL` (`convex/bcsSlack.ts`). Its first message shows the title, status, authors and version and is edited as they change; new versions (with their note) and status changes are replies, mentioning the member when their Slack account is linked. The channel must be private, with the bot behind `SLACK_BOUNDARY_BOT_TOKEN` invited. Nothing is posted while `BCS_SLACK_CHANNEL` is unset
 - **Pages are sandboxed**: shown in an `<iframe sandbox>` without `allow-same-origin` (and "Open full page" serves a CSP `sandbox`), so a page's scripts cannot read the site or its cookies
 - **`bep bcs`**: the `bep` script pulls (`bep bcs pull`, into `BCS/`), creates (`bep bcs new "Title" page.html`) and pushes new versions (`bep bcs push <n>`, refused when the server moved on since the pull) with `BCS_TOKEN`, a token a member gets at `/bcs/token` that expires with their sign-in, signed like the cookie and only good for the CLI routes (`/api/agent/bcs`). BCS proposals never come down in "export all"
-- **Setup**: `BCS_SESSION_SECRET` (signs the cookie) and `BCS_CONVEX_SECRET` on the Next.js app (Vercel, Production), and the same `BCS_CONVEX_SECRET` on the Convex production deployment (dashboard, Settings, Environment Variables), each at least 32 characters; surrounding whitespace is ignored. For Slack, `BCS_SLACK_CHANNEL` on Convex: the channel's ID, from its details in Slack. A member sees which setting is missing at `/bcs` rather than an error. In a checkout where `npx convex dev` ran in anonymous mode, `npx convex env set ... --prod` changes the local backend, not production, so use the dashboard. In development, `BCS_DEV_VIEWER=<github login>` stands in for the cookie, since GitHub's login returns to the production site
+- **Setup**: `BCS_SESSION_SECRET` (signs the cookie) and `BCS_CONVEX_SECRET` on the Next.js app (Vercel, Production), and the same `BCS_CONVEX_SECRET` on the Convex production deployment (dashboard, Settings, Environment Variables), each at least 32 characters; surrounding whitespace is ignored. For Slack, `BCS_SLACK_CHANNEL` on Convex: the channel's ID, from its details in Slack. A member sees which setting is missing at `/bcs` rather than an error. In a checkout where `npx convex dev` ran in anonymous mode, `npx convex env set ... --prod` changes the local backend, not production, so use the dashboard. In development, `BCS_DEV_VIEWER=<github login>` stands in for the cookie, since GitHub's login returns to the production site; add `BCS_DEV_GITHUB_ID=<numeric GitHub account ID>` to get an API token at `/profile` for the local user with that ID
 
 ## Architecture
 
@@ -622,7 +622,7 @@ Requires a Bearer token in the `Authorization` header:
 Authorization: Bearer bep_xxxxxxxxxxxxx
 ```
 
-Get your API token from your profile page (`/profile`).
+Get your API token from your profile page (`/profile`). Tokens are for BoundaryML organization members: the page asks the server (`/api/token`), which checks the GitHub sign-in, and tokens are stored apart from user records (`apiTokens`), so no public query returns them.
 
 #### Request Body
 
