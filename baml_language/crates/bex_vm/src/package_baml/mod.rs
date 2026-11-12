@@ -476,6 +476,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 telemetry_function_id: None,
                 telemetry_registration: bex_vm_types::FunctionRegistration::default(),
                 telemetry_policy_id: function.telemetry_policy_id,
+                hotswap_redirect: bex_vm_types::types::HotswapRedirect::default(),
                 compiled_body: function.compiled_body,
                 local_names: function.local_names,
                 debug_locals: function.debug_locals,

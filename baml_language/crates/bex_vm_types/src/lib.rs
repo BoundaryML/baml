@@ -47,12 +47,12 @@ pub use roots::{
     RootVisitor, Survival, Weak,
 };
 pub use runtime_compile::{
-    MountHead, RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
-    RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight,
-    RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase, RuntimeDiagnosticRelatedInfo,
-    RuntimeDiagnosticSeverity, RuntimeMountEdge, RuntimeMountSurface, RuntimeMountedAlias,
-    RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedImpl,
-    RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount,
+    DeclFingerprints, MountHead, RuntimeCompileDiagnostic, RuntimeCompileMode,
+    RuntimeCompileRequest, RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails,
+    RuntimeDiagnosticHighlight, RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase,
+    RuntimeDiagnosticRelatedInfo, RuntimeDiagnosticSeverity, RuntimeMountEdge, RuntimeMountSurface,
+    RuntimeMountedAlias, RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs,
+    RuntimeMountedImpl, RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount,
     RuntimeProjectedSurface, RuntimeReExport, RuntimeReExportKind, RuntimeSessionCompileRequest,
     RuntimeSourceSpan, SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };

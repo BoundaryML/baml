@@ -209,6 +209,10 @@ pub struct BexHeap {
     /// Uses `RwLock<HashMap>` instead of sharded_slab to allow in-place
     /// updates after GC moves objects.
     pub(crate) handles: RwLock<HashMap<usize, HeapPtr>>,
+    /// Hot swaps installed and queued: the GC roots behind occupied redirects.
+    pub(crate) hotswap: crate::hotswap::HotswapTable,
+    /// Set once a package can be swapped (BEP-087).
+    pub(crate) hotswap_on: std::sync::atomic::AtomicBool,
 
     /// The live handle for each held object, so one object has one key.
     ///
@@ -403,6 +407,8 @@ impl BexHeap {
             inactive: UnsafeCell::new(ChunkedVec::new()),
             gen0_next_chunk: AtomicUsize::new(0),
             handles: RwLock::new(HashMap::new()),
+            hotswap: crate::hotswap::HotswapTable::default(),
+            hotswap_on: std::sync::atomic::AtomicBool::new(false),
             handles_by_ptr: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
@@ -1348,6 +1354,7 @@ mod tests {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
+            hotswap_redirect: bex_vm_types::types::HotswapRedirect::default(),
             compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),

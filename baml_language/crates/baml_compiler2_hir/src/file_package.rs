@@ -69,8 +69,16 @@ fn extract_ns_name(component: &str) -> Option<Name> {
 pub fn file_package(db: &dyn crate::Db, file: SourceFile) -> PackageInfo {
     let root = file.source_root(db);
     let relative = root_relative_path(db, file);
+    PackageInfo {
+        root,
+        namespace_path: namespace_path(&relative),
+    }
+}
 
-    let namespace_path: Vec<Name> = relative
+/// The namespace of a file at `relative` to its source root: its directories
+/// named `ns_<identifier>`, outermost first. The file's own name never counts.
+pub fn namespace_path(relative: &std::path::Path) -> Vec<Name> {
+    relative
         .parent()
         .map(|p| {
             p.components()
@@ -80,10 +88,5 @@ pub fn file_package(db: &dyn crate::Db, file: SourceFile) -> PackageInfo {
                 })
                 .collect()
         })
-        .unwrap_or_default();
-
-    PackageInfo {
-        root,
-        namespace_path,
-    }
+        .unwrap_or_default()
 }

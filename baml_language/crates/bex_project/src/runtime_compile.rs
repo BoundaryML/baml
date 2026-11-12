@@ -1657,6 +1657,17 @@ fn steps_publishing_a_binding(
 }
 
 impl RuntimeCompiler for ProjectRuntimeCompiler {
+    fn declaration_fingerprints(
+        &self,
+        files: &indexmap::IndexMap<String, String>,
+    ) -> bex_vm_types::DeclFingerprints {
+        crate::hotswap_fingerprint::declaration_fingerprints(
+            files
+                .iter()
+                .map(|(path, text)| (path.as_str(), text.as_str())),
+        )
+    }
+
     fn compile(
         &self,
         request: RuntimeCompileRequest,

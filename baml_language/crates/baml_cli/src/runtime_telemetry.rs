@@ -31,6 +31,14 @@ pub(crate) fn create_engine_with_context(
         bex_engine::EngineConfig {
             launch_context,
             runtime_compiler: Some(bex_project::runtime_compiler()),
+            // `--hot` compares each save with this.
+            hotswap_baseline: baml_env::hotswap_enabled().then(|| {
+                bex_project::hotswap_fingerprint::declaration_fingerprints(
+                    sources
+                        .iter()
+                        .map(|(path, text)| (path.as_str(), text.as_str())),
+                )
+            }),
             recording: Some(
                 TelemetryRecording::from_boundary_defaults(
                     boundary.project.as_deref(),

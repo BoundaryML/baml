@@ -588,12 +588,25 @@ impl EqualsDriver {
                 )
             }
             (Object::BoundMethod(_), _) => Cmp::NotEqual,
-            (Object::GenericFunction(x), Object::GenericFunction(y)) => step(
-                x.function == y.function
-                    && x.runtime_package == y.runtime_package
-                    && resolve::ImplResolver::new(vm)
-                        .ty_args_equivalent(&x.type_args, &y.type_args),
-            ),
+            (Object::GenericFunction(x), Object::GenericFunction(y)) => {
+                // A hot swapped body names a function through its patch's own
+                // slot, which holds the same function as the running one.
+                let same_function = (x.function == y.function
+                    && x.runtime_package == y.runtime_package)
+                    || (vm.hotswap_enabled()
+                        && matches!(
+                            (
+                                vm.generic_function_authored_ptr(x),
+                                vm.generic_function_authored_ptr(y),
+                            ),
+                            (Ok(a), Ok(b)) if a == b
+                        ));
+                step(
+                    same_function
+                        && resolve::ImplResolver::new(vm)
+                            .ty_args_equivalent(&x.type_args, &y.type_args),
+                )
+            }
             (Object::GenericFunction(_), _) => Cmp::NotEqual,
             (Object::HostClosure(x), Object::HostClosure(y)) => {
                 step(Arc::ptr_eq(&x.handle, &y.handle))
