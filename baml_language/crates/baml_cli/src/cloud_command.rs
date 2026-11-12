@@ -1,7 +1,7 @@
 //! Manage cloud dashboards using the saved Boundary login.
 use std::{
     io::{self, Write as _},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Result};
@@ -104,7 +104,7 @@ impl CloudCommands {
                     args.output.is_some(),
                 )?;
                 if let (Some(path), Some(html)) = (&args.output, result.html) {
-                    std::fs::write(path, html)
+                    save_html(path, &html)
                         .with_context(|| format!("Could not write dashboard {}", path.display()))?;
                 }
                 let mut output = io::stdout().lock();
@@ -120,6 +120,27 @@ impl CloudCommands {
         }
         Ok(crate::ExitCode::Success)
     }
+}
+
+fn save_html(path: &Path, html: &[u8]) -> io::Result<()> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        temporary
+            .as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    temporary.write_all(html)?;
+    // Replacing the inode keeps an old public file or hard link from exposing the new HTML.
+    temporary
+        .persist(path)
+        .map(|_| ())
+        .map_err(|error| error.error)
 }
 
 impl DashboardCommands {
@@ -322,6 +343,31 @@ mod tests {
             RuntimeCli::command()
                 .try_get_matches_from(["baml", "cloud", "upload-dashboard"])
                 .is_err()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn downloaded_html_replaces_public_files_with_private_files() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("dashboard.html");
+        std::fs::write(&path, b"old content").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let previous = directory.path().join("previous.html");
+        std::fs::hard_link(&path, &previous).unwrap();
+        super::save_html(&path, b"private dashboard").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"private dashboard");
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(std::fs::read(&previous).unwrap(), b"old content");
+        let new = directory.path().join("new.html");
+        super::save_html(&new, b"new private dashboard").unwrap();
+        assert_eq!(
+            std::fs::metadata(new).unwrap().permissions().mode() & 0o777,
+            0o600
         );
     }
 }

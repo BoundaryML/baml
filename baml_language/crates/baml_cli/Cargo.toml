@@ -68,6 +68,7 @@ serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_o
 serde_yaml = { workspace = true }
 sha2 = { workspace = true }
 strsim = { workspace = true }
+tempfile = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
@@ -94,7 +95,6 @@ btel_recorder = { workspace = true }
 insta = { workspace = true }
 prost = { workspace = true }
 pulldown-cmark = { workspace = true }
-tempfile = { workspace = true }
 wiremock = { workspace = true }
 
 [target.'cfg(unix)'.dev-dependencies]
