@@ -42,9 +42,10 @@ function main() -> void throws never {
         // scheduling another helper that immediately retries the same rejection.
         if (!internal_helper) { WrapperTelemetry.finish(telemetry, executable = flush_executable); }
     }
-    // Retain command outcomes without recording arguments or error payloads.
+    // Capture canonical command context and errors without argument snapshots.
+    // Helpers must not inherit a foreground command label.
     flush_executable
-        = dispatch(telemetry, $trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
+        = dispatch(telemetry, $trace = trace.span(inputs = false, output = false, error = true).context(metadata = { "command": if (internal_helper) { null } else { WrapperCli.command_name(args) } })) catch (error) {
             _ => {
                 telemetry_event(telemetry, "wrapper_unhandled_error", fields = { "event_kind": "unhandled_error" });
                 baml.io.eprintln(`error: ${error_message(error)}`);
@@ -74,7 +75,7 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
     }
     let parsed = WrapperInvocation.parse(
         forwarded,
-        $trace = trace.span(inputs = false, output = false, error = false),
+        $trace = trace.span(inputs = false, output = false, error = true),
     );
     let invocation = match (parsed) {
         let display: root.clap.Error => {
@@ -121,12 +122,12 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
                     WrapperCli.output_format(action.matches);
                     match (sub.name) {
                         "toolchain" => {
-                            invocation.manage(management_command(action.name, action.matches))
+                            invocation.manage(management_command(action.name, action.matches, $trace = trace.span(inputs = false, output = false, error = true)))
                         },
                         _ => {
                             WrapperUpdater.update(
                                 telemetry = invocation.telemetry,
-                                $trace = trace.span(inputs = false, output = false, error = false),
+                                $trace = trace.span(inputs = false, output = false, error = true),
                             )
                         },
                     }
@@ -134,6 +135,13 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
             }
         },
     }
+}
+
+// Keep the child result before sys.exit unwinds dispatch as cancellation. Standard
+// streams still inherit; expose only status to the recording boundary.
+function run_toolchain(binary: string, args: string[]) -> baml.sys.ProcessExit {
+    let result = baml.sys.run(binary, args = args, env = { "BAML_CLI_ALLOW_DIRECT": "1" });
+    baml.sys.ProcessExit { exit_code: result.exit_code, signal: result.signal }
 }
 
 function describe_selector(value: string) -> string {

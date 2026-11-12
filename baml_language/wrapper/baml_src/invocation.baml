@@ -295,13 +295,13 @@ class WrapperInvocation {
     function run_cli_version(self, flag: string) -> int {
         let binary = self.selection().ensure_installed(telemetry = self.telemetry);
         WrapperTelemetry.finish(self.telemetry);
-        let result = baml.sys.run(binary, args = [flag], env = { "BAML_CLI_ALLOW_DIRECT": "1" });
+        let result = run_toolchain(binary, [flag], $trace = trace.span(inputs = false, output = true, error = true));
         result.exit_code
     }
 
     function manage(self, command: ManagementCommand) -> null {
-        command.preflight(self, $trace = trace.span(inputs = false, output = false, error = false));
-        command.execute(self, $trace = trace.span(inputs = false, output = false, error = false))
+        command.preflight(self, $trace = trace.span(inputs = false, output = false, error = true));
+        command.execute(self, $trace = trace.span(inputs = false, output = false, error = true))
     }
 
     // Hands the invocation to the selected toolchain's CLI, tokens untouched.
@@ -311,7 +311,7 @@ class WrapperInvocation {
         let warned = active.warn_if_outdated();
         let refresh = spawn { active.refresh_channel() };
         WrapperTelemetry.finish(self.telemetry);
-        let result = baml.sys.run(binary, args = forwarded, env = { "BAML_CLI_ALLOW_DIRECT": "1" });
+        let result = run_toolchain(binary, forwarded, $trace = trace.span(inputs = false, output = true, error = true));
         await refresh;
         if (!warned) {
             active.warn_if_outdated();
