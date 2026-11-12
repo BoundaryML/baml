@@ -106,9 +106,20 @@ function main() -> void throws never {
     // Retain command outcomes without recording arguments or error payloads.
     flush_executable
         = dispatch(telemetry, $trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
+            baml.panics.HostUnavailable {
+                resource: "stdout" | "stderr",
+                io_error_kind: "broken_pipe",
+            } => {
+                // SIGPIPE-equivalent status, while still running defers and host shutdown.
+                baml.sys.exit(141)
+            },
             _ => {
                 telemetry_event(telemetry, "wrapper_unhandled_error", fields = { "event_kind": "unhandled_error" });
-                baml.io.eprintln(`error: ${error_message(error)}`);
+                baml.io.eprintln(`error: ${error_message(error)}`) catch (diagnostic_error) {
+                    baml.panics.HostUnavailable { resource: "stderr", io_error_kind: "broken_pipe" } => {
+                        baml.sys.exit(141)
+                    },
+                };
                 baml.sys.exit(1)
             },
         };

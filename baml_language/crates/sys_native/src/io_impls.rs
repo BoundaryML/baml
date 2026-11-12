@@ -277,9 +277,10 @@ impl io::IoNamespaceRandom for NativeSysOps {}
 /// stream. `baml.io.input` is the deliberate exception: reading input is an
 /// operation callers want to handle, so it declares `throws root.errors.Io`.
 fn output_stream_unavailable(stream: &'static str, context: &str, e: &std::io::Error) -> VmPanic {
-    VmPanic::HostUnavailable {
+    VmPanic::HostOutputUnavailable {
         resource: stream.to_string(),
         message: format!("{context}: {e}"),
+        kind: e.kind(),
     }
 }
 

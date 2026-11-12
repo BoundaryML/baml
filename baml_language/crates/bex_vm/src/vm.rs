@@ -6367,7 +6367,27 @@ impl BexVm {
             VmPanic::HostUnavailable { resource, message } => {
                 let resource = Value::object(self.alloc_string(resource));
                 let message = Value::object(self.alloc_string(message));
-                (PanicClass::HostUnavailable, vec![resource, message])
+                (
+                    PanicClass::HostUnavailable,
+                    vec![resource, message, Value::NULL],
+                )
+            }
+            VmPanic::HostOutputUnavailable {
+                resource,
+                message,
+                kind,
+            } => {
+                let resource = Value::object(self.alloc_string(resource));
+                let message = Value::object(self.alloc_string(message));
+                let io_error_kind = if kind == std::io::ErrorKind::BrokenPipe {
+                    Value::object(self.alloc_string("broken_pipe".to_string()))
+                } else {
+                    Value::NULL
+                };
+                (
+                    PanicClass::HostUnavailable,
+                    vec![resource, message, io_error_kind],
+                )
             }
             VmPanic::NegativeBitShift { message } => {
                 let msg = Value::object(self.alloc_string(message));

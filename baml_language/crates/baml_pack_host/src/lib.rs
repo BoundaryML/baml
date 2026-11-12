@@ -11,7 +11,7 @@ use baml_exec::{
     CONTEXT_ENV, DispatchResult, Interrupts, PACK_SECTION_NAME, PackEnvelope, PackMode,
     clamp_exit_code, context_source_from_env, dispatch_target_with_context,
     ensure_single_stdin_consumer, load_json_source, load_launch_context, parse_multi_target_argv,
-    parse_target_argv, print_error,
+    parse_target_argv, print_error, print_warning,
 };
 use bex_engine::{
     BexEngine, CallId, FunctionCallContextBuilder, UserFunctionCatalog, UserFunctionInfo,
@@ -358,13 +358,13 @@ fn finalize_dispatch(
     if !engine.initial_telemetry_failure_handled()
         && let Some(Err(error)) = engine.telemetry_result()
     {
-        eprintln!("Warning: telemetry recording failed: {error}");
+        print_warning(format_args!("telemetry recording failed: {error}"));
     }
     let mut unhandled_spawn_failed = false;
     for report in engine.take_unhandled_spawn_errors() {
         if report.cancelled {
             let error = report.into_engine_error();
-            eprintln!("Warning: cancelled spawned task failed: {error}");
+            print_warning(format_args!("cancelled spawned task failed: {error}"));
         } else {
             let error = report.into_engine_error();
             print_error(format_args!("unhandled spawned task failed: {error}"));

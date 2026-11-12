@@ -145,6 +145,9 @@ class AllocFailure {
 class HostUnavailable {
     resource: string,
     message: string,
+    /// Native output failures set this to "broken_pipe" when the reader has
+    /// closed its pipe. Null for other or unclassified host failures.
+    io_error_kind: string?,
 }
 
 /// The right operand of a shift (`<<` / `>>`) was negative.
