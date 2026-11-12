@@ -21,37 +21,37 @@ jobs:
 
   determine_changes:
     name: "KILN: Determine changes"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=small..memory=low
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=small..memory=low..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     continue-on-error: true
     outputs:
       # Flag that is raised when any code in baml_language is changed
-      code: ${{ steps.check_code.outputs.changed }}
+      code: 'true'
       # Flag for lexer changes
-      lexer: ${{ steps.check_lexer.outputs.changed }}
+      lexer: 'true'
       # Flag for parser changes
-      parser: ${{ steps.check_parser.outputs.changed }}
+      parser: 'true'
       # Flag for HIR changes
-      hir: ${{ steps.check_hir.outputs.changed }}
+      hir: 'true'
       # Flag for THIR changes
-      thir: ${{ steps.check_thir.outputs.changed }}
+      thir: 'true'
       # Flag for codegen changes
-      codegen: ${{ steps.check_codegen.outputs.changed }}
+      codegen: 'true'
       # Docs example changes need the CLI, but not the full platform/SDK matrix.
-      documentation_snippets: ${{ steps.check_documentation_snippets.outputs.changed }}
+      documentation_snippets: 'true'
       # Flag for docs/frontend changes
-      docs: ${{ steps.check_docs.outputs.changed }}
+      docs: 'true'
       # Flag for typescript2/webview changes
-      webview: ${{ steps.check_webview.outputs.changed }}
+      webview: 'true'
       # Flag for typescript2 grammar changes
-      grammar: ${{ steps.check_grammar.outputs.changed }}
+      grammar: 'true'
       # Flag for unsafe code changes (bex_heap) - triggers Miri tests
-      unsafe: ${{ steps.check_unsafe.outputs.changed }}
+      unsafe: 'true'
       # Flag for proto codegen changes - triggers generated file sync check
-      proto: ${{ steps.check_proto.outputs.changed }}
+      proto: 'true'
       # Flag for inputs that can change the shipping bridge_cffi binaries
-      bridge_cffi_release: ${{ steps.check_bridge_cffi_release.outputs.changed }}
+      bridge_cffi_release: 'true'
       # Flag for SDK test changes - triggers the SDK parity analysis pipeline
-      sdk_tests: ${{ steps.check_sdk_tests.outputs.changed }}
+      sdk_tests: 'true'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -384,7 +384,7 @@ jobs:
 
   prek:
     name: "KILN: Pre-commit Checks"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=large..memory=low
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=large..memory=low..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 40
@@ -461,7 +461,7 @@ jobs:
 
   release-metadata:
     name: "KILN: Release Metadata"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=low
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=low..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 10
@@ -570,7 +570,7 @@ jobs:
 
   grammar-tests:
     name: "KILN: Grammar Tests"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.grammar == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     continue-on-error: true
@@ -634,7 +634,7 @@ jobs:
 
   proto-sync:
     name: "KILN: proto generated files sync"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.proto == 'true'
     timeout-minutes: 40
@@ -766,7 +766,7 @@ jobs:
 
   sdk_parity_check:
     name: "KILN: SDK parity lint"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=low
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=low..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.sdk_tests == 'true'
     timeout-minutes: 30
@@ -827,7 +827,7 @@ jobs:
 
   documentation-snippets:
     name: "KILN: Documentation examples / Compiler and documentation tests"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: >-
       needs.determine_changes.outputs.documentation_snippets == 'true' &&
@@ -947,7 +947,7 @@ jobs:
 
   cargo-test-linux:
     name: "KILN: cargo test (x86_64-unknown-linux-gnu)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 50
@@ -1085,7 +1085,7 @@ jobs:
 
   cargo-test-linux-musl:
     name: "KILN: cargo test (x86_64-unknown-linux-musl)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=high
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..memory=high..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 70
@@ -1224,7 +1224,7 @@ jobs:
 
   cargo-test-wasm:
     name: "KILN: cargo test (wasm32-unknown-unknown)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 90
@@ -1365,7 +1365,7 @@ jobs:
 
   cargo-doc:
     name: "KILN: cargo doc"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 50
@@ -1474,7 +1474,7 @@ jobs:
 
   sdk-tests:
     name: "KILN: sdk tests (${{ matrix.sdk-label }}, ${{ matrix.os-label }})"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=${{ matrix.size }}..memory=${{ matrix.memory }}
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=${{ matrix.size }}..memory=${{ matrix.memory }}..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: ${{ matrix.timeout }}
@@ -1859,7 +1859,7 @@ jobs:
 
   snapshot-tests:
     name: "KILN: Compiler and documentation tests"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 60
@@ -2015,7 +2015,7 @@ jobs:
 
   size-gate-linux:
     name: "KILN: measure-baml-size (linux)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     # Disabled together with the upstream size gate; see the size-gate job in ci.yaml.
     if: false
@@ -2122,7 +2122,7 @@ jobs:
 
   size-gate-wasm:
     name: "KILN: measure-baml-size (wasm)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     # Disabled together with the upstream size gate; see the size-gate job in ci.yaml.
     if: false
@@ -2231,7 +2231,7 @@ jobs:
 
   wasm-pack-test:
     name: "KILN: wasm-pack test"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 40
@@ -2315,7 +2315,7 @@ jobs:
 
   typecheck:
     name: "KILN: Typecheck"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 30
@@ -2390,7 +2390,7 @@ jobs:
 
   unit-tests:
     name: "KILN: Unit Tests (jsdom)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 30
@@ -2456,7 +2456,7 @@ jobs:
 
   browser-tests:
     name: "KILN: Browser Tests (Playwright)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..template=01a1d19d-58a8-7bb1-aaa8-e34c4d7a0b00
     needs: determine_changes
     if: needs.determine_changes.outputs.webview == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 40
