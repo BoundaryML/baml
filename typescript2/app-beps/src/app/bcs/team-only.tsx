@@ -14,8 +14,14 @@ export function TeamOnly() {
       <div className="max-w-md text-center space-y-4">
         <h1 className="text-2xl font-bold">BCS design proposals</h1>
         <p className="text-muted-foreground">
-          These are for the BoundaryML team. Sign in with the GitHub account you use at
-          BoundaryML to read them.
+          These are for the BoundaryML team. Sign in with a GitHub account that is a member of
+          the BoundaryML organization to read them.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Signed in and still here? GitHub must share your BoundaryML membership with this site.
+          Sign out, sign in again, and on GitHub&apos;s permission screen grant the BEPs app access
+          to BoundaryML (finishing BoundaryML&apos;s SSO first if GitHub asks). If GitHub only lets
+          you request access, a BoundaryML organization owner has to approve the request first.
         </p>
         <div className="flex justify-center gap-2">
           <Link href="/api/auth/github">
