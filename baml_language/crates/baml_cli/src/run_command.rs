@@ -334,37 +334,24 @@ struct StandaloneSource {
 }
 
 impl RunArgs {
-    fn call_context(
-        &self,
-        call_id: CallId,
-        interrupts: &baml_exec::Interrupts,
-    ) -> (FunctionCallContext, Option<TraceLogger>) {
-        let builder =
-            FunctionCallContextBuilder::new(call_id).with_cancel_token(interrupts.token());
-        self.log_output().call_context(builder)
-    }
-
-    fn print_logs(&self, producer: Option<&TraceLogger>) {
-        self.log_output().print(producer);
-    }
-
-    fn block_on_with_logs<T>(
-        &self,
-        rt: &tokio::runtime::Runtime,
-        future: impl std::future::Future<Output = T>,
-        producer: Option<&TraceLogger>,
-    ) -> T {
-        self.log_output().block_on(rt, future, producer)
-    }
-
-    /// Logs share the program's stdout as text. A structured stdout carries
-    /// the program's own output and the returned value only, so there the
-    /// logs are status.
-    fn log_output(&self) -> LogOutput {
-        match self.output_format {
+    /// Where the logs of a run that renders its value as `format` go. They
+    /// share the program's stdout as text. A structured stdout carries the
+    /// program's own output and the returned value only, so there the logs
+    /// are status.
+    fn log_output(&self, format: OutputFormat) -> LogOutput {
+        match format {
             OutputFormat::Text => LogOutput::passthrough(self.log, "run"),
             OutputFormat::Json => LogOutput::status(self.log, "run"),
         }
+    }
+
+    fn call_context(
+        log_output: LogOutput,
+        interrupts: &baml_exec::Interrupts,
+    ) -> (FunctionCallContext, Option<TraceLogger>) {
+        let builder =
+            FunctionCallContextBuilder::new(CallId::next()).with_cancel_token(interrupts.token());
+        log_output.call_context(builder)
     }
 
     /// Emit the "your code is unformatted" advisory. This is the one
@@ -790,8 +777,9 @@ impl RunArgs {
         let engine = Arc::new(engine);
         let output_format = output_format.unwrap_or(self.output_format);
         let interrupts = install_interrupts(&rt)?;
-        let (call_context, logs) = self.call_context(CallId::next(), &interrupts);
-        let dispatch_result = self.block_on_with_logs(
+        let log_output = self.log_output(output_format);
+        let (call_context, logs) = Self::call_context(log_output, &interrupts);
+        let dispatch_result = log_output.block_on(
             &rt,
             baml_exec::dispatch_target_with_context(
                 Arc::clone(&engine),
@@ -800,7 +788,7 @@ impl RunArgs {
                 json_args,
                 output_format,
                 call_context,
-                || self.print_logs(logs.as_ref()),
+                || log_output.print(logs.as_ref()),
             ),
             logs.as_ref(),
         );
@@ -811,7 +799,7 @@ impl RunArgs {
             }
             _ => failure_status(&engine),
         };
-        self.block_on_with_logs(
+        log_output.block_on(
             &rt,
             crate::shutdown::shutdown_engine_future(
                 &engine,
@@ -1169,17 +1157,18 @@ impl RunArgs {
         let engine = Arc::new(engine);
         let output_format = self.output_format;
         let interrupts = install_interrupts(&rt)?;
-        let (call_context, logs) = self.call_context(CallId::next(), &interrupts);
+        let log_output = self.log_output(output_format);
+        let (call_context, logs) = Self::call_context(log_output, &interrupts);
         let host_cancel = call_context.cancel.clone();
         let helper_context = baml_exec::HelperCallContext::from_call_context(&call_context);
-        let call_result = self.block_on_with_logs(
+        let call_result = log_output.block_on(
             &rt,
             engine.call_function(EXPRESSION_ENTRY, vec![], call_context, true),
             logs.as_ref(),
         );
         interrupts.root_finished();
-        let output_succeeded: std::result::Result<bool, bex_engine::EngineError> = self
-            .block_on_with_logs(
+        let output_succeeded: std::result::Result<bool, bex_engine::EngineError> = log_output
+            .block_on(
                 &rt,
                 async {
                     let value = call_result?;
@@ -1191,7 +1180,7 @@ impl RunArgs {
                         value,
                         output_format,
                         &helper_context,
-                        || self.print_logs(logs.as_ref()),
+                        || log_output.print(logs.as_ref()),
                     )
                     .await
                     {
@@ -1210,7 +1199,7 @@ impl RunArgs {
             }
             _ => failure_status(&engine),
         };
-        self.block_on_with_logs(
+        log_output.block_on(
             &rt,
             crate::shutdown::shutdown_engine_future(
                 &engine,

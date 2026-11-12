@@ -114,6 +114,29 @@ fn run_logs_stay_off_a_structured_stdout() {
         String::from_utf8_lossy(&text.stdout).contains("[INFO] noise"),
         "{text:?}"
     );
+    // A typed target can also ask for JSON among its own arguments.
+    let typed = project(
+        "function greet(name: string) -> string {\n    log.info(\"noise\");\n    \"hello \" + name\n}\n",
+    );
+    let output = baml(
+        typed.path(),
+        &[
+            "run",
+            "greet",
+            "--",
+            "--name",
+            "Ada",
+            "--output-format",
+            "json",
+        ],
+    );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| panic!("{error}: {output:?}"));
+    assert_eq!(value, "hello Ada", "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("[INFO] noise"),
+        "{output:?}"
+    );
 }
 
 /// A help path that names no command is a usage error.
