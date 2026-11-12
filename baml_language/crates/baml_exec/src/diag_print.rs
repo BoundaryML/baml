@@ -6,8 +6,9 @@
 // automatically when stderr isn't a TTY, so piping through `grep`
 // produces clean plain text.
 
-use console::Style;
 use std::io::{self, Write};
+
+use console::Style;
 
 /// Bold-red `error` keyword, matching ariadne's lowercase
 /// custom-kind header.
