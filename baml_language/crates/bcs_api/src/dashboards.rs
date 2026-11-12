@@ -1,4 +1,6 @@
 //! Native dashboard publication through the selected gateway and its scoped upload capability.
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -95,13 +97,15 @@ impl Client {
             !self.endpoint.as_str().starts_with("https:") || storage.as_str().starts_with("https:"),
             "Boundary dashboard upload cannot downgrade HTTPS",
         )?;
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |time| time.as_secs());
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| Error::Protocol("System clock is before the Unix epoch"))?;
+        let remaining = Duration::from_secs(upload.expires_at).checked_sub(now);
         require(
-            upload.expires_at > now,
+            remaining.is_some_and(|time| !time.is_zero()),
             "Dashboard upload expired; prepare the upload again",
         )?;
+        let timeout = upload_timeout(request.size, remaining.unwrap());
         let response = self
             .http
             .put(format!(
@@ -112,6 +116,7 @@ impl Client {
             .bearer_auth(upload.token.expose())
             .header(reqwest::header::CONTENT_TYPE, "text/html")
             .body(html)
+            .timeout(timeout)
             .send()
             .map_err(Error::transport)?;
         if !response.status().is_success() {
@@ -142,6 +147,13 @@ impl Client {
         }
         Ok(published)
     }
+}
+
+// Allow slow uplinks at 64 KiB/s plus response time, bounded by ten minutes and the capability.
+fn upload_timeout(size: u64, remaining: Duration) -> Duration {
+    const MIN_BYTES_PER_SECOND: u64 = 64 * 1024;
+    let seconds = 30_u64.saturating_add(size.div_ceil(MIN_BYTES_PER_SECOND));
+    Duration::from_secs(seconds.min(600)).min(remaining)
 }
 
 fn version_id(value: &str) -> bool {

@@ -40,7 +40,7 @@ async fn publication_uses_separate_credentials_and_exact_bytes_for_create_and_up
             .and(path(format!("/v1/dashboard-versions/{VERSION}/bundle")))
             .and(header("authorization", "Bearer upload-secret"))
             .and(header("content-type", "text/html"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(2)).set_body_json(json!({
                 "id":"dashboard", "projectId":"app", "key":"overview",
                 "latest":{"version":expected.map_or(1, |v|v+1), "sha256":sha, "size":html.len()}
             })))
@@ -50,13 +50,18 @@ async fn publication_uses_separate_credentials_and_exact_bytes_for_create_and_up
         let url = gateway.uri();
         let sent = html.clone();
         let published = tokio::task::spawn_blocking(move || {
-            Client::new(Endpoint::parse(&url).unwrap())
-                .unwrap()
-                .publish_dashboard(
-                    &Secret::new("bdry_session_native".into()),
-                    &publication(expected),
-                    sent,
-                )
+            let client = Client {
+                endpoint: Endpoint::parse(&url).unwrap(),
+                http: reqwest::blocking::Client::builder()
+                    .timeout(Duration::from_secs(1))
+                    .build()
+                    .unwrap(),
+            };
+            client.publish_dashboard(
+                &Secret::new("bdry_session_native".into()),
+                &publication(expected),
+                sent,
+            )
         })
         .await
         .unwrap()
@@ -143,4 +148,18 @@ async fn untrusted_upload_locations_and_expired_tokens_never_receive_a_credentia
         );
         assert_eq!(server.received_requests().await.unwrap().len(), 1);
     }
+}
+
+#[test]
+fn upload_budget_scales_with_size_and_respects_capability_expiry() {
+    let lifetime = Duration::from_mins(15);
+    assert_eq!(
+        upload_timeout(20 * 1024 * 1024, lifetime),
+        Duration::from_secs(350)
+    );
+    assert_eq!(upload_timeout(u64::MAX, lifetime), Duration::from_mins(10));
+    assert_eq!(
+        upload_timeout(20 * 1024 * 1024, Duration::from_millis(1234)),
+        Duration::from_millis(1234)
+    );
 }
