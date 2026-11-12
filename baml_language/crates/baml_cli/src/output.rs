@@ -310,9 +310,11 @@ fn resolve_hyperlinks(choice: HyperlinkChoice, is_terminal: bool) -> bool {
     }
 }
 
+/// Capture the shared agent signal and each stream's terminal capabilities
+/// before resolving output presets and the agent skill-check policy.
 fn output_signals() -> Result<OutputSignals, baml_env::EnvError> {
     Ok(OutputSignals {
-        running_in_agent: running_in_agent()?,
+        running_in_agent: baml_env::agent::detect()?.is_some(),
         color_forced: env_truthy("CLICOLOR_FORCE"),
         stdout_auto_color: auto_color(&console::Term::stdout()),
         stderr_auto_color: auto_color(&console::Term::stderr()),
@@ -332,30 +334,6 @@ fn env_equals(var: &str, expected: &str) -> bool {
 
 fn env_truthy(var: &str) -> bool {
     baml_env::raw_var(var).is_some_and(|value| !value.is_empty() && value != "0")
-}
-
-/// Environment variables that identify a known coding-agent process.
-const AGENT_ENV_VARS: &[&str] = &[
-    "CLAUDECODE",
-    "CODEX_SANDBOX",
-    "PI_CODING_AGENT",
-    "OPENCODE_CLIENT",
-    "AI_AGENT",
-    "CURSOR_TRACE_ID",
-    "REPL_ID",
-    "AGENT",
-];
-
-/// Dev-only escape hatch for tools that spawn the CLI from inside an agent's
-/// shell (pre-commit hooks, task runners): skip the agent-variable checks so
-/// the run is treated as human and the skill check does not apply.
-const DISABLE_AGENT_DETECTION_ENV: &str = "DEV_BAML_CLI_DISABLE_AGENT_DETECTION";
-
-fn running_in_agent() -> Result<bool, baml_env::EnvError> {
-    if baml_env::bool_var(DISABLE_AGENT_DETECTION_ENV)? == Some(true) {
-        return Ok(false);
-    }
-    Ok(AGENT_ENV_VARS.iter().any(|var| env_truthy(var)))
 }
 
 #[cfg(test)]
