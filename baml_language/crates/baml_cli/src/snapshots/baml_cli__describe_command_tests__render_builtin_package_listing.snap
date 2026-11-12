@@ -209,11 +209,11 @@ class            baml.panics.UserPanic            <builtin>/baml/ns_panics/panic
 class            baml.panics.Exit                 <builtin>/baml/ns_panics/panics.baml:119
 class            baml.panics.AllocFailure         <builtin>/baml/ns_panics/panics.baml:132
 class            baml.panics.HostUnavailable      <builtin>/baml/ns_panics/panics.baml:145
-class            baml.panics.NegativeBitShift     <builtin>/baml/ns_panics/panics.baml:158
-class            baml.panics.SdkPanic             <builtin>/baml/ns_panics/panics.baml:166
-class            baml.panics.HostContractViolation <builtin>/baml/ns_panics/panics.baml:173
-class            baml.panics.IntegerOverflow      <builtin>/baml/ns_panics/panics.baml:189
-type             baml.panics.Panic                <builtin>/baml/ns_panics/panics.baml:193
+class            baml.panics.NegativeBitShift     <builtin>/baml/ns_panics/panics.baml:161
+class            baml.panics.SdkPanic             <builtin>/baml/ns_panics/panics.baml:169
+class            baml.panics.HostContractViolation <builtin>/baml/ns_panics/panics.baml:176
+class            baml.panics.IntegerOverflow      <builtin>/baml/ns_panics/panics.baml:192
+type             baml.panics.Panic                <builtin>/baml/ns_panics/panics.baml:196
 function         baml.path.join                   <builtin>/baml/ns_path/path.baml:2
 function         baml.path.parent                 <builtin>/baml/ns_path/path.baml:7
 function         baml.path.is_absolute            <builtin>/baml/ns_path/path.baml:12

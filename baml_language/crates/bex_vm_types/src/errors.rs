@@ -14,7 +14,7 @@ use crate::{
     types::{ObjectType, Type},
 };
 
-/// A catchable BAML panic — maps 1:1 to a `baml.panics.*` class.
+/// A catchable BAML panic — maps to a `baml.panics.*` class.
 ///
 /// These are user-visible runtime errors (division by zero, index out of
 /// bounds, etc.) that can be caught by `catch` handlers. A panic is caught by
@@ -85,6 +85,15 @@ pub enum VmPanic {
     /// fall back gracefully instead of aborting the host process.
     #[error("host resource '{resource}' unavailable: {message}")]
     HostUnavailable { resource: String, message: String },
+
+    /// An output resource failed with a structured native I/O cause. Maps to
+    /// `HostUnavailable` too, preserving the print family's panic contract.
+    #[error("host resource '{resource}' unavailable: {message}")]
+    HostOutputUnavailable {
+        resource: String,
+        message: String,
+        kind: std::io::ErrorKind,
+    },
 
     /// The right operand of a bigint shift (`<<` / `>>`) was negative.
     /// Catchable because the count is a runtime `bigint` and the type
