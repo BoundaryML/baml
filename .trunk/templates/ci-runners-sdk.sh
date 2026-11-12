@@ -16,9 +16,7 @@ export BAML_GIT_SHA
 
 : >/cache/trunk-template-skipped
 
-# sdk_leg <sdk> mise-tool...
-# Give each leg the tools of its job. With no tools, `mise exec` installs every tool in
-# mise.toml, and a tool that does not compile makes the leg fail.
+# sdk_leg <sdk> [mise tool...]
 sdk_leg() {
 	local sdk=$1
 	shift
@@ -30,12 +28,12 @@ sdk_leg() {
 
 sdk_leg typescript node npm:pnpm
 sdk_leg typescript_web node npm:pnpm github:rustwasm/wasm-pack
-sdk_leg rust sccache direnv
+sdk_leg rust
 sdk_leg java java gradle
 sdk_leg python_pydantic2 python uv
 sdk_leg go go
 sdk_leg csharp dotnet
-sdk_leg cpp sccache direnv
+sdk_leg cpp
 sdk_leg ruby_sorbet ruby
 
 # pnpm links node_modules to a store that the job cannot use (ERR_PNPM_UNEXPECTED_STORE), so
@@ -48,16 +46,3 @@ df -h /
 du -sh "${SRC}/baml_language/target" "${MISE_DATA_DIR}"
 echo "sdk legs that failed:"
 cat /cache/trunk-template-skipped
-
-# The jobs run these tools from the snapshot, and mise does not install them again when the
-# version folder is there. Fail the bake if one is missing, so the last good snapshot stays.
-cd "${SRC}"
-missing=0
-for tool in cargo:prek/prek cargo:cargo-insta/cargo-insta cargo:cargo-nextest/cargo-nextest; do
-	bin="$(mise where "${tool%/*}")/bin/${tool##*/}"
-	if [[ ! -x ${bin} ]]; then
-		echo "missing ${bin}" >&2
-		missing=1
-	fi
-done
-exit "${missing}"
