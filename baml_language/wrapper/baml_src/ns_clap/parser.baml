@@ -112,7 +112,7 @@ class Parser {
         // Only an external subcommand can own options this command lacks.
         if let unknown: string = progress.deferred.at(0) {
             self._ignore_errors_of_pending(matcher);
-            throw self.unknown_argument(unknown, []);
+            throw self.unknown_argument(unknown, [], matcher);
         }
         if let sub: Command = subcommand {
             self.parse_subcommand(sub, matcher, raw, cursor);
@@ -149,14 +149,23 @@ class Parser {
                 let unknown: NoMatchingArg => {
                     self._ignore_errors_of_pending(matcher);
                     if (!self.cmd.passes_externals_through) {
-                        throw self.unknown_argument(unknown.arg, raw.remaining(cursor));
+                        throw self.unknown_argument(unknown.arg, raw.remaining(cursor), matcher);
                     }
                     progress.deferred.push(unknown.arg);
                     return true;
                 },
                 let unneeded: UnneededAttachedValue => {
+                    // The usage names the optional args given before this one.
+                    let used = self._given(matcher)
+                        .filter((arg: Arg) -> bool {
+                            !arg.is_required
+                        })
+                        .concat([unneeded.arg])
+                        .map((arg: Arg) -> string {
+                            arg.id
+                        });
                     self._ignore_errors_of_pending(matcher);
-                    throw Error.too_many_values(self.cmd, unneeded.arg, unneeded.rest);
+                    throw Error.too_many_values(self.cmd, unneeded.arg, unneeded.rest, used);
                 },
                 // A plain value, or one allowed to look like a flag.
                 NoArg | MaybeHyphenValue => {},
@@ -233,6 +242,13 @@ class Parser {
                 true
             },
         }
+    }
+
+    // The visible args given so far.
+    function _given(self, matcher: ArgMatcher) -> Arg[] {
+        matcher.explicit_ids().filter_map(self.cmd.find_arg).filter((arg: Arg) -> bool {
+            !arg.is_hidden
+        })
     }
 
     function _pending_allows_hyphen(self, state: ParseState) -> bool {
@@ -374,7 +390,7 @@ class Parser {
         match (arg.get_action()) {
             ArgAction.Set => {
                 if (matcher.remove(arg.id)) {
-                    throw Error.argument_conflict(self.cmd, arg, []);
+                    throw Error.argument_repeated(self.cmd, arg);
                 }
                 self.push_arg_values(arg, raw_vals, source, matcher);
             },
@@ -383,7 +399,7 @@ class Parser {
             },
             ArgAction.SetTrue => {
                 if (matcher.remove(arg.id)) {
-                    throw Error.argument_conflict(self.cmd, arg, []);
+                    throw Error.argument_repeated(self.cmd, arg);
                 }
                 let vals = if (raw_vals) {
                     raw_vals
@@ -407,13 +423,12 @@ class Parser {
         source: ValueSource,
         matcher: ArgMatcher,
     ) -> null throws Error {
+        // The arg counts as given even when one of its values is rejected.
+        matcher.start_arg(arg.id, source);
         for (let value in raw_vals) {
             if (arg.possible && !arg.possible.includes(value)) {
                 throw Error.invalid_value(self.cmd, arg, value);
             }
-        }
-        matcher.start_arg(arg.id, source);
-        for (let value in raw_vals) {
             matcher.add_val_to(arg.id, value);
         }
         null
@@ -524,30 +539,54 @@ class Parser {
     }
 
     // `remaining` are the arguments after the unknown one.
-    function unknown_argument(self, arg: string, remaining: string[]) -> Error {
-        let tip = if (arg.starts_with("--")) {
-            self._similar_flag_tip(arg.slice(2, arg.length()), remaining)
-        } else {
-            null
-        };
-        let tips: string[] = match (tip) {
+    function unknown_argument(
+        self,
+        arg: string,
+        remaining: string[],
+        matcher: ArgMatcher,
+    ) -> Error {
+        if (!arg.starts_with("--")) {
+            return Error.unknown_argument(self.cmd, arg, self._as_value_tip(arg), Usage.of(self.cmd));
+        }
+        let name = arg.slice(2, arg.length());
+        // The usage shows what was given, and the arg that was probably meant.
+        let similar = self.cmd.find_long(Suggestions.did_you_mean(name, Parser._longs(self.cmd)).at(-1) ?? "");
+        let used = self._given(matcher)
+            .map((arg: Arg) -> string {
+                arg.id
+            })
+            .concat(
+                match (similar) {
+                    let arg: Arg => [arg.id],
+                    null => [],
+                },
+            );
+        let tips: string[] = match (self._similar_flag_tip(similar, name, remaining)) {
             let tip: string => [tip],
-            null => {
-                if (self.cmd.positionals().length() > 0) {
-                    [`to pass '${arg}' as a value, use '-- ${arg}'`]
-                } else {
-                    []
-                }
-            },
+            null => self._as_value_tip(arg),
         };
-        Error.unknown_argument(self.cmd, arg, tips)
+        Error.unknown_argument(
+            self.cmd,
+            arg,
+            tips,
+            Usage.with(self.cmd, used, Usage.required_ids(self.cmd)),
+        )
+    }
+
+    // Where the command takes positionals, the argument may have been meant as one.
+    function _as_value_tip(self, arg: string) -> string[] {
+        if (self.cmd.positionals().length() > 0) {
+            [`to pass '${arg}' as a value, use '-- ${arg}'`]
+        } else {
+            []
+        }
     }
 
     // A long flag of this command similar to `name`, or failing that
     // one of a subcommand named later on the command line.
-    function _similar_flag_tip(self, name: string, remaining: string[]) -> string? {
-        if let best: string = Suggestions.did_you_mean(name, Parser._longs(self.cmd)).at(-1) {
-            return `a similar argument exists: '--${best}'`;
+    function _similar_flag_tip(self, similar: Arg?, name: string, remaining: string[]) -> string? {
+        if let arg: Arg = similar {
+            return `a similar argument exists: '--${arg.long_name ?? ""}'`;
         }
         let nearest: _SubcommandFlag? = null;
         for (let sub in self.cmd.subcommand_list) {
@@ -587,6 +626,7 @@ class Parser {
                 self.cmd,
                 arg_os.inner,
                 [`subcommand '${arg_os.inner}' exists; to use it, remove the '--' before it`],
+                Usage.of(self.cmd),
             );
         }
         if (self.cmd.has_subcommands()) {
@@ -603,7 +643,7 @@ class Parser {
                 return Error.unrecognized_subcommand(self.cmd, arg_os.inner);
             }
         }
-        Error.unknown_argument(self.cmd, arg_os.inner, [])
+        Error.unknown_argument(self.cmd, arg_os.inner, [], Usage.of(self.cmd))
     }
 }
 

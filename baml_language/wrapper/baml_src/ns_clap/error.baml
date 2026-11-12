@@ -56,14 +56,14 @@ class Error {
         Error { kind: kind, message: text, command_path: cmd.path }
     }
 
-    // A failure: the problem, any tips, the usage unless `with_usage`
-    // is off, and where to look next.
+    // A failure: the problem, any tips, the usage when there is one to
+    // show, and where to look next.
     function _failure(
         cmd: Command,
         kind: ErrorKind,
         problem: string,
         tips: string[],
-        with_usage: bool,
+        usage: string?,
     ) -> Error {
         let tip_lines = tips.map((tip: string) -> string {
             `  tip: ${tip}`
@@ -75,12 +75,11 @@ class Error {
             } else {
                 null
             },
-            if (with_usage) {
-                `Usage: ${Usage.of(cmd)}`
-            } else {
-                null
+            match (usage) {
+                let usage: string => `Usage: ${usage}`,
+                null => null,
             },
-            "For more information, try '--help'.",
+            Error._help_pointer(cmd),
         ];
         Error {
             kind: kind,
@@ -93,13 +92,25 @@ class Error {
         }
     }
 
-    function unknown_argument(cmd: Command, arg: string, tips: string[]) -> Error {
+    // Where to find help, when the command has a way to ask for it.
+    function _help_pointer(cmd: Command) -> string? {
+        let asked_with = if (!cmd.help_flag_disabled) {
+            "--help"
+        } else if (cmd.has_builtin_help_subcommand()) {
+            "help"
+        } else {
+            return null;
+        };
+        `For more information, try '${asked_with}'.`
+    }
+
+    function unknown_argument(cmd: Command, arg: string, tips: string[], usage: string) -> Error {
         Error._failure(
             cmd,
             ErrorKind.UnknownArgument,
             `unexpected argument '${arg}' found`,
             tips,
-            true,
+            usage,
         )
     }
 
@@ -109,7 +120,7 @@ class Error {
             ErrorKind.InvalidSubcommand,
             `unrecognized subcommand '${name}'`,
             [],
-            true,
+            Usage.of(cmd),
         )
     }
 
@@ -129,7 +140,7 @@ class Error {
             ErrorKind.InvalidSubcommand,
             `unrecognized subcommand '${name}'`,
             [tip],
-            true,
+            Usage.of(cmd),
         )
     }
 
@@ -139,7 +150,7 @@ class Error {
             ErrorKind.InvalidValue,
             `a value is required for '${arg}' but none was supplied${Error._possible_values(arg)}`,
             [],
-            false,
+            null,
         )
     }
 
@@ -157,7 +168,7 @@ class Error {
             ErrorKind.InvalidValue,
             `invalid value '${value}' for '${arg}'${Error._possible_values(arg)}`,
             tips,
-            false,
+            null,
         )
     }
 
@@ -169,20 +180,30 @@ class Error {
         }
     }
 
-    function too_many_values(cmd: Command, arg: Arg, value: string) -> Error {
+    // `used` are the args given so far, this one included.
+    function too_many_values(cmd: Command, arg: Arg, value: string, used: string[]) -> Error {
         Error._failure(
             cmd,
             ErrorKind.TooManyValues,
             `unexpected value '${value}' for '${arg}' found; no more were expected`,
             [],
-            true,
+            Usage.with(cmd, used, Usage.required_ids(cmd)),
         )
     }
 
-    // `others` empty: `arg` was given more than once.
-    function argument_conflict(cmd: Command, arg: Arg, others: Arg[]) -> Error {
+    // `arg` was given more than once.
+    function argument_repeated(cmd: Command, arg: Arg) -> Error {
+        Error._failure(
+            cmd,
+            ErrorKind.ArgumentConflict,
+            `the argument '${arg}' cannot be used multiple times`,
+            [],
+            Usage.of(cmd),
+        )
+    }
+
+    function argument_conflict(cmd: Command, arg: Arg, others: Arg[], usage: string) -> Error {
         let problem = match (others.length()) {
-            0 => `the argument '${arg}' cannot be used multiple times`,
             1 => `the argument '${arg}' cannot be used with '${others[0]}'`,
             _ => {
                 let listed = others
@@ -193,10 +214,10 @@ class Error {
                 `the argument '${arg}' cannot be used with:${listed}`
             },
         };
-        Error._failure(cmd, ErrorKind.ArgumentConflict, problem, [], true)
+        Error._failure(cmd, ErrorKind.ArgumentConflict, problem, [], usage)
     }
 
-    function missing_required_argument(cmd: Command, missing: Arg[]) -> Error {
+    function missing_required_argument(cmd: Command, missing: Arg[], usage: string) -> Error {
         let listed = missing
             .map((arg: Arg) -> string {
                 `\n  ${arg}`
@@ -207,7 +228,7 @@ class Error {
             ErrorKind.MissingRequiredArgument,
             `the following required arguments were not provided:${listed}`,
             [],
-            true,
+            usage,
         )
     }
 
@@ -222,7 +243,7 @@ class Error {
             ErrorKind.MissingSubcommand,
             `'${cmd.get_bin_name()}' requires a subcommand but one was not provided\n  [subcommands: ${subcommands}]`,
             [],
-            true,
+            Usage.of(cmd),
         )
     }
 }

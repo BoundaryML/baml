@@ -235,21 +235,27 @@ class Arg {
             .join(" ")
     }
 
+    // A positional as usage shows it: `<NAME>` where it must be given,
+    // `[NAME]` where it may be, with `...` when it takes several.
+    function positional_usage(self, required: bool) -> string {
+        let many = if (self.is_multiple()) {
+            "..."
+        } else {
+            ""
+        };
+        if (required) {
+            `<${self.get_value_name()}>${many}`
+        } else {
+            `[${self.get_value_name()}]${many}`
+        }
+    }
+
     // The arg as errors and usage name it: `--long <VALUE>`, `-s`,
     // `<NAME>`, or `[NAME]...`.
     implements baml.ToString {
         function to_string(self) -> string {
             if (self.is_positional()) {
-                let many = if (self.is_multiple()) {
-                    "..."
-                } else {
-                    ""
-                };
-                return if (self.is_required) {
-                    `<${self.get_value_name()}>${many}`
-                } else {
-                    `[${self.get_value_name()}]${many}`
-                };
+                return self.positional_usage(self.is_required);
             }
             let name = match (self.long_name) {
                 let long: string => `--${long}`,

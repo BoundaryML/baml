@@ -2,37 +2,84 @@
 // laid out the way clap lays them out.
 
 class Usage {
-    // `<name> [OPTIONS] <REQUIRED> [OPTIONAL]... [COMMAND]`.
+    // The command's full usage: `<name> [OPTIONS] <REQUIRED> [OPTIONAL]... [COMMAND]`.
     function of(cmd: Command) -> string {
-        let optional_positionals = cmd.positionals()
+        Usage.with(cmd, [], Usage.required_ids(cmd))
+    }
+
+    // The usage for a command line that already has the args `used`, as
+    // clap narrows it under an error: those args and the `required`
+    // ones spelled out, with no `[OPTIONS]` standing in for the rest.
+    // With nothing used, it is the full usage.
+    function with(cmd: Command, used: string[], required: string[]) -> string {
+        // A required arg follows the args it requires in turn.
+        let named = required
+            .flat_map((id: string) -> string[] {
+                (cmd.find_arg(id)?.require_ids ?? []).concat([id])
+            })
+            .concat(used)
+            .reduce(
+                (unique: string[], id: string) -> string[] {
+                    if (unique.includes(id)) {
+                        unique
+                    } else {
+                        unique.concat([id])
+                    }
+                },
+                [],
+            );
+        let options = named.filter_map(cmd.find_arg)
             .filter((arg: Arg) -> bool {
-                !arg.is_required
+                !arg.is_positional()
             })
             .map((arg: Arg) -> string {
                 arg.to_string()
             });
-        let subcommand = if (!cmd.has_visible_subcommands() && !cmd.externals_allowed) {
-            []
-        } else if (cmd.is_subcommand_required) {
-            ["<COMMAND>"]
+        let positionals = cmd.positionals()
+            .filter((arg: Arg) -> bool {
+                !arg.is_hidden
+            })
+            .map((arg: Arg) -> string {
+                arg.positional_usage(named.includes(arg.id))
+            });
+        let options_tag = if (used.length() == 0 && Usage.needs_options_tag(cmd)) {
+            ["[OPTIONS]"]
         } else {
-            ["[COMMAND]"]
+            []
         };
-        [cmd.usage_name]
-            .concat(
-                if (Usage.needs_options_tag(cmd)) {
-                    ["[OPTIONS]"]
-                } else {
-                    []
-                },
-            )
-            .concat(Usage.required(cmd))
-            .concat(optional_positionals)
-            .concat(subcommand)
+        [cmd.usage_name].concat(options_tag)
+            .concat(options)
+            .concat(positionals)
+            .concat(Usage._subcommand(cmd, used.length() > 0))
             .join(" ")
     }
 
-    // The args a command line must have: required options, then required positionals.
+    // A narrowed usage names the subcommand only when one is required.
+    function _subcommand(cmd: Command, narrowed: bool) -> string[] {
+        if (
+            cmd.is_subcommand_required
+                && (narrowed || cmd.has_visible_subcommands() || cmd.externals_allowed)
+        ) {
+            ["<COMMAND>"]
+        } else if (!narrowed && (cmd.has_visible_subcommands() || cmd.externals_allowed)) {
+            ["[COMMAND]"]
+        } else {
+            []
+        }
+    }
+
+    // The args the command declares required, in declaration order.
+    function required_ids(cmd: Command) -> string[] {
+        cmd.arg_list
+            .filter((arg: Arg) -> bool {
+                arg.is_required
+            })
+            .map((arg: Arg) -> string {
+                arg.id
+            })
+    }
+
+    // What a subcommand's usage shows of its parent: the args that must come before it.
     function required(cmd: Command) -> string[] {
         cmd.options()
             .concat(cmd.positionals())

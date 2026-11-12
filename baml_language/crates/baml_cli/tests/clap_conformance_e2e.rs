@@ -8,11 +8,7 @@
 //! - when accepted: the subcommand chosen and every value at every level,
 //!   defaults and propagated globals included;
 //! - help and version text, ignoring trailing spaces;
-//! - the error message: the problem and its tips.
-//!
-//! What is not compared, because the port does not reproduce it:
-//! - the usage line under an error. clap narrows it to the arguments
-//!   involved ("smart usage"); the port prints the command's full usage.
+//! - the whole error message: the problem, its tips and the usage under it.
 //!
 //! The port's one feature beyond clap, `external_subcommand_passthrough`,
 //! has no clap twin and is covered by the BAML tests next to the parser.
@@ -345,17 +341,6 @@ fn tidy(text: &str) -> String {
         .to_string()
 }
 
-/// An error message up to the usage line and the pointer to `--help`.
-fn problem(text: &str) -> String {
-    let tidy = tidy(text);
-    let end = ["\n\nUsage:", "\n\nFor more information"]
-        .iter()
-        .filter_map(|marker| tidy.find(marker))
-        .min()
-        .unwrap_or(tidy.len());
-    tidy[..end].to_string()
-}
-
 /// How the two outcomes differ, or `None` when they agree.
 fn difference(baml: &Outcome, clap: &Outcome) -> Option<String> {
     // `ErrorKind.InvalidValue` on one side, `InvalidValue` on the other.
@@ -374,10 +359,10 @@ fn difference(baml: &Outcome, clap: &Outcome) -> Option<String> {
             tidy(&clap.text)
         )),
         "ok" | "DisplayHelp" | "DisplayVersion" => None,
-        _ if problem(&baml.text) != problem(&clap.text) => Some(format!(
-            "message:\n  baml {:?}\n  clap {:?}",
-            problem(&baml.text),
-            problem(&clap.text)
+        _ if tidy(&baml.text) != tidy(&clap.text) => Some(format!(
+            "message:\n--- baml\n{}\n--- clap\n{}",
+            tidy(&baml.text),
+            tidy(&clap.text)
         )),
         _ => None,
     }
