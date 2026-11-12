@@ -150,7 +150,7 @@ enum ToolchainCommand {
     },
     /// Advance the resolved machine channel.
     Update,
-    /// Show the local inventory after attempting active-toolchain installation.
+    /// Show the local inventory without installing a toolchain.
     List,
     /// Remove a concrete version, preserving selectors and channel mappings.
     Uninstall { version: String },
@@ -539,10 +539,10 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
         Err(error) => return Err(error.into()),
     };
     let base = None;
-    // Every non-help management command attempts active installation, including
-    // status; --install makes an installation failure fatal instead of advisory.
-    // Selection writes validate their complete documents inside the operation,
-    // before even the best-effort installation can make changes.
+    // Explicit targets acquire only the requested toolchain, after validation.
+    // List/status inspect local state (status still refreshes release metadata);
+    // status --install requires acquisition in the operation itself. Update and
+    // uninstall retain their existing active-target preparation.
     match &parsed.command {
         ToolchainCommand::Use { .. } => {}
         ToolchainCommand::Update => {
@@ -557,13 +557,14 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
             ..
         } => {
             validate_selector(selector)?;
-            best_effort_install(paths, base);
         }
         ToolchainCommand::Uninstall { version } => {
             validate_version(version)?;
             best_effort_install(paths, base);
         }
-        _ => best_effort_install(paths, base),
+        ToolchainCommand::Install { selector: None, .. }
+        | ToolchainCommand::Status { .. }
+        | ToolchainCommand::List => {}
     }
     match parsed.command {
         ToolchainCommand::Use { selector, global } => {
@@ -1657,7 +1658,6 @@ fn use_toolchain_impl(
     validate_selector(&selector)?;
     updated_user_config(&selector)?;
     preflight_selector_install(&selector, override_url)?;
-    best_effort_install(paths, override_url);
     prepare_toolchain_selector(&selector, &paths.directory, override_url)?;
     // Reapply the selector to the latest validated document after downloads.
     write_text_atomic(&config_path(), &updated_user_config(&selector)?)?;
@@ -1714,7 +1714,6 @@ fn pin_toolchain_impl(
 
     validate_project(&updated)?;
     preflight_selector_install(&normalized_selector, override_url)?;
-    best_effort_install(paths, override_url);
     let selector = prepare_toolchain_selector(&normalized_selector, base, override_url)?;
     let content = fs::read_to_string(&manifest_path)
         .with_context(|| format!("failed to read {}", manifest_path.display()))?;

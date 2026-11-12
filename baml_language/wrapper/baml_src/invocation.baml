@@ -181,7 +181,6 @@ class WrapperInvocation {
                 }
             }
         }
-        self.best_effort_install();
         if (channel(selected) && !ChannelState.new().source_matches(selected)) {
             ReleaseStore.new().install(selected, true, false, false, telemetry = self.telemetry);
         } else {

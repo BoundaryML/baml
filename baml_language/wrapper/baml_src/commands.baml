@@ -23,6 +23,8 @@ class UnknownManagementCommand {
     }
 }
 
+// Preflight validates command prerequisites; acquisition belongs to the requested
+// operation. Update and uninstall retain their active-target preparation.
 interface ManagementCommand {
     function preflight(self, invocation: WrapperInvocation) -> null throws WrapperFailure;
     function execute(self, invocation: WrapperInvocation) -> null throws WrapperFailure;
@@ -33,7 +35,7 @@ class UseCommand {
     global: bool,
 
     implements ManagementCommand {
-        // Selection performs its write preflight before the best-effort install.
+        // Selection validates its write destination before acquiring only the requested target.
         function preflight(self, invocation: WrapperInvocation) -> null {
             null
         }
@@ -52,7 +54,7 @@ class InstallCommand {
             if let requested: string = self.selector {
                 validate_selector(requested);
             }
-            invocation.best_effort_install()
+            null
         }
         function execute(self, invocation: WrapperInvocation) -> null {
             let requested = self.selector ?? invocation.install_selector();
@@ -91,7 +93,7 @@ class StatusCommand {
 
     implements ManagementCommand {
         function preflight(self, invocation: WrapperInvocation) -> null {
-            invocation.best_effort_install()
+            null
         }
 
         function execute(self, invocation: WrapperInvocation) -> null {
@@ -103,7 +105,7 @@ class StatusCommand {
 class ListCommand {
     implements ManagementCommand {
         function preflight(self, invocation: WrapperInvocation) -> null {
-            invocation.best_effort_install()
+            null
         }
 
         function execute(self, invocation: WrapperInvocation) -> null {

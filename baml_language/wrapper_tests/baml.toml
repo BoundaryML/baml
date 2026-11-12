@@ -42,6 +42,10 @@ args = [
     "--include", "root::toolchain management::failed project use download preserves selection",
     "--include", "root::toolchain management::explicit force install repairs damaged active toolchain",
     "--include", "root::toolchain management::uninstall leaves active toolchain removed",
+    "--include", "root::toolchain management::explicit target acquisition skips absent old selection",
+    "--include", "root::toolchain management::same target acquisition failure is attempted once",
+    "--include", "root::toolchain management::list observes absent active toolchain without acquisition",
+    "--include", "root::toolchain management::list leaves unrecorded channel unresolved",
     # configuration validation
     "--include", "root::configuration validation::project edits preserve restricted permissions",
     "--include", "root::configuration validation::project edits made during downloads are preserved",
@@ -50,6 +54,9 @@ args = [
     # toolchain status
     "--include", "root::toolchain status::json status describes installed version",
     "--include", "root::toolchain status::json status with install downloads absent version",
+    "--include", "root::toolchain status::json status describes absent version without acquisition",
+    "--include", "root::toolchain status::json status requires install flag for unrecorded channel",
+    "--include", "root::toolchain status::plain json status observes absent recorded version without advancing channel",
     # CLI delegation
     "--include", "root::CLI delegation::delegation preserves arguments stdio and exit code",
     "--include", "root::CLI delegation::delegation supports simultaneous binary stdio",

@@ -24,14 +24,13 @@ testset "toolchain status" {
         );
     }
 
-    test "json status reports failed best effort install" {
+    test "json status describes absent version without acquisition" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let args = ["toolchain", "status", "--json"];
 
         fixture.absent(BASE_VERSION);
-        fixture.write(`server/version/${BASE_VERSION}.json.status`, "500");
 
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<root.harness.ResolutionResult>(output.stdout.to_string());
@@ -45,6 +44,18 @@ testset "toolchain status" {
         root.harness.require(
             result.toolchain_path.replace_all("\\", "/") == binary.replace_all("\\", "/"),
             "wrong toolchain path",
+        );
+        root.harness.require(
+            fixture.requests() == ["/canary.json", "/nightly.json"],
+            "plain status acquired an executable",
+        );
+        root.harness.require(
+            !output.stderr.to_string().includes("could not ensure"),
+            "plain status attempted optional installation",
+        );
+        root.harness.require(
+            !baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}`),
+            "plain status installed missing version",
         );
     }
 
@@ -172,21 +183,29 @@ testset "toolchain status" {
         );
     }
 
-    test "json status installs unrecorded channel" {
+    test "json status requires install flag for unrecorded channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["toolchain", "status", "--json"];
         fixture.project("nightly", key = "channel");
         fixture.remove(CHANNEL_STATE_FILE);
-        let result = baml.json.decode<root.harness.ResolutionResult>(fixture.manage(candidate, args).stdout.to_string());
-        root.harness.require(result.version == NEXT_VERSION && result.installed, "unrecorded channel was not installed");
+        fixture.absent(NEXT_VERSION);
+        fixture.manage(
+            candidate,
+            ["toolchain", "status", "--json"],
+            success = false,
+            diagnostic = "status --install",
+        );
         root.harness.require(
-            fixture.read(CHANNEL_STATE_FILE).includes(NEXT_VERSION),
-            "channel mapping was not recorded",
+            !fixture.requests(),
+            "plain status resolved or acquired an unrecorded channel",
+        );
+        root.harness.require(
+            !baml.fs.exists(`${fixture.root}/${CHANNEL_STATE_FILE}`),
+            "plain status recorded a mapping",
         );
     }
 
-    test "plain json status installs the recorded version without advancing the channel" {
+    test "plain json status observes absent recorded version without advancing channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
@@ -199,19 +218,38 @@ testset "toolchain status" {
             selector = "nightly",
             version = NEXT_VERSION,
             managed = true,
-            installed = true,
+            installed = false,
         );
-        root.harness.require(fixture.read(CHANNEL_STATE_FILE) == state, "status advanced the recorded channel");
-        fixture.check(candidate, NEXT_VERSION);
+        root.harness.require(
+            fixture.read(CHANNEL_STATE_FILE) == state,
+            "status advanced the recorded channel",
+        );
+        root.harness.require(
+            fixture.requests() == ["/nightly.json"],
+            "plain channel status acquired an executable",
+        );
+        root.harness.require(
+            !baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
+            "plain status installed recorded version",
+        );
     }
 
-    test "json status cannot resolve an unrecorded channel after installation fails" {
+    test "json status leaves unavailable unrecorded channel untouched" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
         fixture.remove(CHANNEL_STATE_FILE);
         fixture.write("server/nightly.json.status", "500");
-        fixture.manage(candidate, ["toolchain", "status", "--json"], success = false);
+        fixture.manage(
+            candidate,
+            ["toolchain", "status", "--json"],
+            success = false,
+            diagnostic = "status --install",
+        );
+        root.harness.require(
+            !fixture.requests(),
+            "plain status attempted unrecorded channel resolution",
+        );
         root.harness.require(
             !baml.fs.exists(`${fixture.root}/${CHANNEL_STATE_FILE}`),
             "failed resolution recorded a channel",
