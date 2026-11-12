@@ -8,7 +8,9 @@ source: crates/baml_tests/src/generated_tests.rs
 // inferred `throws` clause or a `catch` outside the block would publish is
 // refused at the throw.
 
-class Boom<T> { payload T }
+class Boom<T> {
+    payload: T,
+}
 
 function risky<T>(v: T, fail: bool) -> int throws Boom<T> {
     if (fail) { throw Boom<T> { payload: v } }
@@ -209,7 +211,9 @@ function block_value_is_a_map_literal(t: reflect.Type) -> unknown {
     escaped
 }
 
-class Cell<T> { value T }
+class Cell<T> {
+    value: T,
+}
 
 function outer_list_through_a_class_literal(t: reflect.Type) -> unknown {
     let xs = []

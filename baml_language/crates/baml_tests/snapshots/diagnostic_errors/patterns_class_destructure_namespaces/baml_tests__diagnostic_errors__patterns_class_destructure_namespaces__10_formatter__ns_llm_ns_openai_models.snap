@@ -2,9 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Box<T> {
-    value T
+    value: T,
 }
 
 class Response {
-    score int
+    score: int,
 }

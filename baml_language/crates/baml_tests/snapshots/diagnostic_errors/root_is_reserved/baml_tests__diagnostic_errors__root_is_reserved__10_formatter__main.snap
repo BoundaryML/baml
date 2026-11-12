@@ -9,7 +9,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // `ns_alias/`), so each reports once.
 
 class root {
-    x int
+    x: int,
 }
 
 function root() -> int {
@@ -21,26 +21,26 @@ function generic<root>(value: root) -> root {
 }
 
 class Holder<root> {
-    value root
+    value: root,
 }
 
 interface Bound<root> {
-    function pick(self) -> root throws never
+    function pick(self) -> root throws never;
 }
 
 interface Sig {
-    function required<root>(self, value: root) -> int throws never
-    function required_param(self, root: int) -> int throws never
+    function required<root>(self, value: root) -> int throws never;
+    function required_param(self, root: int) -> int throws never;
 }
 
 class Impl {
-    v int
+    v: int,
     function method<root>(self, value: root) -> root {
         value
     }
 }
 
-implements<root> Bound<root> for Holder<root> {
+implement<root> Bound<root> for Holder<root> {
     function pick(self) -> root throws never {
         self.value
     }

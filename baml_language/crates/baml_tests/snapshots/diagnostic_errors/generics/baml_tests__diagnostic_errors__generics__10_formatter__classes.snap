@@ -6,7 +6,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // ============================================================
 
 class Box<T> {
-    value T
+    value: T,
 
     function get(self) -> T {
         self.value
@@ -23,7 +23,7 @@ function use_box() -> int {
 // ============================================================
 
 class Wrapper<T> {
-    data T
+    data: T,
 
     function of(value: T) -> Wrapper<T> {
         Wrapper<T> { data: value }
@@ -39,8 +39,8 @@ function use_wrapper() -> Wrapper<string> {
 // ============================================================
 
 class Pair<A, B> {
-    first A
-    second B
+    first: A,
+    second: B,
 
     function get_first(self) -> A {
         self.first
@@ -72,7 +72,7 @@ function use_pair_swap() -> Pair<string, int> {
 // ============================================================
 
 class Maker<T> {
-    data T
+    data: T,
 
     function from_string(params: string) -> Maker<T> {
         Maker<T> { data: params }
@@ -92,7 +92,7 @@ function use_maker_static() -> Maker<int> {
 // ============================================================
 
 class Holder<T> {
-    data string
+    data: string,
 
     function get_data(self) -> T {
         // error: method body returns string but declared return is T
@@ -110,7 +110,7 @@ function use_holder() -> int {
 // ============================================================
 
 class Shadow<T> {
-    value T
+    value: T,
 
     // Method declares its own T — shadows the class-level T
     function bad<T>(x: T) -> T {
@@ -142,7 +142,7 @@ function wrong_arity_partial() -> Pair<int> {
 // ============================================================
 
 class Plain {
-    name string
+    name: string,
 }
 
 function wrong_arity_on_non_generic() -> Plain<int> {
@@ -154,7 +154,7 @@ function wrong_arity_on_non_generic() -> Plain<int> {
 // ============================================================
 
 class Container<T> {
-    inner Box<T>
+    inner: Box<T>,
 
     function unwrap(self) -> T {
         self.inner.get()
@@ -171,7 +171,7 @@ function use_nested() -> int {
 // ============================================================
 
 class Factory<T> {
-    data T
+    data: T,
 
     function create(value: T) -> Factory<T> {
         Factory<T> { data: value }
@@ -192,7 +192,7 @@ function use_factory() -> int {
 // ============================================================
 
 class MaybeBox<T> {
-    value T?
+    value: T?,
 
     function get_or_default(self, default: T) -> T {
         match (self.value) {
@@ -212,7 +212,7 @@ function use_maybe_box() -> int {
 // ============================================================
 
 class Stack<T> {
-    items T[]
+    items: T[],
 
     function peek(self) -> T {
         self.items[0]
@@ -231,7 +231,7 @@ function use_stack() -> string {
 // ============================================================
 
 class Foo<T> {
-    value T
+    value: T,
 }
 
 function bare_in_union_param(f: Foo<int> | Foo) -> string {

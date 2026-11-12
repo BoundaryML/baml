@@ -9,7 +9,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // them, does not move them out of its reach — and leaves the owner's prefix
 // to the receiver.
 interface Combinable {
-    function combine(self, other: Self) -> string throws never
+    function combine(self, other: Self) -> string throws never;
 }
 
 class A {
@@ -46,7 +46,7 @@ function unbounded<T>(a: T, done: (() -> void)? = null) -> T {
 }
 
 class Pairer<K> {
-    key K
+    key: K,
 
     function pair<T extends Combinable>(self, a: T, b: T, done: (() -> void)? = null) -> string {
         a.combine(b)
@@ -104,14 +104,14 @@ function accepted() -> void {
 // through impl selection, which replays the header's bound; a goal with none
 // open asks the resolver directly.
 interface Holds<X> {
-    function held(self) -> X throws never
+    function held(self) -> X throws never;
 }
 
 class Holder<T> {
-    item T
+    item: T,
 }
 
-implements<T extends Combinable> Holds<string> for Holder<T> {
+implement<T extends Combinable> Holds<string> for Holder<T> {
     function held(self) -> string throws never {
         self.item.combine(self.item)
     }
@@ -180,7 +180,7 @@ implement Combinable for Side {
 }
 
 class LiteralHolder<T extends Combinable> {
-    value T
+    value: T,
 }
 
 function literal_type_arguments_rejected() -> void {
@@ -205,4 +205,4 @@ function base_type_arguments_accepted() -> void {
     pair<MaybeA>("a", "b");
 }
 
-type MaybeA = "a" | string
+type MaybeA = "a" | string;

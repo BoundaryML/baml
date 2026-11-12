@@ -12,22 +12,22 @@ source: crates/baml_tests/src/generated_tests.rs
 // parameters, not covariant widenings. A defaulted `Self` parameter is one a
 // call may omit, so it is no dispatch source either.
 interface Pairable {
-    function pair(x: Self, y: int) -> int throws never
-    function both(x: Self, y: Self) -> int throws never
-    function later(n: int, x: Self) -> int throws never
-    function make(n: int) -> Self throws never
+    function pair(x: Self, y: int) -> int throws never;
+    function both(x: Self, y: Self) -> int throws never;
+    function later(n: int, x: Self) -> int throws never;
+    function make(n: int) -> Self throws never;
     function opt(n: int, x: Self = (Self as Pairable).make(1)) -> int throws never {
         n
     }
-    function twice(self, other: Self) -> int throws never
-    function maybe(self, other: Self?) -> int throws never
-    function eithered(self, other: Self | int) -> int throws never
-    function boxed(self) -> Self[] throws never
-    function clone(self) -> Self throws never
+    function twice(self, other: Self) -> int throws never;
+    function maybe(self, other: Self?) -> int throws never;
+    function eithered(self, other: Self | int) -> int throws never;
+    function boxed(self) -> Self[] throws never;
+    function clone(self) -> Self throws never;
 }
 
 class P {
-    v int
+    v: int,
 
     implements Pairable {
         function pair(x: P, y: int) -> int throws never { x.v + y }

@@ -24,8 +24,8 @@ function good_literals() -> int {
 }
 
 // Literal types accept the new bases.
-type ReadFlag = 0x1
+type ReadFlag = 0x1;
 
-type Permissions = 0o644 | 0o755
+type Permissions = 0o644 | 0o755;
 
-type Mask = 0b1111 | 0b0000
+type Mask = 0b1111 | 0b0000;

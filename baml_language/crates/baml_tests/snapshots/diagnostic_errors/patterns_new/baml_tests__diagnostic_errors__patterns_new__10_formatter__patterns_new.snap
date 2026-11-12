@@ -62,7 +62,7 @@ function or_multiple_binds_diff_narrows(v: int | string) -> int {
 // ============================================================================
 
 class Team {
-    scores int[]
+    scores: int[],
 }
 
 // Empty array patterns can fail when the input is non-empty.
@@ -114,7 +114,7 @@ function irrefutable_while_let(n: int) -> int {
 // ============================================================================
 
 class Bag {
-    contents int
+    contents: int,
 }
 
 function class_destructure_unreachable_after_bare(b: Bag) -> int {
@@ -131,7 +131,7 @@ function class_destructure_unreachable_after_bare(b: Bag) -> int {
 // ============================================================================
 
 class Mixed {
-    value int | float | bool
+    value: int | float | bool,
 }
 
 function class_destructure_field_union_missing_int(m: Mixed) -> int {
@@ -145,8 +145,8 @@ function class_destructure_field_union_missing_int(m: Mixed) -> int {
 // four (kind, payload) combinations; the missing one (`Pair { kind: bool,
 // payload: string }`) should appear in the diagnostic with both field names.
 class Pair {
-    kind int | bool
-    payload int | string
+    kind: int | bool,
+    payload: int | string,
 }
 
 function class_destructure_two_field_union_missing_combination(p: Pair) -> int {
@@ -165,9 +165,9 @@ function class_destructure_two_field_union_missing_combination(p: Pair) -> int {
 // rustc: `enum_with_single_missing_variant` —
 // missing one enum variant is reported by name.
 enum Color3 {
-    Red
-    Green
-    Blue
+    Red,
+    Green,
+    Blue,
 }
 
 function enum_with_single_missing_variant(c: Color3) -> int {
@@ -180,10 +180,10 @@ function enum_with_single_missing_variant(c: Color3) -> int {
 // rustc: `enum_with_multiple_missing_variants` —
 // multiple missing variants are listed.
 enum Direction4 {
-    North
-    East
-    South
-    West
+    North,
+    East,
+    South,
+    West,
 }
 
 function enum_with_multiple_missing_variants(d: Direction4) -> int {
@@ -194,18 +194,18 @@ function enum_with_multiple_missing_variants(d: Direction4) -> int {
 
 // rustc: `enum_with_excessive_missing_variants` — 12 variants, 1 covered.
 enum ExcessiveEnum {
-    First
-    Second
-    Third
-    Fourth
-    Fifth
-    Sixth
-    Seventh
-    Eighth
-    Ninth
-    Tenth
-    Eleventh
-    Twelfth
+    First,
+    Second,
+    Third,
+    Fourth,
+    Fifth,
+    Sixth,
+    Seventh,
+    Eighth,
+    Ninth,
+    Tenth,
+    Eleventh,
+    Twelfth,
 }
 
 function enum_with_excessive_missing_variants(e: ExcessiveEnum) -> int {
@@ -218,8 +218,8 @@ function enum_with_excessive_missing_variants(e: ExcessiveEnum) -> int {
 // every shape with `field: false`, leaving `field: true` uncovered. Witness
 // should mention the missing bool value.
 class Flagged {
-    flag bool
-    note string
+    flag: bool,
+    note: string,
 }
 
 function class_field_bool_narrowing_missing_true(f: Flagged) -> int {
@@ -233,8 +233,8 @@ function class_field_bool_narrowing_missing_true(f: Flagged) -> int {
 // length array piece, which BAML doesn't model). Class with bool + optional;
 // arms cover three of the four (bool × null/non-null) combos.
 class Box2 {
-    first bool
-    second int[]?
+    first: bool,
+    second: int[]?,
 }
 
 function nested_class_optional_missing_combination(b: Box2) -> int {
@@ -259,8 +259,8 @@ function int_literal_non_exhaustive(n: int) -> int {
 // `(0 | 1, 2 | 3)` against `(int, int)` is non-exhaustive — there are int
 // values outside `0|1` for the first slot. Modeled here with a class.
 class IntPair {
-    a int
-    b int
+    a: int,
+    b: int,
 }
 
 function or_pattern_two_field_non_exhaustive(p: IntPair) -> int {

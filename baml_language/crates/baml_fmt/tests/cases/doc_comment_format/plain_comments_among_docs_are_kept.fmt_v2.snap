@@ -12,13 +12,13 @@ class Person {
     // docs:start
     /// Still the name.
     /* block */
-    name string
+    name: string,
     // docs:end
-    age int
+    age: int,
 }
 
 enum Status {
     /// Up.
     // between
-    Active
+    Active,
 }

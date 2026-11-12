@@ -1,10 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-type ByPair = map<(int, int), string>
+type ByPair = map<(int, int), string>;
 
 class Grid {
-    cells map<(int, int), string>
+    cells: map<(int, int), string>,
 }
 
 function lookup(m: map<(string,), int>) -> int {

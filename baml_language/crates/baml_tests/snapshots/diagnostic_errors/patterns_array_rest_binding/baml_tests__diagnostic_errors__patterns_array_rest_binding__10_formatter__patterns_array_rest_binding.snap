@@ -72,7 +72,7 @@ function rest_flattening_showcase(xs: int[]) -> int {
 // ============================================================================
 
 class Wrapper {
-    value int
+    value: int,
 }
 
 function rest_type_pattern(xs: int[]) -> int {

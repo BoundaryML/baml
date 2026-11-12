@@ -1,8 +1,7 @@
 ---
 source: crates/baml_fmt/tests/cases.rs
 ---
-class NoMatch {
-}
+class NoMatch {}
 
 function f(r: int | string) -> int throws NoMatch {
     let n: int = r else {

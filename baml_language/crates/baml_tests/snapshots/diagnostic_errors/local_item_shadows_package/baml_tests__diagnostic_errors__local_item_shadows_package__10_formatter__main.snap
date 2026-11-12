@@ -7,7 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // is a member of that class, not the package's type.
 
 class reflect {
-    label string
+    label: string,
 }
 
 function shadowed(f: reflect.AnyFunction) -> int {

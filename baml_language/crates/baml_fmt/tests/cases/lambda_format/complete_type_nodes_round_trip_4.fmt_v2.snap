@@ -1,4 +1,4 @@
 ---
 source: crates/baml_fmt/tests/cases.rs
 ---
-type Values = int[] | string? | map<string, bool[]> | (int | string)[]
+type Values = int[] | string? | map<string, bool[]> | (int | string)[];

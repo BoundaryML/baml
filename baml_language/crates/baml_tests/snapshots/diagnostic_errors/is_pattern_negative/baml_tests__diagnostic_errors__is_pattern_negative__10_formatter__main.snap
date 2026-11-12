@@ -28,14 +28,18 @@ function or_pattern_leak() -> int {
 }
 
 // Unresolved class head in a destructure pattern anchors at the type name.
-class WrapNonGeneric { x int }
+class WrapNonGeneric {
+    x: int,
+}
 
 function unresolved_class_head(v: WrapNonGeneric) -> bool {
     v is Frobnitz { x }
 }
 
 // Unresolved generic argument in a class pattern anchors at the type name.
-class WrapGeneric<T> { val T }
+class WrapGeneric<T> {
+    val: T,
+}
 
 function unresolved_generic_arg(v: WrapGeneric<int>) -> bool {
     v is WrapGeneric<Missing>

@@ -2,8 +2,8 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Pair {
-    a: int?
-    b: int
+    a: int?,
+    b: int,
 }
 
 // A field named twice in a class literal is an error.

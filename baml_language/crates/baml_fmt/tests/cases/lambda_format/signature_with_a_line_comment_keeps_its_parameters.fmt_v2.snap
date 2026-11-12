@@ -1,0 +1,11 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function g(a: int) -> int {
+    a
+} // why
+
+interface I {
+    function f(self) -> string // result
+        throws never;
+}

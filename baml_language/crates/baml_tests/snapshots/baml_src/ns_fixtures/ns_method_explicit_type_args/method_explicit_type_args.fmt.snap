@@ -2,10 +2,10 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 class Foo {
-  tag string
-  function zero<T>(self) -> T? {
-    null
-  }
+    tag: string,
+    function zero<T>(self) -> T? {
+      null
+    }
 }
 
 function use_method_type_args() -> int {

@@ -48,8 +48,8 @@ function tagged_unit_call() -> string {
 }
 
 function PromptUnitCall(question: string) -> string {
-  client: "openai/gpt-4o"
-  prompt: `${ nothing() }Answer: ${question}`
+    client: "openai/gpt-4o"
+    prompt: `${ nothing() }Answer: ${question}`
 }
 
 // A value that may be `null` is the tag's to handle.
@@ -59,15 +59,15 @@ function tagged_nullable(note: string?) -> string {
 
 // A `prompt:` is a tagged template too.
 function PromptIfWithValue(verbose: bool, question: string) -> string {
-  client: "openai/gpt-4o"
-  prompt: `${ if (verbose) { "Explain in detail. " } }Answer: ${question}`
+    client: "openai/gpt-4o"
+    prompt: `${ if (verbose) { "Explain in detail. " } }Answer: ${question}`
 }
 
 // --- still fine: the interpolation runs and renders nothing ---
 
 function PromptUnitInterpolation(question: string) -> string {
-  client: "openai/gpt-4o"
-  prompt: `${ side(); }Answer: ${question}`
+    client: "openai/gpt-4o"
+    prompt: `${ side(); }Answer: ${question}`
 }
 
 function unit_interpolations(verbose: bool) -> string {

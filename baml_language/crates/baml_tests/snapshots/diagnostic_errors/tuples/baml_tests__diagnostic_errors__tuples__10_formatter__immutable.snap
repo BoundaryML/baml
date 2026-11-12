@@ -23,7 +23,9 @@ function dynamic_slot(t: (int, string), index: int) -> unknown { t[index] }
 
 function nested_bounds(t: ((int, string), bool)) -> string { t.0.2 }
 
-class Callable { f: (int) -> int }
+class Callable {
+    f: (int) -> int,
+}
 
 function direct_field(value: Callable) -> int { value.f(1) }
 

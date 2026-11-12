@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 // Regression tests for catch/throw typing around divergence and throw propagation.
 
 enum Status {
-    HttpError
-    IndexError
-    AuthError
-    SomeOtherError
+    HttpError,
+    IndexError,
+    AuthError,
+    SomeOtherError,
 }
 
 // Always-diverging function: all code paths throw.
@@ -73,7 +73,7 @@ function CatchRecursiveThrow(n: int) -> string {
 }
 
 class BuildError {
-    reason string
+    reason: string,
 }
 
 // catch_all must handle every inferred throw from the base expression.

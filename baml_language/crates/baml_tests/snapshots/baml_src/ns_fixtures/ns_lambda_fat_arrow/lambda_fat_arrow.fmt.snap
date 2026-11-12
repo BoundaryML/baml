@@ -48,6 +48,6 @@ function test_mixed() -> int {
 
 // The same unambiguous JS/TS spelling is accepted in a top-level signature;
 // the formatter repairs it to the canonical thin arrow.
-function test_top_level_fat_arrow(x: int) => int {
+function test_top_level_fat_arrow(x: int) -> int {
     x + 1
 }

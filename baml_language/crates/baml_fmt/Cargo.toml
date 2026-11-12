@@ -25,6 +25,7 @@ caseless = { workspace = true }
 nunny = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
+text-size = { workspace = true }
 thiserror = { workspace = true }
 unicode-normalization = { workspace = true }
 unicode-width = { workspace = true }

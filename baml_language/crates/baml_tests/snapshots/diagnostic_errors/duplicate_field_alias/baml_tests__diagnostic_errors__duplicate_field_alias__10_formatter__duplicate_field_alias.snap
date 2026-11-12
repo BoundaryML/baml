@@ -8,40 +8,40 @@ source: crates/baml_tests/src/generated_tests.rs
 
 // Case 1: two fields share the same @alias value.
 class AliasVsAlias {
-  a string @alias("x")
-  b string @alias("x")
+    a: string @alias("x"),
+    b: string @alias("x"),
 }
 
 // Case 2: a field's declared name equals another field's @alias.
 class NameVsAlias {
-  x string
-  b string @alias("x")
+    x: string,
+    b: string @alias("x"),
 }
 
 // Case 3: three fields collapse onto one key via a mix of the above.
 class TripleCollision {
-  first string @alias("shared")
-  second string @alias("shared")
-  shared string
+    first: string @alias("shared"),
+    second: string @alias("shared"),
+    shared: string,
 }
 
 // ─── Controls: these must NOT be flagged ─────────────────────────────────────
 
 // A field whose alias equals its OWN name is fine (single occupant of key `a`).
 class AliasEqualsOwnName {
-  a string @alias("a")
-  b string
+    a: string @alias("a"),
+    b: string,
 }
 
 // A @skip'd field is excluded from the schema, so it cannot collide.
 class SkippedDoesNotCollide {
-  a string @alias("x")
-  b string @alias("x") @skip
+    a: string @alias("x"),
+    b: string @alias("x") @skip,
 }
 
 // Distinct aliases, distinct names — no collision.
 class AllDistinct {
-  a string @alias("alpha")
-  b string @alias("beta")
-  c string
+    a: string @alias("alpha"),
+    b: string @alias("beta"),
+    c: string,
 }

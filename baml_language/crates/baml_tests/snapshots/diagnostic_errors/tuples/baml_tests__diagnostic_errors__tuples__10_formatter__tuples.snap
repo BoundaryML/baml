@@ -59,7 +59,9 @@ function union_not_product(t: (int, bool) | (string, bool)) -> (int | string, bo
     t
 }
 
-function nested_product_not_union(t: ((int | string,), bool)) -> ((int,), bool) | ((string,), bool) {
+function nested_product_not_union(
+    t: ((int | string,), bool),
+) -> ((int,), bool) | ((string,), bool) {
     t
 }
 

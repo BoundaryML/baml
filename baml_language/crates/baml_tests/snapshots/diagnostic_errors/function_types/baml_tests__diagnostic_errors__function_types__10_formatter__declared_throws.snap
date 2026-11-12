@@ -4,11 +4,11 @@ source: crates/baml_tests/src/generated_tests.rs
 // Function types outside immediate callback-parameter position must declare
 // `throws` (E0151, TYPE_SYSTEM.md rule 5); the aliases here do so explicitly.
 // Omission coverage lives in the function_type_missing_throws project.
-type ExplicitHandler = (value: int) -> string throws never
+type ExplicitHandler = (value: int) -> string throws never;
 
-type ImplicitHandler = (value: int) -> string throws never
+type ImplicitHandler = (value: int) -> string throws never;
 
-type HiddenHandler = (value: int) -> string throws never
+type HiddenHandler = (value: int) -> string throws never;
 
 function run_explicit(handler: ExplicitHandler, value: int) -> string {
   handler(value)

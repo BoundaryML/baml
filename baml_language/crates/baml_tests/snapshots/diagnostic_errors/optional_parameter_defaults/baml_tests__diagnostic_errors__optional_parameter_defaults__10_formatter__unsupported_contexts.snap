@@ -5,16 +5,16 @@ function Greeting(name: string = "world") -> string {
     `hello ${name}`
 }
 
-type NamedFilter = (query: string, filter?: string?) -> int throws never
+type NamedFilter = (query: string, filter?: string?) -> int throws never;
 
-type NamedLimit = (query: string, limit?: string?) -> int throws never
+type NamedLimit = (query: string, limit?: string?) -> int throws never;
 
 class Counter {
-  value int
+    value: int,
 
-  function Current(self = null) -> int {
-    self.value
-  }
+    function Current(self = null) -> int {
+      self.value
+    }
 }
 
 function LambdaDefault() -> int {

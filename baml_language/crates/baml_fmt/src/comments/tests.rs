@@ -331,7 +331,7 @@ fn dangling_comments_print_after_the_token_they_follow() {
     let d = Docs::new(&bump);
     let root = d.concat([
         d.text("{"),
-        d.indent(docs::dangling(d, &tree, comments.dangling(block))),
+        d.indent(docs::dangling(d, &tree, comments.dangling(block), true)),
         Doc::HARD_LINE,
         d.text("}"),
     ]);
@@ -354,7 +354,7 @@ fn two_end_of_line_comments_never_merge_into_one() {
         d.text("}"),
         docs::trailing(d, &tree, comments.trailing(then_block)),
         d.text(" else {"),
-        docs::dangling(d, &tree, comments.dangling(else_block)),
+        docs::dangling(d, &tree, comments.dangling(else_block), true),
         Doc::HARD_LINE,
         d.text("}"),
     ]);

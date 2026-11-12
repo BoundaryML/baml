@@ -6,7 +6,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // at compile time; the diagnostics snapshot is the assertion.
 
 class Box<T> {
-    value T
+    value: T,
 }
 
 function main() -> int {

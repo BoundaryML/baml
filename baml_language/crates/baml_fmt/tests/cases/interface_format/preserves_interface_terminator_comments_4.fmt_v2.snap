@@ -1,5 +1,6 @@
 ---
 source: crates/baml_fmt/tests/cases.rs
 ---
-interface I { type Key = int /* before */; // after
- }
+interface I {
+    type Key = int /* before */; // after
+}

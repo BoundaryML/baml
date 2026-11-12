@@ -5,24 +5,24 @@ source: crates/baml_tests/src/generated_tests.rs
 // as well as pattern matching formatting permutations
 
 class MatchSuccess {
-    data string
+    data: string,
 }
 
 class MatchFailure {
-    reason string
+    reason: string,
 }
 
 class ArrayPatternTriviaBox {
-    values int[]
+    values: int[],
 }
 
 enum MatchStatus {
-    Active
-    Inactive
-    Pending
+    Active,
+    Inactive,
+    Pending,
 }
 
-type MatchResult = MatchSuccess | MatchFailure
+type MatchResult = MatchSuccess | MatchFailure;
 
 function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 

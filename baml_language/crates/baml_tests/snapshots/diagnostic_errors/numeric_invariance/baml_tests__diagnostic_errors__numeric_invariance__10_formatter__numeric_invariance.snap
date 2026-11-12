@@ -99,7 +99,9 @@ function OptionalFloatLtBigint(x: float?, y: bigint) -> bool {
 // Class fields are invariant — `{ count: 1 }` is not an instance of a
 // class with a `count: bigint` field. The runtime does no field-level
 // widening, so this must be a compile error; write `count: 1n`.
-class BigintHolder { count bigint }
+class BigintHolder {
+    count: bigint,
+}
 
 function IntFieldIntoBigintClass() -> BigintHolder {
     BigintHolder { count: 1 }

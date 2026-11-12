@@ -6,22 +6,21 @@ source: crates/baml_tests/src/generated_tests.rs
 // functions, classes, impl generics, or associated types.
 
 class MyTool {
-    name string
+    name: string,
 }
 
-implements reflect.AnyFunction for MyTool {
-}
+implement reflect.AnyFunction for MyTool {}
 
 function pick<T extends reflect.AnyFunction>(f: T) -> T throws never {
     return f
 }
 
 class Holder<T extends reflect.AnyFunction> {
-    f T
+    f: T,
 }
 
 interface Registry {
-    type Callee extends reflect.AnyFunction
+    type Callee extends reflect.AnyFunction;
 }
 
 // BEP-062: AnyFunction coercion failures. The derived conformance checks the
@@ -30,11 +29,11 @@ interface Registry {
 // widening only goes narrow-to-wide.
 
 class ToolError {
-    message string
+    message: string,
 }
 
 class Doc {
-    title string
+    title: string,
 }
 
 function web_search(q: string) -> Doc[] throws ToolError {

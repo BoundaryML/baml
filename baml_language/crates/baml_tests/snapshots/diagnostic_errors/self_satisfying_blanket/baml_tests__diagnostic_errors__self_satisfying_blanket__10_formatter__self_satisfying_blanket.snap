@@ -9,12 +9,14 @@ source: crates/baml_tests/src/generated_tests.rs
 // what the ground resolver gives for the same shape.
 
 interface Cyc<X> {
-    function m(self) -> int throws never
+    function m(self) -> int throws never;
 }
 
-class Foo { n: int }
+class Foo {
+    n: int,
+}
 
-implements<X, T extends Cyc<X>> Cyc<X> for T {
+implement<X, T extends Cyc<X>> Cyc<X> for T {
     function m(self) -> int throws never { 0 }
 }
 

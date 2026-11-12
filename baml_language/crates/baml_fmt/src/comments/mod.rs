@@ -407,30 +407,46 @@ impl<'t> Sweep<'t> {
             prev.is_none_or(|prev| self.newlines_between(prev.token, token) > 0),
             next.is_none_or(|next| self.newlines_between(token, next.token) > 0),
         );
+        // A comment ending a line before the enclosing node's terminator —
+        // the `;` or `,` that is its last token — is the whole node's
+        // trailing comment: a rule prints the terminator and then the
+        // comment, and re-reading that output attaches the comment the same
+        // way, so the layout does not change between passes. A comment on
+        // the same line as the terminator stays where it was written.
+        let before_terminator = placement == Placement::EndOfLine
+            && next.is_some_and(|next| {
+                next.owner == enclosing
+                    && SEPARATORS.contains(tokens.kind(next.token))
+                    && TokenIdx(next.token.0 + 1) == self.tree.arenas().span(enclosing).end()
+            });
         let dangling = (
             enclosing,
             Position::Dangling {
                 after: prev.map(|prev| prev.token),
             },
         );
-        let (node, position) = match placement {
-            Placement::OwnLine => match (preceding.or_else(before_separator), following) {
-                (_, Some(following)) => (following, Position::Leading),
-                (Some(preceding), None) => (preceding, Position::Trailing),
-                (None, None) => dangling,
-            },
-            Placement::EndOfLine => match preceding.or_else(before_separator) {
-                Some(preceding) => (preceding, Position::Trailing),
-                None => dangling,
-            },
-            Placement::SameLine => match (preceding, following) {
-                (Some(preceding), _) => (preceding, Position::Trailing),
-                (None, Some(following)) => (following, Position::Leading),
-                (None, None) => match before_separator() {
+        let (node, position) = if before_terminator {
+            (enclosing, Position::Trailing)
+        } else {
+            match placement {
+                Placement::OwnLine => match (preceding.or_else(before_separator), following) {
+                    (_, Some(following)) => (following, Position::Leading),
+                    (Some(preceding), None) => (preceding, Position::Trailing),
+                    (None, None) => dangling,
+                },
+                Placement::EndOfLine => match preceding.or_else(before_separator) {
                     Some(preceding) => (preceding, Position::Trailing),
                     None => dangling,
                 },
-            },
+                Placement::SameLine => match (preceding, following) {
+                    (Some(preceding), _) => (preceding, Position::Trailing),
+                    (None, Some(following)) => (following, Position::Leading),
+                    (None, None) => match before_separator() {
+                        Some(preceding) => (preceding, Position::Trailing),
+                        None => dangling,
+                    },
+                },
+            }
         };
         SourceComment {
             token,

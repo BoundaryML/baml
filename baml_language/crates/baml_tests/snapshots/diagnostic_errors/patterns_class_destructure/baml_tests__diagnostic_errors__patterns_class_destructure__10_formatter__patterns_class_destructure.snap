@@ -4,26 +4,26 @@ source: crates/baml_tests/src/generated_tests.rs
 // Class destructure pattern diagnostics.
 
 class Address {
-    zip int
+    zip: int,
 }
 
 class Person {
-    age int
-    flexible_age int | string
-    address Address
+    age: int,
+    flexible_age: int | string,
+    address: Address,
 }
 
 class SameNameInner {
-    field int
+    field: int,
 }
 
 class SameNameOuter {
-    field SameNameInner
-    other SameNameInner
+    field: SameNameInner,
+    other: SameNameInner,
 }
 
 class Box<T> {
-    value T
+    value: T,
 }
 
 // ============================================================================
@@ -160,7 +160,7 @@ function class_destructure_box(boxed: Box<int>) -> int {
 // ============================================================================
 
 class OptionalPerson {
-    age int?
+    age: int?,
 }
 
 function let_top_level_class_narrows_union_scrutinee_is_refutable(v: Person | int) -> int {
@@ -232,7 +232,7 @@ function let_generic_class_field_type_narrower_than_substituted_field_is_refutab
 // ============================================================================
 
 class Admin {
-    age string
+    age: string,
 }
 
 function class_destructure_or_pattern_must_bind_same_names(v: Person | int) -> int {
@@ -247,13 +247,17 @@ function class_destructure_or_pattern_same_binding_conflicting_types(v: Person |
     }
 }
 
-function class_destructure_or_pattern_same_binding_conflicting_types_reversed(v: Person | Admin) -> int {
+function class_destructure_or_pattern_same_binding_conflicting_types_reversed(
+    v: Person | Admin,
+) -> int {
     match (v) {
         Admin { age } | Person { age } => age
     }
 }
 
-function generic_class_destructure_or_pattern_same_binding_conflicting_types(v: Box<int> | Box<string>) -> int {
+function generic_class_destructure_or_pattern_same_binding_conflicting_types(
+    v: Box<int> | Box<string>,
+) -> int {
     match (v) {
         Box<int> { value: let value } | Box<string> { value: let value } => 1
     }

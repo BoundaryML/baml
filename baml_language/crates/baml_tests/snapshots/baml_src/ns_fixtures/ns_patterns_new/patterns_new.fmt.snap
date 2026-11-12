@@ -84,7 +84,7 @@ function fn_return_widens(cb: (int) -> int throws never) -> int {
     }
 }
 
-type Number = int | float
+type Number = int | float;
 
 function int_widens_to_alias(v: Number) -> int {
     match (v) {
@@ -143,7 +143,9 @@ function for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
 // catch arms with crazy chains
 // ============================================================================
 
-class AppError { code int }
+class AppError {
+    code: int,
+}
 
 function risky_error(mode: int) -> int throws AppError | string {
     if (mode == 0) {
@@ -212,9 +214,9 @@ function match_nested_paren_union(v: (int | string)[]) -> int {
 // ============================================================================
 
 class PatternBucket {
-    values int[]
+    values: int[],
 }
 
 class PatternMatrix {
-    rows int[][]
+    rows: int[][],
 }

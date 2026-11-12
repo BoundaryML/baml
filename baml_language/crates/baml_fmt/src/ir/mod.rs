@@ -21,6 +21,11 @@
 //!   The display width is fixed at creation. Text with a newline in it (a
 //!   multi-line string, a block comment) is printed as written, its later
 //!   lines at their own columns, and counts as a forced break.
+//! * `verbatim` — source text with a newline in it whose later lines move
+//!   with the node: each keeps its indentation relative to the line the
+//!   text started on in the source, measured from the indent the node is
+//!   printed at. For a node a rule has no layout for yet, printed deeper or
+//!   shallower than it was written.
 //! * `Doc::SPACE`, `Doc::SOFT_LINE`, `Doc::SOFT_LINE_OR_SPACE`,
 //!   `Doc::HARD_LINE`, `Doc::EMPTY_LINE` — a soft line is nothing when its
 //!   group is flat and a newline when the group breaks; `SOFT_LINE_OR_SPACE`
@@ -84,4 +89,5 @@ mod printer;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use doc::display_width;
 pub use doc::{Doc, Docs, GroupId, SuffixWidth};

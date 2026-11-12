@@ -42,8 +42,6 @@ pub struct Doc<'a>(&'a Node<'a>);
 /// break is a hard or empty line, an `EXPAND_PARENT`, a text with a newline
 /// in it, a trailing line, or an expanded group; a group with one inside
 /// always prints broken.
-// Four words to a node: a 24-byte payload at most on a 64-bit target, plus
-// the tag, with each `bool` in its variant's padding.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Node<'a> {
     /// A run of text. With a newline in it, the later lines are printed as
@@ -52,6 +50,15 @@ pub(crate) enum Node<'a> {
         text: &'a str,
         width: u32,
         forced: bool,
+    },
+    /// Source text with a newline in it whose later lines move with the
+    /// node: each is indented by the difference between the indent the node
+    /// is printed at and `source_indent`, the indentation of the line the
+    /// text started on in the source. Always a forced break.
+    Verbatim {
+        text: &'a str,
+        width: u32,
+        source_indent: u32,
     },
     Space,
     Line(LineMode),
@@ -107,7 +114,10 @@ pub(crate) enum Node<'a> {
     },
 }
 
-const _: () = assert!(size_of::<Node<'_>>() <= 4 * size_of::<usize>());
+// Four words on a 64-bit target (and no more than that anywhere): the
+// payloads are at most two words plus two `u32`s or a word, a `u32` and two
+// flags, with the tag in the padding.
+const _: () = assert!(size_of::<Node<'_>>() <= 32);
 
 /// Whether a line suffix's columns count in the fits-check of the groups
 /// before it on the line.
@@ -164,7 +174,8 @@ impl<'a> Doc<'a> {
             | Node::BestFitting { .. } => false,
             Node::Line(LineMode::Hard | LineMode::Empty)
             | Node::ExpandParent
-            | Node::TrailingLine { .. } => true,
+            | Node::TrailingLine { .. }
+            | Node::Verbatim { .. } => true,
             Node::Text { forced, .. }
             | Node::Concat { forced, .. }
             | Node::Group { forced, .. }
@@ -244,8 +255,8 @@ impl<'a> Docs<'a> {
         Doc(self.bump.alloc(node))
     }
 
-    fn slice(self, items: impl ExactSizeIterator<Item = Doc<'a>>) -> &'a [Doc<'a>] {
-        self.bump.alloc_slice_fill_iter(items)
+    fn slice(self, items: impl IntoIterator<Item = Doc<'a>>) -> &'a [Doc<'a>] {
+        bumpalo::collections::Vec::from_iter_in(items, self.bump).into_bump_slice()
     }
 
     /// A run of text: a token of the file, or a literal. One with a newline
@@ -265,13 +276,26 @@ impl<'a> Docs<'a> {
         self.text(self.bump.alloc_str(text))
     }
 
-    /// The items in sequence. The iterator knows its length, so the children
-    /// are allocated in place, once.
-    pub fn concat(
-        self,
-        items: impl IntoIterator<Item = Doc<'a>, IntoIter: ExactSizeIterator>,
-    ) -> Doc<'a> {
-        let children = self.slice(items.into_iter());
+    /// Source text printed as written, except that its later lines move
+    /// with the node: each keeps its indentation relative to
+    /// `source_indent`, the indentation of the line the text starts on in
+    /// the source, measured from the indent the node is printed at. For a
+    /// node printed where it was, nothing changes; for one printed deeper or
+    /// shallower, its lines follow. Text with no newline is plain text.
+    pub fn verbatim(self, text: &'a str, source_indent: u32) -> Doc<'a> {
+        match text.split_once('\n') {
+            None => self.text(text),
+            Some((first, _)) => self.alloc(Node::Verbatim {
+                text,
+                width: display_width(first),
+                source_indent,
+            }),
+        }
+    }
+
+    /// The items in sequence.
+    pub fn concat(self, items: impl IntoIterator<Item = Doc<'a>>) -> Doc<'a> {
+        let children = self.slice(items);
         self.alloc(Node::Concat {
             children,
             forced: children.iter().any(|child| child.forced()),
@@ -406,6 +430,7 @@ impl<'a> Docs<'a> {
 fn collect_referenced_groups<'a>(doc: Doc<'a>, referenced: &mut Vec<GroupId<'a>>) {
     match doc.node() {
         Node::Text { .. }
+        | Node::Verbatim { .. }
         | Node::Space
         | Node::Line(_)
         | Node::LineSuffix { .. }
@@ -469,6 +494,11 @@ impl<'a> Display<'a> {
         let never = |_| unreachable!("String never fails");
         match doc.node() {
             Node::Text { text, .. } => write!(self.out, "{text:?}").unwrap_or_else(never),
+            Node::Verbatim {
+                text,
+                source_indent,
+                ..
+            } => write!(self.out, "(verbatim {source_indent} {text:?})").unwrap_or_else(never),
             Node::Space => self.out.push_str("space"),
             Node::Line(LineMode::Soft) => self.out.push_str("softline"),
             Node::Line(LineMode::SoftOrSpace) => self.out.push_str("line"),

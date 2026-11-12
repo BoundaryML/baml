@@ -2,26 +2,26 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 interface Named {
-  type Key = string
-  function label(self) -> string
+    type Key = string;
+    function label(self) -> string;
 }
 
 interface Printable {
-  function display(self) -> string
+    function display(self) -> string;
 }
 
 class Ticket {
-  id: string
-  function label(self) -> string { return self.id }
-  implements Named {}
+    id: string,
+    function label(self) -> string { return self.id }
+    implements Named {}
 }
 
 class Box<T> {
-  value: T
+    value: T,
 }
 
-implements<T extends Named> Printable for Box<T> {
-  function display(self) -> string {
-    return self.value.label()
-  }
+implement<T extends Named> Printable for Box<T> {
+    function display(self) -> string {
+      return self.value.label()
+    }
 }

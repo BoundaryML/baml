@@ -1,0 +1,8 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+class A { /* c */ }
+
+function f() -> int {
+    foo( /* a */ )
+}

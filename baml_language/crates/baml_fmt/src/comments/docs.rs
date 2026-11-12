@@ -51,24 +51,38 @@ pub fn trailing<'a>(d: Docs<'a>, tree: &'a FileTree, comments: &[SourceComment])
 }
 
 /// `comments`, to go directly after the token of the node they dangle
-/// after: on that token's line when written there, else each on a line of
-/// its own. The rule closes what follows with a space or a line break as the
-/// last comment's placement asks.
-pub fn dangling<'a>(d: Docs<'a>, tree: &'a FileTree, comments: &[SourceComment]) -> Doc<'a> {
+/// after: on that token's line when written there — a block comment in
+/// place (`spaced` from the token, or not: `{ /* c */ }` but `(/* c */)`),
+/// a line comment ending the line as it did, so that what follows the token
+/// starts a new line, as in the source — else each on a line of its own. A
+/// line comment always ends its line, wherever it is: what the rule prints
+/// next starts a new one. After a block comment on a line of its own the
+/// rule decides, with a space or a line break.
+pub fn dangling<'a>(
+    d: Docs<'a>,
+    tree: &'a FileTree,
+    comments: &[SourceComment],
+    spaced: bool,
+) -> Doc<'a> {
     d.concat(comments.iter().enumerate().map(|(i, &comment)| {
         let text = comment.text(tree);
         match (comment.kind, comment.before.is_line_break()) {
-            (CommentKind::Line | CommentKind::Block, true) => {
+            (kind @ (CommentKind::Line | CommentKind::Block), true) => {
                 // A blank line directly after the token is not kept.
                 let line = if i > 0 && comment.before.has_blank_line() {
                     Doc::EMPTY_LINE
                 } else {
                     Doc::HARD_LINE
                 };
-                d.concat([line, d.text(text)])
+                let end = match kind {
+                    CommentKind::Line => Doc::HARD_LINE,
+                    CommentKind::Block => Doc::NIL,
+                };
+                d.concat([line, d.text(text), end])
             }
+            (CommentKind::Block, false) if i == 0 && !spaced => d.text(text),
             (CommentKind::Block, false) => d.concat([Doc::SPACE, d.text(text)]),
-            (CommentKind::Line, false) => end_of_line(d, text),
+            (CommentKind::Line, false) => d.concat([end_of_line(d, text), Doc::HARD_LINE]),
         }
     }))
 }

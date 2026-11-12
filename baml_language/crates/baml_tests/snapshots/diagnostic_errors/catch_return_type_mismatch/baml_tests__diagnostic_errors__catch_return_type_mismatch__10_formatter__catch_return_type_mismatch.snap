@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 // Regression: return inside catch arm must be validated against function return type.
 
 enum Errors {
-  AuthenticationError
-  AuthorizationError
-  NotFoundError
-  InternalServerError
+    AuthenticationError,
+    AuthorizationError,
+    NotFoundError,
+    InternalServerError,
 }
 
 function callee() -> bool throws Errors {

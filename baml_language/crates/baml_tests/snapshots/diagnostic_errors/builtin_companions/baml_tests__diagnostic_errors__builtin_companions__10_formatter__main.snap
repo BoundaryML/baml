@@ -33,7 +33,7 @@ function type_carrier() -> int {
 // A user package may name a class `Int`; it is a completely ordinary class
 // and stays constructible.
 class Int {
-  bits int
+    bits: int,
 }
 
 function user_named_int_is_unaffected() -> Int {

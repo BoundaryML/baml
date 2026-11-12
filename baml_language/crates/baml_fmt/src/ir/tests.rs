@@ -454,6 +454,21 @@ fn multi_line_text_is_written_exactly_at_its_edges() {
 }
 
 #[test]
+fn verbatim_lines_move_with_the_node() {
+    // Written at indent 2 with its inner line at 6; printed at indent 4 the
+    // inner line follows to 8 and the closing brace to 4. A blank line stays
+    // blank, and text with no newline is plain text.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let block = d.verbatim("{\n      x\n\n  }", 2);
+    let root = d.concat([d.text("f() "), d.indent(d.concat([Doc::HARD_LINE, block]))]);
+    assert_eq!(print(root, 80), "f()\n    {\n        x\n\n    }");
+    let shallower = d.concat([d.text("f() "), block]);
+    assert_eq!(print(shallower, 80), "f() {\n    x\n\n}");
+    assert_eq!(d.verbatim("x", 2).to_string(), "\"x\"");
+}
+
+#[test]
 fn a_space_before_a_suffix_is_trimmed_and_the_suffix_brings_its_own() {
     let bump = Bump::new();
     let d = Docs::new(&bump);

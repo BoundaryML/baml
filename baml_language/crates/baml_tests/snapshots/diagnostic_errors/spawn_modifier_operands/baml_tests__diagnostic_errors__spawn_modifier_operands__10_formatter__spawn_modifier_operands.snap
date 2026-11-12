@@ -7,8 +7,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
 class OnlyInts {}
 
-implements baml.spawn.Modifier<int, never> for OnlyInts {
-    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, never> throws never {
+implement baml.spawn.Modifier<int, never> for OnlyInts {
+    function apply(
+        self,
+        plan: baml.spawn.Plan<int, never>,
+    ) -> baml.spawn.Plan<int, never> throws never {
         plan
     }
 }

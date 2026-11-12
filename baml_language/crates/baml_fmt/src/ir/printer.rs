@@ -196,6 +196,27 @@ impl<'a> Output<'a> {
         }
     }
 
+    /// Source text whose later lines are re-indented: each keeps its
+    /// indentation relative to `source_indent`, measured from `indent`. A
+    /// blank line stays blank.
+    fn push_reindented(&mut self, text: &'a str, source_indent: u32, indent: u32) {
+        let mut lines = text.split('\n');
+        let first = lines
+            .next()
+            .unwrap_or_else(|| unreachable!("`split` yields at least one piece"));
+        self.push_str(first, display_width(first));
+        for line in lines {
+            let content = line.trim_start_matches([' ', '\t']);
+            let was = display_width(&line[..line.len() - content.len()]);
+            self.push_newline(Item::Newline {
+                indent: (indent + was).saturating_sub(source_indent),
+                blank: false,
+                in_text: true,
+            });
+            self.push_str(content, display_width(content));
+        }
+    }
+
     /// Text deferred to the end of the current line.
     fn push_tail(&mut self, text: &'a str) {
         if !text.is_empty() {
@@ -516,6 +537,11 @@ impl<'a> Printer<'a> {
             Node::Text {
                 text, forced: true, ..
             } => self.out.push_multi_line(text),
+            Node::Verbatim {
+                text,
+                source_indent,
+                ..
+            } => self.out.push_reindented(text, source_indent, indent),
             Node::Space => self.out.push_space(),
             Node::Line(line) => match (mode, line) {
                 (Mode::Flat, LineMode::Soft) => {}
@@ -676,6 +702,10 @@ impl<'a> Printer<'a> {
             Node::Text { width, forced, .. } => {
                 let room = room.consume(width)?;
                 if forced { Err(Verdict::Fits) } else { Ok(room) }
+            }
+            Node::Verbatim { width, .. } => {
+                room.consume(width)?;
+                Err(Verdict::Fits)
             }
             Node::Space => room.space(),
             Node::Line(line) => match (mode, line) {

@@ -2,8 +2,8 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Person {
-    age int
-    name string
+    age: int,
+    name: string,
 }
 
 function string_last(person: Person) -> int {

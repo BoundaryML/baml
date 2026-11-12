@@ -3,11 +3,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 // Test: Match expression exhaustiveness and unreachable arm detection
 class Success {
-    data string
+    data: string,
 }
 
 class Failure {
-    reason string
+    reason: string,
 }
 
 // ============================================================================
@@ -79,7 +79,7 @@ function GuardedWithFallback(x: int) -> int {
 // Type aliases should be expanded to their underlying types for exhaustiveness
 // ============================================================================
 
-type Result = Success | Failure
+type Result = Success | Failure;
 
 // Exhaustive: type alias union with all members covered
 function ExhaustiveTypeAlias(r: Result) -> string {
@@ -103,9 +103,9 @@ function ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
 // ============================================================================
 
 enum Status {
-    Active
-    Inactive
-    Pending
+    Active,
+    Inactive,
+    Pending,
 }
 
 // Exhaustive: all enum variants covered
@@ -173,10 +173,10 @@ function UnionPatternCoversAll(r: Result) -> string {
 }
 
 class Pending {
-    eta int
+    eta: int,
 }
 
-type FullResult = Success | Failure | Pending
+type FullResult = Success | Failure | Pending;
 
 // Exhaustive: partial union + remaining covered
 function PartialUnionPlusCatchAll(r: FullResult) -> string {
@@ -268,11 +268,11 @@ function BoolUnionPattern(b: bool) -> string {
 // type X = true means only accepts the value true
 // ============================================================================
 
-type AlwaysTrue = true
+type AlwaysTrue = true;
 
-type AlwaysFalse = false
+type AlwaysFalse = false;
 
-type CustomBool = true | false
+type CustomBool = true | false;
 
 // Exhaustive: singleton true type
 function ExhaustiveTrueType(t: AlwaysTrue) -> string {
@@ -336,7 +336,7 @@ function OptionalWithCatchAll(x: int?) -> string {
 // String literals like "user" | "assistant"
 // ============================================================================
 
-type Role = "user" | "assistant" | "system"
+type Role = "user" | "assistant" | "system";
 
 // Exhaustive: string literal union with catch-all
 function StringLiteralWithCatchAll(role: Role) -> string {
@@ -377,11 +377,11 @@ function StringLiteralUnionPattern(role: Role) -> string {
 // Singleton integer types for exhaustiveness
 // ============================================================================
 
-type HttpOk = 200
+type HttpOk = 200;
 
-type HttpCreated = 201
+type HttpCreated = 201;
 
-type SuccessCode = 200 | 201 | 204
+type SuccessCode = 200 | 201 | 204;
 
 // Exhaustive: singleton int type
 function ExhaustiveSingletonInt(code: HttpOk) -> string {
@@ -420,7 +420,7 @@ function IntLiteralUnionPattern(code: SuccessCode) -> string {
 // Type aliases that reference other type aliases
 // ============================================================================
 
-type MaybeResult = Result?
+type MaybeResult = Result?;
 
 // Exhaustive: nested type alias (Result? = Success | Failure | null)
 function NestedTypeAlias(mr: MaybeResult) -> string {
@@ -522,7 +522,7 @@ function DuplicateStringLiteral(role: Role) -> string {
 // Optional of literal types
 // ============================================================================
 
-type MaybeOk = 200?
+type MaybeOk = 200?;
 
 // Exhaustive: optional singleton int
 function ExhaustiveOptionalSingleton(code: MaybeOk) -> string {
@@ -551,7 +551,7 @@ function NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
 // Union of different literal types
 // ============================================================================
 
-type MixedLiterals = 200 | "success" | true
+type MixedLiterals = 200 | "success" | true;
 
 // Exhaustive: all mixed literals covered
 function ExhaustiveMixedLiterals(x: MixedLiterals) -> string {
@@ -575,9 +575,9 @@ function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
 // Type alias chain with literal types
 // ============================================================================
 
-type OkCode = 200
+type OkCode = 200;
 
-type OkOrCreated = OkCode | 201
+type OkOrCreated = OkCode | 201;
 
 // Exhaustive: type alias of literals
 function ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
@@ -599,7 +599,7 @@ function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
 // Optional of optional (T??)
 // ============================================================================
 
-type DoubleMaybe = MaybeResult?
+type DoubleMaybe = MaybeResult?;
 
 // `DoubleMaybe` expands through two alias/optional layers; the match matrix
 // flattens the union recursively (`matrix_normalize_scrut`), so its columns
@@ -629,9 +629,9 @@ function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
 // Recursive flattening dedups canonically equivalent members
 // ============================================================================
 
-type Inner = int | string
+type Inner = int | string;
 
-type Outer = Inner | int
+type Outer = Inner | int;
 
 // Exhaustive: `Outer` flattens to `int | string | int`; the equivalent `int`
 // members dedup to one column ctor, so two arms cover everything.
@@ -728,7 +728,7 @@ function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
 // Union of class type and literal type
 // ============================================================================
 
-type SuccessOr200 = Success | 200
+type SuccessOr200 = Success | 200;
 
 // Exhaustive: class + int literal union
 function ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
@@ -988,10 +988,10 @@ function NestedEnumMatch(s1: Status, s2: Status) -> string {
 // ============================================================================
 
 enum DispatchState {
-    Alpha
-    Beta
-    Gamma
-    Delta
+    Alpha,
+    Beta,
+    Gamma,
+    Delta,
 }
 
 // 4 dense enum discriminants (0..3) should use JumpTable.
@@ -1015,19 +1015,19 @@ function JumpTableTypeTag(value: int | string | bool | float) -> string {
 }
 
 class Cat {
-    name string
+    name: string,
 }
 
 class Dog {
-    name string
+    name: string,
 }
 
 class Bird {
-    name string
+    name: string,
 }
 
 class Fish {
-    name string
+    name: string,
 }
 
 // 4 user-defined classes should use JumpTable with CLASS_BASE tags.
@@ -1047,7 +1047,7 @@ function JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
 // distinguishable: rendering them both as `WitBox { v: _ }` would ask for one
 // arm where two different ones are missing.
 class WitBox<T> {
-    v: T
+    v: T,
 }
 
 function DistinctInstantiationWitnesses(x: unknown) -> int {

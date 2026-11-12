@@ -8,7 +8,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // it, rather than erased.
 
 class Box<T> {
-    v T
+    v: T,
 }
 
 function id<T>(x: T) -> T {

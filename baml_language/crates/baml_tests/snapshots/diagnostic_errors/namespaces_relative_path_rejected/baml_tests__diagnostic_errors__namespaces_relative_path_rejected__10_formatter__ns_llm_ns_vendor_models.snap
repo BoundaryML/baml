@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Box<T> {
-    value T
+    value: T,
 }
 
 function unbox() -> int {

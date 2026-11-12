@@ -14,16 +14,14 @@ source: crates/baml_tests/src/generated_tests.rs
 // device for the type it names, so it denotes the very same implementor.
 
 interface Flagged {
-    function flag(self) -> string throws never
+    function flag(self) -> string throws never;
 }
 
-class Ok {
-}
+class Ok {}
 
-class Aliased {
-}
+class Aliased {}
 
-type AliasedName = Aliased
+type AliasedName = Aliased;
 
 /// E0138: a union spelling, even one that would denote `bool`.
 implement Flagged for true | false {

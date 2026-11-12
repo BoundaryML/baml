@@ -10,8 +10,8 @@ source: crates/baml_tests/src/generated_tests.rs
 // `a`, `b`, `x`, and `y` unchanged.
 
 class P {
-    a int
-    b string
+    a: int,
+    b: string,
 }
 
 function mk() -> P {
@@ -61,8 +61,8 @@ function assign_to_literal() -> int {
 // enum variant has no storage (`mk = mk` previously crashed MIR lowering with
 // an internal error; `Shape.Circle = Shape.Circle` silently did nothing).
 enum Shape {
-    Circle
-    Square
+    Circle,
+    Square,
 }
 
 function assign_to_function() -> int {

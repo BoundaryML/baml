@@ -2,11 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Worker {
-  factor int
+    factor: int,
 
-  function scale(self, value: int) -> int {
-    self.factor * value
-  }
+    function scale(self, value: int) -> int {
+      self.factor * value
+    }
 }
 
 function direct(cb: (value: int) -> int) -> int {

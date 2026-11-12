@@ -11,11 +11,16 @@ use baml_syntax::{
 use super::{FormatNode, Formatter};
 use crate::{comments::docs, ir::Doc};
 
+mod attrs;
+mod items;
+
 /// Items are separated by one blank line, except that a run of globals keeps
 /// the grouping it was written with: adjacent `let`s stay adjacent, and a
-/// blank line the author put between two of them stays. Comments before the
-/// first item come first; a file with nothing but comments is those
-/// comments.
+/// blank line the author put between two of them stays. The blank line goes
+/// where the author put one among the comments before an item: a comment
+/// written right after the previous item, with the blank line after it,
+/// stays with that item. Comments before the first item come first; a file
+/// with nothing but comments is those comments.
 impl FormatNode for SourceFile {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let d = f.docs;
@@ -24,16 +29,21 @@ impl FormatNode for SourceFile {
             d,
             f.tree,
             f.comments.dangling(f.tree.root_id()),
+            true,
         )];
         for (index, &item) in items.iter().enumerate() {
             if index > 0 {
+                let id = item.node_id();
+                let blank_before = f.comments.gap_before_node(f.tree, id).has_blank_line();
                 let grouped_globals = matches!(item, AnyItem::Let(_))
                     && matches!(items[index - 1], AnyItem::Let(_))
-                    && !f
-                        .comments
-                        .gap_before_node(f.tree, item.node_id())
-                        .has_blank_line();
-                parts.push(if grouped_globals {
+                    && !blank_before;
+                let comments_hug_previous = !blank_before
+                    && f.comments
+                        .leading(id)
+                        .iter()
+                        .any(|comment| comment.after.has_blank_line());
+                parts.push(if grouped_globals || comments_hug_previous {
                     Doc::HARD_LINE
                 } else {
                     Doc::EMPTY_LINE
@@ -65,14 +75,9 @@ macro_rules! verbatim {
 
 verbatim! {
     // items
-    FunctionDef, ReturnType, ThrowsClause, LlmBody, ClientField, PromptField, ToolsField,
-    ClassDef, Field, EnumDef, EnumVariant, InterfaceDef, RequiresClause, MethodSig, AssocTypeDecl,
-    AssocTypeDef,
-    ImplementsBlock, ImplementsFor, InterfaceFieldLink, TypeAliasDef, ClientValueDef, TestDef,
-    WithClause, RemovedItem,
+    RemovedItem,
     GenericParamList, GenericParam, GenericParamBounds, GenericArgs, TypeArgs, AssocTypeBinding,
-    ParamList, Param, TypeAscription, DefaultValue,
-    Attribute, BlockAttr, DottedName, AttrArgs, JinjaArg,
+    JinjaArg,
     // types
     PathType, LiteralType, ParenType, FunctionType, FunctionTypeParam, OptionalType, ArrayType,
     UnionType, QualifiedPath,
@@ -80,7 +85,7 @@ verbatim! {
     BindingPattern, WildcardPattern, DestructurePattern, FieldPattern, ArrayPattern, RestPattern,
     TypePattern, ParenPattern, UnionPattern,
     // expressions
-    Name, PathExpr, GenericApplyExpr, LiteralExpr, StringLit, FieldAccessExpr, OptionalFieldAccessExpr,
+    PathExpr, GenericApplyExpr, LiteralExpr, StringLit, FieldAccessExpr, OptionalFieldAccessExpr,
     UpcastExpr, SpecExpr, EnvAccessExpr, CallExpr, ArgList, Arg, OptionalCallExpr, IndexExpr,
     OptionalIndexExpr, TaggedTemplateExpr, BinaryExpr, IsExpr, UnaryExpr, AwaitExpr, SpawnExpr,
     CatchExpr, CatchClause, CatchArm, ThrowExpr, ReturnExpr, BreakExpr, ContinueExpr, ParenExpr,
@@ -88,7 +93,7 @@ verbatim! {
     MapEntry, ObjectLiteral, ObjectField, SpreadElement,
     // statements
     ExprStmt, AssignStmt, EmptyStmt, LetStmt, TypeBindingStmt, DeferStmt, WhileStmt, WhileLetStmt, ForStmt,
-    ForInHeader, ParenForInHeader, CForHeader, HeaderStmt, DocLine, Directive, HeaderLine, LetItem,
+    ForInHeader, ParenForInHeader, CForHeader, HeaderStmt,
     // templates
     BacktickString, TemplateInterp, TemplateFor, TemplateForOpen, TemplateIf, TemplateIfOpen,
     TemplateElif, TemplateElse, TemplateEndTag,

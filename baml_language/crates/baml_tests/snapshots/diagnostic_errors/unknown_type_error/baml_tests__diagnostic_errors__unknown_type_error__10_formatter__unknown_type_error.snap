@@ -22,8 +22,8 @@ function Baz() -> unknown_optional? {
 // be reported as `UnresolvedType` rather than silently producing a bogus
 // `Ty::EnumVariant`.
 enum Status {
-  Active
-  Inactive
+    Active,
+    Inactive,
 }
 
 function StatusTypoInTypePosition(s: Status.Typo) -> int {
@@ -35,7 +35,7 @@ function UnknownFieldAccess(raw: unknown) -> string {
 }
 
 class Envelope {
-  payload unknown
+    payload: unknown,
 }
 
 function UnknownNestedFieldAccess(envelope: Envelope) -> string {

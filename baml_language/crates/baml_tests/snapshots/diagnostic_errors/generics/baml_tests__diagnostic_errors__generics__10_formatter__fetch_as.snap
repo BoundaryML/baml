@@ -2,10 +2,10 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Todo {
-    id int
-    title string
-    completed bool
-    userId int
+    id: int,
+    title: string,
+    completed: bool,
+    userId: int,
 }
 
 function GetTodo() -> Todo {

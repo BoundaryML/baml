@@ -3,12 +3,16 @@
 //! with the same tokens, so only whitespace and comment placement changed;
 //! and it has every comment, each exactly once. The formatter checks it in
 //! debug builds, and the tests check it on every case and corpus file.
+//!
+//! "The same" allows exactly what the rules canonicalise: a member's or
+//! statement's optional separator (`,`, `;`, a field's `:`), a list's
+//! separators, `=>` for `->`, `implement` for `implements`, and the order
+//! of an LLM body's fields.
 
 use std::fmt;
 
 use baml_parser::ParseError;
 use baml_syntax::{
-    index,
     nodes::FileTree,
     token::{TokenIdx, TokenKind},
     tree::{AnyNodeId, Missing, TokenRange, TreeWalk as _, Visitor},
@@ -80,26 +84,38 @@ pub fn check(input: &FileTree, output: &str) -> Result<(), Violation> {
 }
 
 /// Every node in source order, each as its kind and, in field order, its
-/// tokens (kind and text) and the kinds of its children.
+/// tokens' texts and the kinds of its children — minus what the rules
+/// canonicalise (see the module doc).
 fn shape(tree: &FileTree) -> Vec<String> {
     struct Parts<'t> {
         tree: &'t FileTree,
         out: String,
+        children: Vec<AnyNodeId>,
     }
     impl Visitor for Parts<'_> {
         fn node(&mut self, _field: &'static str, id: AnyNodeId) {
             self.out.push_str(" (");
             self.out.push_str(self.tree.arenas().kind_name(id));
             self.out.push(')');
+            self.children.push(id);
         }
-        fn token(&mut self, _field: &'static str, token: TokenIdx) {
+        fn token(&mut self, field: &'static str, token: TokenIdx) {
+            let text = match (field, self.tree.token_text(token)) {
+                // Optional punctuation the rules add or replace.
+                ("sep" | "semi" | "comma" | "colon", _) => return,
+                ("arrow", "=>") => "->",
+                ("kw", "implement") => "implements",
+                (_, text) => text,
+            };
             self.out.push(' ');
-            self.out.push_str(self.tree.token_text(token));
+            self.out.push_str(text);
         }
+        fn separator(&mut self, _field: &'static str, _token: TokenIdx) {}
         fn range(&mut self, _field: &'static str, range: TokenRange) {
             for token in range.iter() {
                 if !self.tree.tokens().kind(token).is_trivia() {
-                    self.token("", token);
+                    self.out.push(' ');
+                    self.out.push_str(self.tree.token_text(token));
                 }
             }
         }
@@ -107,16 +123,26 @@ fn shape(tree: &FileTree) -> Vec<String> {
             self.out.push_str(" <missing>");
         }
     }
-    index::descendants(tree, tree.root_id())
-        .map(|id| {
-            let mut parts = Parts {
-                tree,
-                out: tree.arenas().kind_name(id).to_owned(),
-            };
-            tree.arenas().walk_node(id, &mut parts);
-            parts.out
-        })
-        .collect()
+    let mut lines = Vec::new();
+    let mut stack = vec![tree.root_id()];
+    while let Some(id) = stack.pop() {
+        let kind = tree.arenas().kind_name(id);
+        let mut parts = Parts {
+            tree,
+            out: kind.to_owned(),
+            children: Vec::new(),
+        };
+        tree.arenas().walk_node(id, &mut parts);
+        let mut children = parts.children;
+        if kind == "LlmBody" {
+            // The fields print in a fixed order whatever the source's.
+            children.sort_by_key(|&child| tree.arenas().kind_name(child));
+            kind.clone_into(&mut parts.out);
+        }
+        lines.push(parts.out);
+        stack.extend(children.into_iter().rev());
+    }
+    lines
 }
 
 /// The text of every plain comment, sorted.

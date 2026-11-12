@@ -1,11 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-type Alias = (x: int) -> int
+type Alias = (x: int) -> int;
 
 class Holder {
-  cb (value: int) -> int
-  opt_cb ((value: int) -> int)?
+    cb: (value: int) -> int,
+    opt_cb: ((value: int) -> int)?,
 }
 
 function let_annotation() -> int {

@@ -6,46 +6,46 @@ source: crates/baml_tests/src/generated_tests.rs
 // error already owns is that error's cascade and reports nothing more.
 
 interface HasOut {
-    type Out
+    type Out;
 }
 
 interface Src<T> {
-    value: T
+    value: T,
 }
 
 class Box<T> {
-    v T
+    v: T,
     implements HasOut {
-        type Out = T
+        type Out = T;
     }
 }
 
 interface HasItem {
-    type Item
-    value: Self.Item
+    type Item;
+    value: Self.Item,
 }
 
 class IntItem {
-    value int
+    value: int,
     implements HasItem {
-        type Item = int
+        type Item = int;
     }
 }
 
 class StringItem {
-    value string
+    value: string,
     implements HasItem {
-        type Item = string
+        type Item = string;
     }
 }
 
 class IntSrc {
-    value int
+    value: int,
     implements Src<int> {}
 }
 
 class StringSrc {
-    value string
+    value: string,
     implements Src<string> {}
 }
 

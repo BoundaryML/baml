@@ -1,13 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-type ExplicitAlias = (x: int) -> int throws never
+type ExplicitAlias = (x: int) -> int throws never;
 
-type OpenAlias = (x: int) -> int throws unknown
+type OpenAlias = (x: int) -> int throws unknown;
 
 class Callbacks {
-  on_done (value: int) -> int throws never
-  on_skip ((value: int) -> int throws never)?
+    on_done: (value: int) -> int throws never,
+    on_skip: ((value: int) -> int throws never)?,
 }
 
 function immediate_callback(cb: (value: int) -> int) -> int {

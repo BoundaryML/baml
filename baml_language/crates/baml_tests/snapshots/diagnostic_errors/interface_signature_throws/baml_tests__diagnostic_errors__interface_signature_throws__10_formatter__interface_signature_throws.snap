@@ -16,7 +16,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // assume it opens with the `Self` slot.
 
 class AppError {
-    msg: string
+    msg: string,
 }
 
 interface Omitted {

@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 class UnusedError {}
 
-type OpenErrors = unknown
+type OpenErrors = unknown;
 
 function Named() -> int throws string | int { throw 1 }
 

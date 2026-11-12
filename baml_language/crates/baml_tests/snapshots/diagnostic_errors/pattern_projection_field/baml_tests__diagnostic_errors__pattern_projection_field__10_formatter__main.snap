@@ -6,17 +6,17 @@ source: crates/baml_tests/src/generated_tests.rs
 // arguments.
 
 interface HasOut {
-    type Out
+    type Out;
 }
 
 class IntOut {
     implements HasOut {
-        type Out = int
+        type Out = int;
     }
 }
 
 class Holder<T extends HasOut> {
-    v T.Out
+    v: T.Out,
 }
 
 // `Holder<IntOut>.v` is an `int`: a `string` binding there never matches.

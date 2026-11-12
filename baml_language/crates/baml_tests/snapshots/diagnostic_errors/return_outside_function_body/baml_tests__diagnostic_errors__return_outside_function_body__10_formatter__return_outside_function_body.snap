@@ -33,7 +33,9 @@ function return_in_a_template_inside_a_lambda(a: int) -> int {
 }
 
 // Controls: a lambda's own `return`, in a default and in an interpolation.
-function lambda_in_a_default_returns_from_the_lambda(a: () -> int = () -> int { return 3; }) -> int {
+function lambda_in_a_default_returns_from_the_lambda(
+    a: () -> int = () -> int { return 3; },
+) -> int {
     a()
 }
 

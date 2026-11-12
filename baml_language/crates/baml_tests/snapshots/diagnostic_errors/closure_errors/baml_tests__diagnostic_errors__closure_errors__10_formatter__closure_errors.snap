@@ -2,19 +2,19 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Formatter {
-  prefix string
-  function format(self, text: string) -> string { self.prefix + text }
+    prefix: string,
+    function format(self, text: string) -> string { self.prefix + text }
 }
 
 class Counter {
-  value int
-  function increment(self) -> int { self.value += 1; self.value }
+    value: int,
+    function increment(self) -> int { self.value += 1; self.value }
 }
 
 class Employee {
-  first string
-  last string
-  function full_name(self) -> string { self.first + " " + self.last }
+    first: string,
+    last: string,
+    function full_name(self) -> string { self.first + " " + self.last }
 }
 
 // Error 1: Extra arg on bound ref

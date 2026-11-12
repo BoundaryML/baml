@@ -42,4 +42,4 @@ function bad_literals() -> int {
 }
 
 // Type-level literals go through the same validation.
-type BadHexFlag = 0X1F | 0b12
+type BadHexFlag = 0X1F | 0b12;

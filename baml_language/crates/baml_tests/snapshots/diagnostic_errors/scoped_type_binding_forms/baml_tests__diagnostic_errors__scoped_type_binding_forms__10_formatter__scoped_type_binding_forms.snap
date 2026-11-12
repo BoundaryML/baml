@@ -6,11 +6,17 @@ source: crates/baml_tests/src/generated_tests.rs
 // interface written in full, and a bounded statement has an `else` block,
 // which diverges.
 
-interface Named { name string }
+interface Named {
+    name: string,
+}
 
-interface Holder<T> { held T }
+interface Holder<T> {
+    held: T,
+}
 
-class Wrapper<T> { inner T }
+class Wrapper<T> {
+    inner: T,
+}
 
 function ident<T>(v: T) -> T throws never { v }
 
