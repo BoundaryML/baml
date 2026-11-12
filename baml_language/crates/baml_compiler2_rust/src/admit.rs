@@ -126,7 +126,7 @@ pub fn compile_program(
         retain_reachable(&index, &mut lowered);
     }
     let (mut bodies, mut functions, builtins) =
-        admission_fixpoint(db, &index, &mut lowered.units, &mut lowered.rejected);
+        admission_fixpoint(db, &index, opt, &mut lowered.units, &mut lowered.rejected);
     crate::init::compile_chainers(
         program,
         &index,
@@ -273,10 +273,11 @@ fn retain_reachable(index: &ProgramIndex, lowered: &mut LoweredProgram<'_>) {
     });
 }
 
-fn admission_fixpoint(
-    db: &dyn baml_compiler2_mir::Db,
+fn admission_fixpoint<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,
-    units: &mut BTreeMap<usize, Unit<'_>>,
+    opt: OptLevel,
+    units: &mut BTreeMap<usize, Unit<'db>>,
     rejected: &mut Vec<(String, Rejection)>,
 ) -> (String, Vec<CompiledFunction>, BTreeMap<String, usize>) {
     // Every failed round removes at least one unit.
@@ -314,6 +315,34 @@ fn admission_fixpoint(
             })
             .map(|(&object, _)| object)
             .collect();
+        // The frame-escape verdict trusts a callee's summary only where the
+        // call passes Rust arguments to a body of this round: a callee this
+        // round rejects runs interpreted, a framed one copies its arguments
+        // into VM slots, and a generic one may be funnelled through the VM
+        // stack, all precise roots the collector would trace a stack
+        // address from. A later round, with fewer units, recomputes.
+        let candidates: BTreeSet<usize> = units.keys().copied().collect();
+        let compiled = |function: baml_compiler2_hir::loc::FunctionLoc<'db>| {
+            index.declared(db, function).is_some_and(|object| {
+                candidates.contains(&object)
+                    && !framed.contains(&object)
+                    && baml_compiler2_hir_ty::callable::callable_user_generic_params(
+                        db,
+                        baml_compiler2_hir::loc::DeclRef::Source(function),
+                    )
+                    .is_empty()
+            })
+        };
+        for unit in units.values_mut() {
+            unit.analysis.escape = baml_compiler2_mir::escape::analyze_for(
+                db,
+                unit.root,
+                &unit.body,
+                unit.analysis.arity,
+                opt,
+                &compiled,
+            );
+        }
         let signatures: HashMap<usize, Signature> = units
             .iter()
             .map(|(&object, unit)| (object, unit.analysis.signature(&unit.body)))
@@ -388,6 +417,7 @@ impl<'db> Admission<'_, 'db> {
                 self.units.insert(
                     object,
                     Unit {
+                        root: self.root,
                         body: body.clone(),
                         lambdas: lambdas.to_vec(),
                         analysis,
@@ -489,6 +519,8 @@ fn symbol_for(name: &str, object: usize) -> String {
 
 pub(crate) struct Unit<'db> {
     pub(crate) recursive: bool,
+    /// The source root the body was lowered in: its summaries' scope.
+    pub(crate) root: SourceRoot,
     pub(crate) body: MirFunctionBody<'db>,
     pub(crate) lambdas: Vec<MirFunction<'db>>,
     pub(crate) analysis: Analysis,

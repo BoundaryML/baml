@@ -21,6 +21,14 @@
 //! come from an allocation this analysis saw; sharing flows from a node to its
 //! contents. Everything the analysis cannot name is shared, so a missed case
 //! costs a lock, never a race.
+//!
+//! The same graph answers a second, stricter question per allocation site:
+//! can the object outlive the frame that allocated it? If not, a backend may
+//! place it on the stack. An allocation *escapes the frame* when it may reach
+//! the return value, a shared node, a global, a captured cell, a thrown
+//! error, a spawned task, or an argument of a call that may keep it; see
+//! [`FrameEscape`] for every cause. Sharing implies escaping, and escaping
+//! flows to contents the way sharing does.
 
 use baml_base::{LangPackage, SourceRoot, SourceRootKind};
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
@@ -63,9 +71,144 @@ pub struct EscapeFacts {
     /// says its argument and everything reachable from it are thread-local;
     /// `0` is thread-local whatever the caller passes.
     needs: Vec<u64>,
+    /// Per node: why what it holds may outlive this frame, or `None` when it
+    /// cannot.
+    escape: Vec<Option<FrameEscape>>,
+    /// Every allocation site of the body, in statement order.
+    sites: Vec<SiteFacts>,
+    /// `(block, statement)` to its index in `sites`.
+    site_index: FxHashMap<(usize, usize), usize>,
+}
+
+/// Why an allocation may outlive its frame, for stack placement and its
+/// coverage report. Every cause but `Generic` is a property of the object's
+/// alias group; `Generic` is the site's.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FrameEscape {
+    /// Reaches the return value.
+    Returned,
+    /// Reaches a node another task, the runtime, or an opaque operation may
+    /// hold (an await, a sys-op, a bound method, logging, a cell read).
+    Shared,
+    /// Reaches a global's value.
+    Global,
+    /// Reaches a cell a closure captures.
+    Captured,
+    /// Reaches a thrown error.
+    Thrown,
+    /// Reaches a spawned task.
+    Spawned,
+    /// Passed to a call that may keep it: the named source function, a
+    /// function value, a virtual call, or a sys-op.
+    KeepingCall(String),
+    /// Passed to a native that is not modeled or that keeps the argument.
+    Native(String),
+    /// An instance of a class that may have a finalizer, which observes the
+    /// object after the frame is gone.
+    Finalizer,
+    /// Held by a parameter: the caller owns it.
+    Parameter,
+    /// A generic class instance; not placed in v1.
+    Generic,
+}
+
+/// An allocation site of a body: an [`Rvalue`] that builds an array, map,
+/// instance or byte array. Obtained from [`EscapeFacts::sites`] or
+/// [`EscapeFacts::site_at`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Site(usize);
+
+/// The sites and locals that may hold the same object; the unit of a stack
+/// slot. Stable within one [`EscapeFacts`] only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct GroupId(usize);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SiteFacts {
+    block: crate::BlockId,
+    statement: usize,
+    group: GroupId,
+    /// A generic class instance: never placed, whatever its group says.
+    generic: bool,
 }
 
 impl EscapeFacts {
+    /// Every allocation site of the body, with its block and statement
+    /// index, in statement order.
+    pub fn sites(&self) -> impl Iterator<Item = (Site, crate::BlockId, usize)> + '_ {
+        self.sites
+            .iter()
+            .enumerate()
+            .map(|(index, site)| (Site(index), site.block, site.statement))
+    }
+
+    /// The allocation site at `statement` of `block`, if that statement
+    /// allocates.
+    pub fn site_at(&self, block: crate::BlockId, statement: usize) -> Option<Site> {
+        self.site_index.get(&(block.0, statement)).map(|&i| Site(i))
+    }
+
+    /// Whether the object `site` allocates cannot outlive this frame, so a
+    /// backend may place it on the stack. Slot reuse across loop iterations
+    /// is the backend's to prove, with [`Self::group_may_reach`] and liveness.
+    pub fn site_stays_in_frame(&self, site: Site) -> bool {
+        self.site_escape(site).is_none()
+    }
+
+    /// Why `site`'s object may outlive this frame; `None` when it cannot.
+    pub fn site_escape(&self, site: Site) -> Option<&FrameEscape> {
+        let facts = &self.sites[site.0];
+        if facts.generic {
+            return Some(&FrameEscape::Generic);
+        }
+        self.escape[facts.group.0].as_ref()
+    }
+
+    /// The alias group of the object `site` allocates: every site and local
+    /// that may hold the same object.
+    pub fn alias_group(&self, site: Site) -> GroupId {
+        self.sites[site.0].group
+    }
+
+    /// The alias group of every object `local` can hold.
+    pub fn local_group(&self, local: Local) -> Option<GroupId> {
+        self.local_node.get(local.0).map(|&node| GroupId(node))
+    }
+
+    /// Why what `local` holds may outlive this frame; `None` when it cannot.
+    pub fn local_escape(&self, local: Local) -> Option<&FrameEscape> {
+        self.escape[self.local_group(local)?.0].as_ref()
+    }
+
+    /// The group every field and element of `group`'s objects belongs to.
+    pub fn contents_group(&self, group: GroupId) -> Option<GroupId> {
+        self.contents[group.0].map(GroupId)
+    }
+
+    /// Whether an object of `a`'s group may hold, directly or through
+    /// fields and elements, an object of `b`'s group (or be it).
+    pub fn may_reach(&self, a: Site, b: Site) -> bool {
+        self.group_may_reach(self.alias_group(a), self.alias_group(b))
+    }
+
+    /// Whether an object of `from` may be, or hold through any depth of
+    /// fields and elements, an object of `to`.
+    pub fn group_may_reach(&self, from: GroupId, to: GroupId) -> bool {
+        let mut node = Some(from.0);
+        let mut seen = Vec::new();
+        while let Some(current) = node {
+            if current == to.0 {
+                return true;
+            }
+            if seen.contains(&current) {
+                return false;
+            }
+            seen.push(current);
+            node = self.contents[current];
+        }
+        false
+    }
+
     /// Whether `block`'s modeled builtin receiver is thread-local.
     /// Consumers check the function object for an available lock-free twin.
     pub fn calls_thread_local_twin(&self, block: crate::BlockId) -> bool {
@@ -169,9 +312,16 @@ impl EscapeFacts {
     }
 }
 
+/// Whether a backend compiles a source callee itself. A callee the backend
+/// cannot admit runs in the interpreter, which may keep its arguments, so
+/// its summary does not clear them for stack placement.
+pub type Compiled<'a, 'db> = &'a dyn Fn(FunctionLoc<'db>) -> bool;
+
 /// Classify every object `body` names. `arity` is the parameter count;
 /// parameters are `_1..=_arity`. Calls to functions with a summary
 /// ([`escape_summary`]) in `root` or the stdlib are seen through, at `opt`.
+/// For the frame verdict every summarized callee keeps its arguments, as if
+/// interpreted: [`analyze_for`] takes the backend's word instead.
 pub fn analyze<'db>(
     db: &'db dyn crate::Db,
     root: SourceRoot,
@@ -179,8 +329,33 @@ pub fn analyze<'db>(
     arity: usize,
     opt: OptLevel,
 ) -> EscapeFacts {
+    analyze_for(db, root, body, arity, opt, &|_| false)
+}
+
+/// [`analyze`], with `compiled` saying which source callees the consuming
+/// backend compiles: a call to one keeps only the arguments its summary
+/// keeps. Thread locality does not depend on `compiled`.
+pub fn analyze_for<'db>(
+    db: &'db dyn crate::Db,
+    root: SourceRoot,
+    body: &MirFunctionBody<'db>,
+    arity: usize,
+    opt: OptLevel,
+    compiled: Compiled<'_, 'db>,
+) -> EscapeFacts {
     let types = Types::new(db, root, body);
-    let mut facts = build(db, body, arity, opt, None, &types).finish(arity);
+    let mut facts = build(
+        db,
+        body,
+        arity,
+        opt,
+        &types,
+        Callees {
+            compiled: Some(compiled),
+            ..Callees::default()
+        },
+    )
+    .finish(arity);
     let builtins = Builtins::new(db);
     let calls: Vec<_> = body
         .blocks
@@ -266,7 +441,20 @@ pub fn escape_summary<'db>(
         return None;
     };
     let types = Types::new(db, root, body);
-    Some(build(db, body, mir.arity, opt, Some(function), &types).summary(0, mir.arity))
+    Some(
+        build(
+            db,
+            body,
+            mir.arity,
+            opt,
+            &types,
+            Callees {
+                current: Some(function),
+                ..Callees::default()
+            },
+        )
+        .summary(0, mir.arity),
+    )
 }
 
 /// The summaries of one component of [`recursive_functions`], from one graph
@@ -315,7 +503,17 @@ fn component_summaries<'db>(
     for (index, &(function, mir, body)) in members.iter().enumerate() {
         graph.offset = offsets[&function].0;
         graph.types = &types[index];
-        walk(&mut graph, db, body, mir.arity, opt, None, Some(&offsets));
+        walk(
+            &mut graph,
+            db,
+            body,
+            mir.arity,
+            opt,
+            Callees {
+                component: Some(&offsets),
+                ..Callees::default()
+            },
+        );
     }
     members
         .iter()
@@ -439,39 +637,57 @@ fn build<'a, 'db>(
     body: &'a MirFunctionBody<'db>,
     arity: usize,
     opt: OptLevel,
-    current: Option<FunctionLoc<'db>>,
     types: &'a Types<'a, 'db>,
+    callees: Callees<'a, 'db>,
 ) -> Graph<'a, 'db> {
     let mut graph = Graph::new(body.locals.len(), types);
-    walk(&mut graph, db, body, arity, opt, current, None);
+    walk(&mut graph, db, body, arity, opt, callees);
     graph
 }
 
+/// How a walk sees the functions a body calls.
+#[derive(Clone, Copy, Default)]
+struct Callees<'a, 'db> {
+    /// The function whose summary is being built, if any: calls within its
+    /// recursive component are opaque.
+    current: Option<FunctionLoc<'db>>,
+    /// The bodies of a recursive component sharing one graph: each callee's
+    /// node offset and arity. A call to one joins the callee's nodes directly.
+    component: Option<&'a FxHashMap<FunctionLoc<'db>, (usize, usize)>>,
+    /// Which summarized callees run compiled, so their summaries' `kept`
+    /// bits hold. `None` trusts every summary: a summary being built sees
+    /// its callees through theirs, and the backend's hook applies once, at
+    /// the direct call.
+    compiled: Option<Compiled<'a, 'db>>,
+}
+
 /// Add `body`'s constraints to `graph`, whose locals for it start at
-/// `graph.offset` and whose types are `body`'s. `component` places the other
-/// bodies of a recursive component in the same graph: each callee's node
-/// offset and arity.
+/// `graph.offset` and whose types are `body`'s.
 fn walk<'a, 'db>(
     graph: &mut Graph<'a, 'db>,
     db: &'db dyn crate::Db,
     body: &'a MirFunctionBody<'db>,
     arity: usize,
     opt: OptLevel,
-    current: Option<FunctionLoc<'db>>,
-    component: Option<&FxHashMap<FunctionLoc<'db>, (usize, usize)>>,
+    callees: Callees<'a, 'db>,
 ) {
     let builtins = Builtins::new(db);
     let array_iterators = array_iterators(db, body, arity);
     let walker = Walker {
         db,
         opt,
-        current,
-        component,
+        callees,
         types: graph.types,
         builtins: &builtins,
         array_iterators: &array_iterators,
     };
+    if !body.locals.is_empty() {
+        // The return value outlives the frame; the caller holds it.
+        let ret = graph.local(0);
+        graph.mark_frame(ret, FrameCause::Returned);
+    }
     graph.cause = Reason::Captured;
+    graph.frame_cause = FrameCause::Captured;
     for (index, decl) in body.locals.iter().enumerate() {
         // A captured local's slot holds its cell, which closures share.
         if decl.is_captured {
@@ -480,6 +696,7 @@ fn walk<'a, 'db>(
         }
     }
     graph.cause = Reason::Handler;
+    graph.frame_cause = FrameCause::Thrown;
     for (_, landing) in body.handlers() {
         // The VM writes these: an in-flight error and its context.
         let (error, context) = (
@@ -495,6 +712,7 @@ fn walk<'a, 'db>(
                 block: block_index,
                 statement: Some(statement_index),
             };
+            graph.frame_cause = FrameCause::Shared;
             graph.statement(&statement.kind);
         }
         if let Some(terminator) = &block.terminator {
@@ -502,10 +720,12 @@ fn walk<'a, 'db>(
                 block: block_index,
                 statement: None,
             };
+            graph.frame_cause = FrameCause::Shared;
             walker.terminator(graph, terminator);
         }
     }
     graph.cause = Reason::Parameter;
+    graph.frame_cause = FrameCause::Parameter;
 }
 
 /// Why an object is shared, for the coverage report.
@@ -521,6 +741,76 @@ enum Reason {
         block: usize,
         statement: Option<usize>,
     },
+}
+
+/// [`FrameEscape`] before its names are rendered: what the graph records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FrameCause<'db> {
+    Returned,
+    Shared,
+    Global,
+    Captured,
+    Thrown,
+    Spawned,
+    /// A call to a source function that may keep the argument.
+    Call(FunctionRef<'db>),
+    /// A call through a function value or a virtual call.
+    FunctionValue,
+    VirtualCall,
+    /// A native not in [`EFFECTS`], or one whose effect keeps the argument.
+    Native(FunctionRef<'db>),
+    Finalizer,
+    Parameter,
+}
+
+impl<'db> FrameCause<'db> {
+    fn describe(self, db: &'db dyn crate::Db) -> FrameEscape {
+        match self {
+            Self::Returned => FrameEscape::Returned,
+            Self::Shared => FrameEscape::Shared,
+            Self::Global => FrameEscape::Global,
+            Self::Captured => FrameEscape::Captured,
+            Self::Thrown => FrameEscape::Thrown,
+            Self::Spawned => FrameEscape::Spawned,
+            Self::Call(func) => FrameEscape::KeepingCall(crate::function_display_name(db, func)),
+            Self::FunctionValue => FrameEscape::KeepingCall("a function value".into()),
+            Self::VirtualCall => FrameEscape::KeepingCall("a virtual call".into()),
+            Self::Native(func) => FrameEscape::Native(
+                native_key(db, func).unwrap_or_else(|| crate::function_display_name(db, func)),
+            ),
+            Self::Finalizer => FrameEscape::Finalizer,
+            Self::Parameter => FrameEscape::Parameter,
+        }
+    }
+}
+
+/// The [`EFFECTS`] key of a native: a VM builtin's native key, or an
+/// external function's display name. `None` for a function with a body.
+fn native_key<'db>(db: &'db dyn crate::Db, func: FunctionRef<'db>) -> Option<String> {
+    match func {
+        DeclRef::Source(loc) => {
+            let body = baml_compiler2_hir::body::function_body(db, loc);
+            matches!(
+                body.as_ref(),
+                baml_compiler2_hir::body::FunctionBody::Builtin(
+                    baml_compiler2_ast::ast::BuiltinKind::Vm
+                )
+            )
+            .then(|| crate::native_key_for(db, loc))
+        }
+        DeclRef::External(_) => Some(crate::function_display_name(db, func)),
+    }
+}
+
+/// Whether `func` runs native code: a builtin of any kind, or external.
+fn is_native<'db>(db: &'db dyn crate::Db, func: FunctionRef<'db>) -> bool {
+    match func {
+        DeclRef::Source(loc) => matches!(
+            baml_compiler2_hir::body::function_body(db, loc).as_ref(),
+            baml_compiler2_hir::body::FunctionBody::Builtin(_)
+        ),
+        DeclRef::External(_) => true,
+    }
 }
 
 /// One container or field access in a body.
@@ -561,14 +851,14 @@ pub fn coverage<'db>(
     opt: OptLevel,
 ) -> Vec<Access> {
     let types = Types::new(db, root, body);
-    let mut graph = build(db, body, arity, opt, None, &types);
+    let mut graph = build(db, body, arity, opt, &types, Callees::default());
     for local in 1..=arity.min(body.locals.len().saturating_sub(1)) {
         graph.mark_shared(local);
     }
     let resolved = graph.resolve();
     // The same graph with its parameters left unclassified: union-find roots
     // do not depend on sharing, so its nodes are this graph's nodes.
-    let facts = build(db, body, arity, opt, None, &types).finish(arity);
+    let facts = build(db, body, arity, opt, &types, Callees::default()).finish(arity);
     let builtins = Builtins::new(db);
     let array_iterators = array_iterators(db, body, arity);
     let mut accesses = Vec::new();
@@ -799,6 +1089,11 @@ pub struct Summary {
     params: Vec<usize>,
     /// The node of the return value.
     ret: usize,
+    /// Per parameter: whether the callee may keep its argument past the
+    /// call, for the frame verdict: it reaches the return value, a shared
+    /// node, a keeping call or native of its own, or another parameter's
+    /// contents (a store the caller cannot see).
+    kept: Vec<bool>,
 }
 
 /// Static types of a body's places, as far as escape analysis needs them.
@@ -953,12 +1248,7 @@ fn primitive_ty(ty: &baml_type::Ty) -> bool {
 struct Walker<'a, 'db> {
     db: &'db dyn crate::Db,
     opt: OptLevel,
-    /// The function whose summary is being built, if any: calls within its
-    /// recursive component are opaque.
-    current: Option<FunctionLoc<'db>>,
-    /// The bodies of a recursive component sharing this graph: a call to one
-    /// joins the callee's nodes directly.
-    component: Option<&'a FxHashMap<FunctionLoc<'db>, (usize, usize)>>,
+    callees: Callees<'a, 'db>,
     types: &'a Types<'a, 'db>,
     builtins: &'a Builtins<'db>,
     array_iterators: &'a [bool],
@@ -1004,6 +1294,7 @@ impl<'a, 'db> Walker<'a, 'db> {
                         .as_ref()
                         .is_none_or(|layout| layout.0.iter().all(Option::is_none));
                 let values = args.get(*ntypeargs..).unwrap_or_default();
+                let func = static_callee(callee);
                 if positional && self.compares_against_immutable(callee, values) {
                     // Reads both operands; the result is a bool.
                 } else if let Some(effect) = self
@@ -1011,6 +1302,12 @@ impl<'a, 'db> Walker<'a, 'db> {
                     .effect(callee)
                     .filter(|effect| positional && self.matches_builtin(effect, values))
                 {
+                    // The native holds a kept argument in its receiver, which
+                    // the graph tracks; for placement, the native keeps it.
+                    graph.frame_cause = FrameCause::Native(func.expect("modeled callee"));
+                    for &kept in effect.keeps {
+                        graph.keep(&values[kept]);
+                    }
                     let result = graph.apply_builtin(effect, values);
                     graph.write(destination, result);
                 } else if let Some(&(offset, arity)) = self
@@ -1028,8 +1325,26 @@ impl<'a, 'db> Walker<'a, 'db> {
                     .summary(callee)
                     .filter(|summary| positional && summary.params.len() == values.len())
                 {
+                    let func = func.expect("summarized callee");
+                    graph.frame_cause = FrameCause::Call(func);
+                    // An interpreted callee may keep anything it is passed.
+                    let interpreted = match (self.callees.compiled, func) {
+                        (Some(compiled), DeclRef::Source(loc)) => !compiled(loc),
+                        (Some(_), DeclRef::External(_)) => true,
+                        (None, _) => false,
+                    };
+                    for (value, &kept) in values.iter().zip(&summary.kept) {
+                        if kept || interpreted {
+                            graph.keep(value);
+                        }
+                    }
                     graph.apply_summary(summary, values, destination);
                 } else {
+                    graph.frame_cause = match func {
+                        Some(func) if is_native(self.db, func) => FrameCause::Native(func),
+                        Some(func) => FrameCause::Call(func),
+                        None => FrameCause::FunctionValue,
+                    };
                     graph.unknown(args, destination, Some(callee));
                 }
             }
@@ -1048,15 +1363,25 @@ impl<'a, 'db> Walker<'a, 'db> {
                     let element = Some(graph.contents_of(array));
                     graph.flow(Some(item), element);
                 }
-                None => graph.unknown(args, destination, None),
+                None => {
+                    graph.frame_cause = FrameCause::VirtualCall;
+                    graph.unknown(args, destination, None);
+                }
             },
             Terminator::SysOp {
                 callee,
                 args,
                 destination,
                 ..
-            } => graph.unknown(args, destination, Some(callee)),
+            } => {
+                graph.frame_cause = match static_callee(callee) {
+                    Some(func) => FrameCause::Call(func),
+                    None => FrameCause::FunctionValue,
+                };
+                graph.unknown(args, destination, Some(callee));
+            }
             Terminator::Spawn { plan, future, .. } => {
+                graph.frame_cause = FrameCause::Spawned;
                 graph.leak(plan);
                 graph.write_shared(future);
             }
@@ -1066,13 +1391,18 @@ impl<'a, 'db> Walker<'a, 'db> {
                 destination,
                 ..
             } => {
+                graph.frame_cause = FrameCause::Spawned;
                 graph.leak(futures);
                 graph.write_shared(destination);
             }
             // A thrown value reaches the VM's in-flight error, and from there
             // any handler or caller.
-            Terminator::Throw { value } => graph.leak(value),
+            Terminator::Throw { value } => {
+                graph.frame_cause = FrameCause::Thrown;
+                graph.leak(value);
+            }
             Terminator::Rethrow { value, context } => {
+                graph.frame_cause = FrameCause::Thrown;
                 graph.leak(value);
                 graph.leak(context);
             }
@@ -1085,7 +1415,7 @@ impl<'a, 'db> Walker<'a, 'db> {
         let DeclRef::Source(callee) = static_callee(callee)? else {
             return None;
         };
-        self.component?.get(&callee)
+        self.callees.component?.get(&callee)
     }
 
     /// The summary of a call's target, unless it is opaque or in the same
@@ -1100,12 +1430,13 @@ impl<'a, 'db> Walker<'a, 'db> {
         // A component member the call could not join is opaque: its summary
         // is the one being built.
         if self
+            .callees
             .component
             .is_some_and(|component| component.contains_key(&callee))
         {
             return None;
         }
-        if let Some(current) = self.current {
+        if let Some(current) = self.callees.current {
             let root = current.file(self.db).source_root(self.db);
             let components = recursive_functions(self.db, root, self.opt);
             if callee == current
@@ -1688,6 +2019,27 @@ pub const EFFECTS: &[(&str, Effect)] = &[
     ),
 ];
 
+/// Whether `rvalue` allocates an object a backend could place, and if so
+/// whether it is a generic class instance.
+fn allocates(rvalue: &Rvalue<'_>) -> Option<bool> {
+    match rvalue {
+        Rvalue::Aggregate {
+            kind: crate::AggregateKind::Class {
+                type_arg_templates, ..
+            },
+            ..
+        } => Some(!type_arg_templates.is_empty()),
+        Rvalue::Aggregate {
+            kind: crate::AggregateKind::Array,
+            ..
+        }
+        | Rvalue::Array(..)
+        | Rvalue::Map(..)
+        | Rvalue::Uint8Array(_) => Some(false),
+        _ => None,
+    }
+}
+
 /// The builtins whose effect on their arguments is declared. Every other
 /// callee is opaque.
 struct Builtins<'db> {
@@ -1714,23 +2066,9 @@ impl<'db> Builtins<'db> {
     fn effect(&self, callee: &Operand<'db>) -> Option<&'static Effect> {
         let func = static_callee(callee)?;
         *self.effects.borrow_mut().entry(func).or_insert_with(|| {
-            let key = match func {
-                DeclRef::Source(loc) => {
-                    let body = baml_compiler2_hir::body::function_body(self.db, loc);
-                    if !matches!(
-                        body.as_ref(),
-                        baml_compiler2_hir::body::FunctionBody::Builtin(
-                            baml_compiler2_ast::ast::BuiltinKind::Vm
-                        )
-                    ) {
-                        return None;
-                    }
-                    crate::native_key_for(self.db, loc)
-                }
-                // An inherent builtin method's key is its display name; any
-                // other external function has no declared effect.
-                DeclRef::External(_) => crate::function_display_name(self.db, func),
-            };
+            // An inherent builtin method's key is its display name; any
+            // other external function has no declared effect.
+            let key = native_key(self.db, func)?;
             EFFECTS
                 .iter()
                 .find(|(name, _)| *name == key)
@@ -1750,6 +2088,14 @@ struct Graph<'a, 'db> {
     reason: Vec<Reason>,
     /// The reason recorded for anything made shared next.
     cause: Reason,
+    /// Per root: why what it holds may outlive the frame. Set with sharing
+    /// and by the frame-only causes; `None` until then.
+    frame: Vec<Option<FrameCause<'db>>>,
+    /// The frame cause recorded for anything made shared or kept next.
+    frame_cause: FrameCause<'db>,
+    /// Every allocation site walked: its block, statement, object node, and
+    /// whether it builds a generic class instance.
+    sites: Vec<(usize, usize, usize, bool)>,
     locals: usize,
     /// Where the locals of the body being walked start: nonzero only for the
     /// later bodies of a recursive component.
@@ -1765,8 +2111,29 @@ impl<'a, 'db> Graph<'a, 'db> {
             contents: vec![None; locals],
             reason: vec![Reason::Parameter; locals],
             cause: Reason::Parameter,
+            frame: vec![None; locals],
+            frame_cause: FrameCause::Parameter,
+            sites: Vec::new(),
             locals,
             offset: 0,
+        }
+    }
+
+    /// What `node` holds may outlive the frame for `cause`, unless an
+    /// earlier cause already says so.
+    fn mark_frame(&mut self, node: usize, cause: FrameCause<'db>) {
+        let root = self.find(node);
+        if self.frame[root].is_none() {
+            self.frame[root] = Some(cause);
+        }
+    }
+
+    /// A call keeps `operand`'s value past its return, for the current
+    /// frame cause. Thread locality is unaffected: the graph still says
+    /// where the value goes.
+    fn keep(&mut self, operand: &Operand<'_>) {
+        if let Some(node) = self.operand(operand) {
+            self.mark_frame(node, self.frame_cause);
         }
     }
 
@@ -1781,6 +2148,7 @@ impl<'a, 'db> Graph<'a, 'db> {
         self.shared.push(false);
         self.contents.push(None);
         self.reason.push(self.cause);
+        self.frame.push(None);
         node
     }
 
@@ -1788,6 +2156,7 @@ impl<'a, 'db> Graph<'a, 'db> {
     fn shared(&mut self) -> usize {
         let node = self.fresh();
         self.shared[node] = true;
+        self.frame[node] = Some(self.frame_cause);
         node
     }
 
@@ -1806,13 +2175,16 @@ impl<'a, 'db> Graph<'a, 'db> {
             self.reason[root] = self.cause;
         }
         self.shared[root] = true;
+        self.mark_frame(root, self.frame_cause);
     }
 
     /// [`Self::shared`], for a value shared for `reason` rather than the cause.
-    fn shared_because(&mut self, reason: Reason) -> usize {
+    fn shared_because(&mut self, reason: Reason, frame: FrameCause<'db>) -> usize {
         let cause = std::mem::replace(&mut self.cause, reason);
+        let frame_cause = std::mem::replace(&mut self.frame_cause, frame);
         let node = self.shared();
         self.cause = cause;
+        self.frame_cause = frame_cause;
         node
     }
 
@@ -1851,7 +2223,9 @@ impl<'a, 'db> Graph<'a, 'db> {
                 | Constant::GenericFunction { .. }
                 | Constant::EnumVariant { .. } => None,
                 // A global's value is shared by every task.
-                Constant::GlobalItem(_) => Some(self.shared_because(Reason::Constant)),
+                Constant::GlobalItem(_) => {
+                    Some(self.shared_because(Reason::Constant, FrameCause::Global))
+                }
             },
         }
     }
@@ -1863,7 +2237,9 @@ impl<'a, 'db> Graph<'a, 'db> {
                 let base = self.read(base);
                 self.contents_of(Some(base))
             }
-            Place::Capture(_) | Place::Deref(_) => self.shared_because(Reason::Cell),
+            Place::Capture(_) | Place::Deref(_) => {
+                self.shared_because(Reason::Cell, FrameCause::Captured)
+            }
         }
     }
 
@@ -1877,7 +2253,9 @@ impl<'a, 'db> Graph<'a, 'db> {
                 let base = self.read(base);
                 self.contents_of(Some(base))
             }
-            Place::Capture(_) | Place::Deref(_) => self.shared_because(Reason::Cell),
+            Place::Capture(_) | Place::Deref(_) => {
+                self.shared_because(Reason::Cell, FrameCause::Captured)
+            }
         };
         self.flow(Some(into), value);
     }
@@ -1906,12 +2284,24 @@ impl<'a, 'db> Graph<'a, 'db> {
     fn statement(&mut self, kind: &StatementKind<'_>) {
         match kind {
             StatementKind::Assign { destination, value } => {
-                let value = self.rvalue(value);
-                self.write(destination, value);
+                let object = self.rvalue(value);
+                if let (
+                    Some(object),
+                    Reason::At {
+                        block,
+                        statement: Some(statement),
+                    },
+                ) = (object, self.cause)
+                    && let Some(generic) = allocates(value)
+                {
+                    self.sites.push((block, statement, object, generic));
+                }
+                self.write(destination, object);
             }
             StatementKind::Drop(_) | StatementKind::Nop => {}
             StatementKind::FreshCell { local, .. } => {
                 let node = self.local(local.0);
+                self.frame_cause = FrameCause::Captured;
                 self.mark_shared(node);
             }
             StatementKind::Intrinsic { op, args } => match op {
@@ -1973,8 +2363,13 @@ impl<'a, 'db> Graph<'a, 'db> {
                 if let crate::AggregateKind::Class { class, .. } = kind
                     && self.types.may_finalize(class)
                 {
+                    let cause = std::mem::replace(&mut self.frame_cause, FrameCause::Finalizer);
+                    // The finalizer observes the instance itself after the
+                    // frame is gone.
+                    self.mark_frame(object, FrameCause::Finalizer);
                     let shared = self.shared();
                     self.flow(Some(shared), contents);
+                    self.frame_cause = cause;
                 }
                 Some(object)
             }
@@ -1990,6 +2385,7 @@ impl<'a, 'db> Graph<'a, 'db> {
             | Rvalue::MakeGenericFunctionFromValue {
                 value: receiver, ..
             } => {
+                self.frame_cause = FrameCause::Captured;
                 self.leak(receiver);
                 Some(self.shared())
             }
@@ -2069,6 +2465,25 @@ impl<'a, 'db> Graph<'a, 'db> {
             order.push(node);
             pending.extend(resolved.contents[node]);
         }
+        // Stored into another parameter's object: a keep the graph alone
+        // would let a caller holding that object on its stack miss.
+        let stored = |node: usize| {
+            roots[1..].iter().any(|&param| {
+                let mut current = resolved.contents[param];
+                let mut seen = Vec::new();
+                while let Some(inner) = current {
+                    if inner == node {
+                        return true;
+                    }
+                    if seen.contains(&inner) {
+                        return false;
+                    }
+                    seen.push(inner);
+                    current = resolved.contents[inner];
+                }
+                false
+            })
+        };
         Summary {
             nodes: order
                 .iter()
@@ -2081,6 +2496,10 @@ impl<'a, 'db> Graph<'a, 'db> {
                 .collect(),
             params: roots[1..].iter().map(|root| compact[root]).collect(),
             ret: compact[&roots[0]],
+            kept: roots[1..]
+                .iter()
+                .map(|&param| resolved.frame[param].is_some() || stored(param))
+                .collect(),
         }
     }
 
@@ -2124,6 +2543,9 @@ impl<'a, 'db> Graph<'a, 'db> {
                 self.reason[a] = self.reason[b];
             }
             self.shared[a] |= self.shared[b];
+            if self.frame[a].is_none() {
+                self.frame[a] = self.frame[b];
+            }
             match (self.contents[a], self.contents[b]) {
                 (Some(x), Some(y)) => pending.push((x, y)),
                 (None, Some(y)) => self.contents[a] = Some(y),
@@ -2140,8 +2562,28 @@ impl<'a, 'db> Graph<'a, 'db> {
         for local in MASKED_PARAMS + 1..=params {
             self.mark_shared(local);
         }
+        // The caller owns what its arguments hold.
+        for local in 1..=params {
+            self.mark_frame(local, FrameCause::Parameter);
+        }
         let resolved = self.resolve();
         let needs = resolved.param_needs(params.min(MASKED_PARAMS));
+        let db = self.types.db;
+        let sites: Vec<SiteFacts> = self
+            .sites
+            .iter()
+            .map(|&(block, statement, node, generic)| SiteFacts {
+                block: crate::BlockId(block),
+                statement,
+                group: GroupId(resolved.roots[node]),
+                generic,
+            })
+            .collect();
+        let site_index = sites
+            .iter()
+            .enumerate()
+            .map(|(index, site)| ((site.block.0, site.statement), index))
+            .collect();
         EscapeFacts {
             twin_needs: Vec::new(),
             call_args: Vec::new(),
@@ -2149,12 +2591,19 @@ impl<'a, 'db> Graph<'a, 'db> {
             shared: needs.iter().map(|&needs| needs != 0).collect(),
             contents: resolved.contents,
             needs,
+            escape: resolved
+                .frame
+                .iter()
+                .map(|cause| cause.map(|cause| cause.describe(db)))
+                .collect(),
+            sites,
+            site_index,
         }
     }
 
     /// Every node's root, and per root its contents and whether sharing
     /// reaches it, from itself or from any node whose contents it is.
-    fn resolve(&mut self) -> Resolved {
+    fn resolve(&mut self) -> Resolved<'db> {
         let nodes = self.parent.len();
         let roots: Vec<usize> = (0..nodes).map(|node| self.find(node)).collect();
         let mut contents: Vec<Option<usize>> = vec![None; nodes];
@@ -2181,24 +2630,44 @@ impl<'a, 'db> Graph<'a, 'db> {
                 pending.push(inner);
             }
         }
+        // Likewise, what an escaping object holds escapes with it.
+        let mut frame: Vec<Option<FrameCause<'db>>> = vec![None; nodes];
+        let mut pending: Vec<usize> = (0..nodes)
+            .filter(|&node| roots[node] == node && self.frame[node].is_some())
+            .collect();
+        for &node in &pending {
+            frame[node] = self.frame[node];
+        }
+        while let Some(node) = pending.pop() {
+            if let Some(inner) = contents[node]
+                && frame[inner].is_none()
+            {
+                frame[inner] = frame[node];
+                pending.push(inner);
+            }
+        }
         Resolved {
             roots,
             shared,
             contents,
             reasons,
+            frame,
         }
     }
 }
 
 /// A graph's nodes after union-find, with sharing propagated.
-struct Resolved {
+struct Resolved<'db> {
     roots: Vec<usize>,
     shared: Vec<bool>,
     contents: Vec<Option<usize>>,
     reasons: Vec<Reason>,
+    /// Per root: why what it holds may outlive the frame, from itself or
+    /// from any node whose contents it is.
+    frame: Vec<Option<FrameCause<'db>>>,
 }
 
-impl Resolved {
+impl Resolved<'_> {
     /// Per node, the first `params` parameters it is thread-local given: a
     /// node is reachable from a parameter's argument when it is the
     /// parameter's node or within its contents, and marking that parameter

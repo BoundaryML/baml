@@ -14,6 +14,9 @@ pub(crate) struct CompiledState {
     /// The fiber's [`Fiber::floor`], kept here so `stack_room` reads it while
     /// the fiber is out of `self` running a body.
     pub(crate) fiber_floor: usize,
+    /// The fiber's whole stack ([`Fiber::stack_range`]), kept here as
+    /// `fiber_floor` is: what [`crate::BexVm::on_fiber_stack`] checks.
+    pub(crate) fiber_stack: std::ops::Range<usize>,
     #[cfg_attr(
         any(target_arch = "wasm32", all(windows, target_arch = "aarch64")),
         allow(dead_code)
@@ -58,6 +61,7 @@ impl Default for CompiledState {
         Self {
             fiber: None,
             fiber_floor: 0,
+            fiber_stack: 0..0,
             yielder: None,
             on_fiber: false,
             parked_sp: 0,
@@ -87,6 +91,7 @@ impl RootHaver for CompiledState {
             static_type_cache,
             fiber,
             fiber_floor: _,
+            fiber_stack: _,
             yielder: _,
             on_fiber: _,
             parked_sp,
@@ -131,6 +136,14 @@ impl RootHaver for CompiledState {
 }
 
 impl BexVm {
+    /// Whether `address` lies in the fiber stack a parked collection scans,
+    /// and a body is running on it now: what a stack-placed object's frame
+    /// must satisfy ([`crate::compiled_rt::StackCell`]).
+    #[must_use]
+    pub fn on_fiber_stack(&self, address: usize) -> bool {
+        self.compiled.on_fiber && self.compiled.fiber_stack.contains(&address)
+    }
+
     pub(in crate::vm) fn save_call_types(&mut self) {
         self.compiled.saved_call_types.push(SavedCallTypes {
             args: std::mem::take(&mut self.pending_call_type_args),

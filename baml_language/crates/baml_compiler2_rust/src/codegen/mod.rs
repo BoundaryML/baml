@@ -7,6 +7,7 @@ mod dispatch;
 mod json;
 mod expr;
 mod place;
+mod stack;
 mod stmt;
 pub(crate) mod types;
 
@@ -134,6 +135,10 @@ pub(crate) struct Generator<'a, 'db> {
     /// Whether the body suspends where its analysis said it would not: a
     /// virtual call whose targets did not all compile. It is then not plain.
     pub(crate) suspends_late: bool,
+    /// Index of the statement being emitted in its block.
+    pub(crate) statement: usize,
+    /// Class literals placed in the frame ([`stack::Placement`]).
+    pub(crate) stack: stack::Placement,
 }
 
 type Gen<T> = Result<T, Rejection>;
@@ -180,6 +185,8 @@ impl<'a, 'db> Generator<'a, 'db> {
             class_words: BTreeSet::new(),
             debug_class_words: BTreeSet::new(),
             suspends_late: false,
+            statement: 0,
+            stack: stack::Placement::default(),
         }
     }
 }
@@ -362,6 +369,20 @@ impl<'db> Generator<'_, 'db> {
             ));
         }
         self.prepare();
+        self.stack = stack::Placement::new(
+            self.body,
+            &self.analysis.escape,
+            |kind| match kind {
+                baml_compiler2_mir::AggregateKind::Class {
+                    class,
+                    type_arg_templates,
+                } if type_arg_templates.is_empty() => {
+                    self.index.class(self.db, *class).map(|(object, _)| object)
+                }
+                _ => None,
+            },
+            |object| self.index.instance_cell(object),
+        );
         let structured = structurize(&self.analysis.cfg)
             .map_err(|error| Rejection::Invalid(error.to_string()))?;
         let stmts = structured.stmts.clone();
@@ -507,6 +528,13 @@ impl<'db> Generator<'_, 'db> {
         }
         for iter in &analysis.array_iters {
             self.emit_line(&format!("let mut i{iter}: i64 = 0;"));
+        }
+        // One cell per alias group of placed class literals; see `stack`.
+        let slots: Vec<(usize, usize)> = self.stack.slots().to_vec();
+        for (slot, (class, bytes)) in slots.into_iter().enumerate() {
+            self.emit_line(&format!(
+                "let mut s{slot} = bex_vm::compiled_rt::StackCell::<{{ bex_vm::compiled_rt::stack_cell_words({bytes}) }}>::new(); // class {class}"
+            ));
         }
         if iterations {
             self.emit_line("let mut iterations: u32 = 0;");

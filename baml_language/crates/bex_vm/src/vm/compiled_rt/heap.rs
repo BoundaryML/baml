@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use bex_vm_types::{
     HeapPtr, Object, ObjectType, RealizedTy, Value,
     object_format::{
-        Access, FIRST_INSTANCE_DESC, HEADER_BYTES, read_tagged_inline, write_tagged_inline,
+        Access, FIRST_INSTANCE_DESC, HEADER_BYTES, Header, read_tagged_inline, write_tagged_inline,
     },
     types::{
         BACKING_CAP_OFFSET, BACKING_ELEMS_OFFSET, CLASS_OFFSET, Closure, LIST_BACKING_OFFSET,
@@ -682,6 +682,151 @@ pub struct InstanceShape {
     descriptor: bex_vm_types::layout::DescriptorId,
     bytes: usize,
     class: HeapPtr,
+}
+
+impl InstanceShape {
+    /// Bytes of an instance, header included: its layout's size.
+    #[must_use]
+    pub fn bytes(&self) -> usize {
+        self.bytes
+    }
+}
+
+/// The heap's granule: its smallest cell, and what every cell is a whole
+/// number of.
+const GRANULE_BYTES: usize = bex_heap::space::GRANULE_BYTES;
+const _: () = assert!(GRANULE_BYTES == 16);
+
+/// Words of the cell the heap gives an instance of `bytes` (header
+/// included): `bytes` rounded up to whole granules, as
+/// `Tlab::alloc_instance_unfilled` rounds it (`bex_heap`'s `granule_align`).
+/// A `const fn`, so a generated module sizes each [`StackCell`] with it.
+#[must_use]
+pub const fn stack_cell_words(bytes: usize) -> usize {
+    ((bytes + GRANULE_BYTES - 1) & !(GRANULE_BYTES - 1)) / 8
+}
+
+/// A frame-local cell for one class instance the escape analysis proved
+/// cannot outlive its frame: the same bytes a heap cell holds, header
+/// included, so every reader of the object (field access, dispatch,
+/// natives, telemetry snapshots) takes the ordinary pointer and never
+/// learns where it lives. The collector finds the heap objects its pointer
+/// fields hold through the conservative scan of the fiber stack
+/// ([`crate::compiled_rt::STACKFUL_FIBERS_SUPPORTED`], `Fiber::parked_range`), which is
+/// why [`BexVm::place_instance`] asserts the cell is on that stack.
+///
+/// Under `BAML_GC_STRESS=1`, and in every debug build, the cell's bytes are
+/// overwritten with [`Self::POISON`] when its frame leaves, so a pointer
+/// kept past the frame reads garbage rather than a stale instance.
+#[repr(C, align(16))]
+pub struct StackCell<const WORDS: usize>([u64; WORDS]);
+
+impl<const WORDS: usize> StackCell<WORDS> {
+    /// Every byte of a cell whose frame has returned.
+    pub const POISON: u8 = 0xDE;
+
+    /// A zeroed cell: a zeroed tagged field reads as held, as in a fresh
+    /// heap cell, until the body stores it.
+    #[allow(clippy::new_without_default)]
+    #[must_use]
+    #[inline]
+    pub fn new() -> Self {
+        Self([0; WORDS])
+    }
+
+    /// Overwrite every byte with [`Self::POISON`].
+    #[inline]
+    pub(crate) fn poison(&mut self) {
+        self.0.fill(u64::from_ne_bytes([Self::POISON; 8]));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn words(&self) -> &[u64; WORDS] {
+        &self.0
+    }
+}
+
+impl<const WORDS: usize> Drop for StackCell<WORDS> {
+    #[inline]
+    fn drop(&mut self) {
+        if cfg!(debug_assertions) || super::gc_stress() {
+            self.poison();
+        }
+    }
+}
+
+impl BexVm {
+    /// An instance of the compile-time class at object index `index` in
+    /// `cell`, as [`Self::alloc_shaped`] makes one in the heap: the header
+    /// the heap writes for a cell of this size class, the class slot, every
+    /// other byte zero. The caller stores every field through the returned
+    /// base as after `alloc_shaped`. An internal error for a class whose
+    /// instances need more than their fields, which the emitter never places.
+    ///
+    /// # Safety
+    /// `cell` is a local of the running compiled body, so it lies on the
+    /// fiber stack (checked in debug builds), and the object the escape
+    /// analysis placed in it cannot outlive that frame.
+    #[allow(unsafe_code)]
+    #[inline]
+    pub unsafe fn place_instance_at<const WORDS: usize>(
+        &mut self,
+        cell: &mut StackCell<WORDS>,
+        index: usize,
+        class: HeapPtr,
+    ) -> Result<(Value, FieldBase), Box<VmError>> {
+        match self.instance_shape_at(index, class) {
+            // SAFETY: forwarded to the caller.
+            Some(shape) => Ok(unsafe { self.place_instance(cell, shape) }),
+            None => Err(Box::new(VmError::from(VmInternalError::CompiledBody {
+                message: format!(
+                    "compiled code placed an instance of `{}` in its frame, which takes type arguments or a finalizer",
+                    self.class_word_name(class_word(class))
+                ),
+            }))),
+        }
+    }
+
+    /// [`Self::place_instance_at`] with the shape looked up.
+    ///
+    /// # Safety
+    /// As [`Self::place_instance_at`].
+    #[allow(unsafe_code, clippy::cast_possible_truncation)]
+    #[inline]
+    pub unsafe fn place_instance<const WORDS: usize>(
+        &self,
+        cell: &mut StackCell<WORDS>,
+        shape: InstanceShape,
+    ) -> (Value, FieldBase) {
+        let cell_bytes = WORDS * 8;
+        debug_assert_eq!(
+            cell_bytes,
+            stack_cell_words(shape.bytes) * 8,
+            "a stack cell is sized for its class's heap cell"
+        );
+        let base = cell.0.as_mut_ptr().cast::<u8>();
+        debug_assert!(
+            self.on_fiber_stack(base as usize),
+            "a stack-placed instance must lie on the fiber stack the collector scans"
+        );
+        // SAFETY: `cell` is `cell_bytes` of writable, 16-byte aligned memory
+        // the caller owns; the header and class slot lie inside it.
+        unsafe {
+            base.write_bytes(0, cell_bytes);
+            base.cast::<Header>().write(Header::new(
+                shape.descriptor,
+                (cell_bytes / GRANULE_BYTES) as u16,
+            ));
+            (*base.add(CLASS_OFFSET as usize).cast::<AtomicU64>())
+                .store(Value::object(shape.class).bits(), Ordering::Relaxed);
+            let payload = base.add(HEADER_BYTES).cast::<Object>();
+            #[cfg(not(feature = "heap_debug"))]
+            let ptr = HeapPtr::from_ptr(payload);
+            #[cfg(feature = "heap_debug")]
+            let ptr = HeapPtr::from_ptr(payload, 0);
+            (Value::object(ptr), FieldBase(base))
+        }
+    }
 }
 
 /// The class-slot word of `value` when it is an instance, else zero, which no

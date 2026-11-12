@@ -3873,9 +3873,11 @@ pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
     #[cfg(debug_assertions)]
     crate::verifier::verify_mir_emit_invariants(body, arity, &analysis);
 
-    // Compile with stackification
-    let escape = (opt != crate::analysis::OptLevel::Zero)
-        .then(|| baml_compiler2_mir::escape::analyze(ctx.db, ctx.refs.root, body, arity, opt));
+    // Compile with stackification. `DEV_BAML_NO_ESCAPE` keeps every access
+    // synchronized, for measuring the analysis against itself.
+    let escape = (opt != crate::analysis::OptLevel::Zero
+        && std::env::var_os("DEV_BAML_NO_ESCAPE").is_none())
+    .then(|| baml_compiler2_mir::escape::analyze(ctx.db, ctx.refs.root, body, arity, opt));
     let codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis, escape);
     let mut f = codegen.compile(identity);
     if let Some(span) = mir_span {

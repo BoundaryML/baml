@@ -21,6 +21,7 @@ mod initializer_probes;
 use harness::{MODES, OUTPUT_LIMIT, Settings, capture, compare_modes, run_modes, run_probe};
 
 const PROBES: &[&str] = &[
+    "StackAllocation",
     "IteratorInterfaceIdentity",
     "EscapeCaptureAlias",
     "EscapeOrderedReturn",

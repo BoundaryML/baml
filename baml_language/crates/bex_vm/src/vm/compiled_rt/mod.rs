@@ -16,7 +16,10 @@ pub(crate) use state::CompiledState;
 mod heap;
 pub mod json;
 mod timing;
-pub use heap::{FieldBase, InstanceShape, ListBase, class_word, debug_class, instance_class_word};
+pub use heap::{
+    FieldBase, InstanceShape, ListBase, StackCell, class_word, debug_class, instance_class_word,
+    stack_cell_words,
+};
 pub use timing::Timed;
 mod program;
 mod record;

@@ -115,6 +115,7 @@ impl<'db> Generator<'_, 'db> {
         for (index, statement) in self.body.blocks[id.0].statements.iter().enumerate() {
             let pc = pcs.statements.get(index).copied().flatten();
             self.set_pc(pc);
+            self.statement = index;
             self.block_statement(id, &statement.kind, pc)?;
         }
         self.set_pc(pcs.terminator);

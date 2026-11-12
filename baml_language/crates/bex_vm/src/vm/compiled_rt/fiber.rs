@@ -69,6 +69,7 @@ impl BexVm {
             None => match Fiber::new() {
                 Ok(fiber) => {
                     self.compiled.fiber_floor = fiber.floor();
+                    self.compiled.fiber_stack = fiber.stack_range();
                     fiber
                 }
                 Err(error) => {
@@ -186,6 +187,12 @@ mod stackful {
 
         pub(crate) fn floor(&self) -> usize {
             self.floor
+        }
+
+        /// The addresses of the fiber's stack, lowest to base: what a parked
+        /// collection may scan, red zone included.
+        pub(crate) fn stack_range(&self) -> Range<usize> {
+            (self.floor - STACK_RED_ZONE)..self.base
         }
 
         /// The words a collection scans conservatively while the fiber is
@@ -434,6 +441,10 @@ mod stackless {
         }
 
         pub(crate) fn floor(&self) -> usize {
+            unreachable!("{NEVER}")
+        }
+
+        pub(crate) fn stack_range(&self) -> std::ops::Range<usize> {
             unreachable!("{NEVER}")
         }
 

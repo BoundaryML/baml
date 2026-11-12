@@ -633,6 +633,85 @@ fn constructs_and_generated_shapes() {
     assert_eq!(lambda.arity, 1);
 }
 
+/// Stack placement: a class literal that cannot outlive its frame takes a
+/// `StackCell` slot of the body and no heap allocation; one that may (it is
+/// returned, or a live alias still reaches the previous instance when its
+/// slot would be reused) keeps the heap path.
+#[test]
+fn frame_local_class_literals_are_placed_on_the_stack() {
+    const WORKLOAD: &str =
+        include_str!("../../../tools/speedtest/workloads/classes/method-call-100k/main.baml");
+    const FIXTURE: &str = include_str!("../rust_diff/baml_src/stack_allocation.baml");
+    // Source, the function to inspect, and the placed sites expected in it.
+    let cases: [(&str, &str, usize); 7] = [
+        (WORKLOAD, "main", 1),
+        (
+            "class C { x: int } function make() -> C { C { x: 1 } } function main() -> int { make().x }",
+            "make",
+            0,
+        ),
+        // A callee that returns its argument keeps it (`FrameEscape::KeepingCall`).
+        (
+            "class C { x: int } function alias(c: C) -> C { c } function main() -> int { let c = C { x: 1 }; alias(c).x }",
+            "main",
+            0,
+        ),
+        (
+            "class C { x: int } function read(c: C) -> int { c.x } function main() -> int { let c = C { x: 1 }; read(c) }",
+            "main",
+            1,
+        ),
+        (
+            "class C { x: int } function main() -> int { let p = C { x: 0 }; let sum = 0; for (let i = 1; i < 9; i += 1) { let c = C { x: i }; sum += p.x; p = c; }; sum + p.x }",
+            "main",
+            0,
+        ),
+        (
+            "class C { x: int } function main() -> int { let xs: C[] = []; let sum = 0; for (let i = 1; i < 9; i += 1) { let c = C { x: i }; xs.push(c); sum += c.x; }; sum + xs.length() }",
+            "main",
+            0,
+        ),
+        // `holder` stays; `local` is passed to a returning callee and `lent`
+        // is held by a heap list.
+        (FIXTURE, "StackAllocation", 1),
+    ];
+    for (source, function, sites) in cases {
+        let db = baml_test_support::setup_test_db(source);
+        let program = lower(&db, OptLevel::Two);
+        let module = render(&db, &program, OptLevel::Two, None);
+        syn::parse_file(&module.source).expect("generated module parses as Rust");
+        let body = body_of(&module, &format!("user.{function}"));
+        let placed = body.matches("vm.place_instance_at(&mut s").count();
+        assert_eq!(placed, sites, "{function}: {body}");
+        let slots = body.matches("bex_vm::compiled_rt::StackCell::<").count();
+        assert!(
+            slots <= placed,
+            "{function}: {slots} slots for {placed} sites: {body}"
+        );
+        if sites > 0 {
+            assert!(slots >= 1, "{function}: no slot: {body}");
+        }
+    }
+    // The method-call loop allocates nothing in the heap: its one literal
+    // fills its slot and `norm2` runs on the pointer.
+    let db = baml_test_support::setup_test_db(WORKLOAD);
+    let program = lower(&db, OptLevel::Two);
+    let module = render(&db, &program, OptLevel::Two, None);
+    let body = body_of(&module, "user.main");
+    assert!(
+        body.contains("let mut s0 = bex_vm::compiled_rt::StackCell::<"),
+        "{body}"
+    );
+    for heap in [
+        "vm.alloc_shaped(",
+        "vm.new_instance(",
+        "vm.new_generic_instance(",
+    ] {
+        assert!(!body.contains(heap), "main allocates with {heap}: {body}");
+    }
+    assert!(body.contains("norm2"), "{body}");
+}
+
 #[test]
 fn entry_points_prune_admission_to_what_they_reach() {
     let db = baml_test_support::setup_test_db(FIXTURE);
@@ -808,19 +887,29 @@ function uses() -> int { from_dispatch(Ones { n: 1 }) + from_dispatch(Twos { n: 
         .symbol;
     let entry_at = module.source.find(&format!("pub fn {symbol}(")).unwrap();
     let entry = &module.source[entry_at..entry_at + module.source[entry_at..].find("\n}").unwrap()];
-    assert!(entry.contains("vm.entering_class(args[0], word)?"), "{entry}");
+    assert!(
+        entry.contains("vm.entering_class(args[0], word)?"),
+        "{entry}"
+    );
 
     // A trusted access asserts in debug builds only; its word is bound so.
     let body = body_of(&module, "user.from_param");
     assert!(body.contains("FieldBase::typed(class_checked!("), "{body}");
-    assert!(body.contains("if cfg!(debug_assertions) { bex_vm::compiled_rt::class_word("), "{body}");
+    assert!(
+        body.contains("if cfg!(debug_assertions) { bex_vm::compiled_rt::class_word("),
+        "{body}"
+    );
     assert!(!body.contains("vm.entering_class"), "{body}");
 
     // A dispatch's VM fallback and a generic callee's `T` enter; a compiled
     // non-generic callee's result does not.
     for name in ["user.from_dispatch", "user.from_json"] {
         let body = body_of(&module, name);
-        assert_eq!(body.matches("vm.entering_class(").count(), 1, "{name}: {body}");
+        assert_eq!(
+            body.matches("vm.entering_class(").count(),
+            1,
+            "{name}: {body}"
+        );
     }
     let body = body_of(&module, "user.from_compiled");
     assert!(!body.contains("vm.entering_class"), "{body}");

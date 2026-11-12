@@ -1765,3 +1765,513 @@ function main() -> int { let xs = [1]; helper(xs); xs[0] }
         assert!(!locals.iter().find(|(name, _)| name == "xs").unwrap().1);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Frame verdict: may an allocation outlive the frame that built it?
+// ---------------------------------------------------------------------------
+
+use baml_compiler2_mir::escape::FrameEscape;
+
+/// Run `check` on the frame facts of `function`, with every allocation site
+/// labeled: by the local it is assigned to when that local is named, else
+/// by the int constant its first field or element is built from. `compiled`
+/// is the backend's answer for every source callee.
+fn with_frame_facts<R>(
+    source: &str,
+    function: &str,
+    compiled: bool,
+    check: impl FnOnce(&escape::EscapeFacts, &[(String, escape::Site)]) -> R,
+) -> R {
+    use baml_compiler2_mir::{Constant, Operand, Place, Rvalue, StatementKind};
+    let mut db = make_db();
+    let file = db.file("test.baml", source);
+    assert_no_diagnostic_errors(&db);
+    let loc = *file_functions(&db, file)
+        .iter()
+        .find(|&&loc| function_data(&db, loc).name.as_str() == function)
+        .unwrap_or_else(|| panic!("no function `{function}`"));
+    let opt = OptLevel::Two;
+    let mir = lower_function(&db, loc, opt)
+        .as_ref()
+        .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        panic!("`{function}` must lower to bytecode")
+    };
+    let facts = escape::analyze_for(&db, file.source_root(&db), body, mir.arity, opt, &|_| {
+        compiled
+    });
+    let sites: Vec<(String, escape::Site)> = facts
+        .sites()
+        .map(|(site, block, statement)| {
+            let StatementKind::Assign { destination, value } =
+                &body.blocks[block.0].statements[statement].kind
+            else {
+                panic!("site at {block:?}/{statement} is not an assignment")
+            };
+            let named = match destination {
+                Place::Local(local) => body.locals[local.0].name.as_ref().map(|n| n.to_string()),
+                _ => None,
+            };
+            let first = match value {
+                Rvalue::Aggregate { fields, .. } => fields.first(),
+                Rvalue::Array(_, elements) => elements.first(),
+                _ => None,
+            };
+            let label = named
+                .or_else(|| match first {
+                    Some(Operand::Constant(Constant::Int(v))) => Some(v.to_string()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("site at {block:?}/{statement} has no label"));
+            (label, site)
+        })
+        .collect();
+    check(&facts, &sites)
+}
+
+/// Why each labeled site of `function` may outlive the frame, in statement
+/// order: `None` when it stays.
+fn frame_verdicts(
+    source: &str,
+    function: &str,
+    compiled: bool,
+) -> Vec<(String, Option<FrameEscape>)> {
+    with_frame_facts(source, function, compiled, |facts, sites| {
+        sites
+            .iter()
+            .map(|(label, site)| (label.clone(), facts.site_escape(*site).cloned()))
+            .collect()
+    })
+}
+
+#[track_caller]
+fn assert_frame(
+    source: &str,
+    function: &str,
+    compiled: bool,
+    expected: &[(&str, Option<FrameEscape>)],
+) {
+    let actual = frame_verdicts(source, function, compiled);
+    for (label, escape) in expected {
+        let found = actual
+            .iter()
+            .find(|(actual, _)| actual == label)
+            .unwrap_or_else(|| panic!("no site `{label}` in {actual:?}"));
+        assert_eq!(&found.1, escape, "site `{label}`; all: {actual:?}");
+    }
+}
+
+const ITEM: &str = "class Item { value: int }";
+const HOLDER: &str = "class Holder { tag: int, item: Item }";
+
+#[test]
+fn frame_local_allocation_stays() {
+    assert_frame(
+        &format!(
+            r#"
+{ITEM}
+function main() -> int {{
+    let item = Item {{ value: 1 }};
+    item.value = 2;
+    let xs = [3];
+    xs.push(item.value);
+    item.value + xs.length()
+}}
+"#
+        ),
+        "main",
+        true,
+        &[("item", None), ("xs", None)],
+    );
+}
+
+#[test]
+fn frame_returned_allocation_escapes() {
+    assert_frame(
+        &format!(
+            r#"
+{ITEM}
+function main() -> Item {{
+    let item = Item {{ value: 1 }};
+    item
+}}
+"#
+        ),
+        "main",
+        true,
+        &[("item", Some(FrameEscape::Returned))],
+    );
+}
+
+#[test]
+fn frame_stored_into_a_parameter_field_escapes() {
+    assert_frame(
+        &format!(
+            r#"
+{ITEM}
+{HOLDER}
+function main(h: Holder) -> int {{
+    let item = Item {{ value: 1 }};
+    h.item = item;
+    0
+}}
+"#
+        ),
+        "main",
+        true,
+        &[("item", Some(FrameEscape::Parameter))],
+    );
+}
+
+#[test]
+fn frame_stored_into_a_local_object_stays() {
+    assert_frame(
+        &format!(
+            r#"
+{ITEM}
+{HOLDER}
+function main() -> int {{
+    let h = Holder {{ tag: 3, item: Item {{ value: 2 }} }};
+    let item = Item {{ value: 1 }};
+    h.item = item;
+    h.item.value + h.tag
+}}
+"#
+        ),
+        "main",
+        true,
+        &[("h", None), ("item", None), ("2", None)],
+    );
+}
+
+const CALLEES: &str = r#"
+function read(x: Item) -> int { x.value }
+function alias(x: Item) -> Item { x }
+function retain(h: Holder, x: Item) -> int { h.item = x; 0 }
+"#;
+
+#[test]
+fn frame_passed_to_a_non_keeping_callee_stays() {
+    assert_frame(
+        &format!(
+            r#"
+{ITEM}
+{HOLDER}
+{CALLEES}
+function main() -> int {{
+    let item = Item {{ value: 1 }};
+    read(item)
+}}
+"#
+        ),
+        "main",
+        true,
+        &[("item", None)],
+    );
+}
+
+#[test]
+fn frame_passed_to_a_returning_callee_escapes() {
+    assert_frame(
+        &format!(
+            r#"
+{ITEM}
+{HOLDER}
+{CALLEES}
+function main() -> int {{
+    let item = Item {{ value: 1 }};
+    let copy = alias(item);
+    copy.value
+}}
+"#
+        ),
+        "main",
+        true,
+        &[("item", Some(FrameEscape::KeepingCall("user.alias".into())))],
+    );
+}
+
+#[test]
+fn frame_passed_to_a_storing_callee_escapes() {
+    assert_frame(
+        &format!(
+            r#"
+{ITEM}
+{HOLDER}
+{CALLEES}
+function main() -> int {{
+    let h = Holder {{ tag: 3, item: Item {{ value: 2 }} }};
+    let item = Item {{ value: 1 }};
+    retain(h, item)
+}}
+"#
+        ),
+        "main",
+        true,
+        &[
+            ("h", None),
+            ("item", Some(FrameEscape::KeepingCall("user.retain".into()))),
+        ],
+    );
+}
+
+#[test]
+fn frame_interpreted_callee_keeps_its_arguments() {
+    // The backend declines `read`: the interpreter runs it, which may keep
+    // what it is passed, whatever the summary says.
+    assert_frame(
+        &format!(
+            r#"
+{ITEM}
+{HOLDER}
+{CALLEES}
+function main() -> int {{
+    let item = Item {{ value: 1 }};
+    read(item)
+}}
+"#
+        ),
+        "main",
+        false,
+        &[("item", Some(FrameEscape::KeepingCall("user.read".into())))],
+    );
+}
+
+#[test]
+fn frame_passed_to_a_modeled_native_stays() {
+    // `concat` is modeled with no `keeps`: it reads both arrays.
+    assert_frame(
+        r#"
+function main() -> int {
+    let xs = [1];
+    let ys = [2];
+    let zs = xs.concat(ys);
+    zs.length() + xs.length() + ys.length()
+}
+"#,
+        "main",
+        true,
+        &[("xs", None), ("ys", None)],
+    );
+}
+
+#[test]
+fn frame_kept_by_a_modeled_native_escapes() {
+    assert_frame(
+        &format!(
+            r#"
+{ITEM}
+function main() -> int {{
+    let xs = [Item {{ value: 1 }}];
+    let item = Item {{ value: 2 }};
+    xs.push(item);
+    xs.length()
+}}
+"#
+        ),
+        "main",
+        true,
+        &[
+            ("xs", None),
+            ("item", Some(FrameEscape::Native("baml.Array.push".into()))),
+        ],
+    );
+}
+
+#[test]
+fn frame_passed_to_an_unmodeled_native_escapes() {
+    // `includes` is a VM builtin the effect table does not list.
+    assert_frame(
+        r#"
+function main() -> bool {
+    let inner = [1];
+    let xs = [inner];
+    let probe = [2];
+    xs.includes(probe)
+}
+"#,
+        "main",
+        true,
+        &[(
+            "probe",
+            Some(FrameEscape::Native("baml.Array.includes".into())),
+        )],
+    );
+}
+
+#[test]
+fn frame_captured_by_a_closure_escapes() {
+    assert_frame(
+        &format!(
+            r#"
+{ITEM}
+function main() -> int {{
+    let item = Item {{ value: 1 }};
+    let read = () -> int {{ item.value }};
+    read()
+}}
+"#
+        ),
+        "main",
+        true,
+        // The captured local is a cell; the instance lands in a temporary.
+        &[("1", Some(FrameEscape::Captured))],
+    );
+}
+
+#[test]
+fn frame_thrown_allocation_escapes() {
+    assert_frame(
+        r#"
+function main() -> int {
+    let xs = [1];
+    if (xs[0] > 0) { throw xs; }
+    0
+}
+"#,
+        "main",
+        true,
+        &[("xs", Some(FrameEscape::Thrown))],
+    );
+}
+
+#[test]
+fn frame_finalizable_instance_escapes() {
+    assert_frame(
+        r#"
+class Resource {
+    value: int,
+    function cleanup(self) -> void throws never {}
+}
+function main() -> int {
+    let resource = Resource { value: 1 };
+    resource.value
+}
+"#,
+        "main",
+        true,
+        &[("resource", Some(FrameEscape::Finalizer))],
+    );
+}
+
+#[test]
+fn frame_parameters_never_stay() {
+    with_frame_facts(
+        &format!(
+            r#"
+{ITEM}
+function main(item: Item) -> int {{
+    item = Item {{ value: 1 }};
+    item.value
+}}
+"#
+        ),
+        "main",
+        true,
+        |facts, sites| {
+            assert_eq!(
+                facts.local_escape(baml_compiler2_mir::Local(1)),
+                Some(&FrameEscape::Parameter)
+            );
+            let (_, site) = &sites[0];
+            assert_eq!(facts.site_escape(*site), Some(&FrameEscape::Parameter));
+            assert!(!facts.site_stays_in_frame(*site));
+        },
+    );
+}
+
+#[test]
+fn frame_generic_instances_never_stay() {
+    assert_frame(
+        r#"
+class Box<T> { value: T }
+function main() -> int {
+    let b = Box<int> { value: 1 };
+    b.value
+}
+"#,
+        "main",
+        true,
+        &[("b", Some(FrameEscape::Generic))],
+    );
+}
+
+#[test]
+fn frame_sites_assigned_to_one_local_share_an_alias_group() {
+    with_frame_facts(
+        &format!(
+            r#"
+{ITEM}
+function main(flip: bool) -> int {{
+    let item = Item {{ value: 1 }};
+    if (flip) {{ item = Item {{ value: 2 }}; }}
+    let other = Item {{ value: 3 }};
+    item.value + other.value
+}}
+"#
+        ),
+        "main",
+        true,
+        |facts, sites| {
+            let site = |label: &str| {
+                sites
+                    .iter()
+                    .find(|(l, _)| l == label)
+                    .unwrap_or_else(|| panic!("no site `{label}` in {sites:?}"))
+                    .1
+            };
+            let items: Vec<escape::Site> = sites
+                .iter()
+                .filter(|(l, _)| l == "item")
+                .map(|(_, site)| *site)
+                .collect();
+            let [first, second] = items[..] else {
+                panic!("two sites assign `item`: {sites:?}")
+            };
+            let other = site("other");
+            assert_eq!(facts.alias_group(first), facts.alias_group(second));
+            assert_ne!(facts.alias_group(first), facts.alias_group(other));
+            assert!(facts.local_group(baml_compiler2_mir::Local(0)).is_some());
+            for site in [first, second, other] {
+                assert!(facts.site_stays_in_frame(site), "{site:?}");
+            }
+        },
+    );
+}
+
+#[test]
+fn frame_may_reach_follows_field_stores() {
+    with_frame_facts(
+        &format!(
+            r#"
+{ITEM}
+{HOLDER}
+function main() -> int {{
+    let inner = Item {{ value: 1 }};
+    let h = Holder {{ tag: 2, item: inner }};
+    let apart = Item {{ value: 3 }};
+    h.item.value + apart.value
+}}
+"#
+        ),
+        "main",
+        true,
+        |facts, sites| {
+            let site = |label: &str| {
+                sites
+                    .iter()
+                    .find(|(l, _)| l == label)
+                    .unwrap_or_else(|| panic!("no site `{label}` in {sites:?}"))
+                    .1
+            };
+            let (inner, h, apart) = (site("inner"), site("h"), site("apart"));
+            assert!(facts.may_reach(h, inner));
+            assert!(facts.may_reach(h, h));
+            assert!(!facts.may_reach(inner, h));
+            assert!(!facts.may_reach(h, apart));
+            let contents = facts.contents_group(facts.alias_group(h)).unwrap();
+            assert_eq!(contents, facts.alias_group(inner));
+            assert!(facts.group_may_reach(contents, facts.alias_group(inner)));
+        },
+    );
+}
