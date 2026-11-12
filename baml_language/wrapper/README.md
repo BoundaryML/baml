@@ -40,7 +40,7 @@ Both wrappers interpret `--project-dir PATH` and `--project-dir=PATH` when selec
 
 Normal channel launches warn when cached metadata identifies a different available release. A passive refresh runs alongside the child CLI, has a five-second network deadline, and is retried at most once per 24 hours, including failures. `[update] auto_check = false` disables refreshes while preserving notices justified by existing cached metadata. Exact versions and local paths do not perform passive checks. `toolchain status` explicitly refreshes metadata after the best-effort installation attempt and never advances a recorded channel.
 
-Builds with `baml self-update` disabled print concrete package-manager commands; successful wrapper updates point to the separate toolchain update check. Wrapper-owned errors use the CLI's human-readable `error:` convention, and management commands produce no entry-point return-value output.
+Builds with `baml self update` disabled print concrete package-manager commands; successful wrapper updates point to the separate toolchain update check. Wrapper-owned errors use the CLI's human-readable `error:` convention, and management commands produce no entry-point return-value output.
 
 Run `python3 baml_language/wrapper_tests/run` to compare both implementations and both self-update variants. Release workflows pack the published BAML wrapper for every wrapper platform from the same run's compiler and pack-host artifacts, verify its embedded release fingerprint, and gate the release on wrapper tests. Rust wrapper archives are reference artifacts for those tests and are never published.
 

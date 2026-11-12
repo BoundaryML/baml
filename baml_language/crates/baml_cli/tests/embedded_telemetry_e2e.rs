@@ -818,7 +818,7 @@ fn wrapper_command_boundaries_record_spans_without_values() {
     for (scenario, args, success) in [
         ("help", vec!["--help"], true),
         ("update", vec!["toolchain", "update"], false),
-        ("self-update", vec!["self-update"], false),
+        ("self-update", vec!["self", "update"], false),
         ("parse-error", vec!["--project-dir"], false),
         ("helper", vec!["__flush-wrapper-telemetry"], true),
     ] {
