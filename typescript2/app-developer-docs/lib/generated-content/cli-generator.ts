@@ -227,14 +227,11 @@ export async function resolveCliHelpBinary(
   if (!wrapperAnswersRootHelp(identity.wrapperVersion)) {
     return bamlBinary;
   }
-  // Wrapper 0.3 spells the flag `--json`; later wrappers take the CLI's
-  // `--output-format json`.
   const status = await invokeBaml(bamlBinary, [
     'toolchain',
     'status',
-    '--output-format',
-    'json',
-  ]).catch(() => invokeBaml(bamlBinary, ['toolchain', 'status', '--json']));
+    '--json',
+  ]);
   const resolved = toolchainStatusSchema.parse(JSON.parse(status.stdout));
   if (
     resolved.version !== null &&
