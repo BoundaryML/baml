@@ -1748,6 +1748,30 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
         assert_eq!(spans("->user.Timing"), 0, "{:#?}", compiled.1);
         assert_eq!(spans("->user.Span"), 2, "{:#?}", compiled.1);
         assert_eq!(spans("->user.Hooked"), 2, "{:#?}", compiled.1);
+        // `trace.span` as a declaration hook records the call's inputs, as
+        // `trace.span()` at a call site does; `trace.empty_span` records none.
+        for (path, records) in [("compiled", &compiled.1), ("bytecode", &bytecode.1)] {
+            let announced = |callee: &str, inputs: &str| {
+                records
+                    .iter()
+                    .filter(|span| {
+                        span.starts_with("FunctionSpanAnnouncement")
+                            && span.contains(callee)
+                            && span.contains(inputs)
+                    })
+                    .count()
+            };
+            for (callee, with_inputs, without) in [("->user.Span", 2, 0), ("->user.Empty", 0, 2)] {
+                assert_eq!(
+                    (
+                        announced(callee, "captured_inputs: Some"),
+                        announced(callee, "captured_inputs: None")
+                    ),
+                    (with_inputs, without),
+                    "{path} {callee}: {records:#?}"
+                );
+            }
+        }
         for callee in ["->user.Decide)", "->user.Boom)", "->user.Fallback)"] {
             assert!(
                 compiled.1.iter().any(|span| span.contains(callee)),
