@@ -60,6 +60,8 @@ testset "toolchain status" {
         for (
             let args in [
                 ["toolchain", "status", "--output-format", "yaml"],
+                ["toolchain", "update", "--output-format", "yaml"],
+                ["self", "update", "--output-format", "yaml"],
                 ["toolchain", "status", "--output-format"],
                 ["toolchain", "status", "--json"],
                 ["toolchain", "use"],

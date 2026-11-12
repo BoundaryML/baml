@@ -365,6 +365,23 @@ export async function generateCliPublicationInput(
     () => true,
     () => false,
   );
+  // Those later wrappers list their toolchain commands by name only; the
+  // arguments and flags are in each command's own help. Wrapper 0.3 has no
+  // such help, and its rows carry the arguments.
+  if (spacedSelfUpdate) {
+    toolchain.subcommands = await Promise.all(
+      toolchain.subcommands.map((leaf) =>
+        leaf.name === 'help'
+          ? leaf
+          : capture(
+              bamlBinary,
+              leaf.command_path,
+              [...leaf.command_path, '--help'],
+              false,
+            ),
+      ),
+    );
+  }
   const selfUpdate = spacedSelfUpdate
     ? cliCommandNodeSchema.parse({
         arguments: [],

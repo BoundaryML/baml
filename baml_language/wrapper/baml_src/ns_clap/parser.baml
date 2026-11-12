@@ -434,12 +434,13 @@ class Parser {
         null
     }
 
-    // Defaults fill in what the command line left out. A flag defaults to false.
+    // Defaults fill in what the command line left out. A flag defaults to
+    // false unless it declares a default of its own.
     function add_defaults(self, matcher: ArgMatcher) -> null throws Error {
         for (let arg in self.cmd.arg_list) {
             if (!matcher.contains(arg.id)) {
                 let fallback = match (arg.get_action()) {
-                    ArgAction.SetTrue => "false",
+                    ArgAction.SetTrue => arg.default_text ?? "false",
                     _ => arg.default_text,
                 };
                 if let value: string = fallback {
@@ -500,8 +501,14 @@ class Parser {
         SubCommand { name: name, matches: sub_matcher.matches }
     }
 
+    // The arguments may span several of the external program's command
+    // levels, so a global given again is a deeper one: the last wins, and
+    // a repeat at one level is the external program's to reject.
     function _read_globals(self, matcher: ArgMatcher, raw: RawArgs) -> null throws Error {
         let cursor = raw.cursor();
+        let order: string[] = [];
+        let hits: map<string, _GlobalHit> = {};
+        let given: map<string, string[]> = {};
         while let arg_os: ParsedArg = raw.next(cursor) {
             if (arg_os.is_escape()) {
                 break;
@@ -512,7 +519,14 @@ class Parser {
                     null => null,
                     let shorts: ShortFlags => {
                         let arg = self.cmd.find_short(shorts.next_flag() ?? "");
-                        _GlobalHit.of(arg, shorts.next_value())
+                        // `-ofile` or `-o=file`.
+                        let attached = match (shorts.next_value()) {
+                            let value: string if value.starts_with("=") => {
+                                value.slice(1, value.length())
+                            },
+                            let value: string? => value,
+                        };
+                        _GlobalHit.of(arg, attached)
                     },
                 },
             };
@@ -522,8 +536,15 @@ class Parser {
                 } else {
                     [hit.attached ?? self._next_value(hit.arg, raw, cursor)]
                 };
-                self.react(null, ValueSource.CommandLine, hit.arg, vals, matcher);
+                if (!hits.has(hit.arg.id)) {
+                    order.push(hit.arg.id);
+                }
+                hits[hit.arg.id] = hit;
+                given[hit.arg.id] = vals;
             }
+        }
+        for (let id in order) {
+            self.react(null, ValueSource.CommandLine, hits[id].arg, given[id], matcher);
         }
         null
     }

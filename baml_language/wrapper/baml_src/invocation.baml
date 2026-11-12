@@ -369,9 +369,15 @@ class ToolchainInventory {
             null => null,
             let table: baml.toml.Table => string_at(table, "selector", config_path()),
         };
+        // A blank selector is no selector, as when the toolchain is selected.
+        let configured = (defaults ?? "").trim();
         ToolchainInventory {
             schema_version: 1,
-            default_selector: defaults ?? "canary",
+            default_selector: if (configured) {
+                configured
+            } else {
+                "canary"
+            },
             active_selector: active.selector.to_string(),
             source: active.source,
             channels: ToolchainInventory.recorded_channels(),

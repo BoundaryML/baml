@@ -1018,13 +1018,18 @@ fn consume_flat_report(
     // An empty selection aggregates to a vacuous `pass` over zero tests; the
     // caller's "no tests selected" guard speaks for it. A zero-test report
     // with a non-pass outcome is still a real failure.
-    if summary.outcome == "pass" {
-        return false;
-    }
-    for message in &flat.messages {
-        eprintln!("  => {message}");
+    // A tolerated failure keeps its message in the report; only a failed
+    // aggregate also prints them.
+    let aggregate_passed = summary.outcome == "pass";
+    if !aggregate_passed {
+        for message in &flat.messages {
+            eprintln!("  => {message}");
+        }
     }
     summary.messages.extend(flat.messages);
+    if aggregate_passed {
+        return false;
+    }
     // A testset runner can fail the aggregate without marking any child
     // failed. Count that verdict as one failure so the summary does not read
     // "0 failed" when the aggregate itself failed.

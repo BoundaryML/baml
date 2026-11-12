@@ -2,7 +2,7 @@ use std::{
     env,
     ffi::OsString,
     fs,
-    io::{self},
+    io::{self, Write},
     path::{Path, PathBuf},
     process,
 };
@@ -70,13 +70,25 @@ impl Command for IdeInstallArgs {
         }
 
         let editor = self.resolve_editor()?;
-        // The editor CLI narrates on its stdout; ours carries only the result.
-        let status = process::Command::new(&editor)
-            .arg("--install-extension")
-            .arg(&vsix)
-            .stdout(io::stderr())
-            .status()
-            .with_context(|| format!("failed to run {}", editor.to_string_lossy()))?;
+        let mut install = process::Command::new(&editor);
+        install.arg("--install-extension").arg(&vsix);
+        let failed_to_run = || format!("failed to run {}", editor.to_string_lossy());
+        let status = if crate::reporter::quiet() {
+            // The editor's progress is status output; keep it only to explain a failure.
+            let output = install.output().with_context(failed_to_run)?;
+            if !output.status.success() {
+                let mut stderr = io::stderr().lock();
+                stderr.write_all(&output.stdout)?;
+                stderr.write_all(&output.stderr)?;
+            }
+            output.status
+        } else {
+            // The editor CLI narrates on its stdout; ours carries only the result.
+            install
+                .stdout(io::stderr())
+                .status()
+                .with_context(failed_to_run)?
+        };
 
         if !status.success() {
             anyhow::bail!(

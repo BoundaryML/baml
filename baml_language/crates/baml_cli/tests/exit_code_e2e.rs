@@ -679,10 +679,10 @@ fn run_without_target_or_main_prints_help() {
     let output = run_baml_cli(built, tmp.path(), &["run"]);
 
     assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty(), "{output:?}");
     assert!(
-        String::from_utf8_lossy(&output.stdout).contains("Usage: baml run"),
-        "stdout: {}",
-        String::from_utf8_lossy(&output.stdout)
+        String::from_utf8_lossy(&output.stderr).contains("Usage: baml run"),
+        "{output:?}"
     );
 }
 
@@ -695,10 +695,10 @@ fn run_without_target_outside_a_project_prints_help() {
     let output = run_baml_cli(built, tmp.path(), &["run"]);
 
     assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty(), "{output:?}");
     assert!(
-        String::from_utf8_lossy(&output.stdout).contains("Usage: baml run"),
-        "stdout: {}",
-        String::from_utf8_lossy(&output.stdout)
+        String::from_utf8_lossy(&output.stderr).contains("Usage: baml run"),
+        "{output:?}"
     );
 }
 
@@ -860,29 +860,31 @@ log.error("expression-error-detail");
         String::from_utf8_lossy(&conversion.stdout),
         String::from_utf8_lossy(&conversion.stderr),
     );
-    let stdout = String::from_utf8_lossy(&conversion.stdout);
+    // A structured stdout holds only the result, so the logs are on stderr.
+    let stderr = String::from_utf8_lossy(&conversion.stderr);
     for expected in [
         "[WARN] from-json-detail",
         "[INFO] conversion-target-detail",
         "[ERROR] to-json-detail",
     ] {
-        assert!(stdout.contains(expected), "stdout: {stdout}");
+        assert!(stderr.contains(expected), "stderr: {stderr}");
     }
     assert!(
-        !stdout.contains("conversion-debug-detail"),
-        "`--log INFO` must override BAML_LOG=ERROR while still filtering debug: {stdout}"
+        !stderr.contains("conversion-debug-detail"),
+        "`--log INFO` must override BAML_LOG=ERROR while still filtering debug: {stderr}"
     );
-    let from_json_pos = stdout.find("[WARN] from-json-detail").unwrap();
-    let target_pos = stdout.find("[INFO] conversion-target-detail").unwrap();
-    let to_json_pos = stdout.find("[ERROR] to-json-detail").unwrap();
+    let from_json_pos = stderr.find("[WARN] from-json-detail").unwrap();
+    let target_pos = stderr.find("[INFO] conversion-target-detail").unwrap();
+    let to_json_pos = stderr.find("[ERROR] to-json-detail").unwrap();
     assert!(
         from_json_pos < target_pos && target_pos < to_json_pos,
-        "conversion-hook logs must retain FromJson/target/ToJson order: {stdout}"
+        "conversion-hook logs must retain FromJson/target/ToJson order: {stderr}"
     );
-    let result_pos = stdout.find(r#""hook-result""#).expect("serialized result");
+    let result: serde_json::Value = serde_json::from_slice(&conversion.stdout)
+        .unwrap_or_else(|error| panic!("{error}: {conversion:?}"));
     assert!(
-        stdout.find("[ERROR] to-json-detail") < Some(result_pos),
-        "conversion logs must be flushed before the serialized result: {stdout}"
+        result.to_string().contains("hook-result"),
+        "serialized result: {result}"
     );
 }
 

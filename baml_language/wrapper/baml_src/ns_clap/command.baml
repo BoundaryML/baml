@@ -111,7 +111,8 @@ class Command {
     // - options this command does not declare are accepted in front of
     //   an external subcommand, because they are that program's;
     // - global args are also read out of the external subcommand's
-    //   arguments, up to any `--`, as if it were one level deeper.
+    //   arguments, up to any `--`, as if it were one level deeper; one
+    //   given again there is deeper still, so the last wins.
     function external_subcommand_passthrough(self, yes: bool) -> Command {
         self.passes_externals_through = yes;
         self.externals_allowed = self.externals_allowed || yes;

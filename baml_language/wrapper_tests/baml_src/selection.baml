@@ -322,7 +322,6 @@ testset "toolchain selection" {
         for (
             let args in [
                 ["--project-dir", ".", "--project-dir", ".", "check"],
-                ["check", "--project-dir", ".", "--project-dir=."],
                 ["toolchain", "list", "--project-dir", ".", "--project-dir", "."],
             ]
         ) {

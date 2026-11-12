@@ -61,7 +61,9 @@ impl Command for PlaygroundArgs {
             port: self.port,
             open_browser: !self.no_open && !is_headless_session(baml_env::has_var),
             on_listening: Some(Box::new(move |port| {
-                eprintln!("{}", playground_banner(port, &banner_roots));
+                if !crate::reporter::quiet() {
+                    eprintln!("{}", playground_banner(port, &banner_roots));
+                }
             })),
         };
         baml_lsp_server::run_playground_server(roots, playground_dir, options)?;

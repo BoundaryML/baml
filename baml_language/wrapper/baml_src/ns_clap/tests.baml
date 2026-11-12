@@ -69,6 +69,15 @@ testset "parsing" {
         assert.equal(given.value_source("mode"), ValueSource.CommandLine)
     }
 
+    test "a flag's declared default wins over the action's" {
+        let cmd = Command.new("app").arg(
+            Arg.new("enabled").long("enabled").action(ArgAction.SetTrue).default_value("true"),
+        );
+        let m = cmd.try_get_matches_from([]);
+        assert.is_true(m.get_flag("enabled"));
+        assert.equal(m.value_source("enabled"), ValueSource.DefaultValue)
+    }
+
     test "double dash makes everything after it a value" {
         let check = _sub(_demo().try_get_matches_from(["check", "--", "--force", "-l"]));
         assert.equal(check.get_many("file"), ["--force", "-l"]);
@@ -304,6 +313,8 @@ testset "external subcommand passthrough" {
         );
         assert.equal(m.get_one("dir"), "x");
         assert.equal(m.get_one("format"), "json");
+        let attached = _launcher().try_get_matches_from(["build", "-F=json"]);
+        assert.equal(attached.get_one("format"), "json");
         // Only globals: `--local` is the launcher's own, so here it is the external program's.
         assert.equal(m.get_one("local"), null);
         assert.equal(_sub(m).external_args(), ["--release", "--dir", "x", "-Fjson", "--local", "y"])
@@ -325,9 +336,13 @@ testset "external subcommand passthrough" {
     test "a bad global among the external arguments is an error named after the subcommand" {
         let missing = _error(_launcher(), ["build", "--dir"]);
         assert.equal(missing.kind, ErrorKind.InvalidValue);
-        assert.equal(missing.command_path, ["build"]);
-        let twice = _error(_launcher(), ["build", "--dir", "a", "--dir", "b"]);
-        assert.equal(twice.kind, ErrorKind.ArgumentConflict)
+        assert.equal(missing.command_path, ["build"])
+    }
+
+    test "a global given again among the external arguments is a deeper level's, so the last wins" {
+        let m = _launcher().try_get_matches_from(["build", "--dir", "a", "deeper", "--dir", "b"]);
+        assert.equal(m.get_one("dir"), "b");
+        assert.equal(_sub(m).external_args(), ["--dir", "a", "deeper", "--dir", "b"])
     }
 
     test "options the launcher lacks are accepted only in front of an external subcommand" {

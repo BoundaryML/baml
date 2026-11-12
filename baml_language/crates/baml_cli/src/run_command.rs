@@ -246,7 +246,8 @@ pub struct RunArgs {
     #[arg(skip)]
     pub output_format: OutputFormat,
 
-    /// Print BAML `log.*` events to stdout at or above this level.
+    /// Print BAML `log.*` events at or above this level: to stdout as text,
+    /// to stderr when stdout is structured.
     #[arg(
         long = "log",
         env = "BAML_LOG",
@@ -340,11 +341,11 @@ impl RunArgs {
     ) -> (FunctionCallContext, Option<TraceLogger>) {
         let builder =
             FunctionCallContextBuilder::new(call_id).with_cancel_token(interrupts.token());
-        LogOutput::passthrough(self.log, "run").call_context(builder)
+        self.log_output().call_context(builder)
     }
 
     fn print_logs(&self, producer: Option<&TraceLogger>) {
-        LogOutput::passthrough(self.log, "run").print(producer);
+        self.log_output().print(producer);
     }
 
     fn block_on_with_logs<T>(
@@ -353,7 +354,17 @@ impl RunArgs {
         future: impl std::future::Future<Output = T>,
         producer: Option<&TraceLogger>,
     ) -> T {
-        LogOutput::passthrough(self.log, "run").block_on(rt, future, producer)
+        self.log_output().block_on(rt, future, producer)
+    }
+
+    /// Logs share the program's stdout as text. A structured stdout carries
+    /// the program's own output and the returned value only, so there the
+    /// logs are status.
+    fn log_output(&self) -> LogOutput {
+        match self.output_format {
+            OutputFormat::Text => LogOutput::passthrough(self.log, "run"),
+            OutputFormat::Json => LogOutput::status(self.log, "run"),
+        }
     }
 
     /// Emit the "your code is unformatted" advisory. This is the one
@@ -503,7 +514,7 @@ impl RunArgs {
     /// `main`, or a directory that is not a project, gets the help instead.
     fn run_default_target(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         let print_help = || {
-            Self::print_run_help();
+            Self::print_run_help_to_stderr();
             Ok(crate::ExitCode::Failure)
         };
         if self.file.is_some() {
@@ -1713,14 +1724,16 @@ impl RunArgs {
         })
     }
 
-    fn print_run_help() {
+    /// Guidance for a `baml run` that found nothing to run. The command
+    /// failed, so stdout stays empty.
+    fn print_run_help_to_stderr() {
         let mut command = crate::commands::RuntimeCli::command();
         command.build();
         let Some(run) = command.find_subcommand("run") else {
             return;
         };
-        let mut run = run.clone();
-        let _ = run.print_help();
+        let help = run.clone().render_help();
+        let _ = write!(std::io::stderr(), "{help}");
     }
 }
 

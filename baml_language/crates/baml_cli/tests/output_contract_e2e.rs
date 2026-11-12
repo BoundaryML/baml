@@ -90,11 +90,39 @@ fn json_mode_writes_exactly_one_document_for_every_result() {
     }
 
     let scratch = tempfile::tempdir().unwrap();
-    assert_silent(scratch.path(), &["new", "created"]);
+    assert!(baml(scratch.path(), &["new", "created"]).status.success());
     json(
         scratch.path(),
         &["agent", "install", "--project-dir", "created"],
     );
+}
+
+/// `baml run` logs share stdout with the program as text, but a structured
+/// stdout holds only the program's output and the returned value.
+#[test]
+fn run_logs_stay_off_a_structured_stdout() {
+    let dir = project("function main() -> string {\n    log.info(\"noise\");\n    \"hello\"\n}\n");
+    let (output, value) = json(dir.path(), &["run", "main"]);
+    assert_eq!(value, "hello", "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("[INFO] noise"),
+        "{output:?}"
+    );
+
+    let text = baml(dir.path(), &["run", "main"]);
+    assert!(
+        String::from_utf8_lossy(&text.stdout).contains("[INFO] noise"),
+        "{text:?}"
+    );
+}
+
+/// A help path that names no command is a usage error.
+#[test]
+fn help_for_an_unknown_command_is_a_usage_error() {
+    let dir = project(SOURCE);
+    let output = baml(dir.path(), &["help", "cloud", "auth", "missing"]);
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(output.stdout.is_empty(), "{output:?}");
 }
 
 /// A failing command that has a result still reports it.
@@ -133,8 +161,21 @@ fn commands_without_a_result_are_silent_in_every_format() {
         assert!(output.status.success(), "{output:?}");
     }
 
+    // Scaffolding refuses an existing destination, so each format gets its own.
     let scratch = tempfile::tempdir().unwrap();
-    assert_silent(scratch.path(), &["init", "initialized"]);
+    for (format, new, init) in [
+        ("text", "created_text", "initialized_text"),
+        ("json", "created_json", "initialized_json"),
+    ] {
+        for args in [["new", new], ["init", init]] {
+            let output = baml(
+                scratch.path(),
+                &[args[0], args[1], "--output-format", format],
+            );
+            assert!(output.status.success(), "{args:?} as {format}: {output:?}");
+            assert!(output.stdout.is_empty(), "{args:?} as {format}: {output:?}");
+        }
+    }
 }
 
 /// A failure with nothing to show leaves stdout empty; the reason is on

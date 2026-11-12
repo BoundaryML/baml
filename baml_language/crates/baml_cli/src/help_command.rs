@@ -59,7 +59,9 @@ impl Command for HelpArgs {
     type Output = HelpText;
 
     fn run(&self, _cx: &CommandContext) -> Result<Outcome<HelpText>> {
-        let rendered = render(&self.command)?;
+        // A path that names no command is a mistake in the invocation.
+        let rendered =
+            render(&self.command).map_err(|error| crate::UsageError::new(error.to_string()))?;
         Ok(Outcome::ok(HelpText {
             plain: rendered.help.to_string(),
             ansi: rendered.help.ansi().to_string(),

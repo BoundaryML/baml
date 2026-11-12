@@ -116,16 +116,20 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
                     baml.io.println(WrapperCli.help_for([sub.name]));
                     null
                 },
-                let action: root.clap.SubCommand => match (sub.name) {
-                    "toolchain" => {
-                        invocation.manage(management_command(action.name, action.matches))
-                    },
-                    _ => {
-                        WrapperUpdater.update(
-                            telemetry = invocation.telemetry,
-                            $trace = trace.span(inputs = false, output = false, error = false),
-                        )
-                    },
+                let action: root.clap.SubCommand => {
+                    // Reject a format the wrapper does not have before acting.
+                    WrapperCli.output_format(action.matches);
+                    match (sub.name) {
+                        "toolchain" => {
+                            invocation.manage(management_command(action.name, action.matches))
+                        },
+                        _ => {
+                            WrapperUpdater.update(
+                                telemetry = invocation.telemetry,
+                                $trace = trace.span(inputs = false, output = false, error = false),
+                            )
+                        },
+                    }
                 },
             }
         },
