@@ -18,7 +18,7 @@ pub use disabled::{NoopGcCycleProfiler as GcCycleProfiler, NoopGcProfile as GcPr
 #[cfg(feature = "gc_profiling")]
 pub(crate) use enabled::GcProfiler;
 #[cfg(feature = "gc_profiling")]
-pub use enabled::{GcCycleProfiler, GcHeapSnapshot, GcProfile};
+pub use enabled::{ConservativeScan, GcCycleProfiler, GcHeapSnapshot, GcProfile};
 
 #[cfg(feature = "gc_profiling")]
 mod enabled {
@@ -55,6 +55,28 @@ mod enabled {
         }
     }
 
+    /// What the conservative scan of the parked stack ranges found, summed
+    /// over the cycle; each range is also traced on `bex_gc` as it is
+    /// scanned, so pins can be attributed to the fiber that holds them.
+    #[derive(Clone, Copy, Debug, Default)]
+    pub struct ConservativeScan {
+        pub ranges: usize,
+        pub words: usize,
+        /// Words that resolved to at least one cell.
+        pub resolved: usize,
+        /// Cells this scan pinned; a cell several words name counts once.
+        pub pinned: usize,
+    }
+
+    impl ConservativeScan {
+        pub(crate) fn add(&mut self, range: Self) {
+            self.ranges += range.ranges;
+            self.words += range.words;
+            self.resolved += range.resolved;
+            self.pinned += range.pinned;
+        }
+    }
+
     /// Per-cycle wall times. Heap phases are disjoint; `pause` includes them.
     /// `park_wait` precedes exclusive access and is not a uniform application pause.
     /// Post-GC callbacks/finalizers run after permits are released.
@@ -63,6 +85,7 @@ mod enabled {
         pub before: GcHeapSnapshot,
         pub after: GcHeapSnapshot,
         pub roots: usize,
+        pub conservative: ConservativeScan,
         pub prepare: Duration,
         pub trace: Duration,
         pub keepalive: Duration,
@@ -102,6 +125,10 @@ mod enabled {
 
         pub(crate) fn set_roots(&mut self, roots: usize) {
             self.profile.roots = roots;
+        }
+
+        pub(crate) fn set_conservative(&mut self, scan: ConservativeScan) {
+            self.profile.conservative = scan;
         }
 
         pub(crate) fn finish_phase(&mut self, phase: HeapPhase) {

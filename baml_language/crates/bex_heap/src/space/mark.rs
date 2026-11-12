@@ -69,6 +69,8 @@ pub(crate) struct Marker<'a> {
     /// The block copies are bumped into, until it is full.
     to_space: Bump,
     live: Live,
+    #[cfg(feature = "gc_profiling")]
+    conservative: crate::gc_profile::ConservativeScan,
 }
 
 impl<'a> Marker<'a> {
@@ -86,11 +88,19 @@ impl<'a> Marker<'a> {
             stack: Vec::new(),
             to_space: Bump::default(),
             live: Live::default(),
+            #[cfg(feature = "gc_profiling")]
+            conservative: Default::default(),
         }
     }
 
     pub(crate) fn live(&self) -> Live {
         self.live
+    }
+
+    /// What the conservative ranges scanned so far resolved and pinned.
+    #[cfg(feature = "gc_profiling")]
+    pub(crate) fn conservative(&self) -> crate::gc_profile::ConservativeScan {
+        self.conservative
     }
 
     pub(crate) fn pool(&self) -> &BlockPool {
@@ -134,11 +144,24 @@ impl<'a> Marker<'a> {
     /// `range` is word-aligned and readable, nothing writes it meanwhile, and
     /// nothing has been copied yet this collection.
     pub(crate) unsafe fn scan_range(&mut self, range: Range<*const usize>) {
+        #[cfg(feature = "gc_profiling")]
+        let mut scan = crate::gc_profile::ConservativeScan {
+            ranges: 1,
+            ..Default::default()
+        };
         let mut word = range.start;
         while word < range.end {
             // SAFETY: the caller guarantees the range is readable.
             let value = unsafe { word.read() };
+            #[cfg(feature = "gc_profiling")]
+            let mut resolved = false;
             for cell in self.resolve_conservative(value).cells() {
+                #[cfg(feature = "gc_profiling")]
+                {
+                    resolved = true;
+                    // SAFETY: resolved from a set start bit, so allocated.
+                    scan.pinned += usize::from(!unsafe { super::is_cell_pinned(cell) });
+                }
                 // SAFETY: resolved from a set start bit, so allocated.
                 unsafe { pin_cell(cell) };
                 let ptr = heap_ptr_at(cell);
@@ -146,8 +169,20 @@ impl<'a> Marker<'a> {
                 let kept = unsafe { self.forward(ptr) };
                 debug_assert_eq!(kept, ptr, "a pinned cell forwards to itself");
             }
+            #[cfg(feature = "gc_profiling")]
+            {
+                scan.words += 1;
+                scan.resolved += usize::from(resolved);
+            }
             // SAFETY: stays within, or one past, the range.
             word = unsafe { word.add(1) };
+        }
+        #[cfg(feature = "gc_profiling")]
+        {
+            tracing::trace!(target: "bex_gc", start = ?range.start, end = ?range.end,
+                words = scan.words, resolved = scan.resolved, pinned = scan.pinned,
+                "conservative range");
+            self.conservative.add(scan);
         }
     }
 

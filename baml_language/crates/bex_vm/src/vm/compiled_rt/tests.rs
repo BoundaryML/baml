@@ -301,7 +301,7 @@ fn a_body_paused_at_a_yield_survives_a_collection() {
 
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 #[test]
-fn a_parked_fiber_with_no_compiled_body_still_reports_its_stack() {
+fn a_fiber_reports_its_range_only_while_a_body_is_parked_on_it() {
     use crate::compiled_rt::Step;
 
     fn body(vm: &mut BexVm, _: &FrameRecord, _: &[Value]) -> BodyResult {
@@ -309,20 +309,45 @@ fn a_parked_fiber_with_no_compiled_body_still_reports_its_stack() {
         Ok(vm.string_value("done"))
     }
     let mut vm = vm_with_main(body, 0, false);
+    let entry = vm
+        .frames
+        .iter()
+        .find_map(|frame| match frame {
+            Frame::Bytecode(frame) => Some(frame.function),
+            _ => None,
+        })
+        .expect("the entry frame is live");
     assert!(parked_ranges(&mut vm).1.is_empty(), "nothing parked yet");
+
+    // Parked mid-body: exactly the park's range, from its `sp`.
     assert!(matches!(vm.exec().unwrap(), VmExecState::EarlyYield));
     let (sp, ranges) = parked_ranges(&mut vm);
+    assert_ne!(sp, 0);
     assert_eq!(ranges.len(), 1, "the body's park is scanned");
-    assert!(matches!(vm.exec().unwrap(), VmExecState::Complete(_)));
-    // The body is done, so the fiber counts none; it is still parked, and
-    // its stack still holds whatever the last park left there.
-    let (sp_after, ranges) = parked_ranges(&mut vm);
-    assert_eq!(sp_after, sp, "the park's `sp` is kept");
-    assert_eq!(ranges.len(), 1, "an idle parked fiber is scanned too");
-    let fiber = vm.compiled.fiber.as_ref().unwrap();
-    assert_eq!(fiber.parked_range(sp), Some(ranges[0].clone()));
     assert_eq!(ranges[0].start as usize, sp);
     assert!(ranges[0].start < ranges[0].end);
+    assert!(!vm.compiled.fiber.as_ref().unwrap().idle());
+
+    // The body completed and the fiber is idle: nothing is live on it.
+    assert!(matches!(vm.exec().unwrap(), VmExecState::Complete(_)));
+    let (sp_after, ranges) = parked_ranges(&mut vm);
+    assert_eq!(sp_after, 0, "the park's `sp` is cleared");
+    assert!(ranges.is_empty(), "an idle fiber is not scanned");
+    let fiber = vm.compiled.fiber.as_ref().unwrap();
+    assert!(fiber.idle());
+    assert_eq!(fiber.parked_range(sp), None, "idle even with a stale `sp`");
+
+    // The same fiber, reused for a second body: only the new park's range.
+    vm.set_entry_point(entry, &[]);
+    assert!(matches!(vm.exec().unwrap(), VmExecState::EarlyYield));
+    let (sp_reused, ranges) = parked_ranges(&mut vm);
+    assert_ne!(sp_reused, 0);
+    assert_eq!(ranges.len(), 1, "the reused fiber's park is scanned");
+    assert_eq!(ranges[0].start as usize, sp_reused);
+    assert!(matches!(vm.exec().unwrap(), VmExecState::Complete(_)));
+    let (sp_idle, ranges) = parked_ranges(&mut vm);
+    assert_eq!(sp_idle, 0);
+    assert!(ranges.is_empty(), "idle again after the reuse");
 }
 
 /// The parked `sp` and the conservative ranges the VM's roots report.

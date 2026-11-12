@@ -84,6 +84,11 @@ impl BexVm {
         let reset = FiberReset(self);
         let request = fiber.resume(message(NonNull::from(&mut *reset.0)));
         drop(reset);
+        // The last body's park is stale once it completes: nothing on the
+        // idle fiber is live, so a collection must not scan it.
+        if fiber.idle() {
+            self.compiled.parked_sp = 0;
+        }
         self.compiled.fiber = Some(fiber);
         request
     }
@@ -188,14 +193,20 @@ mod stackful {
             self.floor
         }
 
-        /// The words a collection scans conservatively while the fiber is
+        /// The words a collection scans conservatively while a body is
         /// parked: from `sp`, recorded by the innermost `suspend`, to the
-        /// stack's base. Not only while a compiled body is on the fiber: a
-        /// fiber parked inside a native that re-entered BAML holds raw
-        /// pointers in Rust locals with no body counted. `None` until a
-        /// first park records an `sp`.
+        /// stack's base. `None` while the fiber is idle: every Rust frame on
+        /// the fiber (bodies, the natives they call, bytecode re-entered
+        /// through `Message::Enter`) sits beneath a counted body, so with
+        /// none counted the stack holds only `fiber_main` and whatever the
+        /// last park left behind, which must not pin anything.
         pub(crate) fn parked_range(&self, sp: usize) -> Option<Range<*const usize>> {
-            (sp != 0).then(|| (sp as *const usize)..(self.base as *const usize))
+            (self.bodies != 0 && sp != 0).then(|| (sp as *const usize)..(self.base as *const usize))
+        }
+
+        /// Whether no compiled body is on the fiber.
+        pub(crate) fn idle(&self) -> bool {
+            self.bodies == 0
         }
     }
 
@@ -439,6 +450,10 @@ mod stackless {
 
         pub(crate) fn parked_range(&self, _sp: usize) -> Option<std::ops::Range<*const usize>> {
             None
+        }
+
+        pub(crate) fn idle(&self) -> bool {
+            true
         }
 
         pub(crate) fn resume(&mut self, _: Message) -> Request {

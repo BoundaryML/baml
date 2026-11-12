@@ -20,8 +20,9 @@ pub(crate) struct CompiledState {
     )]
     pub(crate) yielder: Option<YielderPtr>,
     pub(crate) on_fiber: bool,
-    /// The stack pointer of the innermost `suspend` while the fiber is
-    /// parked; the conservative range starts there.
+    /// The stack pointer of the innermost `suspend` while a body is parked;
+    /// the conservative range starts there. Zero while the fiber is idle:
+    /// `fiber_resume` clears it when the last body completes.
     pub(crate) parked_sp: usize,
     pub(crate) builtin_type_args: Vec<RealizedTy>,
     /// Compiled JSON decode: realized field types of compile-time classes,
