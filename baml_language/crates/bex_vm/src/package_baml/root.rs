@@ -986,13 +986,15 @@ fn deep_copy_value_recursive(
             let new_ptr = match object {
                 Object::Float(f) => vm.tlab.alloc(Object::Float(f)),
                 Object::Shared(SharedKind::Str) => {
-                    // One copy, from the flat holding the text into the new
-                    // cell.
-                    let flat = vm.tlab.flatten_string(ptr);
+                    // One copy into the new cell. A rope is flattened so
+                    // its text is borrowable; the text is then read through
+                    // the string itself, not the flat: a view's is a range
+                    // of its base, which `flatten_string` returns whole.
+                    vm.tlab.flatten_string(ptr);
                     // SAFETY: a live string the copy holds; nothing moves it
                     // while the native runs, and allocating does not collect.
-                    #[allow(unsafe_code, reason = "a flat the native holds is live")]
-                    let text = unsafe { StrRef::new_unchecked(flat) }.as_str();
+                    #[allow(unsafe_code, reason = "a string the native holds is live")]
+                    let text = unsafe { StrRef::new_unchecked(ptr) }.as_str();
                     vm.alloc_string(text)
                 }
                 // A pooled literal never reaches a value, but its copy is a
@@ -1208,5 +1210,24 @@ mod deep_copy_tests {
         let copy = copy.as_object_ptr().expect("a string is an object");
         assert_eq!(vm.str_at(copy).expect("a string cell").as_str(), "pooled text");
         assert_eq!(vm.as_string(&Value::object(copy)).unwrap().as_str(), "pooled text");
+    }
+
+    /// A view (a slice of `STR_SHARE_THRESHOLD` bytes or more shares its
+    /// base) deep-copies to its own bytes, not its base's whole text.
+    #[test]
+    fn deep_copy_of_a_view_copies_the_views_bytes() {
+        let mut vm = test_vm(vec![]);
+        let text: String = (0..200).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
+        let base = vm.tlab.alloc_string(&text);
+        let view = vm.tlab.substring(base, 100..164);
+        assert_eq!(vm.str_at(view).unwrap().kind(), bex_vm_types::types::StrKind::View);
+
+        let copy = deep_copy_value_recursive(&mut vm, Value::object(view), &mut HashMap::new())
+            .expect("a string copies");
+        let copy = copy.as_object_ptr().expect("a string is an object");
+        let copied = vm.str_at(copy).expect("a string cell");
+        assert_eq!(copied.kind(), bex_vm_types::types::StrKind::Flat);
+        assert_eq!(copied.as_str(), &text[100..164]);
+        assert_eq!(copied.byte_len(), 64);
     }
 }
