@@ -624,6 +624,15 @@ impl GenerateArgs {
                     &output_dir,
                 ),
             );
+            for rename in &identifier_renames {
+                reporter.status(
+                    "Renamed",
+                    format!(
+                        "{} `{}`: `{}` → `{}` ({})",
+                        rename.kind, rename.fqn, rename.original, rename.generated, rename.reason,
+                    ),
+                );
+            }
             if self.output.is_none()
                 && generator.package_name.is_some()
                 && let Some(previous) =

@@ -228,6 +228,11 @@ fn generate_reports_identifier_renames_on_stderr() {
         "{verbose_stderr}"
     );
     assert!(
+        verbose_stderr
+            .contains("Renamed enum variant `user.Choice.None`: `None` → `None_` (Python keyword)"),
+        "{verbose_stderr}"
+    );
+    assert!(
         verbose_stderr.contains(&format!(
             "Generating clients with CLI version: {}",
             baml_version::CANONICAL_VERSION
