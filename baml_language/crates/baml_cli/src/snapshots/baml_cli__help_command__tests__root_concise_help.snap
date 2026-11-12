@@ -12,6 +12,7 @@ Commands:
   describe     Describe a BAML symbol
   query        Query BTEL recordings with SQL
   auth         Manage authentication
+  cloud        Manage Boundary cloud dashboards
   update       Show wrapper and language toolchain update commands [aliases: upgrade]
   feedback     Report an issue or improvement to Boundary
   fmt          Format BAML source files
