@@ -58,7 +58,7 @@ impl Space<'_> {
                 return Some(Fault::FreedBlock);
             }
             // SAFETY: the block's cell area is mapped; one word is read.
-            if unsafe { (cell as *const usize).read() } == usize::from_ne_bytes([POISON_BYTE; 8]) {
+            if unsafe { (cell as *const usize).read() } == usize::from_ne_bytes([POISON_BYTE; size_of::<usize>()]) {
                 return Some(Fault::Poisoned);
             }
             let granule = BlockHeader::granule(base, cell);
