@@ -623,7 +623,7 @@ testset "toolchain management" {
         );
     }
 
-    test "status reports available update without installing" {
+    test "status reports available update without advancing channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.config("canary");
@@ -1009,7 +1009,7 @@ testset "toolchain management" {
         );
     }
 
-    test "status install requires acquisition while plain status only fetches metadata" {
+    test "status install is strict while plain status fails open" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
@@ -1024,15 +1024,32 @@ testset "toolchain management" {
             "plain status misreported failed installation",
         );
         root.harness.require(
-            fixture.requests() == ["/canary.json", "/nightly.json"],
-            "plain status attempted acquisition",
+            fixture.requests()
+                == [
+                    `/version/${BASE_VERSION}.json`,
+                    `/${BASE_VERSION}${if (fixture.windows) { ".zip" } else { ".tar.gz" }}`,
+                    "/canary.json",
+                    "/nightly.json",
+                ],
+            "plain status did not attempt acquisition exactly once",
         );
         fixture.manage(candidate, ["toolchain", "status", "--install", "--json"], success = false);
-        // Status metadata populated the exact-version cache, so acquisition
-        // needs only one artifact request and no additional manifest fetch.
-        let extension = if (fixture.windows) { ".zip" } else { ".tar.gz" };
+        // The optional attempt populated the exact-version cache. The strict
+        // invocation must make one artifact request, without a best-effort retry.
+        let extension = if (fixture.windows) {
+            ".zip"
+        } else {
+            ".tar.gz"
+        };
         root.harness.require(
-            fixture.requests() == ["/canary.json", "/nightly.json", `/${BASE_VERSION}${extension}`],
+            fixture.requests()
+                == [
+                    `/version/${BASE_VERSION}.json`,
+                    `/${BASE_VERSION}${extension}`,
+                    "/canary.json",
+                    "/nightly.json",
+                    `/${BASE_VERSION}${extension}`,
+                ],
             "status --install retried failed acquisition",
         );
         root.harness.require(

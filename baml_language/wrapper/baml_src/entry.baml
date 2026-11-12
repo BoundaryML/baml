@@ -39,7 +39,7 @@ function help(command: string = "") -> null {
         baml.io.println("Options: -h, --help");
         if (command == "status") {
             baml.io.println(
-                "Emit the active selector, concrete version, source, paths and installation state as JSON. --install installs an absent managed toolchain first.",
+                "Emit the active selector, concrete version, source, paths and installation state as JSON. Status attempts to install an absent managed toolchain; --install makes acquisition failure fatal.",
             );
         }
         return null;

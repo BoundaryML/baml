@@ -139,9 +139,9 @@ enum ToolchainCommand {
         #[arg(long)]
         force: bool,
     },
-    /// Check the active selection and available releases.
+    /// Prepare the active selection and check available releases.
     Status {
-        /// Install the selected managed toolchain if it is absent.
+        /// Require installation to succeed instead of warning on acquisition failure.
         #[arg(long)]
         install: bool,
         /// Emit structured resolution and available releases as JSON.
@@ -1771,6 +1771,14 @@ fn status_toolchain(
     install: bool,
     json: bool,
 ) -> Result<()> {
+    // Plain status attempts preparation once, but acquisition failure is advisory.
+    // --install instead makes the same preparation a required part of resolution.
+    if !install {
+        let selected = active_selector(paths)?;
+        if let Err(error) = ensure_selected_toolchain(&selected, override_url) {
+            eprintln!("warning: could not ensure active baml-cli is installed: {error:#}");
+        }
+    }
     let resolution = resolve_toolchain(paths, install, override_url)?;
     let mut releases = BTreeMap::new();
     if resolution.managed {
