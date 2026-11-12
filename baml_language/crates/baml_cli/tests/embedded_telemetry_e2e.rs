@@ -951,6 +951,20 @@ function main() -> void {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt as _;
+        let signaled_child = temp.path().join("signaled-child");
+        std::fs::write(&signaled_child, "#!/bin/sh\nkill -TERM $$\n").unwrap();
+        std::fs::set_permissions(&signaled_child, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let output = local(&binary)
+            .arg("check")
+            .env("BAML_TOOLCHAIN", &signaled_child)
+            .env("BAML_TELEMETRY", "medium")
+            .env(
+                "BAML_CONTEXT",
+                json!({"metadata": {"scenario": "signal"}}).to_string(),
+            )
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(143), "{output:?}");
         let invalid_binary = temp.path().join("launch-failure-sentinel");
         // A missing shebang interpreter guarantees a spawn error; a plain
         // invalid executable may be launched through the platform shell.
@@ -1240,6 +1254,20 @@ function main() -> void {
     );
     #[cfg(unix)]
     {
+        let signaled = span("signal", "user.run_toolchain");
+        assert_eq!(signaled[0], "return");
+        assert_eq!(signaled[2]["$class"], "baml.sys.ProcessExit");
+        assert_eq!(signaled[2]["exit_code"], 143);
+        assert_eq!(signaled[2]["signal"], 15);
+        assert_eq!(signaled[4], "no_value");
+        assert_eq!(signaled[7], "baml check");
+        assert_eq!(span("signal", "user.dispatch")[0], "cancel_error");
+        assert_eq!(
+            query(
+                "SELECT DISTINCT status FROM processes WHERE context_metadata['scenario'] = 'signal'"
+            ),
+            json!([["error"]])
+        );
         let panicked = span("panic", "user.dispatch");
         assert_eq!(panicked[0], "panic_error");
         assert_eq!(
