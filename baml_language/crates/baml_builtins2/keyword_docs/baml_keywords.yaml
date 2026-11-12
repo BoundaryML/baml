@@ -1262,7 +1262,10 @@ query:
     ended process: invocations, outcomes, total/self/I/O time). Value columns
     support ordinary subscripts and comparisons —
     `input_args['customer']['age'] >= 30`,
-    `input_args = baml_value_json('{"x":1}')` — decoded on demand. `WITH
+    `input_args = baml_value_json('{"x":1}')` — decoded on demand. An image,
+    audio, pdf or video value is described without its content
+    (`{"$media", "mime", "base64_len"}`); `['base64']` on it reads the content
+    as base64 text. `WITH
     RECURSIVE` walks span trees through `parent_span_id`. Discovery:
     `baml local recordings schema [TABLE]`. Output: `--output-format
     text|json|jsonl` (jsonl ends with an outcome frame). `baml cloud
