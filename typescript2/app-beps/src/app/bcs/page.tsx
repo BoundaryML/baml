@@ -27,7 +27,12 @@ export default async function BcsProposals() {
             <span className="text-muted-foreground">/</span>
             <h1 className="text-2xl font-bold">BCS design proposals</h1>
           </div>
-          <span className="text-sm text-muted-foreground">Team only · {viewer.login}</span>
+          <span className="text-sm text-muted-foreground">
+            Team only · {viewer.login} ·{" "}
+            <Link href="/bcs/token" className="underline hover:text-foreground">
+              CLI token
+            </Link>
+          </span>
         </div>
       </header>
       <main className="max-w-[1600px] mx-auto px-4 py-8 space-y-6">
