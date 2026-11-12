@@ -55,7 +55,7 @@ fn wrapper_closed_output_exits_141_without_traceback() {
     for args in [vec!["--help"], vec!["--version"], vec!["toolchain", "list"]] {
         let output = command(&binary, temp.path())
             .args(&args)
-            .env("BAML_TOOLCHAIN", &common::baml_cli())
+            .env("BAML_TOOLCHAIN", common::baml_cli())
             .stdout(closed_pipe())
             .output()
             .unwrap();
@@ -109,7 +109,7 @@ fn wrapper_closed_output_exits_141_without_traceback() {
     assert!(status.success());
     let mut child = command(&binary, temp.path())
         .args(["toolchain", "list"])
-        .env("BAML_TOOLCHAIN", &common::baml_cli())
+        .env("BAML_TOOLCHAIN", common::baml_cli())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
