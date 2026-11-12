@@ -1,3 +1,4 @@
+import { isoPostDate } from './format';
 import type { Post } from './get-posts';
 
 // How the blog index sorts and filters posts. A post's topics come from its frontmatter tags, which
@@ -49,29 +50,15 @@ export function isListed(post: Post) {
   return Boolean(post.isPublished) && !post.archived;
 }
 
-/** How far back the blog index goes, in months. */
-const INDEX_MONTHS = 2;
+/** The first date the blog index shows: posts dated before it are left off. It is a fixed date,
+ *  not a rolling window, so the index never empties as time passes. Move it by hand to hide or
+ *  show more. */
+const INDEX_SINCE = '2026-09-12';
 
-/** Whether a post shows on the blog index: a listed post from the last INDEX_MONTHS months. Older
- *  posts keep their URLs and stay in the feed and in "Read next"; only the index leaves them out. */
-export function isOnIndex(post: Post, now = new Date()) {
-  return (
-    isListed(post) && new Date(post.date) >= monthsBefore(now, INDEX_MONTHS)
-  );
-}
-
-/** The same day and time `months` months before `date`. When that month is shorter, it is the
- *  month's last day: two months before April 30 is February 28, not March 2, which is where
- *  `setMonth` alone lands by rolling the extra days forward. */
-function monthsBefore(date: Date, months: number) {
-  const out = new Date(date);
-  const day = out.getDate();
-  // Move to the 1st first, so changing the month can't overflow.
-  out.setDate(1);
-  out.setMonth(out.getMonth() - months);
-  const lastDay = new Date(out.getFullYear(), out.getMonth() + 1, 0).getDate();
-  out.setDate(Math.min(day, lastDay));
-  return out;
+/** Whether a post shows on the blog index: a listed post dated INDEX_SINCE or later. Older posts
+ *  keep their URLs and stay in the feed and in "Read next"; only the index leaves them out. */
+export function isOnIndex(post: Post) {
+  return isListed(post) && isoPostDate(post.date) >= INDEX_SINCE;
 }
 
 /** Launch Week is six short posts in one week of January 2025, listed as one group. */

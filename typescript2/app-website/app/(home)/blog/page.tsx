@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 // `featured: true`), the latest release notes, and the articles by date, Engineering by default. A
 // filter (`?tags=research`, `?tags=release`, `?tags=all` for everything, ...) changes only that last
 // list; the sections above it stay. /changelog redirects to `?tags=release`. Archived posts aren't
-// listed, and neither are posts more than two months old (isOnIndex in ./_lib/topics).
+// listed, and neither are posts from before a fixed cutoff date (INDEX_SINCE in ./_lib/topics).
 
 type Filter = 'all' | 'release' | Topic;
 
@@ -300,8 +300,7 @@ export default async function BlogIndex({
 }) {
   const { tags } = await searchParams;
   const selected = readFilter(tags);
-  const now = new Date();
-  const posts = (await getPosts()).filter((p) => isOnIndex(p, now));
+  const posts = (await getPosts()).filter(isOnIndex);
   const articles = posts.filter((p) => p.type === 'article');
   const releases = posts.filter((p) => p.type === 'release');
 
