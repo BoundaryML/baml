@@ -55,3 +55,13 @@ pub const OWNED_SPAN_FORMAT_MINOR: u32 = 12;
 /// (`FunctionCompletion.usage`, `ThreadCompletion.usage`), and function
 /// metadata marks model invoke functions (`FunctionMetadata.model_invoke`).
 pub const MODEL_USAGE_FORMAT_MINOR: u32 = 13;
+
+/// Log events carry the source line of the log call (`LogEvent.line`), so a
+/// reader that has not seen the emitting function's definition, which a
+/// recording publishes once, can still place the event in its file.
+pub const LOG_LINE_FORMAT_MINOR: u32 = 14;
+
+/// A thread's completion carries the error the thread ended with
+/// (`ThreadCompletion.error_cas_id`), so a failed future, a failed root call
+/// among them, says what it failed with as a failed function span does.
+pub const THREAD_ERROR_FORMAT_MINOR: u32 = 14;

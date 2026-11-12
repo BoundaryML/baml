@@ -177,6 +177,7 @@ fn thread_done(ticks: u64, outcome: proto::InvocationOutcome, panicked: bool) ->
         outcome: outcome as i32,
         panicked,
         usage: Vec::new(),
+        error_cas_id: None,
     })
 }
 
@@ -901,6 +902,7 @@ fn self_usage_is_an_invokes_own_and_total_usage_sums_the_tree() {
                     outcome: proto::InvocationOutcome::Ok as i32,
                     panicked: false,
                     usage: vec![usage(Some("some-new-model"), 10, None, None)],
+                    error_cas_id: None,
                 }),
             ],
         )],
