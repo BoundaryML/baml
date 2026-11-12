@@ -193,7 +193,7 @@ crossbeam-channel = { version = "0.5" }
 derive_more = { version = "2.1.1", features = [ "from" ] }
 dirs = "7.0.0"
 dunce = "1.0.5"
-divan = { package = "codspeed-divan-compat", version = "*" }
+divan = "0.1.21"
 # Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
 # crate rustc and rust-analyzer build their inference tables on.
 ena = "0.14"
@@ -375,7 +375,6 @@ unsafe_code = "warn"
 unreachable_pub = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
   "cfg(fuzzing)",
-  "cfg(codspeed)",
   # Reserved for concurrency model-checked builds.
   "cfg(baml_loom)",
 ] }

@@ -78,7 +78,7 @@ enum Command {
     /// Aggregate multiple JSON report files into a unified markdown report.
     ///
     /// Reads JSON files produced by `check --format json` and renders
-    /// a single CodSpeed-style markdown report suitable for PR comments.
+    /// a single markdown report suitable for PR comments.
     Agg {
         /// JSON report files to aggregate.
         files: Vec<PathBuf>,

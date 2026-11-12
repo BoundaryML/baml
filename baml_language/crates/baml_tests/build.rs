@@ -31,7 +31,7 @@ fn main() {
     // Generate tests
     generate_tests(&manifest_dir);
 
-    // Generate CodSpeed benches from the tools/speedtest workloads.
+    // Generate divan benches from the tools/speedtest workloads.
     generate_speedtest_benches(&manifest_dir);
 }
 
@@ -50,9 +50,8 @@ fn main() {
 // exact same `speedtest.loader` logic the harness itself uses — so there is a
 // single source of truth for what a workload is. We shell out to `python3` once and read back JSON.
 //
-// The generated functions are named `vm_speedtest_<slug>` so they are picked up
-// by the same `vm_` CodSpeed filter as the hand-written VM benches, and are
-// `include!`d into runtime_benchmark.rs after `bench_vm_main` is in scope.
+// The generated functions are named `vm_speedtest_<slug>` and are `include!`d
+// into runtime_benchmark.rs after `bench_vm_main` is in scope.
 //
 // This step degrades gracefully: if `python3` or the workloads are unavailable
 // (e.g. a minimal build environment), it emits an empty file and a warning
