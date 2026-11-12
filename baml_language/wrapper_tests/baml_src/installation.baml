@@ -615,7 +615,11 @@ testset "toolchain installation" {
                 let fixture = root.harness.Fixture.start();
                 defer { fixture.close(); }
                 fixture.project(BASE_VERSION);
-                fixture.absent(BASE_VERSION);
+                let forced = args.includes("--force");
+                if (!forced) {
+                    fixture.absent(BASE_VERSION);
+                }
+                let installed: string[] = if (forced) { fixture.tree(`baml/toolchains/${BASE_VERSION}`) } else { [] };
                 fixture.release(BASE_VERSION, "non-executable-cli");
                 let state = fixture.read(CHANNEL_STATE_FILE);
                 let project = fixture.read(PROJECT_MANIFEST_FILE);
@@ -631,6 +635,12 @@ testset "toolchain installation" {
                         && fixture.read(USER_CONFIG_FILE) == config,
                     "invalid executable changed configuration",
                 );
+                if (forced) {
+                    root.harness.require(fixture.tree(`baml/toolchains/${BASE_VERSION}`) == installed, "failed forced replacement changed the working installation");
+                    fixture.check(candidate, BASE_VERSION);
+                } else {
+                    root.harness.require(!baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}`), "invalid executable was published");
+                }
             }
         }
 

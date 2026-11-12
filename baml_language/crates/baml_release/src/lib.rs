@@ -246,12 +246,13 @@ impl Fetcher {
         fs::create_dir_all(root)?;
         let _lock = InstallLock::acquire(&root.join(format!(".{}.lock", self.spec.version)))?;
         let install_dir = root.join(&self.spec.version);
+        let windows_target = self.spec.target.ends_with("windows-msvc");
+        let binary = if windows_target {
+            "baml-cli.exe"
+        } else {
+            "baml-cli"
+        };
         if entry_exists(&install_dir)? && !force {
-            let binary = if self.spec.target.ends_with("windows-msvc") {
-                "baml-cli.exe"
-            } else {
-                "baml-cli"
-            };
             if fs::read_to_string(install_dir.join("VERSION"))
                 .map(|v| v.trim() == self.spec.version)
                 .unwrap_or(false)
@@ -269,6 +270,27 @@ impl Fetcher {
             .prefix(&format!(".{}-", self.spec.version))
             .tempdir_in(root)?;
         extract_archive_to_dir(&archive, &self.artifact_url(), staging.path())?;
+        // Validate the requested executable before publication can remove a usable
+        // installation. The archive layout checks already reject links and unsafe paths.
+        let cli = staging.path().join("bin").join(binary);
+        let cli_metadata = fs::metadata(&cli)?;
+        if !cli_metadata.is_file() {
+            return Err(FetchError::InvalidManifest(format!(
+                "toolchain binary is not a file: {}",
+                cli.display()
+            )));
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            if !windows_target && cli_metadata.permissions().mode() & 0o111 == 0 {
+                return Err(FetchError::InvalidManifest(format!(
+                    "toolchain binary is not executable: {}",
+                    cli.display()
+                )));
+            }
+        }
         let metadata = staging.path().join("VERSION");
         if metadata.exists() && fs::read_to_string(&metadata)?.trim() != self.spec.version {
             return Err(FetchError::InvalidManifest(
