@@ -231,6 +231,23 @@ pub async fn record_program_calls(
     calls: Vec<(&str, Vec<bex_engine::BexCallArg>)>,
     config: RecordingConfig,
 ) -> Vec<Result<BexExternalValue, String>> {
+    record_program_into(
+        TelemetryRecording::local_files(project, config),
+        source,
+        captured,
+        calls,
+    )
+    .await
+}
+
+/// `record_program_calls` into a recording the caller configured, e.g. one
+/// that carries the project's sources.
+pub async fn record_program_into(
+    recording: TelemetryRecording,
+    source: &str,
+    captured: &[&str],
+    calls: Vec<(&str, Vec<bex_engine::BexCallArg>)>,
+) -> Vec<Result<BexExternalValue, String>> {
     let mut program = baml_test_support::compile_source(source);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
@@ -249,7 +266,7 @@ pub async fn record_program_calls(
             vec![],
             None,
             btel_clock::ClockMode::Monotonic,
-            TelemetryRecording::local_files(project, config),
+            recording,
         )
         .expect("engine"),
     );

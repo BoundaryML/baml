@@ -386,6 +386,23 @@ struct EventRow {
     payload_cas: Option<[u8; 16]>,
 }
 
+/// One log event, in recording order by `(sequence, position)`.
+struct LogRow {
+    sequence: u64,
+    position: u32,
+    thread: u64,
+    parent: u64,
+    function: u64,
+    pc: u32,
+    at: Option<i64>,
+    level: i32,
+    event_name: Option<String>,
+    data_cas: Option<[u8; 16]>,
+    context_state: i64,
+    context_cas: Option<[u8; 16]>,
+    line: Option<u32>,
+}
+
 /// One recording's facts, merged in memory.
 #[derive(Default)]
 pub(super) struct Bulk {
@@ -411,6 +428,8 @@ pub(super) struct Bulk {
     usage: BTreeMap<u64, Vec<crate::usage::ModelUsage>>,
     network_spans: FxHashMap<u64, NetworkRow>,
     network_events: Vec<EventRow>,
+    /// Files apply in sequence order, so these stay in key order.
+    logs: Vec<LogRow>,
     /// The first header that names the process, and how it ended.
     process: Option<proto::RecordingHeader>,
     process_end: Option<proto::ProcessEnd>,
@@ -632,8 +651,9 @@ impl Bulk {
             }
         }
         if let Some(spans) = &file.spans {
-            // Each network event's position among the file's.
+            // Each network event's position among the file's, and each log's.
             let mut network_events = 0_u32;
+            let mut logs = 0_u32;
             for section in &spans.sections {
                 self.refer_thread(section.thread_id);
                 for event in &section.events {
@@ -735,8 +755,24 @@ impl Bulk {
                             self.completion(sequence, section.thread_id, done, true, &mut tick);
                         }
                         Some(Event::Log(log)) => {
-                            // Preserve file time coverage without inventing a call row.
-                            let _ = tick(log.at_ticks);
+                            self.refer_function(log.function_id);
+                            let (context_state, context_cas) = super::context::of_section(section);
+                            self.logs.push(LogRow {
+                                sequence,
+                                position: logs,
+                                thread: section.thread_id,
+                                parent: log.parent_id,
+                                function: log.function_id,
+                                pc: log.pc,
+                                at: tick(log.at_ticks),
+                                level: log.level,
+                                event_name: log.event_name.clone(),
+                                data_cas: log.data_cas_id.as_ref().map(cas_id),
+                                context_state,
+                                context_cas,
+                                line: log.line,
+                            });
+                            logs += 1;
                         }
                         Some(Event::NetworkAnnouncement(entry)) => {
                             let path = (entry.call_path_id != 0).then_some(entry.call_path_id);
@@ -1097,6 +1133,7 @@ impl Bulk {
         self.network_events
             .sort_unstable_by_key(|event| (event.span, event.sequence, event.position));
         self.write_network_events(tx, rec)?;
+        with_indexes_deferred(tx, "log", self.logs.len(), || self.write_logs(tx, rec))?;
         let mut insert = tx.prepare_cached(
             "INSERT INTO issue (rec, sequence, code, subject, detail) VALUES (?1, ?2, ?3, ?4, ?5)",
         )?;
@@ -1717,6 +1754,49 @@ impl Bulk {
                 b.bind(&event.name)?;
                 b.bind(event.at)?;
                 b.bind(event.payload_cas)
+            },
+        )
+    }
+
+    /// Logs in key order, and the context snapshots they name.
+    fn write_logs(&self, tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+        let seqs: Vec<i64> = self
+            .logs
+            .iter()
+            .map(|log| event_seq(log.sequence, log.position))
+            .collect::<Result<_, _>>()?;
+        let mut snapshot =
+            tx.prepare_cached("INSERT OR IGNORE INTO context_snapshot (cas) VALUES (?1)")?;
+        let mut previous = None;
+        for cas in self.logs.iter().filter_map(|log| log.context_cas) {
+            // Consecutive logs of one section share its context.
+            if previous != Some(cas) {
+                snapshot.execute([cas])?;
+                previous = Some(cas);
+            }
+        }
+        let rows: Vec<usize> = (0..self.logs.len()).collect();
+        insert_rows(
+            tx,
+            "log (rec, seq, thread_id, parent_id, function_id, pc, at_ticks, level, event_name,
+               data_cas, context_state, context_cas, line)",
+            13,
+            &rows,
+            |b, at| {
+                let log = &self.logs[at];
+                b.bind(rec)?;
+                b.bind(seqs[at])?;
+                b.bind(id(log.thread))?;
+                b.bind(id(log.parent))?;
+                b.bind(id(log.function))?;
+                b.bind(i64::from(log.pc))?;
+                b.bind(log.at)?;
+                b.bind(log.level)?;
+                b.bind(&log.event_name)?;
+                b.bind(log.data_cas)?;
+                b.bind(log.context_state)?;
+                b.bind(log.context_cas)?;
+                b.bind(log.line.map(i64::from))
             },
         )
     }

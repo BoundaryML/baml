@@ -1247,6 +1247,8 @@ query:
                                  FROM spans WHERE input_args['customer']['age'] >= 30" --output-format jsonl
     baml local recordings query "SELECT span_name, total_usage[0]['model'], total_usage[0]['input_tokens']
                                  FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL"
+    baml local recordings query "SELECT timestamp, level, event_name, data, function_name, line
+                                 FROM logs WHERE level IN ('warn', 'error') ORDER BY timestamp"
     baml local recordings schema spans
   details: |
     Every `baml run`/`baml test` records to `.baml/btel`; the first query
@@ -1258,7 +1260,10 @@ query:
     the error that escaped a failed future), `self_usage` (the model usage
     of the calls an `ai.Client.invoke` span made) and `total_usage` (every
     call under a span, one entry per model with its token counts) are BAML values), `span_announcements` (every
-    started span), and `profiler` (one row per calling-context node of an
+    started span), `logs` (one row per `log.*` event: its level, name, `data`
+    value, the function and line that logged, and the span it ran under),
+    `functions` (the definitions a recording carried, with their source file
+    and byte offsets), and `profiler` (one row per calling-context node of an
     ended process: invocations, outcomes, total/self/I/O time, the
     process's `process_start_time` and `process_end_time`, which bound code
     paths by time without a join, and its `baml_source_code_content_id`,
