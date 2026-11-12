@@ -23,6 +23,7 @@ class UnknownManagementCommand {
     }
 }
 
+// Preflight only validates prerequisites; acquisition belongs to the requested operation.
 interface ManagementCommand {
     function preflight(self, invocation: WrapperInvocation) -> null throws WrapperFailure;
     function execute(self, invocation: WrapperInvocation) -> null throws WrapperFailure;
@@ -33,7 +34,7 @@ class UseCommand {
     global: bool,
 
     implements ManagementCommand {
-        // Selection performs its write preflight before the best-effort install.
+        // Selection validates its write destination before acquiring only the requested target.
         function preflight(self, invocation: WrapperInvocation) -> null {
             null
         }
@@ -52,10 +53,10 @@ class InstallCommand {
             if let requested: string = self.selector {
                 validate_selector(requested);
             }
-            invocation.best_effort_install()
+            null
         }
         function execute(self, invocation: WrapperInvocation) -> null {
-            let requested = self.selector ?? invocation.install_selector();
+            let requested = self.selector ?? invocation.selection().selector.to_string();
             if (channel(requested)) {
                 requested = ChannelState.new().recorded(requested) ?? requested;
             }
@@ -77,7 +78,7 @@ class UpdateCommand {
             if (invocation.selection().selector is ChannelSelector) {
                 ChannelState.new().validate();
             }
-            invocation.best_effort_install()
+            null
         }
         function execute(self, invocation: WrapperInvocation) -> null {
             invocation.update()
@@ -91,7 +92,7 @@ class StatusCommand {
 
     implements ManagementCommand {
         function preflight(self, invocation: WrapperInvocation) -> null {
-            invocation.best_effort_install()
+            null
         }
 
         function execute(self, invocation: WrapperInvocation) -> null {
@@ -103,7 +104,7 @@ class StatusCommand {
 class ListCommand {
     implements ManagementCommand {
         function preflight(self, invocation: WrapperInvocation) -> null {
-            invocation.best_effort_install()
+            null
         }
 
         function execute(self, invocation: WrapperInvocation) -> null {
@@ -117,7 +118,7 @@ class UninstallCommand {
 
     implements ManagementCommand {
         function preflight(self, invocation: WrapperInvocation) -> null {
-            invocation.best_effort_install()
+            null
         }
 
         function execute(self, invocation: WrapperInvocation) -> null {

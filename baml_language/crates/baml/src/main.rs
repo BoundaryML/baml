@@ -139,9 +139,9 @@ enum ToolchainCommand {
         #[arg(long)]
         force: bool,
     },
-    /// Check the active selection and available releases.
+    /// Prepare the active selection and check available releases.
     Status {
-        /// Install the selected managed toolchain if it is absent.
+        /// Require installation to succeed instead of warning on acquisition failure.
         #[arg(long)]
         install: bool,
         /// Emit structured resolution and available releases as JSON.
@@ -150,7 +150,7 @@ enum ToolchainCommand {
     },
     /// Advance the resolved machine channel.
     Update,
-    /// Show the local inventory after attempting active-toolchain installation.
+    /// Show the local inventory without installing a toolchain.
     List,
     /// Remove a concrete version, preserving selectors and channel mappings.
     Uninstall { version: String },
@@ -433,7 +433,13 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
 fn print_version(paths: &InvocationPaths, flag: &str) -> Result<i32> {
     println!("baml wrapper {}", env!("CARGO_PKG_VERSION"));
     std::io::stdout().flush()?;
-    pass_through(vec![flag.to_string()], paths)
+    match pass_through(vec![flag.to_string()], paths) {
+        Ok(exit_code) => Ok(exit_code),
+        Err(error) => {
+            eprintln!("warning: could not report selected baml-cli version: {error:#}");
+            Ok(0)
+        }
+    }
 }
 
 fn toolchain_use_command(selector: &ResolvedSelector, value: &str) -> String {
@@ -539,10 +545,8 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
         Err(error) => return Err(error.into()),
     };
     let base = None;
-    // Every non-help management command attempts active installation, including
-    // status; --install makes an installation failure fatal instead of advisory.
-    // Selection writes validate their complete documents inside the operation,
-    // before even the best-effort installation can make changes.
+    // Preflight only validates prerequisites. Each operation acquires its own
+    // target, if needed, without first installing the active toolchain.
     match &parsed.command {
         ToolchainCommand::Use { .. } => {}
         ToolchainCommand::Update => {
@@ -550,20 +554,19 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
             if is_channel(&selected.selector) {
                 preflight_state()?;
             }
-            best_effort_install(paths, base);
         }
         ToolchainCommand::Install {
             selector: Some(selector),
             ..
         } => {
             validate_selector(selector)?;
-            best_effort_install(paths, base);
         }
         ToolchainCommand::Uninstall { version } => {
             validate_version(version)?;
-            best_effort_install(paths, base);
         }
-        _ => best_effort_install(paths, base),
+        ToolchainCommand::Install { selector: None, .. }
+        | ToolchainCommand::Status { .. }
+        | ToolchainCommand::List => {}
     }
     match parsed.command {
         ToolchainCommand::Use { selector, global } => {
@@ -574,65 +577,33 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
             }
         }
         ToolchainCommand::Install { selector, force } => {
-            if let Some(selector) = selector {
-                let selector = if is_channel(&selector) && read_channel(&selector)?.is_some() {
-                    concrete_version_for_selector_with_base(
-                        &ResolvedSelector {
-                            selector,
-                            source: SelectorSource::Config,
-                        },
-                        &manifest_base_url(base),
-                    )?
+            // Omission resolves a target through the same selector precedence as
+            // delegation; both explicit and resolved targets use one install path.
+            let activate_channel = selector.is_none();
+            let selected = match selector {
+                Some(selector) => ResolvedSelector {
+                    selector,
+                    source: SelectorSource::Config,
+                },
+                None => active_selector(paths)?,
+            };
+            let requested =
+                if is_channel(&selected.selector) && read_channel(&selected.selector)?.is_some() {
+                    concrete_version_for_selector_with_base(&selected, &manifest_base_url(base))?
                 } else {
-                    selector
+                    selected.selector
                 };
-                install_toolchain(&selector, false, base, force)
-            } else {
-                let selected = active_selector(paths)?;
-                anyhow::ensure!(
-                    !is_path_selector(&selected.selector),
-                    "active toolchain is a local path; there is nothing to install"
-                );
-                if force {
-                    let concrete = concrete_version_for_selector_with_base(
-                        &selected,
-                        &manifest_base_url(base),
-                    )
-                    .or_else(|error| {
-                        if is_channel(&selected.selector)
-                            && read_channel(&selected.selector)?.is_none()
-                        {
-                            Ok(selected.selector.clone())
-                        } else {
-                            Err(error)
-                        }
-                    })?;
-                    install_toolchain(&concrete, is_channel(&concrete), base, true)
-                } else {
-                    ensure_selected_toolchain(&selected, base).map(|_| ())
-                }
-            }
+            install_toolchain(
+                &requested,
+                activate_channel && is_channel(&requested),
+                base,
+                force,
+            )
         }
         ToolchainCommand::Status { install, json } => status_toolchain(base, paths, install, json),
         ToolchainCommand::Update => update_toolchain(base, paths),
         ToolchainCommand::List => list_toolchains(paths),
         ToolchainCommand::Uninstall { version } => uninstall_toolchain(&version),
-    }
-}
-
-fn best_effort_install(paths: &InvocationPaths, override_url: Option<&str>) {
-    let result = (|| -> Result<()> {
-        let selected = active_selector(paths)?;
-        if let Some(cli) = path_selector(&selected.selector) {
-            let origin = path_selector_origin(&selected.source);
-            verify_path_toolchain(cli, &origin)?;
-            reject_self_exec(cli, &origin)
-        } else {
-            ensure_selected_toolchain(&selected, override_url).map(|_| ())
-        }
-    })();
-    if let Err(error) = result {
-        eprintln!("warning: could not ensure active baml-cli is installed: {error:#}");
     }
 }
 
@@ -1657,7 +1628,6 @@ fn use_toolchain_impl(
     validate_selector(&selector)?;
     updated_user_config(&selector)?;
     preflight_selector_install(&selector, override_url)?;
-    best_effort_install(paths, override_url);
     prepare_toolchain_selector(&selector, &paths.directory, override_url)?;
     // Reapply the selector to the latest validated document after downloads.
     write_text_atomic(&config_path(), &updated_user_config(&selector)?)?;
@@ -1714,7 +1684,6 @@ fn pin_toolchain_impl(
 
     validate_project(&updated)?;
     preflight_selector_install(&normalized_selector, override_url)?;
-    best_effort_install(paths, override_url);
     let selector = prepare_toolchain_selector(&normalized_selector, base, override_url)?;
     let content = fs::read_to_string(&manifest_path)
         .with_context(|| format!("failed to read {}", manifest_path.display()))?;
@@ -1808,6 +1777,16 @@ fn status_toolchain(
     install: bool,
     json: bool,
 ) -> Result<()> {
+    // Plain status attempts preparation once, but acquisition failure is advisory.
+    // --install instead makes the same preparation a required part of resolution.
+    if !install {
+        let selected = active_selector(paths)?;
+        if !is_path_selector(&selected.selector) {
+            if let Err(error) = ensure_selected_toolchain(&selected, override_url) {
+                eprintln!("warning: could not ensure active baml-cli is installed: {error:#}");
+            }
+        }
+    }
     let resolution = resolve_toolchain(paths, install, override_url)?;
     let mut releases = BTreeMap::new();
     if resolution.managed {
