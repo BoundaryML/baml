@@ -204,16 +204,7 @@ fn canonical_command(args: &[String]) -> &'static str {
         if matches!(arg.as_str(), "--" | "--help" | "-h") {
             break;
         }
-        if matches!(
-            arg.as_str(),
-            "--project-dir"
-                | "--output-format"
-                | "--output-preset"
-                | "--color"
-                | "--hyperlinks"
-                | "--diagnostic-format"
-                | "--agent-skill-check"
-        ) {
+        if arg == "--project-dir" || crate::CLI_VALUE_OPTIONS.contains(&arg.as_str()) {
             index += 2;
         } else if arg.starts_with('-') {
             index += 1;

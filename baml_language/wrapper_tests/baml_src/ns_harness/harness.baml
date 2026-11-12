@@ -541,6 +541,15 @@ class ResolutionResult {
     }
 }
 
+class InventoryResult {
+    schema_version: int,
+    default_selector: string,
+    active_selector: string,
+    source: string,
+    channels: map<string, string>,
+    installed: string[],
+}
+
 // Fixture corruption modes are wire values accepted by fixture.py.
 type FixtureReleaseMode = "valid"
     | "missing-cli"

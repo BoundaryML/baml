@@ -1,6 +1,6 @@
 class WrapperInvocation {
     telemetry: WrapperTelemetry?,
-    args: string[],
+    matches: root.clap.Matches,
     directory: string,
     project: string,
 
@@ -212,7 +212,7 @@ class WrapperInvocation {
         null
     }
 
-    function status(self, install_missing: bool, json: bool) -> null {
+    function status(self, install_missing: bool, format: OutputFormat) -> null {
         let result = self.resolve(install_missing);
         if (result.managed) {
             let channels = if (channel(result.selector)) {
@@ -225,7 +225,7 @@ class WrapperInvocation {
                 result.available_releases[name] = release.version;
             }
         }
-        if (json) {
+        if (format == OutputFormat.Json) {
             baml.io.println(baml.json.stringify(result));
             return null;
         }
@@ -267,45 +267,14 @@ class WrapperInvocation {
         null
     }
 
-    function list_toolchains(self) -> null {
-        let config = document(config_path());
-        let defaults = "canary";
-        if let table: baml.toml.Table = table_at(config, "default", config_path()) {
-            defaults = string_at(table, "selector", config_path()) ?? "canary";
-        }
-        let active = self.selection();
-        baml.io.println(`default selector: ${defaults}`);
-        baml.io.println(`active selector: ${active.selector.to_string()} (${active.source})`);
-        let state = document(state_path());
-        if let channels: baml.toml.Table = table_at(state, "channels", state_path()) {
-            for (let name in channels.items.keys().sort()) {
-                if let entry: baml.toml.Table = table_at(channels, name, state_path()) {
-                    let concrete = string_at(entry, "active_version", state_path()) ?? "";
-                    version(concrete);
-                    baml.io.println(`${name}: ${concrete}`);
-                }
-            }
-        }
-        let installed: string[] = if (baml.fs.exists(toolchains())) {
-            baml.fs.read_dir(toolchains())
-                .filter((entry) -> bool {
-                    entry.is_dir && !entry.name.starts_with(".")
-                })
-                .map((entry) -> string {
-                    entry.name
-                })
-        } else {
-            []
-        };
-        if (!installed) {
-            baml.io.println("installed toolchains: (none)");
-        } else {
-            baml.io.println("installed toolchains:");
-            for (let value in installed.sort()) {
-                baml.io.println(`  ${value}`);
-            }
-        }
-        baml.io.println("Remote versions were not checked.");
+    function list_toolchains(self, format: OutputFormat) -> null {
+        let inventory = ToolchainInventory.read(self.selection());
+        baml.io.println(
+            match (format) {
+                OutputFormat.Json => baml.json.stringify(inventory),
+                OutputFormat.Text => inventory.to_string(),
+            },
+        );
         null
     }
 
@@ -317,32 +286,24 @@ class WrapperInvocation {
         baml.sys.exit(result.exit_code)
     }
 
-    function management(self, args: string[]) -> null {
-        if (
-            args.some((arg) -> bool {
-                arg == "--help" || arg == "-h"
-            })
-        ) {
-            help(
-                command = if (args.length() > 0) {
-                    args[0]
-                } else {
-                    ""
-                },
-            );
-            return null;
-        }
-        if (args.length() == 0 || args == ["--help"] || args == ["-h"] || args == ["help"]) {
-            help();
-            return null;
-        }
-        if (args[0] == "help") {
-            help(command = args.at(1) ?? "");
-            return null;
-        }
-        let command = management_command(args);
+    function manage(self, command: ManagementCommand) -> null {
         command.preflight(self, $trace = trace.span(inputs = false, output = false, error = false));
         command.execute(self, $trace = trace.span(inputs = false, output = false, error = false))
+    }
+
+    // Hands the invocation to the selected toolchain's CLI, tokens untouched.
+    function launch(self, forwarded: string[]) -> never {
+        let active = self.selection();
+        let binary = active.ensure_installed(telemetry = self.telemetry);
+        let warned = active.warn_if_outdated();
+        let refresh = spawn { active.refresh_channel() };
+        WrapperTelemetry.finish(self.telemetry);
+        let result = baml.sys.run(binary, args = forwarded, env = { "BAML_CLI_ALLOW_DIRECT": "1" });
+        await refresh;
+        if (!warned) {
+            active.warn_if_outdated();
+        }
+        baml.sys.exit(result.exit_code)
     }
 
     function install_selector(self) -> string {
@@ -358,65 +319,18 @@ class WrapperInvocation {
         active.selector.to_string()
     }
 
-    function parse(raw: string[]) -> WrapperInvocation {
-        let project: string? = null;
-        let command = "";
-        let args: string[] = [];
-        let index = 0;
-        while (index < raw.length()) {
-            let arg = raw[index];
-            if (arg == "--") {
-                args = args.concat(raw.slice(index, raw.length()));
-                break;
-            }
-            // `--project-dir` is always the local path; `baml cloud ... --project`
-            // is a cloud handle the wrapper never reads.
-            let flag = if (arg == "--project-dir" || arg.starts_with("--project-dir=")) {
-                "--project-dir"
-            } else {
-                ""
-            };
-            if (
-                !command
-                    && [
-                        "--output-format",
-                        "--output-preset",
-                        "--color",
-                        "--hyperlinks",
-                        "--diagnostic-format",
-                        "--agent-skill-check",
-                    ]
-                        .includes(arg)
-            ) {
-                args.push(arg);
-                index += 1;
-                if (index < raw.length()) {
-                    args.push(raw[index]);
-                }
-                index += 1;
-                continue;
-            }
-            if (flag) {
-                let value = "";
-                if (arg.starts_with(`${flag}=`)) {
-                    value = arg.slice(flag.length() + 1, arg.length());
-                } else {
-                    index += 1;
-                    ensure(index < raw.length(), `${flag} requires a path`);
-                    value = raw[index];
-                    ensure(!value.starts_with("-"), `${flag} requires a path`);
-                }
-                ensure(value != "", `${flag} requires a path`);
-                ensure(project == null, "--project-dir may only be supplied once");
-                project = value;
-            } else {
-                if (!command && !arg.starts_with("-")) {
-                    command = arg;
-                }
-                args.push(arg);
-            }
-            index += 1;
-        }
+    // Reads the command line and where it runs: the working directory,
+    // and the project `--project-dir` names or the working directory
+    // when it names none. A request for help is returned, not thrown,
+    // since it is an ordinary outcome of parsing.
+    function parse(raw: string[]) -> WrapperInvocation | root.clap.DisplayHelp {
+        let matches = WrapperCli.spec().parse(raw) catch (help) {
+            root.clap.DisplayHelp => {
+                return help;
+            },
+        };
+        let project = matches.get(PROJECT_DIR);
+        ensure(project != "", `--${PROJECT_DIR} requires a path`);
         let cwd = baml.sys.current_dir();
         ensure(
             baml.fs.exists(cwd) && baml.fs.metadata(cwd).is_dir,
@@ -428,9 +342,92 @@ class WrapperInvocation {
             start = parent(start);
         }
         WrapperInvocation {
-            args: args,
+            matches: matches,
             directory: canonical_directory(cwd),
             project: canonical_directory(start),
+        }
+    }
+}
+
+// What `baml toolchain list` reports: selectors, the versions recorded
+// for each channel, and what is installed. None of it is checked
+// against the release server.
+class ToolchainInventory {
+    schema_version: int,
+    default_selector: string,
+    active_selector: string,
+    source: string,
+    channels: map<string, string>,
+    installed: string[],
+
+    function read(active: Selection) -> ToolchainInventory {
+        let config = document(config_path());
+        let defaults = match (table_at(config, "default", config_path())) {
+            null => null,
+            let table: baml.toml.Table => string_at(table, "selector", config_path()),
+        };
+        ToolchainInventory {
+            schema_version: 1,
+            default_selector: defaults ?? "canary",
+            active_selector: active.selector.to_string(),
+            source: active.source,
+            channels: ToolchainInventory.recorded_channels(),
+            installed: ToolchainInventory.installed_versions(),
+        }
+    }
+
+    function recorded_channels() -> map<string, string> {
+        let recorded: map<string, string> = {};
+        let state = document(state_path());
+        if let channels: baml.toml.Table = table_at(state, "channels", state_path()) {
+            for (let name in channels.items.keys().sort()) {
+                if let entry: baml.toml.Table = table_at(channels, name, state_path()) {
+                    let concrete = string_at(entry, "active_version", state_path()) ?? "";
+                    version(concrete);
+                    recorded.set(name, concrete);
+                }
+            }
+        }
+        recorded
+    }
+
+    function installed_versions() -> string[] {
+        if (!baml.fs.exists(toolchains())) {
+            return [];
+        }
+        baml.fs.read_dir(toolchains())
+            .filter((entry) -> bool {
+                entry.is_dir && !entry.name.starts_with(".")
+            })
+            .map((entry) -> string {
+                entry.name
+            })
+            .sort()
+    }
+
+    implements baml.ToString {
+        function to_string(self) -> string {
+            let installed = if (self.installed) {
+                ["installed toolchains:"].concat(
+                    self.installed.map((value) -> string {
+                        `  ${value}`
+                    }),
+                )
+            } else {
+                ["installed toolchains: (none)"]
+            };
+            [
+                `default selector: ${self.default_selector}`,
+                `active selector: ${self.active_selector} (${self.source})`,
+            ]
+                .concat(
+                    self.channels.keys().map((name) -> string {
+                        `${name}: ${self.channels[name]}`
+                    }),
+                )
+                .concat(installed)
+                .concat(["Remote versions were not checked."])
+                .join("\n")
         }
     }
 }

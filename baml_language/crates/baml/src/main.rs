@@ -105,6 +105,18 @@ enum SelectorSource {
     Fallback,
 }
 
+impl SelectorSource {
+    /// Where the selector came from, as structured output names it.
+    fn label(&self) -> String {
+        match self {
+            SelectorSource::Env => "$BAML_TOOLCHAIN".to_string(),
+            SelectorSource::Project(path) => path.display().to_string(),
+            SelectorSource::Config => config_path().display().to_string(),
+            SelectorSource::Fallback => "default canary".to_string(),
+        }
+    }
+}
+
 struct ResolvedSelector {
     selector: String,
     source: SelectorSource,
@@ -119,9 +131,35 @@ enum FetchPolicy {
 #[derive(Parser)]
 #[command(name = "baml toolchain", about = "Manage BAML toolchains")]
 struct ToolchainArgs {
+    /// What goes to stdout.
+    #[arg(
+        long,
+        global = true,
+        value_enum,
+        value_name = "FORMAT",
+        default_value_t = OutputFormat::Text
+    )]
+    output_format: OutputFormat,
     #[command(subcommand)]
     command: ToolchainCommand,
 }
+
+#[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum OutputFormat {
+    Text,
+    Json,
+}
+
+/// The CLI's global options that take a value. The wrapper reads only
+/// `--output-format`; it knows the rest to find the command after them.
+pub(crate) const CLI_VALUE_OPTIONS: [&str; 6] = [
+    "--output-format",
+    "--output-preset",
+    "--color",
+    "--hyperlinks",
+    "--diagnostic-format",
+    "--agent-skill-check",
+];
 
 #[derive(Subcommand)]
 enum ToolchainCommand {
@@ -144,9 +182,6 @@ enum ToolchainCommand {
         /// Install the selected managed toolchain if it is absent.
         #[arg(long)]
         install: bool,
-        /// Emit structured resolution and available releases as JSON.
-        #[arg(long)]
-        json: bool,
     },
     /// Advance the resolved machine channel.
     Update,
@@ -179,17 +214,7 @@ fn invocation_paths(args: &[String]) -> Result<(Vec<String>, InvocationPaths)> {
         let flag = (arg == "--project-dir" || arg.starts_with("--project-dir="))
             .then_some("--project-dir");
         // Skip values of CLI-global output options when finding the command.
-        if command.is_none()
-            && matches!(
-                arg.as_str(),
-                "--output-format"
-                    | "--output-preset"
-                    | "--color"
-                    | "--hyperlinks"
-                    | "--diagnostic-format"
-                    | "--agent-skill-check"
-            )
-        {
+        if command.is_none() && CLI_VALUE_OPTIONS.contains(&arg.as_str()) {
             management.push(arg.clone());
             index += 1;
             if let Some(value) = args.get(index) {
@@ -283,12 +308,7 @@ fn resolve_toolchain(
         reject_self_exec(&binary, "")?;
         true
     };
-    let source = match &selected.source {
-        SelectorSource::Env => "$BAML_TOOLCHAIN".to_string(),
-        SelectorSource::Project(path) => path.display().to_string(),
-        SelectorSource::Config => config_path().display().to_string(),
-        SelectorSource::Fallback => "default canary".to_string(),
-    };
+    let source = selected.source.label();
     Ok(ToolchainResolution {
         schema_version: 1,
         selector: selected.selector,
@@ -337,13 +357,14 @@ fn main() {
         Err(err) => {
             if let Some(error) = err.downcast_ref::<clap::Error>() {
                 eprint!("{error}");
+                error.exit_code()
             } else {
                 eprintln!(
                     "{}: {err:#}",
                     console::style("error").for_stderr().red().bold()
                 );
+                1
             }
-            1
         }
     };
     std::process::exit(exit);
@@ -411,6 +432,9 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
     if matches!(args.first().map(String::as_str), Some("--version" | "-V")) {
         return print_version(&paths, &args[0]);
     }
+    if let Some(owned) = wrapper_command(&args)? {
+        args = owned;
+    }
     if args.first().map(String::as_str) == Some("toolchain") {
         args.remove(0);
         return toolchain(args, &paths).map(|()| 0);
@@ -422,6 +446,7 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
             print!("{SELF_UPDATE_HELP}");
             return Ok(0);
         }
+        args.retain(|arg| !arg.starts_with("--output-format="));
         if args.get(1).map(String::as_str) != Some("update") || args.len() > 2 {
             return Err(anyhow!(
                 "usage: baml self update\nunexpected arguments: {}",
@@ -431,6 +456,50 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
         return self_update().map(|()| 0);
     }
     pass_through(forwarded, &paths)
+}
+
+/// A wrapper command with the global options in front of it applied, or
+/// `None` when the invocation is not one: the command belongs to the
+/// toolchain's CLI, or something other than a global option precedes it.
+/// `--output-format` moves behind the command, where the command's own
+/// parser reads it; the wrapper has no use for the others.
+fn wrapper_command(args: &[String]) -> Result<Option<Vec<String>>> {
+    let mut output_format = None;
+    let mut index = 0;
+    while let Some(arg) = args.get(index).filter(|arg| arg.starts_with('-')) {
+        let (name, inline) = match arg.split_once('=') {
+            Some((name, value)) => (name, Some(value.to_string())),
+            None => (arg.as_str(), None),
+        };
+        if !CLI_VALUE_OPTIONS.contains(&name) {
+            return Ok(None);
+        }
+        if inline.is_none() {
+            index += 1;
+        }
+        let Some(value) = inline.or_else(|| args.get(index).cloned()) else {
+            return Err(clap::Error::raw(
+                clap::error::ErrorKind::InvalidValue,
+                format!("a value is required for '{name}' but none was supplied\n"),
+            )
+            .into());
+        };
+        if name == "--output-format" {
+            output_format = Some(value);
+        }
+        index += 1;
+    }
+    if index == 0
+        || !matches!(
+            args.get(index).map(String::as_str),
+            Some("toolchain" | "self")
+        )
+    {
+        return Ok(None);
+    }
+    let mut command = args[index..].to_vec();
+    command.extend(output_format.map(|format| format!("--output-format={format}")));
+    Ok(Some(command))
 }
 
 fn print_version(paths: &InvocationPaths, flag: &str) -> Result<i32> {
@@ -542,6 +611,7 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
         Err(error) => return Err(error.into()),
     };
     let base = None;
+    let json = parsed.output_format == OutputFormat::Json;
     // Every non-help management command attempts active installation, including
     // status; --install makes an installation failure fatal instead of advisory.
     // Selection writes validate their complete documents inside the operation,
@@ -616,9 +686,9 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
                 }
             }
         }
-        ToolchainCommand::Status { install, json } => status_toolchain(base, paths, install, json),
+        ToolchainCommand::Status { install } => status_toolchain(base, paths, install, json),
         ToolchainCommand::Update => update_toolchain(base, paths),
-        ToolchainCommand::List => list_toolchains(paths),
+        ToolchainCommand::List => list_toolchains(paths, json),
         ToolchainCommand::Uninstall { version } => uninstall_toolchain(&version),
     }
 }
@@ -1878,24 +1948,31 @@ fn installed_toolchains() -> Vec<String> {
     versions
 }
 
-fn list_toolchains(paths: &InvocationPaths) -> Result<()> {
+/// What `baml toolchain list` reports. None of it is checked against the
+/// release server.
+#[derive(Serialize)]
+struct ToolchainInventory {
+    schema_version: u8,
+    default_selector: String,
+    active_selector: String,
+    source: String,
+    channels: BTreeMap<String, String>,
+    installed: Vec<String>,
+}
+
+fn list_toolchains(paths: &InvocationPaths, json: bool) -> Result<()> {
     let document = read_document(&config_path())?;
     let default =
         configuration::optional_string(&document, &["default", "selector"], &config_path())?
             .unwrap_or_else(|| "canary".into());
     let state = read_document(&state_path())?;
     let active = active_selector(paths)?;
-    println!("default selector: {default}");
-    println!(
-        "active selector: {}{}",
-        active.selector,
-        selector_annotation(&active)
-    );
-    if let Some(channels) = state.get("channels") {
-        let channels = channels
+    let mut channels = BTreeMap::new();
+    if let Some(recorded) = state.get("channels") {
+        let recorded = recorded
             .as_table()
             .context("state channels must be a table")?;
-        for name in channels.keys() {
+        for name in recorded.keys() {
             let version = configuration::optional_string(
                 &state,
                 &["channels", name, "active_version"],
@@ -1903,10 +1980,31 @@ fn list_toolchains(paths: &InvocationPaths) -> Result<()> {
             )?
             .context("channel has no active_version")?;
             validate_version(&version)?;
-            println!("{name}: {version}");
+            channels.insert(name.clone(), version);
         }
     }
     let installed = installed_toolchains();
+    if json {
+        let inventory = ToolchainInventory {
+            schema_version: 1,
+            default_selector: default,
+            source: active.source.label(),
+            active_selector: active.selector,
+            channels,
+            installed,
+        };
+        println!("{}", serde_json::to_string(&inventory)?);
+        return Ok(());
+    }
+    println!("default selector: {default}");
+    println!(
+        "active selector: {}{}",
+        active.selector,
+        selector_annotation(&active)
+    );
+    for (name, version) in &channels {
+        println!("{name}: {version}");
+    }
     if installed.is_empty() {
         println!("installed toolchains: (none)");
     } else {

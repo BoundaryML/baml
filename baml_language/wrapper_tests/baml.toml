@@ -42,6 +42,7 @@ args = [
     "--include", "root::toolchain management::failed project use download preserves selection",
     "--include", "root::toolchain management::explicit force install repairs damaged active toolchain",
     "--include", "root::toolchain management::uninstall leaves active toolchain removed",
+    "--include", "root::toolchain management::list reports the inventory as json",
     # configuration validation
     "--include", "root::configuration validation::project edits preserve restricted permissions",
     "--include", "root::configuration validation::project edits made during downloads are preserved",
@@ -50,6 +51,8 @@ args = [
     # toolchain status
     "--include", "root::toolchain status::json status describes installed version",
     "--include", "root::toolchain status::json status with install downloads absent version",
+    "--include", "root::toolchain status::output format is a global option of every wrapper command",
+    "--include", "root::toolchain status::invalid invocations of wrapper commands are usage errors",
     # CLI delegation
     "--include", "root::CLI delegation::delegation preserves arguments stdio and exit code",
     "--include", "root::CLI delegation::delegation supports simultaneous binary stdio",

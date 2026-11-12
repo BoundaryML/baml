@@ -204,7 +204,7 @@ class WrapperTelemetry {
                 session_id: telemetry_random(32),
                 live_path: `${baml_home()}/wrapper-telemetry/live_${baml.sys.pid()}_${telemetry_random(4)}.jsonl`,
                 project_id: config.project_id(directory),
-                command_name: WrapperTelemetry.command(args),
+                command_name: WrapperCli.command_name(args),
             };
             telemetry_event(session, session.command_name, fields = { "event_kind": "invocation" });
             return session;
@@ -241,86 +241,6 @@ class WrapperTelemetry {
             }
         }
         null
-    }
-
-    function command(args: string[]) -> string {
-        let tokens: string[] = [];
-        let index = 0;
-        while (index < args.length()) {
-            let arg = args[index];
-            if (["--", "--help", "-h"].includes(arg)) {
-                break;
-            }
-            if (
-                [
-                    "--project-dir",
-                    "--output-format",
-                    "--output-preset",
-                    "--color",
-                    "--hyperlinks",
-                    "--diagnostic-format",
-                    "--agent-skill-check",
-                ]
-                    .includes(arg)
-            ) {
-                index += 2;
-            } else if (arg.starts_with("-")) {
-                index += 1;
-            } else {
-                tokens.push(arg);
-                index += 1;
-                if (tokens.length() == 3) {
-                    break;
-                }
-            }
-        }
-        index = 0;
-        if (tokens.at(index) == "help") {
-            index += 1;
-            if (!["toolchain", "self"].includes(tokens.at(index) ?? "")) {
-                return "baml";
-            }
-        }
-        let command = tokens.at(index) ?? "";
-        if (command == "toolchain") {
-            let subcommand = tokens.at(index + 1) ?? "";
-            if (["use", "install", "status", "update", "list", "uninstall"].includes(subcommand)) {
-                return `baml toolchain ${subcommand}`;
-            }
-            return "baml toolchain";
-        }
-        if (command == "self") {
-            return "baml self update";
-        }
-        if (
-            [
-                "toolchain",
-                "check",
-                "run",
-                "test",
-                "generate",
-                "fmt",
-                "lsp",
-                "playground",
-                "init",
-                "new",
-                "pack",
-                "describe",
-                "codequality",
-                "local",
-                "cloud",
-                "query",
-                "login",
-                "logout",
-                "ide",
-                "agent",
-                "telemetry",
-            ]
-                .includes(command)
-        ) {
-            return `baml ${command}`;
-        }
-        "baml"
     }
 }
 

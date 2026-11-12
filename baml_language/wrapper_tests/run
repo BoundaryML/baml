@@ -218,6 +218,21 @@ with tempfile.TemporaryDirectory(prefix="wrapper-suite-") as directory:
         WRAPPER_STUB=str(target / "examples" / ("wrapper-stub" + suffix)),
     )
     failed = False
+    if not args.release_artifacts and not args.filter:
+        # The wrapper's own unit tests, such as its command-line parser, run
+        # from source and need no candidate.
+        print("Running wrapper unit tests", flush=True)
+        result = subprocess.run(
+            [
+                str(target / ("baml-cli" + suffix)),
+                "test",
+                "--project-dir",
+                str(repo / "baml_language/wrapper"),
+            ],
+            cwd=repo,
+            env=environment,
+        )
+        failed = result.returncode != 0
     for candidate in candidates:
         print(f"Running wrapper tests: {candidate['label']}", flush=True)
         candidate_environment = dict(

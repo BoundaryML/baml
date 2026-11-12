@@ -1,28 +1,3 @@
-type ManagementName = "use" | "install" | "update" | "status" | "list" | "uninstall";
-
-type ManagementFlag = "--global" | "--force" | "--install" | "--json";
-
-class UnexpectedManagementArgument {
-    command: string,
-    argument: string,
-
-    implements baml.ToString {
-        function to_string(self) -> string {
-            `unexpected argument ${self.argument} for toolchain ${self.command}`
-        }
-    }
-}
-
-class UnknownManagementCommand {
-    command: string,
-
-    implements baml.ToString {
-        function to_string(self) -> string {
-            `unknown toolchain command ${self.command}`
-        }
-    }
-}
-
 interface ManagementCommand {
     function preflight(self, invocation: WrapperInvocation) -> null throws WrapperFailure;
     function execute(self, invocation: WrapperInvocation) -> null throws WrapperFailure;
@@ -87,7 +62,7 @@ class UpdateCommand {
 
 class StatusCommand {
     install_missing: bool,
-    json: bool,
+    format: OutputFormat,
 
     implements ManagementCommand {
         function preflight(self, invocation: WrapperInvocation) -> null {
@@ -95,19 +70,21 @@ class StatusCommand {
         }
 
         function execute(self, invocation: WrapperInvocation) -> null {
-            invocation.status(self.install_missing, self.json)
+            invocation.status(self.install_missing, self.format)
         }
     }
 }
 
 class ListCommand {
+    format: OutputFormat,
+
     implements ManagementCommand {
         function preflight(self, invocation: WrapperInvocation) -> null {
             invocation.best_effort_install()
         }
 
         function execute(self, invocation: WrapperInvocation) -> null {
-            invocation.list_toolchains()
+            invocation.list_toolchains(self.format)
         }
     }
 }
@@ -130,84 +107,29 @@ class UninstallCommand {
     }
 }
 
-// Parse the wire syntax once; command classes represent only applicable options.
-function management_command(args: string[]) -> ManagementCommand {
-    let raw = args[0];
-    let name: ManagementName = match (raw) {
-        "use" | "install" | "update" | "status" | "list" | "uninstall" => raw,
-        _ => throw UnknownManagementCommand { command: raw },
-    };
-    let allowed: ManagementFlag[] = match (name) {
-        "use" => ["--global"],
-        "install" => ["--force"],
-        "status" => ["--install", "--json"],
-        "update" | "list" | "uninstall" => [],
-    };
-    let options = args.slice(1, args.length());
-    let flags = options
-        .filter((arg) -> bool {
-            arg.starts_with("-")
-        })
-        .map((arg) -> string {
-            if (name == "use" && arg == "-g") {
-                "--global"
-            } else {
-                arg
-            }
-        });
-    for (let flag in flags) {
-        if (
-            !allowed.some((option) -> bool {
-                option == flag
-            })
-                || flags
-                    .filter((arg) -> bool {
-                        arg == flag
-                    })
-                    .length()
-                    > 1
-        ) {
-            throw UnexpectedManagementArgument { command: name, argument: flag }
-        }
-    }
-    let positional = options.filter((arg) -> bool {
-        !arg.starts_with("-")
-    });
-    let accepts_selector = match (name) {
-        "use" | "install" | "uninstall" => true,
-        "update" | "status" | "list" => false,
-    };
-    let positional_limit: int = if (accepts_selector) {
-        1
-    } else {
-        0
-    };
-    if (positional.length() > positional_limit) {
-        throw UnexpectedManagementArgument { command: name, argument: positional[positional.length() - 1] }
-    }
-    let selector = positional.at(0);
+// The command a parsed `baml toolchain <name>` asks for.
+function management_command(name: string, matches: root.clap.Matches) -> ManagementCommand {
     match (name) {
         "use" => {
             UseCommand {
-                selector: selector ?? fail("toolchain use requires a selector"),
-                global: flags.includes("--global"),
+                selector: matches.get_or("selector", ""),
+                global: matches.is_present("global"),
             }
         },
-        "install" => InstallCommand { selector: selector, force: flags.includes("--force") },
+        "install" => {
+            InstallCommand { selector: matches.get("selector"), force: matches.is_present("force") }
+        },
         "update" => UpdateCommand {},
         "status" => {
             StatusCommand {
-                install_missing: flags.includes("--install"),
-                json: flags.includes("--json"),
+                install_missing: matches.is_present("install"),
+                format: WrapperCli.output_format(matches),
             }
         },
-        "list" => ListCommand {},
+        "list" => ListCommand { format: WrapperCli.output_format(matches) },
         "uninstall" => {
-            UninstallCommand {
-                version: ManagedVersion.new(
-                    selector ?? fail("toolchain uninstall requires a concrete version"),
-                ),
-            }
+            UninstallCommand { version: ManagedVersion.new(matches.get_or("version", "")) }
         },
+        _ => fail(`unknown toolchain command ${name}`),
     }
 }
