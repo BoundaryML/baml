@@ -150,7 +150,7 @@ pub(crate) enum Commands {
     #[command(
         subcommand,
         about = "Manage Boundary cloud dashboards",
-        after_long_help = "Examples:\n  Upload a new dashboard:\n    baml cloud upload-dashboard dashboard.html --project acme/app --key overview --name Overview"
+        after_long_help = "Examples:\n  Upload a new dashboard:\n    baml cloud dashboard create dashboard.html --project acme/app --key overview --name Overview"
     )]
     Cloud(crate::cloud_command::CloudCommands),
 
@@ -515,7 +515,11 @@ mod tests {
         &["check"],
         &["describe"],
         &["cloud"],
-        &["cloud", "upload-dashboard"],
+        &["cloud", "dashboard"],
+        &["cloud", "dashboard", "create"],
+        &["cloud", "dashboard", "update"],
+        &["cloud", "dashboard", "get"],
+        &["cloud", "dashboard", "delete"],
         &["auth"],
         &["auth", "login"],
         &["auth", "status"],
