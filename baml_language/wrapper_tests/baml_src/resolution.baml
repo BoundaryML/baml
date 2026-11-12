@@ -7,7 +7,7 @@ testset "toolchain status" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
-        let args = ["toolchain", "status", "--output-format", "json"];
+        let args = ["toolchain", "status", "--json"];
 
         let output = fixture.manage(candidate, args);
         let result = baml.json.decode<root.harness.ResolutionResult>(output.stdout.to_string());
@@ -24,31 +24,11 @@ testset "toolchain status" {
         );
     }
 
-    test "status output format takes text or json in either spelling" {
-        let fixture = root.harness.Fixture.start();
-        defer { fixture.close(); }
-        fixture.project(BASE_VERSION);
-
-        let inline = fixture.manage(candidate, ["toolchain", "status", "--output-format=json"]);
-        let result = baml.json.decode<root.harness.ResolutionResult>(inline.stdout.to_string());
-        root.harness.require(result.version == BASE_VERSION, "inline output format did not emit JSON");
-
-        let text = fixture.manage(candidate, ["toolchain", "status", "--output-format", "text"]);
-        root.harness.require(
-            text.stdout.to_string().starts_with("active selector:"),
-            "text output format did not emit text",
-        );
-
-        for (let rejected in [["--output-format", "yaml"], ["--output-format"], ["--json"]]) {
-            fixture.manage(candidate, ["toolchain", "status"].concat(rejected), success = false);
-        }
-    }
-
     test "json status reports failed best effort install" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
-        let args = ["toolchain", "status", "--output-format", "json"];
+        let args = ["toolchain", "status", "--json"];
 
         fixture.absent(BASE_VERSION);
         fixture.write(`server/version/${BASE_VERSION}.json.status`, "500");
@@ -72,7 +52,7 @@ testset "toolchain status" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
-        let args = ["toolchain", "status", "--output-format", "json", "--install"];
+        let args = ["toolchain", "status", "--json", "--install"];
 
         fixture.absent(BASE_VERSION);
         let output = fixture.manage(candidate, args);
@@ -95,7 +75,7 @@ testset "toolchain status" {
     test "json status resolves recorded channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["toolchain", "status", "--output-format", "json"];
+        let args = ["toolchain", "status", "--json"];
 
         fixture.project("nightly", key = "channel");
         let output = fixture.manage(candidate, args);
@@ -116,7 +96,7 @@ testset "toolchain status" {
     test "json status with install records new channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["toolchain", "status", "--output-format", "json", "--install"];
+        let args = ["toolchain", "status", "--json", "--install"];
 
         fixture.project("nightly", key = "channel");
         fixture.remove(CHANNEL_STATE_FILE);
@@ -141,7 +121,7 @@ testset "toolchain status" {
     test "json status describes local binary without launching" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["toolchain", "status", "--output-format", "json"];
+        let args = ["toolchain", "status", "--json"];
 
         fixture.project("./build/baml-cli", key = "path");
         let output = fixture.manage(candidate, args);
@@ -163,7 +143,7 @@ testset "toolchain status" {
     test "json status rejects missing local binary" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["toolchain", "status", "--output-format", "json"];
+        let args = ["toolchain", "status", "--json"];
 
         fixture.project("./build/baml-cli", key = "path");
         fixture.remove(`project/build/baml-cli${fixture.suffix}`);
@@ -195,7 +175,7 @@ testset "toolchain status" {
     test "json status installs unrecorded channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["toolchain", "status", "--output-format", "json"];
+        let args = ["toolchain", "status", "--json"];
         fixture.project("nightly", key = "channel");
         fixture.remove(CHANNEL_STATE_FILE);
         let result = baml.json.decode<root.harness.ResolutionResult>(fixture.manage(candidate, args).stdout.to_string());
@@ -213,7 +193,7 @@ testset "toolchain status" {
         fixture.channel("nightly", LATEST_VERSION);
         fixture.absent(NEXT_VERSION);
         let state = fixture.read(CHANNEL_STATE_FILE);
-        let output = fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"]);
+        let output = fixture.manage(candidate, ["toolchain", "status", "--json"]);
         let result = baml.json.decode<root.harness.ResolutionResult>(output.stdout.to_string());
         result.expect_project_selection(
             selector = "nightly",
@@ -231,7 +211,7 @@ testset "toolchain status" {
         fixture.project("nightly", key = "channel");
         fixture.remove(CHANNEL_STATE_FILE);
         fixture.write("server/nightly.json.status", "500");
-        fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"], success = false);
+        fixture.manage(candidate, ["toolchain", "status", "--json"], success = false);
         root.harness.require(
             !baml.fs.exists(`${fixture.root}/${CHANNEL_STATE_FILE}`),
             "failed resolution recorded a channel",
@@ -243,7 +223,7 @@ testset "toolchain status" {
         defer { fixture.close(); }
         fixture.project(`./build/baml-cli${fixture.suffix}`, key = "path");
         for (let flags in [[], ["--install"]]) {
-            let output = fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"].concat(flags));
+            let output = fixture.manage(candidate, ["toolchain", "status", "--json"].concat(flags));
             let result = baml.json.decode<root.harness.ResolutionResult>(output.stdout.to_string());
             let binary = `${fixture.root}/project/build/baml-cli${fixture.suffix}`;
             root.harness.require(
@@ -272,7 +252,7 @@ testset "toolchain status" {
     test "json status identifies environment user default and fallback sources" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["toolchain", "status", "--output-format", "json"];
+        let args = ["toolchain", "status", "--json"];
         fixture.write(PROJECT_MANIFEST_FILE, "[invalid");
         fixture.env["BAML_TOOLCHAIN"] = NEXT_VERSION;
         let environment = baml.json.decode<root.harness.ResolutionResult>(fixture.manage(candidate, args).stdout.to_string());
@@ -308,7 +288,7 @@ testset "toolchain status" {
         fixture.absent(BASE_VERSION);
         fixture.manage(
             candidate,
-            ["toolchain", "resolve", "--output-format", "json"],
+            ["toolchain", "resolve", "--json"],
             success = false,
             diagnostic = "resolve",
         );

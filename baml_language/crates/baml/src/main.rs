@@ -144,10 +144,9 @@ enum ToolchainCommand {
         /// Install the selected managed toolchain if it is absent.
         #[arg(long)]
         install: bool,
-        /// What goes to stdout; `json` is the structured resolution and
-        /// available releases.
-        #[arg(long, value_enum, value_name = "FORMAT", default_value_t = StatusFormat::Text)]
-        output_format: StatusFormat,
+        /// Emit structured resolution and available releases as JSON.
+        #[arg(long)]
+        json: bool,
     },
     /// Advance the resolved machine channel.
     Update,
@@ -155,12 +154,6 @@ enum ToolchainCommand {
     List,
     /// Remove a concrete version, preserving selectors and channel mappings.
     Uninstall { version: String },
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-enum StatusFormat {
-    Text,
-    Json,
 }
 
 /// Filesystem context used for selection, without consuming the CLI's flags.
@@ -623,10 +616,7 @@ fn toolchain(args: Vec<String>, paths: &InvocationPaths) -> Result<()> {
                 }
             }
         }
-        ToolchainCommand::Status {
-            install,
-            output_format,
-        } => status_toolchain(base, paths, install, output_format == StatusFormat::Json),
+        ToolchainCommand::Status { install, json } => status_toolchain(base, paths, install, json),
         ToolchainCommand::Update => update_toolchain(base, paths),
         ToolchainCommand::List => list_toolchains(paths),
         ToolchainCommand::Uninstall { version } => uninstall_toolchain(&version),

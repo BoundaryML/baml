@@ -43,10 +43,10 @@ testset "wrapper telemetry" {
                 ],
                 "baml toolchain update": [["toolchain", "update", "--help"], ["help", "toolchain", "update"]],
                 "baml toolchain status": [
-                    ["toolchain", "status", "--output-format", "json"],
-                    ["--project-dir", fixture.cwd, "toolchain", "status", "--output-format", "json"],
-                    ["toolchain", "--project-dir", fixture.cwd, "status", "--output-format", "json"],
-                    ["toolchain", "--project-dir=" + fixture.cwd, "status", "--output-format", "json"],
+                    ["toolchain", "status", "--json"],
+                    ["--project-dir", fixture.cwd, "toolchain", "status", "--json"],
+                    ["toolchain", "--project-dir", fixture.cwd, "status", "--json"],
+                    ["toolchain", "--project-dir=" + fixture.cwd, "status", "--json"],
                 ],
                 "baml self update": [["self", "update", "--help"], ["help", "self", "update"]],
                 "baml cloud": [
@@ -524,7 +524,7 @@ testset "wrapper telemetry" {
                 "project hash differs from CLI",
             );
             fixture.env["DO_NOT_TRACK"] = "false";
-            let resolved = fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"]);
+            let resolved = fixture.manage(candidate, ["toolchain", "status", "--json"]);
             baml.json.decode<root.harness.ResolutionResult>(resolved.stdout.to_string());
             fixture.await_telemetry(6);
             let second = fixture.captures()[3];

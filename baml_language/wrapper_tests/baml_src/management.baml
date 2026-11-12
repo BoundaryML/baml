@@ -1013,12 +1013,12 @@ testset "toolchain management" {
         fixture.write(`server/version/${BASE_VERSION}.json.status`, "500");
         fixture.write(`server/${BASE_VERSION}.tar.gz.status`, "500");
         fixture.write(`server/${BASE_VERSION}.zip.status`, "500");
-        let output = fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"]);
+        let output = fixture.manage(candidate, ["toolchain", "status", "--json"]);
         root.harness.require(
             !baml.json.decode<root.harness.ResolutionResult>(output.stdout.to_string()).installed,
             "plain status misreported failed installation",
         );
-        fixture.manage(candidate, ["toolchain", "status", "--install", "--output-format", "json"], success = false);
+        fixture.manage(candidate, ["toolchain", "status", "--install", "--json"], success = false);
         root.harness.require(
             fixture.read(USER_CONFIG_FILE) == config
                 && fixture.read(PROJECT_MANIFEST_FILE) == project,
@@ -1035,7 +1035,7 @@ testset "toolchain management" {
         fixture.remove(`baml/toolchains/${BASE_VERSION}/VERSION`);
         fixture.manage(
             candidate,
-            ["toolchain", "status", "--output-format", "json"],
+            ["toolchain", "status", "--json"],
             success = false,
             diagnostic = "--force",
         );
@@ -1050,7 +1050,7 @@ testset "toolchain management" {
                 ["toolchain", "use", NEXT_VERSION],
                 ["toolchain", "install", NEXT_VERSION],
                 ["toolchain", "update"],
-                ["toolchain", "status", "--output-format", "json"],
+                ["toolchain", "status", "--json"],
                 ["toolchain", "list"],
                 ["toolchain", "uninstall", LATEST_VERSION],
             ]

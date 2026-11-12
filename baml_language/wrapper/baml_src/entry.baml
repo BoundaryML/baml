@@ -29,7 +29,7 @@ function help(command: string = "") -> null {
         "use" => "use [-g|--global] <selector>",
         "install" => "install [<selector>] [--force]",
         "update" => "update",
-        "status" => "status [--install] [--output-format <text|json>]",
+        "status" => "status [--install] [--json]",
         "list" => "list",
         "uninstall" => "uninstall <version>",
         _ => null,
@@ -39,7 +39,7 @@ function help(command: string = "") -> null {
         baml.io.println("Options: -h, --help");
         if (command == "status") {
             baml.io.println(
-                "--output-format json emits the active selector, concrete version, source, paths and installation state as JSON. --install installs an absent managed toolchain first.",
+                "Emit the active selector, concrete version, source, paths and installation state as JSON. --install installs an absent managed toolchain first.",
             );
         }
         return null;
@@ -53,7 +53,7 @@ function help(command: string = "") -> null {
                                        -g, --global selects in $BAML_HOME/config.toml instead
               install [<selector>] [--force]
               update
-              status [--install] [--output-format <text|json>]
+              status [--install] [--json]
               list
               uninstall <version>
 
