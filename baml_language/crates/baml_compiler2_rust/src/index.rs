@@ -360,6 +360,20 @@ impl<'p> ProgramIndex<'p> {
     /// The slot `field` of the class at `object` has in its instances: the
     /// runtime's own [`InstanceLayout`] for the class, so compiled code and
     /// the interpreter agree on every offset by construction.
+    /// Bytes of an instance cell of the class at `object`, header included,
+    /// when compiled code may place one on the stack: a class without type
+    /// arguments or a finalizer, as `BexVm::instance_shape` admits.
+    pub(crate) fn instance_cell(&self, object: usize) -> Option<usize> {
+        let Object::Class(class) = &self.program.objects[ObjectIndex::from_raw(object)] else {
+            return None;
+        };
+        if class.generic_param_count != 0 || class.cleanup.is_some() {
+            return None;
+        }
+        let (kinds, has_type_args) = InstanceLayout::plan(class);
+        Some(InstanceLayout::new(DescriptorId(0), &kinds, has_type_args).size())
+    }
+
     pub(crate) fn field_slot(&self, object: usize, field: usize) -> Option<FieldSlot> {
         let Object::Class(class) = &self.program.objects[ObjectIndex::from_raw(object)] else {
             return None;

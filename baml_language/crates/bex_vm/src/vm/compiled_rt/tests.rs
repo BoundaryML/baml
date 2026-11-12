@@ -1784,3 +1784,77 @@ fn call_safepoints_keep_yielding_under_gc_stress() {
     let yields: Vec<_> = (1..=9).filter(|_| vm.yield_at_call(|| true)).collect();
     assert_eq!(yields, [3, 6, 9]);
 }
+
+/// A class literal placed in a body's frame is, to every reader, an
+/// instance the heap allocated: same header (descriptor, flags, size
+/// class), same class slot, same field access and class checks.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_placed_instance_reads_as_a_heap_instance() {
+    use bex_vm_types::object_format::Header;
+
+    use crate::compiled_rt::{
+        FieldBase, StackCell, class_word, instance_class_word, stack_cell_words,
+    };
+    static ITEM: AtomicU32 = AtomicU32::new(0);
+    #[allow(unsafe_code)]
+    fn body(vm: &mut BexVm, _fr: &FrameRecord, _: &[Value]) -> BodyResult {
+        let index = ITEM.load(Ordering::Relaxed) as usize;
+        let class = object(vm, &ITEM);
+        let shape = vm
+            .instance_shape_at(index, class)
+            .expect("Item has a shape");
+        // Header, class slot and one int: 24 bytes, in the heap's 32-byte class.
+        assert_eq!(shape.bytes(), 24);
+        assert_eq!(stack_cell_words(shape.bytes()), 4);
+        let mut cell = StackCell::<4>::new();
+        assert!(vm.on_fiber_stack(std::ptr::from_ref(&cell) as usize));
+        // SAFETY: `cell` is a local of this body, which runs on the fiber.
+        let (placed, placed_base) = unsafe { vm.place_instance_at(&mut cell, index, class) }?;
+        let (heap, heap_base) = vm.alloc_shaped(shape);
+        // SAFETY: offset 16 is `value`'s raw int slot.
+        unsafe {
+            placed_base.set_int(16, 7);
+            heap_base.set_int(16, 7);
+        }
+        let header = |value: Value| -> (u32, u16, bool) {
+            let ptr = value.as_object_ptr().expect("an object");
+            // SAFETY: both values name instances with headers.
+            let header = unsafe { ptr.header() };
+            (
+                header.descriptor.0,
+                header.granules(),
+                header.is_set(Header::CLEANED),
+            )
+        };
+        assert_eq!(header(placed), header(heap));
+        assert_eq!(header(placed).1, 2, "a 32-byte cell");
+        assert_eq!(instance_class_word(placed), instance_class_word(heap));
+        let word = class_word(class);
+        assert!(FieldBase::of(placed, word).is_some());
+        assert_eq!(vm.entering_class(placed, word)?, placed);
+        assert_eq!(vm.load_field(placed, 0)?, Value::int(7));
+        assert_eq!(vm.load_field(heap, 0)?, Value::int(7));
+        assert!(!vm.on_fiber_stack(heap.as_object_ptr().unwrap().as_ptr() as usize));
+        Ok(vm.string_value("same"))
+    }
+    let out = run_with_compiled_bodies(
+        r#"class Item { value: int } function Main() -> string { "" }"#,
+        &[("user.Main", body)],
+        &[("user.Item", &ITEM)],
+        false,
+    );
+    assert_eq!(out, "same");
+}
+
+#[test]
+fn a_dropped_stack_cell_is_poisoned_in_debug_builds() {
+    use crate::compiled_rt::StackCell;
+    let mut cell = StackCell::<4>::new();
+    assert!(cell.words().iter().all(|&word| word == 0));
+    cell.poison();
+    let poison = u64::from_ne_bytes([StackCell::<4>::POISON; 8]);
+    assert!(cell.words().iter().all(|&word| word == poison));
+    // `drop` poisons in debug builds and under `BAML_GC_STRESS=1`.
+    assert!(cfg!(debug_assertions));
+}

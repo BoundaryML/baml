@@ -17,7 +17,10 @@ mod heap;
 pub mod json;
 mod timing;
 pub use timing::Timed;
-pub use heap::{FieldBase, InstanceShape, ListBase, class_word, debug_class, instance_class_word};
+pub use heap::{
+    FieldBase, InstanceShape, ListBase, StackCell, class_word, debug_class, instance_class_word,
+    stack_cell_words,
+};
 mod program;
 mod record;
 pub(crate) use record::{FrameAt, RecordChain, record_ref};
