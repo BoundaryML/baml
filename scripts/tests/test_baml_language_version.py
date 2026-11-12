@@ -124,7 +124,7 @@ class VersionToolTests(unittest.TestCase):
             "    VERSION = TOOLCHAIN_VERSION\n  end\nend\n",
         )
         self.write(
-            "baml_language/crates/baml/Cargo.toml",
+            "baml_language/wrapper/release.toml",
             '[package]\nversion = "1.0.0"\n',
         )
         self.write(

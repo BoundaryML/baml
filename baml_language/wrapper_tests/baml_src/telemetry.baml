@@ -107,14 +107,7 @@ testset "wrapper telemetry" {
                     );
                     for (let event in events) {
                         root.harness.require(
-                            capture_string(event, "client")
-                                == (
-                                    if (candidate.label.starts_with("rust")) {
-                                        "rust-wrapper"
-                                    } else {
-                                        "baml-in-baml"
-                                    }
-                                ),
+                            capture_string(event, "client") == "baml-in-baml",
                             "client discriminator is missing from an event",
                         );
                         root.harness.require(
@@ -413,35 +406,6 @@ testset "wrapper telemetry" {
             fixture.check(candidate, BASE_VERSION, expected_stderr = "");
         }
 
-        if (candidate.label.starts_with("rust")) {
-            test "rust wrapper sends only posthog even when bcs credentials are present" {
-                let fixture = root.harness.Fixture.start();
-                defer { fixture.close(); }
-                fixture.env["DO_NOT_TRACK"] = "0";
-                fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
-                fixture.env["BAML_TELEMETRY"] = "on";
-                fixture.env["BOUNDARY_API_URL"] = fixture.env["BAML_MANIFEST_BASE_URL"];
-                fixture.env["BOUNDARY_API_KEY"] = "bdry_secret_fixture";
-                fixture.env["BOUNDARY_PROJECT"] = "fixture/project";
-                fixture.env["CI"] = "true";
-                fixture.manage(candidate, ["toolchain", "list"]);
-                fixture.await_telemetry(3);
-                let requests = fixture.read("post-requests.jsonl").split("\n").filter((line) -> bool {
-                    line.trim() != ""
-                });
-                root.harness.require(
-                    requests.length() == 3,
-                    "Rust wrapper made unexpected telemetry requests",
-                );
-                root.harness.require(
-                    requests.every((line) -> bool {
-                        baml.json.decode<string>(line) == "/capture/"
-                    }),
-                    "Rust wrapper attempted BCS delivery",
-                );
-            }
-        }
-
         test "payload has stable identity and private context" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
@@ -485,14 +449,7 @@ testset "wrapper telemetry" {
                 "event creates a person profile",
             );
             root.harness.require(
-                capture_string(first, "client")
-                    == (
-                        if (candidate.label.starts_with("rust")) {
-                            "rust-wrapper"
-                        } else {
-                            "baml-in-baml"
-                        }
-                    ),
+                capture_string(first, "client") == "baml-in-baml",
                 "implementation missing",
             );
             root.harness.require(

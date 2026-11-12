@@ -115,40 +115,29 @@ class WrapperReleasePackingTests(unittest.TestCase):
         self.assertIn("Missing wrapper BCS release configuration: BAML_WRAPPER_BCS_PROJECT", result.stderr)
         self.assertFalse(self.output.exists())
 
-    def test_release_tests_stage_baml_canonical_and_rust_reference_separately(self):
+    def test_release_tests_stage_the_canonical_archives(self):
         self.pack()
         platform = next(
             target for target in json.loads(DEFAULT_PLATFORMS.read_text())["targets"]
             if target["triple"] == "x86_64-pc-windows-msvc"
         )
-        references = self.root / "rust"
-        references.mkdir()
-        for variant in ("", "-no-self-update"):
-            archive = references / f"baml-wrapper-rust{variant}-{VERSION}-{platform['triple']}.zip"
-            with zipfile.ZipFile(archive, "w") as output:
-                output.writestr("bin/baml.exe", f"rust{variant}")
         staged = self.root / "staged"
         staged.mkdir()
         candidates = candidates_from_archives(self.root, staged, platform, VERSION)
-        self.assertEqual({entry["label"] for entry in candidates}, {
-            "baml", "baml-no-self-update", "rust", "rust-no-self-update",
-        })
+        self.assertEqual({entry["label"] for entry in candidates}, {"baml", "baml-no-self-update"})
         for entry in candidates:
             binary = Path(entry["command"][0]).read_bytes()
-            if entry["label"].startswith("rust"):
-                self.assertEqual(binary.decode(), entry["label"])
-            else:
-                self.assertEqual(json.loads(binary)["target"], platform["triple"])
+            self.assertEqual(json.loads(binary)["target"], platform["triple"])
         canonical = self.output / f"baml-wrapper-{VERSION}-{platform['triple']}.zip"
         canonical.unlink()
         with self.assertRaisesRegex(ValueError, "expected exactly one baml-wrapper-.*found 0"):
             candidates_from_archives(self.root, staged, platform, VERSION)
 
-    def test_publishing_verifier_rejects_rust_reference_archives(self):
+    def test_publishing_verifier_rejects_unexpected_archives(self):
         self.pack()
         archive = next(self.output.iterdir())
-        archive.rename(archive.with_name(archive.name.replace("baml-wrapper-", "baml-wrapper-rust-", 1)))
-        with self.assertRaisesRegex(SystemExit, "wrapper artifact mismatch missing=.*extra=.*rust"):
+        archive.rename(archive.with_name(archive.name.replace("baml-wrapper-", "baml-wrapper-other-", 1)))
+        with self.assertRaisesRegex(SystemExit, "wrapper artifact mismatch missing=.*extra=.*other"):
             verify_wrapper_artifacts(self.output, VERSION)
 
 

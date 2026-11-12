@@ -276,7 +276,7 @@ jobs:
           wrapper_version="$(python3 - <<'PY'
           import tomllib
           from pathlib import Path
-          print(tomllib.loads(Path("baml_language/crates/baml/Cargo.toml").read_text())["package"]["version"])
+          print(tomllib.loads(Path("baml_language/wrapper/release.toml").read_text())["package"]["version"])
           PY
           )"
           latest=""
@@ -403,16 +403,6 @@ jobs:
           name: baml-playground-dist
           path: typescript2/app-vscode-webview/dist
 
-  build-wrapper:
-    name: Build Rust wrapper reference
-    needs: [plan]
-    uses: ./.github/workflows/build2-wrapper.reusable.yaml
-    permissions:
-      contents: read
-    with:
-      source_sha: ${{ needs.plan.outputs.source_sha }}
-      wrapper_version: ${{ needs.plan.outputs.wrapper_version }}
-
   # Every channel packs and tests the canonical BAML wrapper before publishing.
   build-baml-wrapper:
     name: Pack published BAML wrapper
@@ -428,7 +418,7 @@ jobs:
 
   wrapper-tests:
     name: Wrapper tests
-    needs: [plan, build-wrapper, build-baml-wrapper]
+    needs: [plan, build-baml-wrapper]
     uses: ./.github/workflows/wrapper-tests.reusable.yaml
     secrets:
       BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
@@ -613,7 +603,6 @@ jobs:
       - plan
       - build-toolchain
       - build-vsix
-      - build-wrapper
       - build-baml-wrapper
       - wrapper-tests
       - build-python-sdk
@@ -2462,7 +2451,6 @@ jobs:
       - build-matrix
       - build-toolchain
       - build-vsix
-      - build-wrapper
       - build-python-sdk
       - build-nodejs-sdk
       - build-java-sdk
