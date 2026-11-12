@@ -217,6 +217,7 @@ libc = "0.2.169"
 libloading = "0.8"
 libsui = { version = "0.16.4" }
 log = "0.4.20"
+os_info = { version = "3.15.0", default-features = false }
 logos = { version = "0.15" }
 # Reserved concurrency model checker; inactive in normal builds.
 loom = { version = "0.7" }

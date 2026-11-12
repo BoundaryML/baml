@@ -42,7 +42,11 @@ fn whole_map(
         .collect()
 }
 
-fn metadata(snapshot: &DecodedSnapshot) -> (Option<&str>, BTreeMap<&str, &DecodedValue>) {
+/// Decode an entire context snapshot into its identity and scalar metadata,
+/// rejecting truncated maps so propagation assertions cannot silently pass.
+pub(super) fn metadata(
+    snapshot: &DecodedSnapshot,
+) -> (Option<&str>, BTreeMap<&str, &DecodedValue>) {
     let DecodedRoot::Value(DecodedValue::Object(root)) = snapshot.root else {
         panic!("context root must be a map");
     };
