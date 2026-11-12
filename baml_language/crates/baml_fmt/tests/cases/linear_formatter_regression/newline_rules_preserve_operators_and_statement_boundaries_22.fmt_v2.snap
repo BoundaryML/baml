@@ -2,6 +2,5 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function example() -> int {
-    [values()
-    [0]]
+    [values(), [0]]
 }

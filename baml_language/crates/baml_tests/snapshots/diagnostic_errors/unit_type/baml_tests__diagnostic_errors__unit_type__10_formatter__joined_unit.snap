@@ -68,12 +68,22 @@ function lone_if_join(a: bool, b: bool) -> int {
 // --- literals ---
 
 function array_join() -> int {
-    let xs = ["a", { side(); }];
+    let xs = [
+        "a",
+        {
+            side();
+        },
+    ];
     1
 }
 
 function map_join() -> int {
-    let m = { "a": 1, "b": { side(); } };
+    let m = {
+        "a": 1,
+        "b": {
+            side();
+        },
+    };
     1
 }
 
@@ -92,7 +102,10 @@ function lambda_tail_join() -> int {
 // --- `??` ---
 
 function coalesce_join(v: int?) -> int {
-    let x = v ?? { side(); };
+    let x = v
+        ?? {
+            side();
+        };
     1
 }
 
@@ -107,7 +120,12 @@ function inferred_return_join() -> int {
 }
 
 function inferred_argument_join() -> int {
-    let x = pick(1, { side(); });
+    let x = pick(
+        1,
+        {
+            side();
+        },
+    );
     1
 }
 
@@ -120,7 +138,11 @@ function unsolved_callback_return() -> int {
 }
 
 function unsolved_element() -> int {
-    length_of({ side(); })
+    length_of(
+        {
+            side();
+        },
+    )
 }
 
 function conflicting_callback_returns() -> int {
@@ -134,6 +156,13 @@ function unit_joins(c: bool) -> null {
     let a = if (c) { null } else { side(); };
     let b = if (c) { side(); } else { side(); };
     let f = (early: bool) -> { if (early) { return; } side(); };
-    let xs = [{ side(); }, { side(); }];
+    let xs = [
+        {
+            side();
+        },
+        {
+            side();
+        },
+    ];
     a
 }

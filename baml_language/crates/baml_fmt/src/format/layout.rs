@@ -3,7 +3,7 @@
 //! the rules add none of their own.
 
 use baml_syntax::{
-    nodes::{AnyDoc, Block},
+    nodes::{AnyDoc, AnyId, Block},
     token::{Token, TokenIdx, TokenSet, punct},
     tree::{AnyNodeId, Id, List, NodeUnion, SepItem},
 };
@@ -14,6 +14,33 @@ use crate::{
     ir::{Doc, GroupId},
 };
 
+/// One item of a bracketed list, its document built by the caller.
+#[derive(Debug, Clone, Copy)]
+pub struct ListItem<'a> {
+    pub doc: Doc<'a>,
+    /// The separator written after it, if any, whose comments are kept.
+    pub comma: Option<TokenIdx>,
+    /// Whether the source left a blank line before it: kept, one at most,
+    /// and the list then breaks — as between the statements of a block.
+    pub blank_before: bool,
+}
+
+/// Whether a node ends in braces of its own that can break instead of the
+/// construct around it: a block, an `if`, a `match`, a `catch`, a lambda or
+/// a `spawn`. An operator after one stays on its `}` line.
+pub(super) fn braced(id: AnyNodeId) -> bool {
+    matches!(
+        id.typed(),
+        AnyId::Block(_)
+            | AnyId::IfExpr(_)
+            | AnyId::IfLetExpr(_)
+            | AnyId::MatchExpr(_)
+            | AnyId::CatchExpr(_)
+            | AnyId::LambdaExpr(_)
+            | AnyId::SpawnExpr(_)
+    )
+}
+
 /// An [`EXPAND_PARENT`](Doc::EXPAND_PARENT) when an item but the last
 /// [spans lines](Doc::spans_lines): the item after it would land on its
 /// closing line, so the list breaks one item per line instead. Nothing when
@@ -21,6 +48,14 @@ use crate::{
 pub(super) fn multi_line_before_last<'a>(docs: &[Doc<'a>]) -> Doc<'a> {
     match docs.split_last() {
         Some((_, init)) if init.iter().any(|doc| doc.spans_lines()) => Doc::EXPAND_PARENT,
+        _ => Doc::NIL,
+    }
+}
+
+/// [`multi_line_before_last`] over list items.
+fn multi_line_item_before_last<'a>(items: &[ListItem<'a>]) -> Doc<'a> {
+    match items.split_last() {
+        Some((_, init)) if init.iter().any(|item| item.doc.spans_lines()) => Doc::EXPAND_PARENT,
         _ => Doc::NIL,
     }
 }
@@ -230,41 +265,136 @@ impl<'a> Formatter<'a> {
         r: Token<R>,
         item: impl Fn(T) -> Doc<'a>,
     ) -> Doc<'a> {
+        let items: Vec<ListItem<'a>> = items
+            .iter()
+            .map(|&SepItem { item: it, sep }| ListItem {
+                doc: item(it),
+                comma: sep.map(|comma| comma.idx),
+                blank_before: false,
+            })
+            .collect();
+        self.delimited_items(l.idx, &items, r)
+    }
+
+    /// [`Self::delimited_parts`] over items already printed. Empty brackets
+    /// print as written, unless a comment is inside, which goes inside them.
+    pub fn delimited_items<R: TokenSet>(
+        &self,
+        l: TokenIdx,
+        items: &[ListItem<'a>],
+        r: Token<R>,
+    ) -> Doc<'a> {
         let d = self.docs;
-        if items.is_empty() && !self.has_comments_after(l.idx) {
-            return d.concat([d.text(self.tree.token_text(l.idx)), self.token(r)]);
+        if items.is_empty() && !self.has_comments_after(l) {
+            return d.concat([d.text(self.tree.token_text(l)), self.token(r)]);
         }
         let last = items.len().checked_sub(1);
-        let docs: Vec<Doc<'a>> = items.iter().map(|it| item(it.item)).collect();
-        let inside =
-            items
-                .iter()
-                .zip(&docs)
-                .enumerate()
-                .map(|(i, (&SepItem { sep, .. }, &doc))| {
-                    let separator = match (sep, Some(i) == last) {
-                        (Some(comma), false) => self.token(comma),
-                        (None, false) => d.text(","),
-                        (Some(comma), true) => d.concat([
-                            d.if_break(d.text(","), Doc::NIL),
-                            self.comments_after(comma.idx),
-                        ]),
-                        (None, true) => d.if_break(d.text(","), Doc::NIL),
-                    };
-                    let line = if i == 0 {
-                        Doc::SOFT_LINE
-                    } else {
-                        Doc::SOFT_LINE_OR_SPACE
-                    };
-                    d.concat([line, doc, separator])
-                });
+        let inside = items.iter().enumerate().map(|(i, item)| {
+            let separator = match (item.comma, Some(i) == last) {
+                (Some(comma), false) => self.token_at(comma),
+                (None, false) => d.text(","),
+                (Some(comma), true) => d.concat([
+                    d.if_break(d.text(","), Doc::NIL),
+                    self.comments_after(comma),
+                ]),
+                (None, true) => d.if_break(d.text(","), Doc::NIL),
+            };
+            let line = if i == 0 {
+                Doc::SOFT_LINE
+            } else if item.blank_before {
+                Doc::EMPTY_LINE
+            } else {
+                Doc::SOFT_LINE_OR_SPACE
+            };
+            d.concat([line, item.doc, separator])
+        });
         d.concat([
-            multi_line_before_last(&docs),
-            d.text(self.tree.token_text(l.idx)),
-            d.indent(d.concat(std::iter::once(self.comments_inside(l.idx)).chain(inside))),
+            multi_line_item_before_last(items),
+            d.text(self.tree.token_text(l)),
+            d.indent(d.concat(std::iter::once(self.comments_inside(l)).chain(inside))),
             Doc::SOFT_LINE,
             self.token(r),
         ])
+    }
+
+    /// `l … r` around items that each carry their own optional comma (an
+    /// array's elements, a map's entries, an object's or destructure's
+    /// fields): all on one line, or one per line with a trailing comma; the
+    /// commas are canonical. With `padded`, a space inside each bracket when
+    /// flat (`{ a, b }`); without, none (`[a, b]`). Empty brackets print as
+    /// `l` and `r` alone, unless a comment is inside.
+    pub fn list_parts(
+        &self,
+        node: AnyNodeId,
+        l: TokenIdx,
+        items: &[ListItem<'a>],
+        r: TokenIdx,
+        padded: bool,
+    ) -> Doc<'a> {
+        let d = self.docs;
+        let open_comments = if padded {
+            self.comments_after(l)
+        } else {
+            self.comments_inside(l)
+        };
+        // A comment that ended the line before the bracket (a constructor's
+        // own-line trailing comment) still does: the bracket starts the next
+        // line, so the comment is read the same way again.
+        let open = d.concat([
+            Doc::LINE_SUFFIX_BOUNDARY,
+            d.text(self.tree.token_text(l)),
+            open_comments,
+        ]);
+        let close = d.concat([d.text(self.tree.token_text(r)), self.comments_after(r)]);
+        if items.is_empty() && self.comments.dangling_after(node, l).is_empty() {
+            return d.concat([open, close]);
+        }
+        let edge = if padded {
+            Doc::SOFT_LINE_OR_SPACE
+        } else {
+            Doc::SOFT_LINE
+        };
+        let last = items.len().checked_sub(1);
+        let inside = items.iter().enumerate().map(|(i, item)| {
+            let separator = match (item.comma, Some(i) == last) {
+                (Some(comma), false) => self.token_at(comma),
+                (None, false) => d.text(","),
+                (Some(comma), true) => d.concat([
+                    d.if_break(d.text(","), Doc::NIL),
+                    self.comments_after(comma),
+                ]),
+                (None, true) => d.if_break(d.text(","), Doc::NIL),
+            };
+            let line = if i == 0 {
+                edge
+            } else if item.blank_before {
+                Doc::EMPTY_LINE
+            } else {
+                Doc::SOFT_LINE_OR_SPACE
+            };
+            d.concat([line, item.doc, separator])
+        });
+        d.concat([
+            multi_line_item_before_last(items),
+            open,
+            d.indent(d.concat(inside)),
+            edge,
+            close,
+        ])
+    }
+
+    /// A [`ListItem`] for `node`, printed by [`Self::any`], with its blank
+    /// line before it if the source left one.
+    pub fn list_item(&self, node: AnyNodeId, comma: Option<TokenIdx>, first: bool) -> ListItem<'a> {
+        ListItem {
+            doc: self.any(node),
+            comma,
+            blank_before: !first
+                && self
+                    .comments
+                    .gap_before_node(self.tree, node)
+                    .has_blank_line(),
+        }
     }
 
     /// Items after a keyword (`requires A, B`, `with a, b`): on the
@@ -300,9 +430,14 @@ impl<'a> Formatter<'a> {
     /// A member's separator: the written `,` or `;` is replaced by `text`
     /// (and its comments kept); an unwritten one is added.
     pub fn separator<S: TokenSet>(&self, written: Option<Token<S>>, text: &'a str) -> Doc<'a> {
+        self.separator_at(written.map(|token| token.idx), text)
+    }
+
+    /// [`Self::separator`] by token index.
+    pub fn separator_at(&self, written: Option<TokenIdx>, text: &'a str) -> Doc<'a> {
         let d = self.docs;
         match written {
-            Some(token) => d.concat([d.text(text), self.comments_after(token.idx)]),
+            Some(token) => d.concat([d.text(text), self.comments_after(token)]),
             None => d.text(text),
         }
     }

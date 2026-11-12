@@ -68,7 +68,7 @@ function LongNameWithManyParameters_ThisFunctionExceedsLimit(
 function LongNameWithLongReturnType_ExceedsTheLineLimit(
     x: int,
 ) -> map<string, map<string, int | string | bool | float | null>> {
-    {"a": {"b": 1}}
+    { "a": { "b": 1 } }
 }
 
 // ===== Long name + long params + long return =====
@@ -76,7 +76,7 @@ function EverythingIsLong_NameParamsReturnType(
     first_long_param: map<string, int>,
     second_long_param: (int | string | bool)[],
 ) -> map<string, int | string | bool | float | null> {
-    {"a": 1}
+    { "a": 1 }
 }
 
 // ===== Complex return type =====
@@ -89,7 +89,7 @@ function NestedGenericReturn() -> map<
     string,
     map<string, map<string, int | string | bool | null | float>>,
 > {
-    {"a": {"b": {"c": 1}}}
+    { "a": { "b": { "c": 1 } } }
 }
 
 // ===== Return type: deeply nested function type exceeding limit =====
@@ -335,7 +335,7 @@ TriviaEverythingLong_NameAndParamsAndReturn( // 4 trailing
 map<string, int | string | bool | float | null> // 21 trailing
 // 22 leading
 { // 23 trailing
-    {"a": 1}
+    { "a": 1 }
 } // 24 trailing
 
 ///////////////////
@@ -360,7 +360,7 @@ TriviaEverythingLong_NameAndParamsAndReturnBlock /* 4 trailing */(/* 5 trailing 
 map<string, int | string | bool | float | null> /* 21 trailing */
 /* 22 leading */
 { /* 23 trailing */
-    {"a": 1}
+    { "a": 1 }
 } /* 24 trailing */
 
 ///////////////////

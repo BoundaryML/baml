@@ -23,14 +23,14 @@
 //!   lines at their own columns, and counts as a forced break.
 //! * `verbatim` — source text with a newline in it whose later lines move
 //!   with the node: each keeps its indentation relative to the line the
-//!   text started on in the source, measured from the indent the node is
-//!   printed at. For a node a rule has no layout for yet, printed deeper or
-//!   shallower than it was written.
+//!   text started on in the source, measured from the indentation of the
+//!   line the node is printed on (an indent that has not reached a line
+//!   break has moved nothing). For a node a rule has no layout for yet,
+//!   printed deeper or shallower than it was written.
 //! * `literal` — a multi-line literal the rule laid out itself (a backtick
-//!   string), copied in: its later lines are indented as written relative
-//!   to the line it starts on, whatever indents enclose it, and it is an
-//!   atom to the layout around it — no forced break, measured by its first
-//!   line — so a call hugs it as it hugs a long string.
+//!   string), copied in: verbatim text that is also an atom to the layout
+//!   around it — no forced break, measured by its first line — so a call
+//!   hugs it as it hugs a long string.
 //! * `Doc::SPACE`, `Doc::SOFT_LINE`, `Doc::SOFT_LINE_OR_SPACE`,
 //!   `Doc::HARD_LINE`, `Doc::EMPTY_LINE` — a soft line is nothing when its
 //!   group is flat and a newline when the group breaks; `SOFT_LINE_OR_SPACE`
@@ -95,4 +95,4 @@ mod printer;
 mod tests;
 
 pub(crate) use doc::display_width;
-pub use doc::{Doc, Docs, GroupId, SuffixWidth};
+pub use doc::{Doc, Docs, GroupId, SuffixWidth, VerbatimPiece};

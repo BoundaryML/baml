@@ -36,6 +36,22 @@ pub(crate) enum LineMode {
 #[must_use = "a document prints nothing until it is part of the one that is printed"]
 pub struct Doc<'a>(&'a Node<'a>);
 
+/// A piece of verbatim text: lines that move with the node, or lines kept
+/// exactly as written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerbatimPiece<'a> {
+    Moved(&'a str),
+    Exact(&'a str),
+}
+
+impl<'a> VerbatimPiece<'a> {
+    fn text(self) -> &'a str {
+        match self {
+            Self::Moved(text) | Self::Exact(text) => text,
+        }
+    }
+}
+
 /// A node. The variants whose subtree may or may not contain a forced break
 /// record that in `forced`, fixed when the node is created since its children
 /// exist before it does; for every other variant the kind decides. A forced
@@ -52,15 +68,17 @@ pub(crate) enum Node<'a> {
         forced: bool,
     },
     /// Source text with a newline in it whose later lines move with the
-    /// node: each is indented by the difference between the indent the node
-    /// is printed at and `source_indent`, the indentation of the line the
-    /// text started on in the source. Code (`forced`) breaks the enclosing
-    /// groups and sits relative to the indent it is printed at; a literal
-    /// does not break them, is measured by its first line, and sits relative
-    /// to the line it starts on — but it [spans lines](Doc::spans_lines),
-    /// which a list it is not the last item of must know.
+    /// node: each is indented by the difference between the indentation of
+    /// the line the node is printed on and `source_indent`, the indentation
+    /// of the line the text started on in the source. Code (`forced`)
+    /// breaks the enclosing groups; a literal does not, and is measured by
+    /// its first line. — but it
+    /// [spans lines](Doc::spans_lines), which a list it is not the last
+    /// item of must know.
     Verbatim {
-        text: &'a str,
+        /// The text in pieces, each moved with the node or kept exactly: a
+        /// string literal or template inside moved code keeps its lines.
+        pieces: &'a [VerbatimPiece<'a>],
         width: u32,
         source_indent: u32,
         forced: bool,
@@ -184,6 +202,24 @@ impl<'a> Doc<'a> {
             Node::Group { content, .. } | Node::Indent { content, .. } => {
                 self.forced() || content.spans_lines()
             }
+            Node::IfBreak { .. } => self.will_break(),
+            _ => self.forced(),
+        }
+    }
+
+    /// Whether the node is sure to print a line break: [`Self::forced`],
+    /// looking into a `best_fitting` as well — at the variant it prints when
+    /// flat, which is a broken layout once every flatter one is ruled out
+    /// (a call hugging a multi-line lambda). What a layout decision asks
+    /// before putting such a node on one line with something after it.
+    pub(crate) fn will_break(self) -> bool {
+        match self.node() {
+            Node::BestFitting { most_flat, .. } => most_flat.will_break(),
+            Node::Concat { children, .. } => children.iter().any(|child| child.will_break()),
+            Node::Group { content, .. } | Node::Indent { content, .. } => {
+                self.forced() || content.will_break()
+            }
+            Node::IfBreak { breaks, flat, .. } => breaks.will_break() || flat.will_break(),
             _ => self.forced(),
         }
     }
@@ -278,6 +314,10 @@ impl<'a> Docs<'a> {
         Doc(self.bump.alloc(node))
     }
 
+    fn slice_of<T>(self, items: impl IntoIterator<Item = T>) -> &'a [T] {
+        bumpalo::collections::Vec::from_iter_in(items, self.bump).into_bump_slice()
+    }
+
     fn slice(self, items: impl IntoIterator<Item = Doc<'a>>) -> &'a [Doc<'a>] {
         bumpalo::collections::Vec::from_iter_in(items, self.bump).into_bump_slice()
     }
@@ -300,20 +340,19 @@ impl<'a> Docs<'a> {
     }
 
     /// A multi-line literal laid out by the rule — a backtick string —
-    /// copied in. Its later lines are indented as written relative to the
-    /// line the literal starts on, whatever indents enclose it, so the line
-    /// closing it lands under the line that opened it; and it is an atom to
-    /// the layout around it: it does not force the enclosing groups to break
-    /// and is measured by its first line, so `f(`…`)` hugs it, as a long
-    /// string is hugged. It does [span lines](Doc::spans_lines), which a
-    /// list it is not the last item of breaks for. Text with no newline is
+    /// copied in: [`Self::verbatim`] text relative to the line it starts on,
+    /// that is also an atom to the layout around it: it does not force the
+    /// enclosing groups to break and is measured by its first line, so
+    /// `f(`…`)` hugs it, as a long string is hugged. It does
+    /// [span lines](Doc::spans_lines), which a list it is not the last item
+    /// of breaks for. Text with no newline is
     /// plain text.
     pub fn literal(self, text: &str) -> Doc<'a> {
         let text = self.bump.alloc_str(text);
         match text.split_once('\n') {
             None => self.text(text),
             Some((first, _)) => self.alloc(Node::Verbatim {
-                text,
+                pieces: self.slice_of([VerbatimPiece::Moved(text)]),
                 width: display_width(first),
                 source_indent: 0,
                 forced: false,
@@ -324,18 +363,47 @@ impl<'a> Docs<'a> {
     /// Source text printed as written, except that its later lines move
     /// with the node: each keeps its indentation relative to
     /// `source_indent`, the indentation of the line the text starts on in
-    /// the source, measured from the indent the node is printed at. For a
-    /// node printed where it was, nothing changes; for one printed deeper or
-    /// shallower, its lines follow. Text with no newline is plain text.
+    /// the source, measured from the indentation of the line the node is
+    /// printed on. For a node printed where it was, nothing changes; for one
+    /// printed deeper or shallower, its lines follow. Text with no newline is
+    /// plain text.
     pub fn verbatim(self, text: &'a str, source_indent: u32) -> Doc<'a> {
-        match text.split_once('\n') {
-            None => self.text(text),
-            Some((first, _)) => self.alloc(Node::Verbatim {
-                text,
-                width: display_width(first),
-                source_indent,
-                forced: true,
-            }),
+        self.verbatim_pieces([VerbatimPiece::Moved(text)], source_indent)
+    }
+
+    /// [`Self::verbatim`] of text in pieces: the moved pieces' lines are
+    /// re-indented, the exact pieces' (a string literal, a template) kept as
+    /// written — all as one node, relative to the one line it starts on.
+    pub fn verbatim_pieces(
+        self,
+        pieces: impl IntoIterator<Item = VerbatimPiece<'a>>,
+        source_indent: u32,
+    ) -> Doc<'a> {
+        let pieces = self.slice_of(pieces);
+        let before_newline: u32 = pieces
+            .iter()
+            .map(|piece| piece.text())
+            .take_while(|text| !text.contains('\n'))
+            .map(display_width)
+            .sum();
+        let first_with_newline = pieces
+            .iter()
+            .map(|piece| piece.text())
+            .find(|text| text.contains('\n'));
+        match first_with_newline {
+            None => match pieces {
+                [only] => self.text(only.text()),
+                pieces => self.concat(pieces.iter().map(|piece| self.text(piece.text()))),
+            },
+            Some(text) => {
+                let first = text.split_once('\n').map_or(text, |(first, _)| first);
+                self.alloc(Node::Verbatim {
+                    pieces,
+                    width: before_newline.saturating_add(display_width(first)),
+                    source_indent,
+                    forced: true,
+                })
+            }
         }
     }
 
@@ -541,13 +609,21 @@ impl<'a> Display<'a> {
         match doc.node() {
             Node::Text { text, .. } => write!(self.out, "{text:?}").unwrap_or_else(never),
             Node::Verbatim {
-                text,
+                pieces,
                 source_indent,
                 forced,
                 ..
             } => {
                 let kind = if forced { "verbatim" } else { "literal" };
-                write!(self.out, "({kind} {source_indent} {text:?})").unwrap_or_else(never);
+                write!(self.out, "({kind} {source_indent}").unwrap_or_else(never);
+                for piece in pieces {
+                    match piece {
+                        VerbatimPiece::Moved(text) => write!(self.out, " {text:?}"),
+                        VerbatimPiece::Exact(text) => write!(self.out, " (exact {text:?})"),
+                    }
+                    .unwrap_or_else(never);
+                }
+                self.out.push(')');
             }
             Node::Space => self.out.push_str("space"),
             Node::Line(LineMode::Soft) => self.out.push_str("softline"),

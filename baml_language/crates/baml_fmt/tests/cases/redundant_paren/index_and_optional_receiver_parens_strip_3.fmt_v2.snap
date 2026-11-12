@@ -2,5 +2,5 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function f(o: string[]?) -> string? {
-    ((o))?.[0]
+    o?.[0]
 }

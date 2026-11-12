@@ -18,7 +18,12 @@ function widen(v: int | Tag) -> int | Tag {
 // the break edge.
 function while_break_after_the_condition_write(a: int) -> int {
     let x: int | Tag = a;
-    while ({ x = a; a > 0 }) {
+    while (
+        {
+            x = a;
+            a > 0
+        }
+    ) {
         x = Tag {};
         break;
     }
@@ -94,13 +99,15 @@ function condition_reads_its_own_write(a: int) -> int {
     x = a;
     let i = 0;
     let out = 0;
-    while ({
-        let u: int = x;
-        out = u;
-        x = Tag {};
-        i += 1;
-        i < 2
-    }) {}
+    while (
+        {
+            let u: int = x;
+            out = u;
+            x = Tag {};
+            i += 1;
+            i < 2
+        }
+    ) {}
     out
 }
 

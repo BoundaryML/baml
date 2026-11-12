@@ -37,9 +37,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
     while // 2 while keyword trailing
     // 3 condition leading
     ( // 4 open paren trailing
-    // 5 expr leading
-    a < 10 // 6 expr trailing
-    // 7 close paren leading
+        // 5 expr leading
+        a < 10 // 6 expr trailing
+        // 7 close paren leading
     ) // 8 close paren trailing
     // 9 body leading
     { // 10 body open trailing
@@ -54,9 +54,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
     while /* 2 while keyword trailing */
     /* 3 condition leading */
     ( /* 4 open paren trailing */
-    /* 5 expr leading */
-    a < 10 /* 6 expr trailing */
-    /* 7 close paren leading */
+        /* 5 expr leading */
+        a < 10 /* 6 expr trailing */
+        /* 7 close paren leading */
     ) /* 8 close paren trailing */
     /* 9 body leading */
     { /* 10 body open trailing */
@@ -189,12 +189,31 @@ function LoopStmts(items: int[], flag: bool) -> int {
     } /* 18 body close trailing */
 
     // ===== Long while condition exceeding limit =====
-    while (a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42) {
+    while (
+        a < 100
+            && result > 0
+            && flag
+            && a != result
+            && a + result < 10000
+            && a * result > 500
+            && a - result != 42
+    ) {
         a += 1;
     }
 
     // ===== Very long while condition far exceeding limit =====
-    while (a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42 && a % 7 == 0 && result % 3 == 0 && a + result + a * result > 99999) {
+    while (
+        a < 100
+            && result > 0
+            && flag
+            && a != result
+            && a + result < 10000
+            && a * result > 500
+            && a - result != 42
+            && a % 7 == 0
+            && result % 3 == 0
+            && a + result + a * result > 99999
+    ) {
         a += 1;
     }
 
@@ -218,14 +237,26 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Long for-in with long array exceeding limit =====
     for (
-        let item in ["very long string one", "very long string two", "very long string three", "very long string four"]
+        let item in [
+            "very long string one",
+            "very long string two",
+            "very long string three",
+            "very long string four",
+        ]
     ) {
         result += 1;
     }
 
     // ===== Very long for-in with complex iterator exceeding limit =====
     for (
-        let extremely_long_item_variable_name in ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"]
+        let extremely_long_item_variable_name in [
+            "alpha bravo charlie",
+            "delta echo foxtrot",
+            "golf hotel india",
+            "juliet kilo lima",
+            "mike november oscar",
+            "papa quebec romeo",
+        ]
     ) {
         result += 1;
     }
@@ -235,9 +266,15 @@ function LoopStmts(items: int[], flag: bool) -> int {
     while // 2 while trailing
     // 3 open paren leading
     ( // 4 open paren trailing
-    // 5 condition leading
-    a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42 // 6 condition trailing
-    // 7 close paren leading
+        // 5 condition leading
+        a < 100
+            && result > 0
+            && flag
+            && a != result
+            && a + result < 10000
+            && a * result > 500
+            && a - result != 42 // 6 condition trailing
+        // 7 close paren leading
     ) // 8 close paren trailing
     // 9 body leading
     { // 10 body open trailing
@@ -252,9 +289,15 @@ function LoopStmts(items: int[], flag: bool) -> int {
     while /* 2 while trailing */
     /* 3 open paren leading */
     ( /* 4 open paren trailing */
-    /* 5 condition leading */
-    a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42 /* 6 condition trailing */
-    /* 7 close paren leading */
+        /* 5 condition leading */
+        a < 100
+            && result > 0
+            && flag
+            && a != result
+            && a + result < 10000
+            && a * result > 500
+            && a - result != 42 /* 6 condition trailing */
+        /* 7 close paren leading */
     ) /* 8 close paren trailing */
     /* 9 body leading */
     { /* 10 body open trailing */
@@ -304,7 +347,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
         /* 10 init value leading */
         a * a + result * result /* 11 init value trailing */ /* 12 semi1 trailing */;
         /* 13 condition leading */
-        extremely_long_loop_counter_variable < 1000000 && flag && a > 0 /* 14 condition trailing */ /* 15 semi2 trailing */;
+        extremely_long_loop_counter_variable < 1000000
+            && flag
+            && a > 0 /* 14 condition trailing */ /* 15 semi2 trailing */;
         /* 16 update leading */
         extremely_long_loop_counter_variable += a + result /* 17 update trailing */
         /* 18 close paren leading */
@@ -329,7 +374,14 @@ function LoopStmts(items: int[], flag: bool) -> int {
         // 9 in leading
         // 10 in trailing
         // 11 iterator leading
-        ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"] // 12 iterator trailing
+        [
+            "alpha bravo charlie",
+            "delta echo foxtrot",
+            "golf hotel india",
+            "juliet kilo lima",
+            "mike november oscar",
+            "papa quebec romeo",
+        ] // 12 iterator trailing
         // 13 close paren leading
     ) // 14 close paren trailing
     // 15 body leading
@@ -351,7 +403,14 @@ function LoopStmts(items: int[], flag: bool) -> int {
         extremely_long_item_variable_name /* 8 name trailing */ in /* 10 in trailing */
         /* 9 in leading */
         /* 11 iterator leading */
-        ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"] /* 12 iterator trailing */
+        [
+            "alpha bravo charlie",
+            "delta echo foxtrot",
+            "golf hotel india",
+            "juliet kilo lima",
+            "mike november oscar",
+            "papa quebec romeo",
+        ] /* 12 iterator trailing */
         /* 13 close paren leading */
     ) /* 14 close paren trailing */
     /* 15 body leading */
@@ -450,11 +509,11 @@ function LoopStmts(items: int[], flag: bool) -> int {
     }
 
     // ===== Extraneous whitespace =====
-    while (  a  <  10  ) {
+    while (a < 10) {
         a += 1;
     }
 
-    for (let i = 0; i  <  10; i += 1) {
+    for (let i = 0; i < 10; i += 1) {
         result += i;
     }
 
@@ -468,21 +527,34 @@ function LoopStmts(items: int[], flag: bool) -> int {
     let complex_init = a + result;
 
     // ===== Long let with type annotation exceeding limit =====
-    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = {"key": 42};
+    let very_long_variable_name_for_testing_wrapping: map<
+        string,
+        int | string | bool | float | null,
+    > = { "key": 42 };
 
     // ===== Very long let with expression exceeding limit =====
-    let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result;
+    let another_extremely_long_variable_name = a * a
+        + result * result
+        + a * result
+        + a
+        + result
+        + a * a * a
+        + result * result * result
+        + a * result * a
+        + result * a * result;
 
     // ===== Long let with nested generic type exceeding limit =====
-    let deeply_typed: map<string, map<string, map<string, int | string | bool>>> = {"outer": {"inner": {"deep": 42}}};
+    let deeply_typed: map<string, map<string, map<string, int | string | bool>>> = {
+        "outer": { "inner": { "deep": 42 } },
+    };
 
     // ===== Trivia on let statement (line comments) =====
     // 1 let keyword leading
     let // 2 let keyword trailing
     // 3 name leading
-    trivia_var // 4 name trailing
+    trivia_var: // 4 name trailing
     // 5 colon leading
-    : // 6 colon trailing
+    // 6 colon trailing
     // 7 type leading
     int = // 8 type trailing
     // 9 equals leading
@@ -495,9 +567,8 @@ function LoopStmts(items: int[], flag: bool) -> int {
     /* 1 let keyword leading */
     let /* 2 let keyword trailing */
     /* 3 name leading */
-    trivia_var_block /* 4 name trailing */
+    trivia_var_block /* 4 name trailing */: /* 6 colon trailing */
     /* 5 colon leading */
-    : /* 6 colon trailing */
     /* 7 type leading */
     int /* 8 type trailing */ = /* 10 equals trailing */
     /* 9 equals leading */
@@ -508,15 +579,15 @@ function LoopStmts(items: int[], flag: bool) -> int {
     // 1 let leading
     let // 2 let trailing
     // 3 name leading
-    very_long_variable_name_for_testing_wrapping // 4 name trailing
+    very_long_variable_name_for_testing_wrapping: // 4 name trailing
     // 5 colon leading
-    : // 6 colon trailing
+    // 6 colon trailing
     // 7 type leading
     map<string, int | string | bool | float | null> = // 8 type trailing
     // 9 equals leading
     // 10 equals trailing
     // 11 value leading
-    {"key": 42}; // 12 value trailing
+    { "key": 42 }; // 12 value trailing
     // 13 semicolon trailing
 
     ///////////////////
@@ -525,14 +596,16 @@ function LoopStmts(items: int[], flag: bool) -> int {
     /* 1 let leading */
     let /* 2 let trailing */
     /* 3 name leading */
-    very_long_variable_name_for_testing_wrapping /* 4 name trailing */
+    very_long_variable_name_for_testing_wrapping /* 4 name trailing */: /* 6 colon trailing */
     /* 5 colon leading */
-    : /* 6 colon trailing */
     /* 7 type leading */
-    map<string, int | string | bool | float | null> /* 8 type trailing */ = /* 10 equals trailing */
+    map<
+        string,
+        int | string | bool | float | null,
+    > /* 8 type trailing */ = /* 10 equals trailing */
     /* 9 equals leading */
     /* 11 value leading */
-    {"key": 42}; /* 12 value trailing */ /* 13 semicolon trailing */
+    { "key": 42 }; /* 12 value trailing */ /* 13 semicolon trailing */
 
     ///////////////////
 
@@ -544,7 +617,15 @@ function LoopStmts(items: int[], flag: bool) -> int {
     // 5 equals leading
     // 6 equals trailing
     // 7 value leading
-    a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result; // 8 value trailing
+    a * a
+        + result * result
+        + a * result
+        + a
+        + result
+        + a * a * a
+        + result * result * result
+        + a * result * a
+        + result * a * result; // 8 value trailing
     // 9 semicolon trailing
 
     ///////////////////
@@ -556,7 +637,15 @@ function LoopStmts(items: int[], flag: bool) -> int {
     another_extremely_long_variable_name /* 4 name trailing */ = /* 6 equals trailing */
     /* 5 equals leading */
     /* 7 value leading */
-    a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result; /* 8 value trailing */ /* 9 semicolon trailing */
+    a * a
+        + result * result
+        + a * result
+        + a
+        + result
+        + a * a * a
+        + result * result * result
+        + a * result * a
+        + result * a * result; /* 8 value trailing */ /* 9 semicolon trailing */
 
     ///////////////////
 
@@ -586,17 +675,44 @@ function AssertStmts(x: int, y: int) -> int {
 
     // ===== Long assert condition exceeding limit =====
     assert;
-    x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0;
+    x > 0
+        && x < 100
+        && y > 0
+        && y < 100
+        && x != y
+        && x + y < 150
+        && x * y > 10
+        && x - y != 42
+        && x % 7 == 0;
 
     // ===== Very long assert condition far exceeding limit =====
     assert;
-    x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 && y % 3 == 0 && x + y + x * y > 100 && x * x + y * y < 10000;
+    x > 0
+        && x < 100
+        && y > 0
+        && y < 100
+        && x != y
+        && x + y < 150
+        && x * y > 10
+        && x - y != 42
+        && x % 7 == 0
+        && y % 3 == 0
+        && x + y + x * y > 100
+        && x * x + y * y < 10000;
 
     // ===== Trivia on wrapping assert (line comments) =====
     // 1 assert leading
     assert; // 2 assert trailing
     // 3 condition leading
-    x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0; // 4 condition trailing
+    x > 0
+        && x < 100
+        && y > 0
+        && y < 100
+        && x != y
+        && x + y < 150
+        && x * y > 10
+        && x - y != 42
+        && x % 7 == 0; // 4 condition trailing
     // 5 semicolon trailing
 
     ///////////////////
@@ -605,7 +721,15 @@ function AssertStmts(x: int, y: int) -> int {
     /* 1 assert leading */
     assert; /* 2 assert trailing */
     /* 3 condition leading */
-    x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0; /* 4 condition trailing */ /* 5 semicolon trailing */
+    x > 0
+        && x < 100
+        && y > 0
+        && y < 100
+        && x != y
+        && x + y < 150
+        && x * y > 10
+        && x - y != 42
+        && x % 7 == 0; /* 4 condition trailing */ /* 5 semicolon trailing */
 
     ///////////////////
 

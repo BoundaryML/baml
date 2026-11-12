@@ -32,10 +32,7 @@ function load_secret() -> string {
     baml.env.get_or_panic("OPENAI_API_KEY")
 }
 
-client ViaHelper = openai.ResponsesClient.new(
-    model = "gpt-4o-mini",
-    api_key = load_secret(),
-);
+client ViaHelper = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = load_secret());
 
 // ── Tainted: a network read, to show the rule is about io, not about env ─────
 client ViaFetch = openai.ResponsesClient.new(
@@ -60,10 +57,7 @@ function spawned_secret() -> string {
     await spawn { baml.env.get_or_panic("OPENAI_API_KEY") }
 }
 
-client ViaSpawn = openai.ResponsesClient.new(
-    model = "gpt-4o-mini",
-    api_key = spawned_secret(),
-);
+client ViaSpawn = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = spawned_secret());
 
 // ── CLEAN: `env.X` is a late-bound reference, not a read ─────────────────────
 // `env.X` desugars to `baml.env.ref("X")`, which only constructs a
@@ -93,10 +87,7 @@ client StoredThunk = openai.ResponsesClient.new(
 );
 
 // ── CLEAN: a plain literal, the baseline ─────────────────────────────────────
-client LiteralKey = openai.ResponsesClient.new(
-    model = "gpt-4o-mini",
-    api_key = "literal-key",
-);
+client LiteralKey = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "literal-key");
 
 // ── CLEAN: taking a `baml.sync.atomic` lock ──────────────────────────────────
 // `atomic` parks on a sys-op only when another task holds the lock, and

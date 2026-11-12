@@ -94,6 +94,15 @@ function through_existential(a: Pairable, b: Pairable) -> int throws never {
 }
 
 function concrete(a: P, b: P) -> int throws never {
-    P.pair(a, 1) + P.both(a, b) + P.later(1, a) + P.make(1).v + a.twice(b) + a.boxed().length()
-        + a.clone().v + a.maybe(b) + a.eithered(b) + P.opt(1) + P.opt(1, x = a)
+    P.pair(a, 1)
+        + P.both(a, b)
+        + P.later(1, a)
+        + P.make(1).v
+        + a.twice(b)
+        + a.boxed().length()
+        + a.clone().v
+        + a.maybe(b)
+        + a.eithered(b)
+        + P.opt(1)
+        + P.opt(1, x = a)
 }

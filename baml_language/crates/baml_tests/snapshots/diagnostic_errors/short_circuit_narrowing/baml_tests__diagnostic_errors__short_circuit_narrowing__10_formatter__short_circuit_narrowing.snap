@@ -114,7 +114,11 @@ function assignment_inside_the_right_side(x: A | B) -> int {
 // After an assignment inside the right side, the right side reads the
 // assigned type.
 function read_after_assignment_inside_the_right_side(x: A | B) -> bool {
-    x is A && { x = B { b: "replaced" }; x.a == 1 }
+    x is A
+        && {
+            x = B { b: "replaced" };
+            x.a == 1
+        }
 }
 
 // In a condition, a test on the right that cannot match after the left side
@@ -135,8 +139,9 @@ function test_that_cannot_match(x: A | B) -> int {
 // arms of the other members: such an arm is unreachable, as it is in the
 // branch of an `if`.
 function unreachable_arm_after_the_test(x: A | B) -> bool {
-    x is A && match (x) {
-        let a: A => true,
-        _ => false,
-    }
+    x is A
+        && match (x) {
+            let a: A => true,
+            _ => false,
+        }
 }

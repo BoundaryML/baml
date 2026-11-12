@@ -346,7 +346,7 @@ class WithLongMethod {
         second_input: (int | string | bool)[],
         third_input: string,
     ) -> map<string, int | string | bool> {
-        {"result": 1}
+        { "result": 1 }
     }
 }
 

@@ -653,3 +653,46 @@ fn nil_prints_nothing_and_needs_no_arena() {
     assert_eq!(Doc::NIL.to_string(), "(concat)");
     assert_eq!(print(Doc::NIL, 80), "");
 }
+
+#[test]
+fn a_group_after_a_hard_line_inside_flat_content_is_measured_again() {
+    // The hug variant fits by its first line and prints flat, but the long
+    // call inside the hugged body comes after a hard line: it is measured
+    // for itself and breaks, instead of inheriting the flat decision.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let inner_call = d.group(d.concat([
+        d.text("g("),
+        d.indent(d.concat([Doc::SOFT_LINE, d.text("aaaaaaaaaaaaaaaaaaaa")])),
+        Doc::SOFT_LINE,
+        d.text(")"),
+    ]));
+    let body = d.concat([
+        d.text("{"),
+        d.indent(d.concat([Doc::HARD_LINE, inner_call])),
+        Doc::HARD_LINE,
+        d.text("}"),
+    ]);
+    let hug = d.concat([d.text("f(x, (y) -> "), body, d.text(")")]);
+    let broken = d.concat([
+        d.text("f("),
+        d.indent(d.concat([
+            Doc::HARD_LINE,
+            d.text("x,"),
+            Doc::HARD_LINE,
+            d.text("(y) -> "),
+            body,
+        ])),
+        Doc::HARD_LINE,
+        d.text(")"),
+    ]);
+    let root = d.best_fitting([
+        d.text("f(x, (y) -> { g(aaaaaaaaaaaaaaaaaaaa) })"),
+        hug,
+        broken,
+    ]);
+    assert_eq!(
+        print(root, 24),
+        "f(x, (y) -> {\n    g(\n        aaaaaaaaaaaaaaaaaaaa\n    )\n})"
+    );
+}

@@ -2,6 +2,6 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function f(x: bool) -> null {
-    assert.is_true(((x && x)));
+    assert.is_true(x && x);
     null
 }

@@ -55,7 +55,11 @@ function block_bound() -> int {
 }
 
 function block_argument() -> int {
-    takes_optional({ side(); })
+    takes_optional(
+        {
+            side();
+        },
+    )
 }
 
 function lambda_body() -> int {

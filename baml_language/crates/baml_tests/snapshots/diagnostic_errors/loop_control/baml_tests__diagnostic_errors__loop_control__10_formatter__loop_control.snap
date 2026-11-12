@@ -35,7 +35,13 @@ function for_in_continue_is_an_exit(a: int, xs: int[]) -> int {
 // `while let` scrutinee or a `for` update expression (rustc's E0590 rule).
 function break_in_a_while_condition(a: int) -> int {
     let n = 0;
-    while ({ n += 1; if (n > a) { break; } true }) {}
+    while (
+        {
+            n += 1;
+            if (n > a) { break; }
+            true
+        }
+    ) {}
     n
 }
 
@@ -172,7 +178,13 @@ const break_in_a_global_initializer: int = {
 // A collection that never produces a value leaves the loop and everything
 // after it dead.
 function for_over_a_diverging_collection() -> int {
-    for (let v in ({ return 2; })) {}
+    for (
+        let v in (
+            {
+                return 2;
+            }
+        )
+    ) {}
     5
 }
 

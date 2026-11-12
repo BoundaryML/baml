@@ -12,7 +12,9 @@ use super::{FormatNode, Formatter};
 use crate::{comments::docs, ir::Doc};
 
 mod attrs;
+mod exprs;
 mod items;
+mod patterns;
 mod stmts;
 mod templates;
 mod types;
@@ -79,19 +81,10 @@ macro_rules! verbatim {
 verbatim! {
     // items
     RemovedItem, JinjaArg,
-    // patterns
-    BindingPattern, WildcardPattern, DestructurePattern, FieldPattern, ArrayPattern, RestPattern,
-    TypePattern, ParenPattern, UnionPattern,
-    // expressions
-    PathExpr, GenericApplyExpr, LiteralExpr, StringLit, FieldAccessExpr, OptionalFieldAccessExpr,
-    UpcastExpr, SpecExpr, EnvAccessExpr, CallExpr, ArgList, Arg, OptionalCallExpr, IndexExpr,
-    OptionalIndexExpr, TaggedTemplateExpr, BinaryExpr, IsExpr, UnaryExpr, AwaitExpr, SpawnExpr,
-    CatchExpr, CatchClause, CatchArm, ThrowExpr, ReturnExpr, BreakExpr, ContinueExpr, ParenExpr,
-    IfExpr, IfLetExpr, MatchExpr, MatchParen, MatchArm, LambdaExpr, ArrayLiteral, MapLiteral,
-    MapEntry, ObjectLiteral, ObjectField, SpreadElement,
+    // control flow
+    CatchExpr, CatchClause, CatchArm, IfExpr, IfLetExpr, MatchExpr, MatchParen, MatchArm, LambdaExpr,
+    SpawnExpr,
     // the parts of a template, printed by the template as a whole
     TemplateInterp, TemplateFor, TemplateForOpen, TemplateIf, TemplateIfOpen, TemplateElif,
     TemplateElse, TemplateEndTag,
-    // tuples (canary #5030), laid out by the rules of their families
-    TupleExpr, TupleFieldExpr, TuplePattern,
 }

@@ -11,7 +11,7 @@ use std::iter;
 
 use rustc_hash::FxHashMap;
 
-use super::doc::{Doc, GroupId, LineMode, Node, SuffixWidth, display_width};
+use super::doc::{Doc, GroupId, LineMode, Node, SuffixWidth, VerbatimPiece, display_width};
 use crate::FormatOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,6 +109,12 @@ enum Item<'a> {
 #[derive(Debug)]
 struct Output<'a> {
     items: Vec<Item<'a>>,
+    /// Whether the content being printed flat was measured to fit on the
+    /// line being written: true after a group's or a `best_fitting`
+    /// variant's fits-check, false again after any newline. A group met in
+    /// flat mode once the line has ended must be measured for itself, as a
+    /// long call inside a hugged lambda's body must still break.
+    measured_fits: bool,
     /// The first item of the line being written: after the last newline of
     /// either kind.
     line: usize,
@@ -124,6 +130,7 @@ impl<'a> Output<'a> {
             items: Vec::new(),
             line: 0,
             tails: 0,
+            measured_fits: false,
         }
     }
 
@@ -259,6 +266,7 @@ impl<'a> Output<'a> {
         debug_assert!(matches!(newline, Item::Newline { .. }));
         self.items.push(newline);
         self.line = self.items.len();
+        self.measured_fits = false;
         if let Item::Newline { in_text: false, .. } = newline {
             self.tails = self.line;
         }
@@ -546,22 +554,25 @@ impl<'a> Printer<'a> {
             Node::Text {
                 text, forced: true, ..
             } => self.out.push_multi_line(text),
+            // Verbatim lines sit relative to the line the text starts on, not
+            // to the indents around it: an indent that has not reached a line
+            // break yet has not moved anything, so a lambda body inside
+            // flat-printed arguments stays where its first line is, and a
+            // literal's closing line lands under the line that opened it.
             Node::Verbatim {
-                text,
+                pieces,
                 source_indent,
-                forced: true,
-                ..
-            } => self.out.push_reindented(text, source_indent, indent),
-            // A literal's lines sit relative to the line it starts on, not
-            // to the indents around it: `f(`…`)` hugs the literal, and its
-            // closing line lands under the line that opened it.
-            Node::Verbatim {
-                text,
-                forced: false,
                 ..
             } => {
                 let line_indent = self.out.line_indent();
-                self.out.push_reindented(text, 0, line_indent);
+                for piece in pieces {
+                    match *piece {
+                        VerbatimPiece::Moved(text) => {
+                            self.out.push_reindented(text, source_indent, line_indent);
+                        }
+                        VerbatimPiece::Exact(text) => self.out.push_multi_line(text),
+                    }
+                }
             }
             Node::Space => self.out.push_space(),
             Node::Line(line) => match (mode, line) {
@@ -607,7 +618,8 @@ impl<'a> Printer<'a> {
                 };
                 let mode = if doc.forced() {
                     Mode::Break
-                } else if mode == Mode::Flat || self.fits(flat, rest) {
+                } else if (mode == Mode::Flat && self.out.measured_fits) || self.fits(flat, rest) {
+                    self.out.measured_fits = true;
                     Mode::Flat
                 } else {
                     Mode::Break
@@ -674,6 +686,7 @@ impl<'a> Printer<'a> {
                         indent,
                     };
                     if self.fits(candidate, rest) {
+                        self.out.measured_fits = true;
                         return self.print(candidate, rest);
                     }
                 }

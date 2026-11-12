@@ -30,7 +30,7 @@ use text_size::TextSize;
 
 use crate::{
     comments::{Comments, SourceComment, docs},
-    ir::{Doc, Docs, display_width},
+    ir::{Doc, Docs, VerbatimPiece, display_width},
 };
 
 mod layout;
@@ -105,6 +105,15 @@ impl<'a> Formatter<'a> {
         self.docs.concat([
             self.docs.text(self.tree.token_text(token.idx)),
             self.comments_after(token.idx),
+        ])
+    }
+
+    /// [`Self::token`] by index, for a token a rule reaches without its
+    /// marker type.
+    pub fn token_at(&self, token: TokenIdx) -> Doc<'a> {
+        self.docs.concat([
+            self.docs.text(self.tree.token_text(token)),
+            self.comments_after(token),
         ])
     }
 
@@ -191,30 +200,26 @@ impl<'a> Formatter<'a> {
                 continue;
             };
             let exact = tokens.text_range(baml_syntax::tree::TokenRange::new(token, end));
-            pieces.push(Piece::Moved(
+            pieces.push(VerbatimPiece::Moved(
                 &text[piece_start.into()..exact.start().into()],
             ));
-            pieces.push(Piece::Exact(&text[exact]));
+            pieces.push(VerbatimPiece::Exact(&text[exact]));
             piece_start = exact.end();
             token = end;
         }
         let end = tokens.text_range(span).end();
-        pieces.push(Piece::Moved(&text[piece_start.into()..end.into()]));
+        pieces.push(VerbatimPiece::Moved(&text[piece_start.into()..end.into()]));
         let source_indent = pieces
             .iter()
             .filter_map(|piece| match *piece {
-                Piece::Moved(moved) => Some(moved),
-                Piece::Exact(_) => None,
+                VerbatimPiece::Moved(moved) => Some(moved),
+                VerbatimPiece::Exact(_) => None,
             })
             .flat_map(|moved| moved.split('\n').skip(1))
             .filter(|line| !line.trim_start_matches([' ', '\t']).is_empty())
             .map(indent_of)
             .fold(self.line_indent(start), u32::min);
-        self.docs
-            .concat(pieces.into_iter().map(|piece| match piece {
-                Piece::Moved(moved) => self.docs.verbatim(moved, source_indent),
-                Piece::Exact(exact) => self.docs.text(exact),
-            }))
+        self.docs.verbatim_pieces(pieces, source_indent)
     }
 
     /// The indentation of the line `offset` is on: the width of its leading
@@ -235,14 +240,6 @@ impl<'a> Formatter<'a> {
             .unwrap_or_else(|| unreachable!("a template owns its opening backticks"));
         self.tree.arenas().span(template).end()
     }
-}
-
-/// A piece of a node's source text: one whose later lines move with the
-/// node, or one that stays exactly as written.
-#[derive(Debug, Clone, Copy)]
-enum Piece<'a> {
-    Moved(&'a str),
-    Exact(&'a str),
 }
 
 /// The width of `line`'s leading blanks.

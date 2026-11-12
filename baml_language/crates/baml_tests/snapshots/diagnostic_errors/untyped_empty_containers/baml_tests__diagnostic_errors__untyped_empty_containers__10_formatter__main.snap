@@ -26,13 +26,13 @@ function bare_map() -> null {
 }
 
 function bare_map_constructor() -> null {
-    let values = map {  };
+    let values = map {};
     null
 }
 
 function contextual_types_are_enough() -> null {
     let array: int[] = [];
     let object_map: map<string, int> = {};
-    let constructor_map: map<string, int> = map {  };
+    let constructor_map: map<string, int> = map {};
     null
 }

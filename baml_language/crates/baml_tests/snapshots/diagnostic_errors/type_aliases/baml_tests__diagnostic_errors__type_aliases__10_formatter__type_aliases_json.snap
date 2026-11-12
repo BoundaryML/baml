@@ -9,7 +9,7 @@ class NotJSON {
 
 // Should be type error.
 function EchoJSON(i: JSON) -> JSON {
-    NotJSON{ inner: "Whoops" }
+    NotJSON { inner: "Whoops" }
 }
 
 // Should work.

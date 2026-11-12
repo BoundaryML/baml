@@ -101,7 +101,7 @@ fn shape(tree: &FileTree) -> Vec<String> {
                 return;
             };
             self.out.push_str(" (");
-            self.out.push_str(self.tree.arenas().kind_name(id));
+            self.out.push_str(kind_label(self.tree, id));
             self.out.push(')');
             self.children.push(id);
         }
@@ -140,6 +140,14 @@ fn shape(tree: &FileTree) -> Vec<String> {
             out: kind.to_owned(),
             children: Vec::new(),
         };
+        if let Some(spine) = member_spine(tree, id) {
+            // `(xs).join()` reparses as the path `xs.join()`: a member access
+            // on a path or on another member access is one spine, whatever
+            // nodes spell it.
+            lines.push(spine.text);
+            stack.extend(spine.base);
+            continue;
+        }
         tree.arenas().walk_node(id, &mut parts);
         let mut children = parts.children;
         match id.typed() {
@@ -171,6 +179,70 @@ fn shape(tree: &FileTree) -> Vec<String> {
         stack.extend(children.into_iter().rev());
     }
     lines
+}
+
+/// How a child is named in its parent's entry: a path and a member access
+/// are both a `Member` spine (see [`member_spine`]).
+fn kind_label(tree: &FileTree, id: AnyNodeId) -> &'static str {
+    match id.typed() {
+        AnyId::PathExpr(_) | AnyId::FieldAccessExpr(_) => "Member",
+        _ => tree.arenas().kind_name(id),
+    }
+}
+
+/// A member-access spine `base.a.b`, as one entry: the names it accesses,
+/// and the base they are accessed on when that is not a plain name.
+struct Spine {
+    text: String,
+    base: Option<AnyNodeId>,
+}
+
+/// The spine `id` heads, if it is a `PathExpr` or a `FieldAccessExpr`: the
+/// two spell the same access (`xs.join` is a path, `(xs).join` a member
+/// access on a parenthesised path), so both read as one `Member` entry
+/// over the innermost base that is neither.
+fn member_spine(tree: &FileTree, id: AnyNodeId) -> Option<Spine> {
+    let mut names: Vec<String> = Vec::new();
+    let mut at = id;
+    let base = loop {
+        match at.typed() {
+            AnyId::PathExpr(path) => {
+                let node = tree.get(path);
+                for segment in tree.list(node.segments).iter().rev() {
+                    let name = segment.name.ok();
+                    names.push(format!(
+                        "{}{}",
+                        tree.token_text(segment.dot.idx),
+                        name.map_or("<missing>", |name| tree
+                            .token_text(tree.get(name).token.idx))
+                    ));
+                }
+                names.push(tree.token_text(tree.get(node.head).token.idx).to_owned());
+                break None;
+            }
+            AnyId::FieldAccessExpr(access) => {
+                let node = tree.get(access);
+                let name = node.name.ok();
+                names.push(format!(
+                    "{}{}",
+                    tree.token_text(node.dot.idx),
+                    name.map_or("<missing>", |name| tree
+                        .token_text(tree.get(name).token.idx))
+                ));
+                let base = seen_through(tree, node.base.node_id())?;
+                match base.typed() {
+                    AnyId::PathExpr(_) | AnyId::FieldAccessExpr(_) => at = base,
+                    _ => break Some(base),
+                }
+            }
+            _ => return None,
+        }
+    };
+    names.reverse();
+    Some(Spine {
+        text: format!("Member {}", names.join(" ")),
+        base,
+    })
 }
 
 /// The node `id` stands for in the compared shape: none for a stray `;`,
