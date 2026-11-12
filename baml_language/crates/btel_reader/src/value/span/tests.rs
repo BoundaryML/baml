@@ -276,6 +276,36 @@ fn media_is_described_without_its_content_and_compared_by_it() {
 }
 
 #[test]
+fn a_path_that_ends_in_base64_on_a_media_value_finds_its_content() {
+    let mut blobs = Blobs::default();
+    let content = "iVBORw0K".repeat(20);
+    // Stored in the value's own blob, and in a blob of its own.
+    let whole = blobs.store(&capture(&mut Shaper::new(ShapePolicy::Whole), |b| {
+        album(b, &content)
+    }));
+    let cut = capture(&mut cut(), |b| album(b, &content));
+    let content_blob = cut.blobs().next().unwrap().id();
+    let split = blobs.store(&cut);
+    for root in [&whole, &split] {
+        let Nav::Value(found) = at(&blobs, root, &["photo", "base64"]) else {
+            panic!("the content is found");
+        };
+        assert_eq!(found.value(), &Found::String(content.as_str().into()));
+        // No other key reads a media value, and its content has nothing under it.
+        assert_eq!(at(&blobs, root, &["photo", "mime"]), Nav::Missing);
+        assert_eq!(at(&blobs, root, &["photo", "base64", "x"]), Nav::Missing);
+    }
+    // A media value that names a URL holds no content.
+    assert_eq!(at(&blobs, &whole, &["link", "base64"]), Nav::Missing);
+    // Content whose blob is gone is unavailable, with the blob's code.
+    blobs.0.remove(&content_blob);
+    assert_eq!(
+        at(&blobs, &split, &["photo", "base64"]),
+        Nav::Unavailable(Unavailable::Blob("cas_missing"))
+    );
+}
+
+#[test]
 fn media_content_is_read_from_its_blob_and_checked_against_its_length() {
     let mut blobs = Blobs::default();
     let content = "iVBORw0K".repeat(20);
