@@ -68,18 +68,19 @@ class Options {
         $rust_function
     }
 
-    /// Select Span mode and replace all three capture requests.
-    /// Capture outputs and errors by default; inputs require an explicit request.
+    /// Select Span mode and replace all three capture requests, by default
+    /// with requests for inputs, output and error, as `trace.span` does.
     function span(
         self,
-        inputs: bool? = null,
+        inputs: bool? = true,
         output: bool? = true,
         error: bool? = true,
     ) -> Options throws never {
         self._span(inputs, output, error)
     }
 
-    /// Select Span mode without requesting value capture.
+    /// Select Span mode without requesting value capture: the span records
+    /// no inputs, no output and no error.
     /// Applicable function-policy requests still capture values.
     function empty_span(self) -> Options throws never {
         self._span(false, false, false)
@@ -142,17 +143,21 @@ function timing() -> Options throws never {
     $rust_function
 }
 
-/// Record this invocation individually, capturing outputs and errors by default.
-/// Inputs require an explicit request.
+/// Record this invocation individually, capturing its inputs, output and error
+/// by default: a span asked for by name shows what went in and what came out.
+/// Pass `inputs = false`, `output = false` or `error = false` to leave one
+/// out, or use `empty_span` to record the invocation alone. A value that must
+/// never be recorded is withheld with `@trace.redact` wherever it is captured.
 function span(
-    inputs: bool? = null,
+    inputs: bool? = true,
     output: bool? = true,
     error: bool? = true,
 ) -> Options throws never {
     _span(inputs, output, error)
 }
 
-/// Record this invocation individually without requesting value capture.
+/// Record this invocation individually without requesting value capture:
+/// the span records no inputs, no output and no error.
 /// Applicable function-policy requests still capture values.
 function empty_span() -> Options throws never {
     _span(false, false, false)

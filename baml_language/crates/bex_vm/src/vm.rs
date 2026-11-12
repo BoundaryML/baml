@@ -10126,10 +10126,14 @@ impl BexVm {
                                             }
                                             _ => btel_types::InvocationMode::Span,
                                         }),
+                                        // `trace.span`'s own defaults, as in
+                                        // `TraceHookMode::config`.
                                         inputs: if op == OpCode::TraceHookEmptySpan {
                                             Some(false)
                                         } else {
-                                            (op == OpCode::TraceHookRich).then_some(true)
+                                            (op == OpCode::TraceHookRich
+                                                || op == OpCode::TraceHookSpan)
+                                                .then_some(true)
                                         },
                                         output: if op == OpCode::TraceHookEmptySpan {
                                             Some(false)
