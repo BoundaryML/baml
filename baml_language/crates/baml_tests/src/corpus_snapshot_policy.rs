@@ -175,6 +175,11 @@ pub(super) const BYTECODE: &[Example] = &[
 
 pub(super) const FORMATTER: &[Example] = &[
     Example {
+        path: "ns_fixtures/ns_top_level_header_comment/repro.baml",
+        functions: &[],
+        reason: "A function-level `//#` title stays above its function.",
+    },
+    Example {
         path: "ns_fixtures/ns_parser_expressions/precedence.baml",
         functions: &[],
         reason: "Expression precedence and parentheses.",
@@ -198,11 +203,6 @@ pub(super) const FORMATTER: &[Example] = &[
         path: "ns_fixtures/ns_backtick_strings/main.baml",
         functions: &[],
         reason: "Backtick interpolation and escapes.",
-    },
-    Example {
-        path: "ns_fixtures/ns_top_level_header_comment/repro.baml",
-        functions: &[],
-        reason: "Top-level comment attachment.",
     },
     Example {
         path: "ns_fixtures/ns_comment_in_type/comment_in_type.baml",

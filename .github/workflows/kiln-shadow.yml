@@ -141,7 +141,8 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_compiler_lexer/**' \
+            ':baml_language/crates/baml_syntax/**' \
+            ':baml_language/crates/baml_syntax_macros/**' \
             ':baml_language/crates/baml_base/**' \
             ':baml_language/Cargo.toml' \
             ':baml_language/Cargo.lock' \
@@ -157,9 +158,9 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_compiler_parser/**' \
-            ':baml_language/crates/baml_compiler_syntax/**' \
-            ':baml_language/crates/baml_compiler_lexer/**' \
+            ':baml_language/crates/baml_parser/**' \
+            ':baml_language/crates/baml_syntax/**' \
+            ':baml_language/crates/baml_syntax_macros/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -173,8 +174,8 @@ jobs:
           MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/baml_compiler_hir/**' \
-            ':baml_language/crates/baml_compiler_parser/**' \
+            ':baml_language/crates/baml_compiler2_hir/**' \
+            ':baml_language/crates/baml_parser/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -1434,127 +1435,6 @@ jobs:
           path: baml_language/target/cargo-timings/cargo-timing-test-wasm.html
           if-no-files-found: ignore
 
-  cargo-build-msrv:
-    name: "KILN: cargo build (msrv)"
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
-    needs: determine_changes
-    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
-    timeout-minutes: 50
-    continue-on-error: true
-    env:
-      CARGO_INCREMENTAL: 0
-      CARGO_NET_RETRY: 10
-      CARGO_TERM_COLOR: always
-      # CI executes the compiler thousands of times per job — in-process in
-      # `baml_tests`, and as a spawned debug `baml-cli` in the CLI e2e suites — so
-      # test runtime dwarfs compile time here (opt-level 0 test execution was
-      # ~55min of CPU per run across the linux jobs alone). opt-level 1 keeps
-      # debug-assertions on and costs one sccache-cold rebuild after this change
-      # lands; per-package overrides in Cargo.toml (e.g. salsa) still apply on
-      # top. Pinned on both `dev` (dependencies) and `test` (the `--test`
-      # binaries) so the setting is unambiguous, mirroring the DEBUG pins in the
-      # windows job.
-      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
-      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
-      RUSTUP_MAX_RETRIES: 10
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          clean: false
-          persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
-        run: |
-          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
-          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
-          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
-          p=("$(git rev-parse --git-path HEAD)")
-          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
-          if ! git show-ref --verify --quiet refs/heads/canary; then
-            b="${basis:-$(git rev-parse HEAD)}"
-            git update-ref refs/heads/canary "${b}"
-            echo "recreated refs/heads/canary at ${b}"
-          fi
-          p+=("$(git rev-parse --git-path refs/heads/canary)")
-          touch -t 197001010000 "${p[@]}"
-          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
-
-      - uses: SebRollen/toml-action@v1.2.0
-        id: msrv
-        with:
-          file: "baml_language/Cargo.toml"
-          field: "workspace.package.rust-version"
-
-      - name: "Install Rust toolchain (MSRV)"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: |
-          rustup toolchain install "${MSRV}"
-          rustup default "${MSRV}"
-        working-directory: baml_language
-
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
-        with:
-          cache: "false"
-          install_args: "sccache direnv"
-
-      - name: "Verify sccache"
-        run: sccache --version
-
-      - name: "Load .envrc with direnv"
-        run: |
-          set -euo pipefail
-
-          direnv allow .envrc
-          direnv export gha >> "$GITHUB_ENV"
-
-      # Separate step so if fetch is slow, build is fast.
-      - name: "Fetch cargo dependencies"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: cargo "+${MSRV}" fetch
-        working-directory: baml_language
-
-      - name: "Build with MSRV"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: cargo "+${MSRV}" test --no-run --all-features --timings
-        working-directory: baml_language
-
-      - name: "Show sccache stats"
-        if: always()
-        run: sccache --show-stats
-
-      - name: "Dump sccache stats (json)"
-        if: always()
-        run: sccache --show-stats --stats-format json > sccache-stats-msrv.json
-
-      - name: "Upload sccache stats"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: sccache-stats-msrv
-          path: sccache-stats-msrv.json
-          if-no-files-found: ignore
-
-      - name: "Rename cargo timings"
-        if: always()
-        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-msrv.html
-        working-directory: baml_language
-      - name: "Upload cargo timings"
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: cargo-timings-msrv
-          path: baml_language/target/cargo-timings/cargo-timing-msrv.html
-          if-no-files-found: ignore
-
   cargo-doc:
     name: "KILN: cargo doc"
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
@@ -1824,7 +1704,8 @@ jobs:
     name: "KILN: measure-baml-size (linux)"
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
     needs: determine_changes
-    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    # Disabled together with the upstream size gate; see the size-gate job in ci.yaml.
+    if: false
     timeout-minutes: 60
     continue-on-error: true
     env:
@@ -1930,7 +1811,8 @@ jobs:
     name: "KILN: measure-baml-size (wasm)"
     runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high
     needs: determine_changes
-    if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
+    # Disabled together with the upstream size gate; see the size-gate job in ci.yaml.
+    if: false
     timeout-minutes: 50
     continue-on-error: true
     env:

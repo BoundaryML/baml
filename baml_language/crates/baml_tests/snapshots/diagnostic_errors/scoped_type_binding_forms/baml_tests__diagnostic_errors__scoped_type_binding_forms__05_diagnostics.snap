@@ -82,7 +82,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × unresolved type: T
     ╭─[scoped_type_binding_forms.baml:62:21]
  62 │         let unseen: T? = null;
-    ·                     ──
+    ·                     ─
     ╰────
 
   [type] E0113

@@ -1,9 +1,10 @@
-//! Test utilities for parser testing, especially incremental parsing verification.
+//! Test utilities shared by the generated project tests.
 
 use std::collections::HashMap;
 
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticPhase};
-use baml_db::{FileId, baml_compiler_syntax::SyntaxNode};
+use baml_db::FileId;
+use baml_syntax::nodes::FileTree;
 
 // Test-database conveniences, re-exported so the generated project tests
 // (`use crate::utils::*`) and the in-crate test modules share the one
@@ -13,14 +14,12 @@ pub use crate::engine::{TestDbExt, db_with_root};
 /// Assert that no diagnostic annotation span begins or ends on a whitespace
 /// character.
 ///
-/// Diagnostic spans must tightly cover the offending construct. The rowan CST
-/// keeps trivia (whitespace, newlines, comments) as child tokens of nodes, so a
-/// node's raw `text_range()` includes any leading/trailing trivia. Spans built
-/// from raw `text_range()` therefore underline the inter-token gap before the
-/// real token (e.g. the space after `->` in a return type). Routing node spans
-/// through `baml_compiler_syntax::trimmed_range` (exposed as
-/// `SyntaxNodeExt::span_range`) eliminates this; this check enforces it across
-/// the whole snapshot corpus so the bug cannot regress.
+/// Diagnostic spans must tightly cover the offending construct. A node's span
+/// in the typed tree excludes trivia (whitespace, newlines, comments) by
+/// construction, so a span with whitespace at an edge was built from raw
+/// offset arithmetic rather than from a node or token range (e.g. underlining
+/// the space after `->` instead of the return type). This check enforces it
+/// across the whole snapshot corpus so the bug cannot regress.
 ///
 /// Zero-width / EOF carets (empty ranges) are skipped — they legitimately point
 /// at a position rather than covering a token.
@@ -73,113 +72,23 @@ pub fn assert_diagnostic_spans_exclude_trivia(
     assert!(
         violations.is_empty(),
         "project '{project}': {} diagnostic span(s) include leading/trailing whitespace.\n\
-         Diagnostic spans must tightly cover the construct: route node spans through \
-         `SyntaxNodeExt::span_range` / `baml_compiler_syntax::trimmed_range` instead of raw \
-         `text_range()`.\n{}",
+         Diagnostic spans must tightly cover the construct: build them from node and token \
+         ranges of the typed tree instead of raw offset arithmetic.\n{}",
         violations.len(),
         violations.join("\n"),
     );
 }
 
-/// Metrics for measuring node reuse in incremental parsing
-#[derive(Debug)]
-pub struct ReuseMetrics {
-    pub total_old_nodes: usize,
-    pub total_new_nodes: usize,
-    pub reused_nodes: usize,
-    pub reuse_percentage: f64,
-}
-
-/// Verify the parse tree can reconstruct the original source exactly
-pub fn assert_tree_is_lossless(tree: &SyntaxNode, original: &str) {
-    let reconstructed = tree.to_string();
+/// The token array reconstructs the source exactly: every byte belongs to
+/// one token.
+pub fn assert_tree_is_lossless(tree: &FileTree, original: &str) {
+    let reconstructed: String = tree
+        .tokens()
+        .iter()
+        .map(|idx| tree.token_text(idx))
+        .collect();
     assert_eq!(
         reconstructed, original,
         "Tree is not lossless: reconstruction doesn't match original"
     );
-}
-
-/// Test that no panics occur when traversing the tree
-pub fn assert_no_panics(tree: &SyntaxNode) {
-    fn traverse(node: &SyntaxNode) {
-        // Access all node properties to ensure no panics
-        let _ = node.kind();
-        let _ = node.text();
-        let _ = node.text_range();
-
-        for child in node.children() {
-            traverse(&child);
-        }
-    }
-
-    traverse(tree);
-}
-
-/// Insert a character at the given position in a string
-pub fn insert_char(source: &str, pos: usize, ch: char) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = source.chars().collect();
-
-    for (i, &c) in chars.iter().enumerate() {
-        if i == pos {
-            result.push(ch);
-        }
-        result.push(c);
-    }
-
-    if pos == chars.len() {
-        result.push(ch);
-    }
-
-    result
-}
-
-/// Delete a character at the given position
-pub fn delete_char(source: &str, pos: usize) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = source.chars().collect();
-
-    for (i, &c) in chars.iter().enumerate() {
-        if i != pos {
-            result.push(c);
-        }
-    }
-
-    result
-}
-
-/// Replace a character at the given position
-pub fn replace_char(source: &str, pos: usize, ch: char) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = source.chars().collect();
-
-    for (i, &c) in chars.iter().enumerate() {
-        if i == pos {
-            result.push(ch);
-        } else {
-            result.push(c);
-        }
-    }
-
-    result
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_string_edit_functions() {
-        let source = "hello world";
-
-        assert_eq!(insert_char(source, 0, 'X'), "Xhello world");
-        assert_eq!(insert_char(source, 5, 'X'), "helloX world");
-        assert_eq!(insert_char(source, 11, 'X'), "hello worldX");
-
-        assert_eq!(delete_char(source, 0), "ello world");
-        assert_eq!(delete_char(source, 5), "helloworld");
-
-        assert_eq!(replace_char(source, 0, 'X'), "Xello world");
-        assert_eq!(replace_char(source, 6, 'X'), "hello Xorld");
-    }
 }

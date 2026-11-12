@@ -1,0 +1,7 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+interface I {
+    function f(self) -> int throws never // before
+        ; // after
+}

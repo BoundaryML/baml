@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== syntax_errors.baml ===
+SourceFile@25..97
+  items: ClassDef@25..97
+    kw: Class "class" @25..30
+    name: Name@31..37
+      token: Word "Broken" @31..37
+    l: LBrace "{" @38..39
+    members: Field@44..53
+      name: Name@44..49
+        token: Word "field" @44..49
+      ty: PathType@50..53
+        head: Name@50..53
+          token: Word "int" @50..53
+    members: FunctionDef@73..97
+      kw: Function "function" @73..81
+      name: <missing @82>
+      params: ParamList@92..94
+        l: LParen "(" @92..93
+        r: RParen ")" @93..94
+      ret: <missing @95>
+      body: Block@95..97
+        l: LBrace "{" @95..96
+        r: RBrace "}" @96..97
+    r: <missing @97>
+error @82..85: expected function name, found integer
+error @95..96: expected return type (->), found '{'
+error @97..97: expected '}', found EOF

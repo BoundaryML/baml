@@ -1,0 +1,4 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+type Values = int[]/* first */|/* arm */string? |/* last */bool;

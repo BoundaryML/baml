@@ -1,0 +1,16 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function example() -> int {
+    (
+        (
+            if (false) {
+                0
+            } else {
+                1000000
+            }
+        )
+            - 1 * 1000
+            - 1
+    )
+}

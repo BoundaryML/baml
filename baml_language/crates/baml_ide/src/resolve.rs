@@ -10,7 +10,6 @@
 //! addressed.
 
 use baml_base::{Name, SourceFile};
-use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_ast::Expr;
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -21,6 +20,7 @@ use baml_compiler2_hir::{
     semantic_index::{BindingId, BindingKind, FileSemanticIndex},
 };
 use baml_compiler2_hir_ty::extern_loc::{DefinitionRef, ExternDefinition, extern_definition_named};
+use baml_syntax::token::{KindSet, TokenIdx, TokenKind};
 use text_size::{TextRange, TextSize};
 
 use crate::syntax;
@@ -119,14 +119,17 @@ pub fn symbol_at(
     // A dispatching operator token (`+`, `<`, `[`) addresses the method the
     // operation invokes: the matching impl's override when the receiver's
     // static type pins one, else the `baml.ops` interface's declaration.
-    if let Some(target) = operator_target_at(db, file, offset, token.kind()) {
+    // `>=`, `>>` and `>>=` are `>` tokens and an `=` joined by adjacency: a
+    // cursor on their tail is on the operator that begins at the first.
+    let (operator_offset, operator_kind) = operator_head(&token, offset);
+    if let Some(target) = operator_target_at(db, file, operator_offset, operator_kind) {
         return Some(target);
     }
 
     // WORD tokens and keyword tokens may both be names in member position
     // (`obj.implements()`), so let the resolvers decide whether the text is
     // actually a symbol.
-    if token.kind() != SyntaxKind::WORD && !token.kind().is_keyword() {
+    if !token.is_ident() && !token.kind().is_keyword() {
         return None;
     }
 
@@ -191,7 +194,7 @@ fn qualified_item_at<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
-    token: &baml_compiler_syntax::SyntaxToken,
+    token: &crate::syntax::TokenRef,
 ) -> Option<SymbolTarget<'db>> {
     let chain = crate::syntax::dotted_chain_to(token);
     if chain.len() < 2 {
@@ -1145,6 +1148,26 @@ fn llm_prompt_position_at(
     }
 }
 
+/// The first token of the adjacency-joined operator `token` is part of
+/// (`>=`, `>>`, `>>=`), with its offset; `token` itself when it begins one
+/// or is none.
+fn operator_head(token: &syntax::TokenRef, offset: TextSize) -> (TextSize, TokenKind) {
+    use baml_syntax::ops::{AnyOperator, OpTok};
+    let tokens = token.tree().tokens();
+    for back in 1..=2u32 {
+        let Some(start) = token.idx().0.checked_sub(back) else {
+            break;
+        };
+        let start = TokenIdx(start);
+        if let Some(op) = OpTok::<AnyOperator>::at(tokens, start)
+            && op.tokens().any(|t| t == token.idx())
+        {
+            return (tokens.range(start).start(), tokens.kind(start));
+        }
+    }
+    (offset, token.kind())
+}
+
 /// Cursor on a dispatching operator token: the method the operation
 /// invokes, from the compiler's own operator table (`hir_ty::ops`) and impl
 /// resolver. The receiver's *static* type picks the impl (`1 + 2` navigates
@@ -1155,46 +1178,44 @@ fn operator_target_at(
     db: &dyn baml_compiler2_hir::Db,
     file: SourceFile,
     offset: TextSize,
-    kind: SyntaxKind,
+    kind: TokenKind,
 ) -> Option<SymbolTarget<'_>> {
     use baml_compiler2_ast::Expr;
     use baml_compiler2_hir_ty::ops;
 
-    // Token kinds that can spell a dispatching operator. Everything else
-    // exits before any body walk. `<`/`>`/`[`/`]` are ambiguous with
-    // generics and array syntax; the enclosing-expression check below
-    // disambiguates (only an operator sits in an operator expression's gap).
-    if !matches!(
-        kind,
-        SyntaxKind::PLUS
-            | SyntaxKind::MINUS
-            | SyntaxKind::STAR
-            | SyntaxKind::SLASH
-            | SyntaxKind::PERCENT
-            | SyntaxKind::AND
-            | SyntaxKind::PIPE
-            | SyntaxKind::CARET
-            | SyntaxKind::LESS_LESS
-            | SyntaxKind::GREATER_GREATER
-            | SyntaxKind::EQUALS_EQUALS
-            | SyntaxKind::NOT_EQUALS
-            | SyntaxKind::LESS
-            | SyntaxKind::GREATER
-            | SyntaxKind::LESS_EQUALS
-            | SyntaxKind::GREATER_EQUALS
-            | SyntaxKind::PLUS_EQUALS
-            | SyntaxKind::MINUS_EQUALS
-            | SyntaxKind::STAR_EQUALS
-            | SyntaxKind::SLASH_EQUALS
-            | SyntaxKind::PERCENT_EQUALS
-            | SyntaxKind::AND_EQUALS
-            | SyntaxKind::PIPE_EQUALS
-            | SyntaxKind::CARET_EQUALS
-            | SyntaxKind::LESS_LESS_EQUALS
-            | SyntaxKind::GREATER_GREATER_EQUALS
-            | SyntaxKind::L_BRACKET
-            | SyntaxKind::R_BRACKET
-    ) {
+    // Token kinds that can begin a dispatching operator (`>>`, `>=` and
+    // `>>=` are `>` tokens joined by adjacency). Everything else exits before
+    // any body walk. `<`/`>`/`[`/`]` are ambiguous with generics and array
+    // syntax; the enclosing-expression check below disambiguates (only an
+    // operator sits in an operator expression's gap).
+    const OPERATOR_START: KindSet = KindSet::new(&[
+        TokenKind::Plus,
+        TokenKind::Minus,
+        TokenKind::Star,
+        TokenKind::Slash,
+        TokenKind::Percent,
+        TokenKind::And,
+        TokenKind::Pipe,
+        TokenKind::Caret,
+        TokenKind::LessLess,
+        TokenKind::EqualsEquals,
+        TokenKind::NotEquals,
+        TokenKind::Less,
+        TokenKind::Greater,
+        TokenKind::LessEquals,
+        TokenKind::PlusEquals,
+        TokenKind::MinusEquals,
+        TokenKind::StarEquals,
+        TokenKind::SlashEquals,
+        TokenKind::PercentEquals,
+        TokenKind::AndEquals,
+        TokenKind::PipeEquals,
+        TokenKind::CaretEquals,
+        TokenKind::LessLessEquals,
+        TokenKind::LBracket,
+        TokenKind::RBracket,
+    ]);
+    if !OPERATOR_START.contains(kind) {
         return None;
     }
 

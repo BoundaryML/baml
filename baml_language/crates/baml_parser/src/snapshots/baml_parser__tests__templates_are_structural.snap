@@ -1,0 +1,185 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f(xs: int[]) -> string {\\n  let s = `n=${xs.len()} ${for (let x in xs)}${x},${endfor} ${if xs.len() > 1}many${else if xs.len() == 1}one${else}none${endif} ${if (true) { \\\"y\\\" } else { \\\"n\\\" }} ${ let w = 1; w }`\\n  tag`x${s}`\\n}\\n\")"
+---
+SourceFile@0..230
+  items: FunctionDef@0..230
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..21
+      l: LParen "(" @10..11
+      params: Param@11..20
+        name: Name@11..13
+          token: Word "xs" @11..13
+        ascription: TypeAscription@13..20
+          colon: Colon ":" @13..14
+          ty: ArrayType@15..20
+            inner: PathType@15..18
+              head: Name@15..18
+                token: Word "int" @15..18
+            l: LBracket "[" @18..19
+            r: RBracket "]" @19..20
+      r: RParen ")" @20..21
+    ret: ReturnType@22..31
+      arrow: Arrow "->" @22..24
+      ty: PathType@25..31
+        head: Name@25..31
+          token: Word "string" @25..31
+    body: Block@32..230
+      l: LBrace "{" @32..33
+      stmts: LetStmt@36..215
+        introducer: Let "let" @36..39
+        pattern: BindingPattern@40..41
+          name: Name@40..41
+            token: Word "s" @40..41
+        eq: Equals "=" @42..43
+        init: BacktickString@44..215
+          open: BacktickStart "`" @44..45
+          parts: TemplateChunk "n=" @45..47
+          parts: TemplateInterp@47..58
+            open: DollarLBrace "${" @47..49
+            tail: CallExpr@49..57
+              callee: PathExpr@49..55
+                head: Name@49..51
+                  token: Word "xs" @49..51
+                dot: Dot "." @51..52
+                name: Name@52..55
+                  token: Word "len" @52..55
+              args: ArgList@55..57
+                l: LParen "(" @55..56
+                r: RParen ")" @56..57
+            close: RBrace "}" @57..58
+          parts: TemplateChunk " " @58..59
+          parts: TemplateFor@59..93
+            open: TemplateForOpen@59..79
+              open: DollarLBrace "${" @59..61
+              kw: For "for" @61..64
+              header: ParenForInHeader@65..78
+                l: LParen "(" @65..66
+                header: ForInHeader@66..77
+                  introducer: Let "let" @66..69
+                  pattern: BindingPattern@70..71
+                    name: Name@70..71
+                      token: Word "x" @70..71
+                  in_kw: In "in" @72..74
+                  iter: PathExpr@75..77
+                    head: Name@75..77
+                      token: Word "xs" @75..77
+                r: RParen ")" @77..78
+              close: RBrace "}" @78..79
+            body: TemplateInterp@79..83
+              open: DollarLBrace "${" @79..81
+              tail: PathExpr@81..82
+                head: Name@81..82
+                  token: Word "x" @81..82
+              close: RBrace "}" @82..83
+            body: TemplateChunk "," @83..84
+            close: TemplateEndTag@84..93
+              open: DollarLBrace "${" @84..86
+              kw: Endfor "endfor" @86..92
+              close: RBrace "}" @92..93
+          parts: TemplateChunk " " @93..94
+          parts: TemplateIf@94..162
+            open: TemplateIfOpen@94..112
+              open: DollarLBrace "${" @94..96
+              kw: If "if" @96..98
+              cond: BinaryExpr@99..111
+                lhs: CallExpr@99..107
+                  callee: PathExpr@99..105
+                    head: Name@99..101
+                      token: Word "xs" @99..101
+                    dot: Dot "." @101..102
+                    name: Name@102..105
+                      token: Word "len" @102..105
+                  args: ArgList@105..107
+                    l: LParen "(" @105..106
+                    r: RParen ")" @106..107
+                op: Greater ">" @108..109
+                rhs: LiteralExpr@110..111
+                  token: Integer "1" @110..111
+              close: RBrace "}" @111..112
+            then_parts: TemplateChunk "many" @112..116
+            elifs: TemplateElif@116..143
+              open: DollarLBrace "${" @116..118
+              else_kw: Else "else" @118..122
+              if_kw: If "if" @123..125
+              cond: BinaryExpr@126..139
+                lhs: CallExpr@126..134
+                  callee: PathExpr@126..132
+                    head: Name@126..128
+                      token: Word "xs" @126..128
+                    dot: Dot "." @128..129
+                    name: Name@129..132
+                      token: Word "len" @129..132
+                  args: ArgList@132..134
+                    l: LParen "(" @132..133
+                    r: RParen ")" @133..134
+                op: EqualsEquals "==" @135..137
+                rhs: LiteralExpr@138..139
+                  token: Integer "1" @138..139
+              close: RBrace "}" @139..140
+              parts: TemplateChunk "one" @140..143
+            else_part: TemplateElse@143..154
+              open: DollarLBrace "${" @143..145
+              kw: Else "else" @145..149
+              close: RBrace "}" @149..150
+              parts: TemplateChunk "none" @150..154
+            close: TemplateEndTag@154..162
+              open: DollarLBrace "${" @154..156
+              kw: Endif "endif" @156..161
+              close: RBrace "}" @161..162
+          parts: TemplateChunk " " @162..163
+          parts: TemplateInterp@163..196
+            open: DollarLBrace "${" @163..165
+            tail: IfExpr@165..195
+              kw: If "if" @165..167
+              cond: ParenExpr@168..174
+                l: LParen "(" @168..169
+                inner: LiteralExpr@169..173
+                  token: True "true" @169..173
+                r: RParen ")" @173..174
+              then_branch: Block@175..182
+                l: LBrace "{" @175..176
+                tail: StringLit@177..180
+                  token: String "\"y\"" @177..180
+                r: RBrace "}" @181..182
+              kw: Else "else" @183..187
+              body: Block@188..195
+                l: LBrace "{" @188..189
+                tail: StringLit@190..193
+                  token: String "\"n\"" @190..193
+                r: RBrace "}" @194..195
+            close: RBrace "}" @195..196
+          parts: TemplateChunk " " @196..197
+          parts: TemplateInterp@197..214
+            open: DollarLBrace "${" @197..199
+            stmts: LetStmt@200..210
+              introducer: Let "let" @200..203
+              pattern: BindingPattern@204..205
+                name: Name@204..205
+                  token: Word "w" @204..205
+              eq: Equals "=" @206..207
+              init: LiteralExpr@208..209
+                token: Integer "1" @208..209
+              semi: Semicolon ";" @209..210
+            tail: PathExpr@211..212
+              head: Name@211..212
+                token: Word "w" @211..212
+            close: RBrace "}" @213..214
+          close: BacktickEnd "`" @214..215
+      tail: TaggedTemplateExpr@218..228
+        tag: PathExpr@218..221
+          head: Name@218..221
+            token: Word "tag" @218..221
+        template: BacktickString@221..228
+          open: BacktickStart "`" @221..222
+          parts: TemplateChunk "x" @222..223
+          parts: TemplateInterp@223..227
+            open: DollarLBrace "${" @223..225
+            tail: PathExpr@225..226
+              head: Name@225..226
+                token: Word "s" @225..226
+            close: RBrace "}" @226..227
+          close: BacktickEnd "`" @227..228
+      r: RBrace "}" @229..230

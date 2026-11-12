@@ -5,6 +5,6 @@
 // initializer and binds nothing.
 function f(flag: bool) -> int throws never {
     let _ = flag;
-//  ^^^^^ bool
+//      ^ bool
     0
 }

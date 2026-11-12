@@ -1,0 +1,9 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(xs: int[]) -> int {
+    while const /*keep*/ [x] = xs {
+        break;
+    }
+    0
+}

@@ -183,7 +183,9 @@ fn build_case(family: &str, semantic: usize, layout: usize) -> (String, String, 
                 "1", "true", "null", "item", "-1", "1 + 2", "foo(1)", "[1, 2]",
             ];
             let expr = exprs[semantic];
-            let separator = if compact && semantic != 7 { " " } else { ", " };
+            // A list needs its separators: the compact layout drops the
+            // spacing, not the comma.
+            let separator = if compact && semantic != 7 { "," } else { ", " };
             (
                 function_with_tail(&name, indent, &format!("[{expr}{separator}{expr}]")),
                 "[".to_string(),
@@ -195,7 +197,7 @@ fn build_case(family: &str, semantic: usize, layout: usize) -> (String, String, 
                 "1", "true", "null", "item", "-1", "1 + 2", "foo(1)", "[1, 2]",
             ];
             let value = values[semantic];
-            let separator = if compact { " " } else { ", " };
+            let separator = if compact { "," } else { ", " };
             (
                 function_with_tail(
                     &name,

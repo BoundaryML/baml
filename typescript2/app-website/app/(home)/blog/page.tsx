@@ -35,20 +35,26 @@ export const metadata: Metadata = {
 };
 
 // The blog index. It opens on the newest article, then a hand-picked "Start here" row (posts with
-// `featured: true`), the latest release notes, and every other article by date. A filter
-// (`?tags=research`, `?tags=release`, ...) changes only that last list; the sections above it stay. `?tags=article` is the unfiltered
-// view, kept for old links; /changelog redirects to `?tags=release`. Archived posts aren't listed,
-// and neither is anything dated before INDEX_SINCE (./_lib/topics.ts).
+// `featured: true`), the latest release notes, and the articles by date, Engineering by default. A
+// filter (`?tags=research`, `?tags=release`, `?tags=all` for everything, ...) changes only that last
+// list; the sections above it stay. /changelog redirects to `?tags=release`. Archived posts aren't
+// listed.
 
 type Filter = 'all' | 'release' | Topic;
 
+// Everything, then Engineering, the default view at /blog itself, then the rest.
 const FILTERS: { href: string; key: Filter; label: string }[] = [
-  { href: '/blog', key: 'all', label: 'Everything' },
-  ...TOPICS.map((t) => ({
-    href: `/blog?tags=${t.key}`,
-    key: t.key,
-    label: t.label,
-  })),
+  { href: '/blog?tags=all', key: 'all', label: 'Everything' },
+  ...[...TOPICS]
+    .sort(
+      (a, b) =>
+        Number(b.key === 'engineering') - Number(a.key === 'engineering'),
+    )
+    .map((t) => ({
+      href: t.key === 'engineering' ? '/blog' : `/blog?tags=${t.key}`,
+      key: t.key,
+      label: t.label,
+    })),
   { href: '/blog?tags=release', key: 'release', label: 'Releases' },
 ];
 
@@ -59,11 +65,11 @@ const ROW_GRID =
 const ROW_TITLE =
   'max-w-[34ch] font-display font-medium text-[22px] md:text-[26px] leading-[1.2] tracking-[-0.03em] text-head transition-colors';
 
-/** The filter named by `?tags=`, or the unfiltered view. */
+/** The filter named by `?tags=`, or Engineering, the default. */
 function readFilter(tags: string | string[] | undefined): Filter {
   const key = Array.isArray(tags) ? tags[0] : tags;
-  if (key === 'release') return 'release';
-  return key && isTopic(key) ? key : 'all';
+  if (key === 'release' || key === 'all') return key;
+  return key && isTopic(key) ? key : 'engineering';
 }
 
 /** One row of the list: a post, or Launch Week's posts gathered into one entry. */
@@ -299,12 +305,12 @@ export default async function BlogIndex({
   const releases = posts.filter((p) => p.type === 'release');
 
   // The lead, Start here, and release notes stay put under every filter, so picking one changes only
-  // the list below them.
+  // the list below them. "All posts" means all: the lead is listed there too.
   const lead = articles.at(0);
   const featured = articles.filter((p) => p.featured && p !== lead);
   const listed =
     selected === 'all'
-      ? articles.filter((p) => p !== lead)
+      ? articles
       : selected === 'release'
         ? releases
         : articles.filter((p) => topicsOf(p).includes(selected));
@@ -348,6 +354,7 @@ export default async function BlogIndex({
             // A topic with nothing on the index has no tab, unless it's the one asked for.
             ({ key }) =>
               key === 'all' ||
+              key === 'engineering' ||
               key === selected ||
               (key === 'release'
                 ? releases.length > 0

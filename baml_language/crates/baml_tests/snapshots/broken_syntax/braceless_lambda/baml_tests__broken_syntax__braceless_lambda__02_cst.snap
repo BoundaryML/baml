@@ -1,0 +1,134 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== braceless_lambda.baml ===
+SourceFile@437..912
+  items: FunctionDef@437..510
+    kw: Function "function" @437..445
+    name: Name@446..455
+      token: Word "Braceless" @446..455
+    params: ParamList@455..457
+      l: LParen "(" @455..456
+      r: RParen ")" @456..457
+    ret: ReturnType@458..464
+      arrow: Arrow "->" @458..460
+      ty: PathType@461..464
+        head: Name@461..464
+          token: Word "int" @461..464
+    body: Block@465..510
+      l: LBrace "{" @465..466
+      stmts: LetStmt@469..498
+        introducer: Let "let" @469..472
+        pattern: BindingPattern@473..477
+          name: Name@473..477
+            token: Word "add1" @473..477
+        eq: Equals "=" @478..479
+        init: BinaryExpr@480..497
+          lhs: LambdaExpr@480..493
+            params: ParamList@480..488
+              l: LParen "(" @480..481
+              params: Param@481..487
+                name: Name@481..482
+                  token: Word "x" @481..482
+                ascription: TypeAscription@482..487
+                  colon: Colon ":" @482..483
+                  ty: PathType@484..487
+                    head: Name@484..487
+                      token: Word "int" @484..487
+              r: RParen ")" @487..488
+            arrow: FatArrow "=>" @489..491
+            ret: PathType@492..493
+              head: Name@492..493
+                token: Word "x" @492..493
+            body: <missing @494>
+          op: Plus "+" @494..495
+          rhs: LiteralExpr@496..497
+            token: Integer "1" @496..497
+        semi: Semicolon ";" @497..498
+      tail: CallExpr@501..508
+        callee: PathExpr@501..505
+          head: Name@501..505
+            token: Word "add1" @501..505
+        args: ArgList@505..508
+          l: LParen "(" @505..506
+          args: Arg@506..507
+            value: LiteralExpr@506..507
+              token: Integer "2" @506..507
+          r: RParen ")" @507..508
+      r: RBrace "}" @509..510
+  items: FunctionDef@652..725
+    kw: Function "function" @652..660
+    name: Name@661..671
+      token: Word "Braceless2" @661..671
+    params: ParamList@671..673
+      l: LParen "(" @671..672
+      r: RParen ")" @672..673
+    ret: ReturnType@674..680
+      arrow: Arrow "->" @674..676
+      ty: PathType@677..680
+        head: Name@677..680
+          token: Word "int" @677..680
+    body: Block@681..725
+      l: LBrace "{" @681..682
+      stmts: LetStmt@685..713
+        introducer: Let "let" @685..688
+        pattern: BindingPattern@689..693
+          name: Name@689..693
+            token: Word "add1" @689..693
+        eq: Equals "=" @694..695
+        init: BinaryExpr@696..711
+          lhs: LambdaExpr@696..709
+            params: ParamList@696..704
+              l: LParen "(" @696..697
+              params: Param@697..703
+                name: Name@697..698
+                  token: Word "x" @697..698
+                ascription: TypeAscription@698..703
+                  colon: Colon ":" @698..699
+                  ty: PathType@700..703
+                    head: Name@700..703
+                      token: Word "int" @700..703
+              r: RParen ")" @703..704
+            arrow: FatArrow "=>" @705..707
+            ret: PathType@708..709
+              head: Name@708..709
+                token: Word "x" @708..709
+            body: <missing @710>
+          op: Plus "+" @710..711
+          rhs: <missing @712>
+        semi: Semicolon ";" @712..713
+      tail: CallExpr@716..723
+        callee: PathExpr@716..720
+          head: Name@716..720
+            token: Word "add1" @716..720
+        args: ArgList@720..723
+          l: LParen "(" @720..721
+          args: Arg@721..722
+            value: LiteralExpr@721..722
+              token: Integer "2" @721..722
+          r: RParen ")" @722..723
+      r: RBrace "}" @724..725
+  items: FunctionDef@860..912
+    kw: Function "function" @860..868
+    name: Name@869..885
+      token: Word "GenuineTypeError" @869..885
+    params: ParamList@885..887
+      l: LParen "(" @885..886
+      r: RParen ")" @886..887
+    ret: ReturnType@888..894
+      arrow: Arrow "->" @888..890
+      ty: PathType@891..894
+        head: Name@891..894
+          token: Word "int" @891..894
+    body: Block@895..912
+      l: LBrace "{" @895..896
+      tail: BinaryExpr@899..910
+        lhs: StringLit@899..906
+          token: String "\"hello\"" @899..906
+        op: Plus "+" @907..908
+        rhs: LiteralExpr@909..910
+          token: Integer "5" @909..910
+      r: RBrace "}" @911..912
+error @494..495: expected lambda body '{', found '+'
+error @710..711: expected lambda body '{', found '+'
+error @712..713: expected expression, found ';'

@@ -10,9 +10,9 @@
 pub mod ast;
 pub mod cleanup_guard;
 pub(crate) mod companions;
-pub mod docstring;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
+pub mod lower_tree;
 pub(crate) mod lower_type_expr;
 pub mod lowering_diagnostic;
 pub mod traverse;
@@ -24,11 +24,7 @@ pub use ast::*;
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
 pub use companions::is_injected_llm_param;
-pub use docstring::extract_docstring;
-pub use lower_cst::{
-    SHORTHAND_PROVIDERS, is_init_test_function, lower_file, lower_file_with_path,
-    lower_file_with_path_and_test_owner, lower_session_file_with_path_and_test_owner,
-};
+pub use lower_cst::{SHORTHAND_PROVIDERS, is_init_test_function};
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
 // Re-exported so callers of `TypeExprKind::at(span)` can name the span type
@@ -140,14 +136,11 @@ pub fn lower_bigint_literal(
 // implementation introduced by BEP-049 M1.
 #[cfg(test)]
 mod tests {
-    use baml_base::FileId;
-    use baml_compiler_lexer::lex_lossless;
-    use baml_compiler_parser::parse_file;
-    use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+    use baml_syntax::nodes::FileTree;
 
     use crate::{
         ast::{BuiltinKind, Expr, FunctionBodyDef, Item, Stmt, TypeExpr, TypeExprKind},
-        lower_cst::lower_file,
+        lower_tree::lower_file,
         unescape_string_literal,
     };
 
@@ -321,47 +314,52 @@ mod tests {
         __stripped.at(text_size::TextRange::default())
     }
 
-    /// Parse BAML source text and return the CST root.
-    fn parse(source: &str) -> SyntaxNode {
-        let tokens = lex_lossless(source, FileId::new(0));
-        let (green, errors) = parse_file(&tokens);
+    /// Parse BAML source text that must parse cleanly.
+    fn parse(source: &str) -> FileTree {
+        let parsed = baml_parser::parse(source);
         assert!(
-            errors.is_empty(),
-            "expected no parse errors, got: {errors:#?}"
+            parsed.errors.is_empty(),
+            "expected no parse errors, got: {:#?}",
+            parsed.errors
         );
-        SyntaxNode::new_root(green)
+        parsed.tree
+    }
+
+    /// Parse BAML source, errors and all, for the recovery tests.
+    fn parse_lenient(source: &str) -> FileTree {
+        baml_parser::parse(source).tree
     }
 
     /// Parse BAML source and lower to AST items.
     pub(super) fn parse_and_lower(source: &str) -> Vec<Item> {
-        let root = parse(source);
-        let (items, diags, _env_var_refs) = lower_file(&root);
+        let tree = parse(source);
+        let (items, diags, _env_var_refs) = lower_file(&tree, None, None);
         assert!(diags.is_empty(), "expected no diagnostics, got: {diags:#?}");
         items
     }
 
-    fn parse_and_lower_with_diagnostics(
+    pub(super) fn parse_and_lower_with_diagnostics(
         source: &str,
     ) -> (Vec<Item>, Vec<crate::LoweringDiagnostic>) {
-        let root = parse(source);
-        let (items, diags, _env_var_refs) = lower_file(&root);
+        let tree = parse(source);
+        let (items, diags, _env_var_refs) = lower_file(&tree, None, None);
         (items, diags)
     }
 
     /// Lower source written in a removed spelling: the parser's E0098 reports
     /// are the only parse errors allowed, and lowering must add nothing.
     fn lower_removed_syntax(source: &str) -> Vec<Item> {
-        let tokens = lex_lossless(source, FileId::new(0));
-        let (green, errors) = parse_file(&tokens);
+        let parsed = baml_parser::parse(source);
         assert!(
-            !errors.is_empty()
-                && errors.iter().all(|error| matches!(
-                    error,
-                    baml_compiler_diagnostics::ParseError::RemovedFeature { .. }
-                )),
-            "expected only removed-feature parse errors, got: {errors:#?}"
+            !parsed.errors.is_empty()
+                && parsed
+                    .errors
+                    .iter()
+                    .all(|error| matches!(error, baml_parser::ParseError::RemovedFeature { .. })),
+            "expected only removed-feature parse errors, got: {:#?}",
+            parsed.errors
         );
-        let (items, diags, _env_var_refs) = lower_file(&SyntaxNode::new_root(green));
+        let (items, diags, _env_var_refs) = lower_file(&parsed.tree, None, None);
         assert!(
             diags.is_empty(),
             "unexpected lowering diagnostics: {diags:#?}"
@@ -445,42 +443,33 @@ mod tests {
     }
 
     #[test]
-    fn removed_type_statement_keeps_its_unreflect_operand() {
-        // The parser reports the removed statement; lowering keeps `T` bound
-        // to the old operand so its later uses do not cascade.
-        let items = lower_removed_syntax(
+    fn removed_type_statement_binds_nothing() {
+        // The parser reports the removed statement (E0098) and lowering
+        // leaves it a `Stmt::Missing`: `T` is not bound, so its later uses
+        // cascade — the accepted price of not keeping removed syntax alive.
+        for source in [
             "function main(t: reflect.Type) -> reflect.Type { type T = unreflect(t); return reflect.Type.of<T>() }",
-        );
-        let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = first_function(items).body else {
-            panic!("expected expression body")
-        };
-        let Stmt::TypeBinding {
-            operand,
-            bounds,
-            else_branch,
-            ..
-        } = only_type_binding(&body)
-        else {
-            unreachable!()
-        };
-        assert!(
-            matches!(&body.exprs[*operand], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "t"),
-            "operand lowered as {:?}",
-            body.exprs[*operand]
-        );
-        assert!(bounds.is_empty() && else_branch.is_none());
-    }
-
-    #[test]
-    fn removed_static_type_statement_lowers_to_a_missing_operand() {
-        let items = lower_removed_syntax("function main() -> int { type T = int[]; 0 }");
-        let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = first_function(items).body else {
-            panic!("expected expression body")
-        };
-        let Stmt::TypeBinding { operand, .. } = only_type_binding(&body) else {
-            unreachable!()
-        };
-        assert!(matches!(body.exprs[*operand], Expr::Missing));
+            "function main() -> int { type T = int[]; 0 }",
+        ] {
+            let items = lower_removed_syntax(source);
+            let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = first_function(items).body
+            else {
+                panic!("expected expression body")
+            };
+            assert!(
+                !body
+                    .stmts
+                    .iter()
+                    .any(|(_, stmt)| matches!(stmt, Stmt::TypeBinding { .. })),
+                "a removed `type` statement binds nothing: {source}"
+            );
+            assert!(
+                body.stmts
+                    .iter()
+                    .any(|(_, stmt)| matches!(stmt, Stmt::Missing)),
+                "the removed statement lowers to `Stmt::Missing`: {source}"
+            );
+        }
     }
 
     #[test]
@@ -887,10 +876,6 @@ implements ToJson for other.Dog {
                 _ => None,
             })
             .expect("expected local Dog class");
-        assert!(
-            class.implements.is_empty(),
-            "qualified target other.Dog must not merge into local Dog"
-        );
 
         let imp = items
             .iter()
@@ -900,6 +885,10 @@ implements ToJson for other.Dog {
             })
             .expect("qualified target should remain an ImplementsFor item");
         assert_eq!(imp.for_target.to_string(), "other.Dog");
+        assert!(
+            !imp.is_for_class(class),
+            "qualified target other.Dog is not an implementation for local Dog"
+        );
     }
 
     #[test]
@@ -927,10 +916,6 @@ implements ToJson for Dog<int> {
                 _ => None,
             })
             .expect("expected local Dog class");
-        assert!(
-            class.implements.is_empty(),
-            "generic target Dog<int> must not merge into generic class Dog<T>"
-        );
 
         let imp = items
             .iter()
@@ -940,6 +925,10 @@ implements ToJson for Dog<int> {
             })
             .expect("generic target should remain an ImplementsFor item");
         assert_eq!(imp.for_target.to_string(), "Dog<int>");
+        assert!(
+            !imp.is_for_class(class),
+            "generic target Dog<int> is not an implementation for generic class Dog<T>"
+        );
     }
 
     #[test]
@@ -1053,12 +1042,7 @@ function Broken(: int = 1, value: int = 2) -> int {
   value
 }
 "#;
-        let root = {
-            let tokens = lex_lossless(source, FileId::new(0));
-            let (green, _errors) = parse_file(&tokens);
-            SyntaxNode::new_root(green)
-        };
-        let (items, _diags, _env_var_refs) = lower_file(&root);
+        let (items, _diags, _env_var_refs) = lower_file(&parse_lenient(source), None, None);
         let function = first_function(items);
 
         assert_eq!(function.params.len(), 1);
@@ -1079,16 +1063,7 @@ function Broken() -> int {
   (1)<int> { x: 2 }
 }
 "#;
-        let tokens = lex_lossless(source, FileId::new(0));
-        let (green, _errors) = parse_file(&tokens);
-
-        let root = SyntaxNode::new_root(green);
-        assert!(
-            root.descendants()
-                .any(|node| node.kind() == baml_compiler_syntax::SyntaxKind::OBJECT_LITERAL),
-            "this regression must exercise the parser's identifier-less object CST"
-        );
-        let (items, diags, _env_var_refs) = lower_file(&root);
+        let (items, diags, _env_var_refs) = lower_file(&parse_lenient(source), None, None);
         let function = first_function(items);
         let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = function.body else {
             panic!("expected expression body")
@@ -1116,17 +1091,12 @@ function legacy() -> string {
   #"value"#
 }
 "##;
-        let tokens = lex_lossless(source, FileId::new(0));
-        let (green, errors) = parse_file(&tokens);
-        assert!(!errors.is_empty(), "removed hash strings must fail parsing");
-
-        let root = SyntaxNode::new_root(green);
+        let parsed = baml_parser::parse(source);
         assert!(
-            root.descendants()
-                .any(|node| node.kind() == SyntaxKind::DEPRECATED_HASH_STRING_LITERAL),
-            "the parser must retain the hash string CST for error recovery"
+            !parsed.errors.is_empty(),
+            "removed hash strings must fail parsing"
         );
-        let (items, _diags, _env_var_refs) = lower_file(&root);
+        let (items, _diags, _env_var_refs) = lower_file(&parsed.tree, None, None);
         let function = first_function(items);
         let Some(FunctionBodyDef::Expr(body, _)) = function.body else {
             panic!("expected expression body")
@@ -1153,20 +1123,14 @@ function Broken(: int, b: string = "x") -> string {
   b
 }
 "#;
-        let root = {
-            let tokens = lex_lossless(source, FileId::new(0));
-            let (green, _errors) = parse_file(&tokens);
-            SyntaxNode::new_root(green)
-        };
-        let (items, diags, _env_var_refs) = lower_file(&root);
+        let parsed = baml_parser::parse(source);
+        assert!(
+            !parsed.errors.is_empty(),
+            "the parser reports the recovered missing name"
+        );
+        let (items, _diags, _env_var_refs) = lower_file(&parsed.tree, None, None);
         let function = first_function(items);
 
-        assert!(
-            diags
-                .iter()
-                .any(|diag| matches!(diag, crate::LoweringDiagnostic::MissingParamName { .. })),
-            "lower_param should report the recovered missing name"
-        );
         assert_eq!(
             function.params.len(),
             1,
@@ -1189,7 +1153,9 @@ function Broken(: int, b: string = "x") -> string {
     }
 
     #[test]
-    fn ast_lowers_method_block_attributes() {
+    fn a_block_attribute_in_a_class_body_is_the_class_s() {
+        // A `@@` attribute is written inside the body of the declaration it
+        // describes, wherever among the members it sits; a method takes none.
         let source = r#"
 class Response {
   @@internal.uses(engine_ctx)
@@ -1206,12 +1172,12 @@ class Response {
                 _ => None,
             })
             .expect("expected ClassDef");
+        assert_eq!(class.attributes.len(), 1);
+        assert_eq!(class.attributes[0].name.as_str(), "internal.uses");
+        assert_eq!(class.attributes[0].args.len(), 1);
+        assert_eq!(class.attributes[0].args[0].value, "engine_ctx");
         let method = class.methods.first().expect("expected method");
-
-        assert_eq!(method.attributes.len(), 1);
-        assert_eq!(method.attributes[0].name.as_str(), "internal.uses");
-        assert_eq!(method.attributes[0].args.len(), 1);
-        assert_eq!(method.attributes[0].args[0].value, "engine_ctx");
+        assert!(method.attributes.is_empty());
         let throws = method.throws.as_ref().expect("expected throws contract");
         assert_eq!(
             throws.kind,
@@ -1335,95 +1301,6 @@ interface Response {
     }
 
     // ── 4.1/4.2: Parser produces GENERIC_PARAM_LIST / GENERIC_PARAM CST nodes ──
-
-    #[test]
-    fn parser_produces_generic_param_list_for_class_with_single_type_param() {
-        let source = r#"
-class Array<T> {
-  function at(self, index: int) -> T {
-    $rust_function
-  }
-}
-"#;
-        let root = parse(source);
-
-        // Verify GENERIC_PARAM_LIST node exists in the tree
-        let param_list = root
-            .descendants()
-            .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_LIST)
-            .expect("expected GENERIC_PARAM_LIST node");
-
-        // Verify it contains exactly one GENERIC_PARAM child
-        let params: Vec<_> = param_list
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::GENERIC_PARAM)
-            .collect();
-        assert_eq!(params.len(), 1, "expected one GENERIC_PARAM");
-
-        // Verify the param name is "T"
-        let param_name = params[0]
-            .children_with_tokens()
-            .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::WORD)
-            .expect("expected WORD token in GENERIC_PARAM")
-            .text()
-            .to_string();
-        assert_eq!(param_name, "T");
-    }
-
-    #[test]
-    fn parser_produces_two_generic_params_for_map_class() {
-        let source = r#"
-class Map<K, V> {
-  function has(self, key: K) -> bool {
-    $rust_function
-  }
-}
-"#;
-        let root = parse(source);
-
-        let param_list = root
-            .descendants()
-            .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_LIST)
-            .expect("expected GENERIC_PARAM_LIST node");
-
-        let params: Vec<_> = param_list
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::GENERIC_PARAM)
-            .collect();
-        assert_eq!(params.len(), 2, "expected two GENERIC_PARAM nodes");
-
-        let names: Vec<String> = params
-            .iter()
-            .map(|p| {
-                p.children_with_tokens()
-                    .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
-                    .find(|t| t.kind() == SyntaxKind::WORD)
-                    .expect("expected WORD token")
-                    .text()
-                    .to_string()
-            })
-            .collect();
-        assert_eq!(names, vec!["K", "V"]);
-    }
-
-    #[test]
-    fn parser_does_not_produce_generic_param_list_for_non_generic_class() {
-        let source = r#"
-class User {
-  name string
-}
-"#;
-        let root = parse(source);
-
-        let param_list = root
-            .descendants()
-            .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_LIST);
-        assert!(
-            param_list.is_none(),
-            "expected no GENERIC_PARAM_LIST for non-generic class"
-        );
-    }
 
     // ── 4.3: AST ClassDef.generic_params is populated from CST ───────────────
 
@@ -2041,15 +1918,12 @@ retry_policy MyRetry {
 
     /// The source text each `InvalidStringEscape` diagnostic points at.
     fn escape_diagnostic_spans(source: &str) -> Vec<&str> {
-        let tokens = lex_lossless(source, FileId::new(0));
-        let (green, errors) = parse_file(&tokens);
-        assert!(errors.is_empty(), "unexpected parse errors: {errors:#?}");
-        let (_items, diags, _env_var_refs) = lower_file(&SyntaxNode::new_root(green));
-        diags
+        baml_parser::parse(source)
+            .errors
             .iter()
-            .map(|diag| match diag {
-                crate::LoweringDiagnostic::InvalidStringEscape { span, .. } => &source[*span],
-                other => panic!("unexpected diagnostic: {other:#?}"),
+            .map(|error| match error {
+                baml_parser::ParseError::InvalidStringEscape { range, .. } => &source[*range],
+                other => panic!("unexpected parse error: {other:#?}"),
             })
             .collect()
     }
@@ -2076,8 +1950,8 @@ function main() -> string {
                 r"\u{E9}",
                 "é",
                 r"\v",
-                r"\U0001F600",
                 r"\e",
+                r"\U0001F600",
             ]
         );
     }
@@ -2095,15 +1969,14 @@ function main() -> string {
   "\d"
 }
 "#;
-        let root = parse(source);
-        let (_items, diags, _env_var_refs) = lower_file(&root);
-        let hints: Vec<bool> = diags
+        let hints: Vec<bool> = baml_parser::parse(source)
+            .errors
             .iter()
-            .map(|diag| match diag {
-                crate::LoweringDiagnostic::InvalidStringEscape { issue, .. } => {
+            .map(|error| match error {
+                baml_parser::ParseError::InvalidStringEscape { issue, .. } => {
                     issue.to_string().contains("raw string")
                 }
-                other => panic!("unexpected diagnostic: {other:#?}"),
+                other => panic!("unexpected parse error: {other:#?}"),
             })
             .collect();
         assert_eq!(hints, vec![false, false, true]);
@@ -2708,7 +2581,7 @@ mod testset_nesting_tests {
     /// clear. Getting only the "set" half right makes `test` silently nest.
     #[test]
     fn a_test_inside_a_test_does_not_register() {
-        let items = super::tests::parse_and_lower(
+        let (items, diags) = super::tests::parse_and_lower_with_diagnostics(
             r#"testset "Outer" {
   test "Middle" {
     test "Inner" {
@@ -2716,6 +2589,18 @@ mod testset_nesting_tests {
     }
   }
 }"#,
+        );
+        // `Inner` sits in a test body, which is no testset's: reported, not
+        // dropped silently.
+        assert!(
+            diags.iter().any(|diag| matches!(
+                diag,
+                crate::LoweringDiagnostic::TestOutsideTestset {
+                    kind: crate::lowering_diagnostic::TestBlockKind::Test,
+                    ..
+                }
+            )),
+            "{diags:#?}"
         );
 
         let init = items
@@ -2731,10 +2616,6 @@ mod testset_nesting_tests {
 
         // Outer testset + Middle test = 2. `Inner` sits in a test body, where
         // the collector is cleared, so it lowers to `Stmt::Missing` instead.
-        //
-        // This pins the *registration* behaviour, not the diagnostic story:
-        // dropping `Inner` silently is a separate known bug (see the `// BUG:`
-        // note on the `TEST_EXPR_DEF` arm in `lower_expr_body.rs`).
         assert_eq!(
             count_registrations(body),
             2,

@@ -1,0 +1,11 @@
+function f(n: int) -> int {
+  let x = n;
+  while (true) {
+    match (x) {
+      0 => break,
+      1 => continue,
+      _ => { x = x - 1; }
+    }
+  }
+  x
+}

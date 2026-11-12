@@ -1,0 +1,71 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"//# ok before an expression function\\nfunction f() -> int { 1 }\\n//# not ok before a class\\nclass C { //# nor in a body\\n a: int }\\n//# not ok before an LLM function\\nfunction g() -> int {\\n  client: \\\"x\\\"\\n  prompt: \\\"y\\\"\\n}\\n\")"
+---
+SourceFile@0..212
+  items: FunctionDef@0..62
+    docs: HeaderLine@0..36
+      token: HeaderComment "//# ok before an expression function" @0..36
+    kw: Function "function" @37..45
+    name: Name@46..47
+      token: Word "f" @46..47
+    params: ParamList@47..49
+      l: LParen "(" @47..48
+      r: RParen ")" @48..49
+    ret: ReturnType@50..56
+      arrow: Arrow "->" @50..52
+      ty: PathType@53..56
+        head: Name@53..56
+          token: Word "int" @53..56
+    body: Block@57..62
+      l: LBrace "{" @57..58
+      tail: LiteralExpr@59..60
+        token: Integer "1" @59..60
+      r: RBrace "}" @61..62
+  items: ClassDef@63..126
+    docs: Bogus@63..88
+      tokens: HeaderComment "//# not ok before a class" @63..88
+    kw: Class "class" @89..94
+    name: Name@95..96
+      token: Word "C" @95..96
+    l: LBrace "{" @97..98
+    members: Field@99..124
+      docs: Bogus@99..116
+        tokens: HeaderComment "//# nor in a body" @99..116
+      name: Name@118..119
+        token: Word "a" @118..119
+      colon: Colon ":" @119..120
+      ty: PathType@121..124
+        head: Name@121..124
+          token: Word "int" @121..124
+    r: RBrace "}" @125..126
+  items: FunctionDef@127..212
+    docs: HeaderLine@127..160
+      token: HeaderComment "//# not ok before an LLM function" @127..160
+    kw: Function "function" @161..169
+    name: Name@170..171
+      token: Word "g" @170..171
+    params: ParamList@171..173
+      l: LParen "(" @171..172
+      r: RParen ")" @172..173
+    ret: ReturnType@174..180
+      arrow: Arrow "->" @174..176
+      ty: PathType@177..180
+        head: Name@177..180
+          token: Word "int" @177..180
+    body: LlmBody@181..212
+      l: LBrace "{" @181..182
+      fields: ClientField@185..196
+        kw: Client "client" @185..191
+        colon: Colon ":" @191..192
+        value: StringLit@193..196
+          token: String "\"x\"" @193..196
+      fields: PromptField@199..210
+        kw: Prompt "prompt" @199..205
+        colon: Colon ":" @205..206
+        value: StringLit@207..210
+          token: String "\"y\"" @207..210
+      r: RBrace "}" @211..212
+---
+InvalidSyntax { message: "a `//#` header is a statement inside a block, or the title directly above a function; it is not allowed here", range: 63..88 }
+InvalidSyntax { message: "a `//#` header is a statement inside a block, or the title directly above a function; it is not allowed here", range: 99..116 }

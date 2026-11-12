@@ -1,0 +1,105 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"interface I requires <T> { x: int }\\nfunction f() -> int {\\n  let y = (f(x) as Foo).bar;\\n  let z = ([1] as I).y;\\n  1\\n}\\nclass C {\\n  a: int\\n  /// trailing doc at the end of the file\")"
+---
+SourceFile@0..177
+  items: InterfaceDef@0..35
+    kw: Interface "interface" @0..9
+    name: Name@10..11
+      token: Word "I" @10..11
+    requires: RequiresClause@12..24
+      kw: Requires "requires" @12..20
+      types: <missing @25>
+    l: LBrace "{" @25..26
+    members: Field@27..33
+      name: Name@27..28
+        token: Word "x" @27..28
+      colon: Colon ":" @28..29
+      ty: PathType@30..33
+        head: Name@30..33
+          token: Word "int" @30..33
+    r: RBrace "}" @34..35
+  items: FunctionDef@36..116
+    kw: Function "function" @36..44
+    name: Name@45..46
+      token: Word "f" @45..46
+    params: ParamList@46..48
+      l: LParen "(" @46..47
+      r: RParen ")" @47..48
+    ret: ReturnType@49..55
+      arrow: Arrow "->" @49..51
+      ty: PathType@52..55
+        head: Name@52..55
+          token: Word "int" @52..55
+    body: Block@56..116
+      l: LBrace "{" @56..57
+      stmts: LetStmt@60..86
+        introducer: Let "let" @60..63
+        pattern: BindingPattern@64..65
+          name: Name@64..65
+            token: Word "y" @64..65
+        eq: Equals "=" @66..67
+        init: FieldAccessExpr@68..85
+          base: Bogus@68..81
+            tokens: LParen "(" @68..69
+            tokens: Word "f" @69..70
+            tokens: LParen "(" @70..71
+            tokens: Word "x" @71..72
+            tokens: RParen ")" @72..73
+            tokens: Whitespace " " @73..74
+            tokens: As "as" @74..76
+            tokens: Whitespace " " @76..77
+            tokens: Word "Foo" @77..80
+            tokens: RParen ")" @80..81
+          dot: Dot "." @81..82
+          name: Name@82..85
+            token: Word "bar" @82..85
+        semi: Semicolon ";" @85..86
+      stmts: LetStmt@89..110
+        introducer: Let "let" @89..92
+        pattern: BindingPattern@93..94
+          name: Name@93..94
+            token: Word "z" @93..94
+        eq: Equals "=" @95..96
+        init: FieldAccessExpr@97..109
+          base: Bogus@97..107
+            tokens: LParen "(" @97..98
+            tokens: LBracket "[" @98..99
+            tokens: Integer "1" @99..100
+            tokens: RBracket "]" @100..101
+            tokens: Whitespace " " @101..102
+            tokens: As "as" @102..104
+            tokens: Whitespace " " @104..105
+            tokens: Word "I" @105..106
+            tokens: RParen ")" @106..107
+          dot: Dot "." @107..108
+          name: Name@108..109
+            token: Word "y" @108..109
+        semi: Semicolon ";" @109..110
+      tail: LiteralExpr@113..114
+        token: Integer "1" @113..114
+      r: RBrace "}" @115..116
+  items: ClassDef@117..177
+    kw: Class "class" @117..122
+    name: Name@123..124
+      token: Word "C" @123..124
+    l: LBrace "{" @125..126
+    members: Field@129..135
+      name: Name@129..130
+        token: Word "a" @129..130
+      colon: Colon ":" @130..131
+      ty: PathType@132..135
+        head: Name@132..135
+          token: Word "int" @132..135
+    members: Bogus@138..177
+      tokens: DocComment "/// trailing doc at the end of the file" @138..177
+    r: <missing @177>
+---
+InvalidSyntax { message: "a function type cannot declare generic parameters", range: 21..22 }
+UnexpectedToken { expected: "function type parameter list", found: "'{'", range: 25..26 }
+UnexpectedToken { expected: "interface name", found: "'{'", range: 25..26 }
+InvalidSyntax { message: "a qualified projection `(Base as Interface).member` needs `as` after the type", range: 70..71 }
+UnexpectedToken { expected: "type", found: "'['", range: 98..99 }
+InvalidSyntax { message: "a qualified projection `(Base as Interface).member` needs a type before `as`", range: 98..99 }
+InvalidDirective { message: "`///` doc comments and `//baml:` directives must directly precede the declaration they belong to; use `//` for a plain comment", range: 138..177 }
+UnexpectedEof { expected: "'}'", range: 177..177 }

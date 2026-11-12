@@ -43,10 +43,10 @@ done
 When the language changes, update the grammar against (in priority order):
 
 1. `typescript2/pkg-grammar/tests/fixtures/*.baml`
-2. `baml_language/crates/baml_compiler_lexer/src/tokens.rs` (token shapes —
+2. `baml_language/crates/baml_syntax/src/token.rs` (token shapes —
    e.g. identifiers may contain hyphens and `$`-joined segments)
-3. `baml_language/crates/baml_compiler_syntax/src/syntax_kind.rs` +
-   `baml_compiler_parser/src/parser.rs` (node taxonomy, precedence)
+3. `baml_language/crates/baml_syntax/src/nodes/` +
+   `baml_syntax/src/ops.rs` (node taxonomy, precedence)
 
 ## Design decisions
 
