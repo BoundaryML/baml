@@ -2,7 +2,7 @@
 """Emit every speedtest workload's *expanded* BAML source as JSON.
 
 This is the bridge that lets the Rust benchmark suite (crates/baml_tests)
-reuse the workloads under tools/speedtest/workloads/ as CodSpeed benches
+reuse the workloads under tools/speedtest/workloads/ as divan benches
 without duplicating what speedtest.loader defines a workload to be. Each bench
 calls the workload's zero-argument `main()`.
 
