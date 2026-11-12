@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs the Rust toolchain, the musl C toolchain and the mise tools of the CI jobs.
+# Installs the Rust toolchain, the musl C toolchain and every mise tool in mise.toml.
 set -euo pipefail
 # The template env sets MISE_DATA_DIR.
 : "${MISE_DATA_DIR:?the template env must set MISE_DATA_DIR}"
@@ -37,6 +37,8 @@ rustup show
 toolchain=$(rustup show active-toolchain)
 rustup default "${toolchain%% *}"
 retry rustup target add x86_64-unknown-linux-musl wasm32-unknown-unknown
+# The Pre-commit Checks job installs this toolchain, and mise compiles cargo-hawk with it.
+retry rustup toolchain install 1.97.1 --profile minimal --component rustc-dev
 sudo DEBIAN_FRONTEND=noninteractive apt-get update
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y musl-tools
 
@@ -59,13 +61,11 @@ tar -xzf "${downloads}/cargo-binstall.tgz" -C "${MISE_DATA_DIR}/bin" cargo-binst
 rm -rf "${downloads}"
 export PATH="${MISE_DATA_DIR}/bin:${PATH}" MISE_YES=1 MISE_TRUSTED_CONFIG_PATHS="${SRC}"
 
-# The union of the `install_args` in .github/workflows/kiln-shadow.yml. Run from the
-# repository root, as mise-action does, so mise resolves the same versions.
+# Every tool in mise.toml, so a job that starts to use one more tool finds it in the snapshot.
+# Run from the repository root, as mise-action does, so mise resolves the same versions.
 (
 	cd "${SRC}"
-	mise install \
-		sccache direnv node npm:pnpm protoc protoc-gen-go python uv clang-format ast-grep \
-		go java gradle dotnet ruby github:rustwasm/wasm-pack cargo:prek cargo:cargo-insta cargo:cargo-nextest
+	mise install
 )
 
 cargo fetch
