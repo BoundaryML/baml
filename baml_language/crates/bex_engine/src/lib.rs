@@ -3778,7 +3778,12 @@ impl BexEngine {
         vm.thread_id = self.next_bex_thread_id().0;
         let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
-        inactive.acquire().await
+        let mut permit = inactive.acquire().await;
+        // A callback a sys-op runs for its caller, such as a server's request
+        // handler, is a spawned future: its body runs from here. Unmarked, it
+        // would record its start at its completion, as if cancelled unstarted.
+        permit.vm.mark_telemetry_running();
+        permit
     }
 
     /// A VM over this engine's heap and program, running nothing, recording
