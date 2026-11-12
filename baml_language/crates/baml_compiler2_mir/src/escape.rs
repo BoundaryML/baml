@@ -413,6 +413,12 @@ fn static_callee<'db>(callee: &Operand<'db>) -> Option<FunctionRef<'db>> {
 /// remains eligible in source compiles; runtime compilation can mount it opaque.
 fn can_summarize(db: &dyn crate::Db, caller: SourceRoot, callee: FunctionLoc<'_>) -> bool {
     let root = callee.file(db).source_root(db);
+    // A hot swap can replace any user function with a body that leaks its
+    // arguments, so with swapping on only the stdlib, which cannot be swapped,
+    // is safe to look through.
+    if baml_env::hotswap_enabled() {
+        return root.kind(db) == SourceRootKind::Stdlib;
+    }
     root == caller || root.kind(db) == SourceRootKind::Stdlib
 }
 

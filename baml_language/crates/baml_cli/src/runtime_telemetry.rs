@@ -31,6 +31,14 @@ pub(crate) fn create_engine_with_context(
     build: Option<bex_engine::BuildProvider>,
     launch_context: btel_types::context::Context,
 ) -> Result<BexEngine, EngineError> {
+    // `--hot` compares each save with this.
+    let hotswap_baseline = baml_env::hotswap_enabled().then(|| {
+        bex_project::hotswap_fingerprint::declaration_fingerprints(
+            sources
+                .iter()
+                .map(|(path, text)| (path.as_str(), text.as_str())),
+        )
+    });
     // Disabled recording must not validate or discover an unused destination.
     if btel_settings::mode::from_env()
         .map_err(|error| EngineError::Other(error.to_string()))?
@@ -43,6 +51,7 @@ pub(crate) fn create_engine_with_context(
             bex_engine::EngineConfig {
                 launch_context,
                 runtime_compiler: Some(bex_project::runtime_compiler()),
+                hotswap_baseline,
                 ..bex_engine::EngineConfig::default()
             },
         );
@@ -72,6 +81,7 @@ pub(crate) fn create_engine_with_context(
         bex_engine::EngineConfig {
             launch_context,
             runtime_compiler: Some(bex_project::runtime_compiler()),
+            hotswap_baseline,
             recording: Some(recording),
             ..bex_engine::EngineConfig::default()
         },

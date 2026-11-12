@@ -206,6 +206,20 @@ pub enum EnvError {
     NotAbsolute { name: String, value: String },
 }
 
+static HOTSWAP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Turn function hot swapping on for this process (BEP-087), as `baml run
+/// --hot` does. Set once, before anything compiles, so escape analysis and the
+/// engine agree for the life of the process.
+pub fn set_hotswap_enabled() {
+    HOTSWAP.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether [`set_hotswap_enabled`] was called.
+pub fn hotswap_enabled() -> bool {
+    HOTSWAP.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Parse the shared boolean spelling; `None` for any other word.
 pub fn parse_bool(value: &str) -> Option<bool> {
     match value.trim().to_ascii_lowercase().as_str() {

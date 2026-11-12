@@ -956,6 +956,7 @@ pub(crate) mod tests {
             op_count: 0,
             cur_pc: 0,
             heap: Arc::clone(&heap),
+            hotswap_enabled: false,
             early_yield: early_yield_for_test(),
             dispatch_fast_path: true,
             tlab: Tlab::new(heap),
@@ -973,6 +974,7 @@ pub(crate) mod tests {
             pending_call_trace: None,
             thread_local_call: false,
             pending_trace_hooks: Vec::new(),
+            hotswap_prepared: None,
             held_traces: Vec::new(),
             trace_scope_frame: usize::MAX,
             entry_reservation: None,
@@ -1029,6 +1031,7 @@ pub(crate) mod tests {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
+            hotswap_redirect: bex_vm_types::types::HotswapRedirect::default(),
             compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
@@ -2097,6 +2100,10 @@ pub struct BexVm {
     /// Reference to the shared heap (long-lived, shared across VMs).
     pub heap: Arc<BexHeap>,
 
+    /// Whether calls consult a function's hot swap redirect: some package can
+    /// be swapped (BEP-087). Fixed when the VM is created.
+    hotswap_enabled: bool,
+
     pub early_yield: EarlyYieldCheck,
 
     /// Whether the dispatch loop runs eligible instructions through
@@ -2200,6 +2207,11 @@ pub struct BexVm {
     /// thread-local twin, which reads the receiver without its lock.
     thread_local_call: bool,
     pending_trace_hooks: Vec<PendingTraceHook>,
+    /// A patch prepared on this VM and not yet queued. Its swaps preview here:
+    /// its initializers run with the call graph it will install, while every
+    /// other VM still runs the old one. Rooted, so it survives a collection
+    /// while an initializer yields.
+    pub(crate) hotswap_prepared: Option<crate::hotswap::PreparedPatch>,
     held_traces: Vec<(usize, CallTrace)>,
     /// Nearest frame with held configuration or an owned-span scope. Ordinary
     /// returns compare one index instead of inspecting both optional stacks.
@@ -2768,7 +2780,9 @@ pub(crate) struct CallableSignature {
 /// Shares [`function_object_ty`]'s contract: substitution realizes fully or the
 /// frame layout is broken, so there is no coarse fallback. Reflection reports
 /// the same type the matcher tests against.
-fn function_callable_signature<C: baml_type::normalize::TypeContext<bex_vm_types::TypeHead>>(
+pub(crate) fn function_callable_signature<
+    C: baml_type::normalize::TypeContext<bex_vm_types::TypeHead>,
+>(
     ctx: &C,
     f: &bex_vm_types::types::Function,
     type_args: &[bex_vm_types::RealizedTy],
@@ -2945,6 +2959,7 @@ impl BexVm {
         // Each BexThread owns a VM, including the main thread. Its stack limit
         // is independent of the shared heap and every other thread's stacks.
         let budget = ThreadStackBudget::default();
+        let hotswap_enabled = heap.hotswap_on();
         Self {
             frames: FrameStack::new(budget.clone()),
             pending_entry_frame_panic: None,
@@ -2952,6 +2967,7 @@ impl BexVm {
             op_count: 0,
             cur_pc: 0,
             heap,
+            hotswap_enabled,
             early_yield,
             dispatch_fast_path: true,
             tlab,
@@ -2969,6 +2985,7 @@ impl BexVm {
             pending_call_trace: None,
             thread_local_call: false,
             pending_trace_hooks: Vec::new(),
+            hotswap_prepared: None,
             held_traces: Vec::new(),
             trace_scope_frame: usize::MAX,
             entry_reservation: None,
@@ -5469,6 +5486,44 @@ impl BexVm {
             .unwrap_or_else(HeapPtr::null)
     }
 
+    pub(crate) fn hotswap_enabled(&self) -> bool {
+        self.hotswap_enabled
+    }
+
+    /// Whether a call of `callee` must take the general call path, which
+    /// selects a hot swap's replacement. The fast paths that enter a callee
+    /// directly hand back when this holds.
+    #[inline(always)]
+    fn hotswap_selects(&self, callee: &Function) -> bool {
+        self.hotswap_enabled
+            && (callee.hotswap_redirect.get().is_some() || self.hotswap_prepared.is_some())
+    }
+
+    /// What a call of `callee` enters: the hot swap installed on the function
+    /// behind it, else `callee`. One hop: a replacement never follows a
+    /// redirect of its own. Every call path selects here exactly once, in
+    /// [`Self::execute_call_from_locals_offset`] and, for host and spawn
+    /// entries, [`Self::set_entry_point_with_type_args`].
+    fn hotswap_entry(&self, callee: HeapPtr) -> HeapPtr {
+        let function_ptr = match self.get_object(callee) {
+            Object::BoundMethod(method) => method.function,
+            Object::Closure(closure) => closure.function,
+            Object::GenericFunction(generic) => self
+                .generic_function_authored_ptr(generic)
+                .unwrap_or(callee),
+            _ => callee,
+        };
+        let Object::Function(function) = self.get_object(function_ptr) else {
+            return callee;
+        };
+        let installed = function.hotswap_redirect.get();
+        let installed = match &self.hotswap_prepared {
+            Some(prepared) => prepared.preview(function_ptr, installed),
+            None => installed,
+        };
+        installed.unwrap_or(callee)
+    }
+
     /// Runtime package that owns a value's nominal/callable definition.
     /// Static values return null.
     pub(crate) fn value_runtime_package(&self, value: Value) -> HeapPtr {
@@ -5895,6 +5950,19 @@ impl BexVm {
         args: &[Value],
         type_args: IndexMap<String, bex_vm_types::RealizedTy>,
     ) {
+        // A specialized wrapper's type arguments apply to whichever
+        // implementation is entered.
+        let carried_type_args = match self.get_object(function) {
+            Object::GenericFunction(generic) if self.hotswap_enabled => {
+                Some(generic.type_args.to_vec())
+            }
+            _ => None,
+        };
+        let function = if self.hotswap_enabled {
+            self.hotswap_entry(function)
+        } else {
+            function
+        };
         #[cfg(not(target_arch = "wasm32"))]
         self.stop_disabled_telemetry();
         #[cfg(not(target_arch = "wasm32"))]
@@ -5996,6 +6064,9 @@ impl BexVm {
             }
             other => unreachable!("expect function or closure as entry point, got {other:?}"),
         };
+        if let Some(carried) = carried_type_args {
+            effective_type_args = carried;
+        }
 
         let hooked_entry = self
             .get_object(dispatch_ptr)
@@ -6251,6 +6322,7 @@ impl BexVm {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
+            hotswap_redirect: bex_vm_types::types::HotswapRedirect::default(),
             compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
@@ -6365,6 +6437,7 @@ impl BexVm {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
+            hotswap_redirect: bex_vm_types::types::HotswapRedirect::default(),
             compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
@@ -8392,6 +8465,8 @@ impl BexVm {
         };
         if !matches!(callee.kind, FunctionKind::Bytecode)
             || callee.compiled_body.is_some()
+            // The general path selects a swap's replacement.
+            || self.hotswap_selects(callee)
             || callee.trace_passthrough
             || callee
                 .bytecode
@@ -8563,6 +8638,10 @@ impl BexVm {
         let Object::Function(callee) = (unsafe { callee_ptr.get() }) else {
             verifier_unreachable!()
         };
+        // The general path selects a swap's replacement.
+        if self.hotswap_selects(callee) {
+            return Ok(None);
+        }
 
         self.stack.truncate(len - 2);
         let Frame::Bytecode(caller_frame) = &mut self.frames[frame_idx] else {
@@ -8727,6 +8806,16 @@ impl BexVm {
             Object::GenericFunction(gf) => &gf.type_args,
             _ => &[],
         };
+
+        // The replacement runs with the type arguments and receiver the call
+        // carries for the target, so select only after reading them.
+        let callee_ptr = if self.hotswap_enabled {
+            self.hotswap_entry(callee_ptr)
+        } else {
+            callee_ptr
+        };
+        // SAFETY: the swap table roots a replacement, and setup cannot collect.
+        let callee_object: &'static Object = unsafe { callee_ptr.get() };
 
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod
         // wrapping one. `callee_fn_ptr` is the heap pointer of the resolved
@@ -11392,6 +11481,8 @@ impl BexVm {
                         };
                         if !matches!(callee.kind, FunctionKind::Bytecode)
                             || callee.compiled_body.is_some()
+                            // The full dispatch selects a swap's replacement.
+                            || self.hotswap_selects(callee)
                             || sp < callee.arity
                             || cap - sp < callee.real_local_count
                             || self.frames.len() == self.frames.capacity()
@@ -12385,8 +12476,11 @@ impl BexVm {
                             // values. Plain static ones go straight into the
                             // new frame; any other operand takes the general
                             // path, which carries runtime declarations along.
+                            // A swapped callee leaves for the general path too,
+                            // which selects its replacement.
                             if let Object::Function(callee) = callee_object
                                 && matches!(callee.kind, FunctionKind::Bytecode)
+                                && !self.hotswap_selects(callee)
                                 && let Some(type_args) = if ntypeargs == 0 {
                                     Some(Vec::new())
                                 } else {
@@ -14398,6 +14492,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             op_count: _,
             cur_pc: _,
             heap: _,
+            hotswap_enabled: _,
             early_yield: _,
             dispatch_fast_path: _,
             // Its cached cursor is layout, not a pointer; see `relocated`.
@@ -14424,6 +14519,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             pending_call_trace: _,
             thread_local_call: _,
             pending_trace_hooks: _,
+            hotswap_prepared,
             held_traces: _,
             trace_scope_frame: _,
             entry_reservation: _,
@@ -14444,6 +14540,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
             static_virtual_field_cache,
             enum_equals_memo: _,
         } = self;
+        if let Some(prepared) = hotswap_prepared {
+            prepared.visit_roots(visitor);
+        }
         debug_assert!(
             matches!(
                 pending_entry_frame_panic,

@@ -251,6 +251,11 @@ pub struct RunArgs {
     )]
     pub context: Option<String>,
 
+    /// Watch the project's files and hot swap each save into the running
+    /// program.
+    #[arg(long, help_heading = "Target options", conflicts_with = "expression")]
+    pub hot: bool,
+
     /// Load one standalone source file instead of discovering a project.
     ///
     /// Mutually exclusive with `--project-dir`.
@@ -356,6 +361,8 @@ struct StandaloneSource {
     db: ProjectDatabase,
     package: SourceRoot,
     file: PathBuf,
+    /// The text compiled, which `--hot` compares later saves with.
+    content: String,
     root: PathBuf,
     needs_format_hint: bool,
 }
@@ -426,6 +433,11 @@ impl RawCommand for RunArgs {
 
 impl RunArgs {
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+        if self.hot {
+            // Before anything compiles: no caller may look through a function
+            // a save can replace.
+            baml_env::set_hotswap_enabled();
+        }
         // Dispatch modes are mutually exclusive. Positional target /
         // `-f` (one or many) / `-e` all replace each other.
         let dispatch_modes: &[(&str, bool)] = &[
@@ -776,13 +788,24 @@ impl RunArgs {
             .map(baml_exec::load_json_source)
             .transpose()?;
         prepared.launch_context = self.launch_context()?;
+        let hot_watch = if self.hot {
+            Some(crate::hot_reload::HotWatch {
+                files: match &self.file {
+                    Some(file) => crate::hot_reload::HotFiles::File(resolve_standalone_file(file)?),
+                    None => crate::hot_reload::HotFiles::Project(prepared.recording_root.clone()),
+                },
+                built: prepared.recording_sources.iter().cloned().collect(),
+            })
+        } else {
+            None
+        };
         let engine = prepared.into_engine(invocation.argv)?;
         self.dispatch_and_finish(
             engine,
+            hot_watch,
             &invocation.function_name,
-            invocation.args.cli_values,
+            invocation.args,
             json_args,
-            invocation.args.output_format,
             reporter,
         )
     }
@@ -792,26 +815,28 @@ impl RunArgs {
     fn dispatch_and_finish(
         &self,
         engine: BexEngine,
+        hot_watch: Option<crate::hot_reload::HotWatch>,
         function_name: &str,
-        cli_values: HashMap<String, bex_engine::BexExternalValue>,
+        args: baml_exec::ParsedTargetArgs,
         json_args: Option<serde_json::Value>,
-        output_format: Option<OutputFormat>,
         reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
         // Preserve the old cleanup call shape before program output.
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
-        let output_format = output_format.unwrap_or(self.output_format);
+        let output_format = args.output_format.unwrap_or(self.output_format);
         let interrupts = install_interrupts(&rt, &engine)?;
         let log_output = self.log_output(output_format);
         let (call_context, logs) = Self::call_context(log_output, &interrupts);
+        let hot_watcher =
+            hot_watch.map(|watch| crate::hot_reload::spawn(&rt, Arc::clone(&engine), watch));
         let dispatch_result = log_output.block_on(
             &rt,
             baml_exec::dispatch_target_with_context(
                 Arc::clone(&engine),
                 function_name,
-                cli_values,
+                args.cli_values,
                 json_args,
                 output_format,
                 call_context,
@@ -819,6 +844,9 @@ impl RunArgs {
             ),
             logs.as_ref(),
         );
+        if let Some(watcher) = hot_watcher {
+            watcher.abort();
+        }
         interrupts.root_finished();
         let status = match &dispatch_result {
             Ok(baml_exec::DispatchResult::Ok | baml_exec::DispatchResult::Exit(0)) => {
@@ -1014,7 +1042,8 @@ impl RunArgs {
             package,
             root,
             needs_format_hint,
-            ..
+            file,
+            content,
         } = self.load_standalone_source(file_path)?;
 
         // Keep standalone compilation quiet for `baml run`; diagnostics still
@@ -1035,7 +1064,13 @@ impl RunArgs {
             program,
             recording_root: root,
             launch_context: Default::default(),
-            recording_sources: Vec::new(),
+            // `--hot` compares edits with this. Recording it only with the flag
+            // on keeps standalone telemetry as it was.
+            recording_sources: if baml_env::hotswap_enabled() {
+                vec![(crate::hot_reload::file_key(&file), content)]
+            } else {
+                Vec::new()
+            },
             needs_format_hint,
         })
     }
@@ -1058,6 +1093,7 @@ impl RunArgs {
             package,
             root: parent.to_path_buf(),
             file: canonical,
+            content,
             needs_format_hint,
         })
     }
@@ -2261,6 +2297,7 @@ mod tests {
     /// fields. Keeps test bodies focused on the field under test.
     fn run_args() -> RunArgs {
         RunArgs {
+            hot: false,
             compiler: crate::commands::CompilerArgs::default(),
             target: None,
             functions: Vec::new(),
