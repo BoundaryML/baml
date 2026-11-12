@@ -1,7 +1,8 @@
 //! Publish a self-contained dashboard HTML file with the saved Boundary login.
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use std::path::PathBuf;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum CloudCommands {
@@ -99,8 +100,9 @@ impl UploadDashboardArgs {
 
 #[cfg(test)]
 mod tests {
-    use crate::commands::{Commands, RuntimeCli};
     use clap::FromArgMatches;
+
+    use crate::commands::{Commands, RuntimeCli};
     #[test]
     fn cloud_upload_parses_a_cloud_project_independently_of_the_source_project() {
         let matches = RuntimeCli::command()

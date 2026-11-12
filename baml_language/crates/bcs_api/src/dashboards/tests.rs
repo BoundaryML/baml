@@ -1,9 +1,10 @@
-use super::*;
 use serde_json::json;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{header, method, path},
 };
+
+use super::*;
 
 const VERSION: &str = "dsv_0123456789abcdef0123456789abcdef";
 fn publication(expected_version: Option<u64>) -> Publication {
