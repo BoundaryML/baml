@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 import { useUser } from "@/components/providers/user-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +30,6 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { Id } from "../../../convex/_generated/dataModel";
 
 type UserRole = "bdfl" | "team" | "unset" | "admin" | "shepherd" | "member";
 
@@ -81,9 +78,28 @@ export default function ProfilePage() {
   const [showToken, setShowToken] = useState(false);
   const [isLoadingToken, setIsLoadingToken] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
 
-  const getOrCreateToken = useMutation(api.users.getOrCreateApiToken);
-  const regenerateToken = useMutation(api.users.regenerateApiToken);
+  /** Asks the server for the token: it checks the GitHub sign-in, which the browser cannot fake. */
+  const requestToken = async (method: "GET" | "POST") => {
+    setIsLoadingToken(true);
+    setTokenError(null);
+    try {
+      const response = await fetch("/api/token", { method, cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || typeof body.token !== "string") {
+        setTokenError(body.error ?? "Could not get a token. Try again.");
+        return;
+      }
+      setApiToken(body.token);
+      setShowToken(true);
+    } catch (err) {
+      console.error("Failed to get token:", err);
+      setTokenError("Could not reach the server. Try again.");
+    } finally {
+      setIsLoadingToken(false);
+    }
+  };
 
   useEffect(() => {
     if (!isLoading && !userId) {
@@ -93,16 +109,7 @@ export default function ProfilePage() {
 
   const handleGetToken = async () => {
     if (!userId) return;
-    setIsLoadingToken(true);
-    try {
-      const result = await getOrCreateToken({ userId: userId as Id<"users"> });
-      setApiToken(result.token);
-      setShowToken(true);
-    } catch (err) {
-      console.error("Failed to get token:", err);
-    } finally {
-      setIsLoadingToken(false);
-    }
+    await requestToken("GET");
   };
 
   const handleRegenerateToken = async () => {
@@ -110,16 +117,7 @@ export default function ProfilePage() {
     if (!confirm("This will invalidate your current token. Any agents using the old token will stop working. Continue?")) {
       return;
     }
-    setIsLoadingToken(true);
-    try {
-      const result = await regenerateToken({ userId: userId as Id<"users"> });
-      setApiToken(result.token);
-      setShowToken(true);
-    } catch (err) {
-      console.error("Failed to regenerate token:", err);
-    } finally {
-      setIsLoadingToken(false);
-    }
+    await requestToken("POST");
   };
 
   const handleCopyToken = async () => {
@@ -271,6 +269,12 @@ export default function ProfilePage() {
                       </p>
                     </div>
                   </div>
+
+                  {tokenError && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {tokenError}
+                    </p>
+                  )}
 
                   {apiToken ? (
                     <div className="space-y-3">

@@ -63,7 +63,8 @@ export default defineSchema({
     isSpecialAccount: v.optional(v.boolean()),
     boundaryEmail: v.optional(v.string()),
     slackUserId: v.optional(v.string()),
-    // API token for agent access
+    // No longer read: API tokens live in `apiTokens`, since user documents reach the browser through
+    // many queries. users.clearLegacyApiTokens removes the old values.
     apiToken: v.optional(v.string()),
   })
     .index("by_name", ["name"])
@@ -391,6 +392,19 @@ export default defineSchema({
   })
     .index("by_bep", ["bepId"])
     .index("by_bep_status", ["bepId", "status"]),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // API TOKENS
+  // ─────────────────────────────────────────────────────────────────────────
+  // A member's token for the agent API and the `bep` script. Kept out of `users`, whose documents
+  // many public queries return: only functions that take the server secret read this table.
+  apiTokens: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_user", ["userId"]),
 
   // ─────────────────────────────────────────────────────────────────────────
   // BCS DESIGN PROPOSALS (team only)

@@ -622,7 +622,7 @@ Requires a Bearer token in the `Authorization` header:
 Authorization: Bearer bep_xxxxxxxxxxxxx
 ```
 
-Get your API token from your profile page (`/profile`).
+Get your API token from your profile page (`/profile`). Tokens are for BoundaryML organization members: the page asks the server (`/api/token`), which checks the GitHub sign-in, and tokens are stored apart from user records (`apiTokens`), so no public query returns them.
 
 #### Request Body
 
