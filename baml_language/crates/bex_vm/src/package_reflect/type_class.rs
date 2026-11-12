@@ -54,30 +54,27 @@ impl BamlClassType for PackageReflectImpl {
         super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Union, union_ty)
     }
 
-    fn to_baml(vm: &mut BexVm, self_value: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
+    fn to_baml(vm: &mut BexVm, self_value: &Value) -> Result<String, VmRustFnError> {
         let type_value = cloned_type_value(vm, *self_value);
         reject_first_type_value_render_schema_error(vm, &type_value)?;
-        Ok(bex_str::BexStr::from(render_type_value_source(
-            vm,
-            &type_value,
-        )))
+        Ok(render_type_value_source(vm, &type_value))
     }
 
     fn meta(
         vm: &mut BexVm,
         self_value: &Value,
-        alias: Option<&bex_str::BexStr>,
-        description: Option<&bex_str::BexStr>,
-        docstring: Option<&bex_str::BexStr>,
-        other: Option<&IndexMap<bex_str::BexStr, Value>>,
+        alias: Option<&str>,
+        description: Option<&str>,
+        docstring: Option<&str>,
+        other: Option<&IndexMap<String, Value>>,
     ) -> Value {
         let other = super::type_kinds::string_map_rows(vm, other);
         super::type_kinds::alloc_with_meta(
             vm,
             *self_value,
-            alias.map(bex_str::BexStr::as_str),
-            description.map(bex_str::BexStr::as_str),
-            docstring.map(bex_str::BexStr::as_str),
+            alias,
+            description,
+            docstring,
             &other,
         )
     }
@@ -177,13 +174,13 @@ impl BamlClassType for PackageReflectImpl {
     /// This identity guarantee makes the result usable as a stable key in
     /// `map<string, V>` until generic-K interfaces enable a real
     /// `map<reflect.Type, V>`.
-    fn _to_string_impl(vm: &BexVm, self_value: &Value) -> bex_str::BexStr {
+    fn _to_string_impl(vm: &BexVm, self_value: &Value) -> String {
         let Some(ptr) = self_value.as_object_ptr() else {
-            return bex_str::BexStr::from("<type: ?>");
+            return "<type: ?>".to_owned();
         };
         match vm.get_object(ptr) {
-            Object::Type(type_value) => bex_str::BexStr::from(type_value.ty.to_string()),
-            _ => bex_str::BexStr::from("<type: ?>"),
+            Object::Type(type_value) => type_value.ty.to_string(),
+            _ => "<type: ?>".to_owned(),
         }
     }
 

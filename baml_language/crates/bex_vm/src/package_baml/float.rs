@@ -197,8 +197,7 @@ impl BamlClassFloat for PackageBamlImpl {
 
     // ── Parsing / randomness ──────────────────────────────────────────────────
 
-    fn parse(text: &bex_str::BexStr) -> Result<f64, VmRustFnError> {
-        let s = text.as_str();
+    fn parse(s: &str) -> Result<f64, VmRustFnError> {
         s.parse::<f64>().map_err(|e| {
             VmBamlError::ParseError {
                 message: format!("float.parse: cannot parse {s:?} as float: {e}"),

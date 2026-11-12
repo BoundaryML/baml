@@ -28,6 +28,7 @@
 #![warn(clippy::disallowed_methods)]
 
 mod accessor;
+mod compile_time;
 mod descriptor;
 mod functions;
 mod gc;

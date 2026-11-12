@@ -92,7 +92,7 @@ impl BexHeap {
     pub fn static_function_metadata(&self) -> FunctionMetadataTable {
         let functions = (0..self.compile_time_len())
             .filter_map(|index| match self.compile_time_object(index) {
-                Object::Function(function) => function.runtime_metadata(),
+                Some(Object::Function(function)) => function.runtime_metadata(),
                 _ => None,
             })
             .collect::<Vec<_>>();

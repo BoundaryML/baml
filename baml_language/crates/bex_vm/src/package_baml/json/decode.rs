@@ -33,10 +33,9 @@ use std::sync::Arc;
 use baml_type::MediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    BexStr, HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, TypeHead, Value, ValueKind,
+    HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, StrRef, TypeHead, Value, ValueKind,
     types::SharedKind,
 };
-use indexmap::IndexMap;
 use rustc_hash::FxHashMap;
 use sys_types::JsonNaming;
 
@@ -108,11 +107,34 @@ enum Container {
     },
     Map {
         source: HeapPtr,
-        entries: Vec<(BexStr, Value)>,
+        /// Each entry's key, the string cell the JSON object holds, and
+        /// its JSON value.
+        entries: Vec<(Value, Value)>,
         key: RealizedTy,
         value: RealizedTy,
-        decoded: IndexMap<BexStr, Value>,
+        decoded: Vec<Value>,
     },
+}
+
+/// The text of `key`, a string cell a JSON object holds, read without the
+/// VM: for a path, where the VM is borrowed by the decode that needs it.
+#[allow(unsafe_code, reason = "a key cell is live for the native's run")]
+fn key_text<'a>(key: Value) -> std::borrow::Cow<'a, str> {
+    let ptr = key
+        .as_object_ptr()
+        .expect("an object's keys are string cells");
+    // SAFETY: the key is live, held by its object and the walk's roots, and
+    // nothing moves it while a native runs: the collector runs only while
+    // every VM is yielded, and the text is read before any yield.
+    unsafe { StrRef::new_unchecked(ptr) }.text()
+}
+
+/// The map hash of `key`, a string cell a JSON object holds, cached in the
+/// cell by its first use.
+fn key_hash(vm: &BexVm, key: Value) -> u64 {
+    vm.as_string(&key)
+        .expect("an object's keys are string cells")
+        .hash()
 }
 
 /// One field of a class the walk is inside.
@@ -196,7 +218,7 @@ impl Container {
                 entries, decoded, ..
             } => {
                 if let Some((key, _)) = entries.get(decoded.len()) {
-                    let _ = write!(path, "[{:?}]", key.as_str());
+                    let _ = write!(path, "[{:?}]", key_text(*key));
                 }
             }
         }
@@ -205,15 +227,11 @@ impl Container {
     /// Record the next child's decoded value.
     fn push(&mut self, child: Value) {
         match self {
-            Self::Class { decoded, .. } | Self::List { decoded, .. } => decoded.push(child),
-            Self::Map {
-                entries, decoded, ..
-            } => {
-                // A JSON object's keys are distinct, so the next entry is the
-                // one after the last result.
-                let key = entries[decoded.len()].0.clone();
-                decoded.insert(key, child);
-            }
+            // A JSON object's keys are distinct, so a map's next entry is the
+            // one after the last result too.
+            Self::Class { decoded, .. }
+            | Self::List { decoded, .. }
+            | Self::Map { decoded, .. } => decoded.push(child),
         }
     }
 
@@ -232,9 +250,17 @@ impl Container {
             Self::Map {
                 key,
                 value,
+                entries,
                 decoded,
                 ..
-            } => vm.alloc_map(key, value, decoded),
+            } => {
+                let data = entries
+                    .into_iter()
+                    .zip(decoded)
+                    .map(|((written, _), value)| (key_hash(vm, written), written, value))
+                    .collect();
+                vm.alloc_map_hashed(key, value, data)
+            }
         })
     }
 }
@@ -686,14 +712,13 @@ impl RootHaver for Container {
                 decoded,
             } => {
                 source.visit_roots(visitor);
-                for (_, json) in entries {
+                for (written, json) in entries {
+                    written.visit_roots(visitor);
                     json.visit_roots(visitor);
                 }
                 key.visit_roots(visitor);
                 value.visit_roots(visitor);
-                for decoded in decoded.values_mut() {
-                    decoded.visit_roots(visitor);
-                }
+                decoded.visit_roots(visitor);
             }
         }
     }
@@ -997,7 +1022,7 @@ fn open_map(
     if !matches!(key, RealizedTy::String)
         && entries
             .iter()
-            .any(|(written, _)| !super::key_fits(vm, written, key))
+            .any(|(written, _)| !super::key_fits(vm, &key_text(*written), key))
     {
         return Err(raise_decode(
             vm,
@@ -1007,7 +1032,7 @@ fn open_map(
     }
     Ok(Container::Map {
         source,
-        decoded: IndexMap::with_capacity(entries.len()),
+        decoded: Vec::with_capacity(entries.len()),
         entries,
         key: key.clone(),
         value: value.clone(),
@@ -1115,7 +1140,7 @@ fn first_invalid(vm: &BexVm, json: Value) -> Option<(&'static str, String)> {
                     }
                     super::string_entries(vm, ptr)
                         .into_iter()
-                        .map(|(key, value)| (Segment::Key(key), value))
+                        .map(|(key, value)| (Segment::Key(key_text(key).into_owned()), value))
                         .collect()
                 }
                 _ => unreachable!("only containers are visited"),
@@ -1146,7 +1171,7 @@ type Visiting = (HeapPtr, Vec<(Segment, Value)>, usize);
 /// One step into a container, as `DecodeError.path` writes it.
 enum Segment {
     Index(usize),
-    Key(BexStr),
+    Key(String),
 }
 
 /// The path to the child each open container is on (its cursor has moved
@@ -1160,7 +1185,7 @@ fn render_segments(open: &[Visiting]) -> String {
                 let _ = write!(path, "[{i}]");
             }
             Some((Segment::Key(key), _)) => {
-                let _ = write!(path, "[{:?}]", key.as_str());
+                let _ = write!(path, "[{key:?}]");
             }
             None => {}
         }
@@ -1218,7 +1243,7 @@ fn node_of(vm: &BexVm, json: Value) -> Node {
         ValueKind::Int(i) => Node::Int(i),
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Float(f) => Node::Float(*f),
-            Object::String(_) => Node::String(json),
+            Object::Shared(SharedKind::Str) => Node::String(json),
             Object::Bigint(b) => Node::Bigint(Arc::clone(b)),
             Object::Shared(SharedKind::List) => Node::Array(ptr),
             Object::Shared(SharedKind::Map) => Node::Object(ptr),
@@ -1264,11 +1289,12 @@ impl Node {
         }
     }
 
-    /// The text of a string node.
-    fn text<'a>(&'a self, vm: &'a BexVm) -> Option<&'a str> {
+    /// The text of a string node; a rope's is copied out, the reader
+    /// having no allocator.
+    fn text<'a>(&'a self, vm: &'a BexVm) -> Option<std::borrow::Cow<'a, str>> {
         match self {
-            Node::String(value) => vm.as_string(value).ok().map(BexStr::as_str),
-            Node::Variant(name) => Some(name),
+            Node::String(value) => vm.as_string(value).ok().map(|value| value.text()),
+            Node::Variant(name) => Some(std::borrow::Cow::Borrowed(name)),
             _ => None,
         }
     }
@@ -1278,7 +1304,7 @@ impl Node {
         match self {
             Node::Int(i) => Some(num_bigint::BigInt::from(*i)),
             Node::Bigint(b) => Some((**b).clone()),
-            Node::String(_) | Node::Variant(_) => super::parse_decimal_bigint(self.text(vm)?),
+            Node::String(_) | Node::Variant(_) => super::parse_decimal_bigint(&self.text(vm)?),
             _ => None,
         }
     }
@@ -1532,21 +1558,22 @@ impl<'p> Structural<'p> {
             return Err(self.fail(vm, || STRING_MAP_REQUIRED.into()));
         }
         let any_key = matches!(key, RealizedTy::String);
-        let mut entries = IndexMap::new();
+        let mut entries = Vec::new();
         for (written, item) in super::string_entries(vm, ptr) {
-            if !any_key && !super::key_fits(vm, &written, key) {
+            let text = key_text(written);
+            if !any_key && !super::key_fits(vm, &text, key) {
                 return Err(self.fail(vm, || "map key does not match declared key type".into()));
             }
             let item = self.within(
                 |path| {
                     use std::fmt::Write;
-                    let _ = write!(path, "[{:?}]", written.as_str());
+                    let _ = write!(path, "[{text:?}]");
                 },
                 |this| this.decode(vm, item, value),
             )?;
-            entries.insert(written, item);
+            entries.push((key_hash(vm, written), written, item));
         }
-        Ok(Value::object(vm.alloc_map(
+        Ok(Value::object(vm.alloc_map_hashed(
             key.clone(),
             value.clone(),
             entries,
@@ -1697,7 +1724,7 @@ impl<'p> Structural<'p> {
                 _ => Err(self.fail(vm, || "literal mismatch".into())),
             },
             baml_type::Literal::String(expected) => {
-                if node.text(vm) != Some(expected.as_str()) {
+                if node.text(vm).as_deref() != Some(expected.as_str()) {
                     return Err(self.fail(vm, || "literal mismatch".into()));
                 }
                 match node {
@@ -1748,10 +1775,10 @@ impl<'p> Structural<'p> {
         head: TypeHead,
     ) -> Result<Value, Failed> {
         let named = || baml_type::HeadDisplay::head_display_name(&head);
-        let Some(variant) = node.text(vm) else {
+        let Some(variant) = node.text(vm).map(std::borrow::Cow::into_owned) else {
             return Err(self.fail(vm, || "expected enum variant string".into()));
         };
-        match super::variant_named(vm, head, variant, self.naming()) {
+        match super::variant_named(vm, head, &variant, self.naming()) {
             Ok(Some(index)) => Ok(Value::object(vm.alloc_variant(head.ptr(), index))),
             Ok(None) => {
                 let variant = variant.to_owned();
@@ -1787,7 +1814,7 @@ impl<'p> Structural<'p> {
             _ => return Err(self.fail(vm, || format!("`{}` is not an enum", named()))),
         };
         match expected {
-            Some((true, expected)) if node.text(vm) == Some(expected.as_str()) => {
+            Some((true, expected)) if node.text(vm).as_deref() == Some(expected.as_str()) => {
                 match super::variant_named(vm, head, &expected, self.naming()) {
                     Ok(Some(index)) => Ok(Value::object(vm.alloc_variant(head.ptr(), index))),
                     _ => Err(self.fail(vm, || {
@@ -1917,7 +1944,7 @@ impl<'p> Structural<'p> {
         }
         let read = |vm: &BexVm, key: &str| {
             let value = super::object_get(vm, ptr, bex_vm_types::map_string_hash(key), key)?;
-            node_of(vm, value).text(vm).map(str::to_owned)
+            node_of(vm, value).text(vm).map(std::borrow::Cow::into_owned)
         };
         let fields = MediaFields {
             kind: read(vm, "kind"),

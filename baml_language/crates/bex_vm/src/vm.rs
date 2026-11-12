@@ -95,7 +95,7 @@ use bex_heap::{BexHeap, Finalizable, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, InstanceRef, ListRef, Object,
     ObjectIndex, ObjectPool, ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex,
-    UnaryOp, Value, Variant, VmGlobals,
+    StrRef, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, Instruction},
     object_format::{Access, SlotValue},
     types::SharedKind,
@@ -2316,7 +2316,7 @@ fn value_type_tag(value: Value) -> i64 {
             let obj = unsafe { ptr.get() };
             match obj {
                 Object::Float(_) => type_tags::FLOAT,
-                Object::String(_) => type_tags::STRING,
+                Object::Shared(SharedKind::Str) | Object::String(_) => type_tags::STRING,
                 Object::Bigint(_) => type_tags::BIGINT,
                 Object::Uint8Array(_) => type_tags::UINT8ARRAY,
                 Object::Variant(_) => type_tags::ENUM,
@@ -2946,7 +2946,7 @@ impl BexVm {
         let level = map
             .get("level")
             .ok_or(VmInternalError::InvalidLogEvent("missing level"))?;
-        let level = match self.as_string(level)?.as_str() {
+        let level = match self.as_string(level)?.text().as_ref() {
             "info" => LogLevel::Info,
             "debug" => LogLevel::Debug,
             "warn" => LogLevel::Warn,
@@ -2958,7 +2958,7 @@ impl BexVm {
             .filter(|value| !value.is_null() && !value.is_omitted())
             .map(|value| {
                 self.as_string(value)
-                    .map(|name| Arc::<str>::from(name.as_str()))
+                    .map(|name| Arc::<str>::from(name.text()))
             })
             .transpose()?;
         let data = *map
@@ -3998,9 +3998,40 @@ impl BexVm {
     }
 
     /// Get string from a Value.
-    pub fn as_string(&self, value: &Value) -> Result<&bex_vm_types::BexStr, VmInternalError> {
+    pub fn as_string(&self, value: &Value) -> Result<StrRef<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
-        self.get_object(ptr).as_string()
+        self.str_at(ptr).ok_or_else(|| VmInternalError::TypeError {
+            expected: ObjectType::String.into(),
+            got: ObjectType::of(self.get_object(ptr)).into(),
+        })
+    }
+
+    /// The flat holding `value`'s text, a rope flattened first (see
+    /// `Tlab::flatten_string`); `None` when `value` is not a string. A
+    /// borrow of the text (`as_string(..).as_str()`) needs this first;
+    /// copies out, hashing and comparison do not.
+    #[inline]
+    pub fn flatten_str(&mut self, value: &Value) -> Option<HeapPtr> {
+        let ptr = value.as_object_ptr()?;
+        self.str_at(ptr)?;
+        Some(self.tlab.flatten_string(ptr))
+    }
+
+    /// The string at `ptr`, if it is one.
+    #[inline]
+    pub fn str_at(&self, ptr: HeapPtr) -> Option<StrRef<'_>> {
+        // SAFETY: the VM holds a heap permit, so a pointer it holds is live.
+        unsafe { StrRef::of(ptr) }
+    }
+
+    /// The string at `ptr`, which the caller has seen is one.
+    ///
+    /// # Panics
+    /// If it is not a string.
+    #[track_caller]
+    pub fn expect_str(&self, ptr: HeapPtr) -> StrRef<'_> {
+        self.str_at(ptr)
+            .unwrap_or_else(|| panic!("expected a string at {ptr:?}"))
     }
 
     /// Get a reference to the `Arc<BigInt>` from a bigint Value.
@@ -4062,7 +4093,7 @@ impl BexVm {
             ValueKind::Bool(b) => b,
             ValueKind::Int(v) => v != 0,
             ValueKind::Object(ptr) => match self.get_object(ptr) {
-                Object::String(s) => !s.is_empty(),
+                Object::Shared(SharedKind::Str) => !self.expect_str(ptr).is_empty(),
                 Object::Shared(SharedKind::List) => {
                     let arr = self.expect_list(ptr);
                     !arr.is_empty()
@@ -4284,7 +4315,7 @@ impl BexVm {
             baml_type::Literal::Int(n) => value.as_int() == Some(*n),
             baml_type::Literal::Bool(b) => value.as_bool() == Some(*b),
             baml_type::Literal::String(s) => match value.as_object_ptr() {
-                Some(ptr) => matches!(self.get_object(ptr), Object::String(v) if **v == **s),
+                Some(ptr) => self.str_at(ptr).is_some_and(|v| v == &**s),
                 None => false,
             },
             baml_type::Literal::Bigint(n) => match value.as_object_ptr() {
@@ -4332,8 +4363,10 @@ impl BexVm {
         }
         if let Some(ptr) = value.as_object_ptr() {
             match self.get_object(ptr) {
-                Object::String(s) => {
-                    return Some(literal(baml_type::Literal::String((**s).to_owned())));
+                Object::Shared(SharedKind::Str) => {
+                    return Some(literal(baml_type::Literal::String(
+                        self.expect_str(ptr).to_owned_string(),
+                    )));
                 }
                 Object::Bigint(n) => {
                     return Some(literal(baml_type::Literal::Bigint((**n).clone())));
@@ -4522,7 +4555,7 @@ impl BexVm {
         Some(match self.get_object(ptr) {
             Object::Float(_) => ConcreteRealizedTy::Float,
             Object::Bigint(_) => ConcreteRealizedTy::Bigint,
-            Object::String(_) => ConcreteRealizedTy::String,
+            Object::Shared(SharedKind::Str) | Object::String(_) => ConcreteRealizedTy::String,
             Object::Uint8Array(_) => ConcreteRealizedTy::Uint8Array,
             Object::Shared(SharedKind::Instance) => {
                 let inst = self.instance_at(ptr)?;
@@ -4892,14 +4925,12 @@ impl BexVm {
             .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"))
     }
 
-    /// Snapshot a string-keyed map for native string-only boundaries.
-    pub fn as_string_map(
-        &self,
-        value: &Value,
-    ) -> Result<IndexMap<bex_vm_types::BexStr, Value>, VmInternalError> {
+    /// Snapshot a string-keyed map for native string-only boundaries, each
+    /// key copied out.
+    pub fn as_string_map(&self, value: &Value) -> Result<IndexMap<String, Value>, VmInternalError> {
         self.as_map(value)?
             .iter()
-            .map(|(key, value)| Ok((self.as_string(key)?.clone(), *value)))
+            .map(|(key, value)| Ok((self.as_string(key)?.to_owned_string(), *value)))
             .collect()
     }
 
@@ -7325,7 +7356,7 @@ impl BexVm {
         // apply its calling convention (TS `$opts`, Python kwargs) without the
         // callee type on the wire.
         let mut positional: Vec<Value> = Vec::new();
-        let mut optional: IndexMap<bex_vm_types::BexStr, Value> = IndexMap::new();
+        let mut optional: IndexMap<String, Value> = IndexMap::new();
         for (i, val) in user_args.into_iter().enumerate() {
             match params.get(i) {
                 Some(p) if p.is_optional() => {
@@ -7337,7 +7368,7 @@ impl BexVm {
                         .as_ref()
                         .map(|n| n.as_str().to_string())
                         .unwrap_or_else(|| format!("arg{i}"));
-                    optional.insert(bex_vm_types::BexStr::from(name), val);
+                    optional.insert(name, val);
                 }
                 _ => positional.push(val),
             }
@@ -7348,7 +7379,7 @@ impl BexVm {
         let positional_ptr = self
             .tlab
             .alloc_array(bex_vm_types::RealizedTy::unknown(), positional);
-        let optional_ptr = self.tlab.alloc_map(
+        let optional_ptr = self.tlab.alloc_string_map(
             bex_vm_types::RealizedTy::string(),
             bex_vm_types::RealizedTy::unknown(),
             optional,
@@ -8202,26 +8233,20 @@ impl BexVm {
         let key_ty = self.ensure_pop_type()?;
         // Nonempty allocations are compiler-generated string maps.
         // General-key literals use yielding Map.set calls.
-        let map = if n > 0 {
+        // The keys on the stack are string cells already: each goes into the
+        // map as it is, hashed through the cell. A repeated key keeps its
+        // first position and takes its last value.
+        let map = self.tlab.alloc_empty_map(key_ty, value_ty);
+        if n > 0 {
             let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
-            let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
-            let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1);
-            let values = self.stack[end_of_values..end_of_keys].iter().copied();
-            let keys = self.stack[idx_of_last_key..].iter().map(|k| {
-                let obj_index = self.as_object_ptr(*k, ObjectType::String)?;
-                self.get_object(obj_index).as_string().cloned()
-            });
-            let pairs = values
-                .zip(keys)
-                .map(|(val, key_res)| key_res.map(|k| (k, val)));
-            let map = pairs.collect::<Result<IndexMap<_, _>, _>>()?;
-            self.stack.drain(end_of_values..);
-            map
-        } else {
-            IndexMap::new()
-        };
-        let obj_index = self.tlab.alloc_map(key_ty, value_ty, map);
-        self.push_stack(Value::object(obj_index))?;
+            let entries: Vec<Value> = self.stack.drain(end_of_values..).collect();
+            let (values, keys) = entries.split_at(n);
+            for (&value, &key) in values.iter().zip(keys) {
+                let key = self.as_string(&key)?.ptr();
+                self.tlab.map_insert_str(map, key, value);
+            }
+        }
+        self.push_stack(Value::object(map.ptr()))?;
         Ok(())
     }
 
@@ -8283,7 +8308,7 @@ impl BexVm {
             Object::Shared(SharedKind::List) => self.expect_list(ptr).len() as i64,
             Object::Uint8Array(bytes) => bytes.len() as i64,
             Object::Shared(SharedKind::Map) => self.expect_map(ptr).len() as i64,
-            Object::String(s) => s.byte_len() as i64,
+            Object::Shared(SharedKind::Str) => self.expect_str(ptr).byte_len() as i64,
             other => {
                 return Err(VmInternalError::TypeError {
                     expected: ObjectType::Array.into(),
@@ -9552,7 +9577,7 @@ impl BexVm {
             let lobj = self.get_object(li);
             let robj = self.get_object(ri);
             match (lobj, robj) {
-                (Object::String(_), Object::String(_)) => {
+                (Object::Shared(SharedKind::Str), Object::Shared(SharedKind::Str)) => {
                     let ls = self.as_string(&left)?;
                     let rs = self.as_string(&right)?;
                     Value::bool(match op {
@@ -9722,10 +9747,10 @@ impl BexVm {
             // object/object string-concatenation case.
             self.bigint_binop(op, l, r)?
         } else if left.is_object() && right.is_object() && op == BinOp::Add {
-            let ls = self.as_string(&left)?;
-            let rs = self.as_string(&right)?;
-            let result = bex_str::BexStr::concat(ls.clone(), rs.clone());
-            let value = Value::object(self.alloc_string(result));
+            let ls = self.as_string(&left)?.ptr();
+            let rs = self.as_string(&right)?.ptr();
+            // A rope when the result is long, else a flat copy.
+            let value = Value::object(self.concat_str(ls, rs));
             // One instruction can build a string of any size.
             self.settle();
             value
@@ -9741,25 +9766,35 @@ impl BexVm {
         Ok(result)
     }
 
-    /// Allocate the result of a `ConcatStrings`, interpreted or compiled.
-    pub(crate) fn alloc_joined_string(&mut self, result: bex_vm_types::BexStr) -> Value {
-        let value = Value::object(self.alloc_string(result));
+    /// The strings `parts` concatenated left to right (`ConcatStrings`:
+    /// template interpolation, interpreted or compiled). One flat when the
+    /// result is short; else each join is a `+` (a rope once the running
+    /// result is long), so interpolating onto an accumulator in a loop
+    /// stays linear.
+    pub(crate) fn concat_parts(&mut self, parts: &[Value]) -> Result<Value, VmInternalError> {
+        let mut strings: SmallVec<[HeapPtr; 16]> = SmallVec::with_capacity(parts.len());
+        let mut byte_len = 0;
+        for part in parts {
+            let string = self.as_string(part)?;
+            byte_len += string.byte_len();
+            strings.push(string.ptr());
+        }
+        let value = if byte_len < bex_vm_types::types::STR_SHARE_THRESHOLD {
+            let mut joined = String::with_capacity(byte_len);
+            for &string in &strings {
+                self.expect_str(string).push_to(&mut joined);
+            }
+            Value::object(self.alloc_string(joined))
+        } else {
+            let mut result = strings[0];
+            for &string in &strings[1..] {
+                result = self.concat_str(result, string);
+            }
+            Value::object(result)
+        };
         // One instruction can build a string of any size.
         self.settle();
-        value
-    }
-
-    /// The strings `parts` joined left to right (`ConcatStrings`).
-    pub(crate) fn join_strings(
-        &self,
-        parts: &[Value],
-    ) -> Result<bex_vm_types::BexStr, VmInternalError> {
-        let mut strings: smallvec::SmallVec<[&bex_vm_types::BexStr; 16]> =
-            smallvec::SmallVec::with_capacity(parts.len());
-        for part in parts {
-            strings.push(self.as_string(part)?);
-        }
-        Ok(bex_vm_types::BexStr::concat_many(&strings))
+        Ok(value)
     }
 
     /// Compact bytecode dispatch loop.
@@ -10305,10 +10340,11 @@ impl BexVm {
                     OpCode::ConcatStrings => {
                         let n = { read_u32_unchecked(code, pc) as usize };
                         let first = StackIndex::from_raw(self.stack.len() - n);
-                        let result = self.join_strings(&self.stack[first..])?;
+                        let parts: SmallVec<[Value; 16]> =
+                            self.stack[first..].iter().copied().collect();
+                        let value = self.concat_parts(&parts)?;
                         // SAFETY: the encoder validates the instruction's stack effect.
                         self.stack.truncate_suffix(n);
-                        let value = self.alloc_joined_string(result);
                         self.push_stack(value)?;
                     }
 

@@ -324,6 +324,12 @@ fn extract_from_class(
         let has_mut_vm = has_method_directive(cst_root, class_name, method_name, "//baml:mut_vm");
         let may_yield = has_method_directive(cst_root, class_name, method_name, "//baml:may_yield");
         let fallible = has_method_directive(cst_root, class_name, method_name, "//baml:fallible");
+        let str_ref = has_method_directive(cst_root, class_name, method_name, "//baml:str_ref");
+        assert!(
+            !(str_ref && has_mut_vm),
+            "baml codegen error: {path} has both //baml:str_ref and //baml:mut_vm \
+             -- a string handle borrows the VM the method would mutate"
+        );
 
         assert!(
             !(has_vm && has_mut_vm),
@@ -410,6 +416,7 @@ fn extract_from_class(
             vm_usage,
             may_yield,
             fallible,
+            str_ref,
             local_twin: has_method_directive(
                 cst_root,
                 class_name,
@@ -512,6 +519,12 @@ fn extract_from_free_function(
     let has_mut_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:mut_vm");
     let may_yield = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:may_yield");
     let fallible = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:fallible");
+    let str_ref = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:str_ref");
+    assert!(
+        !(str_ref && has_mut_vm),
+        "baml codegen error: {path} has both //baml:str_ref and //baml:mut_vm \
+         -- a string handle borrows the VM the function would mutate"
+    );
 
     assert!(
         !(has_vm && has_mut_vm),
@@ -566,6 +579,7 @@ fn extract_from_free_function(
         vm_usage,
         may_yield,
         fallible,
+        str_ref,
         local_twin: false,
         pipeline,
         throws,
@@ -684,6 +698,12 @@ fn extract_from_implements_for(
         let has_mut_vm = impl_method_has_directive(cst_root, method, "//baml:mut_vm");
         let may_yield = impl_method_has_directive(cst_root, method, "//baml:may_yield");
         let fallible = impl_method_has_directive(cst_root, method, "//baml:fallible");
+        let str_ref = impl_method_has_directive(cst_root, method, "//baml:str_ref");
+        assert!(
+            !(str_ref && has_mut_vm),
+            "baml codegen error: {path} has both //baml:str_ref and //baml:mut_vm \
+             -- a string handle borrows the VM the method would mutate"
+        );
 
         assert!(
             !(has_vm && has_mut_vm),
@@ -756,6 +776,7 @@ fn extract_from_implements_for(
             vm_usage,
             may_yield,
             fallible,
+            str_ref,
             local_twin: false,
             pipeline,
             throws: extract_throws(method),
@@ -1368,6 +1389,7 @@ mod tests {
             vm_usage: VmUsage::None,
             may_yield: false,
             fallible: false,
+            str_ref: false,
             local_twin: false,
             pipeline: BuiltinPipeline::Io,
             throws: Some(vec![]),

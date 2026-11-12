@@ -166,7 +166,9 @@ pub fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
     match vm.get_object(value.as_object_ptr()?) {
         Object::Float(_) => Some(Primitive::Float),
         Object::Bigint(_) => Some(Primitive::Bigint),
-        Object::String(_) => Some(Primitive::String),
+        Object::Shared(bex_vm_types::types::SharedKind::Str) | Object::String(_) => {
+            Some(Primitive::String)
+        }
         Object::Uint8Array(_) => Some(Primitive::Uint8Array),
         Object::Package(_)
         | Object::Function(_)

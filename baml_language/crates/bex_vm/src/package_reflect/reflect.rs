@@ -88,7 +88,7 @@ impl BamlPackageReflect for PackageReflectImpl {
     fn call_any(
         vm: &mut BexVm,
         f: &Value,
-        args: &IndexMap<bex_str::BexStr, Value>,
+        args: &IndexMap<String, Value>,
     ) -> NativeCallResult {
         call_any_impl(vm, *f, args)
     }
@@ -723,10 +723,10 @@ fn find_interface(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
 fn find_function(
     vm: &mut BexVm,
     package: Value,
-    name: &bex_str::BexStr,
+    name: &str,
 ) -> Result<Option<Value>, VmRustFnError> {
     let package_ptr = package_ptr(vm, package)?;
-    let Some(local) = local_name(name.as_str()) else {
+    let Some(local) = local_name(name) else {
         return Ok(None);
     };
     // The package the function lives in: a view answers with its base's.
@@ -772,7 +772,7 @@ fn find_function(
             super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
         ));
     }
-    check_function_contract(vm, package_ptr, name.as_str(), &signature)?;
+    check_function_contract(vm, package_ptr, name, &signature)?;
     Ok(Some(function_value))
 }
 
@@ -801,10 +801,10 @@ fn global_cell(vm: &BexVm, package: &Package, ordinal: u32) -> Option<GlobalCell
 fn find_global(
     vm: &mut BexVm,
     package: Value,
-    name: &bex_str::BexStr,
+    name: &str,
 ) -> Result<Option<Value>, VmRustFnError> {
     let package_ptr = package_ptr(vm, package)?;
-    let Some(local) = local_name(name.as_str()) else {
+    let Some(local) = local_name(name) else {
         return Ok(None);
     };
     let path = DeclPath::Let(local);
@@ -843,7 +843,7 @@ fn find_global(
         );
         let message = Value::object(vm.alloc_string(format!(
             "global `{}` has type `{got}`, expected `{expected}`",
-            name.as_str()
+            name
         )));
         return Err(VmRustFnError::thrown_fresh(
             copy::errors::TypeMismatch { message }.to_value(vm),
@@ -854,9 +854,9 @@ fn find_global(
 
 /// The `reflect.errors.NotFound` a `get_*` lookup throws where its `find_*`
 /// counterpart returns `null`.
-fn not_found(vm: &mut BexVm, kind: &str, name: &bex_str::BexStr) -> VmRustFnError {
+fn not_found(vm: &mut BexVm, kind: &str, name: &str) -> VmRustFnError {
     let message = Value::object(
-        vm.alloc_string(format!("no {kind} named {} in this package", name.as_str())),
+        vm.alloc_string(format!("no {kind} named {} in this package", name)),
     );
     VmRustFnError::thrown_fresh(copy::errors::NotFound { message }.to_value(vm))
 }
@@ -1148,9 +1148,9 @@ impl Continuation for FinishPackageTests {
             let Ok(name) = vm.as_string(&name_value) else {
                 continue;
             };
-            tests.insert(name.clone(), body);
+            tests.insert(name.to_owned_string(), body);
         }
-        NativeCallResult::Done(Value::object(vm.tlab.alloc_map(
+        NativeCallResult::Done(Value::object(vm.alloc_map(
             RealizedTy::string(),
             test_function_ty(),
             tests,
@@ -1162,7 +1162,7 @@ impl BamlClassPackage for PackageReflectImpl {
     fn _finish(
         vm: &mut BexVm,
         artifact: &Value,
-        packages: &IndexMap<bex_str::BexStr, Value>,
+        packages: &IndexMap<String, Value>,
     ) -> NativeCallResult {
         let PinnedArtifact { artifact, pins } = match take_compile_artifact(
             vm,
@@ -1254,49 +1254,49 @@ impl BamlClassPackage for PackageReflectImpl {
     fn get_class(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, VmRustFnError> {
         let ptr = package_ptr(vm, *package)?;
-        find_class(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "class", name))
+        find_class(vm, ptr, name).ok_or_else(|| not_found(vm, "class", name))
     }
 
-    fn find_class(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+    fn find_class(vm: &mut BexVm, package: &Value, name: &str) -> Option<Value> {
         let ptr = package_object(vm, *package).ok()?;
-        find_class(vm, ptr, name.as_str())
+        find_class(vm, ptr, name)
     }
 
     fn get_enum(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, VmRustFnError> {
         let ptr = package_ptr(vm, *package)?;
-        find_enum(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "enum", name))
+        find_enum(vm, ptr, name).ok_or_else(|| not_found(vm, "enum", name))
     }
 
-    fn find_enum(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+    fn find_enum(vm: &mut BexVm, package: &Value, name: &str) -> Option<Value> {
         let ptr = package_object(vm, *package).ok()?;
-        find_enum(vm, ptr, name.as_str())
+        find_enum(vm, ptr, name)
     }
 
     fn get_interface(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, VmRustFnError> {
         let ptr = package_ptr(vm, *package)?;
-        find_interface(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "interface", name))
+        find_interface(vm, ptr, name).ok_or_else(|| not_found(vm, "interface", name))
     }
 
-    fn find_interface(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+    fn find_interface(vm: &mut BexVm, package: &Value, name: &str) -> Option<Value> {
         let ptr = package_object(vm, *package).ok()?;
-        find_interface(vm, ptr, name.as_str())
+        find_interface(vm, ptr, name)
     }
 
     fn _with_types(
         vm: &mut BexVm,
         package: &Value,
-        types: &IndexMap<bex_str::BexStr, Value>,
+        types: &IndexMap<String, Value>,
     ) -> Result<Value, VmRustFnError> {
         let base_ptr = package_ptr(vm, *package)?;
         // A view is a new package that re-exports its base wholesale and
@@ -1427,7 +1427,7 @@ impl BamlClassPackage for PackageReflectImpl {
     fn get_function(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, VmRustFnError> {
         find_function(vm, *package, name)?.ok_or_else(|| not_found(vm, "function", name))
     }
@@ -1435,12 +1435,12 @@ impl BamlClassPackage for PackageReflectImpl {
     fn find_function(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Option<Value>, VmRustFnError> {
         find_function(vm, *package, name)
     }
 
-    fn classes(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
+    fn classes(vm: &mut BexVm, package: &Value) -> IndexMap<String, Value> {
         let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
@@ -1455,7 +1455,7 @@ impl BamlClassPackage for PackageReflectImpl {
             .collect()
     }
 
-    fn enums(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
+    fn enums(vm: &mut BexVm, package: &Value) -> IndexMap<String, Value> {
         let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
@@ -1465,7 +1465,7 @@ impl BamlClassPackage for PackageReflectImpl {
             .collect()
     }
 
-    fn interfaces(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
+    fn interfaces(vm: &mut BexVm, package: &Value) -> IndexMap<String, Value> {
         let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
@@ -1480,7 +1480,7 @@ impl BamlClassPackage for PackageReflectImpl {
             .collect()
     }
 
-    fn functions(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
+    fn functions(vm: &mut BexVm, package: &Value) -> IndexMap<String, Value> {
         let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
@@ -1521,14 +1521,14 @@ impl BamlClassPackage for PackageReflectImpl {
             .collect()
     }
 
-    fn globals(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
+    fn globals(vm: &mut BexVm, package: &Value) -> IndexMap<String, Value> {
         let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
         // Every top-level binding along the export chain, each under the
         // first package that exports its name. One `$init` has not reached
         // yet has no value to list.
-        let mut globals: IndexMap<bex_str::BexStr, Value> = IndexMap::new();
+        let mut globals: IndexMap<String, Value> = IndexMap::new();
         for package_ptr in export_chain(vm, ptr) {
             let Object::Package(package) = vm.get_object(package_ptr) else {
                 continue;
@@ -1537,7 +1537,7 @@ impl BamlClassPackage for PackageReflectImpl {
                 let DeclPath::Let(name) = path else {
                     continue;
                 };
-                let key: bex_str::BexStr = display_local_name(name).into();
+                let key: String = display_local_name(name).into();
                 if globals.contains_key(&key) {
                     continue;
                 }
@@ -1552,7 +1552,7 @@ impl BamlClassPackage for PackageReflectImpl {
     fn get_global(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, VmRustFnError> {
         find_global(vm, *package, name)?.ok_or_else(|| not_found(vm, "global", name))
     }
@@ -1560,7 +1560,7 @@ impl BamlClassPackage for PackageReflectImpl {
     fn find_global(
         vm: &mut BexVm,
         package: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Option<Value>, VmRustFnError> {
         find_global(vm, *package, name)
     }
@@ -1611,7 +1611,7 @@ impl BamlClassPackage for PackageReflectImpl {
 fn pinned_dependencies(
     vm: &BexVm,
     pins: &IndexMap<String, bex_heap::Handle>,
-    packages: &IndexMap<bex_str::BexStr, Value>,
+    packages: &IndexMap<String, Value>,
 ) -> Result<IndexMap<String, HeapPtr>, String> {
     use bex_heap::WeakHeapRef as _;
     let mismatch = |message: String| format!("reflect.Package._finish: {message}");
@@ -1832,7 +1832,7 @@ fn graft_session_submission(
 impl BamlClassSession for PackageReflectImpl {
     fn _new(
         vm: &mut BexVm,
-        packages: &IndexMap<bex_str::BexStr, Value>,
+        packages: &IndexMap<String, Value>,
     ) -> Result<Value, VmRustFnError> {
         let mut dependencies = IndexMap::new();
         for (alias, value) in packages {
@@ -2015,7 +2015,7 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
         return Err(non_callable_error("reflect.signature"));
     };
     let mut positional = Vec::new();
-    let mut opts: IndexMap<bex_str::BexStr, Value> = IndexMap::new();
+    let mut opts: IndexMap<String, Value> = IndexMap::new();
     for param in &sig.params {
         match param.mode {
             FunctionParamMode::Required => {
@@ -2030,14 +2030,14 @@ fn signature_impl(vm: &mut BexVm, f_val: Value) -> Result<Value, VmRustFnError> 
                 // are for positionals only and never enter by-name matching.
                 if let Some(name) = &param.name {
                     let arg = alloc_arg(vm, Some(name), positional.len(), param.ty.clone());
-                    opts.insert(bex_str::BexStr::from(name.as_str()), arg);
+                    opts.insert(name.to_string(), arg);
                 }
             }
         }
     }
     let arg_ty = ty_arg(vm);
     let args = Value::object(vm.tlab.alloc_array(arg_ty.clone(), positional));
-    let opts = Value::object(vm.tlab.alloc_map(RealizedTy::string(), arg_ty, opts));
+    let opts = Value::object(vm.alloc_map(RealizedTy::string(), arg_ty, opts));
     let returns =
         Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(sig.ret.clone())));
     let errors = Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(sig.throws)));
@@ -2195,7 +2195,7 @@ impl Continuation for CallAnyContinuation {
 fn call_any_impl(
     vm: &mut BexVm,
     f_val: Value,
-    provided: &IndexMap<bex_str::BexStr, Value>,
+    provided: &IndexMap<String, Value>,
 ) -> NativeCallResult {
     use baml_type::FunctionParamMode;
     let Some(f_ptr) = f_val.as_object_ptr() else {

@@ -112,6 +112,7 @@ pub(crate) fn run_compiled(
     args: &[Value],
     body: impl FnOnce(&mut ValueModel<'_>, &[Value]) -> Result<Value, GlueError>,
 ) -> Option<NativeCallResult> {
+    flatten_strings(vm, args);
     match body(&mut ValueModel::compiled(vm), args) {
         Ok(value) => Some(NativeCallResult::Done(value)),
         Err(GlueError::Vm(error)) => Some(NativeCallResult::Error(error)),
@@ -153,12 +154,21 @@ fn finish(
     fallback: Option<Yielding>,
     body: impl FnOnce(&mut ValueModel<'_>, &[Value]) -> Result<Value, GlueError>,
 ) -> NativeCallResult {
+    flatten_strings(vm, args);
     let result = body(&mut ValueModel::with(vm, locality, View::Values), args);
     match (result, fallback) {
         (Ok(value), _) => NativeCallResult::Done(value),
         (Err(GlueError::Vm(error)), _) => NativeCallResult::Error(error),
         (Err(GlueError::Defer), Some(yielding)) => yielding(vm, args, locality),
         (Err(GlueError::Defer), None) => unreachable!("a builtin that cannot yield deferred"),
+    }
+}
+
+/// Flatten every string among `args`, so a body may borrow their text
+/// (`Strings::str_text`) without the allocator.
+fn flatten_strings(vm: &mut BexVm, args: &[Value]) {
+    for arg in args {
+        vm.flatten_str(arg);
     }
 }
 
@@ -326,6 +336,12 @@ impl<'vm> ValueModel<'vm> {
         self.vm.get_object(heap_ptr(ptr))
     }
 
+    fn string(&self, ptr: ObjPtr) -> bex_vm_types::StrRef<'_> {
+        self.vm
+            .str_at(heap_ptr(ptr))
+            .unwrap_or_else(|| panic!("string ABI call on {}", ObjectType::of(self.object(ptr))))
+    }
+
     fn array(&self, list: ObjPtr) -> ListRef {
         self.vm
             .list_at(heap_ptr(list))
@@ -410,11 +426,16 @@ impl<'vm> ValueModel<'vm> {
     }
 
     fn is_key(&self, candidate: Value, key: StrKey) -> bool {
+        if candidate == ptr_value(key.ptr) {
+            return true;
+        }
         let Some(ptr) = candidate.as_object_ptr() else {
             return false;
         };
         match self.vm.get_object(ptr) {
-            Object::String(text) => text.as_str() == self.str_text(key.ptr),
+            Object::Shared(SharedKind::Str) => {
+                self.vm.expect_str(ptr).text_eq(self.string(key.ptr))
+            }
             _ => false,
         }
     }
@@ -526,7 +547,7 @@ impl Descriptors for ValueModel<'_> {
                     value: self.slot_of(map.value_ty()),
                 }
             }
-            Object::String(_) => Shape::Str,
+            Object::Shared(SharedKind::Str) => Shape::Str,
             Object::Shared(SharedKind::Instance) => Shape::Other(Kind::Instance),
             Object::Closure(_) => Shape::Other(Kind::Closure),
             Object::Future(_) => Shape::Other(Kind::Future),
@@ -662,36 +683,36 @@ impl<V: ValueElem> Maps<V> for ValueModel<'_> {
 
 impl Strings for ValueModel<'_> {
     fn str_text(&self, string: ObjPtr) -> &str {
-        match self.object(string) {
-            Object::String(text) => text.as_str(),
-            other => panic!("string ABI call on {}", ObjectType::of(other)),
-        }
+        self.string(string).as_str()
+    }
+
+    fn str_hash(&self, string: ObjPtr) -> u64 {
+        self.string(string).hash()
     }
 
     fn str_char_len(&self, string: ObjPtr) -> usize {
-        match self.object(string) {
-            Object::String(text) => text.char_len(),
-            other => panic!("string ABI call on {}", ObjectType::of(other)),
-        }
+        self.string(string).char_len()
     }
 
     fn str_char_bytes(&self, string: ObjPtr, chars: Range<usize>) -> Range<usize> {
-        match self.object(string) {
-            Object::String(text) => text.char_to_byte(chars.start)..text.char_to_byte(chars.end),
-            other => panic!("string ABI call on {}", ObjectType::of(other)),
-        }
+        self.string(string).char_bytes(chars)
     }
 
     fn str_alloc(&mut self, text: &str) -> ObjPtr {
         obj_ptr(Value::object(self.vm.alloc_string(text.to_string())))
     }
 
+    fn str_flatten(&mut self, string: ObjPtr) {
+        self.vm.tlab.flatten_string(heap_ptr(string));
+    }
+
+    fn str_to_string(&self, string: ObjPtr) -> String {
+        self.string(string).to_owned_string()
+    }
+
+    /// A view when the piece is long, else a flat copy (`Tlab::substring`).
     fn str_substring(&mut self, string: ObjPtr, bytes: Range<usize>) -> ObjPtr {
-        let sliced = match self.object(string) {
-            Object::String(text) => text.byte_slice(bytes),
-            other => panic!("string ABI call on {}", ObjectType::of(other)),
-        };
-        obj_ptr(Value::object(self.vm.alloc_string(sliced)))
+        obj_ptr(Value::object(self.vm.tlab.substring(heap_ptr(string), bytes)))
     }
 
     fn bytes_alloc(&mut self, bytes: &[u8]) -> ObjPtr {

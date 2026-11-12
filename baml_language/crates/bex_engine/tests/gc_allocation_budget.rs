@@ -62,8 +62,14 @@ function Bytes(seed: uint8array, n: int) -> int {
 function Concat(chunk: string, n: int) -> int {
     let text = "";
     let i = 0;
-    while (i < n) { text = text + chunk; i = i + 1; }
-    text.length()
+    let seen = 0;
+    while (i < n) {
+        text = text + chunk;
+        // `+` makes a rope; reading the text is what copies it.
+        if (text.starts_with("y")) { seen = seen + 1; }
+        i = i + 1;
+    }
+    text.length() + seen
 }
 function CsvGrow(cell: string, n: int) -> int {
     let w = baml.csv.buffer();
@@ -127,9 +133,9 @@ async fn short_calls_service_pressure_on_next_entry() {
 #[tokio::test(start_paused = true)]
 async fn spawn_services_pressure_after_rooting_child_and_future() {
     let engine = engine();
-    let count = engine.heap().gc_budget().full_budget_bytes
-        / std::mem::size_of::<bex_vm_types::Object>()
-        + 1;
+    // Each text is a flat string cell of one byte.
+    let count =
+        engine.heap().gc_budget().full_budget_bytes / bex_vm_types::types::str_cell_bytes(1) + 1;
     let texts = Ext::Array {
         element_type: bex_engine::WireTy::String,
         items: vec![Ext::String("x".into()); count],
@@ -258,8 +264,9 @@ async fn large_buffers_collect_during_the_call() {
     engine.shutdown().await;
 }
 
-/// String concatenation is a single instruction that can allocate any amount,
-/// so a loop of it must also collect during the call.
+/// Reading a concatenated string flattens it in a single native call that
+/// can allocate any amount, so a loop of it must also collect during the
+/// call.
 #[tokio::test(start_paused = true)]
 async fn string_concatenation_collects_during_the_call() {
     let engine = engine();

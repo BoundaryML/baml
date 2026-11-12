@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use baml_type::MediaKind;
 use bex_heap::TlabHolder;
-use bex_vm_types::{BexStr, RealizedTy, TypeHead, Value};
+use bex_vm_types::{RealizedTy, TypeHead, Value};
 
 use super::{
     MediaFields,
@@ -245,16 +245,16 @@ impl TextDecoder<'_, '_> {
         // Any string is a `string` key; narrower key types check each one.
         let any_key = matches!(key, RealizedTy::String);
         self.parser.reader.open_object()?;
-        let mut entries = Entries::default();
+        let entries = Entries::new(vm, key.clone(), value.clone());
         while let Some(written) = self.parser.reader.next_key(entries.is_empty())? {
             if !any_key && !super::key_fits(vm, written, key) {
                 return Err(Stop);
             }
-            let written = BexStr::from(written);
+            let written = vm.alloc_string(written);
             let decoded = self.value(vm, value)?;
-            entries.insert(written, decoded);
+            entries.insert(vm, written, decoded);
         }
-        Ok(entries.alloc(vm, key.clone(), value.clone()))
+        Ok(entries.finish())
     }
 
     /// An instance of the class at `head`, read by its fields' JSON keys. A

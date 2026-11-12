@@ -13,8 +13,7 @@
 use std::sync::Arc;
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{Object, RealizedTy, Value};
-use rustc_hash::FxHashMap;
+use bex_vm_types::{HeapPtr, MapRef, Object, RealizedTy, Value};
 
 use crate::{BexVm, errors::VmRustFnError};
 
@@ -495,13 +494,13 @@ impl Parser<'_> {
             }
             b'{' => {
                 reader.open()?;
-                let mut entries = Entries::default();
+                let entries = Entries::new(vm, RealizedTy::String, self.json.clone());
                 while let Some(key) = self.reader.next_key(entries.is_empty())? {
-                    let key = bex_vm_types::BexStr::from(key);
+                    let key = vm.alloc_string(key);
                     let value = self.value(vm)?;
-                    entries.insert(key, value);
+                    entries.insert(vm, key, value);
                 }
-                Ok(entries.alloc(vm, RealizedTy::String, self.json.clone()))
+                Ok(entries.finish())
             }
             b't' | b'f' => reader.bool().map(Value::bool),
             b'n' => reader.null().map(|()| Value::NULL),
@@ -529,59 +528,36 @@ pub(super) fn number_value(vm: &mut BexVm, number: Number<'_>) -> Result<Value, 
     Ok(Value::object(vm.alloc(Object::Bigint(Arc::new(bigint)))))
 }
 
-/// The entries of a JSON object being built, keyed by text: a repeated key
-/// keeps its first position and takes its last value, as it always has.
-#[derive(Default)]
+/// A JSON object being built: the map itself, each key a flat cell copied
+/// straight from the parser's bytes and hashed once through the cell. A
+/// repeated key keeps its first position and takes its last value, as it
+/// always has.
+#[derive(Clone, Copy)]
 pub(crate) struct Entries {
-    entries: Vec<(u64, bex_vm_types::BexStr, Value)>,
-    /// Positions by key hash, once there are enough entries that a scan for
-    /// a repeated key costs more than the index.
-    index: Option<FxHashMap<u64, Vec<usize>>>,
+    map: MapRef,
 }
 
-/// Entries an object holds before repeated keys are found through an index.
-const ENTRIES_SCANNED: usize = 32;
-
 impl Entries {
-    pub(crate) fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    pub(crate) fn insert(&mut self, key: bex_vm_types::BexStr, value: Value) {
-        let hash = bex_vm_types::map_string_hash(&key);
-        let entries = &mut self.entries;
-        let seen = match &self.index {
-            None => entries
-                .iter()
-                .position(|(seen, seen_key, _)| *seen == hash && *seen_key == key),
-            Some(index) => index
-                .get(&hash)
-                .and_then(|positions| positions.iter().copied().find(|&i| entries[i].1 == key)),
-        };
-        if let Some(position) = seen {
-            entries[position].2 = value;
-            return;
-        }
-        entries.push((hash, key, value));
-        if let Some(index) = &mut self.index {
-            index.entry(hash).or_default().push(entries.len() - 1);
-        } else if entries.len() > ENTRIES_SCANNED {
-            let mut index: FxHashMap<u64, Vec<usize>> = FxHashMap::default();
-            for (position, (hash, _, _)) in entries.iter().enumerate() {
-                index.entry(*hash).or_default().push(position);
-            }
-            self.index = Some(index);
+    /// An empty `map<key, value>`.
+    pub(crate) fn new(vm: &mut BexVm, key: RealizedTy, value: RealizedTy) -> Self {
+        Self {
+            map: vm.alloc_empty_map(key, value),
         }
     }
 
-    /// The map of these entries, typed `map<key, value>`.
-    pub(crate) fn alloc(self, vm: &mut BexVm, key: RealizedTy, value: RealizedTy) -> Value {
-        let data = self
-            .entries
-            .into_iter()
-            .map(|(hash, key, value)| (hash, Value::object(vm.alloc_string(key)), value))
-            .collect();
-        Value::object(vm.alloc_map_hashed(key, value, data))
+    pub(crate) fn is_empty(self) -> bool {
+        self.map.is_empty()
+    }
+
+    /// Insert the cell `key`, a flat copied from the parser's bytes
+    /// (`alloc_string`), with `value`.
+    pub(crate) fn insert(self, vm: &mut BexVm, key: HeapPtr, value: Value) {
+        vm.map_insert_str(self.map, key, value);
+    }
+
+    /// The map.
+    pub(crate) fn finish(self) -> Value {
+        Value::object(self.map.ptr())
     }
 }
 

@@ -168,7 +168,7 @@ fn test_gc_back_to_back_no_allocations_between() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
-    let a = tlab.alloc_string("survivor".to_string());
+    let a = tlab.alloc(Object::String(("survivor".to_string()).into()));
     let (_, roots1, _) = unsafe { heap.collect_garbage(&[a]) };
     tlab.invalidate();
 
@@ -192,7 +192,7 @@ fn test_all_garbage_is_reclaimed() {
 
     // Allocate objects, don't root any
     for i in 0..100 {
-        tlab.alloc_string(format!("garbage_{i}"));
+        tlab.alloc(Object::String((format!("garbage_{i}")).into()));
     }
 
     let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[]) };
@@ -203,7 +203,7 @@ fn test_all_garbage_is_reclaimed() {
     assert!(new_roots.is_empty());
 
     // Verify can allocate again from clean state
-    let fresh = tlab.alloc_string("fresh".to_string());
+    let fresh = tlab.alloc(Object::String(("fresh".to_string()).into()));
     assert_eq!(heap.generation_of(fresh), Generation::Runtime);
 }
 
@@ -218,7 +218,7 @@ fn test_stats_compile_time_not_counted() {
     let ct_ptr = heap.compile_time_ptr(0);
 
     let mut tlab = Tlab::new(Arc::clone(&heap));
-    let _garbage = tlab.alloc_string("garbage".to_string());
+    let _garbage = tlab.alloc(Object::String(("garbage".to_string()).into()));
 
     // Root only compile-time ptr
     let (stats, _, _) = unsafe { heap.collect_garbage(&[ct_ptr]) };
@@ -239,13 +239,13 @@ fn test_forwarding_map_correctness_across_10_cycles() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
     // One persistent string
-    let initial = tlab.alloc_string("persistent_data".to_string());
+    let initial = tlab.alloc(Object::String(("persistent_data".to_string()).into()));
     let mut root = initial;
 
     for _ in 0..10 {
         // Allocate garbage each cycle
         for j in 0..50 {
-            tlab.alloc_string(format!("garbage_{j}"));
+            tlab.alloc(Object::String((format!("garbage_{j}")).into()));
         }
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[root]) };
@@ -277,7 +277,7 @@ fn survivor_edge_to_a_fresh_object_is_traced_and_repointed() {
     let survivor = roots[0];
     assert_eq!(heap.generation_of(survivor), Generation::Runtime);
 
-    let fresh = tlab.alloc_string("fresh".to_string());
+    let fresh = tlab.alloc(Object::String(("fresh".to_string()).into()));
     let Some(array) = (unsafe { bex_vm_types::ListRef::of(survivor) }) else {
         panic!("expected the container array")
     };
@@ -317,7 +317,7 @@ fn survivor_edge_to_a_fresh_chain_is_traced_and_repointed() {
     tlab.invalidate();
     let survivor = roots[0];
 
-    let leaf = tlab.alloc_string("leaf".to_string());
+    let leaf = tlab.alloc(Object::String(("leaf".to_string()).into()));
     let middle = tlab.alloc_array(RealizedTy::unknown(), vec![Value::object(leaf)]);
     let Some(array) = (unsafe { bex_vm_types::ListRef::of(survivor) }) else {
         panic!("expected the container array")
@@ -360,8 +360,8 @@ fn weak_verdicts_follow_the_collection() {
     let heap = BexHeap::new(vec![Object::String("builtin".into())]);
     let builtin = heap.compile_time_ptr(0);
     let mut tlab = Tlab::new(Arc::clone(&heap));
-    let live = tlab.alloc_string("live".to_string());
-    let dead = tlab.alloc_string("dead".to_string());
+    let live = tlab.alloc(Object::String(("live".to_string()).into()));
+    let dead = tlab.alloc(Object::String(("dead".to_string()).into()));
     let (_, _, forwarding) = unsafe { heap.collect_garbage(&[live]) };
     tlab.invalidate();
 
@@ -388,7 +388,7 @@ fn weak_verdicts_follow_the_collection() {
 fn forwarding_a_root_the_collection_never_saw_panics() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
-    let unreported = tlab.alloc_string("unreported".to_string());
+    let unreported = tlab.alloc(Object::String(("unreported".to_string()).into()));
     let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
     let mut root = unreported;
     ForwardRoots::new(&forwarding, &*heap).visit(&mut root);
@@ -704,7 +704,7 @@ fn impl_rule_edges_are_traced_and_forwarded() {
         owner: bex_vm_types::HeapPtr::null(),
     })));
     // Any heap object serves as the method body's stand-in target.
-    let method_ptr = tlab.alloc_string("method body".to_string());
+    let method_ptr = tlab.alloc(Object::String(("method body".to_string()).into()));
     let rule_ptr = tlab.alloc(Object::ImplRule(Box::new(RuntimeImplRule {
         interface_head: iface_ptr,
         for_ty_pattern: baml_type::TyTemplate::from(RealizedTy::int()),
@@ -757,8 +757,8 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
-    let body_ptr = tlab.alloc_string("default body".to_string());
-    let structural_ptr = tlab.alloc_string("structural body".to_string());
+    let body_ptr = tlab.alloc(Object::String(("default body".to_string()).into()));
+    let structural_ptr = tlab.alloc(Object::String(("structural body".to_string()).into()));
     let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
         path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("SessionIface")),
         structural_default: Some(bex_vm_types::types::StructuralDefault {
@@ -829,7 +829,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
-    let body_ptr = tlab.alloc_string("method body".to_string());
+    let body_ptr = tlab.alloc(Object::String(("method body".to_string()).into()));
     let class_name = bex_vm_types::types::LocalName::new(Vec::new(), Name::new("SessionClass"));
     let mut methods = IndexMap::new();
     methods.insert(
@@ -1143,7 +1143,7 @@ fn test_finalizer_is_queued_for_an_instance_of_a_runtime_class() {
 
         // The runtime class's `cleanup` body is a runtime object too: a method
         // body stand-in.
-        let cleanup = tlab.alloc_string("runtime cleanup".to_string());
+        let cleanup = tlab.alloc(Object::String(("runtime cleanup".to_string()).into()));
         let class = tlab.alloc(Object::Class(Box::new(class_with_cleanup(
             "Runtime", cleanup,
         ))));

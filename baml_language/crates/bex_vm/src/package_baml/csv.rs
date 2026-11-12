@@ -306,7 +306,7 @@ fn opt_string(vm: &BexVm, v: Value) -> Result<Option<String>, VmRustFnError> {
     if v.is_null() || v.is_omitted() {
         return Ok(None);
     }
-    Ok(Some(vm.as_string(&v)?.as_str().to_string()))
+    Ok(Some(vm.as_string(&v)?.to_owned_string()))
 }
 
 fn opt_bool(v: Value) -> Option<bool> {
@@ -330,7 +330,7 @@ fn opt_string_list(vm: &BexVm, v: Value) -> Result<Option<Vec<String>>, VmRustFn
     let arr = vm.as_array(&v)?;
     let mut out = Vec::with_capacity(arr.len());
     for item in &arr {
-        out.push(vm.as_string(item)?.as_str().to_string());
+        out.push(vm.as_string(item)?.to_owned_string());
     }
     Ok(Some(out))
 }
@@ -1971,7 +1971,7 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
             return Err(CellTextErr::Unsupported("omitted argument".to_string()));
         }
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::String(s) => s.as_str().to_string(),
+            Object::Shared(SharedKind::Str) => vm.expect_str(ptr).to_owned_string(),
             Object::Float(f) => float_cell_text(*f)?,
             Object::Bigint(b) => b.to_string(),
             Object::Variant(var) => {
@@ -2248,12 +2248,12 @@ impl BamlClassCsvReader for PackageBamlImpl {
 }
 
 impl BamlClassCsvRecord for PackageBamlImpl {
-    fn fields(vm: &mut BexVm, csvrecord: &Value) -> Vec<bex_str::BexStr> {
+    fn fields(vm: &mut BexVm, csvrecord: &Value) -> Vec<String> {
         match record_arc(vm, *csvrecord) {
             Ok(rd) => rd
                 .cells
                 .iter()
-                .map(|c| bex_str::BexStr::from(c.text.as_str()))
+                .map(|c| c.text.clone())
                 .collect(),
             Err(_) => Vec::new(),
         }
@@ -2280,10 +2280,7 @@ impl BamlClassCsvRecord for PackageBamlImpl {
         }
     }
 
-    fn to_map(
-        vm: &mut BexVm,
-        csvrecord: &Value,
-    ) -> Result<IndexMap<bex_str::BexStr, Value>, VmRustFnError> {
+    fn to_map(vm: &mut BexVm, csvrecord: &Value) -> Result<IndexMap<String, Value>, VmRustFnError> {
         let rd = record_arc(vm, *csvrecord)?;
         let Some(header) = &rd.header else {
             let info = ErrInfo::new(
@@ -2307,7 +2304,7 @@ impl BamlClassCsvRecord for PackageBamlImpl {
         for (i, name) in header.names.iter().enumerate() {
             let text = rd.cells.get(i).map(|c| c.text.as_str()).unwrap_or("");
             let v = Value::object(vm.alloc_string(text.to_string()));
-            out.insert(bex_str::BexStr::from(name.as_str()), v);
+            out.insert(name.clone(), v);
         }
         Ok(out)
     }
@@ -2318,14 +2315,14 @@ impl BamlClassCsvWriter for PackageBamlImpl {
         lock(csvwriter._handle::<CsvWriterHandle>(vm), vm).records_written
     }
 
-    fn text(vm: &mut BexVm, csvwriter: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
+    fn text(vm: &mut BexVm, csvwriter: &Value) -> Result<String, VmRustFnError> {
         let st = vm.rust_data_field::<CsvWriterHandle>(csvwriter, 0)?;
         let text = {
             let s = lock(&st, vm);
             s.buffer.clone()
         };
         match text {
-            Some(t) => Ok(bex_str::BexStr::from(t.as_str())),
+            Some(t) => Ok(t.clone()),
             None => {
                 let info = ErrInfo::new(
                     Kind::Options,
@@ -2340,7 +2337,7 @@ impl BamlClassCsvWriter for PackageBamlImpl {
         vm: &mut BexVm,
         csvwriter: &Value,
         record: &[Value],
-    ) -> Result<bex_str::BexStr, VmRustFnError> {
+    ) -> Result<String, VmRustFnError> {
         let st = vm.rust_data_field::<CsvWriterHandle>(csvwriter, 0)?;
         let mut s = lock(&st, vm);
         if s.closed {
@@ -2368,14 +2365,14 @@ impl BamlClassCsvWriter for PackageBamlImpl {
             }
         }
         let out = commit_batch(&mut s, out, 1, false, bom_consumed);
-        Ok(bex_str::BexStr::from(out.as_str()))
+        Ok(out)
     }
 
     fn _encode_header(
         vm: &mut BexVm,
         csvwriter: &Value,
         names: &[Value],
-    ) -> Result<bex_str::BexStr, VmRustFnError> {
+    ) -> Result<String, VmRustFnError> {
         let st = vm.rust_data_field::<CsvWriterHandle>(csvwriter, 0)?;
         let mut s = lock(&st, vm);
         if s.closed {
@@ -2390,7 +2387,7 @@ impl BamlClassCsvWriter for PackageBamlImpl {
         }
         let mut name_texts = Vec::with_capacity(names.len());
         for v in names {
-            name_texts.push(vm.as_string(v)?.as_str().to_string());
+            name_texts.push(vm.as_string(v)?.to_owned_string());
         }
         let (mut out, bom_consumed) = begin_batch(&s);
         match encode_line(&s.opts, &name_texts) {
@@ -2401,7 +2398,7 @@ impl BamlClassCsvWriter for PackageBamlImpl {
             }
         }
         let out = commit_batch(&mut s, out, 0, true, bom_consumed);
-        Ok(bex_str::BexStr::from(out.as_str()))
+        Ok(out)
     }
 
     fn _bytes_written(vm: &BexVm, csvwriter: &view::csv::Writer<'_>) -> i64 {
@@ -2427,7 +2424,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         };
 
         let (initial, eof, file) = if let Ok(s) = vm.as_string(source) {
-            (s.as_str().as_bytes().to_vec(), true, Value::NULL)
+            (s.to_owned_string().into_bytes(), true, Value::NULL)
         } else if let Ok(bytes) = vm.as_uint8array(source) {
             let initial = bytes.to_vec();
             (initial, true, Value::NULL)
@@ -2578,7 +2575,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
     fn _cell_by_name(
         vm: &mut BexVm,
         rec: &Value,
-        column: &bex_str::BexStr,
+        column: &str,
     ) -> Result<Option<Value>, VmRustFnError> {
         let ty = current_type_arg(vm, "baml.csv.get")?;
         let rd = record_arc(vm, *rec)?;
@@ -2590,7 +2587,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
             .at(rd.line, rd.record);
             return Err(throw_err(vm, &info));
         };
-        let name = column.as_str();
+        let name = column;
         if header.dup.contains(name) {
             let mut info = ErrInfo::new(
                 Kind::Header,
@@ -2622,7 +2619,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         vm: &mut BexVm,
         w: &Value,
         row: &Value,
-    ) -> Result<bex_str::BexStr, VmRustFnError> {
+    ) -> Result<String, VmRustFnError> {
         let st = vm.rust_data_field::<CsvWriterHandle>(w, 0)?;
         let mut s = lock(&st, vm);
         if s.closed {
@@ -2642,14 +2639,14 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         }
         let wrote_header = header_was_pending && !header_pending;
         let out = commit_batch(&mut s, out, 1, wrote_header, bom_consumed);
-        Ok(bex_str::BexStr::from(out.as_str()))
+        Ok(out)
     }
 
     fn _encode_rows(
         vm: &mut BexVm,
         w: &Value,
         rows: &[Value],
-    ) -> Result<bex_str::BexStr, VmRustFnError> {
+    ) -> Result<String, VmRustFnError> {
         let st = vm.rust_data_field::<CsvWriterHandle>(w, 0)?;
         let mut s = lock(&st, vm);
         if s.closed {
@@ -2672,10 +2669,10 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         }
         let wrote_header = header_was_pending && !header_pending;
         let out = commit_batch(&mut s, out, records, wrote_header, bom_consumed);
-        Ok(bex_str::BexStr::from(out.as_str()))
+        Ok(out)
     }
 
-    fn _to_markdown(vm: &mut BexVm, rows: &[Value], max_rows: i64) -> bex_str::BexStr {
+    fn _to_markdown(vm: &mut BexVm, rows: &[Value], max_rows: i64) -> String {
         use bex_vm_types::RealizedTy;
         let ty = vm.current_call_type_args().first().cloned();
         let max = usize::try_from(max_rows).unwrap_or(0);
@@ -2716,7 +2713,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
             ),
         };
 
-        bex_str::BexStr::from(render_markdown(&headers, &row_cells, rows.len()).as_str())
+        render_markdown(&headers, &row_cells, rows.len())
     }
 
     fn _to_markdown_records(
@@ -2724,7 +2721,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         records: &[Value],
         headers: Option<&[Value]>,
         max_rows: i64,
-    ) -> bex_str::BexStr {
+    ) -> String {
         let max = usize::try_from(max_rows).unwrap_or(0);
         let mut width = 0usize;
         let rows: Vec<Vec<String>> = records
@@ -2734,7 +2731,7 @@ impl BamlNamespaceCsv for PackageBamlImpl {
                 Ok(cells) => cells
                     .iter()
                     .map(|c| match vm.as_string(c) {
-                        Ok(s) => s.as_str().to_string(),
+                        Ok(s) => s.to_owned_string(),
                         Err(_) => "<unrepresentable>".to_string(),
                     })
                     .collect(),
@@ -2749,16 +2746,16 @@ impl BamlNamespaceCsv for PackageBamlImpl {
             Some(hs) => hs
                 .iter()
                 .map(|h| match vm.as_string(h) {
-                    Ok(s) => s.as_str().to_string(),
+                    Ok(s) => s.to_owned_string(),
                     Err(_) => String::new(),
                 })
                 .collect(),
             None => (1..=width).map(|i| format!("col{i}")).collect(),
         };
         if header_names.is_empty() && rows.is_empty() {
-            return bex_str::BexStr::from("");
+            return String::new();
         }
-        bex_str::BexStr::from(render_markdown(&header_names, &rows, records.len()).as_str())
+        render_markdown(&header_names, &rows, records.len())
     }
 }
 

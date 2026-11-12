@@ -26,7 +26,7 @@ use baml_type::MediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::object_format::Access;
 use bex_vm_types::types::SharedKind;
-use bex_vm_types::{BexStr, HeapPtr, RealizedTy, TypeHead, Value, ValueKind, types::Object};
+use bex_vm_types::{HeapPtr, RealizedTy, TypeHead, Value, ValueKind, types::Object};
 use decode::{Decoder, Root};
 use encode::{Finish, WriteOptions};
 pub(super) use serde_bridge::{json_value_to_serde, serde_to_value};
@@ -73,17 +73,15 @@ fn type_arg(vm: &BexVm, native: &str) -> Result<RealizedTy, VmRustFnError> {
 }
 
 impl BamlNamespaceJson for PackageBamlImpl {
-    fn parse(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
-        let s = s.as_str();
+    fn parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
         text::parse(vm, s).map_err(|text::Stop| text::syntax_error(vm, s))
     }
 
-    fn _decode(vm: &mut BexVm, s: &bex_str::BexStr, aliased: bool) -> NativeCallResult {
+    fn _decode(vm: &mut BexVm, s: &str, aliased: bool) -> NativeCallResult {
         let ty = match type_arg(vm, "_decode") {
             Ok(ty) => ty,
             Err(error) => return NativeCallResult::Error(error),
         };
-        let s = s.as_str();
         let mut decoder = Decoder::new(JsonNaming::new(aliased));
         // With no override in reach, `T` reads the text in one pass.
         if !decoder.lookups.reaches_override(vm, &ty)
@@ -131,15 +129,11 @@ impl BamlNamespaceJson for PackageBamlImpl {
         }
     }
 
-    fn _path(
-        vm: &mut BexVm,
-        j: &Value,
-        selector: &bex_str::BexStr,
-    ) -> Result<Value, VmRustFnError> {
-        path::select(vm, *j, selector.as_str())
+    fn _path(vm: &mut BexVm, j: &Value, selector: &str) -> Result<Value, VmRustFnError> {
+        path::select(vm, *j, selector)
     }
 
-    fn field(vm: &mut BexVm, j: &Value, key: &bex_str::BexStr) -> Value {
+    fn field(vm: &mut BexVm, j: &Value, key: &str) -> Value {
         // The public throws-never API accepts `json`, not arbitrary maps.
         let Some(ptr) = j.as_object_ptr() else {
             return Value::NULL;
@@ -151,8 +145,8 @@ impl BamlNamespaceJson for PackageBamlImpl {
                     string_keyed(vm, map),
                     "baml.json.field received invalid json: {STRING_MAP_REQUIRED}"
                 );
-                let hash = bex_vm_types::map_string_hash(key.as_str());
-                object_get(vm, ptr, hash, key.as_str()).unwrap_or(Value::NULL)
+                let hash = bex_vm_types::map_string_hash(key);
+                object_get(vm, ptr, hash, key).unwrap_or(Value::NULL)
             }
             _ => Value::NULL,
         }
@@ -196,12 +190,13 @@ fn indent_text(vm: &mut BexVm, indent: Value) -> Result<String, VmRustFnError> {
             Err(_) => format!("indent must not be negative, got {count}"),
         },
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::String(text) => {
-                let width = text.as_str().chars().count();
+            Object::Shared(SharedKind::Str) => {
+                let text = vm.expect_str(ptr);
+                let width = text.char_len();
                 if width > MAX_INDENT {
                     format!("indent must be at most {MAX_INDENT} characters, got {width}")
                 } else if text
-                    .as_str()
+                    .text()
                     .chars()
                     .all(|c| matches!(c, ' ' | '\t' | '\n' | '\r'))
                 {
@@ -209,7 +204,7 @@ fn indent_text(vm: &mut BexVm, indent: Value) -> Result<String, VmRustFnError> {
                 } else {
                     format!(
                         "indent must hold only spaces, tabs, and line breaks, got {:?}",
-                        text.as_str()
+                        text
                     )
                 }
             }
@@ -238,7 +233,7 @@ fn object_get(vm: &BexVm, ptr: HeapPtr, hash: u64, key: &str) -> Option<Value> {
         hash,
         |candidate| {
             vm.as_string(candidate)
-                .is_ok_and(|candidate| candidate.as_str() == key)
+                .is_ok_and(|candidate| candidate == key)
         },
     )
 }
@@ -260,16 +255,17 @@ fn rest_value(
         .map_snapshot(map, bex_vm_types::object_format::Access::Shared)
         .snapshot_entries()
     {
-        let Ok(text) = vm.as_string(&key).map(BexStr::as_str) else {
+        let Ok(string) = vm.as_string(&key) else {
             continue;
         };
+        let text = string.text();
         let claimed = rest == plan::Rest::Unclaimed
             && plan
                 .fields
                 .iter()
-                .any(|field| field.shown && field.key == text);
+                .any(|field| field.shown && field.key == text.as_ref());
         if !claimed {
-            data.push((bex_vm_types::map_string_hash(text), key, value));
+            data.push((string.hash(), key, value));
         }
     }
     let json_ty = json_alias_ty(vm);
@@ -315,15 +311,16 @@ fn fallback_tag_error(
     })
 }
 
-/// The entries of the string-keyed map at `ptr`, in order.
-fn string_entries(vm: &BexVm, ptr: HeapPtr) -> Vec<(BexStr, Value)> {
+/// The entries of the string-keyed map at `ptr`, in order: each key the
+/// string cell the map holds, shared, not copied.
+fn string_entries(vm: &BexVm, ptr: HeapPtr) -> Vec<(Value, Value)> {
     let Some(map) = vm.map_at(ptr) else {
         return Vec::new();
     };
     vm.map_snapshot(map, bex_vm_types::object_format::Access::Shared)
         .snapshot_entries()
         .into_iter()
-        .filter_map(|(key, value)| Some((vm.as_string(&key).ok()?.clone(), value)))
+        .filter(|(key, _)| vm.as_string(key).is_ok())
         .collect()
 }
 
@@ -363,7 +360,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
                 Some((Some((_, key)), _)) => {
                     let key = vm
                         .as_string(key)
-                        .map(bex_vm_types::BexStr::as_str)
+                        .map(|key| key.text())
                         .unwrap_or_default();
                     let _ = write!(path, "[{key:?}]");
                 }
@@ -406,9 +403,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
                                     .snapshot_entries()
                                     .into_iter()
                                     .map(|(key, v)| {
-                                        let hash = vm.as_string(&key).map_or(0, |key| {
-                                            bex_vm_types::map_string_hash(key.as_str())
-                                        });
+                                        let hash = vm.as_string(&key).map_or(0, |key| key.hash());
                                         (Some((hash, key)), v)
                                     })
                                     .collect(),
@@ -478,7 +473,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
 fn copy_leaf(vm: &mut BexVm, value: Value, ptr: HeapPtr) -> Value {
     let name = match vm.get_object(ptr) {
         Object::Float(_) => return value,
-        Object::String(_) => return value,
+        Object::Shared(SharedKind::Str) => return value,
         Object::Bigint(b) => {
             return i64::try_from(&**b)
                 .ok()

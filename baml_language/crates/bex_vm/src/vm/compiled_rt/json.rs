@@ -98,9 +98,13 @@ pub fn decode_json(
     ty: &RealizedTy,
     codec: &'static Codec,
 ) -> Option<Value> {
-    let text = vm.as_string(&text).ok()?.clone();
+    let text = vm.flatten_str(&text)?;
+    // SAFETY: a live string the call holds; the decode never yields, and the
+    // collector runs only while every VM is yielded, so the flat neither
+    // moves nor goes away while its text is borrowed.
+    let text = unsafe { bex_vm_types::StrRef::new_unchecked(text) }.as_str();
     let mut decoder = Decoder {
-        reader: Reader::new(text.as_str()),
+        reader: Reader::new(text),
     };
     let value = decoder.value(vm, codec, Some(ty)).ok()?;
     decoder.reader.finish().ok()?;
@@ -114,7 +118,10 @@ struct Decoder<'a> {
 /// The integer a number token writes, when it is integral and fits an
 /// `int`: the interpreter's rule for `int`.
 fn int(number: crate::package_baml::json::text::Number<'_>) -> Option<i64> {
-    number.as_i64().and_then(Value::try_int).and_then(|int| int.as_int())
+    number
+        .as_i64()
+        .and_then(Value::try_int)
+        .and_then(|int| int.as_int())
 }
 
 fn float_value(
@@ -224,18 +231,14 @@ impl Decoder<'_> {
             return Err(Stop);
         };
         self.reader.open_object()?;
-        let mut entries = Entries::default();
+        let entries = Entries::new(vm, key_ty.as_ref().clone(), value_ty.as_ref().clone());
         while let Some(written) = self.reader.next_key(entries.is_empty())? {
-            let key = bex_vm_types::BexStr::from(written);
+            let key = vm.alloc_string(written);
             let decoded = self.value(vm, value, Some(value_ty))?;
             let decoded = boxed(vm, decoded);
-            entries.insert(key, decoded);
+            entries.insert(vm, key, decoded);
         }
-        Ok(Decoded::Value(entries.alloc(
-            vm,
-            key_ty.as_ref().clone(),
-            value_ty.as_ref().clone(),
-        )))
+        Ok(Decoded::Value(entries.finish()))
     }
 
     /// The first of `classes` that decodes the object at the cursor.
@@ -321,7 +324,12 @@ fn instance(vm: &mut BexVm, codec: &ClassCodec, values: &[Decoded]) -> Result<Va
 
 /// # Safety
 /// `base` is an instance with `field`'s slot.
-unsafe fn write(vm: &mut BexVm, base: FieldBase, field: &FieldCodec, value: Decoded) -> Result<(), Stop> {
+unsafe fn write(
+    vm: &mut BexVm,
+    base: FieldBase,
+    field: &FieldCodec,
+    value: Decoded,
+) -> Result<(), Stop> {
     let offset = field.offset;
     // SAFETY: forwarded to the caller.
     unsafe {
@@ -380,6 +388,7 @@ impl Encoder {
             },
             Codec::Bool => self.bool(value.as_bool().ok_or(Stop)?),
             Codec::String | Codec::Literal(_) | Codec::Literals(_) => {
+                vm.flatten_str(&value);
                 let text = vm.as_string(&value).map_err(|_| Stop)?;
                 write_escaped(&mut self.out, text.as_str());
             }
@@ -443,6 +452,7 @@ impl Encoder {
             if i > 0 {
                 self.out.push(b',');
             }
+            vm.flatten_str(&key);
             let key = vm.as_string(&key).map_err(|_| Stop)?;
             write_escaped(&mut self.out, key.as_str());
             self.out.push(b':');
@@ -452,7 +462,12 @@ impl Encoder {
         Ok(())
     }
 
-    fn instance(&mut self, vm: &mut BexVm, value: Value, codec: &'static ClassCodec) -> Result<(), Stop> {
+    fn instance(
+        &mut self,
+        vm: &mut BexVm,
+        value: Value,
+        codec: &'static ClassCodec,
+    ) -> Result<(), Stop> {
         let class = vm.heap.compile_time_ptr(codec.class);
         if instance_class_word(value) != class_word(class) {
             return Err(Stop);

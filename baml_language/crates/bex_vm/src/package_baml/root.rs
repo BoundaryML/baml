@@ -5,7 +5,7 @@ use std::{
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, ObjectType, RootHaver, RootVisitor, ValueKind,
+    HeapPtr, ObjectType, RootHaver, RootVisitor, StrRef, ValueKind,
     types::{Object, Value},
 };
 
@@ -113,7 +113,7 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// `baml._to_string_primitive(value)` renders an `int`, `float`, `bool` or
     /// `null` exactly as `_to_string_default` does. The compiler calls it only
     /// for those types; any other value still renders, structurally.
-    fn _to_string_primitive(vm: &BexVm, value: &Value) -> bex_str::BexStr {
+    fn _to_string_primitive(vm: &BexVm, value: &Value) -> String {
         if let Some(text) = primitive_text(vm, *value) {
             return text.into();
         }
@@ -328,7 +328,7 @@ pub(crate) fn render_to_string_honoring_overrides(
     // value is its own rendering. A primitive needs neither the probe nor the
     // walker: no package can override how it renders (E0139).
     if let ValueKind::Object(ptr) = value.kind()
-        && matches!(vm.get_object(ptr), Object::String(_))
+        && vm.str_at(ptr).is_some()
     {
         return NativeCallResult::Done(value);
     }
@@ -408,7 +408,7 @@ impl Continuation for ToStringWalkContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(
             vm.as_string(&value)
-                .map(|s| s.as_str().to_string())
+                .map(|s| s.to_owned_string())
                 .unwrap_or_default(),
         );
 
@@ -501,8 +501,8 @@ impl JoinContinuation {
             if self.index > 0 {
                 self.out.push_str(&self.separator);
             }
-            match element.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
-                Some(Object::String(s)) => self.out.push_str(s.as_str()),
+            match element.as_object_ptr().and_then(|ptr| vm.str_at(ptr)) {
+                Some(s) => s.push_to(&mut self.out),
                 _ => {
                     let mut state = StringRenderState::with_overrides(&self.pending, &self.results);
                     let mut sink = StringRenderSink(std::mem::take(&mut self.out));
@@ -543,7 +543,7 @@ impl Continuation for JoinContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(
             vm.as_string(&value)
-                .map(|s| s.as_str().to_string())
+                .map(|s| s.to_owned_string())
                 .unwrap_or_default(),
         );
         self.step(vm)
@@ -686,7 +686,10 @@ pub(crate) fn scalar_text(value: bex_vm_types::layout::Tagged) -> Option<String>
 /// Whether `ptr` is a string or a float, which no package can give a
 /// `baml.ToString` override (E0139).
 fn is_primitive_object(vm: &BexVm, ptr: HeapPtr) -> bool {
-    matches!(vm.get_object(ptr), Object::String(_) | Object::Float(_))
+    matches!(
+        vm.get_object(ptr),
+        Object::Shared(SharedKind::Str) | Object::Float(_)
+    )
 }
 
 /// Human-readable rendering used by `string.from` / the `baml.ToString` default.
@@ -764,7 +767,9 @@ pub(super) fn render_to_sink(
     // Capture an owned snapshot, dropping the heap borrow / container lock
     // before recursing.
     let snap = match vm.get_object(ptr) {
-        Object::String(s) => DisplaySnap::Str(s.as_str().to_string()),
+        Object::Shared(SharedKind::Str) => {
+            DisplaySnap::Str(vm.expect_str(ptr).to_owned_string())
+        }
         Object::Bigint(b) => DisplaySnap::Leaf(b.to_string()),
         Object::Shared(SharedKind::List) => {
             let values = vm.expect_list(ptr);
@@ -980,6 +985,16 @@ fn deep_copy_value_recursive(
 
             let new_ptr = match object {
                 Object::Float(f) => vm.tlab.alloc(Object::Float(f)),
+                Object::Shared(SharedKind::Str) => {
+                    // One copy, from the flat holding the text into the new
+                    // cell.
+                    let flat = vm.tlab.flatten_string(ptr);
+                    // SAFETY: a live string the copy holds; nothing moves it
+                    // while the native runs, and allocating does not collect.
+                    #[allow(unsafe_code, reason = "a flat the native holds is live")]
+                    let text = unsafe { StrRef::new_unchecked(flat) }.as_str();
+                    vm.alloc_string(text)
+                }
                 Object::String(s) => vm.tlab.alloc(Object::String(s)),
                 Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 

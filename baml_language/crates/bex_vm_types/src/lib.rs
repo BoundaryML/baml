@@ -174,7 +174,7 @@ pub use types::{
     ImplBodyKey, ImplCoherenceKey, InstanceLayout, InstanceRef, InterfaceBound, InterfaceKey,
     ItemPath, ListRef, LockedContainer, LockedReadGuard, LockedWriteGuard, MapEntry,
     MapEpochChanged, MapRef, Object, ObjectType, PanicClass, Program, RenderedCallable,
-    SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer,
+    SpelledBound, StrRef, SysOp, SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer,
     Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value, ValueKind, Variant, format_float,
     map_string_hash, sys_op_for_path, type_tags,
 };

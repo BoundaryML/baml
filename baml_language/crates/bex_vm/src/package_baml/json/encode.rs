@@ -223,7 +223,7 @@ impl ToJsonCache {
         };
         let key = match vm.get_object(ptr) {
             Object::Float(_) => OverrideKey::Float,
-            Object::String(_) => OverrideKey::String,
+            Object::Shared(SharedKind::Str) => OverrideKey::String,
             Object::Bigint(_) => OverrideKey::Bigint,
             Object::Uint8Array(_) => OverrideKey::Uint8Array,
             // Containers and instances are keyed by the addresses of their
@@ -624,7 +624,7 @@ impl Walker<'_, '_> {
                 Some(Slot::Key(key)) => {
                     let key = vm
                         .as_string(key)
-                        .map(bex_vm_types::BexStr::as_str)
+                        .map(|key| key.text())
                         .unwrap_or_default();
                     write!(path, "[{key:?}]")
                 }
@@ -692,7 +692,7 @@ impl Walker<'_, '_> {
         }
         let shape = match vm.get_object(ptr) {
             Object::Float(f) => Shape::Float(*f),
-            Object::String(_) => Shape::String,
+            Object::Shared(SharedKind::Str) => Shape::String,
             Object::Bigint(_) => Shape::Bigint,
             Object::Shared(SharedKind::List) => {
                 let values = vm.expect_list(ptr);
@@ -804,7 +804,7 @@ impl Walker<'_, '_> {
     ) -> Result<(), Stopped> {
         let shape = match vm.get_object(ptr) {
             Object::Float(f) => JsonShape::Float(*f),
-            Object::String(_) => JsonShape::String,
+            Object::Shared(SharedKind::Str) => JsonShape::String,
             Object::Bigint(_) => JsonShape::Bigint,
             Object::Shared(SharedKind::List) => {
                 let values = vm.expect_list(ptr);
@@ -1013,8 +1013,8 @@ impl Walker<'_, '_> {
                 let written: Vec<_> = entries
                     .into_iter()
                     .filter(|(key, _)| {
-                        let key = vm.as_string(key).map(bex_vm_types::BexStr::as_str);
-                        key.is_ok_and(|key| !declared.contains(&key))
+                        let key = vm.as_string(key).map(|key| key.text());
+                        key.is_ok_and(|key| !declared.contains(&&*key))
                     })
                     .map(|(key, value)| (Some(Slot::Key(key)), value))
                     .collect();
@@ -1146,6 +1146,7 @@ impl Sink for TextSink<'_> {
     }
 
     fn string(&mut self, vm: &mut BexVm, value: Value) {
+        vm.flatten_str(&value);
         if let Ok(text) = vm.as_string(&value) {
             write_escaped(&mut self.out, text.as_str());
         }
@@ -1329,7 +1330,7 @@ impl Sink for ValueSink {
             Key::Value(value) => {
                 let hash = vm
                     .as_string(&value)
-                    .map(|key| bex_vm_types::map_string_hash(key.as_str()))
+                    .map(|key| key.hash())
                     .unwrap_or_default();
                 (hash, value)
             }
@@ -1338,12 +1339,22 @@ impl Sink for ValueSink {
                     .field_keys
                     .entry((class, index))
                     .or_insert_with(|| Value::object(vm.alloc_string(text)));
-                (bex_vm_types::map_string_hash(text), value)
+                // The cell is reused for every instance of the class, so its
+                // hash is computed once.
+                let hash = vm
+                    .as_string(&value)
+                    .map(|key| key.hash())
+                    .unwrap_or_default();
+                (hash, value)
             }
-            Key::Text(text) => (
-                bex_vm_types::map_string_hash(text),
-                Value::object(vm.alloc_string(text)),
-            ),
+            Key::Text(text) => {
+                let value = Value::object(vm.alloc_string(text));
+                let hash = vm
+                    .as_string(&value)
+                    .map(|key| key.hash())
+                    .unwrap_or_default();
+                (hash, value)
+            }
         };
         if let Some(Building::Object(_, next)) = self.building.last_mut() {
             *next = Some((hash, key));

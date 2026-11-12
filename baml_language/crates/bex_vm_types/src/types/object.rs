@@ -135,6 +135,9 @@ pub enum SharedKind {
     Instance,
     List,
     Map,
+    /// A string cell of any kind (flat, rope or view), read through
+    /// [`StrRef`](crate::types::StrRef).
+    Str,
 }
 
 impl SharedKind {
@@ -144,10 +147,12 @@ impl SharedKind {
         static INSTANCE: Object = Object::Shared(SharedKind::Instance);
         static LIST: Object = Object::Shared(SharedKind::List);
         static MAP: Object = Object::Shared(SharedKind::Map);
+        static STR: Object = Object::Shared(SharedKind::Str);
         match self {
             SharedKind::Instance => &INSTANCE,
             SharedKind::List => &LIST,
             SharedKind::Map => &MAP,
+            SharedKind::Str => &STR,
         }
     }
 }
@@ -485,6 +490,7 @@ impl std::fmt::Display for Object {
             Object::Uint8Array(bytes) => write!(f, "<uint8array len={}>", bytes.len()),
             Object::Shared(SharedKind::List) => write!(f, "<array>"),
             Object::Shared(SharedKind::Map) => write!(f, "<map>"),
+            Object::Shared(SharedKind::Str) => write!(f, "<string>"),
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
@@ -549,6 +555,7 @@ impl ObjectType {
             Object::Uint8Array(_) => Self::Uint8Array,
             Object::Shared(SharedKind::List) => Self::Array,
             Object::Shared(SharedKind::Map) => Self::Map,
+            Object::Shared(SharedKind::Str) => Self::String,
             Object::RustData(_) => Self::RustData,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),

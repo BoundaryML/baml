@@ -49,7 +49,7 @@ impl BexVm {
                 let key = self.field_named(call, "resolved_model")?;
                 let text = |name: &str| {
                     self.field_named(key, name).and_then(|value| {
-                        self.as_string(&value).ok().map(|s| Box::from(s.as_str()))
+                        self.as_string(&value).ok().map(|s| Box::<str>::from(s.to_owned_string()))
                     })
                 };
                 Some(ModelUsage {

@@ -688,9 +688,9 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Allocate some objects
-        let _obj1 = tlab.alloc_string("obj1".to_string());
-        let _obj2 = tlab.alloc_string("obj2".to_string());
-        let _obj3 = tlab.alloc_string("obj3".to_string());
+        let _obj1 = tlab.alloc(Object::String(("obj1".to_string()).into()));
+        let _obj2 = tlab.alloc(Object::String(("obj2".to_string()).into()));
+        let _obj3 = tlab.alloc(Object::String(("obj3".to_string()).into()));
 
         // Run GC with no roots - all objects should be collected
         let (stats, _, _) = unsafe { heap.collect_garbage(&[]) };
@@ -756,9 +756,9 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Allocate some objects
-        let obj1 = tlab.alloc_string("obj1".to_string());
-        let obj2 = tlab.alloc_string("obj2".to_string());
-        let _obj3 = tlab.alloc_string("obj3".to_string());
+        let obj1 = tlab.alloc(Object::String(("obj1".to_string()).into()));
+        let obj2 = tlab.alloc(Object::String(("obj2".to_string()).into()));
+        let _obj3 = tlab.alloc(Object::String(("obj3".to_string()).into()));
 
         // Run GC with obj1 and obj2 as roots
         let (stats, remapped, _) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
@@ -781,7 +781,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Allocate a string
-        let str_obj = tlab.alloc_string("referenced".to_string());
+        let str_obj = tlab.alloc(Object::String(("referenced".to_string()).into()));
 
         // Allocate an array that references the string
         let arr = tlab.alloc_array(
@@ -790,7 +790,7 @@ mod tests {
         );
 
         // Allocate another unreferenced string
-        let _unreferenced = tlab.alloc_string("unreferenced".to_string());
+        let _unreferenced = tlab.alloc(Object::String(("unreferenced".to_string()).into()));
 
         // Run GC with only the array as root
         let (stats, remapped, _) = unsafe { heap.collect_garbage(&[arr]) };
@@ -831,8 +831,8 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let obj = tlab.alloc_string("test".to_string());
-        tlab.alloc_string("garbage".to_string());
+        let obj = tlab.alloc(Object::String(("test".to_string()).into()));
+        tlab.alloc(Object::String(("garbage".to_string()).into()));
 
         let (stats, remapped, restamp) = unsafe { heap.collect_garbage(&[obj]) };
 
@@ -853,7 +853,7 @@ mod tests {
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let inner = tlab.alloc_string("inner".to_string());
+        let inner = tlab.alloc(Object::String(("inner".to_string()).into()));
         let arr = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(inner)]);
         let stack: [usize; 1] = [inner.as_ptr() as usize + 16];
         let range = stack.as_ptr_range();
@@ -878,7 +878,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let mut roots = Vec::new();
         for _ in 0..3 {
-            let mut head = tlab.alloc_string("leaf".to_string());
+            let mut head = tlab.alloc(Object::String(("leaf".to_string()).into()));
             for _ in 0..3_333 {
                 head = tlab.alloc(Object::Cell(Cell::new(Value::object(head))));
             }
@@ -915,7 +915,7 @@ mod tests {
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let c = tlab.alloc_string("c".to_string());
+        let c = tlab.alloc(Object::String(("c".to_string()).into()));
         let b = tlab.alloc(Object::Cell(Cell::new(Value::object(c))));
         let a = tlab.alloc(Object::Cell(Cell::new(Value::object(b))));
 
@@ -991,7 +991,7 @@ mod tests {
         POISON_FOR_TESTS.store(true, std::sync::atomic::Ordering::Relaxed);
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let dead = tlab.alloc_string("dead".to_string());
+        let dead = tlab.alloc(Object::String(("dead".to_string()).into()));
         let mut holder = LateRoot {
             ptr: dead,
             walks: 0,
@@ -1009,11 +1009,11 @@ mod tests {
         POISON_FOR_TESTS.store(true, std::sync::atomic::Ordering::Relaxed);
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let finalizer = tlab.alloc(Object::String(("cleanup".to_string()).into()));
         let class = tlab.alloc(class_object(Some(finalizer)));
         heap.note_finalizable_class();
         let dead = tlab.alloc_instance(class, vec![]);
-        let leaf = tlab.alloc_string("leaf".to_string());
+        let leaf = tlab.alloc(Object::String(("leaf".to_string()).into()));
         let list = tlab.alloc_array(RealizedTy::unknown(), vec![Value::object(leaf)]);
         let handle = heap.create_handle(leaf);
         let mut holder = (list, WeakRefs(vec![leaf, dead]));
@@ -1039,8 +1039,8 @@ mod tests {
         POISON_FOR_TESTS.store(true, std::sync::atomic::Ordering::Relaxed);
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let kept = tlab.alloc_string("kept".to_string());
-        tlab.alloc_string("garbage".to_string());
+        let kept = tlab.alloc(Object::String(("kept".to_string()).into()));
+        tlab.alloc(Object::String(("garbage".to_string()).into()));
 
         let (_, roots, _) = unsafe { heap.collect_garbage(&[kept]) };
         assert_ne!(roots[0], kept);
@@ -1058,7 +1058,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let obj = tlab.alloc_string("test".to_string());
+        let obj = tlab.alloc(Object::String(("test".to_string()).into()));
         let handle = heap.create_handle(obj);
 
         let (stats, _, _) = unsafe { heap.collect_garbage(&[]) };
@@ -1076,7 +1076,7 @@ mod tests {
 
             // Allocate objects in this cycle
             for i in 0..100 {
-                tlab.alloc_string(format!("cycle_{cycle}_obj_{i}"));
+                tlab.alloc(Object::String((format!("cycle_{cycle}_obj_{i}")).into()));
             }
 
             // Run GC with no roots - all should be collected
@@ -1096,7 +1096,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Allocate runtime objects
-        let _runtime = tlab.alloc_string("runtime".to_string());
+        let _runtime = tlab.alloc(Object::String(("runtime".to_string()).into()));
 
         // Run GC with no roots - runtime objects collected
         let (stats, _, _) = unsafe { heap.collect_garbage(&[]) };
@@ -1104,16 +1104,11 @@ mod tests {
         // Compile-time objects should still be accessible
         let ct_ptr_0 = heap.compile_time_ptr(0);
         let ct_ptr_1 = heap.compile_time_ptr(1);
-        let obj0 = unsafe { ct_ptr_0.get() };
-        let obj1 = unsafe { ct_ptr_1.get() };
-
-        match (obj0, obj1) {
-            (Object::String(s0), Object::String(s1)) => {
-                assert_eq!(s0, "builtin1");
-                assert_eq!(s1, "builtin2");
-            }
-            _ => panic!("Expected String objects"),
-        }
+        // Literals are flat string cells.
+        let obj0 = unsafe { bex_vm_types::StrRef::of(ct_ptr_0) }.expect("a string literal");
+        let obj1 = unsafe { bex_vm_types::StrRef::of(ct_ptr_1) }.expect("a string literal");
+        assert_eq!(obj0.as_str(), "builtin1");
+        assert_eq!(obj1.as_str(), "builtin2");
 
         // Runtime object should have been collected
         assert_eq!(stats.live_count, 0);
@@ -1123,7 +1118,7 @@ mod tests {
     fn test_gc_traces_and_forwards_structural_map_keys() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let leaf = tlab.alloc_string("key leaf");
+        let leaf = tlab.alloc(Object::String(("key leaf").into()));
         let key = tlab.alloc_array(baml_type::RealizedTy::string(), vec![Value::object(leaf)]);
         let map = tlab
             .alloc_map_hashed(
@@ -1161,7 +1156,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Allocate a string
-        let str_obj = tlab.alloc_string("value".to_string());
+        let str_obj = tlab.alloc(Object::String(("value".to_string()).into()));
 
         // Allocate a map that references the string
         let mut map = indexmap::IndexMap::new();
@@ -1173,7 +1168,7 @@ mod tests {
         );
 
         // Allocate unreferenced garbage
-        let _garbage = tlab.alloc_string("garbage".to_string());
+        let _garbage = tlab.alloc(Object::String(("garbage".to_string()).into()));
 
         // Run GC with only the map as root
         let (stats, remapped, _) = unsafe { heap.collect_garbage(&[map_obj]) };
@@ -1186,9 +1181,8 @@ mod tests {
         let new_map_ptr = remapped[0];
         if let Some(m) = unsafe { bex_vm_types::MapRef::of(new_map_ptr) } {
             let entries = m.snapshot_entries();
-            assert!(
-                matches!(unsafe { entries[0].0.as_object_ptr().unwrap().get() }, Object::String(key) if key == "key")
-            );
+            let key = unsafe { bex_vm_types::StrRef::of(entries[0].0.as_object_ptr().unwrap()) };
+            assert_eq!(key.expect("a string key").as_str(), "key");
             if let Some(str_ptr) = entries[0].1.as_object_ptr() {
                 let str_result = unsafe { str_ptr.get() };
                 if let Object::String(s) = str_result {
@@ -1226,9 +1220,9 @@ mod tests {
         let mut simulated_stack: Vec<Value> = Vec::new();
 
         // Allocate objects and push their pointers to the "stack"
-        let obj1 = tlab.alloc_string("stack_value_1".to_string());
-        let obj2 = tlab.alloc_string("stack_value_2".to_string());
-        let obj3 = tlab.alloc_string("stack_value_3".to_string());
+        let obj1 = tlab.alloc(Object::String(("stack_value_1".to_string()).into()));
+        let obj2 = tlab.alloc(Object::String(("stack_value_2".to_string()).into()));
+        let obj3 = tlab.alloc(Object::String(("stack_value_3".to_string()).into()));
 
         simulated_stack.push(Value::object(obj1));
         simulated_stack.push(Value::int(42)); // Non-object value
@@ -1237,8 +1231,8 @@ mod tests {
         simulated_stack.push(Value::object(obj3));
 
         // Also allocate some garbage that won't be rooted
-        let _garbage1 = tlab.alloc_string("garbage1".to_string());
-        let _garbage2 = tlab.alloc_string("garbage2".to_string());
+        let _garbage1 = tlab.alloc(Object::String(("garbage1".to_string()).into()));
+        let _garbage2 = tlab.alloc(Object::String(("garbage2".to_string()).into()));
 
         // Collect roots from the simulated stack (like collect_vm_roots does)
         let roots: Vec<HeapPtr> = simulated_stack
@@ -1292,7 +1286,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Create a chain: array -> map -> array -> string
-        let leaf_str = tlab.alloc_string("leaf".to_string());
+        let leaf_str = tlab.alloc(Object::String(("leaf".to_string()).into()));
 
         let inner_array = tlab.alloc_array(
             baml_type::RealizedTy::unknown(),
@@ -1313,8 +1307,8 @@ mod tests {
         );
 
         // Allocate garbage between the chain objects
-        let _g1 = tlab.alloc_string("garbage".to_string());
-        let _g2 = tlab.alloc_string("more_garbage".to_string());
+        let _g1 = tlab.alloc(Object::String(("garbage".to_string()).into()));
+        let _g2 = tlab.alloc(Object::String(("more_garbage".to_string()).into()));
 
         // Only root the outer array
         let (stats, remapped, _forwarding) = unsafe { heap.collect_garbage(&[outer_array]) };
@@ -1351,12 +1345,14 @@ mod tests {
             let mut tlab = Tlab::new(Arc::clone(&heap));
 
             // Allocate new objects
-            let new_obj = tlab.alloc_string(format!("cycle_{cycle}_persistent"));
+            let new_obj = tlab.alloc(Object::String((format!("cycle_{cycle}_persistent")).into()));
             persistent_roots.push(new_obj);
 
             // Allocate garbage
             for i in 0..10 {
-                tlab.alloc_string(format!("cycle_{cycle}_garbage_{i}"));
+                tlab.alloc(Object::String(
+                    (format!("cycle_{cycle}_garbage_{i}")).into(),
+                ));
             }
 
             // Run GC with all persistent roots
@@ -1395,8 +1391,8 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let obj1 = tlab.alloc_string("object1".to_string());
-        let obj2 = tlab.alloc_string("object2".to_string());
+        let obj1 = tlab.alloc(Object::String(("object1".to_string()).into()));
+        let obj2 = tlab.alloc(Object::String(("object2".to_string()).into()));
 
         let (stats, remapped, _) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
 
@@ -1428,9 +1424,9 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let obj1 = tlab.alloc_string("handle_obj_1".to_string());
-        let obj2 = tlab.alloc_string("handle_obj_2".to_string());
-        let _obj3 = tlab.alloc_string("no_handle".to_string()); // Will be collected
+        let obj1 = tlab.alloc(Object::String(("handle_obj_1".to_string()).into()));
+        let obj2 = tlab.alloc(Object::String(("handle_obj_2".to_string()).into()));
+        let _obj3 = tlab.alloc(Object::String(("no_handle".to_string()).into())); // Will be collected
 
         let handle1 = heap.create_handle(obj1);
         let handle2 = heap.create_handle(obj2);
@@ -1473,8 +1469,8 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Fresh allocations should be in Gen0 (the nursery).
-        let obj1 = tlab.alloc_string("nursery_1".to_string());
-        let obj2 = tlab.alloc_string("nursery_2".to_string());
+        let obj1 = tlab.alloc(Object::String(("nursery_1".to_string()).into()));
+        let obj2 = tlab.alloc(Object::String(("nursery_2".to_string()).into()));
 
         assert_eq!(
             heap.generation_of(obj1),
@@ -1497,9 +1493,9 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Allocate some objects — all start in Gen0.
-        let obj1 = tlab.alloc_string("survivor_1".to_string());
-        let obj2 = tlab.alloc_string("survivor_2".to_string());
-        let _garbage = tlab.alloc_string("garbage".to_string());
+        let obj1 = tlab.alloc(Object::String(("survivor_1".to_string()).into()));
+        let obj2 = tlab.alloc(Object::String(("survivor_2".to_string()).into()));
+        let _garbage = tlab.alloc(Object::String(("garbage".to_string()).into()));
 
         // Run full GC; obj1 and obj2 are roots, garbage is not.
         let (stats, remapped, _) = unsafe { heap.collect_garbage(&[obj1, obj2]) };
@@ -1514,7 +1510,7 @@ mod tests {
         // In the engine this happens via `<BexVm as RootHaver>::forward_roots`.
         tlab.invalidate();
 
-        let post_gc = tlab.alloc_string("post_gc".to_string());
+        let post_gc = tlab.alloc(Object::String(("post_gc".to_string()).into()));
         assert_eq!(heap.generation_of(post_gc), Generation::Runtime);
     }
 
@@ -1567,7 +1563,7 @@ mod tests {
             layout: std::sync::OnceLock::default(),
             redact: false,
         })));
-        let field_str = tlab.alloc_string("field_value".to_string());
+        let field_str = tlab.alloc(Object::String(("field_value".to_string()).into()));
         let inst_ptr =
             tlab.alloc_instance(class_ptr, vec![Value::object(field_str), Value::int(42)]);
 
@@ -1631,8 +1627,8 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Allocate a function stand-in (a string) and a captured string
-        let func_ptr = tlab.alloc_string("placeholder_func".to_string());
-        let captured = tlab.alloc_string("captured_value".to_string());
+        let func_ptr = tlab.alloc(Object::String(("placeholder_func".to_string()).into()));
+        let captured = tlab.alloc(Object::String(("captured_value".to_string()).into()));
         let closure_ptr = tlab.alloc(Object::Closure(Closure {
             function: func_ptr,
             captures: Box::new([Value::object(captured), Value::int(7)]),
@@ -1659,7 +1655,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let inner = tlab.alloc_string("cell_content".to_string());
+        let inner = tlab.alloc(Object::String(("cell_content".to_string()).into()));
         let cell_ptr = tlab.alloc(Object::Cell(Cell::new(Value::object(inner))));
 
         let roots = vec![cell_ptr];
@@ -1703,7 +1699,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let result = tlab.alloc_string("result".to_string());
+        let result = tlab.alloc(Object::String(("result".to_string()).into()));
         // Allocate the Future in `Pending` state first, then settle it in place.
         let future_ptr = tlab.alloc(Object::Future(Future::pending(
             FutureId::from_usize(0),
@@ -1768,7 +1764,7 @@ mod tests {
     fn test_gc_leaf_string_preserved() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let ptr = tlab.alloc_string("hello world".to_string());
+        let ptr = tlab.alloc(Object::String(("hello world".to_string()).into()));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
         let Object::String(s) = (unsafe { new_roots[0].get() }) else {
@@ -2036,7 +2032,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // D -> C -> B -> A (leaf string wrapped in nested arrays)
-        let a = tlab.alloc_string("a".to_string());
+        let a = tlab.alloc(Object::String(("a".to_string()).into()));
         let b = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(a)]);
         let c = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(b)]);
         let d = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(c)]);
@@ -2075,12 +2071,12 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let children: Vec<Value> = (0..5)
-            .map(|i| Value::object(tlab.alloc_string(format!("child_{i}"))))
+            .map(|i| Value::object(tlab.alloc(Object::String((format!("child_{i}")).into()))))
             .collect();
         let parent = tlab.alloc_array(baml_type::RealizedTy::unknown(), children);
 
         // Also allocate explicit garbage
-        let _garbage = tlab.alloc_string("garbage".to_string());
+        let _garbage = tlab.alloc(Object::String(("garbage".to_string()).into()));
 
         let (stats, _, _) = unsafe { heap.collect_garbage(&[parent]) };
         assert_eq!(stats.live_count, 8); // parent + 5 children // a non-empty list is a list and a backing cell, plus its element type
@@ -2093,7 +2089,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let shared = tlab.alloc_string("shared".to_string());
+        let shared = tlab.alloc(Object::String(("shared".to_string()).into()));
         let parent_a = tlab.alloc_array(
             baml_type::RealizedTy::unknown(),
             vec![Value::object(shared)],
@@ -2133,7 +2129,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // root -> [B, C], B -> [D], C -> [D]
-        let d = tlab.alloc_string("diamond_bottom".to_string());
+        let d = tlab.alloc(Object::String(("diamond_bottom".to_string()).into()));
         let b = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(d)]);
         let c = tlab.alloc_array(baml_type::RealizedTy::unknown(), vec![Value::object(d)]);
         let root = tlab.alloc_array(
@@ -2222,7 +2218,7 @@ mod tests {
         push_onto(&mut tlab, x, Value::object(z));
 
         // Separate rooted survivor
-        let rooted = tlab.alloc_string("survivor".to_string());
+        let rooted = tlab.alloc(Object::String(("survivor".to_string()).into()));
 
         let (stats, _, _) = unsafe { heap.collect_garbage(&[rooted]) };
         assert_eq!(stats.live_count, 1);
@@ -2236,7 +2232,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Build a 100-deep chain: root -> array -> array -> ... -> leaf string
-        let mut current = tlab.alloc_string("leaf".to_string());
+        let mut current = tlab.alloc(Object::String(("leaf".to_string()).into()));
         for _ in 0..99 {
             current = tlab.alloc_array(
                 baml_type::RealizedTy::unknown(),
@@ -2252,7 +2248,7 @@ mod tests {
     fn test_gc_duplicate_roots() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let ptr = tlab.alloc_string("dup".to_string());
+        let ptr = tlab.alloc(Object::String(("dup".to_string()).into()));
 
         // Pass the same root twice — should only be copied once
         let (stats, new_roots, _) = unsafe { heap.collect_garbage(&[ptr, ptr]) };
@@ -2274,7 +2270,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
-        let ptr = tlab.alloc_string("runtime".to_string());
+        let ptr = tlab.alloc(Object::String(("runtime".to_string()).into()));
         assert_eq!(heap.generation_of(ptr), Generation::Runtime);
         assert!(!heap.is_compile_time_ptr(ptr));
     }
@@ -2307,14 +2303,14 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // --- Leaf objects (all start in Gen0) ---
-        let leaf_string = tlab.alloc_string("leaf_string".to_string());
-        let leaf_for_array = tlab.alloc_string("in_array".to_string());
-        let leaf_for_map = tlab.alloc_string("in_map".to_string());
-        let leaf_for_closure_cap = tlab.alloc_string("closure_cap".to_string());
-        let leaf_for_cell = tlab.alloc_string("cell_value".to_string());
+        let leaf_string = tlab.alloc(Object::String(("leaf_string".to_string()).into()));
+        let leaf_for_array = tlab.alloc(Object::String(("in_array".to_string()).into()));
+        let leaf_for_map = tlab.alloc(Object::String(("in_map".to_string()).into()));
+        let leaf_for_closure_cap = tlab.alloc(Object::String(("closure_cap".to_string()).into()));
+        let leaf_for_cell = tlab.alloc(Object::String(("cell_value".to_string()).into()));
 
         // A function stand-in (Class acts as a leaf here, needed by Closure).
-        let leaf_func = tlab.alloc_string("func_placeholder".to_string());
+        let leaf_func = tlab.alloc(Object::String(("func_placeholder".to_string()).into()));
 
         // --- Container: a list ---
         let array_container = tlab.alloc_array(
@@ -2486,12 +2482,11 @@ mod tests {
         // Shared text: two clones and a slice of one buffer, and a
         // concatenation that has never been read.
         let text = bex_str::BexStr::from("x".repeat(100_000));
-        let clone_a = tlab.alloc_string(text.clone());
-        let clone_b = tlab.alloc_string(text.clone());
-        let slice = tlab.alloc_string(text.byte_slice(10..5_000));
-        let rope = tlab.alloc_string(bex_str::BexStr::concat(
-            text,
-            bex_str::BexStr::from("y".repeat(1_000)),
+        let clone_a = tlab.alloc(Object::String((text.clone()).into()));
+        let clone_b = tlab.alloc(Object::String((text.clone()).into()));
+        let slice = tlab.alloc(Object::String((text.byte_slice(10..5_000)).into()));
+        let rope = tlab.alloc(Object::String(
+            (bex_str::BexStr::concat(text, bex_str::BexStr::from("y".repeat(1_000)))).into(),
         ));
 
         // A container with spare capacity, a byte buffer, a map, and one big
@@ -2511,7 +2506,7 @@ mod tests {
 
         // Garbage with payloads much larger than everything above.
         tlab.alloc_uint8array(vec![0; 1_000_000]);
-        tlab.alloc_string("z".repeat(500_000));
+        tlab.alloc(Object::String(("z".repeat(500_000)).into()));
 
         let roots = [
             clone_a, clone_b, slice, rope, array, bytes, map, bigint_a, bigint_b,
@@ -2571,9 +2566,9 @@ mod tests {
         let text = bex_str::BexStr::from("x".repeat(100_000));
         let whole = text.unshared_heap_bytes();
         let strings = [
-            tlab.alloc_string(text.clone()),
-            tlab.alloc_string(text.clone()),
-            tlab.alloc_string(text),
+            tlab.alloc(Object::String((text.clone()).into())),
+            tlab.alloc(Object::String((text.clone()).into())),
+            tlab.alloc(Object::String((text).into())),
         ];
         let (stats, _, _) = unsafe { heap.collect_garbage(&strings) };
         let payload = stats.live_payload_bytes;
@@ -2639,8 +2634,8 @@ mod tests {
             ],
             0,
         ));
-        let by_tag = tlab.alloc_string("reached through the tagged slot");
-        let by_ptr = tlab.alloc_string("reached through the pointer slot");
+        let by_tag = tlab.alloc(Object::String(("reached through the tagged slot").into()));
+        let by_ptr = tlab.alloc(Object::String(("reached through the pointer slot").into()));
         let float = tlab.alloc_float(2.5);
         let ptr = tlab.alloc_instance(
             class,
@@ -2688,7 +2683,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let floats = tlab.alloc_list(bex_vm_types::RealizedTy::Float);
         let mixed = tlab.alloc_list(bex_vm_types::RealizedTy::Unknown);
-        let text = tlab.alloc_string("reached through a tagged element");
+        let text = tlab.alloc(Object::String(("reached through a tagged element").into()));
         for i in 0..10 {
             let float = SlotValue::Float(f64::from(i) + 0.5);
             floats.lock(Access::Shared).push(&mut tlab, float).unwrap();
@@ -2915,7 +2910,7 @@ mod tests {
     fn finalizer_scan_visits_only_finalizable_instances() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let finalizer = tlab.alloc(Object::String(("cleanup".to_string()).into()));
         let class = tlab.alloc(class_object(Some(finalizer)));
         // A runtime class with a finalizer joins the heap, as a graft does.
         heap.note_finalizable_class();
@@ -2950,7 +2945,7 @@ mod tests {
     fn finalizable_instance_follows_collections_and_is_finalized_once() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let finalizer = tlab.alloc(Object::String(("cleanup".to_string()).into()));
         let class = tlab.alloc(class_object(Some(finalizer)));
         heap.note_finalizable_class();
         let mut instance = tlab.alloc_instance(class, vec![]);
@@ -2986,7 +2981,7 @@ mod tests {
     fn class_that_gains_a_finalizer_rebuilds_the_list() {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let finalizer = tlab.alloc(Object::String(("cleanup".to_string()).into()));
         let class = tlab.alloc(class_object(None));
         let older = tlab.alloc_instance(class, vec![]);
         assert!(finalizable_entries(&heap).is_empty());
@@ -3014,7 +3009,7 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut low = Tlab::new(Arc::clone(&heap));
         let mut high = Tlab::new(Arc::clone(&heap));
-        let finalizer = low.alloc_string("cleanup".to_string());
+        let finalizer = low.alloc(Object::String(("cleanup".to_string()).into()));
         let class = low.alloc(class_object(Some(finalizer)));
         heap.note_finalizable_class();
         // `low` takes a block for instance cells first.

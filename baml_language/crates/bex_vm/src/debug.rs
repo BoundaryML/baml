@@ -360,7 +360,10 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
     // SAFETY: During debug display, we assume the pointer is valid
     let object = unsafe { ptr.get() };
     match object {
-        Object::String(string) => format!("{string:?}"),
+        Object::Shared(bex_vm_types::types::SharedKind::Str) => {
+            // SAFETY: the marker is only shown for a string.
+            format!("{:?}", unsafe { bex_vm_types::StrRef::new_unchecked(ptr) })
+        }
         // This one's a bit tricky to print.
         Object::Shared(bex_vm_types::types::SharedKind::Instance) => {
             // SAFETY: During debug display, we assume the pointer is valid

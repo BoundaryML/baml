@@ -2,7 +2,6 @@
 //! call: public collector arrays and registration names can change in place.
 
 use bex_heap::TlabHolder;
-use bex_str::BexStr;
 use bex_vm_types::types::Value;
 
 use crate::{
@@ -37,7 +36,7 @@ pub use generated::*;
 pub struct PackageTestingImpl;
 
 impl BamlPackageTesting for PackageTestingImpl {
-    fn _test_name_count(vm: &BexVm, entries: &[Value], full_name: &BexStr) -> i64 {
+    fn _test_name_count(vm: &BexVm, entries: &[Value], full_name: &str) -> i64 {
         registration_name_count(
             entries.iter().map(|entry| {
                 view::TestRegistration::new(
@@ -49,7 +48,7 @@ impl BamlPackageTesting for PackageTestingImpl {
         )
     }
 
-    fn _testset_name_count(vm: &BexVm, entries: &[Value], full_name: &BexStr) -> i64 {
+    fn _testset_name_count(vm: &BexVm, entries: &[Value], full_name: &str) -> i64 {
         registration_name_count(
             entries.iter().map(|entry| {
                 view::TestSetRegistration::new(
@@ -65,8 +64,9 @@ impl BamlPackageTesting for PackageTestingImpl {
 /// Preserve the existing rule exactly: an explicit `name#anything` counts as a
 /// duplicate of `name`, and duplicate entries each count. A native scan avoids
 /// a VM call, loop bookkeeping and string allocation for every prior entry.
-fn registration_name_count<'a>(names: impl Iterator<Item = &'a str>, full_name: &str) -> i64 {
+fn registration_name_count(names: impl Iterator<Item = impl AsRef<str>>, full_name: &str) -> i64 {
     names.fold(0, |count, name| {
+        let name = name.as_ref();
         count
             + i64::from(
                 name.strip_prefix(full_name)

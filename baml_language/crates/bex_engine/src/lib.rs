@@ -5249,7 +5249,10 @@ impl BexEngine {
             ValueKind::Int(value) => value.to_string(),
             ValueKind::OmittedArg => "<omitted argument>".to_string(),
             ValueKind::Object(ptr) => match unsafe { ptr.get() } {
-                Object::String(value) => value.to_string(),
+                Object::Shared(bex_vm_types::types::SharedKind::Str) => {
+                    // SAFETY: the pointer came from a live value.
+                    unsafe { bex_vm_types::StrRef::new_unchecked(ptr) }.to_string()
+                }
                 Object::Bigint(value) => value.to_string(),
                 Object::Float(value) => value.to_string(),
                 _ => return None,
@@ -7293,10 +7296,7 @@ impl BexEngine {
         vm: &BexVm,
         args: &[Value],
     ) -> Result<PendingRuntimeCompile, EngineError> {
-        fn map_entries(
-            vm: &BexVm,
-            value: Value,
-        ) -> Result<IndexMap<bex_str::BexStr, Value>, EngineError> {
+        fn map_entries(vm: &BexVm, value: Value) -> Result<IndexMap<String, Value>, EngineError> {
             vm.as_string_map(&value)
                 .map_err(|_| EngineError::TypeMismatch {
                     message: "Package.compile expected a string-keyed map".to_string(),
@@ -7322,7 +7322,7 @@ impl BexEngine {
                     message: format!("Package.compile file `{path}` must be a string"),
                 });
             };
-            let Object::String(source) = vm.get_object(ptr) else {
+            let Some(source) = vm.str_at(ptr) else {
                 return Err(EngineError::TypeMismatch {
                     message: format!("Package.compile file `{path}` must be a string"),
                 });
@@ -7426,7 +7426,7 @@ impl BexEngine {
             .get(1)
             .and_then(Value::as_object_ptr)
             .ok_or_else(|| invalid("Session.eval source is not a string".to_string()))?;
-        let Object::String(source) = vm.get_object(source_ptr) else {
+        let Some(source) = vm.str_at(source_ptr) else {
             return Err(invalid("Session.eval source is not a string".to_string()));
         };
         let source = source.to_string();

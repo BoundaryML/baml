@@ -1,7 +1,10 @@
 use std::{borrow::Cow, cmp::Ordering};
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, RootVisitor, types::Value};
+use bex_vm_types::{
+    HeapPtr, Object, ObjectType, RootHaver, RootVisitor,
+    types::{SharedKind, Value},
+};
 use num_bigint::BigInt;
 
 use bex_vm_types::layout::{
@@ -28,10 +31,12 @@ fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
         let lobj = vm.get_object(la);
         let robj = vm.get_object(rb);
         match (lobj, robj) {
-            (Object::String(_), Object::String(_)) => match (vm.as_string(&a), vm.as_string(&b)) {
-                (Ok(ls), Ok(rs)) => ls == rs,
-                _ => false,
-            },
+            (Object::Shared(SharedKind::Str), Object::Shared(SharedKind::Str)) => {
+                match (vm.as_string(&a), vm.as_string(&b)) {
+                    (Ok(ls), Ok(rs)) => ls == rs,
+                    _ => false,
+                }
+            }
             (Object::Uint8Array(_), Object::Uint8Array(_)) => {
                 match (
                     vm.as_uint8array(&a).map(|bytes| bytes.to_vec()),
@@ -192,7 +197,7 @@ fn natural_kind(vm: &BexVm, context: &str, value: Value) -> Result<NaturalKind, 
         // float order, which gives NaN a defined position.
         Object::Float(_) => Ok(NaturalKind::Float),
         Object::Bigint(_) => Ok(NaturalKind::Bigint),
-        Object::String(_) => Ok(NaturalKind::String),
+        Object::Shared(SharedKind::Str) => Ok(NaturalKind::String),
         _ => Err(invalid_sort(
             context,
             format!(
@@ -273,14 +278,12 @@ fn value_as_bigint_cow_for_sort(vm: &BexVm, value: Value) -> Cow<'_, BigInt> {
     }
 }
 
-fn value_as_string_for_sort(vm: &BexVm, value: Value) -> &bex_str::BexStr {
+fn value_as_string_for_sort(vm: &BexVm, value: Value) -> bex_vm_types::StrRef<'_> {
     let ptr = value
         .as_object_ptr()
         .expect("validated string sort value should be object-backed");
-    match vm.get_object(ptr) {
-        Object::String(s) => s,
-        _ => unreachable!("validated string sort value should be string"),
-    }
+    vm.str_at(ptr)
+        .unwrap_or_else(|| unreachable!("validated string sort value should be string"))
 }
 
 pub(super) fn compare_natural_values(
@@ -306,7 +309,7 @@ pub(super) fn compare_natural_values(
             value_as_bigint_cow_for_sort(vm, left).cmp(&value_as_bigint_cow_for_sort(vm, right))
         }
         NaturalDomain::String => {
-            value_as_string_for_sort(vm, left).cmp(value_as_string_for_sort(vm, right))
+            value_as_string_for_sort(vm, left).cmp(&value_as_string_for_sort(vm, right))
         }
     }
 }
@@ -323,7 +326,7 @@ pub(super) fn is_primitive_array_values(vm: &BexVm, values: &[Value]) -> bool {
             } else if let Some(ptr) = v.as_object_ptr() {
                 matches!(
                     vm.get_object(ptr),
-                    Object::Float(_) | Object::Bigint(_) | Object::String(_)
+                    Object::Float(_) | Object::Bigint(_) | Object::Shared(SharedKind::Str)
                 )
             } else {
                 false
@@ -1378,7 +1381,7 @@ pub(crate) mod shared {
             return Ok(text);
         }
         match value {
-            Tagged::Ptr(ptr) if rt.shape(ptr) == Shape::Str => Ok(rt.str_text(ptr).to_string()),
+            Tagged::Ptr(ptr) if rt.shape(ptr) == Shape::Str => Ok(rt.str_to_string(ptr)),
             _ => Err(Fault::NeedsVm(NeedsVm::Render)),
         }
     }
@@ -1394,7 +1397,7 @@ pub(crate) mod shared {
             Err(error) => return NativeCallResult::Error(error.into()),
         };
         let separator = match vm.as_string(&args[1]) {
-            Ok(separator) => separator.as_str().to_owned(),
+            Ok(separator) => separator.to_owned_string(),
             Err(error) => return NativeCallResult::Error(error.into()),
         };
         crate::package_baml::root::join_honoring_overrides(vm, elements, separator)

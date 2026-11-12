@@ -349,7 +349,7 @@ impl BamlClassClassBuilder for PackageReflectImpl {
     fn _field(
         vm: &mut BexVm,
         builder: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
         ty: &Value,
     ) -> Result<Value, VmRustFnError> {
         let (_, handle) = builder_parts(vm, *builder)
@@ -364,13 +364,13 @@ impl BamlClassClassBuilder for PackageReflectImpl {
                     format!("class builder `{builder_name}` is frozen and cannot be mutated"),
                 ));
             }
-            if state.fields.iter().any(|field| field.name == name.as_str()) {
+            if state.fields.iter().any(|field| field.name == name) {
                 return Err(shared_compilation_error(
                     vm,
                     runtime_type::duplicate_member(
                         DuplicateMemberKind::Field,
                         &builder_name,
-                        name.as_str(),
+                        name,
                     ),
                 ));
             }
@@ -565,18 +565,18 @@ impl BamlClassClassPendingType for PackageReflectImpl {
     fn meta(
         vm: &mut BexVm,
         pendingtype: &Value,
-        alias: Option<&bex_str::BexStr>,
-        description: Option<&bex_str::BexStr>,
-        docstring: Option<&bex_str::BexStr>,
-        other: Option<&IndexMap<bex_str::BexStr, Value>>,
+        alias: Option<&str>,
+        description: Option<&str>,
+        docstring: Option<&str>,
+        other: Option<&IndexMap<String, Value>>,
     ) -> Value {
         let other = string_map_rows(vm, other);
         alloc_with_meta(
             vm,
             *pendingtype,
-            alias.map(bex_str::BexStr::as_str),
-            description.map(bex_str::BexStr::as_str),
-            docstring.map(bex_str::BexStr::as_str),
+            alias,
+            description,
+            docstring,
             &other,
         )
     }

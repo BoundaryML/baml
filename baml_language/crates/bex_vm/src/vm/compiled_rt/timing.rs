@@ -10,8 +10,8 @@
 //! callee) is fixed in the generated code, and the site resolves it once per
 //! parent path.
 
-use btel_types::CallPathId;
 use bex_vm_types::{HeapPtr, ObjectIndex};
+use btel_types::CallPathId;
 
 use super::FrameRecord;
 use crate::{BexVm, errors::VmError, telemetry::timed::TimedPath};

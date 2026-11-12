@@ -94,7 +94,11 @@ impl Scratch {
             // Boxes are an execution detail, not snapshot identity. No work item
             // or memo-table entry for floats, even when every source box differs.
             Object::Float(v) => return SnapshotValue::Float(*v),
-            Object::String(s) => leaves.string_value(&rewritten(&self.rewrites, s)),
+            Object::Shared(SharedKind::Str) => {
+                // SAFETY: the marker is only shown for a string.
+                let s = unsafe { bex_vm_types::StrRef::new_unchecked(ptr) };
+                leaves.string_value(&rewritten(&self.rewrites, &s.text()))
+            }
             Object::Bigint(n) => leaves.bigint(n),
             Object::Type(value) => {
                 SnapshotValue::Type(described(leaves, &mut self.carried, &value.ty))
@@ -278,6 +282,7 @@ impl Scratch {
                 Object::Sentinel(_) => describe(Description::Sentinel),
                 Object::Float(_)
                 | Object::String(_)
+                | Object::Shared(SharedKind::Str)
                 | Object::Bigint(_)
                 | Object::Type(_)
                 | Object::Variant(_)
@@ -292,18 +297,15 @@ impl Scratch {
     }
 }
 /// What `text` reads as once every rewrite it quotes is applied.
-fn rewritten<'a>(
-    rewrites: &[(String, String)],
-    text: &'a bex_str::BexStr,
-) -> Cow<'a, bex_str::BexStr> {
+fn rewritten<'a>(rewrites: &[(String, String)], text: &'a str) -> Cow<'a, bex_str::BexStr> {
     let mut rewritten: Option<String> = None;
     for (from, to) in rewrites {
-        let current = rewritten.as_deref().unwrap_or(text.as_str());
+        let current = rewritten.as_deref().unwrap_or(text);
         if current.contains(from.as_str()) {
             rewritten = Some(current.replace(from.as_str(), to));
         }
     }
-    rewritten.map_or(Cow::Borrowed(text), |text| Cow::Owned(text.into()))
+    Cow::Owned(rewritten.unwrap_or_else(|| text.to_owned()).into())
 }
 /// A traced request's payload. Every string, a body included, is capped at
 /// `BODY_CAPTURE_MAX_BYTES`; a longer one is recorded as truncated.
@@ -476,7 +478,7 @@ fn media(
         };
         Some(match content {
             MediaContent::Url { url, base64_data } => MediaSource::Url {
-                url: leaves.label(&rewritten(rewrites, &url.as_str().into()))?,
+                url: leaves.label(&rewritten(rewrites, url.as_str()))?,
                 data: loaded(leaves, base64_data.as_ref())?,
             },
             // Content read from a file. Its name is all that is left of the
@@ -604,10 +606,8 @@ mod tests {
     #[test]
     fn scalar_kinds_strings_bigints_and_non_snapshotable_rust_objects() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
-        let string = vm.tlab.alloc_string(bex_str::BexStr::concat(
-            "a".repeat(1024).into(),
-            "b".repeat(1024).into(),
-        ));
+        let text = "a".repeat(1024) + &"b".repeat(1024);
+        let string = vm.tlab.alloc_string(&text);
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
         let float = vm.tlab.alloc_float(2.5);
         let opaque: Arc<dyn bex_vm_types::BexRustData> = Arc::new(bex_vm_types::TestRustData(7));
@@ -640,10 +640,7 @@ mod tests {
         let Val::String(string) = roots[4] else {
             panic!()
         };
-        assert!(
-            matches!(snapshot.string(string), bex_str::BexStr::Concat(_)),
-            "capture retains the shared concat handle after content hashing"
-        );
+        assert_eq!(snapshot.string(string).as_str(), text);
         assert!(matches!(roots[5], Val::Bigint(_)));
         assert!(matches!(roots[6], Val::Float(2.5)));
         assert_eq!(roots[7], roots[8]);

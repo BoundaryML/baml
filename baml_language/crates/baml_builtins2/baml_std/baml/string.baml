@@ -347,6 +347,7 @@ class String {
     /// "😀hello".index_of("h")          // 1
     /// "abc".index_of("z")              // null
     /// ```
+    //baml:str_ref
     function index_of(self, search: string) -> int? throws never {
         $rust_function
     }
@@ -366,6 +367,7 @@ class String {
     /// "😀hello".last_index_of("h")          // 1
     /// "abc".last_index_of("z")              // null
     /// ```
+    //baml:str_ref
     function last_index_of(self, search: string) -> int? throws never {
         $rust_function
     }
@@ -389,6 +391,7 @@ class String {
     /// "hello".at(-1)  // "o"
     /// "hi".at(99)     // null
     /// ```
+    //baml:str_ref
     function at(self, index: int) -> string? throws never {
         $rust_function
     }
@@ -415,6 +418,7 @@ class String {
     /// "😀hello".code_point_at(1)  // 104 ("h", not a UTF-16 unit)
     /// "hi".code_point_at(99)      // null
     /// ```
+    //baml:str_ref
     function code_point_at(self, index: int) -> int? throws never {
         $rust_function
     }

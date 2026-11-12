@@ -123,8 +123,8 @@ pub(crate) fn alloc_settings(vm: &mut BexVm, options: &TraceOptionsData) -> Valu
 
 fn patch_from_values(
     vm: &BexVm,
-    metadata: &IndexMap<bex_str::BexStr, Value>,
-    distinct_id: Option<&bex_str::BexStr>,
+    metadata: &IndexMap<String, Value>,
+    distinct_id: Option<&str>,
 ) -> ContextPatch {
     ContextPatch {
         metadata: metadata
@@ -137,13 +137,14 @@ fn patch_from_values(
                 } else if let Some(value) = value.as_int() {
                     Some(ContextValue::Int(value))
                 } else {
-                    Some(
-                        match vm.get_object(value.as_object_ptr().expect("context primitive")) {
-                            Object::String(value) => ContextValue::String(value.to_string()),
-                            Object::Float(value) => ContextValue::Float(*value),
-                            _ => unreachable!("context metadata must be primitive"),
-                        },
-                    )
+                    let ptr = value.as_object_ptr().expect("context primitive");
+                    Some(match vm.get_object(ptr) {
+                        Object::Shared(bex_vm_types::types::SharedKind::Str) => {
+                            ContextValue::String(vm.expect_str(ptr).to_string())
+                        }
+                        Object::Float(value) => ContextValue::Float(*value),
+                        _ => unreachable!("context metadata must be primitive"),
+                    })
                 };
                 (key.to_string(), value)
             })
@@ -158,7 +159,7 @@ fn alloc_metadata<'a>(
     nullable: bool,
 ) -> Value {
     use bex_vm_types::RealizedTy;
-    let entries = entries
+    let entries: Vec<(String, Value)> = entries
         .map(|(key, value)| {
             let value = match value {
                 None => Value::NULL,
@@ -167,7 +168,7 @@ fn alloc_metadata<'a>(
                 Some(ContextValue::Float(value)) => Value::object(vm.alloc_float(*value)),
                 Some(ContextValue::Bool(value)) => Value::bool(*value),
             };
-            (key.as_str().into(), value)
+            (key.as_str().to_owned(), value)
         })
         .collect();
     let mut members = vec![
@@ -239,10 +240,10 @@ impl BamlPackageTrace for PackageTraceImpl {
     fn start_span(
         vm: &mut BexVm,
         target: &Value,
-        inputs: Option<&IndexMap<bex_str::BexStr, Value>>,
+        inputs: Option<&IndexMap<String, Value>>,
         parent: Option<&Value>,
-        metadata: &IndexMap<bex_str::BexStr, Value>,
-        distinct_id: Option<&bex_str::BexStr>,
+        metadata: &IndexMap<String, Value>,
+        distinct_id: Option<&str>,
     ) -> Result<Value, VmRustFnError> {
         start_span_impl(vm, *target, inputs, parent, metadata, distinct_id, None)
     }
@@ -272,7 +273,7 @@ impl BamlPackageTrace for PackageTraceImpl {
     fn _create_span(
         vm: &mut BexVm,
         target: &Value,
-        inputs: &IndexMap<bex_str::BexStr, Value>,
+        inputs: &IndexMap<String, Value>,
         config: &Value,
     ) -> Result<Value, VmRustFnError> {
         let trace = vm
@@ -291,8 +292,8 @@ impl BamlPackageTrace for PackageTraceImpl {
 
     fn context(
         vm: &mut BexVm,
-        metadata: &IndexMap<bex_str::BexStr, Value>,
-        distinct_id: Option<&bex_str::BexStr>,
+        metadata: &IndexMap<String, Value>,
+        distinct_id: Option<&str>,
     ) -> Value {
         let patch = patch_from_values(vm, metadata, distinct_id);
         alloc_options(vm, compose_context(TraceOptionsData::default(), patch))
@@ -365,8 +366,8 @@ impl BamlClassOptions for PackageTraceImpl {
     fn context(
         vm: &mut BexVm,
         options: &Value,
-        metadata: &IndexMap<bex_str::BexStr, Value>,
-        distinct_id: Option<&bex_str::BexStr>,
+        metadata: &IndexMap<String, Value>,
+        distinct_id: Option<&str>,
     ) -> Value {
         let options = options_data(vm, *options);
         let patch = patch_from_values(vm, metadata, distinct_id);
@@ -497,10 +498,10 @@ impl BamlClassSpan for PackageTraceImpl {
 fn start_span_impl(
     vm: &mut BexVm,
     target: Value,
-    inputs: Option<&IndexMap<bex_str::BexStr, Value>>,
+    inputs: Option<&IndexMap<String, Value>>,
     parent: Option<&Value>,
-    metadata: &IndexMap<bex_str::BexStr, Value>,
-    distinct_id: Option<&bex_str::BexStr>,
+    metadata: &IndexMap<String, Value>,
+    distinct_id: Option<&str>,
     trace: Option<&crate::vm::CallTrace>,
 ) -> Result<Value, VmRustFnError> {
     (|| -> Result<Value, String> {
@@ -514,7 +515,7 @@ fn start_span_impl(
             btel_types::FunctionMetadata {
                 function_id: vm
                     .heap
-                    .named_span_function_id(name)
+                    .named_span_function_id(&name.text())
                     .map_err(|_| invalid("function identities exhausted"))?,
                 definition_key: Some(btel_types::DefinitionKey(format!("manual:{name}"))),
                 fqn: name.to_string(),

@@ -36,6 +36,10 @@ pub type TypeId = u32;
 pub type FinalizerId = u32;
 
 pub use bex_vm_types::object_format::{HEADER_BYTES, Header, OBJECT_DESC, TaggedKind, TaggedSlot};
+use bex_vm_types::types::{
+    ROPE_BYTES, ROPE_DESC, ROPE_FLAT_OFFSET, ROPE_LEFT_OFFSET, ROPE_RIGHT_OFFSET, STR_BYTES_OFFSET,
+    STR_DESC, VIEW_BASE_OFFSET, VIEW_BYTES, VIEW_DESC,
+};
 
 /// What the heap reads and writes of a [`Header`] beyond the object format.
 pub(crate) trait CellHeader {
@@ -242,6 +246,54 @@ impl Descriptor {
         }
     }
 
+    /// The descriptor of flat strings: the lengths and hash word, then the
+    /// bytes to the end of the cell. No pointers.
+    fn str() -> Self {
+        Self {
+            kind: Kind::Str,
+            trace: Trace::Slots,
+            size: STR_BYTES_OFFSET,
+            elems: None,
+            ptr_slots: Cow::Borrowed(&[]),
+            tagged_slots: Cow::Borrowed(&[]),
+            slot_kinds: Cow::Borrowed(&[]),
+            type_id: STR_DESC.0,
+            finalizer: None,
+        }
+    }
+
+    /// The descriptor of rope strings: the shared prefix, then the left,
+    /// right and (once flattened) flat pointers.
+    fn rope() -> Self {
+        Self {
+            kind: Kind::Str,
+            trace: Trace::Slots,
+            size: ROPE_BYTES,
+            elems: None,
+            ptr_slots: Cow::Borrowed(&[ROPE_LEFT_OFFSET, ROPE_RIGHT_OFFSET, ROPE_FLAT_OFFSET]),
+            tagged_slots: Cow::Borrowed(&[]),
+            slot_kinds: Cow::Borrowed(&[]),
+            type_id: ROPE_DESC.0,
+            finalizer: None,
+        }
+    }
+
+    /// The descriptor of view strings: the shared prefix, then the base
+    /// pointer and the byte offset.
+    fn view() -> Self {
+        Self {
+            kind: Kind::Str,
+            trace: Trace::Slots,
+            size: VIEW_BYTES,
+            elems: None,
+            ptr_slots: Cow::Borrowed(&[VIEW_BASE_OFFSET]),
+            tagged_slots: Cow::Borrowed(&[]),
+            slot_kinds: Cow::Borrowed(&[]),
+            type_id: VIEW_DESC.0,
+            finalizer: None,
+        }
+    }
+
     /// The descriptor of instances laid out by `layout`: the class and type
     /// pointers and the declared fields' slots.
     pub fn for_instance(layout: &InstanceLayout) -> Self {
@@ -302,6 +354,9 @@ fn fixed_descriptors() -> &'static [Option<Descriptor>] {
         for (key, value, id) in map_descriptors() {
             fixed[id.0 as usize] = Some(Descriptor::map(key, value));
         }
+        fixed[STR_DESC.0 as usize] = Some(Descriptor::str());
+        fixed[ROPE_DESC.0 as usize] = Some(Descriptor::rope());
+        fixed[VIEW_DESC.0 as usize] = Some(Descriptor::view());
         fixed
     });
     &FIXED
@@ -587,7 +642,7 @@ mod tests {
             Err(DescriptorError::BadSlot(24)),
             "overruns the object"
         );
-        assert_eq!(table.len(), 1 + 5 + 3 + 25 + 1);
+        assert_eq!(table.len(), 1 + 5 + 3 + 25 + 3 + 1, "object, lists, backings, maps, three string kinds, one instance");
     }
 
     /// Fields are laid out after the header in declaration order, each in

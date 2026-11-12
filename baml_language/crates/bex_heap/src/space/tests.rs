@@ -107,7 +107,7 @@ fn every_cell_start_is_recorded_and_nothing_between() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let cells: Vec<usize> = (0..10)
-        .map(|i| cell_of_ptr(tlab.alloc_string(format!("object {i}"))))
+        .map(|i| cell_of_ptr(tlab.alloc(Object::String((format!("object {i}")).into()))))
         .collect();
     let base = region_base(cells[0]);
     // SAFETY: an initialized block of this heap.
@@ -129,7 +129,7 @@ fn every_cell_start_is_recorded_and_nothing_between() {
 fn conservative_lookup_resolves_interior_pointers_and_ignores_the_rest() {
     let f = fixture();
     let mut tlab = Tlab::new(Arc::clone(&f.heap));
-    let small = cell_of_ptr(tlab.alloc_string("small"));
+    let small = cell_of_ptr(tlab.alloc(Object::String(("small").into())));
     let medium = tlab.alloc_zeroed(f.backing, MEDIUM_BYTES).as_ptr() as usize;
     let large = tlab.alloc_zeroed(f.backing, LARGE_BACKING_BYTES).as_ptr() as usize;
 
@@ -183,7 +183,7 @@ fn a_word_at_a_cells_end_keeps_and_pins_it() {
     let f = fixture();
     let mut tlab = Tlab::new(Arc::clone(&f.heap));
     let large = tlab.alloc_zeroed(f.backing, LARGE_BACKING_BYTES).as_ptr() as usize;
-    let kept = tlab.alloc_string("ends here");
+    let kept = tlab.alloc(Object::String(("ends here").into()));
     let small = cell_of_ptr(kept);
     // Nothing is allocated after `small`, so its end is in no other cell.
     let stack: [usize; 2] = [small + OBJECT_CELL_BYTES, large + LARGE_BACKING_BYTES];
@@ -204,7 +204,7 @@ fn a_word_at_a_cells_end_keeps_and_pins_it() {
 fn pins_are_cleared_at_the_next_collection() {
     let f = fixture();
     let mut tlab = Tlab::new(Arc::clone(&f.heap));
-    let kept = tlab.alloc_string("kept");
+    let kept = tlab.alloc(Object::String(("kept").into()));
     let large = tlab.alloc_zeroed(f.backing, LARGE_BACKING_BYTES).as_ptr() as usize;
     let stack: [usize; 2] = [kept.as_ptr() as usize + 8, large + 64];
     let range: Range<*const usize> = stack.as_ptr_range();
@@ -237,8 +237,8 @@ fn pins_are_cleared_at_the_next_collection() {
 fn a_pinned_cell_stays_and_retains_its_block() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
-    let kept = tlab.alloc_string("kept");
-    tlab.alloc_string("garbage");
+    let kept = tlab.alloc(Object::String(("kept").into()));
+    tlab.alloc(Object::String(("garbage").into()));
     let block = region_base(kept.as_ptr() as usize);
     drop(tlab);
     let free_blocks = heap.stats().free_blocks;
@@ -269,8 +269,8 @@ fn a_pinned_cell_stays_and_retains_its_block() {
 fn an_unpinned_from_space_block_is_empty_in_the_pool() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
-    let kept = tlab.alloc_string("kept");
-    tlab.alloc_string("garbage");
+    let kept = tlab.alloc(Object::String(("kept").into()));
+    tlab.alloc(Object::String(("garbage").into()));
     let block = region_base(kept.as_ptr() as usize);
     drop(tlab);
     let free_blocks = heap.stats().free_blocks;
@@ -297,8 +297,8 @@ fn an_unpinned_from_space_block_is_empty_in_the_pool() {
 fn a_conservative_root_keeps_its_object_and_only_its_object() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
-    let kept = tlab.alloc_string("kept");
-    tlab.alloc_string("garbage");
+    let kept = tlab.alloc(Object::String(("kept").into()));
+    tlab.alloc(Object::String(("garbage").into()));
     let unrelated = Box::new(7_u64);
     // A fake stack: an interior pointer, a scalar and a Rust heap pointer.
     let stack: [usize; 3] = [
@@ -337,7 +337,7 @@ fn mixed_size_cells_bump_contiguously_in_one_block() {
         .iter()
         .map(|&bytes| {
             let cell = if bytes == OBJECT_CELL_BYTES {
-                cell_of_ptr(tlab.alloc_string("object"))
+                cell_of_ptr(tlab.alloc(Object::String(("object").into())))
             } else {
                 tlab.alloc_zeroed(f.backing, bytes).as_ptr() as usize
             };
@@ -385,7 +385,7 @@ fn mixed_size_cells_bump_contiguously_in_one_block() {
 fn a_stale_tlab_takes_a_fresh_block_and_never_writes_into_a_freed_one() {
     let heap = BexHeap::new(vec![]);
     let mut first = Tlab::new(Arc::clone(&heap));
-    let lost = region_base(first.alloc_string("garbage").as_ptr() as usize);
+    let lost = region_base(first.alloc(Object::String(("garbage").into())).as_ptr() as usize);
     assert!(first.is_valid());
 
     // SAFETY: no mutator runs; nothing is rooted.
@@ -395,16 +395,16 @@ fn a_stale_tlab_takes_a_fresh_block_and_never_writes_into_a_freed_one() {
     assert!(!first.is_valid());
 
     let mut second = Tlab::new_empty(Arc::clone(&heap));
-    let taken = region_base(second.alloc_string("second's").as_ptr() as usize);
+    let taken = region_base(second.alloc(Object::String(("second's").into())).as_ptr() as usize);
     assert_eq!(taken, lost, "the freed block is the lowest free one");
 
-    let again = first.alloc_string("first's again");
+    let again = first.alloc(Object::String(("first's again").into()));
     let fresh = region_base(again.as_ptr() as usize);
     assert_ne!(fresh, taken, "the stale allocator took a fresh block");
     assert!(first.is_valid() && second.is_valid());
     for _ in 0..100 {
         assert_ne!(
-            region_base(first.alloc_string("more").as_ptr() as usize),
+            region_base(first.alloc(Object::String(("more").into())).as_ptr() as usize),
             taken
         );
     }
@@ -455,7 +455,7 @@ fn a_sweep_never_reads_a_dead_slot_cell() {
 fn an_empty_block_returns_to_the_pool_and_is_bumped_into_again() {
     let f = fixture();
     let mut tlab = Tlab::new(Arc::clone(&f.heap));
-    let first = tlab.alloc_string("only cell");
+    let first = tlab.alloc(Object::String(("only cell").into()));
     let block = region_base(first.as_ptr() as usize);
     drop(tlab);
     let stats = f.heap.stats();
@@ -484,8 +484,8 @@ fn an_empty_block_returns_to_the_pool_and_is_bumped_into_again() {
 fn a_retained_block_is_not_allocated_into_and_is_freed_once_its_pin_goes() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
-    let kept = tlab.alloc_string("kept");
-    tlab.alloc_string("garbage");
+    let kept = tlab.alloc(Object::String(("kept").into()));
+    tlab.alloc(Object::String(("garbage").into()));
     let retained = region_base(kept.as_ptr() as usize);
     drop(tlab);
     let stack: [usize; 1] = [kept.as_ptr() as usize + 8];
@@ -501,7 +501,7 @@ fn a_retained_block_is_not_allocated_into_and_is_freed_once_its_pin_goes() {
     let mut blocks = std::collections::BTreeSet::new();
     while blocks.len() < 3 {
         blocks.insert(region_base(
-            other.alloc_string("elsewhere").as_ptr() as usize
+            other.alloc(Object::String(("elsewhere").into())).as_ptr() as usize
         ));
     }
     assert!(
@@ -533,7 +533,7 @@ fn a_retained_block_is_not_allocated_into_and_is_freed_once_its_pin_goes() {
     );
     let mut next = Tlab::new_empty(Arc::clone(&heap));
     assert_eq!(
-        region_base(next.alloc_string("reused").as_ptr() as usize),
+        region_base(next.alloc(Object::String(("reused").into())).as_ptr() as usize),
         retained,
         "the freed block is the lowest free one again"
     );
@@ -543,7 +543,7 @@ fn a_retained_block_is_not_allocated_into_and_is_freed_once_its_pin_goes() {
 fn large_objects_are_traced_kept_and_freed() {
     let f = fixture();
     let mut tlab = Tlab::new(Arc::clone(&f.heap));
-    let text = tlab.alloc_string("held by a large backing store");
+    let text = tlab.alloc(Object::String(("held by a large backing store").into()));
     let large = tlab.alloc_zeroed(f.backing, LARGE_BACKING_BYTES).as_ptr() as usize;
     let last_element = LARGE_BACKING_BYTES - 8;
     // SAFETY: an element of the fresh large cell.
@@ -574,9 +574,9 @@ fn large_objects_are_traced_kept_and_freed() {
 fn slot_descriptors_trace_pointers_and_tagged_pointers_only() {
     let f = fixture();
     let mut tlab = Tlab::new(Arc::clone(&f.heap));
-    let left = tlab.alloc_string("left");
-    let by_tag = tlab.alloc_string("by tag");
-    let scalar_lookalike = tlab.alloc_string("only looks like a pointer");
+    let left = tlab.alloc(Object::String(("left").into()));
+    let by_tag = tlab.alloc(Object::String(("by tag").into()));
+    let scalar_lookalike = tlab.alloc(Object::String(("only looks like a pointer").into()));
     let node = tlab.alloc_zeroed(f.node, NODE.size as usize).as_ptr() as usize;
     let other = tlab.alloc_zeroed(f.node, NODE.size as usize).as_ptr() as usize;
     // A tagged slot is a tag byte, padding, then the payload word.
@@ -623,9 +623,9 @@ fn heap_live_and_block_counters_follow_allocation_and_collection() {
     assert_eq!(stats.live_bytes, 0, "nothing collected yet");
     assert_eq!(stats.heap_bytes, BLOCK_BYTES, "the allocator's block");
 
-    let kept = tlab.alloc_string("kept");
+    let kept = tlab.alloc(Object::String(("kept").into()));
     for i in 0..1_000 {
-        tlab.alloc_string(format!("garbage {i}"));
+        tlab.alloc(Object::String((format!("garbage {i}")).into()));
     }
     let large = tlab.alloc_zeroed(f.backing, LARGE_BACKING_BYTES).as_ptr() as usize;
     let stats = f.heap.stats();

@@ -19,11 +19,11 @@ use bex_vm_types::types::SharedKind;
 impl super::BamlNamespaceToml for PackageBamlImpl {}
 
 impl super::BamlClassTomlTable for PackageBamlImpl {
-    fn parse(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
-        match ::toml::Table::from_str(s.as_str()) {
+    fn parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
+        match ::toml::Table::from_str(s) {
             Ok(table) => {
                 let value = convert_toml_value(vm, ::toml::Value::Table(table))?;
-                let source = Value::object(vm.alloc_string(s.clone()));
+                let source = Value::object(vm.alloc_string(s));
                 vm.as_instance(&value)?.store(1, source);
                 Ok(value)
             }
@@ -34,13 +34,13 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
         }
     }
 
-    fn _to_string_impl(vm: &mut BexVm, table: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
+    fn _to_string_impl(vm: &mut BexVm, table: &Value) -> Result<String, VmRustFnError> {
         let source = vm.as_instance(table)?.load(1).expect_value();
         let mut document = if source.is_null() {
             DocumentMut::new()
         } else {
             vm.as_string(&source)?
-                .as_str()
+                .text()
                 .parse::<DocumentMut>()
                 .map_err(|e| invalid_argument(e.to_string()))?
         };
@@ -81,9 +81,9 @@ fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmR
                 .into_iter()
                 .map(|(k, v)| {
                     let v = convert_toml_value(vm, v)?;
-                    Ok((bex_str::BexStr::from(k), v))
+                    Ok((k, v))
                 })
-                .collect::<Result<IndexMap<bex_str::BexStr, Value>, VmRustFnError>>()?;
+                .collect::<Result<IndexMap<String, Value>, VmRustFnError>>()?;
             let map = Value::object(vm.alloc_map(RealizedTy::string(), item_ty(vm), map));
             let class = vm.lang_object(crate::lang_items::BAML_TOML_TABLE);
             Ok(Value::object(vm.alloc_instance(
@@ -228,7 +228,7 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
     active.push(value);
     let ptr = value.as_object_ptr().expect("object kind has a pointer");
     let result = match vm.get_object(ptr) {
-        Object::String(s) => Ok(Node::Scalar(s.as_str().into())),
+        Object::Shared(SharedKind::Str) => Ok(Node::Scalar(vm.expect_str(ptr).to_owned_string().into())),
         Object::Float(f) => Ok(Node::Scalar((*f).into())),
         Object::Shared(SharedKind::List) => {
             let values = vm.list_values(vm.expect_list(ptr), Access::Shared);

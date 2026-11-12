@@ -54,7 +54,7 @@ impl BexVm {
             Object::Shared(SharedKind::List) => self.expect_list(ptr).len() as i64,
             Object::Uint8Array(bytes) => bytes.len() as i64,
             Object::Shared(SharedKind::Map) => self.expect_map(ptr).len() as i64,
-            Object::String(s) => s.byte_len() as i64,
+            Object::Shared(SharedKind::Str) => self.expect_str(ptr).byte_len() as i64,
             other => return Err(object_type_error(ObjectType::Array, other)),
         };
         Ok(Value::int(len))
@@ -460,6 +460,7 @@ impl BexVm {
     /// re-derived the map's shape and slot kinds from its type on every call.
     #[inline]
     pub fn map_get_known(&mut self, map: Value, descriptor: u32, key: Value) -> Option<Value> {
+        self.flatten_str(&key);
         let (map, _, pos) = self.locate_string_key(map, descriptor, key)?;
         let Some(pos) = pos else {
             return Some(Value::NULL);
@@ -481,6 +482,9 @@ impl BexVm {
         key: Value,
         value: SlotValue,
     ) -> Option<Value> {
+        // A key is flattened on entry: the map keeps it, and every later
+        // lookup borrows it.
+        self.flatten_str(&key);
         let (map, hash, pos) = self.locate_string_key(map, descriptor, key)?;
         let guard = map.lock(Access::Shared);
         let previous = match pos {
@@ -515,14 +519,14 @@ impl BexVm {
             return None;
         }
         let map = self.map_at(ptr)?;
-        let text = self.as_string(&key).ok()?.as_str();
-        let hash = bex_vm_types::map_string_hash(text);
+        let string = self.as_string(&key).ok()?;
+        let hash = string.hash();
         let pos = map.lock(Access::Shared).find(hash, |candidate| {
             let candidate = candidate.expect_value();
             candidate == key
-                || candidate.as_object_ptr().is_some_and(|ptr| {
-                    matches!(self.get_object(ptr), Object::String(other) if other.as_str() == text)
-                })
+                || candidate
+                    .as_object_ptr()
+                    .is_some_and(|ptr| self.str_at(ptr).is_some_and(|other| other.text_eq(string)))
         });
         Some((map, hash, pos))
     }

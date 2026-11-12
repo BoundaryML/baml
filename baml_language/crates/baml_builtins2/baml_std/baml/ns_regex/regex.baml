@@ -389,6 +389,7 @@ function _literal_match(text: string, start: int) -> Match throws never {
 /// (internal) Offset search for callback replacement; returns an absolute
 /// codepoint index without constructing the remaining suffix. An offset
 /// outside `[0, length]` returns null, including for an empty search.
+//baml:str_ref
 function _index_of_from(haystack: string, search: string, start: int) -> int? throws never {
     $rust_function
 }

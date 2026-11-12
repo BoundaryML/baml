@@ -627,8 +627,8 @@ fn interface_closure_members(
 impl BamlClassClass for PackageReflectImpl {
     fn _new(
         vm: &mut BexVm,
-        name: &bex_str::BexStr,
-        fields: &IndexMap<bex_str::BexStr, Value>,
+        name: &str,
+        fields: &IndexMap<String, Value>,
         implementations: &[Value],
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let rows = fields
@@ -643,13 +643,13 @@ impl BamlClassClass for PackageReflectImpl {
             .iter()
             .map(|implementation| witness_state(vm, *implementation))
             .collect();
-        mint_class(vm, name.as_str(), rows, witnesses)
+        mint_class(vm, name, rows, witnesses)
     }
 
     fn _extends(
         vm: &mut BexVm,
-        name: &bex_str::BexStr,
-        fields: &IndexMap<bex_str::BexStr, Value>,
+        name: &str,
+        fields: &IndexMap<String, Value>,
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let Some(interface_ty) = vm.current_call_type_args().first().cloned() else {
             unreachable!("extends<I> receives one runtime type argument")
@@ -686,17 +686,17 @@ impl BamlClassClass for PackageReflectImpl {
             };
             rows.push((field_name.to_string(), row));
         }
-        mint_class(vm, name.as_str(), rows, witnesses)
+        mint_class(vm, name, rows, witnesses)
     }
 
-    fn builder(vm: &mut BexVm, name: &bex_str::BexStr) -> Value {
-        super::runtime_class_builder::alloc_builder(vm, name.as_str())
+    fn builder(vm: &mut BexVm, name: &str) -> Value {
+        super::runtime_class_builder::alloc_builder(vm, name)
     }
 
     fn get_field(
         vm: &mut BexVm,
         value: &Value,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let fail = |vm: &mut BexVm, message: String| {
             crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(
@@ -725,7 +725,7 @@ impl BamlClassClass for PackageReflectImpl {
             let Some(index) = class
                 .fields
                 .iter()
-                .position(|field| field.name == name.as_str())
+                .position(|field| field.name == name)
             else {
                 return Err(fail(
                     vm,
@@ -773,7 +773,7 @@ impl BamlClassClass for PackageReflectImpl {
 
     fn instantiate(
         vm: &mut BexVm,
-        fields: &IndexMap<bex_str::BexStr, Value>,
+        fields: &IndexMap<String, Value>,
     ) -> Result<Value, crate::errors::VmRustFnError> {
         // The caller's `T`, as in `get_field`: a missing one is a
         // frame-seeding bug.
@@ -937,31 +937,31 @@ impl BamlClassClass for PackageReflectImpl {
 impl BamlClassEnum for PackageReflectImpl {
     fn value(
         vm: &mut BexVm,
-        name: &bex_str::BexStr,
-        alias: Option<&bex_str::BexStr>,
-        description: Option<&bex_str::BexStr>,
-        docstring: Option<&bex_str::BexStr>,
-        other: Option<&IndexMap<bex_str::BexStr, Value>>,
+        name: &str,
+        alias: Option<&str>,
+        description: Option<&str>,
+        docstring: Option<&str>,
+        other: Option<&IndexMap<String, Value>>,
     ) -> Value {
         let other = other.map_or_else(IndexMap::new, |other| string_map(vm, other));
         let meta = alloc_meta(
             vm,
-            alias.map(bex_str::BexStr::as_str),
-            description.map(bex_str::BexStr::as_str),
-            docstring.map(bex_str::BexStr::as_str),
+            alias,
+            description,
+            docstring,
             &other,
             false,
         );
-        let name = Value::object(vm.alloc_string(name.clone()));
+        let name = Value::object(vm.alloc_string(name));
         copy::r#enum::Value { name, meta }.to_value(vm)
     }
 
     fn new(
         vm: &mut BexVm,
-        name: &bex_str::BexStr,
+        name: &str,
         values: &[Value],
     ) -> Result<Value, crate::errors::VmRustFnError> {
-        let enum_name = name.as_str();
+        let enum_name = name;
         let mut diagnostics = Vec::new();
         if !is_baml_identifier(enum_name) {
             diagnostics.push(
@@ -1045,7 +1045,7 @@ impl BamlClassEnum for PackageReflectImpl {
     fn get_value(
         vm: &mut BexVm,
         value: &Value,
-    ) -> Result<bex_str::BexStr, crate::errors::VmRustFnError> {
+    ) -> Result<String, crate::errors::VmRustFnError> {
         let Some(ptr) = value.as_object_ptr() else {
             return Err(invalid_enum_value(vm, *value));
         };
@@ -1061,12 +1061,12 @@ impl BamlClassEnum for PackageReflectImpl {
             .unwrap_or_else(|| unreachable!("variant index validated at allocation"))
             .name
             .clone();
-        Ok(bex_str::BexStr::from(name))
+        Ok(name)
     }
 
     fn value_of(
         vm: &mut BexVm,
-        name: &bex_str::BexStr,
+        name: &str,
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let Some(enum_ty) = vm.current_call_type_args().first().cloned() else {
             return Err(crate::errors::VmRustFnError::InternalError(
@@ -1091,14 +1091,14 @@ impl BamlClassEnum for PackageReflectImpl {
         if let Some(index) = enm
             .variants
             .iter()
-            .position(|variant| variant.name == name.as_str())
+            .position(|variant| variant.name == name)
         {
             return Ok(Value::object(vm.alloc_variant(enum_ptr, index)));
         }
         let message = match enm
             .variants
             .iter()
-            .find(|variant| variant.alias.as_deref() == Some(name.as_str()))
+            .find(|variant| variant.alias.as_deref() == Some(name))
         {
             Some(aliased) => format!(
                 "reflect.Enum.value_of: enum `{enum_ty}` has no variant `{name}`; `{name}` is the alias of `{}`",
@@ -1149,8 +1149,8 @@ impl BamlClassInterfaceImplementation for PackageReflectImpl {
     fn field(
         vm: &mut BexVm,
         implementation: &Value,
-        interface_field: &bex_str::BexStr,
-        class_field: Option<&bex_str::BexStr>,
+        interface_field: &str,
+        class_field: Option<&str>,
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let mut witness = witness_state(vm, *implementation).map_err(|message| {
             crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(
@@ -1161,7 +1161,7 @@ impl BamlClassInterfaceImplementation for PackageReflectImpl {
         let Object::Interface(interface) = vm.get_object(witness.interface_ptr) else {
             unreachable!("implementation witness captures Object::Interface")
         };
-        let field_name = baml_type::Name::new(interface_field.as_str());
+        let field_name = baml_type::Name::new(interface_field);
         if !interface
             .fields
             .iter()
@@ -1193,7 +1193,7 @@ impl BamlClassInterfaceImplementation for PackageReflectImpl {
             ));
         }
         let class_field = baml_type::Name::new(
-            class_field.map_or(interface_field.as_str(), bex_str::BexStr::as_str),
+            class_field.unwrap_or(interface_field),
         );
         witness.field_links.insert(field_name, class_field);
         Ok(copy::interface::Implementation {
@@ -1776,7 +1776,7 @@ fn opt_string(vm: &mut BexVm, value: Option<&str>) -> Value {
 /// Read a native `map<string, string>` argument into owned rows.
 pub(super) fn string_map_rows(
     vm: &BexVm,
-    other: Option<&IndexMap<bex_str::BexStr, Value>>,
+    other: Option<&IndexMap<String, Value>>,
 ) -> IndexMap<String, String> {
     other
         .into_iter()
@@ -1810,7 +1810,7 @@ pub(super) fn alloc_with_meta(
     let mut entries = IndexMap::with_capacity(other.len());
     for (key, value) in other {
         entries.insert(
-            bex_str::BexStr::from(key.as_str()),
+            key.clone(),
             Value::object(vm.alloc_string(value.as_str())),
         );
     }
@@ -1850,7 +1850,7 @@ fn alloc_meta(
     let mut entries = IndexMap::with_capacity(other.len());
     for (key, value) in other {
         entries.insert(
-            bex_str::BexStr::from(key.as_str()),
+            key.clone(),
             Value::object(vm.alloc_string(value.as_str())),
         );
     }
@@ -1874,7 +1874,7 @@ fn alloc_meta(
 
 fn string_map(
     vm: &mut BexVm,
-    values: &IndexMap<bex_str::BexStr, Value>,
+    values: &IndexMap<String, Value>,
 ) -> IndexMap<String, String> {
     values
         .iter()
@@ -2000,8 +2000,8 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
         return Err("reflect.Enum.new values must be strings or reflect.enum.Value rows".into());
     };
     match vm.get_object(ptr) {
-        Object::String(name) => Ok(EnumVariant {
-            name: name.to_string(),
+        Object::Shared(bex_vm_types::types::SharedKind::Str) => Ok(EnumVariant {
+            name: vm.expect_str(ptr).to_string(),
             description: None,
             alias: None,
             docstring: None,
@@ -2165,7 +2165,7 @@ fn same_kind_containers(
 /// not depend on `baml`, so its natives never throw a `baml.errors` value.
 pub(super) fn invalid_argument(
     vm: &mut BexVm,
-    message: impl Into<bex_str::BexStr>,
+    message: impl AsRef<str>,
 ) -> crate::errors::VmRustFnError {
     let message = Value::object(vm.alloc_string(message));
     crate::errors::VmRustFnError::thrown_fresh(

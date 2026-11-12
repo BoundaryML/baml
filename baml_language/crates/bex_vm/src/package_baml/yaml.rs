@@ -11,8 +11,8 @@ use serde::Deserialize;
 use crate::{BexVm, errors::VmRustFnError, package_baml::PackageBamlImpl};
 
 impl super::BamlNamespaceYaml for PackageBamlImpl {
-    fn parse(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
-        parse_yaml(vm, s.as_str())
+    fn parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
+        parse_yaml(vm, s)
     }
 }
 
@@ -62,7 +62,7 @@ fn convert_yaml_value(vm: &mut BexVm, value: serde_yaml::Value) -> Result<Value,
                     )));
                 };
                 let value = convert_yaml_value(vm, value)?;
-                entries.insert(bex_str::BexStr::from(key), value);
+                entries.insert(key, value);
             }
             // `baml.json.json` maps: string keys, `json` values.
             Ok(Value::object(vm.alloc_map(

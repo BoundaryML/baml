@@ -483,7 +483,25 @@ pub trait Maps<V: Elem>: Descriptors {
 
 /// Immutable strings and byte payloads.
 pub trait Strings: Descriptors {
+    /// The text, borrowed. A model whose strings may be ropes needs
+    /// [`Self::str_flatten`] first; glue flattens its string arguments on
+    /// entry.
     fn str_text(&self, string: ObjPtr) -> &str;
+
+    /// Make [`Self::str_text`] borrowable: a rope is flattened. Nothing to
+    /// do for a model whose text is always borrowable.
+    fn str_flatten(&mut self, _string: ObjPtr) {}
+
+    /// The text copied out, borrowable or not.
+    fn str_to_string(&self, string: ObjPtr) -> String {
+        self.str_text(string).to_owned()
+    }
+
+    /// The string's map hash ([`crate::map_string_hash`] of its text). A
+    /// model whose cells cache it computes it once per cell.
+    fn str_hash(&self, string: ObjPtr) -> u64 {
+        crate::map_string_hash(self.str_text(string))
+    }
 
     /// Length in Unicode scalar values.
     fn str_char_len(&self, string: ObjPtr) -> usize;

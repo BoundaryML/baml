@@ -33,7 +33,6 @@ use bex_sap::{
     sap_model::{ConvertError, NamedTy, NamedTyKind, ParseTy, TyResolvedRef, TypeCtx},
     to_baml_ty::ToBamlTy,
 };
-use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, RealizedTy, RootHaver, RootVisitor, TyTemplate, TypeHead,
     types::{Class, Object, Value},
@@ -122,17 +121,17 @@ impl BamlNamespaceSap for PackageBamlImpl {
 }
 
 impl BamlNamespaceSap_ParseCache for PackageBamlImpl {
-    fn _parse_final(vm: &mut BexVm, cache: &Value, json: &BexStr) -> NativeCallResult {
+    fn _parse_final(vm: &mut BexVm, cache: &Value, json: &str) -> NativeCallResult {
         text_read(vm, *cache, json, Mode::Final)
     }
 
-    fn _parse_partial(vm: &mut BexVm, cache: &Value, json: &BexStr) -> NativeCallResult {
+    fn _parse_partial(vm: &mut BexVm, cache: &Value, json: &str) -> NativeCallResult {
         text_read(vm, *cache, json, Mode::Partial)
     }
 }
 
 /// Parse `text` with the model in `cache`.
-fn text_read(vm: &mut BexVm, cache: Value, text: &BexStr, mode: Mode) -> NativeCallResult {
+fn text_read(vm: &mut BexVm, cache: Value, text: &str, mode: Mode) -> NativeCallResult {
     let cache = vm
         .rust_data_field::<ParseCache>(&cache, 0)
         .map_err(VmRustFnError::from)
@@ -149,13 +148,13 @@ fn text_read(vm: &mut BexVm, cache: Value, text: &BexStr, mode: Mode) -> NativeC
         (Ok(cache), Ok(target)) => read(
             vm,
             &cache.model,
-            Input::Text(text.as_str()),
+            Input::Text(text),
             cache.has_shapes,
             target,
             mode,
             || Source::Text {
                 cache: Arc::clone(&cache),
-                text: text.as_str().to_string(),
+                text: text.to_string(),
             },
         ),
         (Err(error), _) | (_, Err(error)) => NativeCallResult::Error(error),
@@ -1142,10 +1141,7 @@ fn to_heap(
             let value_ty = declarations.realize(&map_ty.value.to_baml_ty())?;
             let mut entries = IndexMap::with_capacity(map.value.len());
             for (k, v) in &map.value {
-                entries.insert(
-                    BexStr::from(k.as_ref()),
-                    to_heap(vm, v, declarations, mode)?,
-                );
+                entries.insert(k.as_ref().to_owned(), to_heap(vm, v, declarations, mode)?);
             }
             Value::object(vm.alloc_map(key, value_ty, entries))
         }
@@ -1207,7 +1203,7 @@ fn parsed_to_heap(
             let mut values = IndexMap::with_capacity(entries.len());
             for (k, v) in entries {
                 values.insert(
-                    BexStr::from(k.as_ref()),
+                    k.as_ref().to_owned(),
                     parsed_to_heap(vm, v, declarations, mode)?,
                 );
             }
@@ -1509,7 +1505,7 @@ fn refusal(vm: &BexVm, value: Value) -> Option<String> {
     let message = vm.field(instance, 0);
     Some(
         vm.as_string(&message)
-            .map(|message| message.as_str().to_string())
+            .map(|message| message.to_owned_string())
             .unwrap_or_default(),
     )
 }
@@ -1571,7 +1567,7 @@ pub(super) fn empty_value(
         },
         RealizedTy::List(element) => Value::object(vm.alloc_array((**element).clone(), Vec::new())),
         RealizedTy::Map { key, value } => {
-            Value::object(vm.alloc_map((**key).clone(), (**value).clone(), IndexMap::new()))
+            Value::object(vm.alloc_empty_map((**key).clone(), (**value).clone()).ptr())
         }
         RealizedTy::Enum(head) => {
             let Object::Enum(enm) = vm.get_object(head.ptr()) else {

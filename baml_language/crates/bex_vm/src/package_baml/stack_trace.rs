@@ -5,7 +5,7 @@ impl BamlNamespaceErrors for PackageBamlImpl {}
 
 impl BamlClassErrorsStackTrace for PackageBamlImpl {
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    fn _to_string_impl(vm: &BexVm, stacktrace: &view::errors::StackTrace<'_>) -> bex_str::BexStr {
+    fn _to_string_impl(vm: &BexVm, stacktrace: &view::errors::StackTrace<'_>) -> String {
         let frames = stacktrace.frames(vm);
 
         let frame_views: Vec<_> = frames
@@ -18,14 +18,16 @@ impl BamlClassErrorsStackTrace for PackageBamlImpl {
             })
             .collect();
 
-        let out = format_traceback(frame_views.iter().map(|frame| {
-            (
-                frame.file(vm),
-                frame.line() as usize,
-                frame.function_name(vm),
-            )
-        }));
+        let frames: Vec<_> = frame_views
+            .iter()
+            .map(|frame| (frame.file(vm), frame.line() as usize, frame.function_name(vm)))
+            .collect();
+        let out = format_traceback(
+            frames
+                .iter()
+                .map(|(file, line, function)| (&**file, *line, &**function)),
+        );
 
-        bex_str::BexStr::from(out.trim_end().to_string())
+        out.trim_end().to_string()
     }
 }
