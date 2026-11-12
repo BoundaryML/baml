@@ -507,12 +507,6 @@ jobs:
         uses: actions/github-script@v9
         with:
           script: |
-            // Linux legs run on Trunk runners. The label routes one job to one
-            // fresh runner: the run id and attempt keep it unique to this run,
-            // and size/memory pick the machine (vCPU, and GB per vCPU:
-            // low = 1, standard = 2, high = 4).
-            const trunkRunner = (size, memory) =>
-              `trunk=${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}..size=${size}..memory=${memory}`;
             const baseMatrix = [
               {
                 "sdk-label": "go",
@@ -521,7 +515,7 @@ jobs:
                 "sdk-path": "go",
                 "install-args": "sccache direnv go cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": trunkRunner("large", "low"),
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -532,7 +526,7 @@ jobs:
                 "sdk-path": "python_pydantic2",
                 "install-args": "sccache direnv python uv cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": trunkRunner("xlarge", "standard"),
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -543,7 +537,7 @@ jobs:
                 "sdk-path": "ruby_sorbet",
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": trunkRunner("large", "low"),
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -554,7 +548,7 @@ jobs:
                 "sdk-path": "typescript",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": trunkRunner("xlarge", "standard"),
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -565,7 +559,7 @@ jobs:
                 "sdk-path": "typescript_web",
                 "install-args": "sccache direnv node npm:pnpm cargo:cargo-nextest github:rustwasm/wasm-pack",
                 "os-label": "linux",
-                "runs-on": trunkRunner("large", "high"),
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -581,7 +575,7 @@ jobs:
                 "sdk-path": "cpp",
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": trunkRunner("xlarge", "standard"),
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -592,7 +586,7 @@ jobs:
                 "sdk-path": "csharp",
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": trunkRunner("xlarge", "high"),
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -603,7 +597,7 @@ jobs:
                 "sdk-path": "rust",
                 "install-args": "sccache direnv cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": trunkRunner("large", "low"),
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -618,7 +612,7 @@ jobs:
                 "sdk-path": "java",
                 "install-args": "sccache direnv java gradle cargo:cargo-nextest",
                 "os-label": "linux",
-                "runs-on": trunkRunner("large", "low"),
+                "runs-on": "blacksmith-16vcpu-ubuntu-2404",
                 "rust-cache-key": "linux-cargo",
                 "timeout": 30,
               },
@@ -931,36 +925,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          # A Trunk runner starts from a warm checkout of canary with a built
-          # target/ tree. Keep the untracked build output so cargo reuses it.
-          clean: ${{ !startsWith(matrix.runs-on, 'trunk=') }}
-
-      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
-      # checkout rewrites both, which makes cargo rebuild every crate that
-      # depends on baml_artifact. Backdate the refs so the warm target/ tree
-      # stays fresh, and stamp the SHA that the warm tree was built from.
-      - name: "Backdate the git refs baml_artifact tracks"
-        if: startsWith(matrix.runs-on, 'trunk=')
-        run: |
-          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
-          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
-          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
-          p=("$(git rev-parse --git-path HEAD)")
-          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
-          if ! git show-ref --verify --quiet refs/heads/canary; then
-            b="${basis:-$(git rev-parse HEAD)}"
-            git update-ref refs/heads/canary "${b}"
-            echo "recreated refs/heads/canary at ${b}"
-          fi
-          p+=("$(git rev-parse --git-path refs/heads/canary)")
-          touch -t 197001010000 "${p[@]}"
-          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -970,16 +934,12 @@ jobs:
         uses: ./.github/actions/setup-mise
         with:
           install_args: ${{ matrix.install-args }}
-          # The Trunk runner image already holds the mise tools.
-          cache: ${{ !startsWith(matrix.runs-on, 'trunk=') }}
 
       - name: "Install Ruby"
         if: matrix.sdk-label == 'ruby-sorbet'
         uses: ./.github/actions/setup-ruby
         with:
-          # The Trunk runner image has only the latest patch of each Ruby
-          # series, so ask for the series there.
-          ruby-version: ${{ startsWith(matrix.runs-on, 'trunk=') && '3.2' || '3.2.2' }}
+          ruby-version: "3.2.2"
 
       - name: "Install .NET SDK"
         if: matrix.sdk-label == 'csharp'
@@ -1119,10 +1079,7 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      # A Trunk runner already holds the Cargo registry and git state in its
-      # warm template, so it skips this restore.
       - uses: Swatinem/rust-cache@v2
-        if: ${{ !startsWith(matrix.runs-on, 'trunk=') }}
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
