@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { BoundaryLambLogo } from '@/components/home/boundary-logo';
+import { PageShell } from '@/components/home/page-shell';
 import { Generated } from './generated';
 import {
   Clover,
@@ -20,6 +21,7 @@ import {
 } from './marks';
 
 // A review board of logo ideas for Boundary, BAML and the two together. Not linked from the site.
+// Like the site's other pages, it sits in PageShell for the shared nav and footer.
 
 export const metadata: Metadata = {
   robots: { follow: false, index: false },
@@ -206,66 +208,68 @@ function IdeaCard({ idea, lane }: { idea: Idea; lane: Lane }) {
 
 export default function LogoIdeas() {
   return (
-    <main className="min-h-screen bg-[#0F0F0F] px-6 pt-16 pb-28 text-white sm:px-10">
-      <div className="mx-auto max-w-[1180px]">
-        <h1
-          className="font-semibold text-5xl tracking-[-0.03em] sm:text-6xl"
-          style={{ fontFamily: 'var(--font-lexend)' }}
-        >
-          Logo ideas
-        </h1>
-        <p className="mt-5 max-w-[62ch] text-lg text-white/65 leading-relaxed">
-          Logos drawn by code, then twelve picked and tuned by hand, then the
-          lamb wordmark.
-        </p>
-
-        <section className="mt-20">
-          <Heading>Generated</Heading>
-          <p className="mt-3 mb-8 max-w-[62ch] text-base text-white/65 leading-relaxed">
-            Fifteen families of marks. Each family is a function that draws a
-            mark from random numbers, and each row shows eight results. Shuffle
-            to draw a new set of 120.
+    <PageShell>
+      <div className="bg-[#0F0F0F] px-6 pt-16 pb-28 text-white sm:px-10">
+        <div className="mx-auto max-w-[1180px]">
+          <h1
+            className="font-semibold text-5xl tracking-[-0.03em] sm:text-6xl"
+            style={{ fontFamily: 'var(--font-lexend)' }}
+          >
+            Logo ideas
+          </h1>
+          <p className="mt-5 max-w-[62ch] text-lg text-white/65 leading-relaxed">
+            Logos drawn by code, then twelve picked and tuned by hand, then the
+            lamb wordmark.
           </p>
-          <Generated />
-        </section>
 
-        <section className="mt-28">
-          <Heading>Picked by hand</Heading>
-          <p className="mt-3 max-w-[62ch] text-base text-white/65 leading-relaxed">
-            One mark from most families, shown as an app icon, beside the
-            existing wordmark, and in one color at small sizes.
-          </p>
-        </section>
-
-        {LANES.map((lane) => (
-          <section className="mt-14" key={lane.title}>
-            <h3
-              className="font-medium text-3xl"
-              style={{ fontFamily: 'var(--font-lexend)' }}
-            >
-              {lane.title}
-            </h3>
-            <p className="mt-3 mb-10 max-w-[62ch] text-base text-white/65 leading-relaxed">
-              {lane.about}
+          <section className="mt-20">
+            <Heading>Generated</Heading>
+            <p className="mt-3 mb-8 max-w-[62ch] text-base text-white/65 leading-relaxed">
+              Fifteen families of marks. Each family is a function that draws a
+              mark from random numbers, and each row shows eight results.
+              Shuffle to draw a new set of 120.
             </p>
-            <div className="grid gap-x-14 gap-y-12 lg:grid-cols-2">
-              {lane.ideas.map((idea) => (
-                <IdeaCard idea={idea} key={idea.name} lane={lane} />
-              ))}
+            <Generated />
+          </section>
+
+          <section className="mt-28">
+            <Heading>Picked by hand</Heading>
+            <p className="mt-3 max-w-[62ch] text-base text-white/65 leading-relaxed">
+              One mark from most families, shown as an app icon, beside the
+              existing wordmark, and in one color at small sizes.
+            </p>
+          </section>
+
+          {LANES.map((lane) => (
+            <section className="mt-14" key={lane.title}>
+              <h3
+                className="font-medium text-3xl"
+                style={{ fontFamily: 'var(--font-lexend)' }}
+              >
+                {lane.title}
+              </h3>
+              <p className="mt-3 mb-10 max-w-[62ch] text-base text-white/65 leading-relaxed">
+                {lane.about}
+              </p>
+              <div className="grid gap-x-14 gap-y-12 lg:grid-cols-2">
+                {lane.ideas.map((idea) => (
+                  <IdeaCard idea={idea} key={idea.name} lane={lane} />
+                ))}
+              </div>
+            </section>
+          ))}
+
+          <section className="mt-24">
+            <Heading>The lamb wordmark</Heading>
+            <p className="mt-3 mb-10 max-w-[62ch] text-base text-white/65 leading-relaxed">
+              The alt mark’s main piece with the pixel lamb rising out of it.
+            </p>
+            <div className="flex h-56 items-center justify-center border-white/12 border-y px-8">
+              <BoundaryLambLogo className="h-28 w-auto max-w-full text-white" />
             </div>
           </section>
-        ))}
-
-        <section className="mt-24">
-          <Heading>The lamb wordmark</Heading>
-          <p className="mt-3 mb-10 max-w-[62ch] text-base text-white/65 leading-relaxed">
-            The alt mark’s main piece with the pixel lamb rising out of it.
-          </p>
-          <div className="flex h-56 items-center justify-center border-white/12 border-y px-8">
-            <BoundaryLambLogo className="h-28 w-auto max-w-full text-white" />
-          </div>
-        </section>
+        </div>
       </div>
-    </main>
+    </PageShell>
   );
 }
