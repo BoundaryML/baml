@@ -7,6 +7,9 @@ class Artifact {
             self.url,
             timeout = baml.time.Duration.from_seconds(DOWNLOAD_TIMEOUT_SECONDS),
         );
+        if (!response.ok()) {
+            discard_response_body(response);
+        }
         ensure(response.ok(), `failed to download ${self.url}: HTTP ${response.status_code}`);
         let data = response.bytes();
         ensure(hash(data) == self.sha256.to_lower_case(), `sha256 mismatch for ${self.url}`);
@@ -161,8 +164,21 @@ function validate_artifacts(schema: int, artifacts: map<string, Artifact>) -> nu
 
 function fetch_text(url: string, timeout_seconds: int = DOWNLOAD_TIMEOUT_SECONDS) -> string {
     let response = baml.http.fetch(url, timeout = baml.time.Duration.from_seconds(timeout_seconds));
+    if (!response.ok()) {
+        discard_response_body(response);
+    }
     ensure(response.ok(), `failed to fetch ${url}: HTTP ${response.status_code}`);
     response.text()
+}
+
+// Complete the HTTP network span even when the caller needs only the status.
+// A failed drain must preserve that status-based decision, including an accepted
+// telemetry event which must not be retried just because its body was unreadable.
+function discard_response_body(response: baml.http.Response) -> null {
+    let _ = response.bytes() catch (error) {
+        baml.errors.Io | baml.errors.Timeout => null
+    };
+    null
 }
 
 function acquire_lock(path: string) -> baml.fs.Lock {
