@@ -9,7 +9,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
@@ -109,16 +109,26 @@ impl Command for TelemetryArgs {
         // Snapshot the pre-change state so `disable` can distinguish
         // "already off" from "just turned off" (matches Next's UX).
         let was_enabled = t.is_enabled();
-        let saved = |path: Option<PathBuf>| match path {
-            Some(path) => reporter.status("Saved", path.display().to_string()),
-            None => reporter.warning("could not save the telemetry preference"),
+        let save = |enabled: bool| {
+            t.set_enabled(enabled).with_context(|| {
+                format!(
+                    "could not save the telemetry preference to {}",
+                    t.config_path().display()
+                )
+            })
         };
         match self.command.unwrap_or(TelemetryCommand::Status) {
             TelemetryCommand::Status => {}
-            TelemetryCommand::Enable => saved(t.set_enabled(true)),
-            TelemetryCommand::Disable if was_enabled => saved(t.set_enabled(false)),
+            TelemetryCommand::Enable => {
+                reporter.status("Saved", save(true)?.display().to_string());
+            }
+            TelemetryCommand::Disable if was_enabled => {
+                reporter.status("Saved", save(false)?.display().to_string());
+            }
+            // `DO_NOT_TRACK` can mask an enabled preference, so the opt-out
+            // is still written.
             TelemetryCommand::Disable => {
-                t.set_enabled(false);
+                save(false)?;
                 reporter.status("Unchanged", "BAML CLI telemetry is already disabled");
             }
         }

@@ -344,7 +344,7 @@ impl RuntimeCli {
             Commands::Playground(args) => run_command(args, cx),
             Commands::Local(LocalCommands::Recordings(command)) => command.run(cx, Backend::Local),
             Commands::Cloud(cloud) => match &cloud.command {
-                CloudCommands::Auth(command) => command.run(cx),
+                CloudCommands::Auth(command) => command.run(cx, &cloud.scope),
                 CloudCommands::Recordings(command) => command.run(cx, Backend::Cloud(&cloud.scope)),
             },
             Commands::Query(args) => run_command(

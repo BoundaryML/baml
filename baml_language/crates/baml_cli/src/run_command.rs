@@ -560,12 +560,21 @@ impl RunArgs {
         let (function_name, effective_target_args, was_script) =
             if let Some(script_tokens) = scripts.get(target) {
                 let expansion = parse_script_body(script_tokens)?;
-                let func = expansion.function.ok_or_else(|| {
-                    anyhow!(
-                        "script `{target}` has no `--function` and there is no implicit \
-                         entry point. Add `--function <name>` to the script body."
-                    )
-                })?;
+                // Validation accepts a script without `--function` when the
+                // project has the entry point; run it the same way.
+                let func = expansion
+                    .function
+                    .or_else(|| {
+                        catalog
+                            .find_user_function(ENTRY_POINT)
+                            .map(|_| ENTRY_POINT.to_owned())
+                    })
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "script `{target}` has no `--function` and the project has no \
+                             `{ENTRY_POINT}`. Add `--function <name>` to the script body."
+                        )
+                    })?;
                 if catalog.find_user_function(&func).is_none() {
                     return Err(Self::function_not_found_error(&catalog, &func));
                 }
@@ -1326,8 +1335,8 @@ impl RunArgs {
                         } else {
                             Some(func.as_str())
                         }
-                    } else if catalog.find_user_function("main").is_some() {
-                        Some("main")
+                    } else if catalog.find_user_function(ENTRY_POINT).is_some() {
+                        Some(ENTRY_POINT)
                     } else {
                         None
                     };

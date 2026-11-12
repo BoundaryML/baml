@@ -117,5 +117,5 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project-dir, --agent-skill-check, --features, or --help. With no default profile,
-  all tests are selected.
+  --project-dir, --agent-skill-check, --features, --output-format, or --help.
+  With no default profile, all tests are selected.

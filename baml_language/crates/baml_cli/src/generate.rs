@@ -249,7 +249,7 @@ impl Command for GenerateArgs {
 
     fn run(&self, cx: &CommandContext) -> Result<Outcome<()>> {
         if self.command.is_some() && self.telemetry.embed_telemetry {
-            anyhow::bail!(
+            crate::usage_bail!(
                 "`--embed-telemetry` applies to `baml generate`, which produces the SDK. Add the generator first, then run `baml generate --embed-telemetry`."
             );
         }

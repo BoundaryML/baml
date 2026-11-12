@@ -125,6 +125,43 @@ fn launch_context_reaches_processes_roots_and_futures_without_nested_overrides()
     assert_eq!(future["rows"], serde_json::json!([[4]]));
 }
 
+/// A JSON Lines row is keyed by column name, so two columns with one name
+/// cannot both be shown.
+#[test]
+fn jsonl_rejects_duplicate_column_names() {
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("baml_src")).unwrap();
+    std::fs::write(project.path().join("baml_src/main.baml"), PROGRAM).unwrap();
+    let run = |format: &str| {
+        cli(
+            project.path(),
+            &[
+                "local",
+                "recordings",
+                "query",
+                "--output-format",
+                format,
+                "SELECT 1 AS x, 2 AS x",
+            ],
+            &[],
+        )
+    };
+
+    let jsonl = run("jsonl");
+    assert_eq!(jsonl.status.code(), Some(1), "{jsonl:?}");
+    assert!(jsonl.stdout.is_empty(), "{jsonl:?}");
+    assert!(
+        String::from_utf8_lossy(&jsonl.stderr).contains("column `x` appears more than once"),
+        "{jsonl:?}"
+    );
+
+    // The positional formats keep both values.
+    let json = run("json");
+    assert_eq!(json.status.code(), Some(0), "{json:?}");
+    let report: Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(report["rows"], serde_json::json!([[1, 2]]));
+}
+
 #[test]
 fn fresh_query_processes_index_once_and_then_only_new_files() {
     let project = tempfile::tempdir().unwrap();

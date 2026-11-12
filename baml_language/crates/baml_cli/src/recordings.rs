@@ -25,7 +25,7 @@ use serde_json::{Value, json};
 
 use crate::{
     ExitCode,
-    output::{Command, CommandContext, Outcome, Report, Style, run_command},
+    output::{Command, CommandContext, Outcome, OutputFormat, Report, Style, run_command},
     project_load::find_project_root_from,
 };
 
@@ -130,6 +130,9 @@ pub(crate) struct QueryReport {
     pub columns: Vec<Value>,
     pub rows: Vec<Vec<Value>>,
     pub outcome: Value,
+    /// The query failed or was cancelled; partial frames are not a result.
+    #[serde(skip)]
+    failed: bool,
 }
 
 impl Report for QueryReport {
@@ -137,7 +140,7 @@ impl Report for QueryReport {
 
     /// A failed query has no result to show; the error is on stderr.
     fn is_silent(&self) -> bool {
-        self.columns.is_empty()
+        self.failed
     }
 
     fn text(&self, out: &mut dyn Write, _style: &Style) -> io::Result<()> {
@@ -216,7 +219,14 @@ impl QueryReport {
             columns: Vec::new(),
             rows: Vec::new(),
             outcome: Value::Null,
+            failed: false,
         }
+    }
+
+    /// A column name that more than one column carries, if any.
+    fn duplicate_column(&self) -> Option<&str> {
+        let mut seen = std::collections::HashSet::new();
+        self.column_names().find(|name| !seen.insert(*name))
     }
 }
 
@@ -232,7 +242,7 @@ impl Command for Query<'_> {
             self.args.sql.clone()
         };
         let root = project_root(cx.project_dir.as_deref())?;
-        match self.cloud_session(&root)? {
+        let mut outcome = match self.cloud_session(&root)? {
             Some(session) => {
                 if matches!(self.backend, Backend::Auto) {
                     crate::reporter::print_note(
@@ -249,7 +259,18 @@ impl Command for Query<'_> {
                 }
                 self.run_local(&root, sql)
             }
+        }?;
+        outcome.value.failed = outcome.status != ExitCode::Success;
+        // A JSON Lines row is an object keyed by column name.
+        if cx.format == OutputFormat::Jsonl
+            && !outcome.value.failed
+            && let Some(name) = outcome.value.duplicate_column()
+        {
+            anyhow::bail!(
+                "column `{name}` appears more than once, and JSON Lines rows are keyed by column name; alias the columns or use `--output-format json`"
+            );
         }
+        Ok(outcome)
     }
 }
 
@@ -383,6 +404,7 @@ impl Query<'_> {
                 .collect::<Result<_, _>>()?,
             outcome: serde_json::to_value(&result.outcome)?,
             rows: result.rows,
+            failed: false,
         };
         Ok(Outcome::ok(report))
     }

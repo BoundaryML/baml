@@ -51,8 +51,8 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project-dir, --agent-skill-check, --features, or --help. With no default profile,
-  all tests are selected.
+  --project-dir, --agent-skill-check, --features, --output-format, or --help.
+  With no default profile, all tests are selected.
 
 Examples:
   List available tests:
@@ -660,6 +660,11 @@ impl TestArgs {
             summary.failed += unhandled_spawn_failure_count;
             summary.total += unhandled_spawn_failure_count;
             command_failed = true;
+            summary.outcome = "fail".to_owned();
+        }
+        // No flat report was read: nothing ran, or the run itself failed.
+        if summary.outcome.is_empty() {
+            summary.outcome = if command_failed { "fail" } else { "pass" }.to_owned();
         }
         let TestSummary {
             passed,
@@ -803,15 +808,17 @@ impl TestArgs {
                     | "--project-dir"
                     | "--agent-skill-check"
                     | "--features"
+                    | "--output-format"
                     | "--help"
                     | "-h"
             ) || token.starts_with("--profile=")
                 || token.starts_with("--project-dir=")
                 || token.starts_with("--agent-skill-check=")
-                || token.starts_with("--features=");
+                || token.starts_with("--features=")
+                || token.starts_with("--output-format=");
             if bootstrap {
                 anyhow::bail!(
-                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project-dir, --agent-skill-check, --features, or --help"
+                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project-dir, --agent-skill-check, --features, --output-format, or --help"
                 );
             }
         }
@@ -1402,6 +1409,17 @@ mod tests {
             .to_string();
         assert!(
             error.contains("cannot contain") && error.contains("--features"),
+            "{error}"
+        );
+
+        let error = TestArgs::parse_profile_args(
+            "bad_format",
+            &["--output-format".to_string(), "json".to_string()],
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.contains("cannot contain") && error.contains("--output-format"),
             "{error}"
         );
 

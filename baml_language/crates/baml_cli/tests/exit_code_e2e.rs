@@ -597,6 +597,77 @@ fn run_with_target_ignores_project_main() {
     );
 }
 
+/// A `main` script without `--function` passes its arguments to the `main`
+/// function, as script validation promises.
+#[test]
+fn run_without_target_runs_main_script_without_function() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function main(name: string) -> string {\n    \"hello \" + name\n}\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n[scripts]\nmain = [\"--\", \"--name\", \"Ada\"]\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["run"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "\"hello Ada\""
+    );
+}
+
+/// Telemetry flags belong to `baml generate`, so passing one to
+/// `generate add` is a usage error.
+#[test]
+fn generate_add_with_embed_telemetry_is_a_usage_error() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), MAIN_AND_OTHER);
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["generate", "--embed-telemetry", "add", "python/pydantic2"],
+    );
+
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+}
+
+/// An opt-out that cannot be saved is a failure, even when `DO_NOT_TRACK`
+/// already disables telemetry for this process.
+#[test]
+fn telemetry_disable_fails_when_the_preference_cannot_be_saved() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    // A directory where the preference file belongs makes the write fail.
+    std::fs::create_dir_all(tmp.path().join(".baml-home/telemetry.toml")).unwrap();
+
+    let output = run_baml_cli_with_env(
+        built,
+        tmp.path(),
+        &["telemetry", "disable"],
+        &[("DO_NOT_TRACK", "1")],
+    );
+
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(output.stdout.is_empty(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("could not save the telemetry preference"),
+        "{output:?}"
+    );
+}
+
 /// A project with no `main` has nothing to default to, so a bare `baml run`
 /// shows what can be run instead.
 #[test]
@@ -969,6 +1040,15 @@ fn test_no_tests_succeeds() {
         output.status.code(),
         String::from_utf8_lossy(&output.stderr),
     );
+    // Nothing ran, so the aggregate verdict is a pass.
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--project-dir", ".", "--output-format", "json"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| panic!("{error}: {output:?}"));
+    assert_eq!(report["summary"]["outcome"], "pass", "{report}");
 }
 
 /// A malformed build-cache variable is an error, never a silently different

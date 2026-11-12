@@ -49,9 +49,10 @@ const ROOT_HELP = `
       playground, local, cloud, query, login, logout, ide, agent, telemetry, lsp
 
     Options:
-      --project-dir <path>  Select a filesystem project
-      -h, --help            Show help
-      -V, --version         Report wrapper and selected CLI versions
+      --project-dir <path>      Select a filesystem project
+      --output-format <format>  What goes to stdout (text, json)
+      -h, --help                Show help
+      -V, --version             Report wrapper and selected CLI versions
 
     Use baml help <command> for command help.
 `;

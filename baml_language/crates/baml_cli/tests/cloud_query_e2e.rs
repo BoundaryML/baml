@@ -14,7 +14,12 @@ async fn cancelled_cloud_query_fails() {
                 "queryId": body["queryId"], "status": "cancelled"
             }});
             ResponseTemplate::new(200).set_body_raw(
-                format!("{}\n{outcome}\n", json!({"columns": []})),
+                // Frames that arrive before the cancellation are not a result.
+                format!(
+                    "{}\n{}\n{outcome}\n",
+                    json!({"columns": [{"name": "value", "type": "int64"}]}),
+                    json!({"row": [1]})
+                ),
                 "application/x-ndjson",
             )
         })
