@@ -49,9 +49,15 @@ export function isListed(post: Post) {
   return Boolean(post.isPublished) && !post.archived;
 }
 
-/** Whether a post shows on the blog index: every listed post, old or new. */
-export function isOnIndex(post: Post) {
-  return isListed(post);
+/** How far back the blog index goes, in months. */
+const INDEX_MONTHS = 2;
+
+/** Whether a post shows on the blog index: a listed post from the last INDEX_MONTHS months. Older
+ *  posts keep their URLs and stay in the feed and in "Read next"; only the index leaves them out. */
+export function isOnIndex(post: Post, now = new Date()) {
+  const cutoff = new Date(now);
+  cutoff.setMonth(cutoff.getMonth() - INDEX_MONTHS);
+  return isListed(post) && new Date(post.date) >= cutoff;
 }
 
 /** Launch Week is six short posts in one week of January 2025, listed as one group. */
