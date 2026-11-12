@@ -27,11 +27,14 @@
 //! }
 //! ```
 //!
-//! A 5-byte string is a 32-byte flat cell. Concatenation makes a rope when
-//! the result is [`STR_SHARE_THRESHOLD`] bytes or more and both inputs are
-//! non-empty; a sub-range makes a view when it is that long. The pointer
-//! slots are in the kinds' descriptors, so the collector traces them like
-//! any other object's.
+//! A 5-byte string is a 32-byte flat cell. A binary `+` makes a rope when
+//! the result is [`STR_ROPE_THRESHOLD`] bytes or more, or when its left
+//! operand is already a rope (an accumulator growing in a loop); otherwise
+//! it copies both texts into one flat. A concatenation of known parts (a
+//! template, `join`) is always one flat of the total length: one copy. A
+//! sub-range makes a view when it is [`STR_SHARE_THRESHOLD`] bytes or
+//! more. The pointer slots are in the kinds' descriptors, so the collector
+//! traces them like any other object's.
 //!
 //! A rope's bytes are borrowable only once it is flattened: the owner of
 //! the allocator does that (`Tlab::flatten_string`), storing the flat into
@@ -89,9 +92,16 @@ pub const VIEW_BASE_OFFSET: u32 = STR_BYTES_OFFSET;
 pub const VIEW_OFFSET_OFFSET: u32 = VIEW_BASE_OFFSET + 8;
 pub const VIEW_BYTES: u32 = VIEW_OFFSET_OFFSET + 8;
 
-/// Results this long or longer share storage (a rope for a concatenation,
-/// a view for a sub-range); shorter ones are copied into a flat.
+/// A sub-range this long or longer is a view sharing its base's storage;
+/// a shorter one is copied into a flat.
 pub const STR_SHARE_THRESHOLD: usize = 32;
+
+/// A binary `+` whose result is this long or longer makes a rope instead
+/// of copying both texts; below it, one copy of a few hundred bytes is
+/// cheaper than a 48-byte cell plus the flattening every read needs. A
+/// `+` onto a rope makes a rope at any length, so an accumulator stays
+/// linear.
+pub const STR_ROPE_THRESHOLD: usize = 256;
 
 /// The allocation unit of every cell. The heap's granule; asserted equal
 /// there.
@@ -110,6 +120,18 @@ pub enum StrKind {
     Flat,
     Rope,
     View,
+}
+
+const _: () = assert!(
+    ROPE_DESC.0 == STR_DESC.0 + 1 && VIEW_DESC.0 == STR_DESC.0 + 2,
+    "the string descriptors are contiguous, so `is_str_descriptor` is one range check"
+);
+
+/// Whether `descriptor` names a string cell of any kind: one range check,
+/// the test every glue makes per string argument.
+#[inline]
+pub const fn is_str_descriptor(descriptor: DescriptorId) -> bool {
+    descriptor.0.wrapping_sub(STR_DESC.0) <= VIEW_DESC.0 - STR_DESC.0
 }
 
 impl StrKind {
@@ -144,8 +166,11 @@ impl<'a> StrRef<'a> {
     /// `ptr` names a live object.
     #[inline]
     pub unsafe fn of(ptr: HeapPtr) -> Option<Self> {
+        // One range check on the descriptor, rather than `Format::of`'s
+        // chain: the same answer, since the string descriptors are below
+        // the first instance's and none is the object descriptor.
         // SAFETY: forwarded to the caller.
-        matches!(unsafe { ptr.format() }, Format::Str).then_some(Self::new(ptr))
+        is_str_descriptor(unsafe { ptr.header() }.descriptor).then_some(Self::new(ptr))
     }
 
     /// The string at `ptr`.
@@ -233,6 +258,32 @@ impl<'a> StrRef<'a> {
                     }
                 },
             )
+        }
+    }
+
+    /// Fill a fresh flat cell with `parts` in order: the concatenation of
+    /// known parts (a template, `join`), copied once.
+    ///
+    /// # Safety
+    /// `ptr` is the payload of a fresh flat cell of at least
+    /// [`str_cell_bytes`] of the parts' total byte length with its header
+    /// written; every part names a live string.
+    pub unsafe fn init_concat_many(ptr: HeapPtr, parts: &[HeapPtr]) -> Self {
+        // SAFETY: the caller holds live strings.
+        let part = |&ptr: &HeapPtr| unsafe { Self::new_unchecked(ptr) };
+        let (byte_len, char_len) = parts
+            .iter()
+            .map(part)
+            .fold((0, 0), |(b, c), part| (b + part.byte_len(), c + part.char_len()));
+        // SAFETY: forwarded to the caller; the chunks are the parts' bytes.
+        unsafe {
+            Self::init_flat_from(ptr, byte_len, char_len, 0, |out| {
+                for part in parts.iter().map(part) {
+                    for chunk in part.chunks() {
+                        out.push(chunk);
+                    }
+                }
+            })
         }
     }
 
@@ -482,6 +533,12 @@ impl<'a> StrRef<'a> {
     /// (`Tlab::flatten_string`) before a borrow.
     #[inline]
     pub fn as_bytes(self) -> &'a [u8] {
+        // A flat, nearly every string a native borrows: one descriptor
+        // check, then the bytes, with no kind match or slice bounds check.
+        // SAFETY: a live cell has a header.
+        if unsafe { self.ptr.header() }.descriptor == STR_DESC {
+            return self.flat_bytes();
+        }
         match self.flat() {
             Some((flat, offset)) => &flat.flat_bytes()[offset..offset + self.byte_len()],
             None => unflattened_rope_borrow(),
@@ -502,7 +559,10 @@ impl<'a> StrRef<'a> {
     /// an unflattened rope. Walks with an explicit stack, however deep the
     /// rope.
     pub fn chunks(self) -> Chunks<'a> {
-        Chunks { stack: vec![self] }
+        Chunks {
+            next: Some(self),
+            stack: Vec::new(),
+        }
     }
 
     /// Append the text to `out`, flattened or not.
@@ -705,21 +765,30 @@ impl Filler {
 /// The flats a string's bytes live in, left to right. See
 /// [`StrRef::chunks`].
 pub struct Chunks<'a> {
+    /// The string to descend next; the one chunk of a borrowable string,
+    /// so walking a flat, a view or a flattened rope allocates nothing.
+    next: Option<StrRef<'a>>,
+    /// The right halves still to walk under an unflattened rope; empty
+    /// (and unallocated) until one is met.
     stack: Vec<StrRef<'a>>,
 }
 
 impl<'a> Iterator for Chunks<'a> {
     type Item = &'a [u8];
 
+    #[inline]
     fn next(&mut self) -> Option<&'a [u8]> {
         loop {
-            let string = self.stack.pop()?;
+            let string = match self.next.take() {
+                Some(string) => string,
+                None => self.stack.pop()?,
+            };
             if let Some((flat, offset)) = string.flat() {
                 return Some(&flat.flat_bytes()[offset..offset + string.byte_len()]);
             }
             let (left, right) = string.rope_halves().expect("an unflattened rope");
             self.stack.push(right);
-            self.stack.push(left);
+            self.next = Some(left);
         }
     }
 }

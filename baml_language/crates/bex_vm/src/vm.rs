@@ -3987,11 +3987,26 @@ impl BexVm {
     /// `Tlab::flatten_string`); `None` when `value` is not a string. A
     /// borrow of the text (`as_string(..).as_str()`) needs this first;
     /// copies out, hashing and comparison do not.
+    ///
+    /// The glue calls this once per string argument, so the borrowable
+    /// case (a flat or a view, nearly every string) is one descriptor
+    /// check inline; only a rope takes the call into the allocator.
     #[inline]
     pub fn flatten_str(&mut self, value: &Value) -> Option<HeapPtr> {
         let ptr = value.as_object_ptr()?;
-        self.str_at(ptr)?;
-        Some(self.tlab.flatten_string(ptr))
+        // SAFETY: the VM holds a heap permit, so a pointer it holds is live.
+        let descriptor = unsafe { ptr.header() }.descriptor;
+        if descriptor == bex_vm_types::types::ROPE_DESC {
+            return Some(self.flatten_rope(ptr));
+        }
+        bex_vm_types::types::is_str_descriptor(descriptor).then_some(ptr)
+    }
+
+    /// The flattening of the rope at `ptr`; the out-of-line half of
+    /// [`Self::flatten_str`].
+    #[inline(never)]
+    fn flatten_rope(&mut self, ptr: HeapPtr) -> HeapPtr {
+        self.tlab.flatten_string(ptr)
     }
 
     /// The string at `ptr`, if it is one.
@@ -9744,31 +9759,17 @@ impl BexVm {
     }
 
     /// The strings `parts` concatenated left to right (`ConcatStrings`:
-    /// template interpolation, interpreted or compiled). One flat when the
-    /// result is short; else each join is a `+` (a rope once the running
-    /// result is long), so interpolating onto an accumulator in a loop
-    /// stays linear.
+    /// template interpolation, interpreted or compiled). Always one flat of
+    /// the total length (`Tlab::concat_strs`): every part is known, so one
+    /// copy is optimal. An accumulator interpolated into itself in a loop
+    /// copies each round, as it would in any language; `+` is the rope
+    /// path.
     pub(crate) fn concat_parts(&mut self, parts: &[Value]) -> Result<Value, VmInternalError> {
-        let mut strings: SmallVec<[HeapPtr; 16]> = SmallVec::with_capacity(parts.len());
-        let mut byte_len = 0;
+        let mut strings: SmallVec<[HeapPtr; 32]> = SmallVec::with_capacity(parts.len());
         for part in parts {
-            let string = self.as_string(part)?;
-            byte_len += string.byte_len();
-            strings.push(string.ptr());
+            strings.push(self.as_string(part)?.ptr());
         }
-        let value = if byte_len < bex_vm_types::types::STR_SHARE_THRESHOLD {
-            let mut joined = String::with_capacity(byte_len);
-            for &string in &strings {
-                self.expect_str(string).push_to(&mut joined);
-            }
-            Value::object(self.alloc_string(joined))
-        } else {
-            let mut result = strings[0];
-            for &string in &strings[1..] {
-                result = self.concat_str(result, string);
-            }
-            Value::object(result)
-        };
+        let value = Value::object(self.concat_strs(&strings));
         // One instruction can build a string of any size.
         self.settle();
         Ok(value)
