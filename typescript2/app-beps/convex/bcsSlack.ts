@@ -197,8 +197,18 @@ export const notify = internalAction({
       });
       if (!kept) return;
       if (kept !== posted.ts) {
-        // Another notification started the thread first: drop this message and reply there.
+        // Another notification started the thread first: drop this message, bring that thread's
+        // overview up to date (it may show the proposal as it was before this save), and reply there.
         await slack("chat.delete", { channel, ts: posted.ts });
+        const latest = await ctx.runQuery(internal.bcs.slackView, { docId: args.docId });
+        if (latest) {
+          await slack("chat.update", {
+            channel,
+            ts: kept,
+            blocks: overviewBlocks(latest, false),
+            text: `${bcsId(latest.number)}: ${clip(latest.title, 300)}`,
+          });
+        }
       }
       thread = kept;
     }
