@@ -166,7 +166,14 @@ export async function GET(request: NextRequest) {
     // ends that member's BCS session.
     const githubId = githubUser.id.toString();
     const member = await isBcsOrgMember(tokenData.access_token);
-    const token = member && signSession({ githubId, login: githubUser.login, via: "org" });
+    const token =
+      member &&
+      signSession({
+        githubId,
+        login: githubUser.login,
+        via: "org",
+        checkedAt: Math.floor(Date.now() / 1000),
+      });
     if (token) {
       response.cookies.set(BCS_COOKIE, token, sessionCookie);
     } else {
