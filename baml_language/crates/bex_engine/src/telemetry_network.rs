@@ -8,7 +8,8 @@
 //! A span ends when the program finishes reading its response (`text()`,
 //! `bytes()`, the `next()` that finds a stream done), closes a stream, or when
 //! the op fails or is cancelled: the span then ends with the thrown value, in
-//! `inject_sysop_throw`. A response that is never read stays open.
+//! `inject_sysop_throw`. A response discarded unread ends as cancelled, with
+//! a `drop` event rather than a successful body read.
 
 use std::sync::Arc;
 
@@ -136,18 +137,54 @@ impl BexEngine {
     /// belong to. Called after every sys-op, before its result reaches the VM,
     /// so a span's events come before the completion that op may write. The
     /// queue drops the events of a span that ended since they were queued.
-    /// Events still queued when the engine shuts down are not written: a
-    /// last drain onto the root thread belongs in `shutdown`, with the GC
-    /// `drop` hook (see `NetworkTraced`).
+    /// A terminal `drop` preserves earlier queued events, then completes the
+    /// abandoned body as cancelled (not a transport error or a full read).
     pub(crate) fn drain_network_events(&self, vm: &mut BexVm) {
         let Some(telemetry) = &self.telemetry else {
             return;
         };
         for event in telemetry.network.drain() {
             if let Some(span) = TelemetryId::from_raw(event.span) {
-                vm.network_event(span, ClockInstant::from_ticks(event.at_ticks), &event.kind);
+                let at = ClockInstant::from_ticks(event.at_ticks);
+                vm.network_event(span, at, &event.kind);
+                if event.kind == NetworkEventKind::Drop {
+                    vm.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[]);
+                }
             }
         }
+    }
+
+    /// Drain the final GC drops and abandon responses still rooted by host handles
+    /// or globals before the recorder seals. Never reads or waits for a body.
+    pub(crate) fn finish_network_spans(&self) {
+        let Some(telemetry) = &self.telemetry else {
+            return;
+        };
+        telemetry.network.abandon_open();
+        let events = telemetry.network.drain();
+        if events.is_empty() {
+            return;
+        }
+        let Some(mut state) = crate::telemetry_state::EngineTelemetry::new_root(Some(telemetry))
+        else {
+            return;
+        };
+        telemetry.clock.validate(state.clock(), true);
+        #[cfg(not(target_arch = "wasm32"))]
+        let _scope = state.host_recording_scope();
+        for event in events {
+            if let Some(span) = TelemetryId::from_raw(event.span) {
+                let at = ClockInstant::from_ticks(event.at_ticks);
+                state.network_event(span, at, &event.kind);
+                if event.kind == NetworkEventKind::Drop {
+                    // SAFETY: a dropped response has no heap-backed error to capture.
+                    unsafe {
+                        state.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[])
+                    };
+                }
+            }
+        }
+        state.complete_thread(InvocationOutcome::Ok);
     }
 
     /// After an HTTP sys-op succeeded: end the span a finished read or a

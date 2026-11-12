@@ -21,6 +21,12 @@ const SOURCE: &str = r##"
         slow: Flag,
 
         function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
+            if (req.url.starts_with("/unread-500")) {
+                return baml.http.Response.new(500, { "set-cookie": "session=sk-cookie" }, "private-unread-error".to_utf8());
+            }
+            if (req.url.starts_with("/unread-504")) {
+                return baml.http.Response.new(504, {}, "private-unread-error".to_utf8());
+            }
             if (req.url.starts_with("/missing")) {
                 return baml.http.Response.new(404, { "content-type": "text/plain" }, "not here".to_utf8());
             }
@@ -114,6 +120,12 @@ const SOURCE: &str = r##"
         early.close();
 
         let never = baml.http.send(request(base, "/never"));
+        let alias = never;
+        let unread500 = baml.http.send(request(base, "/unread-500"));
+        let unread504 = baml.http.send(request(base, "/unread-504"));
+        // Parsed data can arrive before the consumer abandons an SSE stream.
+        let partial = baml.http.send_sse(request(base, "/sse-partial"));
+        let first = partial.next();
 
         let slow = spawn { slow_text(base) };
         while (!canned.slow.set) {
@@ -344,7 +356,10 @@ async fn each_request_records_its_span_events_and_end() {
             "refused",
             "slow",
             "sse",
-            "sse-close"
+            "sse-close",
+            "sse-partial",
+            "unread-500",
+            "unread-504"
         ]
     );
 
@@ -433,10 +448,24 @@ async fn each_request_records_its_span_events_and_end() {
     assert_eq!(span.written, ["connection", "close", "completion"]);
     assert_eq!(outcome(span), ok);
 
-    // Never read: open for good, with what arrived.
-    let span = &spans["never"];
-    assert_eq!(span.names(), ["connection"]);
-    assert!(span.completion.is_none());
+    // Unread bodies retain their HTTP statuses, with no invented successful
+    // read or transport failure. The recording completes before engine drop.
+    for (path, status) in [("never", 200), ("unread-500", 500), ("unread-504", 504)] {
+        let span = &spans[path];
+        assert_eq!(span.names(), ["connection", "drop"]);
+        assert_eq!(
+            load(span.event("connection").payload_cas_id)["status"],
+            status
+        );
+        assert_eq!(outcome(span), (proto::InvocationOutcome::Cancelled, false));
+        let done = span.completion.as_ref().unwrap();
+        assert!(done.error_cas_id.is_none());
+        assert_eq!(done.completed_at_ticks, span.event("drop").at_ticks);
+    }
+    // Even wire-complete SSE data is abandoned until the program reads EOF.
+    let span = &spans["sse-partial"];
+    assert_eq!(span.names(), ["connection", "data", "data", "end", "drop"]);
+    assert_eq!(outcome(span), (proto::InvocationOutcome::Cancelled, false));
 
     // Cancelled while waiting for the response.
     let span = &spans["slow"];
@@ -459,7 +488,13 @@ async fn each_request_records_its_span_events_and_end() {
             .count()
     };
     assert!(!files.is_empty());
-    for secret in ["sk-query", "sk-norm", "sk-header", "sk-cookie"] {
+    for secret in [
+        "sk-query",
+        "sk-norm",
+        "sk-header",
+        "sk-cookie",
+        "private-unread-error",
+    ] {
         assert_eq!(holding(secret), 0, "{secret} reached the disk");
     }
 }
