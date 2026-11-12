@@ -12,13 +12,13 @@ There were 959 issue-comment/review bodies and 389 inline comments. All comment,
 
 38 Linear issues were read with attachment metadata and all 37 comments, covering direct links, GitHub report mirrors, and relevant linked context. Sources identified internal authors, mirrored the external GitHub reports, or described changes from earlier releases. No audited source linked a Discord thread. No Discord conversation or recipient is inferred from absent evidence. Credentials were retrieved from the specified Infisical environment in process memory; no credentials or raw private source dumps belong in this repository.
 
-## Recipients and exclusions
+## Attribution and exclusions
 
 | Source | Decision | Evidence and scope |
 | --- | --- | --- |
-| #5264, #5442, #5498, #5503, #5506, #5531 | Notify external collaborator @harivansh-afk on every authored in-range PR. | Native compilation, its differential CI coverage, escape analysis, optimized array iteration, native helper inlining, and the finalizer safety correction are present at the upper boundary. CI-only #5442 gets an acknowledgment without claiming an SDK feature. |
-| [#4377](https://github.com/BoundaryML/baml/issues/4377) | Notify @BenSpex. | #5509 stops baml_bridge from forcing serde_json arbitrary_precision and preserve_order. The reply identifies explicit feature opt-in and JSON behavior changes. |
-| [#5074](https://github.com/BoundaryML/baml/issues/5074) / BAMLGH-93 | Notify @BenSpex on GitHub only. | #5426/#5422 select the target project before toolchain resolution. At the upper boundary `WrapperInvocation.parse` derives `project` from --project and `selection()` searches that project. The fix requires wrapper 0.3.0; a toolchain-only update leaves the old wrapper in place. BAML_TOOLCHAIN keeps precedence. |
+| #5264, #5442, #5498, #5503, #5506, #5531 | External collaborator: @harivansh-afk. | Native compilation, its differential CI coverage, escape analysis, optimized array iteration, native helper inlining, and the finalizer safety correction are present at the upper boundary. CI-only #5442 gets an acknowledgment without claiming an SDK feature. |
+| [#4377](https://github.com/BoundaryML/baml/issues/4377) | External reporter: @BenSpex. | #5509 stops baml_bridge from forcing serde_json arbitrary_precision and preserve_order. The migration requires explicit feature opt-in to retain the earlier JSON behavior. |
+| [#5074](https://github.com/BoundaryML/baml/issues/5074) / BAMLGH-93 | External reporter: @BenSpex. | #5426/#5422 select the target project before toolchain resolution. At the upper boundary `WrapperInvocation.parse` derives `project` from --project and `selection()` searches that project. The fix requires wrapper 0.3.0; a toolchain-only update leaves the old wrapper in place. BAML_TOOLCHAIN keeps precedence. |
 | [#5092](https://github.com/BoundaryML/baml/issues/5092) / BAMLGH-97 | Do not announce as addressed. | A bot associates wrapper conformance tests with the report, but those tests do not expose the selected project root or current executable to user test code. |
 | [#5392](https://github.com/BoundaryML/baml/issues/5392) / BAMLGH-118 | Do not announce a new 0.24.0 fix. | #5456 adds subprocess lifetime controls to user code. It does not change the CLI's own stdout ownership or telemetry shutdown budget. Earlier bounded-shutdown improvements were already in 0.23.0. @duongynhi000005-oss contributed an investigation on the issue, but its proposed additional fix is not shipped in this range. |
 | [#5441](https://github.com/BoundaryML/baml/issues/5441) / BAMLGH-119 | Do not announce as addressed. | #5520 changes homepage illustrations. It does not restore query columns, change SQL indexing, add cost data, or repair the cloud query schema. |
@@ -29,6 +29,8 @@ There were 959 issue-comment/review bodies and 389 inline comments. All comment,
 | B-1996, B-1999, B-2002 | Do not announce as fixed. | Per-list union fallback hints, repeated custom LLM conversion during streaming, and opaque-handle get_field behavior remain distinct follow-ups. |
 
 The only external human found in the in-range PR discussions was @harivansh-afk. Other human participants had MEMBER association. Bot accounts are not notification recipients. Adopted predecessor commits in the wrapper stack retain internal authorship.
+
+The action checklist was removed. This file retains attribution and issue-scope evidence; no notifications were sent.
 
 ## Linear sources
 

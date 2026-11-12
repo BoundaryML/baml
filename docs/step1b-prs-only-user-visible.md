@@ -1,13 +1,13 @@
 # BAML 0.24.0 release audit
 
-Prepared on 2026-11-05 (Pacific). These immutable boundaries apply to the inventory, effects, release post, and follow-up checklist.
+Prepared on 2026-11-05 (Pacific). These immutable boundaries apply to the inventory, effects, and release post.
 
 - Lower: `baml-language-0.23.0`, `f0f0bb5135bba599c11a32cc4d631f2f66f1f96f`.
 - Upper: published `baml-language-0.24.0`, `dec4713a0e7c9699442bf5855b4f327063f769c5`.
 - Inventory: 84 commits/PRs across the entire repository, in chronological order.
 - Scope follows the user's just-published-release request: use the published tag rather than later `origin/canary` commits. At preparation, `origin/canary` was `853072242cf951cca227759a130b9cb91d60e9a0`; its 11 later commits are excluded, including `package_name` (#5532/#5533), BTELCAS v6 (#5543), and the Homebrew publication fix (#5546).
 - GitHub release: https://github.com/BoundaryML/baml/releases/tag/baml-language-0.24.0, published 2026-11-05T22:23:21Z. Paired wrapper: 0.3.0.
-- Publication is incomplete at audit time: https://github.com/BoundaryML/baml/actions/runs/42111122075 failed at Homebrew publishing. Go mirror publishing, manifest promotion, developer docs, and final artifact verification were skipped. The canary manifest still reports 0.23.0. This does not change the tagged source boundary. Recheck the checklist's publication gates before merging the public post or sending announcements.
+- Publication is incomplete at audit time: https://github.com/BoundaryML/baml/actions/runs/42111122075 failed at Homebrew publishing. Go mirror publishing, manifest promotion, developer docs, and final artifact verification were skipped. The canary manifest still reports 0.23.0. This does not change the tagged source boundary. This records publication status at preparation time.
 - `git fetch origin --tags` refreshed canary but reported two unrelated pre-existing v0 tag conflicts (`0.226.3`, `0.226.3-engine`); neither was overwritten. Both v1 release tags were resolved and checked against GitHub release metadata.
 
 ## User-visible PRs

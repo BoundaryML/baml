@@ -14,9 +14,9 @@ All 14 PR descriptions, 142 issue-comment/review bodies, 39 inline review commen
 
 Additional GitHub context was fetched for #5075, #5185, #5422, #5483, #5519, #5526, #5528, #5532, #5533, #5534, #5541, #5546, and #5548. Contextual predecessor PRs do not become new 0.25.0 contributions. BoundaryML/alien-baml-sdk#6 was read with its empty issue/inline comment lists because #5532 explicitly references it. It is authored internally and is not an external-user PR to announce.
 
-[Linear BAMLGH-94](https://linear.app/boundaryml2/issue/BAMLGH-94) was read with both comments and its GitHub attachment. It mirrors #5075 and gets one reply at the GitHub source. No other Linear issue was directly referenced. TASK-121/TASK-122 were resolved in Notion rather than misidentified as Linear issues. Their source triage and customer-feedback pages were read, including four internal inline comments. [TASK-199](https://app.notion.com/p/40cbb2d2621681aa86beef18ed4a8b34) was read from the direct link in #5547. No discussion pagination was omitted.
+[Linear BAMLGH-94](https://linear.app/boundaryml2/issue/BAMLGH-94) was read with both comments and its GitHub attachment. It mirrors #5075. No other Linear issue was directly referenced. TASK-121/TASK-122 were resolved in Notion rather than misidentified as Linear issues. Their source triage and customer-feedback pages were read, including four internal inline comments. [TASK-199](https://app.notion.com/p/40cbb2d2621681aa86beef18ed4a8b34) was read from the direct link in #5547. No discussion pagination was omitted.
 
-The Alien task links led to the customer thread at `C0BSRAU8PPD`, timestamp `1793394616.813439`. The complete parent and replies were read through the connected Slack read-only tool. Itamar Zand and Alon Gubkin are the customer contacts. The actual reply asks for the shared-engine/Zod work, which is still open. Package-name isolation addresses only the separately recorded installation collision. The checklist prepares a scoped customer handoff and does not claim those open requests are fixed.
+The Alien task links led to the customer thread at `C0BSRAU8PPD`, timestamp `1793394616.813439`. The complete parent and replies were read through the connected Slack read-only tool. Itamar Zand and Alon Gubkin are the customer contacts. The actual reply asks for the shared-engine/Zod work, which is still open. Package-name isolation addresses only the separately recorded installation collision. This audit records only the delivered package-name portion; the shared-engine and Zod requests remain open.
 
 No Discord thread link was found in the audited PRs, referenced GitHub sources, Linear mirror, or Notion/customer thread. There is no invented Discord recipient. Credentials and raw private evidence are not committed.
 
@@ -24,10 +24,10 @@ No Discord thread link was found in the audited PRs, referenced GitHub sources, 
 
 | Source | Decision | Scope |
 | --- | --- | --- |
-| [#5501](https://github.com/BoundaryML/baml/pull/5501) | Notify external contributor @Nedas-Jaronis. | Merged removal of unreachable stdlib fallbacks and regression coverage. |
-| [#5075](https://github.com/BoundaryML/baml/issues/5075) | Notify external reporter @BenSpex. | Unactionable stdlib warnings fixed. Do not imply unreachable diagnostics for user code were disabled. |
-| Alien package-isolation request | Prepare a customer-owner handoff. | Configurable package names fix install collisions. One program/type map per process and exact bridge-version requirements remain. No Slack message was sent. |
+| [#5501](https://github.com/BoundaryML/baml/pull/5501) | External contributor: @Nedas-Jaronis. | Merged removal of unreachable stdlib fallbacks and regression coverage. |
+| [#5075](https://github.com/BoundaryML/baml/issues/5075) | External reporter: @BenSpex. | Unactionable stdlib warnings fixed. Do not imply unreachable diagnostics for user code were disabled. |
+| Alien package-isolation request | Customer context for package isolation. | Configurable package names fix install collisions. One program/type map per process and exact bridge-version requirements remain. No Slack message was sent. |
 | TASK-121 / shared engine and Zod | Do not announce as fixed. | They remain separate work, even though the package-name part ships. |
 | Remaining in-range authors | No external-author PR notification. | All are MEMBER; only #5501 has CONTRIBUTOR association. |
 
-The two required GitHub replies and the optional scoped customer handoff are in the adjacent release checklist. The earlier 0.24.0 checklist carries its eight unsent replies forward to replacement canary 0.25.0; do not duplicate or send either checklist before its publication checks pass.
+The per-release action checklists were removed. This file retains the source and attribution audit; no notifications were sent.

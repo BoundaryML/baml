@@ -1,13 +1,13 @@
 # BAML 0.24.0 release audit
 
-Prepared on 2026-11-05 (Pacific). These immutable boundaries apply to the inventory, effects, release post, and follow-up checklist.
+Prepared on 2026-11-05 (Pacific). These immutable boundaries apply to the inventory, effects, and release post.
 
 - Lower: `baml-language-0.23.0`, `f0f0bb5135bba599c11a32cc4d631f2f66f1f96f`.
 - Upper: published `baml-language-0.24.0`, `dec4713a0e7c9699442bf5855b4f327063f769c5`.
 - Inventory: 84 commits/PRs across the entire repository, in chronological order.
 - Scope follows the user's just-published-release request: use the published tag rather than later `origin/canary` commits. At preparation, `origin/canary` was `853072242cf951cca227759a130b9cb91d60e9a0`; its 11 later commits are excluded, including `package_name` (#5532/#5533), BTELCAS v6 (#5543), and the Homebrew publication fix (#5546).
 - GitHub release: https://github.com/BoundaryML/baml/releases/tag/baml-language-0.24.0, published 2026-11-05T22:23:21Z. Paired wrapper: 0.3.0.
-- Publication is incomplete at audit time: https://github.com/BoundaryML/baml/actions/runs/42111122075 failed at Homebrew publishing. Go mirror publishing, manifest promotion, developer docs, and final artifact verification were skipped. The canary manifest still reports 0.23.0. This does not change the tagged source boundary. Recheck the checklist's publication gates before merging the public post or sending announcements.
+- Publication is incomplete at audit time: https://github.com/BoundaryML/baml/actions/runs/42111122075 failed at Homebrew publishing. Go mirror publishing, manifest promotion, developer docs, and final artifact verification were skipped. The canary manifest still reports 0.23.0. This does not change the tagged source boundary. This records publication status at preparation time.
 - `git fetch origin --tags` refreshed canary but reported two unrelated pre-existing v0 tag conflicts (`0.226.3`, `0.226.3-engine`); neither was overwritten. Both v1 release tags were resolved and checked against GitHub release metadata.
 
 ## Aggregation rules
@@ -19,7 +19,7 @@ The reviewed release body below is the aggregation. Headline, feature, breaking-
 `baml pack --rust` compiles supported functions to Rust. Other functions keep running as bytecode. Both can call each other inside the same runtime.
 
 ```bash
-# Use a BAML checkout at the baml-language-0.24.0 tag.
+# Use a BAML checkout at the baml-language-0.25.0 tag for the replacement canary.
 baml pack main --rust --rust-workspace /path/to/baml/baml_language --output ./app
 ./app
 
@@ -140,7 +140,7 @@ function save_config(path: string, text: string) -> void {
 
 ## Inspect archives and edit TOML
 
-Inspect an archive before extracting it. `entries` validates the whole archive and rejects links. `read_file` reads a member without extraction. `extract` supports ZIP and gzip-compressed tar archives and requires an empty destination that is not a symlink.
+Inspect an archive before extracting it. `entries` validates entry metadata and paths and rejects links. It does not check compressed ZIP member data; corruption may be detected only when reading or extracting a member. `read_file` reads a member without extraction. `extract` supports ZIP and gzip-compressed tar archives and requires an empty destination that is not a symlink.
 
 ```baml
 function inspect_archive(data: uint8array) -> string[] {
@@ -291,7 +291,7 @@ We compared the published macOS ARM64 releases at `f0f0bb5135` (0.23.0) and `dec
 
 The figures below are medians from five interleaved release pairs. Timing excludes process startup, SDK initialization, and compilation. Kernel timings include the bridge call and the complete workload. These compare the complete releases; they do not isolate individual PR contributions or measure provider latency.
 
-The [benchmark archive](https://github.com/BoundaryML/baml/tree/canary/docs/changelog-0.24.0-benchmarks) contains the exact inputs, runners, environment details, and raw samples.
+The [measurement data](https://github.com/BoundaryML/baml/tree/canary/docs/changelog-0.24.0-benchmarks) records the environment details and raw samples.
 
 ### String formatting and joining
 
@@ -315,6 +315,12 @@ The runtime caches interface resolution and limits a runtime class's first looku
 ### Allocation and collection overhead
 
 Default builds avoid deadlock-detector bookkeeping on every lock. Allocation avoids unnecessary slot-directory locks, and finalizer scans visit candidates instead of every dead object. The 20,000-step n-body workload fell from 231.829 ms to 138.645 ms across the complete releases. This allocation-heavy workload does not establish the same gain for other programs. The isolated allocation PR also reported a 7.8% regression in its shared-array-push workload.
+
+LSP deadlock reports are also disabled by default. To restore them when debugging a hung language server, build from source with the watchdog feature:
+
+```bash
+cargo build --release -p baml_cli --features deadlock-watchdog
+```
 
 ([#5417](https://github.com/BoundaryML/baml/pull/5417)), ([#5429](https://github.com/BoundaryML/baml/pull/5429))
 
@@ -612,7 +618,7 @@ After:
 
 ```bash
 # Update the nearest existing baml.toml.
-baml toolchain use 0.24.0
+baml toolchain use 0.25.0
 
 # Set the user default in $BAML_HOME/config.toml.
 baml toolchain use --global canary
