@@ -307,7 +307,7 @@ Usage: baml [--project-dir <path>] <command> [args...]
 
 Wrapper commands:
   toolchain     Manage language toolchains
-  self update   Update the wrapper executable
+  self-update   Update the wrapper executable
 
 CLI commands (provided by the selected toolchain):
   new, init, check, fmt, test, run, pack, generate, describe, codequality,
@@ -321,10 +321,10 @@ Options:
 Use baml help <command> for command help.
 ";
 
-const SELF_UPDATE_HELP: &str = r#"BAML wrapper self update
+const SELF_UPDATE_HELP: &str = r#"BAML wrapper self-update
 
 Usage:
-  baml self update
+  baml self-update
 
 Updates the wrapper binary only. It never installs or changes the active
 language toolchain. Package-manager-managed wrappers refuse self-update and
@@ -397,11 +397,8 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
                 args.remove(0);
                 args.push("--help".to_string());
             }
-            Some("self") => {
-                anyhow::ensure!(
-                    args.len() == 3 && args[2] == "update",
-                    "usage: baml help self update"
-                );
+            Some("self-update") => {
+                anyhow::ensure!(args.len() == 2, "usage: baml help self-update");
                 print!("{SELF_UPDATE_HELP}");
                 return Ok(0);
             }
@@ -415,16 +412,14 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
         args.remove(0);
         return toolchain(args, &paths).map(|()| 0);
     }
-    if args.first().map(String::as_str) == Some("self") {
-        if args.get(1).is_none_or(|arg| is_help_arg(arg))
-            || args.get(2).is_some_and(|arg| is_help_arg(arg))
-        {
+    if args.first().map(String::as_str) == Some("self-update") {
+        if args.get(1).is_some_and(|arg| is_help_arg(arg)) {
             print!("{SELF_UPDATE_HELP}");
             return Ok(0);
         }
-        if args.get(1).map(String::as_str) != Some("update") || args.len() > 2 {
+        if args.len() > 1 {
             return Err(anyhow!(
-                "usage: baml self update\nunexpected arguments: {}",
+                "usage: baml self-update\nunexpected arguments: {}",
                 args[1..].join(" ")
             ));
         }
@@ -1947,7 +1942,7 @@ fn self_update() -> Result<()> {
 #[cfg(any(not(feature = "self-update"), feature = "no-self-update"))]
 fn self_update_impl() -> Result<()> {
     Err(anyhow!(
-        "baml self update is disabled in this build.\nUpdate BAML with your package manager.\nHomebrew: brew upgrade baml\nWinGet: winget upgrade --id BoundaryML.BAML\nArch Linux: sudo pacman -Syu baml\nTo check language toolchain updates, run: baml toolchain status"
+        "self-update is disabled in this build.\nUpdate BAML with your package manager.\nHomebrew: brew upgrade baml\nWinGet: winget upgrade --id BoundaryML.BAML\nArch Linux: sudo pacman -Syu baml\nTo check language toolchain updates, run: baml toolchain status"
     ))
 }
 

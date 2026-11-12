@@ -48,7 +48,7 @@ testset "wrapper telemetry" {
                     ["toolchain", "--project-dir", fixture.cwd, "status", "--json"],
                     ["toolchain", "--project-dir=" + fixture.cwd, "status", "--json"],
                 ],
-                "baml self update": [["self", "update", "--help"], ["help", "self", "update"]],
+                "baml self-update": [["self-update", "--help"], ["help", "self-update"]],
                 "baml cloud": [
                     ["--color", "toolchain", "cloud", "recordings", "query", "--project", "private-cloud-project"],
                     ["cloud", "auth", "login", "--token", "private-token"],
@@ -144,7 +144,7 @@ testset "wrapper telemetry" {
                     ["--project-dir"],
                     ["--project-dir", `${fixture.root}/private-project`, "toolchain", "status"],
                     ["toolchain", "private-command"],
-                    ["self", "update", "private-argument"],
+                    ["self-update", "private-argument"],
                 ]
             ) {
                 let before = fixture.captures().length();
@@ -268,7 +268,7 @@ testset "wrapper telemetry" {
                     command: [`${fixture.root}/wrapper${fixture.suffix}`],
                     self_update: true,
                 };
-                root.harness.require(fixture.run(copy, ["self", "update"]).ok(), "self-update failed");
+                root.harness.require(fixture.run(copy, ["self-update"]).ok(), "self-update failed");
                 // The replacement is a CLI stub, so use the original wrapper to
                 // deliver its predecessor's durable queue.
                 root.harness.require(
@@ -278,7 +278,7 @@ testset "wrapper telemetry" {
                 fixture.await_telemetry(2);
                 let events = fixture.captures();
                 root.harness.require(
-                    events.length() == 2 && events[0].event == "baml self update",
+                    events.length() == 2 && events[0].event == "baml self-update",
                     "successful replacement lost its command event",
                 );
                 root.harness.require(
@@ -894,7 +894,7 @@ testset "wrapper telemetry" {
             fixture.env["CI"] = "true";
 
             fixture.manage(candidate, ["toolchain", "--help"]);
-            fixture.manage(candidate, ["self", "update", "--help"]);
+            fixture.manage(candidate, ["self-update", "--help"]);
             fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = ["--version"]);
             root.harness.require(
                 fixture.run(candidate, ["--version"]).ok(),
@@ -922,7 +922,7 @@ testset "wrapper telemetry" {
             fixture.channel("canary", NEXT_VERSION);
             fixture.manage(candidate, ["toolchain", "update"]);
             fixture.await_telemetry(8);
-            fixture.manage(candidate, ["self", "update"], success = false);
+            fixture.manage(candidate, ["self-update"], success = false);
             fixture.await_telemetry(10);
             let events = fixture.captures();
             for (let name in ["wrapper_selection", "wrapper_install", "wrapper_update"]) {
@@ -954,7 +954,7 @@ testset "wrapper telemetry" {
             );
             root.harness.require(
                 events.some((event) -> bool {
-                    event.event == "baml self update"
+                    event.event == "baml self-update"
                 }),
                 "self-update command event missing",
             );

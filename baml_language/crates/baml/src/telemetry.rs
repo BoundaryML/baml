@@ -228,7 +228,10 @@ fn canonical_command(args: &[String]) -> &'static str {
     let mut index = 0;
     if tokens.get(index) == Some(&"help") {
         index += 1;
-        if !matches!(tokens.get(index).copied(), Some("toolchain" | "self")) {
+        if !matches!(
+            tokens.get(index).copied(),
+            Some("toolchain" | "self-update")
+        ) {
             return "baml";
         }
     }
@@ -242,7 +245,7 @@ fn canonical_command(args: &[String]) -> &'static str {
             Some("uninstall") => "baml toolchain uninstall",
             _ => "baml toolchain",
         },
-        Some("self") => "baml self update",
+        Some("self-update") => "baml self-update",
         Some("check") => "baml check",
         Some("run") => "baml run",
         Some("test") => "baml test",

@@ -127,7 +127,7 @@ impl WrapperManifest {
 fn validate_schema(schema: u32) -> anyhow::Result<()> {
     if schema > MANIFEST_SCHEMA {
         anyhow::bail!(
-            "manifest schema {schema} is newer than this wrapper; run `baml self update`"
+            "manifest schema {schema} is newer than this wrapper; run `baml self-update`"
         );
     }
     if schema != MANIFEST_SCHEMA {

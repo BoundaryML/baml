@@ -277,7 +277,7 @@ class WrapperTelemetry {
         index = 0;
         if (tokens.at(index) == "help") {
             index += 1;
-            if (!["toolchain", "self"].includes(tokens.at(index) ?? "")) {
+            if (!["toolchain", "self-update"].includes(tokens.at(index) ?? "")) {
                 return "baml";
             }
         }
@@ -289,12 +289,10 @@ class WrapperTelemetry {
             }
             return "baml toolchain";
         }
-        if (command == "self") {
-            return "baml self update";
-        }
         if (
             [
                 "toolchain",
+                "self-update",
                 "check",
                 "run",
                 "test",

@@ -7,7 +7,7 @@ function root_help() -> null {
 
             Wrapper commands:
               toolchain     Manage language toolchains
-              self update   Update the wrapper executable
+              self-update   Update the wrapper executable
 
             CLI commands (provided by the selected toolchain):
               new, init, check, fmt, test, run, pack, generate, describe, codequality,
@@ -58,7 +58,7 @@ function help(command: string = "") -> null {
               uninstall <version>
 
             Selectors: canary, nightly, exact release version, or a local baml-cli path
-            Wrapper updates: baml self update
+            Wrapper updates: baml self-update
         `,
     );
     null
@@ -141,8 +141,8 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
         paths.management(args.slice(2, args.length()).concat(["--help"]));
         return null;
     }
-    if (args[0] == "help" && args.at(1) == "self") {
-        ensure(args == ["help", "self", "update"], "usage: baml help self update");
+    if (args[0] == "help" && args.at(1) == "self-update") {
+        ensure(args.length() == 2, "usage: baml help self-update");
         baml.io.println(SELF_UPDATE_HELP);
         return null;
     }
@@ -155,16 +155,12 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
             paths.management(args.slice(1, args.length()));
             return null;
         },
-        "self" => {
-            if (
-                args.length() == 1
-                    || ["--help", "-h"].includes(args[1])
-                    || ["--help", "-h"].includes(args.at(2) ?? "")
-            ) {
+        "self-update" => {
+            if (args == ["self-update", "--help"] || args == ["self-update", "-h"]) {
                 baml.io.println(SELF_UPDATE_HELP);
                 return null;
             }
-            ensure(args == ["self", "update"], "usage: baml self update");
+            ensure(args.length() == 1, "unexpected self-update arguments");
             return WrapperUpdater.update(
                 telemetry = paths.telemetry,
                 $trace = trace.span(inputs = false, output = false, error = false),
@@ -215,4 +211,4 @@ function previous_selector(original: string, global: bool) -> string {
     "not set"
 }
 
-const SELF_UPDATE_HELP = "baml self update: update the wrapper executable independently of language toolchains; use baml toolchain status to check language updates";
+const SELF_UPDATE_HELP = "baml self-update: update the wrapper executable independently of language toolchains; use baml toolchain status to check language updates";

@@ -5,7 +5,7 @@ class WrapperUpdater {
         if (!self_update_enabled()) {
             fail(
                 `
-                    baml self update is disabled in this build.
+                    self-update is disabled in this build.
                     Update BAML with your package manager.
                     Homebrew: brew upgrade baml
                     WinGet: winget upgrade --id BoundaryML.BAML
