@@ -187,7 +187,8 @@ def cmd_pull(args: argparse.Namespace) -> int:
         # First, show what would change
         existing_files = set()
         for f in ALL_BEPS_DIR.rglob("*"):
-            if f.is_file() and f.name != "bep":  # Don't count the script itself
+            # Don't count the script itself, or the BCS proposals "bep bcs pull" keeps here
+            if f.is_file() and f.name != "bep" and f.relative_to(ALL_BEPS_DIR).parts[0] != "BCS":
                 existing_files.add(f.relative_to(ALL_BEPS_DIR))
 
         new_files = set()
@@ -848,17 +849,43 @@ def write_local_bcs(proposal: dict) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "index.html").write_text(proposal["html"], encoding="utf-8")
     meta = {key: proposal[key] for key in ("number", "title", "status", "authors", "version") if key in proposal}
+    # What the server had, so a later pull can tell a local edit from an old copy.
+    meta["pulledSha256"] = bcs_digest(proposal["html"])
     (folder / "meta.json").write_text(json.dumps(meta, indent=2) + chr(10), encoding="utf-8")
     return folder
 
 
+def bcs_digest(html: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(html.encode("utf-8")).hexdigest()
+
+
+def bcs_local_edits(folder: Path) -> bool:
+    """Whether the local page differs from what was last pulled or pushed."""
+    meta_path = folder / "meta.json"
+    page_path = folder / "index.html"
+    if not meta_path.exists() or not page_path.exists():
+        return False
+    pulled = json.loads(meta_path.read_text(encoding="utf-8")).get("pulledSha256")
+    return pulled is not None and bcs_digest(page_path.read_text(encoding="utf-8")) != pulled
+
+
 def cmd_bcs_pull(args: argparse.Namespace) -> int:
-    data = bcs_call("GET")
-    proposals = data.get("proposals", [])
-    for proposal in proposals:
+    """Every proposal's current page, one request each; local edits are kept unless --force."""
+    listed = bcs_call("GET").get("proposals", [])
+    kept = 0
+    for summary in listed:
+        number = summary["number"]
+        local = find_local_bcs(str(number))
+        if local and bcs_local_edits(local) and not args.force:
+            print(f"  {local.name}  kept: it has edits you have not pushed (bep bcs push {number}, or pull --force)")
+            kept += 1
+            continue
+        proposal = bcs_call("GET", f"/{number}")
         folder = write_local_bcs(proposal)
         print(f"  {folder.name}  v{proposal['version']}  {proposal['status']}")
-    print(f"Pulled {len(proposals)} BCS proposal(s) into {BCS_DIR}")
+    print(f"Pulled {len(listed) - kept} BCS proposal(s) into {BCS_DIR}" + (f", kept {kept} with local edits" if kept else ""))
     return 0
 
 
@@ -902,13 +929,14 @@ def cmd_bcs_push(args: argparse.Namespace) -> int:
     if remote["version"] != meta.get("version") and not args.force:
         print(f"Error: the server has v{remote['version']}, you edited v{meta.get('version')}. Pull first, or --force.", file=sys.stderr)
         return 1
+    if local == remote["html"]:
+        print(f"{format_bcs_number(number)} matches the server's v{remote['version']}: nothing to push")
+        return 0
+    # The line diff only describes the change; a change in line endings alone shows as none.
     changed = [
         line for line in difflib.unified_diff(remote["html"].splitlines(), local.splitlines(), lineterm="")
         if line[:1] in "+-" and line[:3] not in ("+++", "---")
     ]
-    if not changed:
-        print(f"{format_bcs_number(number)} matches the server's v{remote['version']}: nothing to push")
-        return 0
     added = sum(1 for line in changed if line.startswith("+"))
     print(f"{format_bcs_number(number)}: {added} line(s) added, {len(changed) - added} removed, against v{remote['version']}")
     if not args.yes:
@@ -922,6 +950,7 @@ def cmd_bcs_push(args: argparse.Namespace) -> int:
         "baseVersion": None if args.force else meta.get("version"),
     })
     meta["version"] = saved["version"]
+    meta["pulledSha256"] = bcs_digest(local)
     (folder / "meta.json").write_text(json.dumps(meta, indent=2) + chr(10), encoding="utf-8")
     print(f"Pushed {format_bcs_number(number)} v{saved['version']}: {API_BASE}/bcs/{number}")
     return 0
@@ -1005,12 +1034,13 @@ def main():
     # bcs: team-only design proposals
     bcs_parser = subparsers.add_parser("bcs", help="Team only: BCS design proposals (needs BCS_TOKEN)")
     bcs_sub = bcs_parser.add_subparsers(dest="bcs_command")
-    bcs_sub.add_parser("pull", help="Fetch every BCS proposal into BCS/")
+    bcs_pull = bcs_sub.add_parser("pull", help="Fetch every BCS proposal into BCS/")
+    bcs_pull.add_argument("-f", "--force", action="store_true", help="Overwrite local edits you have not pushed")
     bcs_sub.add_parser("list", help="List local BCS proposals")
     bcs_new = bcs_sub.add_parser("new", help="Create a BCS proposal from an HTML page")
     bcs_new.add_argument("title", help="Title of the proposal")
     bcs_new.add_argument("file", help="The HTML page")
-    bcs_new.add_argument("--status", default="draft", help="draft, proposed, accepted, ...")
+    bcs_new.add_argument("--status", default="draft", choices=["draft", "proposed", "pending", "accepted", "implemented", "rejected", "superseded"], help="Its status")
     bcs_push = bcs_sub.add_parser("push", help="Save a local BCS proposal as a new version")
     bcs_push.add_argument("ref", help="BCS number (e.g., 1 or BCS-001)")
     bcs_push.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")

@@ -6,6 +6,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { bepStatus } from "./schema";
 
 /** The longest HTML page a version may hold, under Convex's 1 MiB document limit. */
@@ -58,6 +59,14 @@ export const list = query({
   },
 });
 
+/** A version's page: one document, read by itself. */
+async function page(ctx: QueryCtx, docId: Id<"bcsDocs">, version: number) {
+  return ctx.db
+    .query("bcsVersionPages")
+    .withIndex("by_doc_version", (q) => q.eq("docId", docId).eq("version", version))
+    .unique();
+}
+
 /** A proposal with one version's page, its current one unless `version` names another. */
 export const get = query({
   args: { secret: v.string(), number: v.number(), version: v.optional(v.number()) },
@@ -65,13 +74,14 @@ export const get = query({
     guard(args.secret);
     const doc = await byNumber(ctx, args.number);
     if (!doc) return null;
+    const version = args.version ?? doc.currentVersion;
+    const shown = await page(ctx, doc._id, version);
+    if (!shown) return null;
     const versions = await ctx.db
       .query("bcsDocVersions")
       .withIndex("by_doc_version", (q) => q.eq("docId", doc._id))
       .order("desc")
       .collect();
-    const shown = versions.find((each) => each.version === (args.version ?? doc.currentVersion));
-    if (!shown) return null;
     return {
       number: doc.number,
       title: doc.title,
@@ -80,7 +90,7 @@ export const get = query({
       currentVersion: doc.currentVersion,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
-      version: shown.version,
+      version,
       html: shown.html,
       versions: versions.map((each) => ({
         version: each.version,
@@ -117,54 +127,25 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
-    await ctx.db.insert("bcsDocVersions", {
-      docId,
-      version: 1,
-      html: args.html,
-      createdBy: args.author,
-      createdAt: now,
-    });
+    await ctx.db.insert("bcsDocVersions", { docId, version: 1, createdBy: args.author, createdAt: now });
+    await ctx.db.insert("bcsVersionPages", { docId, version: 1, html: args.html });
     return number;
   },
 });
 
-/** Saves a new version of the page; its saver joins the authors. */
-export const addVersion = mutation({
+/**
+ * Saves what an editor changed, in one transaction: a new version when `html` differs from the
+ * current page, and the title or status when given. Refused when `baseVersion`, the version the
+ * editor started from, is no longer the current one, so a stale editor cannot hide a newer save.
+ */
+export const save = mutation({
   args: {
     secret: v.string(),
     number: v.number(),
-    html: v.string(),
-    note: v.optional(v.string()),
     author: v.string(),
-  },
-  handler: async (ctx, args) => {
-    guard(args.secret);
-    checkHtml(args.html);
-    const doc = await byNumber(ctx, args.number);
-    if (!doc) throw new Error("No such proposal");
-    const version = doc.currentVersion + 1;
-    const now = Date.now();
-    await ctx.db.insert("bcsDocVersions", {
-      docId: doc._id,
-      version,
-      html: args.html,
-      note: args.note?.trim() || undefined,
-      createdBy: args.author,
-      createdAt: now,
-    });
-    await ctx.db.patch(doc._id, {
-      currentVersion: version,
-      updatedAt: now,
-      authors: doc.authors.includes(args.author) ? doc.authors : [...doc.authors, args.author],
-    });
-    return version;
-  },
-});
-
-export const update = mutation({
-  args: {
-    secret: v.string(),
-    number: v.number(),
+    baseVersion: v.optional(v.number()),
+    html: v.optional(v.string()),
+    note: v.optional(v.string()),
     title: v.optional(v.string()),
     status: v.optional(bepStatus),
   },
@@ -172,11 +153,39 @@ export const update = mutation({
     guard(args.secret);
     const doc = await byNumber(ctx, args.number);
     if (!doc) throw new Error("No such proposal");
+    if (args.baseVersion !== undefined && args.baseVersion !== doc.currentVersion) {
+      throw new Error(
+        `Someone saved v${doc.currentVersion} since you started from v${args.baseVersion}: reload it and save again`
+      );
+    }
+    const now = Date.now();
+    let version = doc.currentVersion;
+    if (args.html !== undefined) {
+      checkHtml(args.html);
+      const current = await page(ctx, doc._id, doc.currentVersion);
+      if (current?.html !== args.html) {
+        version = doc.currentVersion + 1;
+        await ctx.db.insert("bcsDocVersions", {
+          docId: doc._id,
+          version,
+          note: args.note?.trim() || undefined,
+          createdBy: args.author,
+          createdAt: now,
+        });
+        await ctx.db.insert("bcsVersionPages", { docId: doc._id, version, html: args.html });
+      }
+    }
     const title = args.title?.trim();
-    await ctx.db.patch(doc._id, {
-      ...(title ? { title } : {}),
-      ...(args.status ? { status: args.status } : {}),
-      updatedAt: Date.now(),
-    });
+    const changed = version !== doc.currentVersion || title || args.status;
+    if (changed) {
+      await ctx.db.patch(doc._id, {
+        currentVersion: version,
+        updatedAt: now,
+        ...(title ? { title } : {}),
+        ...(args.status ? { status: args.status } : {}),
+        authors: doc.authors.includes(args.author) ? doc.authors : [...doc.authors, args.author],
+      });
+    }
+    return version;
   },
 });

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { api } from "../../../../convex/_generated/api";
 import { BepStatusBadge } from "@/components/bep/bep-status";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { currentViewer } from "@/lib/bcs-auth";
@@ -83,10 +83,9 @@ export default async function BcsProposal({
             href={`/bcs/${proposal.number}/raw?v=${proposal.version}`}
             target="_blank"
             rel="noreferrer"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
           >
-            <Button variant="outline" size="sm">
-              Open full page
-            </Button>
+            Open full page
           </a>
           <details className="relative">
             <summary className="cursor-pointer list-none text-sm rounded-md border px-3 py-1.5 hover:bg-muted">
@@ -95,6 +94,7 @@ export default async function BcsProposal({
             <div className="absolute right-0 z-10 mt-1 w-[28rem] rounded-md border bg-background p-4 shadow-lg space-y-6">
               <form action={saveVersion.bind(null, proposal.number)} className="space-y-3">
                 <h2 className="font-medium">Save a new version</h2>
+                <input type="hidden" name="baseVersion" value={proposal.currentVersion} />
                 <HtmlField />
                 <div className="space-y-2">
                   <Label htmlFor="note">What changed</Label>
@@ -109,6 +109,8 @@ export default async function BcsProposal({
                 className="space-y-3 border-t pt-4"
               >
                 <h2 className="font-medium">Title and status</h2>
+                <input type="hidden" name="originalTitle" value={proposal.title} />
+                <input type="hidden" name="originalStatus" value={proposal.status} />
                 <Input name="title" defaultValue={proposal.title} aria-label="Title" />
                 <select
                   name="status"

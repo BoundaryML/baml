@@ -41,28 +41,39 @@ export async function createProposal(form: FormData) {
   redirect(`/bcs/${number}`);
 }
 
+/** The version the editor's form was opened at, which the save is refused against if stale. */
+function baseVersion(form: FormData): number | undefined {
+  const value = Number(form.get("baseVersion"));
+  return Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 export async function saveVersion(number: number, form: FormData) {
   const viewer = await viewerOrFail();
   const { convex, secret } = bcsConvex();
-  await convex.mutation(api.bcs.addVersion, {
+  await convex.mutation(api.bcs.save, {
     secret,
     number,
+    author: viewer.login,
+    baseVersion: baseVersion(form),
     html: await html(form),
     note: String(form.get("note") ?? ""),
-    author: viewer.login,
   });
   revalidatePath(`/bcs/${number}`);
   redirect(`/bcs/${number}`);
 }
 
+/** Saves the title and status, each only when the editor changed it from what the form showed. */
 export async function updateProposal(number: number, form: FormData) {
-  await viewerOrFail();
+  const viewer = await viewerOrFail();
   const { convex, secret } = bcsConvex();
-  await convex.mutation(api.bcs.update, {
+  const title = String(form.get("title") ?? "").trim();
+  const newStatus = status(form.get("status"));
+  await convex.mutation(api.bcs.save, {
     secret,
     number,
-    title: String(form.get("title") ?? "") || undefined,
-    status: status(form.get("status")),
+    author: viewer.login,
+    title: title && title !== form.get("originalTitle") ? title : undefined,
+    status: newStatus !== form.get("originalStatus") ? newStatus : undefined,
   });
   revalidatePath(`/bcs/${number}`);
   revalidatePath("/bcs");

@@ -22,10 +22,18 @@ export default function Home() {
   const { user, userId, isLoading, logout, hasManagementPermissions } = useUser();
   const router = useRouter();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Signing out of the app ends the team-only BCS session too; until the server has cleared
+    // it, the member is not signed out.
+    const ended = await fetch("/api/bcs/logout", { method: "POST" }).then(
+      (response) => response.ok,
+      () => false
+    );
+    if (!ended) {
+      window.alert("Could not sign out. Check your connection and try again.");
+      return;
+    }
     logout();
-    // Signing out of the app ends the team-only BCS session too.
-    void fetch("/api/bcs/logout", { method: "POST" });
     router.push("/login");
   };
 

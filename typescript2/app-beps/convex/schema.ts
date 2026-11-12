@@ -411,12 +411,20 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_number", ["number"]),
 
+  // A version's metadata, listed without its page so that reading a proposal never loads every
+  // version's HTML.
   bcsDocVersions: defineTable({
     docId: v.id("bcsDocs"),
     version: v.number(),
-    html: v.string(),
     note: v.optional(v.string()),
     createdBy: v.string(),
     createdAt: v.number(),
+  }).index("by_doc_version", ["docId", "version"]),
+
+  // A version's page, read one at a time.
+  bcsVersionPages: defineTable({
+    docId: v.id("bcsDocs"),
+    version: v.number(),
+    html: v.string(),
   }).index("by_doc_version", ["docId", "version"]),
 });

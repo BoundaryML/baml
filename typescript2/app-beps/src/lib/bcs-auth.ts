@@ -12,7 +12,7 @@ import { cookies } from "next/headers";
 export const BCS_COOKIE = "bcs_session";
 const MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 /** How long a CLI token works, after which its owner gets a new one from /bcs/token. */
-const TOKEN_SECONDS = 90 * 24 * 60 * 60;
+const TOKEN_SECONDS = 30 * 24 * 60 * 60;
 /** What a signed value is for: the browser's cookie, or the `bep bcs` CLI's bearer token. */
 type Use = "session" | "cli";
 const TOKEN_PREFIX = "bcs_";
@@ -28,14 +28,22 @@ const TEAM: Record<string, string> = {
   "512410": "sxlijin",
 };
 
-export type BcsViewer = { githubId: string; login: string };
+/**
+ * A team member, and why they are one: `list`, checked again on every request, so removing an
+ * account from TEAM ends its access at once; or a verified `email`, which only GitHub can check,
+ * so it lasts until the cookie or token expires.
+ */
+export type BcsViewer = { githubId: string; login: string; via: "list" | "email" };
 
-/** Whether a GitHub account may read BCS proposals. */
-export function isBcsMember(githubId: string, verifiedEmails: string[]): boolean {
-  return (
-    githubId in TEAM ||
-    verifiedEmails.some((email) => email.toLowerCase().endsWith("@boundaryml.com"))
-  );
+/** Why a GitHub account may read BCS proposals, or null when it may not. */
+export function bcsMembership(
+  githubId: string,
+  verifiedEmails: string[]
+): BcsViewer["via"] | null {
+  if (githubId in TEAM) return "list";
+  return verifiedEmails.some((email) => email.toLowerCase().endsWith("@boundaryml.com"))
+    ? "email"
+    : null;
 }
 
 function secret(): string | null {
@@ -92,7 +100,10 @@ function verify(token: string | undefined, use: Use): BcsViewer | null {
     if (claims.use !== use) return null;
     if (typeof claims.exp !== "number" || claims.exp < Date.now() / 1000) return null;
     if (typeof claims.githubId !== "string" || typeof claims.login !== "string") return null;
-    return { githubId: claims.githubId, login: claims.login };
+    if (claims.via !== "list" && claims.via !== "email") return null;
+    // Removed from the list since signing in: no longer a member.
+    if (claims.via === "list" && !(claims.githubId in TEAM)) return null;
+    return { githubId: claims.githubId, login: claims.login, via: claims.via };
   } catch {
     return null;
   }
@@ -112,7 +123,7 @@ export const sessionCookie = {
  */
 export async function currentViewer(): Promise<BcsViewer | null> {
   if (process.env.NODE_ENV !== "production" && process.env.BCS_DEV_VIEWER) {
-    return { githubId: "dev", login: process.env.BCS_DEV_VIEWER };
+    return { githubId: "dev", login: process.env.BCS_DEV_VIEWER, via: "email" };
   }
   const jar = await cookies();
   return verifySession(jar.get(BCS_COOKIE)?.value);

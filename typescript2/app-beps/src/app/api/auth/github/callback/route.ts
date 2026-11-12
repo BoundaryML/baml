@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { BCS_COOKIE, isBcsMember, sessionCookie, signSession } from "@/lib/bcs-auth";
+import { BCS_COOKIE, bcsMembership, sessionCookie, signSession } from "@/lib/bcs-auth";
 
 const PRODUCTION_URL = "https://beps.boundaryml.com";
 const ALLOWED_PREVIEW_PATTERNS = [
@@ -163,13 +163,15 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.redirect(
       new URL(`/login?github_user=${encodedUser}`, baseUrl)
     );
-    // The server knows who this is here, so here it decides who may read BCS proposals.
+    // The server knows who this is here, so here it decides who may read BCS proposals. A
+    // non-member signing in on a browser a member used ends that member's BCS session.
     const githubId = githubUser.id.toString();
-    if (isBcsMember(githubId, verifiedEmails)) {
-      const token = signSession({ githubId, login: githubUser.login });
-      if (token) {
-        response.cookies.set(BCS_COOKIE, token, sessionCookie);
-      }
+    const via = bcsMembership(githubId, verifiedEmails);
+    const token = via && signSession({ githubId, login: githubUser.login, via });
+    if (token) {
+      response.cookies.set(BCS_COOKIE, token, sessionCookie);
+    } else {
+      response.cookies.set(BCS_COOKIE, "", { ...sessionCookie, maxAge: 0 });
     }
     return response;
   } catch (error) {

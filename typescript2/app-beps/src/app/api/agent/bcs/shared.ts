@@ -15,8 +15,14 @@ export function authenticate(request: NextRequest): BcsViewer | NextResponse {
   );
 }
 
-export function status(value: unknown): BcsStatus | undefined {
-  return BCS_STATUSES.find((each) => each === value);
+/** A status from a request: undefined when omitted, an error when it is not one we know. */
+export function status(value: unknown): BcsStatus | undefined | { error: string } {
+  if (value === undefined || value === null) return undefined;
+  return (
+    BCS_STATUSES.find((each) => each === value) ?? {
+      error: `status must be one of ${BCS_STATUSES.join(", ")}`,
+    }
+  );
 }
 
 /** A Convex error's message, which the BCS functions write for people. */

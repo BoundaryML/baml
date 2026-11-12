@@ -15,9 +15,10 @@ export function HtmlField() {
       />
       <p className="text-sm text-muted-foreground">
         An HTML file, such as a design doc an agent made, with its styles and diagrams inline.
-        Or paste it:
       </p>
+      <Label htmlFor="html">Or paste the HTML</Label>
       <Textarea
+        id="html"
         name="html"
         rows={8}
         placeholder="<!doctype html>..."

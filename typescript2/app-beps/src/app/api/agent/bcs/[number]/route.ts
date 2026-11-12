@@ -1,4 +1,4 @@
-// One proposal, for `bep bcs push`: read its current page, and save a new version.
+// One proposal, for `bep bcs pull` and `bep bcs push`: read its current page, and save it.
 import { NextRequest } from "next/server";
 import { api } from "../../../../../../convex/_generated/api";
 import { bcsConvex } from "@/lib/bcs-convex";
@@ -30,8 +30,9 @@ export async function GET(request: NextRequest, { params }: Params) {
 }
 
 /**
- * Saves `{ html?, note?, title?, status?, baseVersion? }`: a new version when html is given,
- * refused when baseVersion is not the current one, and the title or status when given.
+ * Saves `{ html?, note?, title?, status?, baseVersion? }` in one transaction: a new version when
+ * html differs from the current page, and the title or status when given, all refused (409) when
+ * baseVersion is no longer the current version.
  */
 export async function PUT(request: NextRequest, { params }: Params) {
   const viewer = authenticate(request);
@@ -39,36 +40,29 @@ export async function PUT(request: NextRequest, { params }: Params) {
   const number = Number((await params).number);
   const body = await request.json().catch(() => null);
   if (!Number.isInteger(number) || !body) return json({ error: "Send a JSON body." }, 400);
+  const asked = status(body.status);
+  if (asked && typeof asked === "object") return json(asked, 400);
   const { convex, secret } = bcsConvex();
   try {
-    const current = await convex.query(api.bcs.get, { secret, number });
-    if (!current) return json({ error: "No such proposal." }, 404);
-    if (typeof body.baseVersion === "number" && body.baseVersion !== current.currentVersion) {
-      return json(
-        {
-          error: `The server has v${current.currentVersion}; you edited v${body.baseVersion}. Pull first.`,
-          currentVersion: current.currentVersion,
-        },
-        409
-      );
-    }
-    let version = current.currentVersion;
-    if (typeof body.html === "string" && body.html !== current.html) {
-      version = await convex.mutation(api.bcs.addVersion, {
-        secret,
-        number,
-        html: body.html,
-        note: typeof body.note === "string" ? body.note : undefined,
-        author: viewer.login,
-      });
-    }
-    const title = typeof body.title === "string" ? body.title : undefined;
-    const newStatus = status(body.status);
-    if (title || newStatus) {
-      await convex.mutation(api.bcs.update, { secret, number, title, status: newStatus });
-    }
+    const version = await convex.mutation(api.bcs.save, {
+      secret,
+      number,
+      author: viewer.login,
+      baseVersion: typeof body.baseVersion === "number" ? body.baseVersion : undefined,
+      html: typeof body.html === "string" ? body.html : undefined,
+      note: typeof body.note === "string" ? body.note : undefined,
+      title: typeof body.title === "string" ? body.title : undefined,
+      status: asked,
+    });
     return json({ number, version });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("Someone saved")) return json({ error: failureText(message) }, 409);
+    if (message.includes("No such proposal")) return json({ error: "No such proposal." }, 404);
     return failure(error);
   }
+}
+
+function failureText(message: string): string {
+  return message.match(/(Someone saved[^\n]*)/)?.[1] ?? message;
 }
