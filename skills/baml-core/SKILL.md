@@ -157,7 +157,7 @@ To add cross-cutting behavior (metering, caching, replay, budgets), write a clas
 
 ### Debugging a recorded call
 
-Runs record their calls. AI functions record their inputs, output, error and type arguments by default. A failed call's error is recorded on the innermost span that does not pass `error = false`, and a failed future records the error that escaped it, unless `baml.toml` sets `http_bodies = false` (see [Tracing](#tracing)). `baml local recordings query` answers SQL over them (`baml local recordings schema` lists the tables). To turn a failing call into a test:
+Runs record their calls. AI functions record their inputs, output, error and type arguments by default. A failed call's error is recorded on the innermost span that does not pass `error = false`, and a failed future records the error that escaped it, unless `baml.toml` sets `http_bodies = false` (see [Tracing](#tracing)). `baml local recordings query` answers SQL over them (`baml local recordings schema` lists the tables). Results keep the stored spellings, which are what SQL filters on. When you put results in front of a person, in a report or a dashboard, show the labels and column headings that `baml local recordings schema` lists under "Labels for people": a `status` of `user_error` is shown as Failed, a `future` as Task, `context_distinct_id` as User, and a duration in ms or s, not nanoseconds. `baml local recordings schema --output-format json` carries the same labels on each column. To turn a failing call into a test:
 
 ```bash
 # 1. Find the call.

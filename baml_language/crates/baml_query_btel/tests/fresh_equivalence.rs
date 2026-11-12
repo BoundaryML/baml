@@ -204,6 +204,27 @@ async fn fresh_and_incremental_indexes_are_identical() {
     let mut incremental = Index::for_project(&incremental_project, options).unwrap();
     let metrics = incremental.refresh().unwrap();
     assert_eq!(metrics.transactions, metrics.files_applied);
+    // The profiler serves each ended process's times and source revision
+    // from what both paths stored: the same rows either way.
+    let times = "SELECT process_id, process_start_time, process_end_time,
+           baml_source_code_content_id, COUNT(*)
+         FROM profiler GROUP BY 1, 2, 3, 4 ORDER BY 1";
+    let fresh_times = sql(&mut fresh, times).rows;
+    assert!(!fresh_times.is_empty());
+    assert!(
+        fresh_times
+            .iter()
+            .all(|row| row[1].as_str().is_some() && row[1].as_str() <= row[2].as_str()),
+        "{fresh_times:?}"
+    );
+    assert_eq!(fresh_times, sql(&mut incremental, times).rows);
+    // The revision is the process's own, in either index.
+    let revisions = "SELECT COUNT(*) FROM profiler n
+         JOIN processes p ON p.process_id = n.process_id
+         WHERE n.baml_source_code_content_id IS DISTINCT FROM p.baml_source_code_content_id";
+    for index in [&mut fresh, &mut incremental] {
+        assert_eq!(sql(index, revisions).rows, [[serde_json::json!(0)]]);
+    }
     let fresh = dump(&fresh);
     // Two Pick<T> calls, Box<T>.map<U>, and the explicitly owned Pick<int>
     // span each record type arguments on every main execution.
