@@ -1259,7 +1259,10 @@ query:
     of the calls an `ai.Client.invoke` span made) and `total_usage` (every
     call under a span, one entry per model with its token counts) are BAML values), `span_announcements` (every
     started span), and `profiler` (one row per calling-context node of an
-    ended process: invocations, outcomes, total/self/I/O time). Value columns
+    ended process: invocations, outcomes, total/self/I/O time, the
+    process's `process_start_time` and `process_end_time`, which bound code
+    paths by time without a join, and its `baml_source_code_content_id`,
+    which picks one source revision's code paths without a join). Value columns
     support ordinary subscripts and comparisons —
     `input_args['customer']['age'] >= 30`,
     `input_args = baml_value_json('{"x":1}')` — decoded on demand. An image,
