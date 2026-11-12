@@ -819,27 +819,6 @@ fn escape_coverage() {
         }
     }
 
-    fn percent(part: usize, whole: usize) -> usize {
-        (part * 100).checked_div(whole).unwrap_or(0)
-    }
-
-    fn baml_files(dir: &std::path::Path) -> Vec<(String, String)> {
-        let mut files: Vec<_> = std::fs::read_dir(dir)
-            .unwrap()
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().is_some_and(|ext| ext == "baml"))
-            .map(|path| {
-                (
-                    path.file_name().unwrap().to_string_lossy().into_owned(),
-                    std::fs::read_to_string(&path).unwrap(),
-                )
-            })
-            .collect();
-        files.sort();
-        files
-    }
-
     let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let workloads = manifest.join("../../tools/speedtest/workloads");
     let mut all = Tally::default();
@@ -997,6 +976,334 @@ fn escape_coverage() {
         }
     }
     tally.print("standard library");
+}
+
+fn percent(part: usize, whole: usize) -> usize {
+    (part * 100).checked_div(whole).unwrap_or(0)
+}
+
+/// The `.baml` files directly in `dir`, by name.
+fn baml_files(dir: &std::path::Path) -> Vec<(String, String)> {
+    let mut files: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "baml"))
+        .map(|path| {
+            (
+                path.file_name().unwrap().to_string_lossy().into_owned(),
+                std::fs::read_to_string(&path).unwrap(),
+            )
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+/// Every `.baml` file under `dir`, by path relative to it.
+fn baml_tree(dir: &std::path::Path) -> Vec<(String, String)> {
+    let mut files: Vec<_> = walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "baml"))
+        .map(|entry| {
+            (
+                entry
+                    .path()
+                    .strip_prefix(dir)
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+                std::fs::read_to_string(entry.path()).unwrap(),
+            )
+        })
+        .collect();
+    files.sort();
+    files
+}
+
+/// The speedtest workload directories, as `category/slug`, in order.
+fn speedtest_workloads() -> (std::path::PathBuf, Vec<String>) {
+    let workloads =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/speedtest/workloads");
+    let mut names: Vec<_> = walkdir::WalkDir::new(&workloads)
+        .min_depth(2)
+        .max_depth(2)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_dir())
+        .filter(|entry| !baml_files(entry.path()).is_empty())
+        .map(|entry| {
+            entry
+                .path()
+                .strip_prefix(&workloads)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    (workloads, names)
+}
+
+/// Allocation sites placed on the fiber stack by the Rust backend, and the
+/// first cause every other one stays in the heap.
+#[derive(Default)]
+struct PlacementTally {
+    placed: usize,
+    total: usize,
+    /// Bodies with at least one site.
+    bodies: usize,
+    buckets: std::collections::BTreeMap<&'static str, usize>,
+    causes: std::collections::BTreeMap<String, usize>,
+}
+
+impl PlacementTally {
+    fn add(&mut self, body: &baml_db::rust_backend::FunctionPlacement) {
+        if body.sites.is_empty() {
+            return;
+        }
+        self.bodies += 1;
+        for site in &body.sites {
+            self.total += 1;
+            match site {
+                Ok(_) => self.placed += 1,
+                Err(refusal) => {
+                    *self.buckets.entry(refusal.bucket()).or_default() += 1;
+                    *self.causes.entry(refusal.to_string()).or_default() += 1;
+                }
+            }
+        }
+    }
+
+    fn print(&self, title: &str, started: std::time::Instant) {
+        println!(
+            "\n## {title}: {}/{} allocation sites placed ({}%) in {} bodies ({:.0?})",
+            self.placed,
+            self.total,
+            percent(self.placed, self.total),
+            self.bodies,
+            started.elapsed()
+        );
+        let mut buckets: Vec<_> = self.buckets.iter().collect();
+        buckets.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+        for (bucket, count) in buckets {
+            println!("  {count:>6}  {bucket}");
+        }
+        let mut causes: Vec<_> = self
+            .causes
+            .iter()
+            .filter(|(cause, _)| cause.contains(" to ") || cause.starts_with("not compiled"))
+            .collect();
+        causes.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+        if !causes.is_empty() {
+            println!("  by callee or rejection:");
+            for (cause, count) in causes.into_iter().take(10) {
+                println!("  {count:>6}  {cause}");
+            }
+        }
+    }
+
+    fn absorb(&mut self, other: &Self) {
+        self.placed += other.placed;
+        self.total += other.total;
+        self.bodies += other.bodies;
+        for (bucket, count) in &other.buckets {
+            *self.buckets.entry(bucket).or_default() += count;
+        }
+        for (cause, count) in &other.causes {
+            *self.causes.entry(cause.clone()).or_default() += count;
+        }
+    }
+
+    #[track_caller]
+    fn pin(&self, corpus: &str, placed: usize, total: usize) {
+        assert_eq!(
+            (self.placed, self.total),
+            (placed, total),
+            "{corpus}: stack placement changed (placed/total); the buckets above say where \
+             (run with --nocapture). Update the pin when the change is intended."
+        );
+    }
+}
+
+/// The placement of a project's bodies (`baml_compiler2_rust::placement_coverage`
+/// at O2): the user package's into `user`, the standard library's into
+/// `stdlib`. `None` when the project does not compile.
+fn measure_placement(
+    files: &[(String, String)],
+    user: &mut PlacementTally,
+    stdlib: Option<&mut PlacementTally>,
+) -> Option<()> {
+    use baml_db::rust_backend::{declared_functions, placement_coverage};
+    let opt = OptLevel::Two;
+    let input: Vec<_> = files
+        .iter()
+        .map(|(name, text)| (name.as_str(), text.as_str()))
+        .collect();
+    let db =
+        baml_db::testing::setup_multi_file_db_with_prefix(baml_test_support::prefix(opt), &input);
+    let root = db.workspace_root().unwrap();
+    let program = baml_db::CheckedWorld::collect(&db, root)
+        .ok()?
+        .compile(opt)
+        .ok()?;
+    let roots = baml_compiler2_hir::package::lang_roots(&db);
+    let lang: Vec<_> = baml_base::LangPackage::ALL
+        .iter()
+        .filter_map(|package| roots.get(*package))
+        .collect();
+    // Every function of the user package as an entry compiles the user
+    // package and what it reaches; the standard library tally needs it all.
+    let entries = stdlib
+        .is_none()
+        .then(|| declared_functions(&db, root, &program));
+    let bodies =
+        placement_coverage(&db, root, &program, opt, entries.as_deref()).expect("coverage runs");
+    for body in &bodies {
+        if !lang.contains(&body.root) {
+            user.add(body);
+        }
+    }
+    if let Some(stdlib) = stdlib {
+        for body in &bodies {
+            if lang.contains(&body.root) {
+                stdlib.add(body);
+            }
+        }
+    }
+    Some(())
+}
+
+/// The speedtest workloads with a site on the stack, each pinned as
+/// placed/total allocation sites. A workload not listed places nothing; the
+/// report below says why.
+const PLACED_WORKLOADS: &[(&str, usize, usize)] = &[
+    ("classes/method-call-100k", 1, 1),
+    ("classes/method-chain-100k", 1, 1),
+    ("compute/class-instances-100k", 1, 1),
+    ("compute/json-ndjson-events", 1, 7),
+    ("compute/json-request-body", 1, 28),
+    ("compute/json-tree-path", 2, 7),
+    ("compute/json-typed-orders", 1, 6),
+    ("compute/mixed-ops-5k", 1, 2),
+    ("compute/nested-field-access-500k", 3, 3),
+    ("compute/wide-nested-class-create-50k", 1, 8),
+    ("interfaces/to-string-interpolation-10k", 1, 5),
+    ("memory/heap-calls", 1, 9),
+    ("memory/splay-2k", 1, 11),
+    ("programs/agent-loop-300", 1, 11),
+    ("programs/json-parser-15", 1, 19),
+];
+
+/// Stack placement by the Rust backend, pinned so a regression fails CI:
+/// every speedtest workload that places a site ([`PLACED_WORKLOADS`]), the
+/// rust_diff probes and the standard library. The whole corpus is
+/// [`placement_coverage_report`]. A deliberate change updates the pins; the
+/// buckets print with `cargo test -p baml_tests --lib placement_coverage -- --nocapture`.
+#[test]
+fn placement_coverage() {
+    let (workloads, _) = speedtest_workloads();
+    let started = std::time::Instant::now();
+    let mut speedtest = PlacementTally::default();
+    for &(name, placed, total) in PLACED_WORKLOADS {
+        let mut tally = PlacementTally::default();
+        measure_placement(&baml_files(&workloads.join(name)), &mut tally, None)
+            .unwrap_or_else(|| panic!("speedtest workload {name} does not compile"));
+        println!("  {:>3}/{:<3} {name}", tally.placed, tally.total);
+        tally.pin(name, placed, total);
+        speedtest.absorb(&tally);
+    }
+    speedtest.print("speedtest workloads with a placed site", started);
+
+    let started = std::time::Instant::now();
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut probes = PlacementTally::default();
+    let mut stdlib = PlacementTally::default();
+    measure_placement(
+        &baml_files(&manifest.join("rust_diff/baml_src")),
+        &mut probes,
+        Some(&mut stdlib),
+    )
+    .expect("the rust_diff probes compile");
+    probes.print("rust_diff probes", started);
+    stdlib.print("standard library", started);
+    probes.pin("rust_diff probes", 8, 169);
+    stdlib.pin("standard library", 15, 1340);
+}
+
+/// [`placement_coverage`] over every corpus: all speedtest workloads, the
+/// rust_diff probes, the standard library and `baml_tests/baml_src`, with
+/// the per-corpus totals pinned. Minutes long (one world check and compile
+/// per project), so not in CI.
+///
+/// `cargo test -p baml_tests --lib placement_coverage_report -- --ignored --nocapture`
+#[test]
+#[ignore = "minutes long; the CI pin is placement_coverage"]
+fn placement_coverage_report() {
+    let (workloads, names) = speedtest_workloads();
+    let started = std::time::Instant::now();
+    let mut speedtest = PlacementTally::default();
+    for name in &names {
+        let mut tally = PlacementTally::default();
+        measure_placement(&baml_files(&workloads.join(name)), &mut tally, None)
+            .unwrap_or_else(|| panic!("speedtest workload {name} does not compile"));
+        if tally.placed > 0 {
+            println!("  {:>3}/{:<3} {name}", tally.placed, tally.total);
+        }
+        speedtest.absorb(&tally);
+    }
+    speedtest.print(&format!("speedtest workloads ({})", names.len()), started);
+
+    let started = std::time::Instant::now();
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut probes = PlacementTally::default();
+    let mut stdlib = PlacementTally::default();
+    measure_placement(
+        &baml_files(&manifest.join("rust_diff/baml_src")),
+        &mut probes,
+        Some(&mut stdlib),
+    )
+    .expect("the rust_diff probes compile");
+    probes.print("rust_diff probes", started);
+    stdlib.print("standard library", started);
+
+    let started = std::time::Instant::now();
+    let mut corpus = PlacementTally::default();
+    let mut projects: Vec<_> = std::fs::read_dir(manifest.join("baml_src"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_dir()
+                && path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("ns_")
+        })
+        .collect();
+    projects.sort();
+    let (mut compiled, mut rejected) = (0, 0);
+    for project in &projects {
+        let sources = baml_tree(project);
+        if sources.is_empty() {
+            continue;
+        }
+        match measure_placement(&sources, &mut corpus, None) {
+            Some(()) => compiled += 1,
+            None => rejected += 1,
+        }
+    }
+    corpus.print(
+        &format!("baml_tests/baml_src ({compiled} projects; {rejected} do not compile)"),
+        started,
+    );
+
+    speedtest.pin("speedtest workloads", 18, 227);
+    probes.pin("rust_diff probes", 8, 169);
+    stdlib.pin("standard library", 15, 1340);
+    corpus.pin("baml_tests/baml_src", 504, 6102);
 }
 
 #[test]

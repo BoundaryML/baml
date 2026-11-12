@@ -7,7 +7,7 @@ mod dispatch;
 mod json;
 mod expr;
 mod place;
-mod stack;
+pub(crate) mod stack;
 mod stmt;
 pub(crate) mod types;
 
@@ -369,20 +369,7 @@ impl<'db> Generator<'_, 'db> {
             ));
         }
         self.prepare();
-        self.stack = stack::Placement::new(
-            self.body,
-            &self.analysis.escape,
-            |kind| match kind {
-                baml_compiler2_mir::AggregateKind::Class {
-                    class,
-                    type_arg_templates,
-                } if type_arg_templates.is_empty() => {
-                    self.index.class(self.db, *class).map(|(object, _)| object)
-                }
-                _ => None,
-            },
-            |object| self.index.instance_cell(object),
-        );
+        self.stack = stack::plan(self.db, self.index, self.body, &self.analysis.escape).0;
         let structured = structurize(&self.analysis.cfg)
             .map_err(|error| Rejection::Invalid(error.to_string()))?;
         let stmts = structured.stmts.clone();

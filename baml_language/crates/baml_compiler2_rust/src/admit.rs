@@ -104,27 +104,7 @@ pub fn compile_program(
 ) -> Result<RustModule, String> {
     crate::analysis::validate_builtin_metadata()?;
     let index = ProgramIndex::new(db, root, program);
-    let mut lowered = lower_program(db, root, &index, opt, entries);
-    if entries.is_some() {
-        // Chainers run outside the selected entry points. Keep their callees
-        // and the closures those bodies register reachable as well.
-        for package in &program.packages {
-            for object in [package.init, package.test_init].into_iter().flatten() {
-                let bex_vm_types::Object::Function(function) = &program.objects[object] else {
-                    continue;
-                };
-                for instruction in &function.bytecode.instructions {
-                    if let bex_vm_types::Instruction::Call { callee, .. } = instruction
-                        && let Some(bex_vm_types::ConstValue::Object(callee)) =
-                            program.globals.get(callee.raw())
-                    {
-                        lowered.seeds.insert(callee.raw());
-                    }
-                }
-            }
-        }
-        retain_reachable(&index, &mut lowered);
-    }
+    let mut lowered = lower_reachable(db, root, program, &index, opt, entries);
     let (mut bodies, mut functions, builtins) =
         admission_fixpoint(db, &index, opt, &mut lowered.units, &mut lowered.rejected);
     crate::init::compile_chainers(
@@ -143,14 +123,48 @@ pub fn compile_program(
     })
 }
 
-struct LoweredProgram<'db> {
-    units: BTreeMap<usize, Unit<'db>>,
-    rejected: Vec<(String, Rejection)>,
+/// The units of the program reachable from `entries` (every unit when
+/// `None`), each analyzed; see [`compile_program`] for what `entries` keeps.
+pub(crate) fn lower_reachable<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    root: SourceRoot,
+    program: &Program,
+    index: &ProgramIndex,
+    opt: OptLevel,
+    entries: Option<&[usize]>,
+) -> LoweredProgram<'db> {
+    let mut lowered = lower_program(db, root, index, opt, entries);
+    if entries.is_some() {
+        // Chainers run outside the selected entry points. Keep their callees
+        // and the closures those bodies register reachable as well.
+        for package in &program.packages {
+            for object in [package.init, package.test_init].into_iter().flatten() {
+                let bex_vm_types::Object::Function(function) = &program.objects[object] else {
+                    continue;
+                };
+                for instruction in &function.bytecode.instructions {
+                    if let bex_vm_types::Instruction::Call { callee, .. } = instruction
+                        && let Some(bex_vm_types::ConstValue::Object(callee)) =
+                            program.globals.get(callee.raw())
+                    {
+                        lowered.seeds.insert(callee.raw());
+                    }
+                }
+            }
+        }
+        retain_reachable(index, &mut lowered);
+    }
+    lowered
+}
+
+pub(crate) struct LoweredProgram<'db> {
+    pub(crate) units: BTreeMap<usize, Unit<'db>>,
+    pub(crate) rejected: Vec<(String, Rejection)>,
     refs: HashMap<usize, crate::reach::References>,
     seeds: BTreeSet<usize>,
 }
 
-fn lower_program<'db>(
+pub(crate) fn lower_program<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     root: SourceRoot,
     index: &ProgramIndex,
@@ -273,7 +287,7 @@ fn retain_reachable(index: &ProgramIndex, lowered: &mut LoweredProgram<'_>) {
     });
 }
 
-fn admission_fixpoint<'db>(
+pub(crate) fn admission_fixpoint<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,
     opt: OptLevel,
