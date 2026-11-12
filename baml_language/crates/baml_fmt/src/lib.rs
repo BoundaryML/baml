@@ -106,7 +106,13 @@ pub fn format_salsa(
     let index = baml_parser::tree_index(db, file);
     let comments = Comments::from_tree(&tree, &index);
     let bump = Bump::new();
-    let formatter = Formatter::new(Docs::new(&bump), &complete, &index, &comments);
+    let formatter = Formatter::new(
+        Docs::new(&bump),
+        &complete,
+        &index,
+        &comments,
+        options.indent_width,
+    );
     let output = formatter.file().print(options);
     if cfg!(debug_assertions)
         && let Err(violation) = oracle::check(&tree, &output)
@@ -219,7 +225,7 @@ mod ignore_directive_tests {
             format(source, &FormatOptions::default()).expect("a documented function formats");
         assert_eq!(
             formatted,
-            "/// baml-format: ignore\nfunction f() -> int { 1 }\n\nclass A {}\n"
+            "/// baml-format: ignore\nfunction f() -> int {\n    1\n}\n\nclass A {}\n"
         );
     }
 

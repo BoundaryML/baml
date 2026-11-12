@@ -6,5 +6,7 @@ interface I {
         throws never; // throws
     function g(self) -> int
         throws never // default
-    { 1 }
+    {
+        1
+    }
 }

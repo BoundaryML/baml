@@ -24,7 +24,9 @@ class ViaAlias {
 // Reported once, at the signature: the body is not then held to the return
 // type the signature should not have.
 class ReturnsValue {
-    function cleanup(self) -> int { 5 }
+    function cleanup(self) -> int {
+        5
+    }
 }
 
 class ReturnsOptional {

@@ -2,6 +2,6 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function example() -> int {
- factory()
- (0)
+    factory();
+    (0)
 }

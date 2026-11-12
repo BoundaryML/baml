@@ -1,9 +1,10 @@
 ---
 source: crates/baml_fmt/tests/cases.rs
 ---
-function g(a: int) -> int {
+function g(a: int) -> int // why
+{
     a
-} // why
+}
 
 interface I {
     function f(self) -> string // result

@@ -17,6 +17,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_base = { workspace = true }
 baml_db = { workspace = true }
 baml_parser = { workspace = true }
 baml_syntax = { workspace = true }

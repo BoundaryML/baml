@@ -54,11 +54,16 @@ pub(crate) enum Node<'a> {
     /// Source text with a newline in it whose later lines move with the
     /// node: each is indented by the difference between the indent the node
     /// is printed at and `source_indent`, the indentation of the line the
-    /// text started on in the source. Always a forced break.
+    /// text started on in the source. Code (`forced`) breaks the enclosing
+    /// groups and sits relative to the indent it is printed at; a literal
+    /// does not break them, is measured by its first line, and sits relative
+    /// to the line it starts on — but it [spans lines](Doc::spans_lines),
+    /// which a list it is not the last item of must know.
     Verbatim {
         text: &'a str,
         width: u32,
         source_indent: u32,
+        forced: bool,
     },
     Space,
     Line(LineMode),
@@ -165,6 +170,24 @@ impl<'a> Doc<'a> {
         *self.0
     }
 
+    /// Whether the node is sure to take more than one line: a forced break,
+    /// or a multi-line literal anywhere in it. A literal is an atom to the
+    /// group around it — `f(`…`)` stays on the line it starts on — but the
+    /// item after it in a list would land on its closing line, so a list
+    /// breaks when any item but the last spans lines, as a run of
+    /// attributes does.
+    pub fn spans_lines(self) -> bool {
+        match self.node() {
+            Node::Verbatim { .. } => true,
+            Node::BestFitting { most_flat, .. } => most_flat.spans_lines(),
+            Node::Concat { children, .. } => children.iter().any(|child| child.spans_lines()),
+            Node::Group { content, .. } | Node::Indent { content, .. } => {
+                self.forced() || content.spans_lines()
+            }
+            _ => self.forced(),
+        }
+    }
+
     /// Whether this subtree contains a forced break.
     pub(crate) fn forced(self) -> bool {
         match self.node() {
@@ -174,9 +197,9 @@ impl<'a> Doc<'a> {
             | Node::BestFitting { .. } => false,
             Node::Line(LineMode::Hard | LineMode::Empty)
             | Node::ExpandParent
-            | Node::TrailingLine { .. }
-            | Node::Verbatim { .. } => true,
+            | Node::TrailingLine { .. } => true,
             Node::Text { forced, .. }
+            | Node::Verbatim { forced, .. }
             | Node::Concat { forced, .. }
             | Node::Group { forced, .. }
             | Node::Indent { forced, .. }
@@ -276,6 +299,28 @@ impl<'a> Docs<'a> {
         self.text(self.bump.alloc_str(text))
     }
 
+    /// A multi-line literal laid out by the rule — a backtick string —
+    /// copied in. Its later lines are indented as written relative to the
+    /// line the literal starts on, whatever indents enclose it, so the line
+    /// closing it lands under the line that opened it; and it is an atom to
+    /// the layout around it: it does not force the enclosing groups to break
+    /// and is measured by its first line, so `f(`…`)` hugs it, as a long
+    /// string is hugged. It does [span lines](Doc::spans_lines), which a
+    /// list it is not the last item of breaks for. Text with no newline is
+    /// plain text.
+    pub fn literal(self, text: &str) -> Doc<'a> {
+        let text = self.bump.alloc_str(text);
+        match text.split_once('\n') {
+            None => self.text(text),
+            Some((first, _)) => self.alloc(Node::Verbatim {
+                text,
+                width: display_width(first),
+                source_indent: 0,
+                forced: false,
+            }),
+        }
+    }
+
     /// Source text printed as written, except that its later lines move
     /// with the node: each keeps its indentation relative to
     /// `source_indent`, the indentation of the line the text starts on in
@@ -289,6 +334,7 @@ impl<'a> Docs<'a> {
                 text,
                 width: display_width(first),
                 source_indent,
+                forced: true,
             }),
         }
     }
@@ -497,8 +543,12 @@ impl<'a> Display<'a> {
             Node::Verbatim {
                 text,
                 source_indent,
+                forced,
                 ..
-            } => write!(self.out, "(verbatim {source_indent} {text:?})").unwrap_or_else(never),
+            } => {
+                let kind = if forced { "verbatim" } else { "literal" };
+                write!(self.out, "({kind} {source_indent} {text:?})").unwrap_or_else(never);
+            }
             Node::Space => self.out.push_str("space"),
             Node::Line(LineMode::Soft) => self.out.push_str("softline"),
             Node::Line(LineMode::SoftOrSpace) => self.out.push_str("line"),

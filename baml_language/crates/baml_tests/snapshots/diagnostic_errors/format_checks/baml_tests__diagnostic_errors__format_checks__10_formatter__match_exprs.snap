@@ -25,7 +25,6 @@ enum MatchStatus {
 type MatchResult = MatchSuccess | MatchFailure;
 
 function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
-
     // ===== Basic match =====
 
     match (x) {

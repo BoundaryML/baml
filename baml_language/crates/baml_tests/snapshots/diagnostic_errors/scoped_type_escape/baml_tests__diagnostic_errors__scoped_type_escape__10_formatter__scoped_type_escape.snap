@@ -29,7 +29,7 @@ function unannotated_block_value(t: reflect.Type) -> unknown {
     let escaped = {
         let type T = t;
         as_t<T>(1)
-    }
+    };
     escaped
 }
 
@@ -50,7 +50,7 @@ function lambda_infers_its_own_clause(t: reflect.Type) -> unknown throws never {
     let f = () -> {
         let type T = t;
         risky<T>(as_t<T>("x"), false)
-    }
+    };
     f
 }
 
@@ -61,14 +61,14 @@ function catch_outside_the_block(t: reflect.Type) -> int throws never {
         risky<T>(as_t<T>("x"), true)
     } catch (e) {
         _ => 0
-    }
+    };
     n
 }
 
 // A list declared outside the block cannot take `T` as its element type:
 // it would carry `T` after the block, and after a rebinding.
 function outer_container_takes_the_binding(t: reflect.Type) -> unknown {
-    let xs = []
+    let xs = [];
     {
         let type T = t;
         xs.push(as_t<T>(1))
@@ -81,8 +81,8 @@ function outer_container_takes_the_binding(t: reflect.Type) -> unknown {
 // `T[]` collapses whole, never to `unknown[]`), which the clause must say.
 function thrown_list_without_a_clause(t: reflect.Type) -> string {
     let type T = t;
-    let v: T = as_t<T>(1)
-    let a: T[] = [v]
+    let v: T = as_t<T>(1);
+    let a: T[] = [v];
     throw a
 }
 
@@ -91,8 +91,8 @@ function thrown_list_without_a_clause(t: reflect.Type) -> string {
 // Each is judged at the throw against the clause as written.
 function list_relaxed_wrongly(t: reflect.Type) -> string throws unknown[] | string {
     let type T = t;
-    let v: T = as_t<T>(1)
-    let a: T[] = [v]
+    let v: T = as_t<T>(1);
+    let a: T[] = [v];
     throw a
 }
 
@@ -101,14 +101,16 @@ function boom_relaxed_wrongly(t: reflect.Type) -> int throws Boom<unknown> | str
     risky<T>(as_t<T>("x"), true)
 }
 
-function ident<T>(v: T) -> T throws never { v }
+function ident<T>(v: T) -> T throws never {
+    v
+}
 
 // `throws unknown` is imprecise when something closer exists: a thrown
 // `() -> T throws never` relaxes to `() -> unknown throws never` (the return
 // is covariant), and that is what the clause should say.
 function imprecise_unknown_clause(t: reflect.Type) -> int throws unknown {
     let type T = t;
-    let v: T = as_t<T>(1)
+    let v: T = as_t<T>(1);
     throw () -> { ident<T>(v) }
 }
 
@@ -118,7 +120,7 @@ function return_from_an_inferred_lambda(t: reflect.Type) -> unknown throws never
     let f = () -> {
         let type T = t;
         return as_t<T>("x")
-    }
+    };
     f
 }
 
@@ -139,8 +141,8 @@ function value_through_an_open_variable(t: reflect.Type) -> string {
     let v = {
         let type T = t;
         ident(as_t<T>(42))
-    }
-    let s: string = v
+    };
+    let s: string = v;
     s
 }
 
@@ -154,7 +156,7 @@ function value_through_a_nested_open_variable(t: reflect.Type) -> unknown[] {
     let vs = {
         let type T = t;
         [ident(as_t<T>(42))]
-    }
+    };
     vs
 }
 
@@ -162,9 +164,9 @@ function value_through_a_nested_open_variable(t: reflect.Type) -> unknown[] {
 // though it dies with the block: its element type is fixed when the list is
 // allocated, and `T`'s frame slot is bound only when the statement executes.
 function block_local_list_before_the_binding(t: reflect.Type) -> int {
-    let ys = []
+    let ys = [];
     let type T = t;
-    ys.push(as_t<T>(1))
+    ys.push(as_t<T>(1));
     ys.length()
 }
 
@@ -180,22 +182,22 @@ function erroneous_context(t: reflect.Type) -> Undefined {
 // the deposit is made and becomes `T` only at the closing brace. The escape
 // is reported where the outer deposit was made, on every deposit road.
 function outer_list_through_an_inner_variable(t: reflect.Type) -> unknown {
-    let xs = []
+    let xs = [];
     {
         let type T = t;
-        let ys = []
-        ys.push(ident(as_t<T>(1)))
+        let ys = [];
+        ys.push(ident(as_t<T>(1)));
         xs.push(ys)
     }
     xs
 }
 
 function outer_map_through_an_inner_variable(t: reflect.Type) -> unknown {
-    let m = map {}
+    let m = map {};
     {
         let type T = t;
-        let ys = []
-        ys.push(ident(as_t<T>(1)))
+        let ys = [];
+        ys.push(ident(as_t<T>(1)));
         m.set("k", ys)
     }
     m
@@ -207,7 +209,7 @@ function block_value_is_a_map_literal(t: reflect.Type) -> unknown {
     let escaped = {
         let type T = t;
         map { "key": as_t<T>(1) }
-    }
+    };
     escaped
 }
 
@@ -216,7 +218,7 @@ class Cell<T> {
 }
 
 function outer_list_through_a_class_literal(t: reflect.Type) -> unknown {
-    let xs = []
+    let xs = [];
     {
         let type T = t;
         xs.push(Cell { value: ident(as_t<T>(1)) })
@@ -225,12 +227,12 @@ function outer_list_through_a_class_literal(t: reflect.Type) -> unknown {
 }
 
 function outer_variable_through_assignment(t: reflect.Type) -> unknown {
-    let xs = []
+    let xs = [];
     {
         let type T = t;
-        let ys = []
-        ys.push(ident(as_t<T>(1)))
-        xs = ys
+        let ys = [];
+        ys.push(ident(as_t<T>(1)));
+        xs = ys;
     }
     xs
 }
@@ -252,7 +254,7 @@ function lambda_partial_clause_covers(t: reflect.Type) -> int throws unknown {
     let f = () -> int throws unknown | _ {
         let type T = t;
         throw as_t<T>(1)
-    }
+    };
     f()
 }
 
@@ -260,6 +262,6 @@ function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown
     let f = () -> int throws string | _ {
         let type T = t;
         throw as_t<T>(1)
-    }
+    };
     f()
 }

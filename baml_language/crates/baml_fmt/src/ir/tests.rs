@@ -469,6 +469,32 @@ fn verbatim_lines_move_with_the_node() {
 }
 
 #[test]
+fn a_literal_is_an_atom_to_the_group_around_it() {
+    // The group stays flat — it is measured by the literal's first line —
+    // so the call hugs the template, whose lines then sit relative to the
+    // line it starts on, not to the call's argument indent, and whose
+    // closing line lands under that line.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let template = d.concat([d.text("`"), d.literal("\n      hello\n\n        there\n`")]);
+    let call = d.group(d.concat([
+        d.text("f("),
+        d.indent(d.concat([Doc::SOFT_LINE, template])),
+        Doc::SOFT_LINE,
+        d.text(")"),
+    ]));
+    let root = d.indent(d.concat([Doc::HARD_LINE, call]));
+    assert_eq!(
+        print(root, 80),
+        "    f(`\n          hello\n\n            there\n    `)"
+    );
+    assert!(!template.forced());
+    assert!(template.spans_lines());
+    assert!(!d.group(d.text("x")).spans_lines());
+    assert_eq!(d.literal("x").to_string(), "\"x\"");
+}
+
+#[test]
 fn a_space_before_a_suffix_is_trimmed_and_the_suffix_brings_its_own() {
     let bump = Bump::new();
     let d = Docs::new(&bump);

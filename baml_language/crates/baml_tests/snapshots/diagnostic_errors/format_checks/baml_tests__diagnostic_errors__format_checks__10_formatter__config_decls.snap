@@ -460,7 +460,7 @@ test // 2 test keyword trailing
 { // 6 open brace trailing
     // 7 body leading
     TestTarget() // 8 body trailing
-// 9 close brace leading
+    // 9 close brace leading
 } // 10 close brace trailing
 
 // ===== Trivia on test declaration (block comments) =====
@@ -472,7 +472,7 @@ test /* 2 test keyword trailing */
 { /* 6 open brace trailing */
     /* 7 body leading */
     TestTarget() /* 8 body trailing */
-/* 9 close brace leading */
+    /* 9 close brace leading */
 } /* 10 close brace trailing */
 
 // ===== Short names =====

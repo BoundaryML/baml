@@ -25,7 +25,7 @@ function valid_wildcard_rest(xs: int[]) -> int {
 }
 
 function valid_ascribed_rest() -> int {
-    let [..let rest: int[]] = [1, 2]
+    let [..let rest: int[]] = [1, 2];
     return rest[0]
 }
 

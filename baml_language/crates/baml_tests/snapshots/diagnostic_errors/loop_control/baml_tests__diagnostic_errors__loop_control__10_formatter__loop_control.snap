@@ -20,7 +20,7 @@ function sql(body: (x: int) -> baml.TaggedString) -> string {
 function for_in_continue_is_an_exit(a: int, xs: int[]) -> int {
     let x: int | Tag = a;
     x = a;
-    for let v in xs {
+    for (let v in xs) {
         if (v > 0) {
             x = Tag {};
             continue;
@@ -41,7 +41,11 @@ function break_in_a_while_condition(a: int) -> int {
 
 function break_in_a_while_let_scrutinee(a: int) -> int {
     let n = 0;
-    while let v: int = { if (n > a) { break; } n } {
+    while let v: int = {
+        if (n > a) { break; }
+        n
+    }
+    {
         n += 1;
     }
     n
@@ -49,18 +53,29 @@ function break_in_a_while_let_scrutinee(a: int) -> int {
 
 function break_in_the_update_expression(a: int) -> int {
     let i = 0;
-    for (let j = 0; i < 3; i = { if (a > 0) { break; } i + 1 }) {}
+    for (
+        let j = 0;
+        i < 3;
+        i = {
+            if (a > 0) { break; }
+            i + 1
+        }
+    ) {}
     i
 }
 
 function continue_in_the_update_expression(a: int) -> int {
     let i = 0;
-    for (let j = 0; i < 3; i = {
-        if (a > 0) {
-            continue;
+    for (
+        let j = 0;
+        i < 3;
+        i = {
+            if (a > 0) {
+                continue;
+            }
+            i + 1
         }
-        i + 1
-    }) {}
+    ) {}
     i
 }
 
@@ -140,16 +155,24 @@ function break_inside_a_defer_with_no_loop(a: int) -> int {
     a
 }
 
-function break_in_a_parameter_default(a: int = { break; 1 }) -> int {
+function break_in_a_parameter_default(
+    a: int = {
+        break;
+        1
+    },
+) -> int {
     a
 }
 
-const break_in_a_global_initializer: int = { break; 1 };
+const break_in_a_global_initializer: int = {
+    break;
+    1
+};
 
 // A collection that never produces a value leaves the loop and everything
 // after it dead.
 function for_over_a_diverging_collection() -> int {
-    for let v in ({ return 2; }) {}
+    for (let v in ({ return 2; })) {}
     5
 }
 

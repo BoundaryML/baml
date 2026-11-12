@@ -3,7 +3,7 @@ source: crates/baml_fmt/tests/cases.rs
 ---
 function Foo(name: string) -> string {
     `
-            Hello ${name}
-            Bye
+        Hello ${name}
+        Bye
     `
 }

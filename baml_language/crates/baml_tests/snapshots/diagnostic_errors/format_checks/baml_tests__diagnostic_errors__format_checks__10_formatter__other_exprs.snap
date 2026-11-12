@@ -20,7 +20,6 @@ class OtherTriple {
 }
 
 function OtherExprs(a: int, b: int) -> int {
-
     // ===== Integer literals =====
     0;
     1;
@@ -68,8 +67,7 @@ function OtherExprs(a: int, b: int) -> int {
     // 3 inner leading
     a // 4 inner trailing
     // 5 close leading
-    ) // 6 close trailing
-    ;
+    ); // 6 close trailing
 
     // ===== Trivia in parens (block comments) =====
     /* 1 open leading */
@@ -77,8 +75,7 @@ function OtherExprs(a: int, b: int) -> int {
     /* 3 inner leading */
     a /* 4 inner trailing */
     /* 5 close leading */
-    ) /* 6 close trailing */
-    ;
+    ); /* 6 close trailing */
 
     // ===== Unary expressions =====
     -a;
@@ -90,15 +87,13 @@ function OtherExprs(a: int, b: int) -> int {
     // 1 op leading
     - // 2 op trailing
     // 3 operand leading
-    a // 4 operand trailing
-    ;
+    a; // 4 operand trailing
 
     // ===== Trivia in unary (block comments) =====
     /* 1 op leading */
     - /* 2 op trailing */
     /* 3 operand leading */
-    a /* 4 operand trailing */
-    ;
+    a; /* 4 operand trailing */
 
     // ===== Array initializers =====
     [];
@@ -130,8 +125,7 @@ function OtherExprs(a: int, b: int) -> int {
     // 6 second element leading
     2 // 7 second element trailing
     // 8 close bracket leading
-    ] // 9 close bracket trailing
-    ;
+    ]; // 9 close bracket trailing
 
     // ===== Trivia in array (block comments) =====
     /* 1 open bracket leading */
@@ -142,8 +136,7 @@ function OtherExprs(a: int, b: int) -> int {
     /* 6 second element leading */
     2 /* 7 second element trailing */
     /* 8 close bracket leading */
-    ] /* 9 close bracket trailing */
-    ;
+    ]; /* 9 close bracket trailing */
 
     // ===== Trivia in long wrapping array (line comments) =====
     [ // 1 trailing
@@ -158,8 +151,7 @@ function OtherExprs(a: int, b: int) -> int {
     , // 10 trailing
     // 11 leading
     "and one more string element" // 12 trailing
-    ] // 13 trailing
-    ;
+    ]; // 13 trailing
 
     // ===== Trivia in long wrapping array (block comments) =====
     [ /* 1 trailing */
@@ -174,8 +166,7 @@ function OtherExprs(a: int, b: int) -> int {
     , /* 10 trailing */
     /* 11 leading */
     "and one more string element" /* 12 trailing */
-    ] /* 13 trailing */
-    ;
+    ]; /* 13 trailing */
 
     // ===== Map literals =====
     {"key": 1};
@@ -197,8 +188,7 @@ function OtherExprs(a: int, b: int) -> int {
     // 6 value leading
     1 // 7 value trailing
     // 8 close brace leading
-    } // 9 close brace trailing
-    ;
+    }; // 9 close brace trailing
 
     // ===== Trivia in map (block comments) =====
     /* 1 open brace leading */
@@ -209,8 +199,7 @@ function OtherExprs(a: int, b: int) -> int {
     /* 6 value leading */
     1 /* 7 value trailing */
     /* 8 close brace leading */
-    } /* 9 close brace trailing */
-    ;
+    }; /* 9 close brace trailing */
 
     // ===== Object initializers =====
     OtherPoint { x: 1, y: 2 };

@@ -14,7 +14,7 @@ class Box<T> {
 }
 
 function use_box() -> int {
-    let b = Box<int> { value: 42 }
+    let b = Box<int> { value: 42 };
     b.get()
 }
 
@@ -56,12 +56,12 @@ class Pair<A, B> {
 }
 
 function use_pair() -> string {
-    let p = Pair<int, string> { first: 1, second: "two" }
+    let p = Pair<int, string> { first: 1, second: "two" };
     p.get_second()
 }
 
 function use_pair_swap() -> Pair<string, int> {
-    let p = Pair<int, string> { first: 1, second: "two" }
+    let p = Pair<int, string> { first: 1, second: "two" };
     p.swap()
 }
 
@@ -101,7 +101,7 @@ class Holder<T> {
 }
 
 function use_holder() -> int {
-    let h = Holder<int> { data: "hello" }
+    let h = Holder<int> { data: "hello" };
     h.get_data()
 }
 
@@ -162,7 +162,7 @@ class Container<T> {
 }
 
 function use_nested() -> int {
-    let c = Container<int> { inner: Box<int> { value: 10 } }
+    let c = Container<int> { inner: Box<int> { value: 10 } };
     c.unwrap()
 }
 
@@ -183,7 +183,7 @@ class Factory<T> {
 }
 
 function use_factory() -> int {
-    let f = Factory<int>.create(42)
+    let f = Factory<int>.create(42);
     f.get()
 }
 
@@ -203,7 +203,7 @@ class MaybeBox<T> {
 }
 
 function use_maybe_box() -> int {
-    let b = MaybeBox<int> { value: null }
+    let b = MaybeBox<int> { value: null };
     b.get_or_default(0)
 }
 
@@ -220,7 +220,7 @@ class Stack<T> {
 }
 
 function use_stack() -> string {
-    let s = Stack<string> { items: ["a", "b", "c"] }
+    let s = Stack<string> { items: ["a", "b", "c"] };
     s.peek()
 }
 

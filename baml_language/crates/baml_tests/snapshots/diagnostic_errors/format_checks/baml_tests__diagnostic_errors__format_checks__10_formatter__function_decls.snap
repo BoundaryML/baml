@@ -85,12 +85,23 @@ function ComplexReturn(x: int) -> int | string | null {
 }
 
 // ===== Return type: nested generics exceeding limit =====
-function NestedGenericReturn() -> map<string, map<string, map<string, int | string | bool | null | float>>> {
+function NestedGenericReturn() -> map<
+    string,
+    map<string, map<string, int | string | bool | null | float>>,
+> {
     {"a": {"b": {"c": 1}}}
 }
 
 // ===== Return type: deeply nested function type exceeding limit =====
-function DeepFnReturn() -> (x: int) -> ((y: int) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never) throws never {
+function DeepFnReturn() -> (
+    x: int,
+) -> (
+    (
+        y: int,
+    ) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never)
+        throws never
+)
+    throws never {
     1
 }
 
@@ -261,39 +272,41 @@ function TriviaWrapReturnType(x: int) ->
 // 1 first member leading
 int // 2 first trailing
 // 3 pipe leading
-| // 4 pipe trailing
-// 5 second leading
-string // 6 second trailing
-// 7 pipe leading
-| // 8 pipe trailing
-// 9 third leading
-bool // 10 third trailing
-// 11 pipe leading
-| // 12 pipe trailing
-// 13 fourth leading
-null {
+// 4 pipe trailing
+    |
+    // 5 second leading
+    string // 6 second trailing
+    // 7 pipe leading
+    // 8 pipe trailing
+    |
+    // 9 third leading
+    bool // 10 third trailing
+    // 11 pipe leading
+    // 12 pipe trailing
+    |
+    // 13 fourth leading
+    null // 14 fourth trailing
+{
     x
-} // 14 fourth trailing
+}
 
 // ===== Trivia on wrapping return type (block comments) =====
 function TriviaWrapReturnTypeBlock(x: int) ->
 /* 1 first member leading */
-int /* 2 first trailing */
+int /* 2 first trailing */ /* 4 pipe trailing */
 /* 3 pipe leading */
-| /* 4 pipe trailing */
-/* 5 second leading */
-string /* 6 second trailing */
-/* 7 pipe leading */
-| /* 8 pipe trailing */
-/* 9 third leading */
-bool /* 10 third trailing */
-/* 11 pipe leading */
-| /* 12 pipe trailing */
-/* 13 fourth leading */
-null /* 14 fourth trailing */ {
+    |
+    /* 5 second leading */
+    string /* 6 second trailing */ /* 8 pipe trailing */
+    /* 7 pipe leading */
+    |
+    /* 9 third leading */
+    bool /* 10 third trailing */ /* 12 pipe trailing */
+    /* 11 pipe leading */
+    |
+    /* 13 fourth leading */
+    null /* 14 fourth trailing */ {
     x
-
-
 }
 
 ///////////////////
@@ -426,8 +439,8 @@ function NestedLoops(matrix: int[][]) -> int {
                 _ => val
             };
             total += processed;
-        };
-    };
+        }
+    }
     return total;
 }
 

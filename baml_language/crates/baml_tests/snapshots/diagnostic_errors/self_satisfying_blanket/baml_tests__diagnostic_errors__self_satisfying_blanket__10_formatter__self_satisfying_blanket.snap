@@ -17,7 +17,9 @@ class Foo {
 }
 
 implement<X, T extends Cyc<X>> Cyc<X> for T {
-    function m(self) -> int throws never { 0 }
+    function m(self) -> int throws never {
+        0
+    }
 }
 
 function needs_cyc<X, T extends Cyc<X>>(x: T) -> int throws never {

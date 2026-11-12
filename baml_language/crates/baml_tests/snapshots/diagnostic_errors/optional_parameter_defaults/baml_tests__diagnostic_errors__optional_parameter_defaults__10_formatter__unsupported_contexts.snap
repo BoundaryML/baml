@@ -13,20 +13,20 @@ class Counter {
     value: int,
 
     function Current(self = null) -> int {
-      self.value
+        self.value
     }
 }
 
 function LambdaDefault() -> int {
-  let f = (x: int = 1) -> int { x }
-  f(2)
+    let f = (x: int = 1) -> int { x };
+    f(2)
 }
 
 function Filtered(query: string, filter: string? = null) -> int {
-  query.length()
+    query.length()
 }
 
 function OptionalNameMismatch() -> int {
-  let f: NamedLimit = Filtered
-  f("cats", limit = "recent")
+    let f: NamedLimit = Filtered;
+    f("cats", limit = "recent")
 }

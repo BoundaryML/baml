@@ -2,12 +2,17 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function f() -> int {
-    let type T extends AaaaaaaaaaaaaaaaaaaA & BbbbbbbbbbbbbbbB = v else { return 0; };
+    let type T extends AaaaaaaaaaaaaaaaaaaA
+        & BbbbbbbbbbbbbbbB = v else {
+        return 0;
+    };
     0
 }
 
 interface I {
     type Item
-        extends SomeVeryLongBoundTypeName<WithArgument>
+        extends SomeVeryLongBoundTypeName<
+            WithArgument,
+        >
         = DefaultTypeNameHere<Another>;
 }

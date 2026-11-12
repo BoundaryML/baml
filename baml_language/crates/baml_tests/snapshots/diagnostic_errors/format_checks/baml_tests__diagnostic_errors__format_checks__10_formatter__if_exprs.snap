@@ -4,7 +4,6 @@ source: crates/baml_tests/src/generated_tests.rs
 // Testing all the formatter cases for if expressions
 
 function MyFunction(a: int, b: int) -> int {
-
     if (a > b) {
         1;
     } else {

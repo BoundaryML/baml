@@ -20,7 +20,7 @@ function thrower(a: int) -> int throws string {
 function or_right_operand_may_not_run(a: int, xs: int[]) -> int {
     let x: int | Tag = a;
     x = a;
-    for let v in xs {
+    for (let v in xs) {
         let ok = v < 5 || { return 7; };
         x = Tag {};
     }
@@ -32,7 +32,7 @@ function or_right_operand_may_not_run(a: int, xs: int[]) -> int {
 function null_coalesce_fallback_may_not_run(a: int, o: int?, xs: int[]) -> int {
     let x: int | Tag = a;
     x = a;
-    for let v in xs {
+    for (let v in xs) {
         let w = o ?? { return 7; };
         x = Tag {};
     }
@@ -44,7 +44,7 @@ function null_coalesce_fallback_may_not_run(a: int, o: int?, xs: int[]) -> int {
 function catch_arm_may_not_run(a: int, xs: int[]) -> int {
     let x: int | Tag = a;
     x = a;
-    for let v in xs {
+    for (let v in xs) {
         let r = thrower(v) catch (e) { _ => { return 5; } };
         x = Tag {};
     }
@@ -107,7 +107,7 @@ function null_coalesce_fallback_write_may_be_skipped(a: int, o: int?) -> int {
 function null_coalesce_fallback_continue_keeps_the_body_end(a: int, o: int?, xs: int[]) -> int {
     let x: int | Tag = a;
     x = a;
-    for let v in xs {
+    for (let v in xs) {
         x = Tag {};
         let r = o ?? { x = a; continue; };
     }
@@ -117,6 +117,8 @@ function null_coalesce_fallback_continue_keeps_the_body_end(a: int, o: int?, xs:
 
 // A `return` inside a `?.` argument does not make the else block diverge.
 function let_else_with_a_return_in_an_optional_argument(p: int?, b: Box?) -> int {
-    let v: int = p else { b?.m({ return 1; }); };
+    let v: int = p else {
+        b?.m({ return 1; });
+    };
     v
 }

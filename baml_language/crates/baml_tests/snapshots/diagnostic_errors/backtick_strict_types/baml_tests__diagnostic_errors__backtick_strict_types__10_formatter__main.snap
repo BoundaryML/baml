@@ -22,7 +22,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
 // (A) Interpolating a `null` literal.
 function case_a_null_interp() -> string {
-    let x: int? = null
+    let x: int? = null;
     `val: ${x}`
 }
 
@@ -33,6 +33,6 @@ function get_count() -> int? {
 }
 
 function case_e_optional_int_interp() -> string {
-    let c = get_count()
+    let c = get_count();
     `count: ${c}`
 }

@@ -6,16 +6,19 @@
 //!
 //! "The same" allows exactly what the rules canonicalise: a member's or
 //! statement's optional separator (`,`, `;`, a field's `:`), a list's
-//! separators, `=>` for `->`, `implement` for `implements`, and the order
-//! of an LLM body's fields.
+//! separators, `=>` for `->`, `implement` for `implements`, the order of an
+//! LLM body's fields, a stray `;`, the parentheses around a loop condition
+//! or `for` header, and the layout of a multi-line backtick string (its
+//! dedented text is what is compared).
 
 use std::fmt;
 
+use baml_base::dedent::dedent_backtick;
 use baml_parser::ParseError;
 use baml_syntax::{
-    nodes::FileTree,
+    nodes::{AnyId, AnyTemplatePart, FileTree},
     token::{TokenIdx, TokenKind},
-    tree::{AnyNodeId, Missing, TokenRange, TreeWalk as _, Visitor},
+    tree::{AnyNodeId, Missing, NodeUnion as _, TokenRange, TreeWalk as _, Visitor},
 };
 
 /// How a formatted output fails the oracle.
@@ -94,6 +97,9 @@ fn shape(tree: &FileTree) -> Vec<String> {
     }
     impl Visitor for Parts<'_> {
         fn node(&mut self, _field: &'static str, id: AnyNodeId) {
+            let Some(id) = seen_through(self.tree, id) else {
+                return;
+            };
             self.out.push_str(" (");
             self.out.push_str(self.tree.arenas().kind_name(id));
             self.out.push(')');
@@ -105,6 +111,8 @@ fn shape(tree: &FileTree) -> Vec<String> {
                 ("sep" | "semi" | "comma" | "colon", _) => return,
                 ("arrow", "=>") => "->",
                 ("kw", "implement") => "implements",
+                // Compared dedented, by the template as a whole.
+                (_, _) if self.tree.tokens().kind(token) == TokenKind::TemplateChunk => return,
                 (_, text) => text,
             };
             self.out.push(' ');
@@ -134,15 +142,50 @@ fn shape(tree: &FileTree) -> Vec<String> {
         };
         tree.arenas().walk_node(id, &mut parts);
         let mut children = parts.children;
-        if kind == "LlmBody" {
-            // The fields print in a fixed order whatever the source's.
-            children.sort_by_key(|&child| tree.arenas().kind_name(child));
-            kind.clone_into(&mut parts.out);
+        match id.typed() {
+            AnyId::LlmBody(_) => {
+                // The fields print in a fixed order whatever the source's.
+                children.sort_by_key(|&child| tree.arenas().kind_name(child));
+                kind.clone_into(&mut parts.out);
+            }
+            AnyId::BacktickString(template) => {
+                // The text with every non-text part held out, dedented: what
+                // the literal means, whatever its layout.
+                let joined: String = tree
+                    .list(tree.get(template).parts)
+                    .iter()
+                    .map(|part| match *part {
+                        AnyTemplatePart::Chunk(chunk) => tree.token_text(chunk.idx),
+                        AnyTemplatePart::Interp(_)
+                        | AnyTemplatePart::For(_)
+                        | AnyTemplatePart::If(_)
+                        | AnyTemplatePart::Bogus(_) => "\0",
+                    })
+                    .collect();
+                parts.out.push(' ');
+                parts.out.push_str(&dedent_backtick(&joined));
+            }
+            _ => {}
         }
         lines.push(parts.out);
         stack.extend(children.into_iter().rev());
     }
     lines
+}
+
+/// The node `id` stands for in the compared shape: none for a stray `;`,
+/// which the rules drop; the inner node for parentheses the rules add
+/// around a loop condition or `for` header, however many; else itself.
+fn seen_through(tree: &FileTree, id: AnyNodeId) -> Option<AnyNodeId> {
+    match id.typed() {
+        AnyId::EmptyStmt(_) => None,
+        AnyId::ParenExpr(paren) => {
+            let inner = tree.get(paren).inner;
+            seen_through(tree, inner.ok()?.node_id())
+        }
+        AnyId::ParenForInHeader(paren) => Some(AnyNodeId::of(tree.get(paren).header)),
+        _ => Some(id),
+    }
 }
 
 /// The text of every plain comment, sorted.

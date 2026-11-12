@@ -8,22 +8,22 @@ source: crates/baml_tests/src/generated_tests.rs
 // `is` pattern bindings are scoped to the pattern test — they must NOT leak
 // into the surrounding scope, so `x` is unresolved afterwards.
 function binding_leak_scope() -> int {
-    let v: int | string = 7
-    let _ = v is let x: int
+    let v: int | string = 7;
+    let _ = v is let x: int;
     x
 }
 
 // Same property inside an `if` condition: the binding must not leak into the
 // `then` branch the way Rust's `if let` would.
 function binding_leak_if() -> int {
-    let v: int | string = 7
+    let v: int | string = 7;
     if (v is let x: int) { x } else { 0 }
 }
 
 // Or-pattern bindings on each side also do not escape the pattern test.
 function or_pattern_leak() -> int {
-    let v: int | string = 7
-    let _ = v is (let x: int) | (let x: string)
+    let v: int | string = 7;
+    let _ = v is (let x: int) | (let x: string);
     x
 }
 

@@ -13,6 +13,9 @@ use crate::{comments::docs, ir::Doc};
 
 mod attrs;
 mod items;
+mod stmts;
+mod templates;
+mod types;
 
 /// Items are separated by one blank line, except that a run of globals keeps
 /// the grouping it was written with: adjacent `let`s stay adjacent, and a
@@ -75,12 +78,7 @@ macro_rules! verbatim {
 
 verbatim! {
     // items
-    RemovedItem,
-    GenericParamList, GenericParam, GenericParamBounds, GenericArgs, TypeArgs, AssocTypeBinding,
-    JinjaArg,
-    // types
-    PathType, LiteralType, ParenType, FunctionType, FunctionTypeParam, OptionalType, ArrayType,
-    UnionType, QualifiedPath,
+    RemovedItem, JinjaArg,
     // patterns
     BindingPattern, WildcardPattern, DestructurePattern, FieldPattern, ArrayPattern, RestPattern,
     TypePattern, ParenPattern, UnionPattern,
@@ -89,14 +87,11 @@ verbatim! {
     UpcastExpr, SpecExpr, EnvAccessExpr, CallExpr, ArgList, Arg, OptionalCallExpr, IndexExpr,
     OptionalIndexExpr, TaggedTemplateExpr, BinaryExpr, IsExpr, UnaryExpr, AwaitExpr, SpawnExpr,
     CatchExpr, CatchClause, CatchArm, ThrowExpr, ReturnExpr, BreakExpr, ContinueExpr, ParenExpr,
-    Block, IfExpr, IfLetExpr, MatchExpr, MatchParen, MatchArm, LambdaExpr, ArrayLiteral, MapLiteral,
+    IfExpr, IfLetExpr, MatchExpr, MatchParen, MatchArm, LambdaExpr, ArrayLiteral, MapLiteral,
     MapEntry, ObjectLiteral, ObjectField, SpreadElement,
-    // statements
-    ExprStmt, AssignStmt, EmptyStmt, LetStmt, TypeBindingStmt, DeferStmt, WhileStmt, WhileLetStmt, ForStmt,
-    ForInHeader, ParenForInHeader, CForHeader, HeaderStmt,
-    // templates
-    BacktickString, TemplateInterp, TemplateFor, TemplateForOpen, TemplateIf, TemplateIfOpen,
-    TemplateElif, TemplateElse, TemplateEndTag,
+    // the parts of a template, printed by the template as a whole
+    TemplateInterp, TemplateFor, TemplateForOpen, TemplateIf, TemplateIfOpen, TemplateElif,
+    TemplateElse, TemplateEndTag,
     // tuples (canary #5030), laid out by the rules of their families
-    TupleExpr, TupleFieldExpr, TuplePattern, TupleType,
+    TupleExpr, TupleFieldExpr, TuplePattern,
 }

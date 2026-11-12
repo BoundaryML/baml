@@ -41,7 +41,6 @@ class ChainMetadata {
 }
 
 function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> string {
-
     // ===== Simple path =====
     user;
     user.name;
@@ -59,8 +58,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     // 3 dot leading
     . // 4 dot trailing
     // 5 field leading
-    name // 6 field trailing
-    ;
+    name; // 6 field trailing
 
     // ===== Trivia in path (block comments) =====
     /* 1 first leading */
@@ -68,8 +66,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     /* 3 dot leading */
     . /* 4 dot trailing */
     /* 5 field leading */
-    name /* 6 field trailing */
-    ;
+    name; /* 6 field trailing */
 
     // ===== Trivia in deep path (line comments) =====
     // 1 root leading
@@ -82,8 +79,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     settings // 8 settings trailing
     . // 9 dot3 trailing
     // 10 theme leading
-    theme // 11 theme trailing
-    ;
+    theme; // 11 theme trailing
 
     // ===== Function calls =====
     user.name.len();

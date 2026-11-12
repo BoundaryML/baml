@@ -8,15 +8,25 @@ source: crates/baml_tests/src/generated_tests.rs
 // the instantiation from is refused where it is stored. (The run-time half,
 // the value carrying its type arguments, is pinned by the corpus in
 // `baml_src/ns_instantiation_expr/inferred_instantiation.baml`.)
-function identity<T>(x: T) -> T { x }
+function identity<T>(x: T) -> T {
+    x
+}
 
-function get_identity() -> (int) -> int throws never { identity }
+function get_identity() -> (int) -> int throws never {
+    identity
+}
 
-function get_identity_written() -> (int) -> int throws never { identity<int> }
+function get_identity_written() -> (int) -> int throws never {
+    identity<int>
+}
 
-function call_inferred_with_string() -> int { get_identity()("x") }
+function call_inferred_with_string() -> int {
+    get_identity()("x")
+}
 
-function call_written_with_string() -> int { get_identity_written()("x") }
+function call_written_with_string() -> int {
+    get_identity_written()("x")
+}
 
 function call_let_bound_with_string() -> int {
     let f: (int) -> int throws never = identity;

@@ -8,13 +8,17 @@ interface Named {
     type Error = never;
     name: Name,
     function label(self) -> string throws never;
-    function display(self) -> string throws never { self.label() }
+    function display(self) -> string throws never {
+        self.label()
+    }
 }
 
 class Item {
     name: Name,
     implements Named {
         type Key = string;
-        function label(self) -> string { self.name }
+        function label(self) -> string {
+            self.name
+        }
     }
 }

@@ -53,7 +53,11 @@ class LongAttrField {
 class LongFieldTypes {
     very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[],
     another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>,
-    callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int> throws never,
+    callback_field: (
+        first_param: int,
+        second_param: string,
+        third_param: bool,
+    ) -> map<string, int> throws never,
     deeply_nested: (int | (string | (bool | (float | null))))[]?,
 }
 
@@ -164,25 +168,29 @@ class TriviaLongFieldType {
     // 3 colon leading
     // 4 colon trailing
     // 5 type leading
-    map // 6 map trailing
-    < // 7 open angle trailing
-    // 8 key type leading
-    string // 9 key type trailing
-    , // 10 comma trailing
-    // 11 value type leading
-    int // 12 first trailing
-    | // 13 pipe trailing
-    // 14 second leading
-    string // 15 second trailing
-    | // 16 pipe trailing
-    // 17 third leading
-    bool // 18 third trailing
-    | // 19 pipe trailing
-    // 20 fourth leading
-    float // 21 fourth trailing
-    | // 22 pipe trailing
-    // 23 fifth leading
-    null // 24 fifth trailing
+    map< // 6 map trailing
+        // 7 open angle trailing
+        // 8 key type leading
+        string // 9 key type trailing
+        , // 10 comma trailing
+        // 11 value type leading
+        int // 12 first trailing
+        // 13 pipe trailing
+            |
+            // 14 second leading
+            string // 15 second trailing
+            // 16 pipe trailing
+            |
+            // 17 third leading
+            bool // 18 third trailing
+            // 19 pipe trailing
+            |
+            // 20 fourth leading
+            float // 21 fourth trailing
+            // 22 pipe trailing
+            |
+            // 23 fifth leading
+            null, // 24 fifth trailing
     > // 25 close angle trailing
         // 26 attr leading
         @description( // 27 attr name trailing
@@ -198,25 +206,23 @@ class TriviaLongFieldTypeBlock {
     data /* 2 field name trailing */: /* 4 colon trailing */
     /* 3 colon leading */
     /* 5 type leading */
-    map /* 6 map trailing */
-    < /* 7 open angle trailing */
-    /* 8 key type leading */
-    string /* 9 key type trailing */
-    , /* 10 comma trailing */
-    /* 11 value type leading */
-    int /* 12 first trailing */
-    | /* 13 pipe trailing */
-    /* 14 second leading */
-    string /* 15 second trailing */
-    | /* 16 pipe trailing */
-    /* 17 third leading */
-    bool /* 18 third trailing */
-    | /* 19 pipe trailing */
-    /* 20 fourth leading */
-    float /* 21 fourth trailing */
-    | /* 22 pipe trailing */
-    /* 23 fifth leading */
-    null /* 24 fifth trailing */
+    map /* 6 map trailing */</* 7 open angle trailing */
+        /* 8 key type leading */
+        string /* 9 key type trailing */ /* 10 comma trailing */,
+        /* 11 value type leading */
+        int /* 12 first trailing */ /* 13 pipe trailing */
+            |
+            /* 14 second leading */
+            string /* 15 second trailing */ /* 16 pipe trailing */
+            |
+            /* 17 third leading */
+            bool /* 18 third trailing */ /* 19 pipe trailing */
+            |
+            /* 20 fourth leading */
+            float /* 21 fourth trailing */ /* 22 pipe trailing */
+            |
+            /* 23 fifth leading */
+            null /* 24 fifth trailing */,
     > /* 25 close angle trailing */
         /* 26 attr leading */
         @description /* 27 attr name trailing */(/* 28 attr open trailing */

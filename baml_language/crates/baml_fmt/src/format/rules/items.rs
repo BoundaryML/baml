@@ -18,7 +18,7 @@ use baml_syntax::{
 };
 
 use crate::{
-    format::{FormatNode, Formatter},
+    format::{FormatNode, Formatter, layout::multi_line_before_last},
     ir::{Doc, GroupId},
 };
 
@@ -119,7 +119,7 @@ impl FormatNode for FunctionDef {
             throws: node.throws,
         };
         let body = match f.tree.present(node.body) {
-            AnyFunctionBody::Expr(block) => f.node(block),
+            AnyFunctionBody::Expr(block) => f.expanded_block(block),
             AnyFunctionBody::Llm(llm) => f.node(llm),
             AnyFunctionBody::Bogus(bogus) => f.tree.absent(bogus),
         };
@@ -304,17 +304,28 @@ impl FormatNode for ClassDef {
 }
 
 /// The attributes after a member's name or type: on its line when they fit,
-/// else each on a line of its own, indented.
+/// else each on a line of its own, indented. One with a multi-line template
+/// in it is measured by its first line, so a `@description(…)` holding one
+/// stays on the member's line — unless another attribute follows it, which
+/// would land on the template's closing line: then each takes a line of its
+/// own.
 fn attributes<'a>(f: &Formatter<'a>, attrs: List<Id<Attribute>>) -> Doc<'a> {
     let d = f.docs;
-    d.indent(
-        d.concat(
-            f.tree
-                .list(attrs)
-                .iter()
-                .map(|&attr| d.concat([Doc::SOFT_LINE_OR_SPACE, f.node(attr)])),
+    let docs: Vec<Doc<'a>> = f
+        .tree
+        .list(attrs)
+        .iter()
+        .map(|&attr| f.node(attr))
+        .collect();
+    d.concat([
+        multi_line_before_last(&docs),
+        d.indent(
+            d.concat(
+                docs.iter()
+                    .map(|&attr| d.concat([Doc::SOFT_LINE_OR_SPACE, attr])),
+            ),
         ),
-    )
+    ])
 }
 
 /// `name: T @attrs,` — the colon and the comma are canonical.
@@ -615,7 +626,7 @@ impl FormatNode for TestDef {
             f.alt(f.tree.present(node.name)),
             with,
             f.brace_after(group),
-            f.node(f.tree.present(node.body)),
+            f.expanded_block(f.tree.present(node.body)),
         ])
     }
 }

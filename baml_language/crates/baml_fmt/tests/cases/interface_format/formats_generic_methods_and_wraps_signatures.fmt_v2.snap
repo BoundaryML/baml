@@ -6,5 +6,5 @@ interface I {
         self,
         first: T,
         second: string,
-    ) -> map<string,T> throws never;
+    ) -> map<string, T> throws never;
 }

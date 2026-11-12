@@ -12,7 +12,9 @@ interface Printable {
 
 class Ticket {
     id: string,
-    function label(self) -> string { return self.id }
+    function label(self) -> string {
+        return self.id
+    }
     implements Named {}
 }
 
@@ -22,6 +24,6 @@ class Box<T> {
 
 implement<T extends Named> Printable for Box<T> {
     function display(self) -> string {
-      return self.value.label()
+        return self.value.label()
     }
 }

@@ -704,6 +704,7 @@ dependencies = [
 name = "baml_fmt"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_db",
  "baml_parser",
  "baml_syntax",

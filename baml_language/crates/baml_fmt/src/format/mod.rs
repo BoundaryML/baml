@@ -43,6 +43,9 @@ pub struct Formatter<'a> {
     pub tree: &'a CompleteTree<'a>,
     pub index: &'a TreeIndex,
     pub comments: &'a Comments,
+    /// One level of indentation, for a rule that lays out a literal's lines
+    /// itself.
+    pub indent_width: usize,
 }
 
 /// The layout of one node type.
@@ -59,12 +62,14 @@ impl<'a> Formatter<'a> {
         tree: &'a CompleteTree<'a>,
         index: &'a TreeIndex,
         comments: &'a Comments,
+        indent_width: usize,
     ) -> Self {
         Self {
             docs,
             tree,
             index,
             comments,
+            indent_width,
         }
     }
 
@@ -125,6 +130,12 @@ impl<'a> Formatter<'a> {
     /// The trailing comments of node `id` (see [`Self::leading_of`]).
     pub fn trailing_of(&self, id: AnyNodeId) -> Doc<'a> {
         docs::trailing(self.docs, self.tree, self.comments.trailing(id))
+    }
+
+    /// The source text of node `id`, its comments included.
+    pub fn node_text(&self, id: AnyNodeId) -> &'a str {
+        let span = self.tree.arenas().span(id);
+        &self.tree.text()[self.tree.tokens().text_range(span)]
     }
 
     /// Whether any comment dangles after `token`.

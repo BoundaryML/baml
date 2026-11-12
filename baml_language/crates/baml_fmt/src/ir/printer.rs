@@ -196,6 +196,15 @@ impl<'a> Output<'a> {
         }
     }
 
+    /// The indentation of the line being written: what the newline that
+    /// started it set, or none on the first line.
+    fn line_indent(&self) -> u32 {
+        match self.line.checked_sub(1).map(|at| &self.items[at]) {
+            Some(Item::Newline { indent, .. }) => *indent,
+            Some(Item::Text { .. } | Item::Tail(_) | Item::TailLine { .. }) | None => 0,
+        }
+    }
+
     /// Source text whose later lines are re-indented: each keeps its
     /// indentation relative to `source_indent`, measured from `indent`. A
     /// blank line stays blank.
@@ -540,8 +549,20 @@ impl<'a> Printer<'a> {
             Node::Verbatim {
                 text,
                 source_indent,
+                forced: true,
                 ..
             } => self.out.push_reindented(text, source_indent, indent),
+            // A literal's lines sit relative to the line it starts on, not
+            // to the indents around it: `f(`…`)` hugs the literal, and its
+            // closing line lands under the line that opened it.
+            Node::Verbatim {
+                text,
+                forced: false,
+                ..
+            } => {
+                let line_indent = self.out.line_indent();
+                self.out.push_reindented(text, 0, line_indent);
+            }
             Node::Space => self.out.push_space(),
             Node::Line(line) => match (mode, line) {
                 (Mode::Flat, LineMode::Soft) => {}

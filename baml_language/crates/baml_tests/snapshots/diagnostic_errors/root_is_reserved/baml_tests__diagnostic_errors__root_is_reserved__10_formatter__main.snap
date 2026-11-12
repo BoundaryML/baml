@@ -51,12 +51,12 @@ function parameter(root: string) -> string {
 }
 
 function binding() -> int {
-    let root = 1
+    let root = 1;
     root
 }
 
 function lambda() -> int {
-    let f = (root: int) => { root }
+    let f = (root: int) => { root };
     f(1)
 }
 
@@ -83,7 +83,7 @@ function matched(value: int | string) -> int {
 }
 
 function destructured(holder: Holder<int>) -> int {
-    let Holder<int> { value: let root } = holder
+    let Holder<int> { value: let root } = holder;
     root
 }
 

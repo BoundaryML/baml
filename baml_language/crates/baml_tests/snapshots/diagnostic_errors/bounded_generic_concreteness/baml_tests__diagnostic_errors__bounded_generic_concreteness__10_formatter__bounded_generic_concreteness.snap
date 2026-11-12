@@ -14,13 +14,17 @@ interface Combinable {
 
 class A {
     implements Combinable {
-        function combine(self, other: A) -> string throws never { "a" }
+        function combine(self, other: A) -> string throws never {
+            "a"
+        }
     }
 }
 
 class B {
     implements Combinable {
-        function combine(self, other: B) -> string throws never { "b" }
+        function combine(self, other: B) -> string throws never {
+            "b"
+        }
     }
 }
 
@@ -167,7 +171,9 @@ function rejected_top_and_bottom(u: unknown, n: never) -> void {
 // `string`'s implementation of `Combinable`, but it is never a bound's type
 // argument, written on a function or on a class alike.
 implement Combinable for string {
-    function combine(self, other: string) -> string throws never { "s" }
+    function combine(self, other: string) -> string throws never {
+        "s"
+    }
 }
 
 enum Side {
@@ -176,7 +182,9 @@ enum Side {
 }
 
 implement Combinable for Side {
-    function combine(self, other: Side) -> string throws never { "side" }
+    function combine(self, other: Side) -> string throws never {
+        "side"
+    }
 }
 
 class LiteralHolder<T extends Combinable> {

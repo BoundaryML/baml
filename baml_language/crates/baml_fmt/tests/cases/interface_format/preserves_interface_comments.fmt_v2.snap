@@ -13,6 +13,8 @@ interface /* keyword */ Named /* name */<T> /* generics */ requires
     function label(self) -> string; // signature
     function value(self) -> T throws never; // throws
     // default
-    function fallback(self) -> string throws never { "fallback" } // body
+    function fallback(self) -> string throws never {
+        "fallback"
+    } // body
     // close
 } // end

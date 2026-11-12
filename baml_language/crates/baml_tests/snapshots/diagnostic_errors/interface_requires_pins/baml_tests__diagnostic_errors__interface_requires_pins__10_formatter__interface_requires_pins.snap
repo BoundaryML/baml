@@ -18,11 +18,9 @@ interface Entity requires HasKey<Key = string> {}
 
 interface Loose requires HasKey {}
 
-function wants_int_key(e: HasKey<Key = int>) -> void throws never {
-}
+function wants_int_key(e: HasKey<Key = int>) -> void throws never {}
 
-function wants_string_key(e: HasKey<Key = string>) -> void throws never {
-}
+function wants_string_key(e: HasKey<Key = string>) -> void throws never {}
 
 /// E0001: `Entity` pins `Key = string`, so it is not a `HasKey<Key = int>`.
 function wrong_pin(e: Entity) -> void throws never {

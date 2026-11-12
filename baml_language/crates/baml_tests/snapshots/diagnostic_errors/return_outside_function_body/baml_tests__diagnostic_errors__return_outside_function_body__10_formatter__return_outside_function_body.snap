@@ -15,7 +15,12 @@ function sql(body: (x: int) -> baml.TaggedString) -> string {
 
 const THRESHOLD: int = 1;
 
-function return_in_a_parameter_default(a: int = { if (THRESHOLD > 0) { return "str"; } 3 }) -> int {
+function return_in_a_parameter_default(
+    a: int = {
+        if (THRESHOLD > 0) { return "str"; }
+        3
+    },
+) -> int {
     a
 }
 

@@ -9,12 +9,12 @@ source: crates/baml_tests/src/generated_tests.rs
 
 // Case 1: Simple identifier runner — `{ body }` is the test body.
 test "simple runner" with my_runner {
-  assert.is_true(true)
+    assert.is_true(true)
 }
 
 // Case 2: Call expression runner — `{ body }` is the test body.
 test "call runner" with testing.Quorum(5, 3) {
-  assert.is_true(true)
+    assert.is_true(true)
 }
 
 // Case 3: Constructor runner — `{ threshold: 0.5 }` is parsed as an object
@@ -24,5 +24,5 @@ class MyRunner {
 }
 
 test "constructor runner" with MyRunner { threshold: 0.5 } {
-  assert.is_true(true)
+    assert.is_true(true)
 }

@@ -10,4 +10,4 @@ type InvalidJson = json<string>;
 
 type InvalidMap = map<string>;
 
-type InvalidAssociatedBinding = image<Output=string>;
+type InvalidAssociatedBinding = image<Output = string>;

@@ -1,0 +1,13 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    for (
+        let very_long = 0;
+        very_long < 1000 && flag;
+        very_long += 1
+    ) {
+        g();
+    }
+    0
+}

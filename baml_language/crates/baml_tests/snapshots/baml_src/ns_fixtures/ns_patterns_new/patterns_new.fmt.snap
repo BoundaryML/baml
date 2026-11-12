@@ -117,7 +117,7 @@ function fn_pattern(cb: (int) -> int) -> int {
 function for_let_with_narrow(items: int[]) -> int {
     let sum = 0;
     for (let n: int in items) {
-        sum += n
+        sum += n;
     }
     sum
 }
@@ -125,7 +125,7 @@ function for_let_with_narrow(items: int[]) -> int {
 function for_let_ascription(items: int[]) -> int {
     let sum = 0;
     for (let n: int | string in items) {
-        sum += 1
+        sum += 1;
     }
     sum
 }
@@ -134,7 +134,7 @@ function for_let_ascription(items: int[]) -> int {
 function for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     let total = 0;
     for (let f: (int) -> int throws never in items) {
-        total += f(0)
+        total += f(0);
     }
     total
 }

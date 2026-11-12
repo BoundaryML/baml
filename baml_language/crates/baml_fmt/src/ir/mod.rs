@@ -26,6 +26,11 @@
 //!   text started on in the source, measured from the indent the node is
 //!   printed at. For a node a rule has no layout for yet, printed deeper or
 //!   shallower than it was written.
+//! * `literal` — a multi-line literal the rule laid out itself (a backtick
+//!   string), copied in: its later lines are indented as written relative
+//!   to the line it starts on, whatever indents enclose it, and it is an
+//!   atom to the layout around it — no forced break, measured by its first
+//!   line — so a call hugs it as it hugs a long string.
 //! * `Doc::SPACE`, `Doc::SOFT_LINE`, `Doc::SOFT_LINE_OR_SPACE`,
 //!   `Doc::HARD_LINE`, `Doc::EMPTY_LINE` — a soft line is nothing when its
 //!   group is flat and a newline when the group breaks; `SOFT_LINE_OR_SPACE`

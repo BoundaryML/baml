@@ -1,11 +1,17 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function slot_out_of_range(t: (int, string)) -> int { t.2 }
+function slot_out_of_range(t: (int, string)) -> int {
+    t.2
+}
 
-function slot_non_tuple(x: int) -> int { x.0 }
+function slot_non_tuple(x: int) -> int {
+    x.0
+}
 
-function nullable_slot(t: (int, int)?) -> int { t.0 }
+function nullable_slot(t: (int, int)?) -> int {
+    t.0
+}
 
 function wrong_arity() -> (int, int) {
     (1, 2, 3)
@@ -114,9 +120,13 @@ function element_test_arms_cover(t: (int | string, bool)) -> int {
     }
 }
 
-function tp_takes_wide(t: (int?, bool)) -> int { 0 }
+function tp_takes_wide(t: (int?, bool)) -> int {
+    0
+}
 
-function tp_takes_narrow(t: (int, bool)) -> int { 0 }
+function tp_takes_narrow(t: (int, bool)) -> int {
+    0
+}
 
 function type_test_narrows(t: (int?, bool) | (int, bool)) -> int {
     match (t) {
@@ -153,7 +163,9 @@ function single_tuple_not_refined(t: (int | string, bool)) -> int {
     }
 }
 
-function tp_takes_unknowns(pair: (unknown, unknown)) -> int { 0 }
+function tp_takes_unknowns(pair: (unknown, unknown)) -> int {
+    0
+}
 
 function unknown_not_narrowed(v: unknown) -> int {
     match (v) {

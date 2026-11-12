@@ -1,5 +1,8 @@
 //! Attributes: `@name(args)` on a member, `@@name(args)` on a declaration,
-//! the arguments all on one line or one per line with a trailing comma.
+//! the arguments all on one line or one per line with a trailing comma. A
+//! multi-line backtick string is an atom measured by its first line, so a
+//! `@description(…)` holding one stays on its line, the template's lines
+//! under it.
 
 use baml_syntax::{
     nodes::{AttrArgs, Attribute, BlockAttr, DottedName},

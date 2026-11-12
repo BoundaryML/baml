@@ -11,30 +11,30 @@ class Callbacks {
 }
 
 function immediate_callback(cb: (value: int) -> int) -> int {
-  cb(1)
+    cb(1)
 }
 
 // An optional callback is a callback root too — its omitted `throws` opens
 // to a synthetic effect param instantiated per call site, same as the
 // immediate form above.
 function optional_callback(cb: ((value: int) -> int)?) -> int {
-  1
+    1
 }
 
 function lambda_explicit_callback() -> int {
-  let apply = (f: (value: int) -> int throws never, x: int) -> int { f(x) };
-  apply((value: int) -> int { value }, 1)
+    let apply = (f: (value: int) -> int throws never, x: int) -> int { f(x) };
+    apply((value: int) -> int { value }, 1)
 }
 
 function explicit_nested(cb: ((value: int) -> int throws never) -> int) -> int {
-  cb((value: int) -> int { value })
+    cb((value: int) -> int { value })
 }
 
 function explicit_let() -> int {
-  let f: (x: int) -> int throws never = (x: int) -> int { x };
-  f(1)
+    let f: (x: int) -> int throws never = (x: int) -> int { x };
+    f(1)
 }
 
 function explicit_return() -> (value: int) -> int throws never {
-  (value: int) -> int { value }
+    (value: int) -> int { value }
 }

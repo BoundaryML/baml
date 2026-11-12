@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-type JSON = int | float | string | bool | JSON[] | map<string,json>;
+type JSON = int | float | string | bool | JSON[] | map<string, json>;
 
 class NotJSON {
     inner: name,
@@ -9,10 +9,10 @@ class NotJSON {
 
 // Should be type error.
 function EchoJSON(i: JSON) -> JSON {
-  NotJSON{ inner: "Whoops" }
+    NotJSON{ inner: "Whoops" }
 }
 
 // Should work.
 function MakeJSON(i: NotJSON) -> JSON {
- i.inner
+    i.inner
 }

@@ -28,10 +28,14 @@ class Only {
 }
 
 implement Shown for Only {
-    function s(self) -> string throws never { "only" }
+    function s(self) -> string throws never {
+        "only"
+    }
 }
 
-function needs_shown<T extends Shown>(t: T) -> int throws never { 0 }
+function needs_shown<T extends Shown>(t: T) -> int throws never {
+    0
+}
 
 function open_union_is_not_ambiguity(flag: bool) -> int throws never {
     let u = if (flag) { Only { v: 1 } } else { [] };
@@ -51,14 +55,20 @@ class W {
 }
 
 implement Conv<int> for W {
-    function to(self) -> int throws never { self.v }
+    function to(self) -> int throws never {
+        self.v
+    }
 }
 
 implement Conv<string> for W {
-    function to(self) -> string throws never { "w" }
+    function to(self) -> string throws never {
+        "w"
+    }
 }
 
-function needs_conv<A, T extends Conv<A>>(t: T) -> int throws never { 0 }
+function needs_conv<A, T extends Conv<A>>(t: T) -> int throws never {
+    0
+}
 
 function genuine_ambiguity(w: W) -> int throws never {
     needs_conv(w)
@@ -84,7 +94,9 @@ class C1 {
     v: int,
 }
 
-function takes_b(b: B1) -> int throws never { 0 }
+function takes_b(b: B1) -> int throws never {
+    0
+}
 
 function two_faults_one_span(c: C1) -> int throws never {
     takes_b(c.as<A1>)
