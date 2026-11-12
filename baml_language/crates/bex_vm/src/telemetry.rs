@@ -195,6 +195,9 @@ pub struct ThreadTelemetry {
     running: bool,
     completed: bool,
     name: Option<btel_records::ThreadName>,
+    /// The error that escaped the thread's outermost frame, until the thread's
+    /// completion, which is written with it.
+    error: Option<btel_snapshot::Snapshot>,
 }
 
 pub struct TelemetryState {
@@ -388,6 +391,7 @@ impl TelemetryState {
                 running: false,
                 completed: false,
                 name: None,
+                error: None,
             },
             call_paths: FxHashMap::default(),
             call_path_keys: FxHashMap::default(),
@@ -1419,6 +1423,22 @@ impl TelemetryState {
         }
     }
 
+    /// Capture `error`, the value that escaped the thread's outermost frame,
+    /// for the thread's completion. The last one wins: a host can resume a
+    /// thread after an unhandled throw, and only the throw that ends it counts.
+    ///
+    /// # Safety
+    /// `error` and its reachable objects must remain live under the heap permit.
+    pub unsafe fn record_thread_error(&mut self, error: Value) {
+        // Without HTTP bodies no error is recorded: it can quote a response
+        // body, as a failed `send_sse`'s does.
+        self.thread.error = if self.records_errors() {
+            self.capture(snapshot::Input::Value(error))
+        } else {
+            None
+        };
+    }
+
     pub fn complete_thread(&mut self, outcome: InvocationOutcome) {
         if self.thread.completed {
             return;
@@ -1439,6 +1459,18 @@ impl TelemetryState {
             self.write_span(SpanRecord::ThreadSpanRunning { at: completed_at });
         }
         self.flush_model_usage(self.thread.id);
+        // A thread that ended otherwise than with the error captured for it,
+        // returning after a host resumed it or cancelled, says nothing of it.
+        let error = self.thread.error.take();
+        if matches!(
+            outcome,
+            InvocationOutcome::Errored | InvocationOutcome::Panicked
+        ) && error.is_some()
+        {
+            self.write_span(SpanRecord::ThreadSpanError {
+                captured_error: error,
+            });
+        }
         self.write_span(SpanRecord::ThreadSpanCompletion {
             id: self.thread.id,
             parent_id: self.thread.parent_id,
@@ -3855,6 +3887,76 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn thread_completion_follows_the_error_the_thread_ended_with() {
+        for (outcome, recorded, carried) in [
+            (InvocationOutcome::Errored, true, true),
+            (InvocationOutcome::Panicked, true, true),
+            // No error was captured for the thread: nothing precedes its completion.
+            (InvocationOutcome::Errored, false, false),
+            // A host resumed the thread after the throw, or cancelled it: it
+            // did not end with the error.
+            (InvocationOutcome::Ok, true, false),
+            (InvocationOutcome::Cancelled, true, false),
+        ] {
+            let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+            state.start_thread();
+            if recorded {
+                // An earlier unhandled throw is superseded by the one that ends the thread.
+                unsafe {
+                    state.record_thread_error(Value::int(1));
+                    state.record_thread_error(Value::int(9));
+                }
+            }
+            state.complete_thread(outcome);
+            let records = state.span_records();
+            let completion = records
+                .iter()
+                .position(|record| matches!(record, SpanRecord::ThreadSpanCompletion { .. }))
+                .unwrap();
+            let errors: Vec<usize> = records
+                .iter()
+                .enumerate()
+                .filter(|(_, record)| matches!(record, SpanRecord::ThreadSpanError { .. }))
+                .map(|(index, _)| index)
+                .collect();
+            if carried {
+                assert_eq!(errors, vec![completion - 1], "{outcome:?}");
+                let SpanRecord::ThreadSpanError {
+                    captured_error: Some(error),
+                } = &records[completion - 1]
+                else {
+                    panic!("the thread error record owns its capture");
+                };
+                assert!(matches!(
+                    error.roots()[0],
+                    btel_snapshot::SnapshotValue::Int(9)
+                ));
+            } else {
+                assert!(errors.is_empty(), "{outcome:?}/{recorded}");
+            }
+            // A completed thread writes nothing more.
+            let written = state.span_records().len();
+            state.complete_thread(InvocationOutcome::Errored);
+            assert_eq!(state.span_records().len(), written);
+        }
+        // An engine that keeps HTTP bodies out of its recordings carries no
+        // thread error: it can quote a response body.
+        let mut state = test_state(
+            Arc::new(TelemetryPolicies::new().with_http_bodies(false)),
+            test_clock(),
+        );
+        state.start_thread();
+        unsafe { state.record_thread_error(Value::int(9)) };
+        state.complete_thread(InvocationOutcome::Errored);
+        assert!(
+            !state
+                .span_records()
+                .iter()
+                .any(|record| matches!(record, SpanRecord::ThreadSpanError { .. }))
+        );
     }
 
     #[test]
