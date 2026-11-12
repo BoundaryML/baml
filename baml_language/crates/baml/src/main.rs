@@ -1775,8 +1775,10 @@ fn status_toolchain(
     // --install instead makes the same preparation a required part of resolution.
     if !install {
         let selected = active_selector(paths)?;
-        if let Err(error) = ensure_selected_toolchain(&selected, override_url) {
-            eprintln!("warning: could not ensure active baml-cli is installed: {error:#}");
+        if !is_path_selector(&selected.selector) {
+            if let Err(error) = ensure_selected_toolchain(&selected, override_url) {
+                eprintln!("warning: could not ensure active baml-cli is installed: {error:#}");
+            }
         }
     }
     let resolution = resolve_toolchain(paths, install, override_url)?;

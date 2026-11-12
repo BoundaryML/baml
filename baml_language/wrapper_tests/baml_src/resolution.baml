@@ -369,6 +369,10 @@ testset "toolchain status" {
                 "unexpected local resolution state",
             );
             root.harness.require(
+                !output.stderr.to_string().includes("could not ensure"),
+                "valid local status emitted a managed-toolchain installation warning",
+            );
+            root.harness.require(
                 result.source.ends_with("baml.toml") && baml.fs.exists(result.wrapper_path),
                 "local resolution omitted its origin or wrapper",
             );

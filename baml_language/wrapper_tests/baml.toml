@@ -70,6 +70,7 @@ args = [
     "--include", "root::toolchain status::plain and json status warn and report absent version after failed acquisition",
     "--include", "root::toolchain management::status install is strict while plain status fails open",
     "--include", "root::toolchain status::json status fails open when selected manifest is unavailable",
+    "--include", "root::toolchain status::json status inspects local executables with and without install",
     # CLI delegation
     "--include", "root::CLI delegation::delegation preserves arguments stdio and exit code",
     "--include", "root::CLI delegation::delegation supports simultaneous binary stdio",

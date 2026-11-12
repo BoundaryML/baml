@@ -215,14 +215,16 @@ class WrapperInvocation {
         // Plain status attempts preparation once; --install makes it required.
         if (!install_missing) {
             let active = self.selection();
-            active.ensure_installed(telemetry = self.telemetry) catch (error) {
-                WrapperFailure => {
-                    baml.io.eprintln(
-                        `warning: could not ensure active baml-cli is installed: ${error_message(error)}`,
-                    );
-                    null
-                }
-            };
+            if (!is_path(active.selector.to_string())) {
+                active.ensure_installed(telemetry = self.telemetry) catch (error) {
+                    WrapperFailure => {
+                        baml.io.eprintln(
+                            `warning: could not ensure active baml-cli is installed: ${error_message(error)}`,
+                        );
+                        null
+                    }
+                };
+            }
         }
         let result = self.resolve(install_missing);
         if (result.managed) {
