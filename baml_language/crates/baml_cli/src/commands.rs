@@ -148,6 +148,13 @@ pub(crate) enum Commands {
     Auth(crate::auth::AuthCommands),
 
     #[command(
+        subcommand,
+        about = "Manage Boundary cloud dashboards",
+        after_long_help = "Examples:\n  Upload a new dashboard:\n    baml cloud dashboard create dashboard.html --project acme/app --key overview --name Overview"
+    )]
+    Cloud(crate::cloud_command::CloudCommands),
+
+    #[command(
         about = "Show wrapper and language toolchain update commands",
         visible_alias = "upgrade"
     )]
@@ -246,7 +253,7 @@ impl RuntimeCli {
             .clone()
             .global(true);
         command = command.mut_subcommands(|subcommand| {
-            if subcommand.get_name() == "query" {
+            if matches!(subcommand.get_name(), "query" | "cloud") {
                 subcommand
             } else {
                 subcommand.arg(project.clone())
@@ -380,6 +387,7 @@ impl RuntimeCli {
                 }
             },
             Commands::Auth(args) => args.run(),
+            Commands::Cloud(args) => args.run(),
             Commands::Feedback(args) => args.run(),
             // Handled before telemetry and command-side effects above.
             Commands::Help(args) => args.run(crate::output::policy().stdout.color),
@@ -453,6 +461,7 @@ impl Commands {
         };
         let project = project.to_path_buf();
         match self {
+            Self::Cloud(args) => args.apply_project(project.clone()),
             Self::Check(args) => args.from = Some(project.clone()),
             Self::Clean(args) => args.from = Some(project.clone()),
             Self::Query(args) => args.from = Some(project.clone()),
@@ -505,6 +514,12 @@ mod tests {
         &[],
         &["check"],
         &["describe"],
+        &["cloud"],
+        &["cloud", "dashboard"],
+        &["cloud", "dashboard", "create"],
+        &["cloud", "dashboard", "update"],
+        &["cloud", "dashboard", "get"],
+        &["cloud", "dashboard", "delete"],
         &["auth"],
         &["auth", "login"],
         &["auth", "status"],
