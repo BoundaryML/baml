@@ -5,6 +5,7 @@ mod admit;
 mod analysis;
 mod codegen;
 mod coords;
+mod coverage;
 mod index;
 mod init;
 mod json_codec;
@@ -14,3 +15,5 @@ mod render;
 mod structure;
 
 pub use admit::{CompiledFunction, Rejection, RustModule, compile_program};
+pub use codegen::stack::{Refusal, Verdict};
+pub use coverage::{FunctionPlacement, declared_functions, placement_coverage};

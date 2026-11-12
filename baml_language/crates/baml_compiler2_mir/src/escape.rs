@@ -115,7 +115,7 @@ pub enum FrameEscape {
 /// An allocation site of a body: an [`Rvalue`] that builds an array, map,
 /// instance or byte array. Obtained from [`EscapeFacts::sites`] or
 /// [`EscapeFacts::site_at`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Site(usize);
 
 /// The sites and locals that may hold the same object; the unit of a stack

@@ -362,16 +362,24 @@ impl<'p> ProgramIndex<'p> {
     /// the interpreter agree on every offset by construction.
     /// Bytes of an instance cell of the class at `object`, header included,
     /// when compiled code may place one on the stack: a class without type
-    /// arguments or a finalizer, as `BexVm::instance_shape` admits.
-    pub(crate) fn instance_cell(&self, object: usize) -> Option<usize> {
+    /// arguments or a finalizer, as `BexVm::instance_shape` admits. Else why
+    /// not.
+    pub(crate) fn instance_cell(
+        &self,
+        object: usize,
+    ) -> Result<usize, crate::codegen::stack::Refusal> {
+        use crate::codegen::stack::Refusal;
         let Object::Class(class) = &self.program.objects[ObjectIndex::from_raw(object)] else {
-            return None;
+            return Err(Refusal::UnknownClass);
         };
-        if class.generic_param_count != 0 || class.cleanup.is_some() {
-            return None;
+        if class.generic_param_count != 0 {
+            return Err(Refusal::Generic);
+        }
+        if class.cleanup.is_some() {
+            return Err(Refusal::Finalizer);
         }
         let (kinds, has_type_args) = InstanceLayout::plan(class);
-        Some(InstanceLayout::new(DescriptorId(0), &kinds, has_type_args).size())
+        Ok(InstanceLayout::new(DescriptorId(0), &kinds, has_type_args).size())
     }
 
     pub(crate) fn field_slot(&self, object: usize, field: usize) -> Option<FieldSlot> {

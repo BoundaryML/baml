@@ -19,23 +19,121 @@
 //! Heap and stack cells share one layout, header included
 //! (`BexVm::place_instance`), so field access, calls, natives and telemetry
 //! see an ordinary pointer.
+//!
+//! [`plan`] decides every allocation site of a body and records why each
+//! unplaced one stays in the heap ([`Refusal`]), the same decision the
+//! emitter acts on; `coverage` reports those verdicts over a program.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use baml_compiler2_mir::{
     AggregateKind, BlockId, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
     Terminator,
-    escape::{EscapeFacts, GroupId, Site},
+    escape::{EscapeFacts, FrameEscape, GroupId, Site},
     memory::{Resources, place_reads, walk_operand_places, walk_rvalue_places},
 };
 
-use crate::operands::{walk_statement_operands, walk_terminator_operands};
+use crate::{
+    index::ProgramIndex,
+    operands::{walk_statement_operands, walk_terminator_operands},
+};
 
 /// Bytes of frame a class's cell may take, header included.
 const MAX_CELL_BYTES: usize = 1024;
 
 /// Bytes of frame every slot of a body may take together.
 const MAX_FRAME_BYTES: usize = 4096;
+
+/// Why an allocation site stays in the heap: the first check that refused
+/// it, in the order [`plan`] applies them.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Refusal {
+    /// The body is not compiled: the backend rejected it for this reason.
+    NotCompiled(String),
+    /// The analysis says the object may outlive the frame.
+    Escapes(FrameEscape),
+    /// Not a class literal: an array, map or byte array, which v1 keeps in
+    /// the heap.
+    NotClass,
+    /// The literal is stored into a field or element, not a local.
+    Destination,
+    /// The literal's class is not in the program's object table.
+    UnknownClass,
+    /// A generic class, or a literal with type arguments.
+    Generic,
+    /// The class has a finalizer.
+    Finalizer,
+    /// The cell exceeds [`MAX_CELL_BYTES`].
+    Size,
+    /// Another class literal of the alias group stays in the heap.
+    GroupMember,
+    /// The alias group holds literals of two classes.
+    MixedClasses,
+    /// A local live after the site may still reach the previous instance,
+    /// or the group is self-linked, so the slot cannot be reused.
+    LiveReach,
+    /// Held by an alias group that is not placed.
+    HeldByUnplaced,
+    /// The body's slots together exceed [`MAX_FRAME_BYTES`].
+    Budget,
+}
+
+impl Refusal {
+    /// The coarse cause, for tallies: the escape reason's kind without its
+    /// callee name, and the backend's checks by name.
+    pub fn bucket(&self) -> &'static str {
+        match self {
+            Self::NotCompiled(_) => "not compiled",
+            Self::Escapes(escape) => match escape {
+                FrameEscape::Returned => "escapes: returned",
+                FrameEscape::Shared => "escapes: shared",
+                FrameEscape::Global => "escapes: global",
+                FrameEscape::Captured => "escapes: captured",
+                FrameEscape::Thrown => "escapes: thrown",
+                FrameEscape::Spawned => "escapes: spawned",
+                FrameEscape::KeepingCall(_) => "escapes: keeping call",
+                FrameEscape::Native(_) => "escapes: native",
+                FrameEscape::Finalizer => "escapes: finalizer",
+                FrameEscape::Parameter => "escapes: parameter",
+                FrameEscape::Generic => "escapes: generic",
+            },
+            Self::NotClass => "not a class literal",
+            Self::Destination => "stored into a field or element",
+            Self::UnknownClass => "class not in the program",
+            Self::Generic => "generic class",
+            Self::Finalizer => "class with a finalizer",
+            Self::Size => "cell over the size limit",
+            Self::GroupMember => "another literal of the group stays in the heap",
+            Self::MixedClasses => "group holds two classes",
+            Self::LiveReach => "previous instance reachable at the site",
+            Self::HeldByUnplaced => "held by an unplaced group",
+            Self::Budget => "frame over the slot budget",
+        }
+    }
+}
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotCompiled(reason) => write!(f, "not compiled: {reason}"),
+            Self::Escapes(FrameEscape::KeepingCall(callee)) => {
+                write!(f, "escapes: kept by call to {callee}")
+            }
+            Self::Escapes(FrameEscape::Native(callee)) => {
+                write!(f, "escapes: passed to native {callee}")
+            }
+            _ => f.write_str(self.bucket()),
+        }
+    }
+}
+
+/// The decision for one allocation site: its slot, or why it stays in the
+/// heap.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Verdict {
+    pub site: Site,
+    pub outcome: Result<usize, Refusal>,
+}
 
 /// The stack slots of one body and the sites that fill them.
 #[derive(Default, Debug)]
@@ -58,47 +156,76 @@ struct Candidate {
     bytes: usize,
 }
 
+/// The placement of `body` against the classes of `index`, with the verdict
+/// of every allocation site in statement order.
+pub(crate) fn plan<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    index: &ProgramIndex<'_>,
+    body: &MirFunctionBody<'db>,
+    facts: &EscapeFacts,
+) -> (Placement, Vec<Verdict>) {
+    Placement::plan(
+        body,
+        facts,
+        |kind| match kind {
+            AggregateKind::Class {
+                class,
+                type_arg_templates,
+            } if type_arg_templates.is_empty() => index
+                .class(db, *class)
+                .map(|(object, _)| object)
+                .ok_or(Refusal::UnknownClass),
+            _ => Err(Refusal::Generic),
+        },
+        |object| index.instance_cell(object),
+    )
+}
+
 impl Placement {
-    /// The placement of `body`, whose facts are `facts`; `cell` gives a
-    /// class object's instance cell bytes when its instances may be placed
-    /// (not generic, no finalizer), and `class` resolves a literal's class.
-    pub(crate) fn new<'db>(
+    /// The placement of `body`, whose facts are `facts`; `class` resolves a
+    /// literal's class object and `cell` gives a class object's instance cell
+    /// bytes, each refusing with the cause.
+    fn plan<'db>(
         body: &MirFunctionBody<'db>,
         facts: &EscapeFacts,
-        class: impl Fn(&AggregateKind<'db>) -> Option<usize>,
-        cell: impl Fn(usize) -> Option<usize>,
-    ) -> Self {
+        class: impl Fn(&AggregateKind<'db>) -> Result<usize, Refusal>,
+        cell: impl Fn(usize) -> Result<usize, Refusal>,
+    ) -> (Self, Vec<Verdict>) {
         let mut candidates = Vec::new();
-        let mut invalid: BTreeSet<GroupId> = BTreeSet::new();
+        let mut verdicts = Vec::new();
+        // The first cause a group's literals stay in the heap, once one is
+        // known for every candidate of the group.
+        let mut invalid: BTreeMap<GroupId, Refusal> = BTreeMap::new();
         // Groups with a class site, each one's class: a group holding
         // literals of two classes has no one cell size.
         let mut classes: BTreeMap<GroupId, usize> = BTreeMap::new();
         for (site, block, statement) in facts.sites() {
             let kind = &body.blocks[block.0].statements[statement].kind;
-            let StatementKind::Assign {
-                destination,
-                value: Rvalue::Aggregate { kind, .. },
-            } = kind
-            else {
-                continue;
-            };
-            let AggregateKind::Class { .. } = kind else {
-                continue;
+            let (destination, literal) = match kind {
+                StatementKind::Assign {
+                    destination,
+                    value: Rvalue::Aggregate { kind, .. },
+                } if matches!(kind, AggregateKind::Class { .. }) => (destination, Some(kind)),
+                StatementKind::Assign { destination, .. } => (destination, None),
+                _ => unreachable!("an allocation site is an assignment"),
             };
             let group = facts.alias_group(site);
             let placeable = (|| {
-                let Place::Local(destination) = destination else {
-                    return None;
-                };
-                if !facts.site_stays_in_frame(site) {
-                    return None;
+                if let Some(escape) = facts.site_escape(site) {
+                    return Err(Refusal::Escapes(escape.clone()));
                 }
+                let Some(kind) = literal else {
+                    return Err(Refusal::NotClass);
+                };
+                let Place::Local(destination) = destination else {
+                    return Err(Refusal::Destination);
+                };
                 let class = class(kind)?;
                 let bytes = cell(class)?;
                 if bytes > MAX_CELL_BYTES {
-                    return None;
+                    return Err(Refusal::Size);
                 }
-                Some(Candidate {
+                Ok(Candidate {
                     site,
                     block: block.0,
                     statement,
@@ -108,21 +235,28 @@ impl Placement {
                 })
             })();
             match placeable {
-                Some(candidate) => {
+                Ok(candidate) => {
                     if *classes.entry(group).or_insert(candidate.class) != candidate.class {
-                        invalid.insert(group);
+                        invalid.entry(group).or_insert(Refusal::MixedClasses);
                     }
                     candidates.push(candidate);
                 }
-                // A class site of the group that stays in the heap: the
-                // group's objects are not all placed.
-                None => {
-                    invalid.insert(group);
+                Err(refusal) => {
+                    // A class site of the group that stays in the heap: the
+                    // group's objects are not all placed.
+                    if literal.is_some() {
+                        invalid.entry(group).or_insert(Refusal::GroupMember);
+                    }
+                    verdicts.push(Verdict {
+                        site,
+                        outcome: Err(refusal),
+                    });
                 }
             }
         }
         if candidates.is_empty() {
-            return Self::default();
+            verdicts.sort_by_key(|verdict| verdict.site);
+            return (Self::default(), verdicts);
         }
 
         // Holders: every group reachable from a local or site, with what
@@ -169,7 +303,7 @@ impl Placement {
                         })
                     });
                     if reaches || strictly_reaches(facts, group, group) {
-                        invalid.insert(group);
+                        invalid.entry(group).or_insert(Refusal::LiveReach);
                     }
                 }
                 transfer(&statement.kind, &mut live);
@@ -184,7 +318,7 @@ impl Placement {
         // A placed group is held by placed groups only.
         let mut placed: BTreeSet<GroupId> = classes
             .keys()
-            .filter(|group| !invalid.contains(group))
+            .filter(|group| !invalid.contains_key(group))
             .copied()
             .collect();
         loop {
@@ -202,14 +336,17 @@ impl Placement {
             }
             for group in unplaced {
                 placed.remove(&group);
+                invalid.insert(group, Refusal::HeldByUnplaced);
             }
         }
 
         let mut placement = Self::default();
         let mut slot_of: BTreeMap<GroupId, usize> = BTreeMap::new();
+        let mut outcomes = Vec::with_capacity(candidates.len());
         for candidate in &candidates {
             let group = facts.alias_group(candidate.site);
-            if !placed.contains(&group) {
+            if let Some(refusal) = invalid.get(&group) {
+                outcomes.push((candidate.site, Err(refusal.clone())));
                 continue;
             }
             let slot = *slot_of.entry(group).or_insert_with(|| {
@@ -219,6 +356,7 @@ impl Placement {
             placement
                 .sites
                 .insert((candidate.block, candidate.statement), slot);
+            outcomes.push((candidate.site, Ok(slot)));
         }
         // Stay within the fiber stack budget: an oversized body keeps its
         // heap allocations.
@@ -229,9 +367,20 @@ impl Placement {
             .sum::<usize>()
             > MAX_FRAME_BYTES
         {
-            return Self::default();
+            placement = Self::default();
+            for (_, outcome) in &mut outcomes {
+                if outcome.is_ok() {
+                    *outcome = Err(Refusal::Budget);
+                }
+            }
         }
-        placement
+        verdicts.extend(
+            outcomes
+                .into_iter()
+                .map(|(site, outcome)| Verdict { site, outcome }),
+        );
+        verdicts.sort_by_key(|verdict| verdict.site);
+        (placement, verdicts)
     }
 
     /// The slot the literal at `statement` of `block` fills, if placed.
