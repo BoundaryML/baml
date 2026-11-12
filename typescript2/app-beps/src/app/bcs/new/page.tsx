@@ -7,14 +7,21 @@ import { BCS_STATUSES } from "@/lib/bcs-convex";
 import { createProposal } from "../actions";
 import { HtmlField } from "../proposal-fields";
 import { TeamOnly } from "../team-only";
+import { BcsError } from "../unavailable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "New BCS proposal" };
 
-export default async function NewBcsProposal() {
+export default async function NewBcsProposal({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   if (!(await currentViewer())) return <TeamOnly />;
+  const { error } = await searchParams;
   return (
     <div className="min-h-screen bg-background">
+      <BcsError message={error} />
       <main className="max-w-2xl mx-auto px-4 py-10 space-y-6">
         <div className="flex items-baseline gap-3">
           <Link href="/bcs" className="text-sm text-muted-foreground hover:text-foreground">

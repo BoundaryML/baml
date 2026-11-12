@@ -7,10 +7,11 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { currentViewer } from "@/lib/bcs-auth";
-import { BCS_STATUSES, bcsConvex, bcsId } from "@/lib/bcs-convex";
+import { BCS_STATUSES, bcsCall, bcsId } from "@/lib/bcs-convex";
 import { saveVersion, updateProposal } from "../actions";
 import { HtmlField } from "../proposal-fields";
 import { TeamOnly } from "../team-only";
+import { BcsError, BcsUnavailable } from "../unavailable";
 
 export const dynamic = "force-dynamic";
 
@@ -25,19 +26,23 @@ export default async function BcsProposal({
   searchParams,
 }: {
   params: Promise<{ number: string }>;
-  searchParams: Promise<{ v?: string }>;
+  searchParams: Promise<{ v?: string; error?: string }>;
 }) {
   const viewer = await currentViewer();
   if (!viewer) return <TeamOnly />;
   const number = Number((await params).number);
-  const asked = Number((await searchParams).v);
+  const query = await searchParams;
+  const asked = Number(query.v);
   if (!Number.isInteger(number)) notFound();
-  const { convex, secret } = bcsConvex();
-  const proposal = await convex.query(api.bcs.get, {
-    secret,
-    number,
-    version: Number.isInteger(asked) && asked > 0 ? asked : undefined,
-  });
+  const found = await bcsCall((convex, secret) =>
+    convex.query(api.bcs.get, {
+      secret,
+      number,
+      version: Number.isInteger(asked) && asked > 0 ? asked : undefined,
+    })
+  );
+  if (!found.ok) return <BcsUnavailable message={found.failure.message} />;
+  const proposal = found.value;
   if (!proposal) notFound();
   const old = proposal.version !== proposal.currentVersion;
 
@@ -132,6 +137,7 @@ export default async function BcsProposal({
           </details>
         </div>
       </header>
+      <BcsError message={query.error} />
       <iframe
         title={proposal.title}
         sandbox={FRAME_SANDBOX}

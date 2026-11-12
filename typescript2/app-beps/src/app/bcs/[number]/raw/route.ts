@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "../../../../../convex/_generated/api";
 import { currentViewer } from "@/lib/bcs-auth";
-import { bcsConvex } from "@/lib/bcs-convex";
+import { bcsCall } from "@/lib/bcs-convex";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +19,15 @@ export async function GET(
   const number = Number((await params).number);
   const asked = Number(request.nextUrl.searchParams.get("v"));
   if (!Number.isInteger(number)) return new NextResponse("Not found", { status: 404 });
-  const { convex, secret } = bcsConvex();
-  const proposal = await convex.query(api.bcs.get, {
-    secret,
-    number,
-    version: Number.isInteger(asked) && asked > 0 ? asked : undefined,
-  });
+  const found = await bcsCall((convex, secret) =>
+    convex.query(api.bcs.get, {
+      secret,
+      number,
+      version: Number.isInteger(asked) && asked > 0 ? asked : undefined,
+    })
+  );
+  if (!found.ok) return new NextResponse(found.failure.message, { status: 503 });
+  const proposal = found.value;
   if (!proposal) return new NextResponse("Not found", { status: 404 });
   return new NextResponse(proposal.html, {
     headers: {
