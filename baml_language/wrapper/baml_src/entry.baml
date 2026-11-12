@@ -103,9 +103,21 @@ function main() -> void throws never {
         // scheduling another helper that immediately retries the same rejection.
         if (!internal_helper) { WrapperTelemetry.finish(telemetry, executable = flush_executable); }
     }
-    // Retain command outcomes without recording arguments or error payloads.
+    // Canonical command context is independent of PostHog and value capture.
+    // Helpers must not inherit a caller-supplied foreground command label.
     flush_executable
-        = dispatch(telemetry, $trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
+        = dispatch(
+            telemetry,
+            $trace = trace.span(inputs = false, output = false, error = false).context(
+                metadata = {
+                    "command": if (internal_helper) {
+                        null
+                    } else {
+                        WrapperTelemetry.command(args)
+                    },
+                },
+            ),
+        ) catch (error) {
             _ => {
                 telemetry_event(telemetry, "wrapper_unhandled_error", fields = { "event_kind": "unhandled_error" });
                 baml.io.eprintln(`error: ${error_message(error)}`);

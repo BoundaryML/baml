@@ -80,6 +80,8 @@ You may also opt out by setting the cross-tool environment variable
 
 The Rust and BAML toolchain wrappers share an independent PostHog event schema. Each invocation emits one canonical command event, such as `baml`, `baml check`, `baml toolchain status`, `baml toolchain update`, or `baml self-update`, with `event_kind = "invocation"`. All flags and argument values are discarded: `baml --help` becomes `baml`, and `baml toolchain update --help` becomes `baml toolchain update`. Only recognized command names enter telemetry; unknown commands collapse to the nearest recognized parent. Delegated CLI commands use their recognized top-level name, without inspecting the CLI's nested arguments. Internal telemetry and replacement helpers are excluded.
 
+The canonical `baml` label does not prove empty argv: it also covers root help, version, unknown commands, and `--` termination.
+
 Every wrapper event includes `schema_version = 2`, its canonical `command`, and a `client` discriminator: `rust-wrapper` or `baml-in-baml`. Both implementations also emit `wrapper_resolution`, `wrapper_install`, `wrapper_selection`, `wrapper_update`, and `wrapper_self_update` for bounded decisions and outcomes. `wrapper_unhandled_error` records errors escaping the wrapper command handler, including argument parsing and failed handoffs. Recovered errors and delegated CLI nonzero exit codes do not count as unhandled wrapper errors. A delegated CLI keeps its separate telemetry.
 
 Events include coarse OS/architecture/CPU/CI information, a random anonymous identity and session, and a salted project-root hash. Source categories, toolchain kinds, and outcomes are bounded labels; argument values, selectors, raw paths, panic payloads, and error text are not sent.
@@ -91,6 +93,8 @@ Both wrapper implementations share their identity and preferences at `$BAML_HOME
 Wrapper events are written locally before a toolchain handoff. If a handoff fails, the later error is sealed into a separate batch without overwriting the invocation batch. A detached helper sends them with a two-second per-request limit, retaining failed deliveries for retry, recovering abandoned live files after 30 minutes, and removing events older than 24 hours. The helper rechecks opt-out before sending. Telemetry failures are silent and do not change command output or status. `BAML_WRAPPER_TELEMETRY_HOST` can point capture delivery at an HTTPS endpoint or loopback HTTP receiver for isolated testing; it defaults to the compiled PostHog ingestion host.
 
 The Rust wrapper sends only PostHog usage events. Release builds of the BAML-native wrapper additionally enable BCS runtime recording through an embedded public ingestion credential. BCS uses the existing packed-runtime policy: delivery runs on a background worker and shutdown waits for its normal bounded drain. The wrapper selects the existing `on_initial_telemetry_failure = "ignore"` policy. The PostHog queue retains its separate retry behavior. Set `BAML_TELEMETRY=off` to disable the BAML wrapper’s BCS recording.
+
+The BAML-native wrapper also attaches the same bounded canonical `command` to the foreground `user.dispatch` span and descendants, independently of PostHog and function value capture. Helpers remove this key in their dispatch scope. This does not update process launch metadata or add an identity; join dispatch to `processes` by `process_id` for process outcomes. See the [wrapper query example](baml_language/wrapper/README.md) for counting invocations without duplicating inherited spans.
 
 ## BCS environment metadata
 
