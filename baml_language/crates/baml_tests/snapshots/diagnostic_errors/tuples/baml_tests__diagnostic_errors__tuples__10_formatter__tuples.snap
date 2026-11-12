@@ -1,17 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function slot_out_of_range(t: (int, string)) -> int {
-    t.2
-}
+function slot_out_of_range(t: (int, string)) -> int { t.2 }
 
-function slot_non_tuple(x: int) -> int {
-    x.0
-}
+function slot_non_tuple(x: int) -> int { x.0 }
 
-function nullable_slot(t: (int, int)?) -> int {
-    t.0
-}
+function nullable_slot(t: (int, int)?) -> int { t.0 }
 
 function wrong_arity() -> (int, int) {
     (1, 2, 3)
@@ -65,9 +59,7 @@ function union_not_product(t: (int, bool) | (string, bool)) -> (int | string, bo
     t
 }
 
-function nested_product_not_union(
-    t: ((int | string,), bool),
-) -> ((int,), bool) | ((string,), bool) {
+function nested_product_not_union(t: ((int | string,), bool)) -> ((int,), bool) | ((string,), bool) {
     t
 }
 
@@ -93,7 +85,7 @@ function ambiguous_same_arity_literal() -> int {
 type TpZeroPair = (0, 0);
 
 function type_test_never_matches(t: (int, int), u: (int, int)) -> bool {
-    let nested = match (t, 1) {
+    let nested = match ((t, 1)) {
         ((0, 0), _) => true,
         _ => false,
     };
@@ -120,13 +112,9 @@ function element_test_arms_cover(t: (int | string, bool)) -> int {
     }
 }
 
-function tp_takes_wide(t: (int?, bool)) -> int {
-    0
-}
+function tp_takes_wide(t: (int?, bool)) -> int { 0 }
 
-function tp_takes_narrow(t: (int, bool)) -> int {
-    0
-}
+function tp_takes_narrow(t: (int, bool)) -> int { 0 }
 
 function type_test_narrows(t: (int?, bool) | (int, bool)) -> int {
     match (t) {
@@ -163,9 +151,7 @@ function single_tuple_not_refined(t: (int | string, bool)) -> int {
     }
 }
 
-function tp_takes_unknowns(pair: (unknown, unknown)) -> int {
-    0
-}
+function tp_takes_unknowns(pair: (unknown, unknown)) -> int { 0 }
 
 function unknown_not_narrowed(v: unknown) -> int {
     match (v) {

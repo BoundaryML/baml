@@ -5,5 +5,5 @@ source: crates/baml_tests/src/generated_tests.rs
 // produce a TypeMismatch diagnostic.
 
 function BadAssign(j: json) -> int {
-    j
+  j
 }

@@ -27,9 +27,7 @@ function let_inside_nested_const(nested: (int, (int, int))) -> int {
 }
 
 function let_inside_const_list(xs: int[]) -> int {
-    const [const first, let second] = xs else {
-        return 0;
-    };
+    const [const first, let second] = xs else { return 0; };
     first + second
 }
 

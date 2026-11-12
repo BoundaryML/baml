@@ -1,0 +1,7 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+const A = 1;
+const B = 2;
+
+const C = 3;

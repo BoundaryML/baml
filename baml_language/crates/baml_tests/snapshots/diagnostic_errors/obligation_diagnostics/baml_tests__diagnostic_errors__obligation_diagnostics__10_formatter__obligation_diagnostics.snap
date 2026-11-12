@@ -20,27 +20,19 @@ source: crates/baml_tests/src/generated_tests.rs
 // implementations apply, which was true of nothing.
 
 interface Shown {
-    function s(self) -> string throws never;
+    function s(self) -> string throws never
 }
 
-class Only {
-    v: int,
-}
+class Only { v: int }
 
 implements Shown for Only {
     function s(self) -> string throws never { "only" }
 }
 
-function needs_shown<T extends Shown>(t: T) -> int throws never {
-    0
-}
+function needs_shown<T extends Shown>(t: T) -> int throws never { 0 }
 
 function open_union_is_not_ambiguity(flag: bool) -> int throws never {
-    let u = if (flag) {
-        Only { v: 1 }
-    } else {
-        []
-    };
+    let u = if (flag) { Only { v: 1 } } else { [] };
     needs_shown(u)
 }
 
@@ -49,12 +41,10 @@ function open_union_is_not_ambiguity(flag: bool) -> int throws never {
 // needed" (rustc's E0283), and it is the only shape here that says so.
 
 interface Conv<A> {
-    function to(self) -> A throws never;
+    function to(self) -> A throws never
 }
 
-class W {
-    v: int,
-}
+class W { v: int }
 
 implements Conv<int> for W {
     function to(self) -> int throws never { self.v }
@@ -64,9 +54,7 @@ implements Conv<string> for W {
     function to(self) -> string throws never { "w" }
 }
 
-function needs_conv<A, T extends Conv<A>>(t: T) -> int throws never {
-    0
-}
+function needs_conv<A, T extends Conv<A>>(t: T) -> int throws never { 0 }
 
 function genuine_ambiguity(w: W) -> int throws never {
     needs_conv(w)
@@ -81,20 +69,16 @@ function genuine_ambiguity(w: W) -> int throws never {
 // verdict on `A1` silences a restatement about `A1` and nothing else.
 
 interface A1 {
-    function a(self) -> int throws never;
+    function a(self) -> int throws never
 }
 
 interface B1 {
-    function b(self) -> int throws never;
+    function b(self) -> int throws never
 }
 
-class C1 {
-    v: int,
-}
+class C1 { v: int }
 
-function takes_b(b: B1) -> int throws never {
-    0
-}
+function takes_b(b: B1) -> int throws never { 0 }
 
 function two_faults_one_span(c: C1) -> int throws never {
     takes_b(c.as<A1>)

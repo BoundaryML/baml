@@ -9,11 +9,11 @@ source: crates/baml_tests/src/generated_tests.rs
 // claimed, and the arm's scrutinee is still the whole union of lists.
 
 interface Src<T> {
-    value: T,
+    value: T
 }
 
 class A {
-    value: int,
+    value int
     implements Src<int> {}
 }
 
@@ -44,10 +44,7 @@ function class_head_keeps_the_union_list<T>(x: (A | string)[] | T, d: T) -> T {
 
 // Same claim, read through a bounded existential: the arm's `x` is the
 // union, which has no `sum`.
-function claim_keeps_the_existential(
-    x: (A | string)[] | baml.Summable<Sum = int>,
-    d: baml.Summable<Sum = int>,
-) -> int {
+function claim_keeps_the_existential(x: (A | string)[] | baml.Summable<Sum = int>, d: baml.Summable<Sum = int>) -> int {
     match (x) {
         [A { value }] => x.sum(),
         _ => d.sum(),

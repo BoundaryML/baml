@@ -26,7 +26,7 @@ function unbounded_slot<A>(a: (A, int), b: (A, int)) -> bool {
 }
 
 class NoOrder {
-    n: int,
+    n: int
 }
 
 function class_slot(a: (NoOrder,), b: (NoOrder,)) -> baml.ops.Ordering {

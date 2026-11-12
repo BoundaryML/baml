@@ -21,9 +21,7 @@ const _ = 3;
 const ALIAS: let OTHER = 4;
 
 // ── `const … else` has no body to leave ──────────────────────────────────────
-const MAYBE: int = 5 else {
-    6
-};
+const MAYBE: int = 5 else { 6 };
 
 // ── `root` is the path to the package itself, so no global may take it ──────
 const root = 7;

@@ -9,16 +9,16 @@ source: crates/baml_tests/src/generated_tests.rs
 // (E0002) instead of silently adopting the alias's existential view.
 
 interface Tagged {
-    type Label = string;
+    type Label = string
 
-    function id(self) -> int throws never;
+    function id(self) -> int throws never
 }
 
-type TagAlias = Tagged;
+type TagAlias = Tagged
 
-type TagPinned = Tagged<Label = int>;
+type TagPinned = Tagged<Label = int>
 
-type TagChain = TagAlias;
+type TagChain = TagAlias
 
 function bare_alias_bound<T extends TagAlias>(t: T, v: unknown) -> bool {
     v is T.Label
@@ -33,5 +33,5 @@ function chained_alias_bound<T extends TagChain>(t: T) -> int {
 }
 
 class AliasBounded<T extends TagAlias> {
-    value: T,
+    value: T
 }

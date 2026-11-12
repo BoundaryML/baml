@@ -1,5 +1,6 @@
 //! Formatter cases: every `tests/cases/**/*.baml` is formatted, checked for
-//! idempotency, and compared with the `<name>.fmt.snap` beside it.
+//! idempotency and against the oracle, and compared with the
+//! `<name>.fmt_v2.snap` beside it.
 //!
 //! The cases are the formatter's behavioural spec. They were extracted
 //! one-to-one from the former in-crate regression tests, grouped by the module
@@ -8,11 +9,16 @@
 //! non-default options starts with `// fmt: line_width=N indent_width=M`; that
 //! line is not part of the formatted input.
 //!
+//! Two snapshots sit beside each case while the rules are being written on
+//! the document IR: `<name>.fmt.snap` is the target, the former formatter's
+//! output; `<name>.fmt_v2.snap` is what the rules produce today. A rule is
+//! done when the two agree, and the pair collapses once they all do.
+//!
 //! Review a change with `cargo insta test --accept -p baml_fmt --test cases`.
 
 use std::path::Path;
 
-use baml_fmt::{FormatOptions, format};
+use baml_fmt::{FormatOptions, format, oracle};
 
 /// Split an optional `// fmt: key=value …` header off the case text.
 fn options(text: &str) -> (FormatOptions, &str) {
@@ -71,6 +77,9 @@ fn cases() {
             Ok(_) => violations.push(format!("{rel}: formatting is not idempotent")),
             Err(error) => violations.push(format!("{rel}: second pass failed: {error}")),
         }
+        if let Err(violation) = oracle::check(&baml_parser::parse(source).tree, &formatted) {
+            violations.push(format!("{rel}: {violation}"));
+        }
 
         let stem = path
             .file_stem()
@@ -84,7 +93,7 @@ fn cases() {
             prepend_module_to_snapshot => false,
             omit_expression => true,
         }, {
-            insta::assert_snapshot!(format!("{stem}.fmt"), formatted);
+            insta::assert_snapshot!(format!("{stem}.fmt_v2"), formatted);
         });
         count += 1;
     }

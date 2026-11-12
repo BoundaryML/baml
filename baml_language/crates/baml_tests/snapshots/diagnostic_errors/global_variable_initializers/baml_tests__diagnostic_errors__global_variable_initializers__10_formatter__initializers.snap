@@ -33,12 +33,8 @@ function with_default(value: int = THROUGH_DEFAULT) -> int {
 // ── A cycle through a lambda: references are lexical ────────────────────────
 // Whether `$init` ever calls the stored function is a question about values;
 // initialization order is decided from the source alone, as in Go.
-const STORED: () -> int throws never = () -> int {
-    STORED_PEER()
-};
-const STORED_PEER: () -> int throws never = () -> int {
-    STORED()
-};
+const STORED: () -> int throws never = () -> int { STORED_PEER() };
+const STORED_PEER: () -> int throws never = () -> int { STORED() };
 
 // ── A global reading itself ──────────────────────────────────────────────────
 const SELF_REFERENCE: int = SELF_REFERENCE + 1;

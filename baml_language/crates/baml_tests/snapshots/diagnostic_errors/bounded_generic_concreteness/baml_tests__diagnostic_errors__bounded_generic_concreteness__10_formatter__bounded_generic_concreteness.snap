@@ -9,22 +9,18 @@ source: crates/baml_tests/src/generated_tests.rs
 // them, does not move them out of its reach — and leaves the owner's prefix
 // to the receiver.
 interface Combinable {
-    function combine(self, other: Self) -> string throws never;
+    function combine(self, other: Self) -> string throws never
 }
 
 class A {
     implements Combinable {
-        function combine(self, other: A) -> string throws never {
-            "a"
-        }
+        function combine(self, other: A) -> string throws never { "a" }
     }
 }
 
 class B {
     implements Combinable {
-        function combine(self, other: B) -> string throws never {
-            "b"
-        }
+        function combine(self, other: B) -> string throws never { "b" }
     }
 }
 
@@ -50,7 +46,7 @@ function unbounded<T>(a: T, done: (() -> void)? = null) -> T {
 }
 
 class Pairer<K> {
-    key: K,
+    key K
 
     function pair<T extends Combinable>(self, a: T, b: T, done: (() -> void)? = null) -> string {
         a.combine(b)
@@ -75,10 +71,10 @@ function rejected() -> void {
     let either: A | B = A {};
     pair(a, b);
     pair_with_callback(a, b);
-    pair_with_callback(a, b, done = () -> void {});
+    pair_with_callback(a, b, done = () -> void { });
     pair_with_callback<Combinable>(a, b);
     pair_with_callback(either, either);
-    second_bounded(1, a, () -> void {});
+    second_bounded(1, a, () -> void { });
     Pairer { key: a }.pair(a, b);
     // Two faults: `T = Combinable` is not concrete, and nothing determines
     // the class's `K`.
@@ -90,8 +86,8 @@ function accepted() -> void {
     let a: Combinable = A {};
     pair(A {}, A {});
     pair_with_callback(A {}, A {});
-    pair_with_callback(B {}, B {}, done = () -> void {});
-    second_bounded(a, A {}, () -> void {});
+    pair_with_callback(B {}, B {}, done = () -> void { });
+    second_bounded(a, A {}, () -> void { });
     unbounded(a);
     Pairer { key: a }.pair(A {}, A {});
     // The type-argument channel fills the class frame and then the
@@ -108,11 +104,11 @@ function accepted() -> void {
 // through impl selection, which replays the header's bound; a goal with none
 // open asks the resolver directly.
 interface Holds<X> {
-    function held(self) -> X throws never;
+    function held(self) -> X throws never
 }
 
 class Holder<T> {
-    item: T,
+    item T
 }
 
 implements<T extends Combinable> Holds<string> for Holder<T> {
@@ -184,7 +180,7 @@ implement Combinable for Side {
 }
 
 class LiteralHolder<T extends Combinable> {
-    value: T,
+    value T
 }
 
 function literal_type_arguments_rejected() -> void {
@@ -209,4 +205,4 @@ function base_type_arguments_accepted() -> void {
     pair<MaybeA>("a", "b");
 }
 
-type MaybeA = "a" | string;
+type MaybeA = "a" | string

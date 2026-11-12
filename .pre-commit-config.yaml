@@ -23,8 +23,9 @@ repos:
         args: [--markdown-linebreak-ext=md]
         fail_fast: true
         files: ^baml_language/
-        # Exclude: snapshots, IDE test files, and special test files (class.rs, enum.rs)
-        exclude: (baml_tests/projects/|lsp_actions_tests/test_files/|lsp2_actions_tests/test_files/|\.snap$|class\.rs$|enum\.rs$)
+        # Exclude: snapshots, IDE test files, formatter case inputs (whose
+        # whitespace is what they pin), and special test files (class.rs, enum.rs)
+        exclude: (baml_tests/projects/|lsp_actions_tests/test_files/|lsp2_actions_tests/test_files/|baml_fmt/tests/cases/|\.snap$|class\.rs$|enum\.rs$)
 
       - id: check-merge-conflict
         fail_fast: true

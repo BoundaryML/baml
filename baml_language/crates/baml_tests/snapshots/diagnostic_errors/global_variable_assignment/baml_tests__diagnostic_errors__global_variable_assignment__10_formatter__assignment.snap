@@ -8,7 +8,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // are an ordinary heap value, and changing them is visible to every reader.
 
 class Settings {
-    retries: int,
+    retries int
 }
 
 const LIMIT = 3;

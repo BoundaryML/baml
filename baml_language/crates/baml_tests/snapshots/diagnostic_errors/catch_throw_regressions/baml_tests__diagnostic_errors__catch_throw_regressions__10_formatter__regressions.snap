@@ -4,17 +4,17 @@ source: crates/baml_tests/src/generated_tests.rs
 // Regression tests for catch/throw typing around divergence and throw propagation.
 
 enum Status {
-    HttpError,
-    IndexError,
-    AuthError,
-    SomeOtherError,
+    HttpError
+    IndexError
+    AuthError
+    SomeOtherError
 }
 
 // Always-diverging function: all code paths throw.
 function AlwaysThrowsStatus(n: int) -> Status {
     match (n) {
         0 => throw "http_error",
-        _ => throw 404,
+        _ => throw 404
     }
 }
 
@@ -38,7 +38,7 @@ function ThrowsAllStatusVariants(n: int) -> Status {
         1 => throw Status.HttpError,
         2 => throw Status.IndexError,
         3 => throw Status.AuthError,
-        _ => throw Status.SomeOtherError,
+        _ => throw Status.SomeOtherError
     }
 }
 
@@ -58,7 +58,7 @@ function CatchAllStatusVariants(n: int) -> string {
 function RecA(n: int) -> string {
     match (n) {
         0 => throw "boom",
-        _ => RecB(n),
+        _ => RecB(n)
     }
 }
 
@@ -73,7 +73,7 @@ function CatchRecursiveThrow(n: int) -> string {
 }
 
 class BuildError {
-    reason: string,
+    reason string
 }
 
 // catch_all must handle every inferred throw from the base expression.

@@ -55,13 +55,13 @@ function NestedIntArrayToBigint() -> bigint[][] {
 
 // `map<string, int>` is not assignable to `map<string, bigint>`.
 function IntMapToBigintMap() -> map<string, bigint> {
-    let m = { "a": 1 };
+    let m = {"a": 1};
     m
 }
 
 // A map literal with int values does not satisfy a `map<string, bigint>` slot.
 function IntMapLiteralToBigint() -> map<string, bigint> {
-    { "a": 1 }
+    {"a": 1}
 }
 
 // Arithmetic with an Optional operand is invalid — `null + int` has no
@@ -99,9 +99,7 @@ function OptionalFloatLtBigint(x: float?, y: bigint) -> bool {
 // Class fields are invariant — `{ count: 1 }` is not an instance of a
 // class with a `count: bigint` field. The runtime does no field-level
 // widening, so this must be a compile error; write `count: 1n`.
-class BigintHolder {
-    count: bigint,
-}
+class BigintHolder { count bigint }
 
 function IntFieldIntoBigintClass() -> BigintHolder {
     BigintHolder { count: 1 }

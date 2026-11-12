@@ -28,7 +28,7 @@ function old_qualified_call() -> string {
 // None of this touches the `type` keyword. An alias, a scoped type binding,
 // and an ordinary binding that happens to be called `type` all still compile,
 // so none of them appears in the diagnostics below.
-type StillAnAlias = int | string;
+type StillAnAlias = int | string
 
 function type_keyword_still_works(t: reflect.Type) -> string {
     let type T = t;

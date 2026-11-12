@@ -8,8 +8,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // `ns_loop_narrowing`; the post-loop types are in the type fixture
 // `loop_exit_edges`.
 
-class Tag {
-}
+class Tag {}
 
 function widen(v: int | Tag) -> int | Tag {
     v
@@ -19,12 +18,7 @@ function widen(v: int | Tag) -> int | Tag {
 // the break edge.
 function while_break_after_the_condition_write(a: int) -> int {
     let x: int | Tag = a;
-    while (
-        {
-            x = a;
-            a > 0
-        }
-    ) {
+    while ({ x = a; a > 0 }) {
         x = Tag {};
         break;
     }
@@ -36,10 +30,7 @@ function while_break_after_the_condition_write(a: int) -> int {
 // break edge carries the body's write.
 function while_let_break_after_the_scrutinee_write(a: int) -> int {
     let x: int | Tag = Tag {};
-    while let v: int = {
-        x = a;
-        widen(x)
-    } {
+    while let v: int = { x = a; widen(x) } {
         x = Tag {};
         break;
     }
@@ -64,10 +55,7 @@ function step_write_reaches_the_body(a: int) -> int {
 // A for-in collection runs once; the body's write outlives it.
 function for_in_body_write_outlives_the_collection(a: int, xs: int[]) -> int {
     let x: int | Tag = Tag {};
-    for let i in {
-            x = a;
-            xs
-        } {
+    for let i in { x = a; xs } {
         x = Tag {};
     }
     let u: int = x;
@@ -97,15 +85,13 @@ function condition_reads_its_own_write(a: int) -> int {
     x = a;
     let i = 0;
     let out = 0;
-    while (
-        {
-            let u: int = x;
-            out = u;
-            x = Tag {};
-            i += 1;
-            i < 2
-        }
-    ) {}
+    while ({
+        let u: int = x;
+        out = u;
+        x = Tag {};
+        i += 1;
+        i < 2
+    }) {}
     out
 }
 

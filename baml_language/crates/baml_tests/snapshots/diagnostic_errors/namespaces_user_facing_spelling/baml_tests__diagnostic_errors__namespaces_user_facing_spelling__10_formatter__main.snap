@@ -7,7 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // Names). Every mismatch below names one of each.
 
 class Widget {
-    id: int,
+    id int
 }
 
 // From the root namespace: `Widget` is bare, `gadgets.Gear` is `root.gadgets.Gear`.

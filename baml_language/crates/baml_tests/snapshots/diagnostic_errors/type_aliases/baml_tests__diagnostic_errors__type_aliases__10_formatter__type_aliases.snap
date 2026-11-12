@@ -1,23 +1,23 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-type foo = bar;
+type foo = bar
 
-type bar = int;
+type bar = int
 
 // Should pass.
 function Foo() -> foo {
-    1
+  1
 }
 
 // Should fail.
 function Bar() -> foo {
-    true
+  true
 }
 
-type Json = int | float | string | Json[] | map<string, Json>;
+type Json = int | float | string | Json[] | map<string, Json>
 
 // Should pass.
 function Baz() -> Json {
-    "hello"
+  "hello"
 }

@@ -1,22 +1,28 @@
-pub mod ast;
+//! The BAML formatter: a parsed file in, its canonical text out.
+//!
+//! The file's comments are attached to the nodes they belong to
+//! ([`comments`]), each node's rule builds a document ([`format`](mod@format)) on the
+//! document IR ([`ir`]), and the printer lays it out within the line width.
+//! The [`oracle`] states what every output must satisfy against its input.
+
 pub mod comments;
+pub mod format;
 pub mod ir;
 mod newline_style;
+pub mod oracle;
 pub mod package_source;
-pub mod printer;
-mod trivia_classifier;
 
 use baml_db::{ProjectDatabase, SourceRootSpec};
 use baml_parser::ParseError;
-use baml_syntax::{nodes::FileTree, token::TokenKind};
+use baml_syntax::{
+    complete::{CompleteTree, Incomplete},
+    nodes::FileTree,
+    token::TokenKind,
+};
+use bumpalo::Bump;
 use newline_style::apply_newline_style;
-use printer::{Printer, Shape};
-pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
-#[cfg(test)]
-mod formatter_scenario_tests;
-#[cfg(test)]
-mod tuple_tests;
+use crate::{comments::Comments, format::Formatter, ir::Docs};
 
 /// Runs the formatter on the given source code. The output keeps the line
 /// ending of `source`'s first line, `\n` or `\r\n`. A file that opts out with
@@ -96,19 +102,19 @@ pub fn format_salsa(
         return Err(FormatterError::ParseErrors(errors.to_vec()));
     }
 
-    let trivia = TriviaInfo::classify(tree.tokens());
-
-    let mut printer = Printer::new_empty(&tree, &options, &trivia);
-    printer.print(
-        tree.root(),
-        Shape {
-            width: options.line_width,
-            indent: 0,
-            first_line_offset: 0,
-        },
-    );
+    let complete = CompleteTree::try_from(&*tree).map_err(FormatterError::Incomplete)?;
+    let index = baml_parser::tree_index(db, file);
+    let comments = Comments::from_tree(&tree, &index);
+    let bump = Bump::new();
+    let formatter = Formatter::new(Docs::new(&bump), &complete, &index, &comments);
+    let output = formatter.file().print(options);
+    if cfg!(debug_assertions)
+        && let Err(violation) = oracle::check(&tree, &output)
+    {
+        panic!("the formatter broke its oracle: {violation}\n--- output ---\n{output}");
+    }
     Ok(Formatted {
-        output: Some(printer.output),
+        output: Some(output),
     })
 }
 
@@ -157,6 +163,10 @@ pub const CANONICAL_INDENT_WIDTH: usize = 4;
 pub enum FormatterError {
     #[error("{0:?}")]
     ParseErrors(Vec<ParseError>),
+    /// The parser reported no error yet left the tree incomplete: a parser
+    /// bug, reported rather than formatted around.
+    #[error("the parse reported no errors but {} is incomplete", .0.node.kind().name())]
+    Incomplete(Incomplete),
 }
 
 #[cfg(test)]
@@ -177,9 +187,14 @@ mod format_options_tests {
         let options = FormatOptions::default();
         assert_eq!(CANONICAL_INDENT_WIDTH, 4);
         assert_eq!(options.indent_width, CANONICAL_INDENT_WIDTH);
-        let formatted = format("function value() -> int {\n  result\n}\n", &options)
-            .expect("default formatter options should format a function body");
-        assert_eq!(formatted, "function value() -> int {\n    result\n}\n");
+    }
+
+    /// The layout a file already has is kept: items one blank line apart.
+    #[test]
+    fn items_are_one_blank_line_apart() {
+        let source = "class A {}\n\n\nclass B {}\nclass C {}\n";
+        let formatted = format(source, &FormatOptions::default()).expect("the file formats");
+        assert_eq!(formatted, "class A {}\n\nclass B {}\n\nclass C {}\n");
     }
 }
 
@@ -199,22 +214,22 @@ mod ignore_directive_tests {
     /// ignore directive.
     #[test]
     fn doc_comment_is_not_an_ignore_directive() {
-        let source = "/// baml-format: ignore\nfunction f() -> int {1}\n";
+        let source = "/// baml-format: ignore\nfunction f() -> int { 1 }\n\n\nclass A {}\n";
         let formatted =
             format(source, &FormatOptions::default()).expect("a documented function formats");
         assert_eq!(
             formatted,
-            "/// baml-format: ignore\nfunction f() -> int {\n    1\n}\n"
+            "/// baml-format: ignore\nfunction f() -> int { 1 }\n\nclass A {}\n"
         );
     }
 
     #[test]
     fn directive_text_inside_a_string_does_not_disable_formatting() {
-        let source = "function main() -> string {\n  let marker = \"// baml-format: ignore\";\n  marker\n}\n";
+        let source = "function main() -> string {\n  let marker = \"// baml-format: ignore\";\n  marker\n}\n\n\nclass A {}\n";
         let formatted = format(source, &FormatOptions::default())
             .expect("directive-like string content is ordinary source text");
         assert_ne!(formatted, source);
-        assert!(formatted.contains("    let marker = \"// baml-format: ignore\";"));
+        assert!(formatted.ends_with("}\n\nclass A {}\n"));
     }
 }
 

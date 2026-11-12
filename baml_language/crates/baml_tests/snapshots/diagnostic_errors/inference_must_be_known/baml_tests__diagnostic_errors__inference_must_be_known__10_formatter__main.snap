@@ -6,46 +6,46 @@ source: crates/baml_tests/src/generated_tests.rs
 // error already owns is that error's cascade and reports nothing more.
 
 interface HasOut {
-    type Out;
+    type Out
 }
 
 interface Src<T> {
-    value: T,
+    value: T
 }
 
 class Box<T> {
-    v: T,
+    v T
     implements HasOut {
-        type Out = T;
+        type Out = T
     }
 }
 
 interface HasItem {
-    type Item;
-    value: Self.Item,
+    type Item
+    value: Self.Item
 }
 
 class IntItem {
-    value: int,
+    value int
     implements HasItem {
-        type Item = int;
+        type Item = int
     }
 }
 
 class StringItem {
-    value: string,
+    value string
     implements HasItem {
-        type Item = string;
+        type Item = string
     }
 }
 
 class IntSrc {
-    value: int,
+    value int
     implements Src<int> {}
 }
 
 class StringSrc {
-    value: string,
+    value string
     implements Src<string> {}
 }
 
@@ -57,7 +57,7 @@ function open_scrutinee() -> int {
     let xs = [];
     match (xs) {
         [let a] => 1,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -65,7 +65,7 @@ function open_scrutinee_typed_arm() -> int {
     let xs = [];
     match (xs) {
         let whole: int[] => 1,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -74,7 +74,7 @@ function open_scrutinee_typed_arm() -> int {
 function open_scrutinee_never_pinned() -> int {
     let xs = [];
     match (xs) {
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -85,7 +85,7 @@ function open_scrutinee_owned_by_an_error() -> int {
     xs.push(missing_value);
     match (xs) {
         [let a] => 1,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -95,7 +95,7 @@ function open_scrutinee_owned_by_an_error() -> int {
 function pattern_without_arguments(x: unknown) -> int {
     match (x) {
         Src { value } => 1,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -104,7 +104,7 @@ function pattern_without_arguments(x: unknown) -> int {
 function pattern_with_conflicting_implementors(x: IntSrc | StringSrc) -> int {
     match (x) {
         Src { value } => 1,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -113,7 +113,7 @@ function pattern_with_conflicting_implementors(x: IntSrc | StringSrc) -> int {
 function pattern_with_conflicting_associated_types(x: IntItem | StringItem) -> int {
     match (x) {
         HasItem { value } => 1,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -121,7 +121,7 @@ function pattern_with_conflicting_associated_types(x: IntItem | StringItem) -> i
 function pattern_with_an_unpinned_associated_type(x: unknown) -> int {
     match (x) {
         HasItem { value } => 1,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -129,7 +129,7 @@ function pattern_with_an_unpinned_associated_type(x: unknown) -> int {
 function list_pattern_on_non_list(x: int | string) -> int {
     match (x) {
         [let a] => 1,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -139,7 +139,7 @@ function list_pattern_on_an_error() -> int {
     let x = missing_list;
     match (x) {
         [let a] => a.anything(),
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -156,7 +156,7 @@ function open_scrutinee_all_guarded(c: bool) -> int {
     let xs = [];
     let n = match (xs) {
         _ if c => 1,
-        let whole if !c => 2,
+        let whole if !c => 2
     };
     xs.push(1);
     n
@@ -173,8 +173,6 @@ function expression_hole() -> int {
 }
 
 function annotation_hole_into_a_lambda() -> int {
-    let f: (_) -> int throws never = (x) -> {
-        1
-    };
+    let f: (_) -> int throws never = (x) -> { 1 };
     0
 }

@@ -8,15 +8,15 @@ source: crates/baml_tests/src/generated_tests.rs
 // class's come from the alias's definition.
 
 class Point {
-    x: int,
-    y: int,
+    x int
+    y int
 }
 
-type PointAlias = Point;
+type PointAlias = Point
 
-type Text = string;
+type Text = string
 
-type Either = Point | string;
+type Either = Point | string
 
 function not_a_class() -> string throws never {
     Text { value: "x" }

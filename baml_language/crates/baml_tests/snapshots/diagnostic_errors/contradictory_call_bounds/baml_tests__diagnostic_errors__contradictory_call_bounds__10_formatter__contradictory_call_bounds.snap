@@ -8,7 +8,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // it, rather than erased.
 
 class Box<T> {
-    v: T,
+    v T
 }
 
 function id<T>(x: T) -> T {
@@ -46,11 +46,7 @@ function open_list_member() -> int {
 }
 
 function open_branch_member(flag: bool) -> int {
-    let b = if (flag) {
-        make(1)
-    } else {
-        make(id("s"))
-    };
+    let b = if (flag) { make(1) } else { make(id("s")) };
     take(b)
 }
 

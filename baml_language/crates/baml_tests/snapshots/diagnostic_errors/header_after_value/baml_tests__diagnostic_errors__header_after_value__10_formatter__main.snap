@@ -7,6 +7,6 @@ source: crates/baml_tests/src/generated_tests.rs
 
 function header_after_value() -> int {
     let x = 4;
-    x + 1;
+    x + 1
     //# done
 }

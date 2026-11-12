@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Gear {
-    teeth: int,
+    teeth int
 }
 
 // From `gadgets`: `Gear` is bare, the root namespace's `Widget` is `root.Widget`.

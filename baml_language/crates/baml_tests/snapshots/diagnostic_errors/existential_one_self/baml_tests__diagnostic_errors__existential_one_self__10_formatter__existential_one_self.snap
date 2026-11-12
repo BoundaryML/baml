@@ -12,39 +12,29 @@ source: crates/baml_tests/src/generated_tests.rs
 // parameters, not covariant widenings. A defaulted `Self` parameter is one a
 // call may omit, so it is no dispatch source either.
 interface Pairable {
-    function pair(x: Self, y: int) -> int throws never;
-    function both(x: Self, y: Self) -> int throws never;
-    function later(n: int, x: Self) -> int throws never;
-    function make(n: int) -> Self throws never;
+    function pair(x: Self, y: int) -> int throws never
+    function both(x: Self, y: Self) -> int throws never
+    function later(n: int, x: Self) -> int throws never
+    function make(n: int) -> Self throws never
     function opt(n: int, x: Self = (Self as Pairable).make(1)) -> int throws never {
         n
     }
-    function twice(self, other: Self) -> int throws never;
-    function maybe(self, other: Self?) -> int throws never;
-    function eithered(self, other: Self | int) -> int throws never;
-    function boxed(self) -> Self[] throws never;
-    function clone(self) -> Self throws never;
+    function twice(self, other: Self) -> int throws never
+    function maybe(self, other: Self?) -> int throws never
+    function eithered(self, other: Self | int) -> int throws never
+    function boxed(self) -> Self[] throws never
+    function clone(self) -> Self throws never
 }
 
 class P {
-    v: int,
+    v int
 
     implements Pairable {
-        function pair(x: P, y: int) -> int throws never {
-            x.v + y
-        }
-        function both(x: P, y: P) -> int throws never {
-            x.v + y.v
-        }
-        function later(n: int, x: P) -> int throws never {
-            x.v + n
-        }
-        function make(n: int) -> P throws never {
-            P { v: n }
-        }
-        function twice(self, other: P) -> int throws never {
-            self.v + other.v
-        }
+        function pair(x: P, y: int) -> int throws never { x.v + y }
+        function both(x: P, y: P) -> int throws never { x.v + y.v }
+        function later(n: int, x: P) -> int throws never { x.v + n }
+        function make(n: int) -> P throws never { P { v: n } }
+        function twice(self, other: P) -> int throws never { self.v + other.v }
         function maybe(self, other: P?) -> int throws never {
             match (other) {
                 let p: P => self.v + p.v,
@@ -57,12 +47,8 @@ class P {
                 let n: int => self.v + n,
             }
         }
-        function boxed(self) -> P[] throws never {
-            [self]
-        }
-        function clone(self) -> P throws never {
-            P { v: self.v }
-        }
+        function boxed(self) -> P[] throws never { [self] }
+        function clone(self) -> P throws never { P { v: self.v } }
     }
 }
 
@@ -94,15 +80,6 @@ function through_existential(a: Pairable, b: Pairable) -> int throws never {
 }
 
 function concrete(a: P, b: P) -> int throws never {
-    P.pair(a, 1)
-        + P.both(a, b)
-        + P.later(1, a)
-        + P.make(1).v
-        + a.twice(b)
-        + a.boxed().length()
-        + a.clone().v
-        + a.maybe(b)
-        + a.eithered(b)
-        + P.opt(1)
-        + P.opt(1, x = a)
+    P.pair(a, 1) + P.both(a, b) + P.later(1, a) + P.make(1).v + a.twice(b) + a.boxed().length()
+        + a.clone().v + a.maybe(b) + a.eithered(b) + P.opt(1) + P.opt(1, x = a)
 }

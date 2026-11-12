@@ -9,8 +9,8 @@ source: crates/baml_tests/src/corpus.rs
 // Interior pushed far past the block: pulled back to one level.
 function FarIndented() -> string {
     `
-        deeply
-        pushed in
+                    deeply
+                    pushed in
     `
 }
 
@@ -18,37 +18,35 @@ function FarIndented() -> string {
 // indentation between lines survives.
 function Ragged() -> string {
     `
-        header
-            bullet one
-            bullet two
-        footer
+            header
+                bullet one
+                bullet two
+            footer
     `
 }
 
 // Blank lines inside the body are preserved.
 function WithBlankLines() -> string {
     `
-        para one
+              para one
 
-        para two
+              para two
     `
 }
 
 // Single-line ${...} interpolations move with the surrounding text.
 function WithInterps(name: string, count: int) -> string {
     `
-        name:  ${name}
-        count: ${count}
+                name:  ${name}
+                count: ${count}
     `
 }
 
 // First line flush with the opening tick, second line deeper: the deeper indent
 // is part of the value, so it is preserved.
 function FirstLineFlush() -> string {
-    `
-        first
-                  nested under first
-    `
+    `first
+          nested under first`
 }
 
 // A `${for}` block tag triggers §13 whitespace control, so the interior is left

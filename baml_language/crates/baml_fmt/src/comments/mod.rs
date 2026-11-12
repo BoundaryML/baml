@@ -206,6 +206,15 @@ impl Comments {
         &of[start..end]
     }
 
+    /// The comments dangling in `node` directly after its token `token`.
+    pub fn dangling_after(&self, node: AnyNodeId, token: TokenIdx) -> &[SourceComment] {
+        let position = Position::Dangling { after: Some(token) };
+        let of = self.of(node);
+        let start = of.partition_point(|c| c.position < position);
+        let end = start + of[start..].partition_point(|c| c.position == position);
+        &of[start..end]
+    }
+
     /// The comments after `node`.
     pub fn trailing(&self, node: AnyNodeId) -> &[SourceComment] {
         let of = self.of(node);

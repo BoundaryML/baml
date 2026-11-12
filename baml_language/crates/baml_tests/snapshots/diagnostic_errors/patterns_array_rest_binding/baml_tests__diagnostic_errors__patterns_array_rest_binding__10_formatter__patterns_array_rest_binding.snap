@@ -13,20 +13,20 @@ source: crates/baml_tests/src/generated_tests.rs
 function valid_rest_binding(xs: int[]) -> int {
     match (xs) {
         [let first, ..let rest, let last] => first + rest.length() + last,
-        [..let all] => all.length(),
+        [..let all] => all.length()
     }
 }
 
 function valid_wildcard_rest(xs: int[]) -> int {
     match (xs) {
         [let first, .._] => first,
-        _ => 0,
+        _ => 0
     }
 }
 
 function valid_ascribed_rest() -> int {
-    let [..let rest: int[]] = [1, 2];
-    return rest[0];
+    let [..let rest: int[]] = [1, 2]
+    return rest[0]
 }
 
 // ============================================================================
@@ -38,7 +38,7 @@ function valid_ascribed_rest() -> int {
 function nested_bare_rest(xs: int[]) -> int {
     match (xs) {
         [..[..]] => 1,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -46,7 +46,7 @@ function nested_bare_rest(xs: int[]) -> int {
 function nested_rest_binding(xs: int[]) -> int {
     match (xs) {
         [..[..let r]] => r.length(),
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -54,7 +54,7 @@ function nested_rest_binding(xs: int[]) -> int {
 function rest_empty_array(xs: int[]) -> int {
     match (xs) {
         [let a, ..[]] => a,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -62,7 +62,7 @@ function rest_empty_array(xs: int[]) -> int {
 function rest_flattening_showcase(xs: int[]) -> int {
     match (xs) {
         [let a, ..[let b, ..let r, let c], let d] => a + b + c + d,
-        _ => 0,
+        _ => 0
     }
 }
 
@@ -72,19 +72,19 @@ function rest_flattening_showcase(xs: int[]) -> int {
 // ============================================================================
 
 class Wrapper {
-    value: int,
+    value int
 }
 
 function rest_type_pattern(xs: int[]) -> int {
     match (xs) {
         [let a, ..int] => a,
-        _ => 0,
+        _ => 0
     }
 }
 
 function rest_class_destructure(ws: Wrapper[]) -> int {
     match (ws) {
         [..Wrapper { value }] => value,
-        _ => 0,
+        _ => 0
     }
 }

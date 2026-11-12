@@ -1,0 +1,11 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function D() -> string {
+    let x = `
+        a ${
+            foo()
+        } b
+    `;
+    x
+}

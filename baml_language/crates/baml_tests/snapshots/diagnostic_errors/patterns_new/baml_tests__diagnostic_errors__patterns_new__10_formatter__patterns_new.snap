@@ -10,28 +10,28 @@ source: crates/baml_tests/src/generated_tests.rs
 // Single binding name differs across branches.
 function or_different_names_two(v: int) -> int {
     match (v) {
-        (let x) | (let y) => 1,
+        (let x) | (let y) => 1
     }
 }
 
 // Three branches, all different names.
 function or_different_names_three(v: int) -> int {
     match (v) {
-        let x | let y | let z => 1,
+        let x | let y | let z => 1
     }
 }
 
 // One branch binds a name, the other does not.
 function or_one_binds_one_doesnt(v: int) -> int {
     match (v) {
-        (let x) | _ => 1,
+        (let x) | _ => 1
     }
 }
 
 // Binding name + sibling branch with a different binding name in a chain.
 function or_mixed_names_in_chain(v: int | string) -> int {
     match (v) {
-        (let x: int) | (let y: string) => 1,
+        (let x: int) | (let y: string) => 1
     }
 }
 
@@ -41,7 +41,7 @@ function or_mixed_names_in_chain(v: int | string) -> int {
 
 function or_same_name_distinct_narrows(v: int | string) -> int {
     match (v) {
-        (let x: int) | (let x: string) => 1,
+        (let x: int) | (let x: string) => 1
     }
 }
 
@@ -53,7 +53,7 @@ function or_same_name_distinct_narrows(v: int | string) -> int {
 // catches the mismatch when both names share the chain's effective type.
 function or_multiple_binds_diff_narrows(v: int | string) -> int {
     match (v) {
-        (let a: let b: int) | (let a: let b: string) => 1,
+        (let a: let b: int) | (let a: let b: string) => 1
     }
 }
 
@@ -62,7 +62,7 @@ function or_multiple_binds_diff_narrows(v: int | string) -> int {
 // ============================================================================
 
 class Team {
-    scores: int[],
+    scores int[]
 }
 
 // Empty array patterns can fail when the input is non-empty.
@@ -82,8 +82,7 @@ function refutable_for_array_prefix(rows: int[][]) -> int {
     let total = 0;
     for (let [let first, ..] in rows) {
         total += first
-    }
-    ;
+    };
     total
 }
 
@@ -92,8 +91,7 @@ function refutable_for_class_field_array_prefix(teams: Team[]) -> int {
     let total = 0;
     for (let Team { scores: [let first, ..] } in teams) {
         total += first
-    }
-    ;
+    };
     total
 }
 
@@ -116,13 +114,13 @@ function irrefutable_while_let(n: int) -> int {
 // ============================================================================
 
 class Bag {
-    contents: int,
+    contents int
 }
 
 function class_destructure_unreachable_after_bare(b: Bag) -> int {
     match (b) {
-        Bag {} => 1,
-        Bag { contents: int } => 2,
+        Bag { } => 1,
+        Bag { contents: int } => 2
     }
 }
 
@@ -133,13 +131,13 @@ function class_destructure_unreachable_after_bare(b: Bag) -> int {
 // ============================================================================
 
 class Mixed {
-    value: int | float | bool,
+    value int | float | bool
 }
 
 function class_destructure_field_union_missing_int(m: Mixed) -> int {
     match (m) {
         Mixed { value: float } => 1,
-        Mixed { value: bool } => 2,
+        Mixed { value: bool } => 2
     }
 }
 
@@ -147,15 +145,15 @@ function class_destructure_field_union_missing_int(m: Mixed) -> int {
 // four (kind, payload) combinations; the missing one (`Pair { kind: bool,
 // payload: string }`) should appear in the diagnostic with both field names.
 class Pair {
-    kind: int | bool,
-    payload: int | string,
+    kind int | bool
+    payload int | string
 }
 
 function class_destructure_two_field_union_missing_combination(p: Pair) -> int {
     match (p) {
         Pair { kind: int, payload: int } => 1,
         Pair { kind: int, payload: string } => 2,
-        Pair { kind: bool, payload: int } => 3,
+        Pair { kind: bool, payload: int } => 3
     }
 }
 
@@ -167,52 +165,52 @@ function class_destructure_two_field_union_missing_combination(p: Pair) -> int {
 // rustc: `enum_with_single_missing_variant` —
 // missing one enum variant is reported by name.
 enum Color3 {
-    Red,
-    Green,
-    Blue,
+    Red
+    Green
+    Blue
 }
 
 function enum_with_single_missing_variant(c: Color3) -> int {
     match (c) {
         Color3.Green => 1,
-        Color3.Blue => 2,
+        Color3.Blue => 2
     }
 }
 
 // rustc: `enum_with_multiple_missing_variants` —
 // multiple missing variants are listed.
 enum Direction4 {
-    North,
-    East,
-    South,
-    West,
+    North
+    East
+    South
+    West
 }
 
 function enum_with_multiple_missing_variants(d: Direction4) -> int {
     match (d) {
-        Direction4.North => 1,
+        Direction4.North => 1
     }
 }
 
 // rustc: `enum_with_excessive_missing_variants` — 12 variants, 1 covered.
 enum ExcessiveEnum {
-    First,
-    Second,
-    Third,
-    Fourth,
-    Fifth,
-    Sixth,
-    Seventh,
-    Eighth,
-    Ninth,
-    Tenth,
-    Eleventh,
-    Twelfth,
+    First
+    Second
+    Third
+    Fourth
+    Fifth
+    Sixth
+    Seventh
+    Eighth
+    Ninth
+    Tenth
+    Eleventh
+    Twelfth
 }
 
 function enum_with_excessive_missing_variants(e: ExcessiveEnum) -> int {
     match (e) {
-        ExcessiveEnum.First => 1,
+        ExcessiveEnum.First => 1
     }
 }
 
@@ -220,14 +218,14 @@ function enum_with_excessive_missing_variants(e: ExcessiveEnum) -> int {
 // every shape with `field: false`, leaving `field: true` uncovered. Witness
 // should mention the missing bool value.
 class Flagged {
-    flag: bool,
-    note: string,
+    flag bool
+    note string
 }
 
 function class_field_bool_narrowing_missing_true(f: Flagged) -> int {
     match (f) {
         Flagged { flag: false, note: "zero" } => 1,
-        Flagged { flag: false, note: string } => 2,
+        Flagged { flag: false, note: string } => 2
     }
 }
 
@@ -235,22 +233,22 @@ function class_field_bool_narrowing_missing_true(f: Flagged) -> int {
 // length array piece, which BAML doesn't model). Class with bool + optional;
 // arms cover three of the four (bool × null/non-null) combos.
 class Box2 {
-    first: bool,
-    second: int[]?,
+    first bool
+    second int[]?
 }
 
 function nested_class_optional_missing_combination(b: Box2) -> int {
     match (b) {
         Box2 { first: true, second: null } => 1,
         Box2 { first: true, second: int[] } => 2,
-        Box2 { first: false, second: null } => 3,
+        Box2 { first: false, second: null } => 3
     }
 }
 
 // rustc: `match-non-exhaustive` — single literal arm against int.
 function int_literal_non_exhaustive(n: int) -> int {
     match (n) {
-        1 => 1,
+        1 => 1
     }
 }
 
@@ -261,13 +259,13 @@ function int_literal_non_exhaustive(n: int) -> int {
 // `(0 | 1, 2 | 3)` against `(int, int)` is non-exhaustive — there are int
 // values outside `0|1` for the first slot. Modeled here with a class.
 class IntPair {
-    a: int,
-    b: int,
+    a int
+    b int
 }
 
 function or_pattern_two_field_non_exhaustive(p: IntPair) -> int {
     match (p) {
-        IntPair { a: 0 | 1, b: 2 | 3 } => 1,
+        IntPair { a: 0 | 1, b: 2 | 3 } => 1
     }
 }
 
@@ -277,7 +275,7 @@ function or_pattern_two_field_non_exhaustive(p: IntPair) -> int {
 function or_pattern_optional_int_non_exhaustive(x: int?) -> int {
     match (x) {
         null => 0,
-        0 | 1 => 1,
+        0 | 1 => 1
     }
 }
 
@@ -292,7 +290,7 @@ function slice_prefix_or_suffix_non_exhaustive(xs: bool[]) -> int {
     match (xs) {
         [] => 0,
         [true, ..] => 1,
-        [.., false] => 2,
+        [.., false] => 2
     }
 }
 
@@ -301,7 +299,7 @@ function slice_repeated_prefix_unreachable(xs: bool[]) -> int {
     match (xs) {
         [true, ..] => 1,
         [true, ..] => 2,
-        _ => 3,
+        _ => 3
     }
 }
 
@@ -310,7 +308,7 @@ function slice_repeated_suffix_unreachable(xs: bool[]) -> int {
     match (xs) {
         [.., true] => 1,
         [.., true] => 2,
-        _ => 3,
+        _ => 3
     }
 }
 
@@ -320,6 +318,6 @@ function slice_prefix_suffix_subsumes_fixed(xs: bool[]) -> int {
     match (xs) {
         [false, .., true] => 1,
         [false, true] => 2,
-        _ => 3,
+        _ => 3
     }
 }

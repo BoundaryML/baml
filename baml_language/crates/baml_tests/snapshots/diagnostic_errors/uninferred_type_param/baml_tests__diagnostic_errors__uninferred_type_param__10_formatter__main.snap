@@ -19,7 +19,7 @@ class Picker {
 }
 
 class Tag<T> {
-    name: string,
+    name string
 }
 
 function call_slot() -> int {
@@ -67,7 +67,7 @@ function conflicting_arguments() -> int {
 // Controls: each of these has exactly one diagnostic, the root one. The
 // slots its failure leaves open belong to that report.
 class Holder<T> {
-    v: T,
+    v T
 }
 
 function unholder<T>(h: Holder<T>) -> int {
@@ -127,11 +127,7 @@ function decided_then_operated() -> int {
 }
 
 function pick_compared<T extends baml.ops.Compare>(a: T, b: T) -> T {
-    if (a < b) {
-        a
-    } else {
-        b
-    }
+    if (a < b) { a } else { b }
 }
 
 function decided_then_bounded() -> int {
@@ -143,15 +139,11 @@ function decided_then_bounded() -> int {
 // effect: its body may dispatch on the type, which `never` cannot answer,
 // so with no evidence it is uninferable rather than defaulted.
 interface Maker {
-    function make() -> int throws never;
+    function make() -> int throws never
 }
 
 function bounded_effect<E extends Maker>(cb: (() -> int throws E)? = null) -> int throws E {
-    if (cb != null) {
-        cb()
-    } else {
-        E.make()
-    }
+    if (cb != null) { cb() } else { E.make() }
 }
 
 function bounded_effect_slot() -> int {
@@ -162,17 +154,10 @@ function bounded_effect_slot() -> int {
 // argument keeps its own rule: with no evidence it is uninferable, never
 // defaulted along with the effect.
 function make_effect_box<E>() -> Holder<() -> int throws E> {
-    Holder {
-        v: () -> {
-            1
-        },
-    }
+    Holder { v: () -> { 1 } }
 }
 
-function take_effect_box<V extends Maker>(
-    b: Holder<() -> int throws V>,
-    v: V?,
-) -> int throws never {
+function take_effect_box<V extends Maker>(b: Holder<() -> int throws V>, v: V?) -> int throws never {
     V.make()
 }
 

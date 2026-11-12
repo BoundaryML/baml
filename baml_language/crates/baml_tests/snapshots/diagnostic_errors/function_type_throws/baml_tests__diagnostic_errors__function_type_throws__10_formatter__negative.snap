@@ -1,38 +1,38 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-type HiddenHandler = (value: int) -> int throws never;
+type HiddenHandler = (value: int) -> int throws never
 
 class Holder {
-    cb: (value: int) -> int throws never,
+  cb (value: int) -> int throws never
 }
 
 function accept_hidden(cb: HiddenHandler) -> int {
-    cb(1)
+  cb(1)
 }
 
 function nested_position(cb: ((value: int) -> int throws never) -> int) -> int {
-    let inner = (value: int) -> int throws string {
-        throw "boom"
-    };
-    cb(inner)
+  let inner = (value: int) -> int throws string {
+    throw "boom"
+  }
+  cb(inner)
 }
 
 function risky(value: int) -> int throws string {
-    throw "boom"
+  throw "boom"
 }
 
 function fail_hidden() -> int {
-    accept_hidden(risky)
+  accept_hidden(risky)
 }
 
 function fail_stored() -> Holder {
-    Holder { cb: risky }
+  Holder { cb: risky }
 }
 
 function fail_returned() -> (value: int) -> int throws never {
-    let local = (value: int) -> int throws string {
-        throw "boom"
-    };
-    local
+  let local = (value: int) -> int throws string {
+    throw "boom"
+  }
+  local
 }

@@ -1,0 +1,7 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    let result = root.ai.Agent<Itinerary>.new().run(spec);
+    result
+}

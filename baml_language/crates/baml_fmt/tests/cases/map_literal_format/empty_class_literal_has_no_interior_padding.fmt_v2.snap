@@ -1,0 +1,9 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+class Root {
+}
+
+function f() -> Root {
+    Root {}
+}

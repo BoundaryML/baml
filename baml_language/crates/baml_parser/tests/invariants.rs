@@ -143,7 +143,7 @@ fn walk(tree: &FileTree) -> Walk {
     let mut stack = vec![root];
     let mut parts = Parts::default();
     while let Some(id) = stack.pop() {
-        if Arenas::kind(id) == NodeKind::Bogus {
+        if id.kind() == NodeKind::Bogus {
             w.bogus.push(id);
         }
         parts.0.clear();
@@ -210,16 +210,12 @@ fn tree_invariants_hold_on_every_corpus_file() {
         let reachable: BTreeSet<AnyNodeId> = w.refs.keys().copied().collect();
         for id in tree.arenas().all_ids() {
             if !reachable.contains(&id) {
-                let _ = writeln!(report, "{label}: unreferenced {:?}", Arenas::kind(id));
+                let _ = writeln!(report, "{label}: unreferenced {:?}", id.kind());
             }
         }
         for (id, n) in &w.refs {
             if *n > 1 {
-                let _ = writeln!(
-                    report,
-                    "{label}: {:?} referenced {n} times",
-                    Arenas::kind(*id)
-                );
+                let _ = writeln!(report, "{label}: {:?} referenced {n} times", id.kind());
             }
         }
         // Unconditional: no token owned twice.
@@ -238,7 +234,7 @@ fn tree_invariants_hold_on_every_corpus_file() {
             let _ = writeln!(
                 report,
                 "{label}: {:?} at {:?} has children out of order",
-                Arenas::kind(*id),
+                id.kind(),
                 tree.arenas().span(*id)
             );
         }
@@ -260,7 +256,7 @@ fn tree_invariants_hold_on_every_corpus_file() {
             let _ = writeln!(
                 report,
                 "{label}: {:?} has a Missing child in an error-free parse",
-                Arenas::kind(*id)
+                id.kind()
             );
         }
         for id in &w.bogus {
@@ -275,7 +271,7 @@ fn tree_invariants_hold_on_every_corpus_file() {
             let _ = writeln!(
                 report,
                 "{label}: {:?} stores span {stored:?} but its children span {derived:?}",
-                Arenas::kind(*id)
+                id.kind()
             );
         }
         // Error-free: every item but the last has its separator.
@@ -283,7 +279,7 @@ fn tree_invariants_hold_on_every_corpus_file() {
             let _ = writeln!(
                 report,
                 "{label}: {:?}.{field} has an item after one with no separator",
-                Arenas::kind(*id)
+                id.kind()
             );
         }
     }

@@ -184,7 +184,7 @@ fn any_node_ids_round_trip_through_cast() {
         .next()
         .unwrap_or_else(|| unreachable!("one call"));
     let any = AnyNodeId::of(call);
-    assert_eq!(Arenas::kind(any), NodeKind::CallExpr);
+    assert_eq!(any.kind(), NodeKind::CallExpr);
     assert_eq!(any.cast::<CallExpr>(), Some(call));
     assert_eq!(any.cast::<Name>(), None);
     assert_eq!(

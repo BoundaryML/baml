@@ -72,15 +72,15 @@ function MatchExpression(x: int) -> string {
         1 => {
             //# One
             "one"
-        },
+        }
         2 => {
             //# Two
             "two"
-        },
+        }
         _ => {
             //# Default
             "other"
-        },
+        }
     }
 }
 

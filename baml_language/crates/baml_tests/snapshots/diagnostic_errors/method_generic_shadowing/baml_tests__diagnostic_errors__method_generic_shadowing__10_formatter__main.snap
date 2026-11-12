@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // parameter of its owner: one spelling would name two frame slots.
 
 class Bin<T> {
-    v: T,
+    v T
 
     function make<T>(x: T) -> int {
         0
@@ -13,19 +13,19 @@ class Bin<T> {
 }
 
 interface Source<T> {
-    type Item;
+    type Item
 
-    function read<T>(self) -> int throws never;
+    function read<T>(self) -> int throws never
     // Control: an associated type is only ever spelled `Self.Item`, so an
     // own generic sharing its name shadows nothing.
-    function item<Item>(self) -> int throws never;
+    function item<Item>(self) -> int throws never
 }
 
 class Ints {
-    v: int,
+    v int
 
     implements Source<int> {
-        type Item = int;
+        type Item = int
 
         function read<U>(self) -> int throws never {
             0
@@ -38,7 +38,7 @@ class Ints {
 }
 
 class Wrap<T> {
-    v: T,
+    v T
 }
 
 implements<T> Source<T> for Wrap<T> {
@@ -56,10 +56,10 @@ implements<T> Source<T> for Wrap<T> {
 // An in-class `implements` block's frame is the class's own, so the
 // shadowed parameter is named as the class's.
 class Pair<T> {
-    a: T,
+    a T
 
     implements Source<T> {
-        type Item = T;
+        type Item = T
 
         function read<T>(self) -> int throws never {
             0
@@ -73,7 +73,7 @@ class Pair<T> {
 
 // Control: distinct names are fine.
 class Fine<T> {
-    v: T,
+    v T
 
     function make<U>(x: U) -> int {
         0

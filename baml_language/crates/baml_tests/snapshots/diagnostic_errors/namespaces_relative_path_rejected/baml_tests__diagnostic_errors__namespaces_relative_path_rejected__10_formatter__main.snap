@@ -25,7 +25,7 @@ function call() -> int {
 function type_pattern(value: root.llm.Response | int) -> int {
     match (value) {
         llm.Response => 1,
-        _ => 0,
+        _ => 0
     }
 }
 

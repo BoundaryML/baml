@@ -8,26 +8,16 @@ source: crates/baml_tests/src/generated_tests.rs
 // `let type T extends I = … else { … }`, checks `I` where it binds and then
 // satisfies it: `ns_let_type_bounds`.)
 
-interface Named {
-    name: string,
-}
+interface Named { name string }
 
-class Boom<T> {
-    payload: T,
-}
+class Boom<T> { payload T }
 
-function needs_bound<A extends Named>() -> string {
-    "ok"
-}
+function needs_bound<A extends Named>() -> string { "ok" }
 
-function echo<T>(v: T) -> T throws never {
-    v
-}
+function echo<T>(v: T) -> T throws never { v }
 
 function risky<T>(v: T, fail: bool) -> int throws Boom<T> {
-    if (fail) {
-        throw Boom<T> { payload: v }
-    }
+    if (fail) { throw Boom<T> { payload: v } }
     0
 }
 

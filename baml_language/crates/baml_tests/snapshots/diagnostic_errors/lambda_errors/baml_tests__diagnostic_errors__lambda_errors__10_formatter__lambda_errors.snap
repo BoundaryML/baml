@@ -3,66 +3,50 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 // Type mismatch: lambda return type vs actual body type
 function test_return_mismatch() -> int {
-    let bad = (x: int) -> string {
-        x * 2
-    };
+    let bad = (x: int) -> string { x * 2 }
     0
 }
 
 // Lambda param with no annotation and no expected type context
 function test_no_annotation_no_context() -> int {
-    let bad = (x) -> {
-        x * 2
-    };
+    let bad = (x) -> { x * 2 }
     0
 }
 
 // Arity mismatch: lambda has wrong number of params for expected type
 function test_arity_mismatch() -> int[] {
-    let items: int[] = [1, 2, 3];
-    items.map((x, y) -> {
-        x
-    })
+    let items: int[] = [1, 2, 3]
+    items.map((x, y) -> { x })
 }
 
 // Arity mismatch: lambda has too few params for expected type
 function test_arity_mismatch_too_few() -> int[] {
-    let f: (int, int) -> int[] throws never = (x) -> {
-        [x]
-    };
+    let f: (int, int) -> int[] throws never = (x) -> { [x] }
     f(1, 2)
 }
 
 // Wrong param type annotation vs expected
 function test_param_type_mismatch() -> int[] {
-    let items: int[] = [1, 2, 3];
-    items.map((x: string) -> {
-        x
-    })
+    let items: int[] = [1, 2, 3]
+    items.map((x: string) -> { x })
 }
 
 // Unknown type name in lambda param annotation (should report UnresolvedType)
 function test_unknown_param_type() -> int {
-    let f = (x: NonExistentType) -> {
-        0
-    };
+    let f = (x: NonExistentType) -> { 0 }
     0
 }
 
 // Unknown type name in lambda return type annotation
 function test_unknown_return_type() -> int {
-    let f = (x: int) -> NonExistentType {
-        x
-    };
+    let f = (x: int) -> NonExistentType { x }
     0
 }
 
 // Incompatible constraints after an initially unconstrained lambda
 function test_conflicting_later_constraints() -> int {
-    let f = (x) -> {
-        x
-    };
-    let int_identity: (int) -> int throws never = f;
-    let string_identity: (string) -> string throws never = f;
+    let f = (x) -> { x }
+    let int_identity: (int) -> int throws never = f
+    let string_identity: (string) -> string throws never = f
     int_identity(0)
 }
