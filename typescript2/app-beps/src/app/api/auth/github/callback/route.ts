@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { BCS_COOKIE, bcsMembership, sessionCookie, signSession } from "@/lib/bcs-auth";
 
 const PRODUCTION_URL = "https://beps.boundaryml.com";
 const ALLOWED_PREVIEW_PATTERNS = [
@@ -127,6 +128,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch all emails to check for @boundaryml.com (special account)
     let boundaryEmail: string | undefined;
+    let verifiedEmails: string[] = [];
     try {
       const emailsResponse = await fetch("https://api.github.com/user/emails", {
         headers: {
@@ -137,6 +139,7 @@ export async function GET(request: NextRequest) {
 
       if (emailsResponse.ok) {
         const emails: GitHubEmail[] = await emailsResponse.json();
+        verifiedEmails = emails.filter((e) => e.verified).map((e) => e.email);
         const boundaryEmailObj = emails.find(
           (e) => e.verified && e.email.endsWith("@boundaryml.com")
         );
@@ -157,9 +160,20 @@ export async function GET(request: NextRequest) {
 
     const encodedUser = encodeURIComponent(JSON.stringify(userData));
 
-    return NextResponse.redirect(
+    const response = NextResponse.redirect(
       new URL(`/login?github_user=${encodedUser}`, baseUrl)
     );
+    // The server knows who this is here, so here it decides who may read BCS proposals. A
+    // non-member signing in on a browser a member used ends that member's BCS session.
+    const githubId = githubUser.id.toString();
+    const via = bcsMembership(githubId, verifiedEmails);
+    const token = via && signSession({ githubId, login: githubUser.login, via });
+    if (token) {
+      response.cookies.set(BCS_COOKIE, token, sessionCookie);
+    } else {
+      response.cookies.set(BCS_COOKIE, "", { ...sessionCookie, maxAge: 0 });
+    }
+    return response;
   } catch (error) {
     console.error("GitHub OAuth error:", error);
     return NextResponse.redirect(

@@ -2,7 +2,7 @@
 
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { Phase } from './phase';
-import { useReducedMotion, useVisible } from './pinned';
+import { leftVertically, useReducedMotion, useVisible } from './pinned';
 import { ramp } from './scroll';
 
 // Section 7, Improve: what's coming, as one collage a dot steps through. HyperReload's tile is an
@@ -770,14 +770,14 @@ function Collage() {
     setT(1);
   };
   return (
-    // A pick holds until the mouse leaves or focus leaves the collage. Touch fires its leave before
+    // A pick holds until the mouse leaves above or below or focus leaves the collage. Touch fires its leave before
     // the click, so it's left out, and a touch pick holds until the collage scrolls away.
     <div
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget)) setHeld(false);
       }}
       onPointerLeave={(e) => {
-        if (e.pointerType === 'mouse') setHeld(false);
+        if (e.pointerType === 'mouse' && leftVertically(e)) setHeld(false);
       }}
       ref={ref}
     >

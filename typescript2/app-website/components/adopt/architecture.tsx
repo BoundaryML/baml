@@ -7,9 +7,12 @@ import {
   SDK_LANGS,
   usePinnedLang,
 } from '@/components/home/lang-pick';
+import { BOOK } from '@/components/home/links';
 import { useReducedMotion } from '@/components/home/pinned';
+import { type SceneDef, ScenePlayer } from '@/components/home/scene-player';
+import { Button, LINKS } from '@/components/home/ui';
 
-// How BAML runs, for the /adopt page's last section and anyone who wants the detail: what
+// How BAML works, the /how-baml-works page, for anyone who wants the detail: what
 // `baml generate` makes, where the runtime lives in each target and language, and what happens at
 // startup, when BAML throws, and at shutdown. Facts come from the SDK generators (sdks/*/sdkgen_*),
 // the bridges (crates/bridge_cffi, sdks/*), sys_native and sys_wasm, and baml.panics.
@@ -49,18 +52,14 @@ type Case = { kind: Kind; outcome: string; when: string };
 // (sdks/*/sdkgen_*), the bridges (sdks/*, crates/bridge_cffi) and each SDK's runtime and exit hook.
 // Every one loads the program through bridge_cffi's initialize_runtime_from_blob, which checks the
 // toolchain version and starts the baml-worker threads.
-const SHARED_LOAD: Step[] = [
-  {
-    once: 'process',
-    text: 'Checks the toolchain version',
-    tone: 'baml',
-  },
-  {
-    once: 'process',
-    text: 'Starts BAML’s worker threads',
-    tone: 'baml',
-  },
-];
+// Toolchain check, then decode: prepare_runtime_from_blob checks the version first
+// (crates/bridge_cffi/src/lib.rs). The worker pool isn't started here; the first call builds it
+// (lib_native.rs shared_tokio_runtime), so Python's threads never start before a fork().
+const CHECK_STEP: Step = {
+  once: 'process',
+  text: 'Checks the toolchain version',
+  tone: 'baml',
+};
 const SYSOPS_STEP: Step = {
   once: 'process',
   sysops: true,
@@ -70,7 +69,7 @@ const SYSOPS_STEP: Step = {
 const BUG: Case = {
   kind: 'bug',
   outcome:
-    'You get an SdkPanic, and your program keeps running. A crash during garbage collection still aborts.',
+    'You get your language’s BAML panic, carrying an SdkPanic, and your program keeps running. A crash during garbage collection still aborts.',
   when: 'The BAML runtime itself fails',
 };
 const drain = (hook: string, host: string, exits: string): Step[] => [
@@ -108,7 +107,7 @@ const HOSTS: {
       {
         kind: 'unhandled',
         outcome:
-          'BAML prints it and exits, like any uncaught exception. Change that with set_unhandled_spawn_error_handler.',
+          'BAML prints it and exits right away, skipping atexit and finally. Change that with set_unhandled_spawn_error_handler.',
         when: 'A background task throws, and nothing waits for it',
       },
       {
@@ -134,7 +133,7 @@ const HOSTS: {
       { text: 'Reports errors nothing observed', tone: 'baml' },
       { text: 'Finishes writing recordings', tone: 'baml' },
       {
-        note: 'optional timeout cancels the rest',
+        note: 'no time limit, unless you call shutdown_runtime(timeout=…)',
         text: 'Python exits',
         tone: 'host',
       },
@@ -147,12 +146,12 @@ const HOSTS: {
         tone: 'baml',
       },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -206,12 +205,12 @@ const HOSTS: {
         tone: 'baml',
       },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -247,7 +246,8 @@ const HOSTS: {
     ],
     loads: 'on the first call',
     process: 'your Go program',
-    runtime: 'baml-go · the BAML library, opened with dlopen',
+    runtime:
+      'baml-go · the BAML library, opened with dlopen (LoadLibrary on Windows)',
     shutdown: [
       {
         note: 'Go has no exit hook',
@@ -276,12 +276,12 @@ const HOSTS: {
         tone: 'baml',
       },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -332,12 +332,12 @@ const HOSTS: {
       },
       { once: 'process', text: 'Opens it', tone: 'baml' },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -379,18 +379,19 @@ const HOSTS: {
         tone: 'host',
       },
       {
+        note: 'unless you point it at one',
         once: 'process',
         text: 'Unpacks the JNI library from the jar',
         tone: 'baml',
       },
       { once: 'process', text: 'Loads it', tone: 'baml' },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -441,12 +442,12 @@ const HOSTS: {
       },
       { once: 'process', text: 'Opens it', tone: 'baml' },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
   {
@@ -496,12 +497,12 @@ const HOSTS: {
         tone: 'baml',
       },
       SYSOPS_STEP,
+      CHECK_STEP,
       {
         once: 'process',
         text: 'Decodes your compiled program',
         tone: 'baml',
       },
-      ...SHARED_LOAD,
     ],
   },
 ];
@@ -699,14 +700,14 @@ const TARGETS = [
     draw: (_lang: number) => (
       <Box label="one binary, from baml pack" tone="host">
         <Box label={WORKERS_LABEL} tone="baml">
-          <Threads names={BAML_WORKERS} tone="baml" />
+          <Threads names={['worker', 'worker', 'worker', '…']} tone="baml" />
           <Box label="your program, packed in" sdk tone="baml" />
         </Box>
       </Box>
     ),
     name: 'Standalone',
     note: () =>
-      'No host language at all. baml pack builds one binary with your program inside, and each function becomes a subcommand.',
+      'No host language at all. baml pack builds one binary with your program inside, and each function you pick with -f becomes a subcommand.',
   },
   {
     draw: (_lang: number) => (
@@ -879,7 +880,7 @@ function Exceptions({ cases }: { cases: Case[] }) {
 // Checked in the code: native hosts run BAML's own Rust (crates/sys_native) on the shared process,
 // so env vars, the working directory and exit are your process's; HTTP is BAML's own client
 // (reqwest), which reads the proxy env vars; your functions are reached through call_host_value.
-// The web build (crates/sys_wasm) takes fetch and readFileSync from JavaScript and has nothing else.
+// The web build (crates/sys_wasm) takes fetch and readFileSync from JavaScript, plus the clock.
 type Via = 'baml' | 'none' | 'process' | 'yours';
 // `code` is the BAML that makes the call, so each row reads as a line you'd write.
 type Route = {
@@ -926,6 +927,12 @@ function routesFor(target: string, lang: number): Route[] {
         code: callback,
         need: 'Call your code',
         uses: 'your JavaScript functions',
+        via: 'yours',
+      },
+      {
+        code: 'baml.time.now()',
+        need: 'Read the clock',
+        uses: 'the browser’s clock',
         via: 'yours',
       },
       {
@@ -1204,7 +1211,7 @@ const BEHAVIOR: Record<string, Record<Scenario, ReactNode>> = {
           {
             kind: 'bug',
             outcome:
-              'BAML reports an SdkPanic instead of crashing. A crash during garbage collection still aborts.',
+              'The binary crashes. Packed binaries don’t catch runtime bugs yet.',
             when: 'The BAML runtime itself fails',
           },
         ]}
@@ -1261,7 +1268,8 @@ const BEHAVIOR: Record<string, Record<Scenario, ReactNode>> = {
           },
           {
             kind: 'bug',
-            outcome: 'WebAssembly can’t recover from it, so the module stops.',
+            outcome:
+              'WebAssembly can’t recover from it: the module traps, and your JavaScript sees an exception.',
             when: 'The BAML runtime itself fails',
           },
         ]}
@@ -1614,91 +1622,6 @@ function DemoLine({ line }: { line: string }) {
   );
 }
 
-/** Change a variable between two calls and the second call sees it: BAML reads the process
- *  environment at the request, it doesn't keep a copy. */
-function EnvChange({ at, lang }: { at: number; lang: number }) {
-  const name = TARGETS[at].name;
-  if (name === 'WebAssembly')
-    return (
-      <p className="max-w-[44rem] text-[15px] leading-snug text-ink-2">
-        There’s no process environment in a browser or a Worker, so env.get
-        isn’t available there. Calling it panics with HostUnavailable.
-      </p>
-    );
-  const code = envDemo(name, lang);
-  return (
-    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-      {code ? (
-        <div className="overflow-hidden rounded-xl border border-rule bg-raised">
-          <p className="flex h-10 items-center gap-2 border-b border-rule px-3.5 font-mono text-[12px] text-ink-2">
-            {name === 'In your app' && (
-              <LangIcon className="size-3.5" name={SDK_LANGS[lang].name} />
-            )}
-            {name === 'In your app' ? 'your code' : 'your shell'}
-          </p>
-          <pre className="overflow-x-auto px-3.5 py-3 font-mono text-[12.5px] leading-[1.65] text-body">
-            {code.split('\n').map((line, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: the sample's lines never reorder.
-              <DemoLine key={i} line={line} />
-            ))}
-          </pre>
-        </div>
-      ) : (
-        <p className="text-[15px] leading-snug text-ink-2">
-          Java can’t change its own environment, so BAML reads what the JVM
-          started with, the same as System.getenv.
-        </p>
-      )}
-      <ul className="space-y-4 text-[15px] leading-snug text-ink-2">
-        <li>
-          <span className="text-head">It reads at the request.</span>{' '}
-          env.OPENAI_API_KEY holds the variable’s name, not its value, so a
-          secret you load after startup is used from the next call on.
-        </li>
-        <li>
-          <span className="text-head">BAML only reads.</span> There’s no
-          env.set: changes come from your code. For a single command,
-          baml.sys.run takes env overrides that only that child process sees.
-        </li>
-        <li>
-          <span className="text-head">Clients never hold the key.</span>{' '}
-          Printing or recording a client can’t leak it.
-        </li>
-        <li>
-          <span className="text-head">Proxies follow too.</span> Change
-          HTTPS_PROXY, NO_PROXY or SSL_CERT_FILE and the next request uses them.
-        </li>
-        <li className="text-[13px] text-muted">
-          Set variables before starting calls on other threads. Changing the
-          environment isn’t thread-safe in C, or in any language built on it.
-        </li>
-      </ul>
-    </div>
-  );
-}
-
-const MOMENTS: {
-  lead: string;
-  name: Exclude<Scenario, 'A call'>;
-  title: string;
-}[] = [
-  {
-    lead: 'Only the first call pays for this. Along the way the runtime sets up its sysops: the way BAML reaches the outside world, like env vars, files and the network.',
-    name: 'Startup',
-    title: 'What happens at startup',
-  },
-  {
-    lead: 'What if your BAML code has an error? It depends on the kind.',
-    name: 'An exception',
-    title: 'What happens when BAML throws an exception',
-  },
-  {
-    lead: 'BAML finishes its work before your program exits.',
-    name: 'Shutdown',
-    title: 'What happens at shutdown',
-  },
-];
-
 /** The page's two choices: what BAML runs in, and for an app, its language. Pinned to the top so
  *  every diagram below follows it. */
 /** How far down a sticky bar has to sit to clear the site's own sticky nav, if the page has one,
@@ -1760,7 +1683,7 @@ function Section({
 }: {
   children: ReactNode;
   id?: string;
-  lead: string;
+  lead?: string;
   title: string;
 }) {
   return (
@@ -1768,11 +1691,329 @@ function Section({
       <h2 className="font-display text-[28px] leading-tight text-head md:text-[32px]">
         {title}
       </h2>
-      <p className="mt-2 max-w-[40rem] text-[16px] text-ink-2">{lead}</p>
+      {lead && (
+        <p className="mt-2 max-w-[40rem] text-[16px] text-ink-2">{lead}</p>
+      )}
       <div className="mt-8">{children}</div>
     </section>
   );
 }
+
+// ---------- the life of a program, played: startup, a call, shutdown ----------
+
+// Standalone and WebAssembly have no host language, so their steps don't come from HOSTS. Same
+// sources as BEHAVIOR above.
+const STANDALONE_LIFE: Record<'call' | 'shutdown' | 'startup', Step[]> = {
+  call: [
+    { text: './triage classify-ticket "…"', tone: 'host' },
+    {
+      note: 'from the function’s signature',
+      text: 'Parses the arguments',
+      tone: 'baml',
+    },
+    { text: 'Runs your function', tone: 'baml' },
+    { text: 'Prints its result', tone: 'baml' },
+  ],
+  shutdown: [
+    { text: 'The function you ran returns', tone: 'baml' },
+    { text: 'Waits for spawned work and recordings', tone: 'baml' },
+    { text: 'Reports errors nothing observed', tone: 'baml' },
+    { text: 'The binary exits', tone: 'host' },
+  ],
+  startup: [
+    { text: 'You run the binary', tone: 'host' },
+    {
+      note: 'packed into the binary',
+      text: 'Reads your program from inside itself',
+      tone: 'baml',
+    },
+    { sysops: true, text: 'Sets up its sysops', tone: 'baml' },
+    { text: 'Starts its worker threads', tone: 'baml' },
+  ],
+};
+const WASM_LIFE: Record<'call' | 'shutdown' | 'startup', Step[]> = {
+  call: [
+    { text: 'Your JavaScript calls classify_ticket', tone: 'host' },
+    {
+      note: 'no threads of its own',
+      text: 'Runs as a task on your event loop',
+      tone: 'baml',
+    },
+    { text: 'Calls the model with fetch, parses the reply', tone: 'baml' },
+    { text: 'The promise resolves with a typed result', tone: 'host' },
+  ],
+  shutdown: [
+    { text: 'The tab closes, or the Worker finishes', tone: 'host' },
+    { text: 'The WebAssembly module goes with it', tone: 'baml' },
+  ],
+  startup: [
+    { text: 'import from baml_sdk', tone: 'host' },
+    { text: 'Loads the WebAssembly runtime', tone: 'baml' },
+    {
+      sysops: true,
+      text: 'Takes fetch and readFileSync from JavaScript',
+      tone: 'baml',
+    },
+    { text: 'Decodes your compiled program', tone: 'baml' },
+  ],
+};
+
+/** A program's life in the target and language picked: what starts it, one call, how it ends. */
+function lifeFor(target: string, lang: number) {
+  if (target === 'Standalone') return STANDALONE_LIFE;
+  if (target === 'WebAssembly') return WASM_LIFE;
+  const h = HOSTS[lang];
+  return {
+    call: [
+      { text: 'Your code calls classify_ticket', tone: 'host' },
+      {
+        note: 'the first call starts the pool',
+        text: 'The bridge hands it to a BAML worker thread',
+        tone: 'baml',
+      },
+      {
+        text: 'Builds the prompt, calls the model, parses the reply',
+        tone: 'baml',
+      },
+      { text: 'Your code gets a typed result back', tone: 'host' },
+    ] satisfies Step[],
+    shutdown: h.shutdown,
+    startup: h.startup,
+  };
+}
+
+/** Who's on the left of the lanes: the program BAML runs inside. */
+function hostLabel(target: string, lang: number) {
+  if (target === 'Standalone') return 'You';
+  if (target === 'WebAssembly') return 'Your JavaScript';
+  return `Your ${SDK_LANGS[lang].name} code`;
+}
+
+/** Steps in two lanes, the program's and BAML's, lit one at a time; an arrow marks each hand-off
+ *  from one lane to the other. */
+function Lanes({
+  host,
+  say,
+  step,
+  steps,
+}: {
+  host: string;
+  say: string;
+  step: number;
+  steps: Step[];
+}) {
+  const side = (st: Step) => (st.tone === 'host' ? 0 : 1);
+  return (
+    <div className="flex min-h-[420px] flex-col px-5 py-4">
+      <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1fr)] pb-2 text-[12px] text-muted">
+        <span>{host}</span>
+        <span />
+        <span className="text-clover">BAML</span>
+      </div>
+      <ol className="grid gap-2">
+        {steps.map((st, i) => {
+          const on = i < step;
+          const now = i === step - 1;
+          const crossed = i > 0 && side(steps[i - 1]) !== side(st);
+          const tone =
+            st.tone === 'bad'
+              ? 'border-[#f85149]/60 bg-[#f85149]/10'
+              : st.tone === 'host'
+                ? 'border-white/20 bg-white/[0.04]'
+                : 'border-clover/60 bg-clover/[0.1]';
+          const card = (
+            <div
+              className={`rounded-lg border px-3.5 py-2.5 transition-[opacity,box-shadow] duration-300 ${tone}`}
+              style={{
+                boxShadow: now
+                  ? '0 0 0 1px rgb(255 255 255 / 0.45)'
+                  : undefined,
+                opacity: on ? 1 : 0.22,
+              }}
+            >
+              <p className="text-[14px] text-head">{st.text}</p>
+              {(st.note || st.once) && (
+                <p className="mt-1 flex flex-wrap items-center gap-2">
+                  {st.once && (
+                    <span className="rounded-full border border-clover/50 px-2 py-0.5 font-mono text-[10.5px] text-clover">
+                      once per {st.once}
+                    </span>
+                  )}
+                  {st.note && (
+                    <span className="font-mono text-[11.5px] text-muted [overflow-wrap:anywhere]">
+                      {st.note}
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+          );
+          return (
+            <li
+              className="grid grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,1fr)] items-center"
+              key={st.text}
+            >
+              <div>{side(st) === 0 && card}</div>
+              <div
+                aria-hidden="true"
+                className="text-center text-[16px] transition-opacity duration-300"
+                style={{
+                  color:
+                    side(st) === 1 ? 'var(--color-clover)' : 'var(--color-ink)',
+                  opacity: crossed && on ? 1 : 0,
+                }}
+              >
+                {side(st) === 1 ? '→' : '←'}
+              </div>
+              <div>{side(st) === 1 && card}</div>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-auto pt-4 text-[14px] text-head">{say}</p>
+    </div>
+  );
+}
+
+/** One moment of a program's life, startup, a call or shutdown, played for the target picked. */
+function Life({
+  at,
+  lang,
+  moment,
+}: {
+  at: number;
+  lang: number;
+  moment: 'call' | 'shutdown' | 'startup';
+}) {
+  const target = TARGETS[at].name;
+  const steps = lifeFor(target, lang)[moment];
+  const host = hostLabel(target, lang);
+  const say = {
+    call:
+      target === 'WebAssembly'
+        ? 'Your event loop keeps running while BAML works.'
+        : target === 'Standalone'
+          ? 'Each function you pack with -f is a subcommand.'
+          : 'BAML does the work on its own threads, not yours.',
+    shutdown:
+      target === 'WebAssembly'
+        ? 'Nothing to clean up: it goes with the page.'
+        : 'BAML finishes its work before your program exits, as long as its exit hook runs.',
+    startup:
+      target === 'In your app'
+        ? `This happens ${HOSTS[lang].loads}, once. After that, calls go straight to the runtime.`
+        : 'Once, when it starts.',
+  }[moment];
+  const scenes: SceneDef[] = [
+    {
+      steps: steps.length,
+      title: moment,
+      View: ({ step }) => (
+        <Lanes host={host} say={say} step={step} steps={steps} />
+      ),
+    },
+  ];
+  return <ScenePlayer key={`${target}-${lang}-${moment}`} scenes={scenes} />;
+}
+
+// ---------- a function crossing between your code and BAML ----------
+// Sources (an audit of the bridges): values are protobuf (crates/bridge_ctypes/types/baml_bridge/
+// cffi/v1/*.proto), data is copied (value_encode.rs) and functions, streams and resources go as
+// handles (handle_table.rs); a host function passed in becomes a HOST_VALUE_CALLABLE that BAML calls
+// through the call_host_value sysop and awaits (sys_native/src/host_impls.rs); where it runs is each
+// SDK's dispatch (sdks/*/host_value.*); the result is checked against the declared type, and an
+// undeclared throw becomes baml.panics.HostContractViolation (bex_engine land_host_outcome).
+
+// A small function in each language, in SDK_LANGS order, and where BAML's call to it runs.
+const CROSSING: { fn: string; runs: string }[] = [
+  {
+    fn: 'lambda name: name.upper()',
+    runs: 'on your thread, or your asyncio loop',
+  },
+  { fn: '(name) => name.toUpperCase()', runs: 'on your event loop' },
+  { fn: 'a Go func', runs: 'in a new goroutine' },
+  { fn: '|name| name.to_uppercase()', runs: 'on the bridge’s dispatch pool' },
+  { fn: 'name -> name.toUpperCase()', runs: 'on a dispatch thread' },
+  { fn: 'a C++ lambda', runs: 'on its own thread' },
+  { fn: '{ $0.uppercased() }', runs: 'in a Task' },
+];
+
+function crossingSteps(target: string, lang: number): Step[] {
+  const c =
+    target === 'WebAssembly'
+      ? { fn: '(name) => name.toUpperCase()', runs: 'on your event loop' }
+      : CROSSING[lang];
+  return [
+    { note: c.fn, text: 'You pass a function to make_widget', tone: 'host' },
+    {
+      note: 'a reference to your function, not a copy',
+      text: 'It crosses as a handle',
+      tone: 'baml',
+    },
+    { text: 'BAML calls it, and waits for the answer', tone: 'baml' },
+    { note: c.runs, text: 'Your function runs on your side', tone: 'host' },
+    {
+      note: 'checked against the type BAML declared',
+      text: 'The result crosses back as a value',
+      tone: 'baml',
+    },
+    {
+      note: 'data copied, functions as handles you can call later',
+      text: 'make_widget returns a Widget',
+      tone: 'host',
+    },
+  ];
+}
+
+/** Passing a function into BAML and getting values back, played in the two lanes. */
+function Crossing({ at, lang }: { at: number; lang: number }) {
+  const target = TARGETS[at].name;
+  if (target === 'Standalone')
+    return (
+      <p className="text-[16px] text-ink-2">
+        A standalone binary has no host language, so nothing crosses.
+      </p>
+    );
+  const steps = crossingSteps(target, lang);
+  const host = hostLabel(target, lang);
+  const scenes: SceneDef[] = [
+    {
+      steps: steps.length,
+      title: 'crossing',
+      View: ({ step }) => (
+        <Lanes
+          host={host}
+          say="Data crosses as a copy. Functions cross as handles, freed when the side holding one lets go."
+          step={step}
+          steps={steps}
+        />
+      ),
+    },
+  ];
+  return <ScenePlayer key={`${target}-${lang}`} scenes={scenes} />;
+}
+
+// The founder's email, with the subject and the start of the message already filled in.
+const EMAIL_ME = `mailto:vbv@boundaryml.com?subject=${encodeURIComponent(
+  'Hi, I’m curious about Boundary/BAML',
+)}&body=${encodeURIComponent(
+  'Hi Vaibhav,\n\nI’m working on \n\nand I’d love to talk about \n',
+)}`;
+
+// Every question the page answers, in order, for the list at the top.
+const QUESTIONS = [
+  { id: 'build', title: 'What happens when you build?' },
+  { id: 'release', title: 'What happens at release?' },
+  { id: 'startup', title: 'What happens at startup?' },
+  { id: 'call', title: 'What happens when you call a BAML function?' },
+  { id: 'exceptions', title: 'What happens when BAML throws an exception?' },
+  { id: 'shutdown', title: 'What happens at shutdown?' },
+  {
+    id: 'functions',
+    title: 'What happens when a function crosses between your code and BAML?',
+  },
+  { id: 'docs', title: 'Why don’t you have docs?' },
+];
 
 /** The page as it would ship: the architecture first, then one diagram per moment in a program's
  *  life, all for the environment picked in the bar. */
@@ -1784,48 +2025,124 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
     <>
       <header className="pb-10">
         {embedded ? (
-          <h2 className="v4-h2 text-head">How BAML runs</h2>
+          <h2 className="v4-h2 text-head">How BAML works</h2>
         ) : (
-          <h1 className="v4-h2 text-head">How BAML runs</h1>
+          <h1 className="v4-h2 text-head">How BAML works</h1>
         )}
         <p className="mt-4 max-w-[42rem] text-[17px] leading-relaxed text-ink-2">
-          {embedded
-            ? 'BAML compiles when you build and runs inside your app as a library, with no sidecar and no server. Pick where it runs, and the diagrams below follow.'
-            : 'BAML compiles when you build and runs inside your app as a library. There’s no sidecar and no server. Pick where it runs, and every diagram on this page follows.'}
+          BAML compiles when you build and runs inside your app as a library. No
+          sidecar, no server.
         </p>
       </header>
+      {/* The questions this page answers, each a link to its answer. */}
+      <nav aria-label="Questions on this page" className="pb-10">
+        <ol className="grid gap-px overflow-hidden rounded-xl border border-rule bg-rule sm:grid-cols-2">
+          {QUESTIONS.map((q, i) => (
+            <li className="bg-ground" key={q.id}>
+              <a
+                className="focus-ring group flex h-full items-start gap-3 px-4 py-3 text-[15px] leading-snug text-ink-2 transition-colors hover:bg-raised hover:text-head"
+                href={`#${q.id}`}
+              >
+                <span className="mt-0.5 font-mono text-[12px] text-muted">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span className="flex-1">{q.title}</span>
+                <span
+                  aria-hidden="true"
+                  className="text-muted transition-[translate] group-hover:translate-y-0.5"
+                >
+                  ↓
+                </span>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </nav>
       <ControlBar at={at} lang={lang} setAt={setAt} setLang={setLang} />
-      <Section
-        lead="baml generate type-checks and compiles your BAML, then writes an SDK in your language with the compiled program inside. Your app ships with it."
-        title="Build, then run"
-      >
+      <Section id="build" title="What happens when you build?">
         <Architecture at={at} lang={lang} />
       </Section>
-      <Section
-        id="release"
-        lead="What ships with your app, and what to set so production runs the same as your machine."
-        title="What happens at release"
-      >
+      <Section id="release" title="What happens at release?">
         <div key={`${target.name}-${lang}`}>
           <ReleaseView at={at} lang={lang} />
         </div>
       </Section>
-      {MOMENTS.map((m) => (
-        <Section key={m.name} lead={m.lead} title={m.title}>
-          <div
-            className={m.name === 'Shutdown' ? 'max-w-[52rem]' : ''}
-            key={`${target.name}-${lang}`}
-          >
-            {behaviorFor(target.name, lang)[m.name]}
-          </div>
-        </Section>
-      ))}
+      <Section id="startup" title="What happens at startup?">
+        <Life at={at} lang={lang} moment="startup" />
+      </Section>
+      <Section id="call" title="What happens when you call a BAML function?">
+        <Life at={at} lang={lang} moment="call" />
+      </Section>
       <Section
-        lead="The simplest way to see sysops at work: BAML reads the environment when it needs a value, instead of keeping its own copy."
-        title="What happens when you change an environment variable"
+        id="exceptions"
+        title="What happens when BAML throws an exception?"
       >
         <div key={`${target.name}-${lang}`}>
-          <EnvChange at={at} lang={lang} />
+          {behaviorFor(target.name, lang)['An exception']}
+        </div>
+      </Section>
+      <Section id="shutdown" title="What happens at shutdown?">
+        <Life at={at} lang={lang} moment="shutdown" />
+      </Section>
+      <Section
+        id="functions"
+        title="What happens when a function crosses between your code and BAML?"
+      >
+        <Crossing at={at} lang={lang} />
+      </Section>
+      {/* The question readers ask after a page like this one, answered plainly, and by the founder. */}
+      <Section id="docs" title="Why don’t you have docs?">
+        <p className="max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
+          <span className="font-medium text-head">
+            Docs for humans are coming by the end of 2026.
+          </span>{' '}
+          Until then, we’re more than happy to make time with you directly.
+        </p>
+        <p className="mt-4 max-w-[40rem] text-[17px] leading-relaxed text-ink-2">
+          Meanwhile, we’ve worked hard to ensure{' '}
+          <a
+            className="text-ink underline decoration-white/30 underline-offset-2 hover:text-head"
+            href="/#review"
+          >
+            agents can understand and use the toolchain well
+          </a>
+          . Seriously, ask Claude: “Install BAML and be ambitious with it.”
+        </p>
+        <div className="mt-8 flex max-w-[44rem] flex-col gap-5 rounded-xl border border-rule bg-raised p-6 sm:flex-row sm:items-start">
+          {/* biome-ignore lint/performance/noImgElement: a small static photo */}
+          <img
+            alt="Vaibhav Gupta"
+            className="size-16 shrink-0 rounded-full object-cover"
+            height={64}
+            src="/profile-vbv.jpeg"
+            width={64}
+          />
+          <div>
+            <p className="text-[16px] leading-relaxed text-head">
+              I know how big a bet a new programming language is. We’re
+              engineers too, and we’re happy to talk it through with you. Email
+              me directly.
+            </p>
+            <p className="mt-2 text-[14px] text-muted">
+              Vaibhav Gupta, co-founder and CEO
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Button href={EMAIL_ME}>vbv@boundaryml.com</Button>
+              <Button href={BOOK} variant="secondary">
+                Get on a call
+              </Button>
+              <Button href={LINKS.discord} variant="secondary">
+                Ask on Discord
+              </Button>
+            </div>
+            {/* Trust is the team as much as the tech: the people behind it, one click away. */}
+            <a
+              className="mt-4 inline-block text-[14px] text-ink-2 underline decoration-white/30 underline-offset-2 hover:text-head"
+              href="/who-are-we"
+            >
+              Meet the team →
+            </a>
+          </div>
         </div>
       </Section>
     </>

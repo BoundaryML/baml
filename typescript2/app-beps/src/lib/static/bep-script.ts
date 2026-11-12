@@ -17,6 +17,9 @@ Usage:
     ./bep diff <ref>        # Diff local vs server (--full for unified diff)
     ./bep push <ref>        # Dry-run diff + prompt to push (-y to confirm)
     ./bep open <number>     # Open BEP in browser
+    ./bep bcs pull          # Team only: BCS design proposals into BCS/ (needs BCS_TOKEN)
+    ./bep bcs new "T" f.html  # Team only: a new BCS proposal from an HTML page
+    ./bep bcs push <number> # Team only: a new version of a BCS proposal
 """
 
 import argparse
@@ -184,7 +187,8 @@ def cmd_pull(args: argparse.Namespace) -> int:
         # First, show what would change
         existing_files = set()
         for f in ALL_BEPS_DIR.rglob("*"):
-            if f.is_file() and f.name != "bep":  # Don't count the script itself
+            # Don't count the script itself, or the BCS proposals "bep bcs pull" keeps here
+            if f.is_file() and f.name != "bep" and f.relative_to(ALL_BEPS_DIR).parts[0] != "BCS":
                 existing_files.add(f.relative_to(ALL_BEPS_DIR))
 
         new_files = set()
@@ -716,6 +720,265 @@ def cmd_open(args: argparse.Namespace) -> int:
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+def bep_number_of(ref: str) -> int | None:
+    """A BEP's number from 41, BEP-041 or a local folder's slug."""
+    number, _ = parse_bep_ref(ref)
+    if number is not None:
+        return number
+    folder = find_local_bep(ref)
+    if folder and (folder / "meta.json").exists():
+        return json.loads((folder / "meta.json").read_text(encoding="utf-8")).get("number")
+    return None
+
+
+def cmd_comments(args: argparse.Namespace) -> int:
+    import httpx
+
+    number = bep_number_of(args.ref)
+    if number is None:
+        print(f"Error: no BEP {args.ref}", file=sys.stderr)
+        return 1
+    output = "json" if args.json else (args.format or "markdown")
+    try:
+        response = httpx.get(
+            f"{API_BASE}/api/agent/beps/{number}/comments",
+            params={"includeResolved": "true" if args.include_resolved else "false", "format": output},
+            timeout=60.0,
+        )
+        response.raise_for_status()
+    except httpx.HTTPError as e:
+        print(f"Error: failed to fetch comments: {e}", file=sys.stderr)
+        return 1
+    if output == "json":
+        print(json.dumps(response.json(), indent=2))
+    else:
+        print(response.text)
+    return 0
+
+
+def cmd_reply(args: argparse.Namespace) -> int:
+    import httpx
+
+    if not API_TOKEN:
+        print("Error: BEP_API_TOKEN environment variable not set.", file=sys.stderr)
+        return 1
+    number = bep_number_of(args.ref)
+    if number is None:
+        print(f"Error: no BEP {args.ref}", file=sys.stderr)
+        return 1
+    try:
+        response = httpx.post(
+            f"{API_BASE}/api/agent/beps/{number}/comments/reply",
+            headers={"Authorization": f"Bearer {API_TOKEN}"},
+            json={"commentId": args.comment_id, "content": args.content, "type": args.type},
+            timeout=60.0,
+        )
+    except httpx.HTTPError as e:
+        print(f"Error: failed to reply: {e}", file=sys.stderr)
+        return 1
+    if response.status_code >= 400:
+        print(f"Error ({response.status_code}): {response.text}", file=sys.stderr)
+        return 1
+    print(f"Replied on {format_bep_number(number)}")
+    return 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BCS design proposals (team only)
+# ─────────────────────────────────────────────────────────────────────────────
+# System design proposals for Boundary Cloud, each one HTML page. They come down only through
+# "bep bcs pull", never in the export, and every call needs BCS_TOKEN, which a team member gets
+# at /bcs/token on the site.
+
+BCS_DIR = SCRIPT_DIR / "BCS"
+BCS_ENDPOINT = f"{API_BASE}/api/agent/bcs"
+
+
+def format_bcs_number(num: int) -> str:
+    return f"BCS-{num:03d}"
+
+
+def bcs_call(method: str, path: str = "", body: dict | None = None) -> dict:
+    """A call to the BCS routes with BCS_TOKEN; exits with the server's reason on failure."""
+    import httpx
+
+    token = os.environ.get("BCS_TOKEN", "")
+    if not token:
+        print(f"Error: set BCS_TOKEN. Get yours at {API_BASE}/bcs/token", file=sys.stderr)
+        sys.exit(1)
+    try:
+        response = httpx.request(
+            method,
+            BCS_ENDPOINT + path,
+            headers={"Authorization": f"Bearer {token}"},
+            json=body,
+            timeout=120.0,
+        )
+    except httpx.HTTPError as e:
+        print(f"Error: could not reach {BCS_ENDPOINT}: {e}", file=sys.stderr)
+        sys.exit(1)
+    if response.status_code >= 400:
+        try:
+            reason = response.json().get("error", response.text)
+        except ValueError:
+            reason = response.text
+        print(f"Error ({response.status_code}): {reason}", file=sys.stderr)
+        sys.exit(1)
+    return response.json()
+
+
+def find_local_bcs(ref: str) -> Path | None:
+    """The local folder of BCS proposal ref: 1, 001 or BCS-001."""
+    m = re.match(r"(?:BCS-)?([0-9]+)$", ref.strip(), re.IGNORECASE)
+    if not m or not BCS_DIR.exists():
+        return None
+    prefix = format_bcs_number(int(m.group(1)))
+    for folder in sorted(BCS_DIR.iterdir()):
+        if folder.is_dir() and (folder.name == prefix or folder.name.startswith(prefix + "-")):
+            return folder
+    return None
+
+
+def write_local_bcs(proposal: dict) -> Path:
+    """Writes a proposal's page and metadata, replacing its folder if its title changed."""
+    number = proposal["number"]
+    folder = BCS_DIR / f"{format_bcs_number(number)}-{slugify(proposal['title'])}"
+    old = find_local_bcs(str(number))
+    if old and old != folder:
+        old.rename(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "index.html").write_text(proposal["html"], encoding="utf-8")
+    meta = {key: proposal[key] for key in ("number", "title", "status", "authors", "version") if key in proposal}
+    # What the server had, so a later pull can tell a local edit from an old copy.
+    meta["pulledSha256"] = bcs_digest(proposal["html"])
+    (folder / "meta.json").write_text(json.dumps(meta, indent=2) + chr(10), encoding="utf-8")
+    return folder
+
+
+def bcs_digest(html: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(html.encode("utf-8")).hexdigest()
+
+
+def bcs_local_edits(folder: Path) -> bool:
+    """Whether the local page differs from what was last pulled or pushed."""
+    meta_path = folder / "meta.json"
+    page_path = folder / "index.html"
+    if not meta_path.exists() or not page_path.exists():
+        return False
+    pulled = json.loads(meta_path.read_text(encoding="utf-8")).get("pulledSha256")
+    return pulled is not None and bcs_digest(page_path.read_text(encoding="utf-8")) != pulled
+
+
+def cmd_bcs_pull(args: argparse.Namespace) -> int:
+    """Every proposal's current page, one request each; local edits are kept unless --force."""
+    listed = bcs_call("GET").get("proposals", [])
+    kept = 0
+    for summary in listed:
+        number = summary["number"]
+        local = find_local_bcs(str(number))
+        if local and bcs_local_edits(local) and not args.force:
+            print(f"  {local.name}  kept: it has edits you have not pushed (bep bcs push {number}, or pull --force)")
+            kept += 1
+            continue
+        proposal = bcs_call("GET", f"/{number}")
+        folder = write_local_bcs(proposal)
+        print(f"  {folder.name}  v{proposal['version']}  {proposal['status']}")
+    print(f"Pulled {len(listed) - kept} BCS proposal(s) into {BCS_DIR}" + (f", kept {kept} with local edits" if kept else ""))
+    return 0
+
+
+def cmd_bcs_list(args: argparse.Namespace) -> int:
+    if not BCS_DIR.exists():
+        print("No BCS proposals here yet: run bep bcs pull")
+        return 0
+    for folder in sorted(BCS_DIR.iterdir()):
+        meta_path = folder / "meta.json"
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            print(f"{format_bcs_number(meta['number'])}  v{meta.get('version', '?')}  {meta.get('status', '?'):<12} {meta['title']}")
+    return 0
+
+
+def cmd_bcs_new(args: argparse.Namespace) -> int:
+    path = Path(args.file)
+    if not path.exists():
+        print(f"Error: no file {path}", file=sys.stderr)
+        return 1
+    html = path.read_text(encoding="utf-8")
+    created = bcs_call("POST", body={"title": args.title, "html": html, "status": args.status})
+    number = created["number"]
+    folder = write_local_bcs({"number": number, "title": args.title, "status": args.status, "authors": [], "version": 1, "html": html})
+    print(f"Created {format_bcs_number(number)}: {API_BASE}/bcs/{number}")
+    print(f"Local copy: {folder}")
+    return 0
+
+
+def cmd_bcs_push(args: argparse.Namespace) -> int:
+    import difflib
+
+    folder = find_local_bcs(args.ref)
+    if not folder:
+        print(f"Error: no local BCS proposal {args.ref}: run bep bcs pull", file=sys.stderr)
+        return 1
+    meta = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+    local = (folder / "index.html").read_text(encoding="utf-8")
+    number = meta["number"]
+    remote = bcs_call("GET", f"/{number}")
+    if remote["version"] != meta.get("version") and not args.force:
+        print(f"Error: the server has v{remote['version']}, you edited v{meta.get('version')}. Pull first, or --force.", file=sys.stderr)
+        return 1
+    if local == remote["html"]:
+        print(f"{format_bcs_number(number)} matches the server's v{remote['version']}: nothing to push")
+        return 0
+    # The line diff only describes the change; a change in line endings alone shows as none.
+    changed = [
+        line for line in difflib.unified_diff(remote["html"].splitlines(), local.splitlines(), lineterm="")
+        if line[:1] in "+-" and line[:3] not in ("+++", "---")
+    ]
+    added = sum(1 for line in changed if line.startswith("+"))
+    print(f"{format_bcs_number(number)}: {added} line(s) added, {len(changed) - added} removed, against v{remote['version']}")
+    if not args.yes:
+        answer = input(f"Push as v{remote['version'] + 1}? [y/N] ").strip().lower()
+        if answer not in ("y", "yes"):
+            print("Not pushed")
+            return 0
+    saved = bcs_call("PUT", f"/{number}", body={
+        "html": local,
+        "note": args.note,
+        "baseVersion": None if args.force else meta.get("version"),
+    })
+    meta["version"] = saved["version"]
+    meta["pulledSha256"] = bcs_digest(local)
+    (folder / "meta.json").write_text(json.dumps(meta, indent=2) + chr(10), encoding="utf-8")
+    print(f"Pushed {format_bcs_number(number)} v{saved['version']}: {API_BASE}/bcs/{number}")
+    return 0
+
+
+def cmd_bcs_open(args: argparse.Namespace) -> int:
+    m = re.match(r"(?:BCS-)?([0-9]+)$", args.ref.strip(), re.IGNORECASE)
+    if not m:
+        print(f"Error: {args.ref} is not a BCS number", file=sys.stderr)
+        return 1
+    webbrowser.open(f"{API_BASE}/bcs/{int(m.group(1))}")
+    return 0
+
+
+def cmd_bcs(args: argparse.Namespace) -> int:
+    commands = {
+        "pull": cmd_bcs_pull,
+        "list": cmd_bcs_list,
+        "new": cmd_bcs_new,
+        "push": cmd_bcs_push,
+        "open": cmd_bcs_open,
+    }
+    if not getattr(args, "bcs_command", None):
+        print("Usage: bep bcs {pull,list,new,push,open}")
+        return 1
+    return commands[args.bcs_command](args)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="BEP CLI - Work with BAML Enhancement Proposals",
@@ -768,6 +1031,24 @@ def main():
     reply_parser.add_argument("content", help="Reply content")
     reply_parser.add_argument("--type", choices=["discussion", "concern", "question"], default="discussion", help="Comment type")
 
+    # bcs: team-only design proposals
+    bcs_parser = subparsers.add_parser("bcs", help="Team only: BCS design proposals (needs BCS_TOKEN)")
+    bcs_sub = bcs_parser.add_subparsers(dest="bcs_command")
+    bcs_pull = bcs_sub.add_parser("pull", help="Fetch every BCS proposal into BCS/")
+    bcs_pull.add_argument("-f", "--force", action="store_true", help="Overwrite local edits you have not pushed")
+    bcs_sub.add_parser("list", help="List local BCS proposals")
+    bcs_new = bcs_sub.add_parser("new", help="Create a BCS proposal from an HTML page")
+    bcs_new.add_argument("title", help="Title of the proposal")
+    bcs_new.add_argument("file", help="The HTML page")
+    bcs_new.add_argument("--status", default="draft", choices=["draft", "proposed", "pending", "accepted", "implemented", "rejected", "superseded"], help="Its status")
+    bcs_push = bcs_sub.add_parser("push", help="Save a local BCS proposal as a new version")
+    bcs_push.add_argument("ref", help="BCS number (e.g., 1 or BCS-001)")
+    bcs_push.add_argument("-y", "--yes", action="store_true", help="Skip confirmation")
+    bcs_push.add_argument("-n", "--note", help="What changed in this version")
+    bcs_push.add_argument("-f", "--force", action="store_true", help="Push even if the server moved on")
+    bcs_open = bcs_sub.add_parser("open", help="Open a BCS proposal in the browser")
+    bcs_open.add_argument("ref", help="BCS number")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -783,6 +1064,7 @@ def main():
         "open": cmd_open,
         "comments": cmd_comments,
         "reply": cmd_reply,
+        "bcs": cmd_bcs,
     }
 
     return commands[args.command](args)

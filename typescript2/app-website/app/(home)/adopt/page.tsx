@@ -5,7 +5,7 @@ import { PageShell } from '@/components/home/page-shell';
 
 export const metadata = createMetadata({
   description:
-    'Adopt BAML incrementally, send your OpenTelemetry traces to Boundary Cloud, and see how BAML runs inside your app.',
+    'Adopt BAML incrementally, rewrite your stack in BAML, or send your OpenTelemetry traces to Boundary Cloud.',
   ogSubtitle: 'Incrementally adoptable.',
   ogTitle: 'Adopting Boundary and BAML',
   path: '/adopt',
@@ -13,7 +13,7 @@ export const metadata = createMetadata({
 });
 
 // Where the homepage's adoption cards lead: why not to rewrite, the three ways in (each with an
-// anchor the cards link to), then how BAML runs, for anyone who wants the detail.
+// anchor the cards link to). How BAML works is its own page.
 
 export default async function Page() {
   const html = await highlightAll();

@@ -53,6 +53,14 @@ A standalone web application for managing BAML Enhancement Proposals (BEPs) and 
 
 ---
 
+### BCS Design Proposals (team only)
+- **System design proposals for Boundary Cloud** at `/bcs`, each a whole HTML page (styles, inline SVG diagrams) with versions, a title and a status
+- **Team only**: the GitHub login callback decides who may read them and sets a signed, HttpOnly `bcs_session` cookie; every BCS page, action and route checks it on the server. Until the callback checks membership of the BoundaryML organization, the team is the GitHub accounts listed in `src/lib/bcs-auth.ts` or any account with a verified `@boundaryml.com` email
+- **The browser never reads the BCS tables**: `convex/bcs.ts` functions require `BCS_CONVEX_SECRET`, which only the server passes, and they live apart from `beps`, so Slack notifications, export, AI analysis and the agent pull API never see them
+- **Pages are sandboxed**: shown in an `<iframe sandbox>` without `allow-same-origin` (and "Open full page" serves a CSP `sandbox`), so a page's scripts cannot read the site or its cookies
+- **`bep bcs`**: the `bep` script pulls (`bep bcs pull`, into `BCS/`), creates (`bep bcs new "Title" page.html`) and pushes new versions (`bep bcs push <n>`, refused when the server moved on since the pull) with `BCS_TOKEN`, a 30-day token a member gets at `/bcs/token`, signed like the cookie and only good for the CLI routes (`/api/agent/bcs`). BCS proposals never come down in "export all"
+- **Setup**: `BCS_SESSION_SECRET` (signs the cookie) and `BCS_CONVEX_SECRET` on the Next.js app, and the same `BCS_CONVEX_SECRET` on the Convex deployment (`npx convex env set BCS_CONVEX_SECRET ...`), each at least 32 characters. In development, `BCS_DEV_VIEWER=<github login>` stands in for the cookie, since GitHub's login returns to the production site
+
 ## Architecture
 
 ```

@@ -14,8 +14,9 @@ import {
   SiV8,
 } from 'react-icons/si';
 import { section } from '@/components/home/analytics';
+import { ALT_MARK } from '@/components/home/boundary-alt';
 import { BoundaryLogo, BoundaryMark } from '@/components/home/boundary-logo';
-import { COMBINATION, LAMB_PATHS } from '@/components/home/lamb';
+import { LAMB_PATHS } from '@/components/home/lamb';
 import { MarkTile } from '@/components/home/mark';
 import { MARKS } from '@/components/home/marks';
 import { Hyper, Looped, Pinned, Played, sweep } from '@/components/home/pinned';
@@ -93,7 +94,7 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 // repainting anything, so it stays smooth.
 // The space starts left of the stack, where the tools each layer replaces wait to be kicked off.
 const VB_X = -100;
-// Room above the stack for the lamb's last leap, over the gate.
+// Room above the stack for the lamb's last leap, to its place beside the Boundary mark.
 const VB_TOP = -90;
 const VB_W = 600;
 const VB_H = TOP + LAYERS.length * STEP + 150;
@@ -282,16 +283,26 @@ function LambArt({ glow }: { glow?: boolean }) {
   );
 }
 
-// The finale: the Boundary gate stands on the top layer and the lamb leaps over it, together the
-// combination mark. The gate is GATE_W wide; the mark keeps its own proportions around it.
-const GATE_W = 130;
-const COMBO_K = GATE_W / 474;
-// The gate's foot, on the top layer's face.
-const GATE_BASE = TOP + 50;
-const COMBO_X = 180 - 237 * COMBO_K;
-const COMBO_Y = GATE_BASE - 510.29 * COMBO_K;
+// The finale: the two logos stand side by side on the top layer, the Boundary mark on the left and
+// the BAML lamb on the right. The mark rises out of the layer; the lamb lands beside it. Both are
+// LOGO_H tall.
+const LOGO_H = 80;
+const MARK_W = LOGO_H * (86 / 144);
+const BIG_LAMB_W = LOGO_H * (356 / 422);
+const LOGO_GAP = 18;
+// The logos' feet, on the top layer's face.
+const LOGO_BASE = TOP + 50;
+const MARK_X = 180 - (MARK_W + LOGO_GAP + BIG_LAMB_W) / 2;
+const BIG_LAMB_X = MARK_X + MARK_W + LOGO_GAP;
 
-function ComboArt({ glow, part }: { glow?: boolean; part: 'gate' | 'lamb' }) {
+function LogoArt({
+  glow,
+  part,
+}: {
+  glow?: boolean;
+  part: 'boundary' | 'lamb';
+}) {
+  const boundary = part === 'boundary';
   return (
     <svg
       aria-hidden="true"
@@ -303,11 +314,14 @@ function ComboArt({ glow, part }: { glow?: boolean; part: 'gate' | 'lamb' }) {
       }
       viewBox={VIEW_BOX}
     >
-      <path
-        d={COMBINATION[part]}
+      <g
         fill="#fff"
-        transform={`translate(${COMBO_X} ${COMBO_Y}) scale(${COMBO_K})`}
-      />
+        transform={`translate(${boundary ? MARK_X : BIG_LAMB_X} ${LOGO_BASE - LOGO_H}) scale(${LOGO_H / (boundary ? 144 : 422)})`}
+      >
+        {(boundary ? ALT_MARK.paths : LAMB_PATHS).map((d) => (
+          <path d={d} key={d} />
+        ))}
+      </g>
     </svg>
   );
 }
@@ -320,10 +334,11 @@ function Layers({ p }: { p: number }) {
   const base = ramp(s, 0.06, 0.28) * FIRST_LIT;
   // Then the rest of the stack, one layer at a time, as the lamb climbs.
   const rest = ramp(s, 0.34, 0.82) * climbs;
-  // Once the lamb is on top, the gate rises out of the top layer and the lamb leaps over it.
+  // Once the lamb is on top, the Boundary mark rises out of the top layer and the lamb leaps to its
+  // place beside it.
   const leap = ramp(s, 0.83, 0.93);
   const gate = ramp(leap, 0.1, 0.55);
-  // Mid-air the climbing lamb becomes the leaping one from the combination mark.
+  // Mid-air the climbing lamb becomes the larger one that stands beside the mark.
   const swap = ramp(leap, 0.3, 0.55);
   const arrive = ramp(leap, 0.3, 1);
   // Then the finale.
@@ -451,7 +466,7 @@ function Layers({ p }: { p: number }) {
         >
           <LambArt />
         </div>
-        {/* The gate, rising out of the top layer. */}
+        {/* The Boundary mark, rising out of the top layer. */}
         <div
           className={MOVING}
           style={{
@@ -459,9 +474,9 @@ function Layers({ p }: { p: number }) {
             transform: `translate3d(0, ${down((1 - gate) * 24)}, 0)`,
           }}
         >
-          <ComboArt part="gate" />
+          <LogoArt part="boundary" />
         </div>
-        {/* The lamb over the gate, arriving at the top of its arc. */}
+        {/* The BAML lamb, landing beside the mark. */}
         <div
           className={MOVING}
           style={{
@@ -469,9 +484,9 @@ function Layers({ p }: { p: number }) {
             transform: `translate3d(${across(-(1 - arrive) * 34)}, ${down((1 - arrive) * 26)}, 0)`,
           }}
         >
-          <ComboArt part="lamb" />
+          <LogoArt part="lamb" />
           <div className={MOVING} style={{ opacity: done * 0.8 }}>
-            <ComboArt glow part="lamb" />
+            <LogoArt glow part="lamb" />
           </div>
         </div>
       </div>
@@ -685,6 +700,10 @@ function Side({
             type="range"
             value={Math.round(rate * 100)}
           />
+          {/* Readers took the slider for a gauge, so it says it moves. */}
+          <p className="mt-1.5 text-[13px] text-white/45">
+            Drag to change the sampling
+          </p>
         </div>
         <div>
           <div className="mb-2 flex items-baseline justify-between gap-3">

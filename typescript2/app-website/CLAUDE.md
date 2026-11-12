@@ -32,8 +32,9 @@ npm run format:fix # Fix formatting issues with Biome
     `globals.css`, in the `@boundaryml/brand` package's BAML lane (dark only, Clover accent),
     fonts in `fonts/` (loaded by `fonts.ts`), the homepage's section styles in `styles/`. Pages
     other than the homepage and the blog wrap themselves in `PageShell`
-    (`components/home/page-shell.tsx`) for the homepage's nav and footer. Only the homepage and
-    the blog are linked from the nav and footer
+    (`components/home/page-shell.tsx`) for the homepage's nav and footer. The nav's Platform menu
+    (`components/home/nav-menu.tsx`) links the homepage, /adopt, the blog, /podcast and
+    /who-are-we, and the bar links /pricing; the footer links only the blog
   - `global-not-found.tsx` - The 404 page, which renders its own document with the same fonts,
     stylesheet, and shell
   - `/_lib/config.tsx` - Site configuration and constants

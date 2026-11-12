@@ -6,6 +6,7 @@ import { useUser } from "@/components/providers/user-provider";
 import { BepList } from "@/components/bep/bep-list";
 import { BepCreateModal } from "@/components/bep/bep-create-modal";
 import { BepExportAllDialog } from "@/components/bep/bep-export-all-dialog";
+import { BcsLink } from "@/components/bep/bcs-link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -21,7 +22,17 @@ export default function Home() {
   const { user, userId, isLoading, logout, hasManagementPermissions } = useUser();
   const router = useRouter();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Signing out of the app ends the team-only BCS session too; until the server has cleared
+    // it, the member is not signed out.
+    const ended = await fetch("/api/bcs/logout", { method: "POST" }).then(
+      (response) => response.ok,
+      () => false
+    );
+    if (!ended) {
+      window.alert("Could not sign out. Check your connection and try again.");
+      return;
+    }
     logout();
     router.push("/login");
   };
@@ -48,6 +59,7 @@ export default function Home() {
         <div className="max-w-[1600px] mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold">BAML Enhancement Proposals</h1>
           <div className="flex items-center gap-4">
+            <BcsLink />
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
