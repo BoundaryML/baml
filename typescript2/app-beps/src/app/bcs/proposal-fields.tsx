@@ -1,8 +1,8 @@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-/** The page's HTML, uploaded as a file or pasted. */
-export function HtmlField() {
+/** The page's HTML, uploaded as a file or pasted; `defaultValue` brings back a refused draft. */
+export function HtmlField({ defaultValue }: { defaultValue?: string }) {
   return (
     <div className="space-y-2">
       <Label htmlFor="file">The page</Label>
@@ -21,6 +21,7 @@ export function HtmlField() {
         id="html"
         name="html"
         rows={8}
+        defaultValue={defaultValue}
         placeholder="<!doctype html>..."
         className="font-mono text-xs"
       />

@@ -43,6 +43,15 @@ function escape(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/**
+ * `text` cut to `max` characters, before escaping. Slack refuses a whole message when a section's
+ * text passes 3,000 characters or a field's 2,000, so long notes and titles are shortened, with
+ * room left for the words around them and for escaping, which can make text up to five times longer.
+ */
+function clip(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
 function slackDate(ms: number): string {
   return `<!date^${Math.floor(ms / 1000)}^{date_short_pretty} at {time}|${new Date(ms).toISOString()}>`;
 }
@@ -69,12 +78,12 @@ export function overviewBlocks(proposal: Overview, isNew: boolean): Block[] {
         emoji: true,
       },
     },
-    { type: "section", text: { type: "mrkdwn", text: `*<${url}|${escape(proposal.title)}>*` } },
+    { type: "section", text: { type: "mrkdwn", text: `*<${url}|${escape(clip(proposal.title, 300))}>*` } },
     {
       type: "section",
       fields: [
         { type: "mrkdwn", text: `*Status:* ${emoji} ${proposal.status}` },
-        { type: "mrkdwn", text: `*Authors:* ${escape(proposal.authors.join(", "))}` },
+        { type: "mrkdwn", text: `*Authors:* ${escape(clip(proposal.authors.join(", "), 300))}` },
         { type: "mrkdwn", text: `*Version:* v${proposal.currentVersion}` },
         { type: "mrkdwn", text: `*Last updated:* ${slackDate(proposal.updatedAt)}` },
       ],
@@ -108,7 +117,7 @@ export function savedBlocks(
         type: "mrkdwn",
         text:
           `📝 ${who} saved <${url}|*v${change.version}*> of ${bcsId(proposal.number)}` +
-          (change.note ? `\n>${escape(change.note)}` : ""),
+          (change.note ? `\n>${escape(clip(change.note, 500)).replace(/\n/g, "\n>")}` : ""),
       },
     });
   }
@@ -163,7 +172,7 @@ export const notify = internalAction({
     if (!proposal) return;
     const who = proposal.slackUserId ? `<@${proposal.slackUserId}>` : `*${escape(args.login)}*`;
     const created = args.event.kind === "created";
-    const label = `${bcsId(proposal.number)}: ${proposal.title}`;
+    const label = `${bcsId(proposal.number)}: ${clip(proposal.title, 300)}`;
 
     let thread = proposal.slackThreadTs;
     if (thread) {
@@ -182,8 +191,16 @@ export const notify = internalAction({
         unfurl_links: false,
       });
       if (!posted.ok || !posted.ts) return;
-      thread = posted.ts;
-      await ctx.runMutation(internal.bcs.storeSlackThread, { docId: args.docId, ts: thread });
+      const kept = await ctx.runMutation(internal.bcs.storeSlackThread, {
+        docId: args.docId,
+        ts: posted.ts,
+      });
+      if (!kept) return;
+      if (kept !== posted.ts) {
+        // Another notification started the thread first: drop this message and reply there.
+        await slack("chat.delete", { channel, ts: posted.ts });
+      }
+      thread = kept;
     }
 
     if (args.event.kind !== "saved") return;

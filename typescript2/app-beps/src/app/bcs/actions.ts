@@ -2,12 +2,23 @@
 
 // Saving BCS proposals. Each action checks the viewer on the server before it calls Convex with
 // the secret, so a forged form post saves nothing. A refused save (stale, empty page, not set up)
-// returns the editor to the page with the reason, rather than to an error screen.
+// returns its reason with what the editor submitted, so the form shows both and nothing typed or
+// uploaded is lost.
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { api } from "../../../convex/_generated/api";
 import { currentViewer } from "@/lib/bcs-auth";
 import { BCS_STATUSES, type BcsStatus, bcsCall } from "@/lib/bcs-convex";
+
+/** What a BCS form shows after a submission: nothing, or why it was refused and the draft. */
+export type FormState = {
+  error?: string;
+  values?: { title?: string; status?: string; html?: string; note?: string };
+  // The version to save over next time, after someone else saved one meanwhile.
+  baseVersion?: number;
+  // Changes on every refused submission, so the form re-renders with the draft.
+  attempt?: number;
+};
 
 async function viewerOrFail() {
   const viewer = await currentViewer();
@@ -28,24 +39,28 @@ async function html(form: FormData): Promise<string> {
   return String(form.get("html") ?? "");
 }
 
-function withError(path: string, message: string): string {
-  return `${path}?error=${encodeURIComponent(message)}`;
-}
-
-export async function createProposal(form: FormData) {
+export async function createProposal(_previous: FormState, form: FormData): Promise<FormState> {
   const viewer = await viewerOrFail();
+  const title = String(form.get("title") ?? "");
+  const chosen = status(form.get("status"));
   const page = await html(form);
   const created = await bcsCall((convex, secret) =>
     convex.mutation(api.bcs.create, {
       secret,
-      title: String(form.get("title") ?? ""),
-      status: status(form.get("status")),
+      title,
+      status: chosen,
       html: page,
       author: viewer.login,
       authorGithubId: viewer.githubId,
     })
   );
-  if (!created.ok) redirect(withError("/bcs/new", created.failure.message));
+  if (!created.ok) {
+    return {
+      error: created.failure.message,
+      values: { title, status: chosen, html: page },
+      attempt: Date.now(),
+    };
+  }
   revalidatePath("/bcs");
   redirect(`/bcs/${created.value}`);
 }
@@ -56,9 +71,14 @@ function baseVersion(form: FormData): number | undefined {
   return Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
-export async function saveVersion(number: number, form: FormData) {
+export async function saveVersion(
+  number: number,
+  _previous: FormState,
+  form: FormData
+): Promise<FormState> {
   const viewer = await viewerOrFail();
   const page = await html(form);
+  const note = String(form.get("note") ?? "");
   const saved = await bcsCall((convex, secret) =>
     convex.mutation(api.bcs.save, {
       secret,
@@ -67,16 +87,32 @@ export async function saveVersion(number: number, form: FormData) {
       authorGithubId: viewer.githubId,
       baseVersion: baseVersion(form),
       html: page,
-      note: String(form.get("note") ?? ""),
+      note,
     })
   );
-  if (!saved.ok) redirect(withError(`/bcs/${number}`, saved.failure.message));
+  if (!saved.ok) {
+    const { kind, message, currentVersion } = saved.failure;
+    return {
+      error:
+        kind === "stale" && currentVersion
+          ? `Someone saved v${currentVersion} while you were editing. Your draft is kept below: ` +
+            `open v${currentVersion} in another tab to compare, then save again to replace it.`
+          : message,
+      values: { html: page, note },
+      baseVersion: kind === "stale" ? currentVersion : undefined,
+      attempt: Date.now(),
+    };
+  }
   revalidatePath(`/bcs/${number}`);
   redirect(`/bcs/${number}`);
 }
 
 /** Saves the title and status, each only when the editor changed it from what the form showed. */
-export async function updateProposal(number: number, form: FormData) {
+export async function updateProposal(
+  number: number,
+  _previous: FormState,
+  form: FormData
+): Promise<FormState> {
   const viewer = await viewerOrFail();
   const title = String(form.get("title") ?? "").trim();
   const newStatus = status(form.get("status"));
@@ -90,7 +126,14 @@ export async function updateProposal(number: number, form: FormData) {
       status: newStatus !== form.get("originalStatus") ? newStatus : undefined,
     })
   );
-  if (!saved.ok) redirect(withError(`/bcs/${number}`, saved.failure.message));
+  if (!saved.ok) {
+    return {
+      error: saved.failure.message,
+      values: { title, status: newStatus },
+      attempt: Date.now(),
+    };
+  }
   revalidatePath(`/bcs/${number}`);
   revalidatePath("/bcs");
+  return {};
 }

@@ -22,10 +22,12 @@ import { bepStatus } from "./schema";
 export type BcsFailure = {
   kind: "not_configured" | "stale" | "missing" | "invalid";
   message: string;
+  // For `stale`: the version someone else saved, which the editor can compare and save over.
+  currentVersion?: number;
 };
 
-function fail(kind: BcsFailure["kind"], message: string): never {
-  throw new ConvexError<BcsFailure>({ kind, message });
+function fail(kind: BcsFailure["kind"], message: string, currentVersion?: number): never {
+  throw new ConvexError<BcsFailure>({ kind, message, currentVersion });
 }
 
 /** The longest HTML page a version may hold, under Convex's 1 MiB document limit. */
@@ -180,7 +182,8 @@ export const save = mutation({
     if (args.baseVersion !== undefined && args.baseVersion !== doc.currentVersion) {
       fail(
         "stale",
-        `Someone saved v${doc.currentVersion} since you started from v${args.baseVersion}: reload it and save again.`
+        `Someone saved v${doc.currentVersion} since you started from v${args.baseVersion}: reload it and save again.`,
+        doc.currentVersion
       );
     }
     const now = Date.now();
@@ -286,11 +289,17 @@ export const slackView = internalQuery({
   },
 });
 
+/**
+ * Keeps `ts` as the proposal's thread unless another message got there first, and returns the
+ * thread that won, so a notification that lost the race can delete its message and reply there.
+ */
 export const storeSlackThread = internalMutation({
   args: { docId: v.id("bcsDocs"), ts: v.string() },
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
-    // The first message to land wins, so two quick saves cannot leave two threads behind.
-    if (doc && !doc.slackThreadTs) await ctx.db.patch(args.docId, { slackThreadTs: args.ts });
+    if (!doc) return null;
+    if (doc.slackThreadTs) return doc.slackThreadTs;
+    await ctx.db.patch(args.docId, { slackThreadTs: args.ts });
+    return args.ts;
   },
 });

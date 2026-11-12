@@ -20,9 +20,10 @@ export async function bcsCall<T>(
   // Trimmed, as Convex trims its copy: a pasted secret often gains a trailing newline.
   const secret = process.env.BCS_CONVEX_SECRET?.trim();
   if (!url || !secret) {
+    const missing = !url ? "NEXT_PUBLIC_CONVEX_URL" : "BCS_CONVEX_SECRET";
     return {
       ok: false,
-      failure: { kind: "not_configured", message: "BCS_CONVEX_SECRET is not set on the site." },
+      failure: { kind: "not_configured", message: `${missing} is not set on the site.` },
     };
   }
   try {

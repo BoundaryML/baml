@@ -22,13 +22,3 @@ export function BcsUnavailable({ message }: { message: string }) {
     </div>
   );
 }
-
-/** A refused save, shown above the page the editor came back to. */
-export function BcsError({ message }: { message?: string }) {
-  if (!message) return null;
-  return (
-    <div role="alert" className="border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-sm">
-      {message}
-    </div>
-  );
-}
