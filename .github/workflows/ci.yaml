@@ -1040,7 +1040,11 @@ jobs:
     # policy
     # and the "Perf benchmarks (PR notice)" job for the comment PRs get when
     # benchmarks are skipped. Skipped in merge_group (already settled on the PR).
-    if: needs.determine_changes.outputs.run_perf == 'true'
+    # Disabled: the codspeed-macro runner stopped picking up benchmarks-run, so
+    # the job sits queued forever, the canary push run never completes and the
+    # nightly release selector finds no green commit. To re-enable, restore the
+    # conditions on benchmarks-build, benchmarks-run and perf-pr-notice.
+    if: false # needs.determine_changes.outputs.run_perf == 'true'
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
@@ -1122,7 +1126,8 @@ jobs:
       - determine_changes
       - benchmarks-build
     # Same gate as benchmarks-build — see determine_changes' `check_perf` step.
-    if: needs.determine_changes.outputs.run_perf == 'true'
+    # Disabled with benchmarks-build; see the note there.
+    if: false # needs.determine_changes.outputs.run_perf == 'true'
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
@@ -1213,7 +1218,9 @@ jobs:
     name: "Perf benchmarks (PR notice)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: determine_changes
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+    # Disabled with benchmarks-build: the opt-in markers it advertises do nothing
+    # while the benchmark jobs are off.
+    if: false # github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
     permissions:
       pull-requests: write
     steps:
