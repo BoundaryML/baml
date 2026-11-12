@@ -433,7 +433,13 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
 fn print_version(paths: &InvocationPaths, flag: &str) -> Result<i32> {
     println!("baml wrapper {}", env!("CARGO_PKG_VERSION"));
     std::io::stdout().flush()?;
-    pass_through(vec![flag.to_string()], paths)
+    match pass_through(vec![flag.to_string()], paths) {
+        Ok(exit_code) => Ok(exit_code),
+        Err(error) => {
+            eprintln!("warning: could not report selected baml-cli version: {error:#}");
+            Ok(0)
+        }
+    }
 }
 
 fn toolchain_use_command(selector: &ResolvedSelector, value: &str) -> String {

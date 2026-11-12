@@ -78,6 +78,12 @@ args = [
     "--include", "root::CLI delegation::help after toolchain arguments changes nothing",
     # version reporting
     "--include", "root::version reporting::version reports wrapper and selected toolchain",
+    "--include", "root::version reporting::version installs and invokes selected toolchain",
+    "--include", "root::version reporting::version propagates cli exit code",
+    "--include", "root::version reporting::version reports wrapper when selected local cli is missing",
+    "--include", "root::version reporting::version fails open after one failed acquisition",
+    "--include", "root::version reporting::version fails open for invalid selection or damaged installation",
+    "--include", "root::version reporting::version fails open when local cli cannot start",
     # passive update checks
     "--include", "root::passive update checks::disabled passive refresh uses no network",
     # wrapper self update

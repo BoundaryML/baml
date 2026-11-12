@@ -312,10 +312,22 @@ class WrapperInvocation {
 
     function print_version(self, flag: string) -> null {
         baml.io.println(`baml wrapper ${wrapper_version()}`);
+        let exit_code = self.run_cli_version(flag) catch (error) {
+            WrapperFailure => {
+                baml.io.eprintln(
+                    `warning: could not report selected baml-cli version: ${error_message(error)}`,
+                );
+                0
+            }
+        };
+        baml.sys.exit(exit_code)
+    }
+
+    function run_cli_version(self, flag: string) -> int {
         let binary = self.selection().ensure_installed(telemetry = self.telemetry);
         WrapperTelemetry.finish(self.telemetry);
         let result = baml.sys.run(binary, args = [flag], env = { "BAML_CLI_ALLOW_DIRECT": "1" });
-        baml.sys.exit(result.exit_code)
+        result.exit_code
     }
 
     function management(self, args: string[]) -> null {
