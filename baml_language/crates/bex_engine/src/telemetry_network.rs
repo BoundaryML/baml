@@ -179,8 +179,8 @@ impl BexEngine {
                 if event.kind == NetworkEventKind::Drop {
                     // SAFETY: a dropped response has no heap-backed error to capture.
                     unsafe {
-                        state.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[])
-                    };
+                        state.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[]);
+                    }
                 }
             }
         }
