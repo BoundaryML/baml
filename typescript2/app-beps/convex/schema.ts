@@ -409,6 +409,8 @@ export default defineSchema({
     currentVersion: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),
+    // The proposal's thread in BCS_SLACK_CHANNEL, once its first message was posted.
+    slackThreadTs: v.optional(v.string()),
   }).index("by_number", ["number"]),
 
   // A version's metadata, listed without its page so that reading a proposal never loads every

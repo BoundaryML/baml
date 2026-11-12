@@ -47,8 +47,14 @@ export function bcsMembership(
 }
 
 function secret(): string | null {
-  const value = process.env.BCS_SESSION_SECRET;
+  // Trimmed: a secret pasted into a dashboard often gains a trailing newline.
+  const value = process.env.BCS_SESSION_SECRET?.trim();
   return value && value.length >= 32 ? value : null;
+}
+
+/** Whether this deployment can sign BCS sessions at all, so a sign-in can work. */
+export function bcsSessionConfigured(): boolean {
+  return secret() !== null;
 }
 
 function mac(payload: string, key: string): string {
