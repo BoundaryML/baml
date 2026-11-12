@@ -40,6 +40,7 @@ const TABLES: &[(&str, &str)] = &[
     ("call", "rec, call_id"),
     ("network_span", "rec, span_id"),
     ("network_event", "rec, span_id, seq"),
+    ("log", "rec, seq"),
     ("profile_part", "rec, node_id"),
     ("profile_node", "process_id, node_id"),
 ];
@@ -47,7 +48,14 @@ const TABLES: &[(&str, &str)] = &[
 const ERRORS: &str = r#"
 class Failure { code int }
 function Leaf(n: int) -> int { n + 1 }
-function Thrower(n: int) -> int throws Failure { throw Failure { code: n } }
+function Thrower(n: int) -> int throws Failure {
+    log.warn(n);
+    throw Failure { code: n }
+}
+function Noted(n: int) -> int {
+    log.info({ "n": n }, event_name = "noted");
+    n
+}
 function Middle(n: int) -> int throws Failure { Thrower(n) + 1 }
 function Recur(n: int) -> int throws Failure {
     if (n == 0) { Thrower(n) } else { Recur(n - 1) + 1 }
@@ -66,6 +74,8 @@ function main(n: int) -> int {
     let child = spawn { Middle(n) };
     let e = (await child) catch (x) { Failure => 5 };
     let f = Pick(Box { value: n }).map((v) -> string { "v" }).value;
+    let noted = Noted(n, $trace = trace.context(metadata = { "phase": "noted" }));
+    log.debug("main", event_name = "");
     span.finish(n);
     closed.close();
     a + b + c + d + e + Pick(f.length())
@@ -234,6 +244,17 @@ async fn fresh_and_incremental_indexes_are_identical() {
         24 * 4,
         "type_args_cas"
     );
+    // Logs from every execution, with and without a context snapshot.
+    let logs = &fresh.iter().find(|(table, _)| table == "log").unwrap().1;
+    assert!(logs.len() >= 24 * 3, "{} logs", logs.len());
+    assert!(
+        logs.iter().any(|row| row[11] == Value::Null),
+        "a log without a context snapshot"
+    );
+    assert!(
+        logs.iter().any(|row| row[11] != Value::Null),
+        "a log under a context snapshot"
+    );
     // Futures that failed carry the error they ended with: `crash` (a root
     // future) in both recordings, and the future each `main` of the second
     // one spawns. No other future names an error.
@@ -276,6 +297,8 @@ mod crafted {
     const EPOCH: u64 = 5;
     const CALLER: u64 = 21;
     const CALLEE: u64 = 22;
+    /// Logs, and is defined only in the last file.
+    const LOGGER: u64 = 23;
     /// The thread that fails with an error, and that error's snapshot.
     pub(super) const FAILED_THREAD: u64 = T3;
     pub(super) const T3_ERROR: u64 = 66;
@@ -400,6 +423,30 @@ mod crafted {
         }
     }
 
+    /// A log by `function`, under `parent`, whose value is snapshot `at`.
+    fn log(parent: u64, function: u64, at: u64, name: Option<&str>) -> Event {
+        Event::Log(proto::LogEvent {
+            parent_id: parent,
+            function_id: function,
+            pc: 12,
+            at_ticks: at,
+            level: proto::LogLevel::Warn as i32,
+            event_name: name.map(str::to_owned),
+            data_cas_id: Some(snapshot(at)),
+            line: None,
+        })
+    }
+
+    fn in_context(
+        context: proto::thread_section::Context,
+        section: proto::ThreadSection,
+    ) -> proto::ThreadSection {
+        proto::ThreadSection {
+            context: Some(context),
+            ..section
+        }
+    }
+
     fn aggregate(path: u32, count: u64, duration: u64, errored: u64) -> proto::AggregateDelta {
         proto::AggregateDelta {
             node: u64::from(path) << 1,
@@ -506,6 +553,19 @@ mod crafted {
                             network_event(201, "connection", 24, None),
                         ],
                     ),
+                    // Logs before their function's definition, between other
+                    // events, under a context snapshot.
+                    in_context(
+                        proto::thread_section::Context::ContextCasId(snapshot(77)),
+                        section(
+                            T2,
+                            vec![
+                                log(100, LOGGER, 21, Some("first")),
+                                network_event(200, "data", 31, None),
+                                log(T2, LOGGER, 22, None),
+                            ],
+                        ),
+                    ),
                 ],
             }),
             aggregates: Some(proto::AggregateBatch {
@@ -576,9 +636,14 @@ mod crafted {
                             network_done(202, 50, proto::InvocationOutcome::Unspecified),
                         ],
                     ),
+                    in_context(
+                        proto::thread_section::Context::EmptyContext(true),
+                        section(T3, vec![log(101, CALLEE, 32, Some(""))]),
+                    ),
                     section(
                         T3,
                         vec![
+                            log(T3, LOGGER, 33, Some("second")),
                             // Fails with an error, before its definition.
                             Event::ThreadCompletion(proto::ThreadCompletion {
                                 completed_at_ticks: 70,
@@ -602,13 +667,16 @@ mod crafted {
         };
         let third = proto::RecordingFile {
             definitions: Some(proto::Definitions {
-                functions: vec![{
-                    let mut callee = metadata(CALLEE, "user.Callee", 7);
-                    if let Some(Resolution::Metadata(metadata)) = &mut callee.resolution {
-                        metadata.model_invoke = true;
-                    }
-                    callee
-                }],
+                functions: vec![
+                    {
+                        let mut callee = metadata(CALLEE, "user.Callee", 7);
+                        if let Some(Resolution::Metadata(metadata)) = &mut callee.resolution {
+                            metadata.model_invoke = true;
+                        }
+                        callee
+                    },
+                    metadata(LOGGER, "user.Logger", 30),
+                ],
                 call_paths: vec![
                     path(1, 0, None, 0, CALLER, 1),
                     path(4, 1, Some(CALLER), 2, CALLEE, 1),
@@ -733,7 +801,25 @@ fn late_and_conflicting_evidence_indexes_identically() {
         .find(|(table, _)| table == "network_event")
         .unwrap()
         .1;
-    assert_eq!(events.len(), 6, "{events:?}");
+    assert_eq!(events.len(), 7, "{events:?}");
+    // Logs keep file order, their names and their section's context state.
+    let logs = &fresh.iter().find(|(table, _)| table == "log").unwrap().1;
+    let stored: Vec<(i64, Value, i64)> = logs
+        .iter()
+        .map(|row| match (&row[1], &row[10]) {
+            (Value::Integer(seq), Value::Integer(state)) => (*seq, row[8].clone(), *state),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        stored,
+        vec![
+            (1 << 32, Value::Text("first".into()), 2),
+            ((1 << 32) | 1, Value::Null, 2),
+            (2 << 32, Value::Text(String::new()), 1),
+            ((2 << 32) | 1, Value::Text("second".into()), 0),
+        ]
+    );
     // The late announcement gives its call the type arguments.
     let type_args: Vec<i64> = fresh
         .iter()
