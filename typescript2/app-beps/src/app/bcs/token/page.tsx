@@ -23,7 +23,7 @@ export default async function BcsToken() {
         </div>
         <p className="text-muted-foreground">
           The <code>bep</code> script pulls and pushes BCS proposals with this token. It is yours
-          ({viewer.login}), works for 30 days, and a new one is made each time you open this page.
+          ({viewer.login}), works for 14 days, and a new one is made each time you open this page.
           Keep it out of git and chat.
         </p>
         {token ? (

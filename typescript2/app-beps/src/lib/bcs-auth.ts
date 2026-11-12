@@ -1,49 +1,55 @@
 // Who may read BCS design proposals, and the signed cookie that says so.
 //
 // The GitHub login callback is the one place the server knows the viewer's real GitHub account
-// (the rest of the app trusts what the browser says). There, `isBcsMember` decides, and a member
-// gets a cookie signed with BCS_SESSION_SECRET that pages and routes check on the server.
+// (the rest of the app trusts what the browser says). There it asks GitHub whether the account is
+// an active member of the BoundaryML organization, and a member gets a cookie signed with
+// BCS_SESSION_SECRET that pages and routes check on the server.
 //
-// Until the callback checks membership of the BoundaryML organization on GitHub, the team is the
-// accounts listed below, or any account with a verified @boundaryml.com email on GitHub.
+// GitHub only answers with the viewer's own token, so membership is checked at sign-in, not on
+// every request: someone removed from the organization keeps access until their cookie or CLI
+// token expires, which is why both last two weeks.
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
 export const BCS_COOKIE = "bcs_session";
-const MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+const MAX_AGE_SECONDS = 14 * 24 * 60 * 60;
 /** How long a CLI token works, after which its owner gets a new one from /bcs/token. */
-const TOKEN_SECONDS = 30 * 24 * 60 * 60;
+const TOKEN_SECONDS = 14 * 24 * 60 * 60;
 /** What a signed value is for: the browser's cookie, or the `bep bcs` CLI's bearer token. */
 type Use = "session" | "cli";
 const TOKEN_PREFIX = "bcs_";
 
-/** BoundaryML's members on GitHub, by account ID, which a rename keeps. */
-const TEAM: Record<string, string> = {
-  "22033723": "2kai2kai2",
-  "5353992": "aaronvg",
-  "54243067": "antoniosarosi",
-  "17539023": "codeshaunted",
-  "2448742": "hellovai",
-  "82104712": "rossirpaulo",
-  "512410": "sxlijin",
-};
+/** The GitHub organization whose members may read BCS proposals. */
+export const BCS_ORG = "BoundaryML";
 
 /**
- * A team member, and why they are one: `list`, checked again on every request, so removing an
- * account from TEAM ends its access at once; or a verified `email`, which only GitHub can check,
- * so it lasts until the cookie or token expires.
+ * A team member: an active member of BCS_ORG when they signed in. `via` names that check, so a
+ * cookie or token from an earlier rule (a hardcoded list, a verified email) no longer counts.
  */
-export type BcsViewer = { githubId: string; login: string; via: "list" | "email" };
+export type BcsViewer = { githubId: string; login: string; via: "org" };
 
-/** Why a GitHub account may read BCS proposals, or null when it may not. */
-export function bcsMembership(
-  githubId: string,
-  verifiedEmails: string[]
-): BcsViewer["via"] | null {
-  if (githubId in TEAM) return "list";
-  return verifiedEmails.some((email) => email.toLowerCase().endsWith("@boundaryml.com"))
-    ? "email"
-    : null;
+/**
+ * Whether the account behind a GitHub OAuth token (with the read:org scope) is an active member of
+ * BCS_ORG. GitHub answers 404 for non-members, and 403 when the organization has not approved this
+ * OAuth app or requires an SSO session the token does not have; all of these mean no.
+ */
+export async function isBcsOrgMember(accessToken: string): Promise<boolean> {
+  try {
+    const response = await fetch(`https://api.github.com/user/memberships/orgs/${BCS_ORG}`, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/vnd.github+json" },
+      cache: "no-store",
+    });
+    if (response.status === 403) {
+      const why = await response.json().catch(() => ({}));
+      console.warn(`GitHub refused the ${BCS_ORG} membership check:`, why?.message);
+    }
+    if (!response.ok) return false;
+    const membership = (await response.json()) as { state?: string };
+    return membership.state === "active";
+  } catch (error) {
+    console.warn(`The ${BCS_ORG} membership check failed:`, error);
+    return false;
+  }
 }
 
 function secret(): string | null {
@@ -106,10 +112,8 @@ function verify(token: string | undefined, use: Use): BcsViewer | null {
     if (claims.use !== use) return null;
     if (typeof claims.exp !== "number" || claims.exp < Date.now() / 1000) return null;
     if (typeof claims.githubId !== "string" || typeof claims.login !== "string") return null;
-    if (claims.via !== "list" && claims.via !== "email") return null;
-    // Removed from the list since signing in: no longer a member.
-    if (claims.via === "list" && !(claims.githubId in TEAM)) return null;
-    return { githubId: claims.githubId, login: claims.login, via: claims.via };
+    if (claims.via !== "org") return null;
+    return { githubId: claims.githubId, login: claims.login, via: "org" };
   } catch {
     return null;
   }
@@ -129,7 +133,7 @@ export const sessionCookie = {
  */
 export async function currentViewer(): Promise<BcsViewer | null> {
   if (process.env.NODE_ENV !== "production" && process.env.BCS_DEV_VIEWER) {
-    return { githubId: "dev", login: process.env.BCS_DEV_VIEWER, via: "email" };
+    return { githubId: "dev", login: process.env.BCS_DEV_VIEWER, via: "org" };
   }
   const jar = await cookies();
   return verifySession(jar.get(BCS_COOKIE)?.value);
