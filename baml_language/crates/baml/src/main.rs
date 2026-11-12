@@ -1509,8 +1509,8 @@ fn install_manifest_artifact(
     );
     fetcher
         .install_to_toolchain_root_with_force(&toolchains_dir(), force)
-        .map(|_| ())
-        .map_err(|err| anyhow!("{err}"))
+        .map_err(|err| anyhow!("{err}"))?;
+    verify_managed_toolchain(version)
 }
 
 fn preflight_selector_install(selector: &str, override_url: Option<&str>) -> Result<()> {

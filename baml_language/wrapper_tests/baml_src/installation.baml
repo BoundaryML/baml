@@ -603,6 +603,37 @@ testset "toolchain installation" {
     }
 
     if (candidate.supports([root.harness.Capability.PosixPermissions])) {
+        test "explicit and resolved installs verify downloaded executable" {
+            for (
+                let args in [
+                    ["toolchain", "install"],
+                    ["toolchain", "install", BASE_VERSION],
+                    ["toolchain", "install", "--force"],
+                    ["toolchain", "install", BASE_VERSION, "--force"],
+                ]
+            ) {
+                let fixture = root.harness.Fixture.start();
+                defer { fixture.close(); }
+                fixture.project(BASE_VERSION);
+                fixture.absent(BASE_VERSION);
+                fixture.release(BASE_VERSION, "non-executable-cli");
+                let state = fixture.read(CHANNEL_STATE_FILE);
+                let project = fixture.read(PROJECT_MANIFEST_FILE);
+                let config = fixture.read(USER_CONFIG_FILE);
+                fixture.manage(candidate, args, success = false, diagnostic = "not executable");
+                root.harness.require(
+                    fixture.requests() == [`/version/${BASE_VERSION}.json`, `/${BASE_VERSION}.tar.gz`],
+                    "invalid executable was acquired more than once",
+                );
+                root.harness.require(
+                    fixture.read(CHANNEL_STATE_FILE) == state
+                        && fixture.read(PROJECT_MANIFEST_FILE) == project
+                        && fixture.read(USER_CONFIG_FILE) == config,
+                    "invalid executable changed configuration",
+                );
+            }
+        }
+
         test "unwritable install destination preserves existing selection" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }

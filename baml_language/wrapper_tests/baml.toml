@@ -39,6 +39,7 @@ args = [
     "--include", "root::toolchain installation::bare install uses environment selection",
     "--include", "root::toolchain installation::bare install preserves recorded channel version",
     "--include", "root::toolchain installation::bare forced install replaces recorded channel version",
+    "--include", "root::toolchain installation::explicit and resolved installs verify downloaded executable",
     # toolchain management
     "--include", "root::toolchain management::use updates project and preserves global default",
     "--include", "root::toolchain management::global use preserves project selection",
