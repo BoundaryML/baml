@@ -995,7 +995,9 @@ fn deep_copy_value_recursive(
                     let text = unsafe { StrRef::new_unchecked(flat) }.as_str();
                     vm.alloc_string(text)
                 }
-                Object::String(s) => vm.tlab.alloc(Object::String(s)),
+                // A pooled literal never reaches a value, but its copy is a
+                // string cell like every runtime string.
+                Object::String(s) => vm.alloc_string(s.as_str()),
                 Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 
                 Object::Shared(SharedKind::List) => {
@@ -1180,5 +1182,31 @@ mod trunc_to_int_tests {
         assert_eq!(PackageBamlImpl::_trunc_to_int(f64::NAN), 0);
         assert_eq!(PackageBamlImpl::_trunc_to_int(f64::INFINITY), i64::MAX);
         assert_eq!(PackageBamlImpl::_trunc_to_int(f64::NEG_INFINITY), i64::MIN);
+    }
+}
+
+#[cfg(test)]
+mod deep_copy_tests {
+    use std::collections::HashMap;
+
+    use bex_vm_types::{Object, Value};
+
+    use super::deep_copy_value_recursive;
+    use crate::vm::tests::test_vm;
+
+    /// A pooled `Object::String` enum cell (what the compiler's pool holds)
+    /// deep-copies to a string cell, the only string a runtime reader
+    /// (`as_string`, hashing, equality) understands.
+    #[test]
+    fn deep_copy_of_a_pooled_string_is_a_string_cell() {
+        let mut vm = test_vm(vec![]);
+        let pooled = vm.tlab.alloc(Object::String("pooled text".into()));
+        assert!(vm.str_at(pooled).is_none(), "an enum cell is not a string cell");
+
+        let copy = deep_copy_value_recursive(&mut vm, Value::object(pooled), &mut HashMap::new())
+            .expect("a string copies");
+        let copy = copy.as_object_ptr().expect("a string is an object");
+        assert_eq!(vm.str_at(copy).expect("a string cell").as_str(), "pooled text");
+        assert_eq!(vm.as_string(&Value::object(copy)).unwrap().as_str(), "pooled text");
     }
 }
