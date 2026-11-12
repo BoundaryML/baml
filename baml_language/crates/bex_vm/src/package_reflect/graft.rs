@@ -586,6 +586,15 @@ fn place_objects<'a>(
     let mut locals = Vec::new();
     let mut pending = Vec::new();
     for object in owned {
+        // A pooled string literal is a flat string cell at run time (the
+        // cell `CompileTimeSpace::new` lays out for the startup pool), never
+        // an `Object::String` enum cell: every reader goes through `StrRef`.
+        // It names nothing, so it needs no reservation or relocation.
+        if let Object::String(text) = object {
+            let ptr = vm.tlab.alloc_string(text.as_str());
+            locals.push(image.add_tagged(ptr, None));
+            continue;
+        }
         let mut object = object.clone();
         adopt(&mut object, package_ptr);
         // A class with a finalizer joins the heap: the collector's
