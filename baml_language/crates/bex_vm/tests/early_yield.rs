@@ -75,7 +75,12 @@ fn flag_unset_completes_without_early_yield() {
     let flag = Arc::new(AtomicBool::new(false));
     let mut vm = make_vm(Arc::clone(&flag));
 
-    let state = vm.exec().expect("exec");
+    let mut state = vm.exec().expect("exec");
+    // Under `BAML_GC_STRESS=1` every poll yields by design; the baseline
+    // then is that resuming completes.
+    while bex_vm::compiled_rt::gc_stress() && matches!(state, VmExecState::EarlyYield) {
+        state = vm.exec().expect("exec");
+    }
     match state {
         VmExecState::Complete(v) if v.is_int() => {
             assert_eq!(v.as_int().unwrap(), LOOP_ITERATIONS);

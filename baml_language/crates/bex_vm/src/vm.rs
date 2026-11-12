@@ -3834,13 +3834,17 @@ impl BexVm {
         self.early_yield.tick() && self.poll_for_yield()
     }
 
+    /// Under `BAML_GC_STRESS=1` every poll yields, in the interpreter loop
+    /// and in compiled bodies alike, and the engine collects at every yield
+    /// (`compiled_rt::collection_due`): a collection every `POLL_INTERVAL`
+    /// control-flow checks.
     #[cold]
     #[inline(never)]
     fn poll_for_yield(&mut self) -> bool {
         self.tlab.flush_alloc_debt();
         // The poll reads the pressure flag the settlement may have raised.
         self.tlab.take_budget_crossed();
-        self.early_yield.poll()
+        self.early_yield.poll() || compiled_rt::gc_stress()
     }
 
     pub(crate) fn current_runtime_package(&self) -> HeapPtr {

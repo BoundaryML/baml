@@ -30,7 +30,9 @@ mod r#virtual;
 #[cfg(test)]
 pub(crate) mod tests;
 
-/// `BAML_GC_STRESS=1` forces safepoints and collections.
+/// `BAML_GC_STRESS=1`: every safepoint poll yields (`BexVm::poll_for_yield`,
+/// the interpreter's and the compiled bodies' alike, and every compiled
+/// loop back edge) and every yield collects ([`collection_due`]).
 #[inline]
 #[must_use]
 pub fn gc_stress() -> bool {

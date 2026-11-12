@@ -202,7 +202,13 @@ fn exact_calls_poll_and_resume_inside_the_callee() {
     vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
     assert!(matches!(vm.exec().unwrap(), VmExecState::EarlyYield));
     flag.store(false, std::sync::atomic::Ordering::Relaxed);
-    match vm.exec().unwrap() {
+    let mut state = vm.exec().unwrap();
+    // Under `BAML_GC_STRESS=1` every poll yields by design; resuming through
+    // them must still complete.
+    while bex_vm::compiled_rt::gc_stress() && matches!(state, VmExecState::EarlyYield) {
+        state = vm.exec().unwrap();
+    }
+    match state {
         VmExecState::Complete(value) => assert_eq!(value.as_int(), Some(42)),
         other => panic!("expected completion after resuming, got {other:?}"),
     }
