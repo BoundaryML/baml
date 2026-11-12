@@ -4902,14 +4902,12 @@ impl BexVm {
             .unwrap_or_else(|error| panic!("a list element does not fit its slot: {error}"))
     }
 
-    /// Snapshot a string-keyed map for native string-only boundaries.
-    pub fn as_string_map(
-        &self,
-        value: &Value,
-    ) -> Result<IndexMap<bex_vm_types::BexStr, Value>, VmInternalError> {
+    /// Snapshot a string-keyed map for native string-only boundaries, each
+    /// key copied out.
+    pub fn as_string_map(&self, value: &Value) -> Result<IndexMap<String, Value>, VmInternalError> {
         self.as_map(value)?
             .iter()
-            .map(|(key, value)| Ok((self.as_string(key)?.to_bex_str(), *value)))
+            .map(|(key, value)| Ok((self.as_string(key)?.to_owned_string(), *value)))
             .collect()
     }
 
@@ -7335,7 +7333,7 @@ impl BexVm {
         // apply its calling convention (TS `$opts`, Python kwargs) without the
         // callee type on the wire.
         let mut positional: Vec<Value> = Vec::new();
-        let mut optional: IndexMap<bex_vm_types::BexStr, Value> = IndexMap::new();
+        let mut optional: IndexMap<String, Value> = IndexMap::new();
         for (i, val) in user_args.into_iter().enumerate() {
             match params.get(i) {
                 Some(p) if p.is_optional() => {
@@ -7347,7 +7345,7 @@ impl BexVm {
                         .as_ref()
                         .map(|n| n.as_str().to_string())
                         .unwrap_or_else(|| format!("arg{i}"));
-                    optional.insert(bex_vm_types::BexStr::from(name), val);
+                    optional.insert(name, val);
                 }
                 _ => positional.push(val),
             }
@@ -7358,7 +7356,7 @@ impl BexVm {
         let positional_ptr = self
             .tlab
             .alloc_array(bex_vm_types::RealizedTy::unknown(), positional);
-        let optional_ptr = self.tlab.alloc_map(
+        let optional_ptr = self.tlab.alloc_string_map(
             bex_vm_types::RealizedTy::string(),
             bex_vm_types::RealizedTy::unknown(),
             optional,
@@ -8212,25 +8210,20 @@ impl BexVm {
         let key_ty = self.ensure_pop_type()?;
         // Nonempty allocations are compiler-generated string maps.
         // General-key literals use yielding Map.set calls.
-        let map = if n > 0 {
+        // The keys on the stack are string cells already: each goes into the
+        // map as it is, hashed through the cell. A repeated key keeps its
+        // first position and takes its last value.
+        let map = self.tlab.alloc_empty_map(key_ty, value_ty);
+        if n > 0 {
             let end_of_values = self.stack.ensure_slot_from_top(2 * n - 1);
-            let end_of_keys = self.stack.ensure_slot_from_top(n - 1);
-            let idx_of_last_key = self.stack.ensure_slot_from_top(n - 1);
-            let values = self.stack[end_of_values..end_of_keys].iter().copied();
-            let keys = self.stack[idx_of_last_key..]
-                .iter()
-                .map(|k| -> Result<_, VmInternalError> { Ok(self.as_string(k)?.to_bex_str()) });
-            let pairs = values
-                .zip(keys)
-                .map(|(val, key_res)| key_res.map(|k| (k, val)));
-            let map = pairs.collect::<Result<IndexMap<_, _>, _>>()?;
-            self.stack.drain(end_of_values..);
-            map
-        } else {
-            IndexMap::new()
-        };
-        let obj_index = self.tlab.alloc_map(key_ty, value_ty, map);
-        self.push_stack(Value::object(obj_index))?;
+            let entries: Vec<Value> = self.stack.drain(end_of_values..).collect();
+            let (values, keys) = entries.split_at(n);
+            for (&value, &key) in values.iter().zip(keys) {
+                let key = self.as_string(&key)?.ptr();
+                self.tlab.map_insert_str(map, key, value);
+            }
+        }
+        self.push_stack(Value::object(map.ptr()))?;
         Ok(())
     }
 

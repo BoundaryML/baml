@@ -2280,10 +2280,7 @@ impl BamlClassCsvRecord for PackageBamlImpl {
         }
     }
 
-    fn to_map(
-        vm: &mut BexVm,
-        csvrecord: &Value,
-    ) -> Result<IndexMap<bex_str::BexStr, Value>, VmRustFnError> {
+    fn to_map(vm: &mut BexVm, csvrecord: &Value) -> Result<IndexMap<String, Value>, VmRustFnError> {
         let rd = record_arc(vm, *csvrecord)?;
         let Some(header) = &rd.header else {
             let info = ErrInfo::new(
@@ -2307,7 +2304,7 @@ impl BamlClassCsvRecord for PackageBamlImpl {
         for (i, name) in header.names.iter().enumerate() {
             let text = rd.cells.get(i).map(|c| c.text.as_str()).unwrap_or("");
             let v = Value::object(vm.alloc_string(text.to_string()));
-            out.insert(bex_str::BexStr::from(name.as_str()), v);
+            out.insert(name.clone(), v);
         }
         Ok(out)
     }

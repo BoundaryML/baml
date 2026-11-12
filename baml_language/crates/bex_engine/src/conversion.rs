@@ -858,7 +858,7 @@ impl BexEngine {
                     .as_object_ptr()
                     .and_then(|ptr| unsafe { bex_vm_types::StrRef::of(ptr) })
                 {
-                    Some(key) => Ok((key.to_bex_str(), value)),
+                    Some(key) => Ok((key.to_owned_string(), value)),
                     _ => Err(malformed(
                         "host-call optional argument names must be strings".to_owned(),
                     )),
@@ -868,9 +868,7 @@ impl BexEngine {
         let (required_types, optional_types) = host_call_parameter_types(
             params,
             positional_values.len(),
-            optional_values
-                .keys()
-                .map(bex_external_types::BexStr::as_str),
+            optional_values.keys().map(String::as_str),
         )
         .map_err(malformed)?;
         let positional = positional_values

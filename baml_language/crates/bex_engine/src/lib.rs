@@ -7316,10 +7316,7 @@ impl BexEngine {
         vm: &BexVm,
         args: &[Value],
     ) -> Result<PendingRuntimeCompile, EngineError> {
-        fn map_entries(
-            vm: &BexVm,
-            value: Value,
-        ) -> Result<IndexMap<bex_str::BexStr, Value>, EngineError> {
+        fn map_entries(vm: &BexVm, value: Value) -> Result<IndexMap<String, Value>, EngineError> {
             vm.as_string_map(&value)
                 .map_err(|_| EngineError::TypeMismatch {
                     message: "Package.compile expected a string-keyed map".to_string(),

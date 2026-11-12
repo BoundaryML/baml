@@ -33,7 +33,6 @@ use bex_sap::{
     sap_model::{ConvertError, NamedTy, NamedTyKind, ParseTy, TyResolvedRef, TypeCtx},
     to_baml_ty::ToBamlTy,
 };
-use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, RealizedTy, RootHaver, RootVisitor, TyTemplate, TypeHead,
     types::{Class, Object, Value},
@@ -1142,10 +1141,7 @@ fn to_heap(
             let value_ty = declarations.realize(&map_ty.value.to_baml_ty())?;
             let mut entries = IndexMap::with_capacity(map.value.len());
             for (k, v) in &map.value {
-                entries.insert(
-                    BexStr::from(k.as_ref()),
-                    to_heap(vm, v, declarations, mode)?,
-                );
+                entries.insert(k.as_ref().to_owned(), to_heap(vm, v, declarations, mode)?);
             }
             Value::object(vm.alloc_map(key, value_ty, entries))
         }
@@ -1207,7 +1203,7 @@ fn parsed_to_heap(
             let mut values = IndexMap::with_capacity(entries.len());
             for (k, v) in entries {
                 values.insert(
-                    BexStr::from(k.as_ref()),
+                    k.as_ref().to_owned(),
                     parsed_to_heap(vm, v, declarations, mode)?,
                 );
             }
@@ -1571,7 +1567,7 @@ pub(super) fn empty_value(
         },
         RealizedTy::List(element) => Value::object(vm.alloc_array((**element).clone(), Vec::new())),
         RealizedTy::Map { key, value } => {
-            Value::object(vm.alloc_map((**key).clone(), (**value).clone(), IndexMap::new()))
+            Value::object(vm.alloc_empty_map((**key).clone(), (**value).clone()).ptr())
         }
         RealizedTy::Enum(head) => {
             let Object::Enum(enm) = vm.get_object(head.ptr()) else {

@@ -505,13 +505,13 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         this.member(built, &value_ty)?;
                         Ok(built)
                     })?;
-                    values.insert(bex_vm_types::BexStr::from(name.as_str()), built);
+                    values.insert(name.clone(), built);
                 }
                 Value::object(
                     self.holder
                         .holder_mut()
                         .tlab_mut()
-                        .alloc_map(key, value_ty, values),
+                        .alloc_string_map(key, value_ty, values),
                 )
             }
             BexExternalValue::Instance {

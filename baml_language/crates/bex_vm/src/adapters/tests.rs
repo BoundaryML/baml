@@ -161,10 +161,10 @@ fn list(vm: &mut BexVm, fixture: &Fixture) -> Value {
 }
 
 fn map(vm: &mut BexVm, fixture: &Fixture) -> Value {
-    let entries: IndexMap<bex_vm_types::BexStr, Value> = MAP_KEYS
+    let entries: IndexMap<String, Value> = MAP_KEYS
         .iter()
         .zip(fixture.elems)
-        .map(|(&key, &value)| (key.into(), lit(vm, value)))
+        .map(|(&key, &value)| (key.to_owned(), lit(vm, value)))
         .collect();
     Value::object(vm.alloc_map(RealizedTy::string(), fixture.ty.realized(), entries))
 }
@@ -809,11 +809,10 @@ fn specialized_map_adapters_take_the_slot_representation() {
 fn string_keys_cache_their_map_hash_in_the_cell() {
     const KEYS: usize = 10_000;
     let mut vm = test_vm(Vec::new());
-    let map = ptr(Value::object(vm.alloc_map(
-        RealizedTy::string(),
-        RealizedTy::int(),
-        IndexMap::new(),
-    )));
+    let map = ptr(Value::object(
+        vm.alloc_empty_map(RealizedTy::string(), RealizedTy::int())
+            .ptr(),
+    ));
     let keys: Vec<ObjPtr> = (0..KEYS)
         .map(|i| ptr(Value::object(vm.alloc_string(format!("key-{i}-ключ")))))
         .collect();

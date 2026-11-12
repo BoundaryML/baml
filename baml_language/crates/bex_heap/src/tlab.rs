@@ -430,25 +430,60 @@ impl Tlab {
         self.alloc_list_of(element_ty, &values).ptr()
     }
 
-    /// Allocate a string-keyed map whose keys/values have static types
-    /// `key_ty`/`value_ty`.
+    /// [`Self::alloc_string_map`] keyed by the compiler's string, the shape
+    /// the heap's own tests build fixtures in.
     pub fn alloc_map(
         &mut self,
         key_ty: RealizedTy,
         value_ty: RealizedTy,
         values: IndexMap<bex_str::BexStr, Value>,
     ) -> HeapPtr {
-        let entries: Vec<(u64, Value, Value)> = values
-            .into_iter()
-            .map(|(key, value)| {
-                let key = self.alloc_string(key);
-                // SAFETY: just allocated; the hash lands in the cell, so the
-                // first lookup of the key reads it.
-                let hash = unsafe { StrRef::new_unchecked(key) }.hash();
-                (hash, Value::object(key), value)
-            })
-            .collect();
-        self.alloc_map_hashed(key_ty, value_ty, entries).ptr()
+        self.alloc_string_map(key_ty, value_ty, values)
+    }
+
+    /// Allocate a string-keyed map whose keys/values have static types
+    /// `key_ty`/`value_ty`, each key copied into a flat cell. A repeated key
+    /// keeps its first position and takes its last value.
+    pub fn alloc_string_map<K: AsRef<str>>(
+        &mut self,
+        key_ty: RealizedTy,
+        value_ty: RealizedTy,
+        values: impl IntoIterator<Item = (K, Value)>,
+    ) -> HeapPtr {
+        let map = self.alloc_empty_map(key_ty, value_ty);
+        for (key, value) in values {
+            let key = self.alloc_string(key);
+            self.map_insert_str(map, key, value);
+        }
+        map.ptr()
+    }
+
+    /// Insert `key`, a string cell, into the string-keyed `map`: the value
+    /// of the entry holding the same text is replaced in place, else the
+    /// entry is appended. Hashes through the cell, so a key hashes once.
+    pub fn map_insert_str(&mut self, map: MapRef, key: HeapPtr, value: Value) {
+        // SAFETY: the caller holds a live string cell.
+        let text = unsafe { StrRef::new_unchecked(key) };
+        let hash = text.hash();
+        let guard = map.lock(Access::ThreadLocal);
+        let seen = guard.find(hash, |candidate| {
+            candidate
+                .as_object_ptr()
+                // SAFETY: the map's keys are live string cells.
+                .is_some_and(|ptr| unsafe { StrRef::new_unchecked(ptr) }.text_eq(text))
+        });
+        let result = match seen {
+            Some(pos) => guard.set_value(pos, SlotValue::Value(value)),
+            None => guard
+                .insert(
+                    self,
+                    hash,
+                    SlotValue::Value(Value::object(key)),
+                    SlotValue::Value(value),
+                )
+                .map(|_| ()),
+        };
+        result.unwrap_or_else(|error| panic!("a map entry does not fit its slots: {error}"));
     }
 
     /// Allocate an empty map of `key_ty` to `value_ty`.
@@ -819,13 +854,24 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_array(element_ty, values)
     }
 
-    fn alloc_map(
+    /// Allocate a string-keyed map (see [`Tlab::alloc_string_map`]).
+    fn alloc_map<K: AsRef<str>>(
         &mut self,
         key_ty: bex_vm_types::RealizedTy,
         value_ty: bex_vm_types::RealizedTy,
-        values: IndexMap<bex_str::BexStr, Value>,
+        values: impl IntoIterator<Item = (K, Value)>,
     ) -> HeapPtr {
-        self.tlab_mut().alloc_map(key_ty, value_ty, values)
+        self.tlab_mut().alloc_string_map(key_ty, value_ty, values)
+    }
+
+    /// Allocate an empty string-keyed map (see [`Tlab::alloc_empty_map`]).
+    fn alloc_empty_map(&mut self, key_ty: RealizedTy, value_ty: RealizedTy) -> MapRef {
+        self.tlab_mut().alloc_empty_map(key_ty, value_ty)
+    }
+
+    /// Insert a string cell key (see [`Tlab::map_insert_str`]).
+    fn map_insert_str(&mut self, map: MapRef, key: HeapPtr, value: Value) {
+        self.tlab_mut().map_insert_str(map, key, value);
     }
 
     fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {

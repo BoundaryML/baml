@@ -81,9 +81,9 @@ fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmR
                 .into_iter()
                 .map(|(k, v)| {
                     let v = convert_toml_value(vm, v)?;
-                    Ok((bex_str::BexStr::from(k), v))
+                    Ok((k, v))
                 })
-                .collect::<Result<IndexMap<bex_str::BexStr, Value>, VmRustFnError>>()?;
+                .collect::<Result<IndexMap<String, Value>, VmRustFnError>>()?;
             let map = Value::object(vm.alloc_map(RealizedTy::string(), item_ty(vm), map));
             let class = vm.lang_object(crate::lang_items::BAML_TOML_TABLE);
             Ok(Value::object(vm.alloc_instance(

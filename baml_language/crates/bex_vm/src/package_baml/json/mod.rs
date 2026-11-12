@@ -26,7 +26,7 @@ use baml_type::MediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::object_format::Access;
 use bex_vm_types::types::SharedKind;
-use bex_vm_types::{BexStr, HeapPtr, RealizedTy, TypeHead, Value, ValueKind, types::Object};
+use bex_vm_types::{HeapPtr, RealizedTy, TypeHead, Value, ValueKind, types::Object};
 use decode::{Decoder, Root};
 use encode::{Finish, WriteOptions};
 pub(super) use serde_bridge::{json_value_to_serde, serde_to_value};
@@ -311,15 +311,16 @@ fn fallback_tag_error(
     })
 }
 
-/// The entries of the string-keyed map at `ptr`, in order.
-fn string_entries(vm: &BexVm, ptr: HeapPtr) -> Vec<(BexStr, Value)> {
+/// The entries of the string-keyed map at `ptr`, in order: each key the
+/// string cell the map holds, shared, not copied.
+fn string_entries(vm: &BexVm, ptr: HeapPtr) -> Vec<(Value, Value)> {
     let Some(map) = vm.map_at(ptr) else {
         return Vec::new();
     };
     vm.map_snapshot(map, bex_vm_types::object_format::Access::Shared)
         .snapshot_entries()
         .into_iter()
-        .filter_map(|(key, value)| Some((vm.as_string(&key).ok()?.to_bex_str(), value)))
+        .filter(|(key, _)| vm.as_string(key).is_ok())
         .collect()
 }
 

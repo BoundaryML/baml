@@ -66,7 +66,7 @@ impl BamlClassType for PackageReflectImpl {
         alias: Option<&str>,
         description: Option<&str>,
         docstring: Option<&str>,
-        other: Option<&IndexMap<bex_str::BexStr, Value>>,
+        other: Option<&IndexMap<String, Value>>,
     ) -> Value {
         let other = super::type_kinds::string_map_rows(vm, other);
         super::type_kinds::alloc_with_meta(

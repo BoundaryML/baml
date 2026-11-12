@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{HeapPtr, RealizedTy, Value, types::Object};
-use indexmap::IndexMap;
 
 use super::{CYCLIC_JSON, STRING_MAP_REQUIRED, json_alias_ty, parse_decimal_bigint};
 use crate::BexVm;
@@ -26,10 +25,12 @@ where
     r
 }
 
+/// The entries of a string-keyed map, each key copied out: a `serde_json`
+/// object owns its keys.
 fn string_map_entries(
     vm: &BexVm,
     map: bex_vm_types::MapRef,
-) -> Result<Vec<(bex_vm_types::BexStr, Value)>, &'static str> {
+) -> Result<Vec<(String, Value)>, &'static str> {
     if !super::string_keyed(vm, map) {
         return Err(STRING_MAP_REQUIRED);
     }
@@ -38,7 +39,7 @@ fn string_map_entries(
         .into_iter()
         .map(
             |(key, value)| match key.as_object_ptr().and_then(|ptr| vm.str_at(ptr)) {
-                Some(key) => Ok((key.to_bex_str(), value)),
+                Some(key) => Ok((key.to_owned_string(), value)),
                 _ => Err(STRING_MAP_REQUIRED),
             },
         )
@@ -78,20 +79,18 @@ pub(in crate::package_baml) fn serde_to_value(vm: &mut BexVm, v: &serde_json::Va
             Value::object(vm.tlab.alloc_array(json_alias_ty(vm), items))
         }
         serde_json::Value::Object(map) => {
-            let entries: IndexMap<bex_vm_types::BexStr, Value> = map
+            // Untyped JSON object: string keys, `json` values. A
+            // `serde_json` object's keys are distinct, so each becomes a
+            // cell, hashed through it, and the map is built from them.
+            let entries: Vec<(u64, Value, Value)> = map
                 .iter()
                 .map(|(k, v)| {
-                    (
-                        bex_vm_types::BexStr::from(k.as_str()),
-                        serde_to_value(vm, v),
-                    )
+                    let key = vm.alloc_string(k.as_str());
+                    let hash = vm.expect_str(key).hash();
+                    (hash, Value::object(key), serde_to_value(vm, v))
                 })
                 .collect();
-            // Untyped JSON object: string keys, `json` values.
-            Value::object(
-                vm.tlab
-                    .alloc_map(RealizedTy::string(), json_alias_ty(vm), entries),
-            )
+            Value::object(vm.alloc_map_hashed(RealizedTy::string(), json_alias_ty(vm), entries))
         }
     }
 }

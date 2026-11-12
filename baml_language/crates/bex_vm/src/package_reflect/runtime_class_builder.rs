@@ -568,7 +568,7 @@ impl BamlClassClassPendingType for PackageReflectImpl {
         alias: Option<&str>,
         description: Option<&str>,
         docstring: Option<&str>,
-        other: Option<&IndexMap<bex_str::BexStr, Value>>,
+        other: Option<&IndexMap<String, Value>>,
     ) -> Value {
         let other = string_map_rows(vm, other);
         alloc_with_meta(

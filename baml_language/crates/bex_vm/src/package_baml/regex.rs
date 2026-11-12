@@ -23,13 +23,11 @@
 use std::sync::Arc;
 
 use bex_heap::TlabHolder;
-use bex_str::BexStr;
 use bex_vm_types::StrRef;
 use bex_vm_types::{
     RealizedTy,
     types::{Object, Value},
 };
-use indexmap::IndexMap;
 use sys_regex::{BuildError, Program, RawMatch, SearchAborted};
 
 use super::{BamlClassRegexRegex, BamlNamespaceRegex, PackageBamlImpl, copy};
@@ -125,12 +123,14 @@ fn match_value(
 
     // Every name in the pattern gets a key, participating or not: code reading
     // `named` should not have to distinguish "no such group" from "did not
-    // match this time".
-    let mut named: IndexMap<BexStr, Value> = IndexMap::new();
+    // match this time". Group names are distinct, so each is a cell, hashed
+    // through it, and the map is built from them.
+    let mut named: Vec<(u64, Value, Value)> = Vec::new();
     for (index, name) in names.iter().enumerate() {
         if let Some(name) = name {
             let group = groups.get(index).copied().unwrap_or(Value::NULL);
-            named.insert(BexStr::from(name.as_str()), group);
+            let key = vm.alloc_string(name.as_str());
+            named.push((vm.expect_str(key).hash(), Value::object(key), group));
         }
     }
 
@@ -146,7 +146,7 @@ fn match_value(
 
     let groups_value = Value::object(vm.alloc_array(RealizedTy::unknown(), groups));
     let named_value =
-        Value::object(vm.alloc_map(RealizedTy::string(), RealizedTy::unknown(), named));
+        Value::object(vm.alloc_map_hashed(RealizedTy::string(), RealizedTy::unknown(), named));
 
     copy::regex::Match {
         text,

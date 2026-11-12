@@ -2275,7 +2275,7 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool, str_ref: bool) -> String {
             }
         }
         BamlType::Map(key, _) if matches!(&**key, BamlType::String) && !is_mut => {
-            "&IndexMap<bex_str::BexStr, Value>".to_string()
+            "&IndexMap<String, Value>".to_string()
         }
         BamlType::Map(_, _) => {
             if is_mut {
@@ -2321,7 +2321,7 @@ fn baml_type_to_output(ty: &BamlType) -> String {
             BamlType::String => "Vec<String>".to_string(),
             _ => "Vec<Value>".to_string(),
         },
-        BamlType::Map(_, _) => "IndexMap<bex_str::BexStr, Value>".to_string(),
+        BamlType::Map(_, _) => "IndexMap<String, Value>".to_string(),
         BamlType::Optional(inner) => {
             let inner_str = baml_type_to_output(inner);
             format!("Option<{inner_str}>")

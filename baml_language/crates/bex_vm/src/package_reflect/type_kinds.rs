@@ -628,7 +628,7 @@ impl BamlClassClass for PackageReflectImpl {
     fn _new(
         vm: &mut BexVm,
         name: &str,
-        fields: &IndexMap<bex_str::BexStr, Value>,
+        fields: &IndexMap<String, Value>,
         implementations: &[Value],
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let rows = fields
@@ -649,7 +649,7 @@ impl BamlClassClass for PackageReflectImpl {
     fn _extends(
         vm: &mut BexVm,
         name: &str,
-        fields: &IndexMap<bex_str::BexStr, Value>,
+        fields: &IndexMap<String, Value>,
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let Some(interface_ty) = vm.current_call_type_args().first().cloned() else {
             unreachable!("extends<I> receives one runtime type argument")
@@ -773,7 +773,7 @@ impl BamlClassClass for PackageReflectImpl {
 
     fn instantiate(
         vm: &mut BexVm,
-        fields: &IndexMap<bex_str::BexStr, Value>,
+        fields: &IndexMap<String, Value>,
     ) -> Result<Value, crate::errors::VmRustFnError> {
         // The caller's `T`, as in `get_field`: a missing one is a
         // frame-seeding bug.
@@ -941,7 +941,7 @@ impl BamlClassEnum for PackageReflectImpl {
         alias: Option<&str>,
         description: Option<&str>,
         docstring: Option<&str>,
-        other: Option<&IndexMap<bex_str::BexStr, Value>>,
+        other: Option<&IndexMap<String, Value>>,
     ) -> Value {
         let other = other.map_or_else(IndexMap::new, |other| string_map(vm, other));
         let meta = alloc_meta(
@@ -1776,7 +1776,7 @@ fn opt_string(vm: &mut BexVm, value: Option<&str>) -> Value {
 /// Read a native `map<string, string>` argument into owned rows.
 pub(super) fn string_map_rows(
     vm: &BexVm,
-    other: Option<&IndexMap<bex_str::BexStr, Value>>,
+    other: Option<&IndexMap<String, Value>>,
 ) -> IndexMap<String, String> {
     other
         .into_iter()
@@ -1810,7 +1810,7 @@ pub(super) fn alloc_with_meta(
     let mut entries = IndexMap::with_capacity(other.len());
     for (key, value) in other {
         entries.insert(
-            bex_str::BexStr::from(key.as_str()),
+            key.clone(),
             Value::object(vm.alloc_string(value.as_str())),
         );
     }
@@ -1850,7 +1850,7 @@ fn alloc_meta(
     let mut entries = IndexMap::with_capacity(other.len());
     for (key, value) in other {
         entries.insert(
-            bex_str::BexStr::from(key.as_str()),
+            key.clone(),
             Value::object(vm.alloc_string(value.as_str())),
         );
     }
@@ -1874,7 +1874,7 @@ fn alloc_meta(
 
 fn string_map(
     vm: &mut BexVm,
-    values: &IndexMap<bex_str::BexStr, Value>,
+    values: &IndexMap<String, Value>,
 ) -> IndexMap<String, String> {
     values
         .iter()

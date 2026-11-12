@@ -908,12 +908,6 @@ impl PartialEq<&str> for StrRef<'_> {
     }
 }
 
-impl PartialEq<bex_str::BexStr> for StrRef<'_> {
-    fn eq(&self, other: &bex_str::BexStr) -> bool {
-        *self == *other.as_str()
-    }
-}
-
 impl AsRef<str> for StrRef<'_> {
     fn as_ref(&self) -> &str {
         self.as_str()

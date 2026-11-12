@@ -5,7 +5,7 @@ use std::{
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, ObjectType, RootHaver, RootVisitor, ValueKind,
+    HeapPtr, ObjectType, RootHaver, RootVisitor, StrRef, ValueKind,
     types::{Object, Value},
 };
 
@@ -986,7 +986,13 @@ fn deep_copy_value_recursive(
             let new_ptr = match object {
                 Object::Float(f) => vm.tlab.alloc(Object::Float(f)),
                 Object::Shared(SharedKind::Str) => {
-                    let text = vm.expect_str(ptr).to_owned_string();
+                    // One copy, from the flat holding the text into the new
+                    // cell.
+                    let flat = vm.tlab.flatten_string(ptr);
+                    // SAFETY: a live string the copy holds; nothing moves it
+                    // while the native runs, and allocating does not collect.
+                    #[allow(unsafe_code, reason = "a flat the native holds is live")]
+                    let text = unsafe { StrRef::new_unchecked(flat) }.as_str();
                     vm.alloc_string(text)
                 }
                 Object::String(s) => vm.tlab.alloc(Object::String(s)),
