@@ -150,12 +150,13 @@ export const sessionCookie = {
 
 /**
  * The signed-in team member viewing this request, or null. In development, BCS_DEV_VIEWER (a
- * GitHub login) stands in, since GitHub's login returns to the production site.
+ * GitHub login) stands in, since GitHub's login returns to the production site, with
+ * BCS_DEV_GITHUB_ID as its GitHub account ID so /api/token finds that user.
  */
 export async function currentViewer(): Promise<BcsViewer | null> {
   if (process.env.NODE_ENV !== "production" && process.env.BCS_DEV_VIEWER) {
     return {
-      githubId: "dev",
+      githubId: process.env.BCS_DEV_GITHUB_ID ?? "dev",
       login: process.env.BCS_DEV_VIEWER,
       via: "org",
       checkedAt: Math.floor(Date.now() / 1000),

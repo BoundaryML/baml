@@ -48,6 +48,7 @@ function LoginContent() {
         failed_to_fetch_user: "Failed to fetch GitHub user info.",
         oauth_failed: "GitHub authentication failed. Please try again.",
         access_denied: "GitHub access was denied.",
+        sign_in_not_recorded: "The server could not record your sign-in. Try again in a minute.",
       };
       setError(errorMessages[errorParam] || `Authentication error: ${errorParam}`);
       return;

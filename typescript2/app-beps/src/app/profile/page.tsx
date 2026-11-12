@@ -38,12 +38,6 @@ function isLegacyRole(role: string): boolean {
   return role === "admin" || role === "shepherd" || role === "member";
 }
 
-// Check if user can have API tokens (team members only)
-function canHaveApiToken(user: { role: string; isSpecialAccount?: boolean }): boolean {
-  const hasTeamPermissions = ["bdfl", "team", "admin", "shepherd"].includes(user.role);
-  return user.isSpecialAccount === true || hasTeamPermissions;
-}
-
 function RoleBadge({ role }: { role: UserRole }) {
   const roleConfig = {
     bdfl: { label: "BDFL", variant: "bdfl" as const, icon: Crown, description: "Full administrative access" },
@@ -88,6 +82,9 @@ export default function ProfilePage() {
       const response = await fetch("/api/token", { method, cache: "no-store" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok || typeof body.token !== "string") {
+        // A regenerate may have replaced the token even though no answer came back, so stop
+        // showing the old one; showing the token again (GET) reads whichever is current.
+        if (method === "POST") setApiToken(null);
         setTokenError(body.error ?? "Could not get a token. Try again.");
         return;
       }
@@ -95,6 +92,7 @@ export default function ProfilePage() {
       setShowToken(true);
     } catch (err) {
       console.error("Failed to get token:", err);
+      if (method === "POST") setApiToken(null);
       setTokenError("Could not reach the server. Try again.");
     } finally {
       setIsLoadingToken(false);
@@ -255,7 +253,9 @@ export default function ProfilePage() {
             </div>
 
             {/* API Token Section - Only for team members */}
-            {canHaveApiToken(user) && (
+            {/* API tokens: shown to everyone signed in, since only the server knows who is in the
+                BoundaryML organization; /api/token says so to anyone who is not. */}
+            {(
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">API Access</h3>
 
@@ -265,7 +265,7 @@ export default function ProfilePage() {
                     <div className="flex-1">
                       <div className="font-medium">API Token</div>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Use this token to authenticate API requests from agents or scripts.
+                        Use this token to authenticate API requests from agents or scripts. Tokens are for BoundaryML organization members.
                       </p>
                     </div>
                   </div>

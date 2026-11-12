@@ -162,7 +162,12 @@ export async function GET(request: NextRequest) {
         boundaryEmail,
       })
     );
-    if (!recorded.ok) console.warn("Could not record the GitHub sign-in:", recorded.failure.message);
+    if (!recorded.ok) {
+      // Without the server's record the account would stay unlinked from GitHub (and get no API
+      // token), so stop here rather than finish a half sign-in.
+      console.error("Could not record the GitHub sign-in:", recorded.failure.message);
+      return NextResponse.redirect(new URL("/login?error=sign_in_not_recorded", baseUrl));
+    }
 
     const userData = {
       githubId: githubUser.id.toString(),
