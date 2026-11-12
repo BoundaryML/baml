@@ -42,6 +42,17 @@ find "${SRC}" -path "${SRC}/baml_language/target" -prune -o -type d -name node_m
 	-exec rm -rf {} +
 rm -rf "${SRC}/.pnpm-store" "${SRC}/baml_language/target/pnpm-store"
 
+# Delete the final outputs at the top of each Cargo profile folder (target/debug,
+# target/<triple>/release, ...): binaries, libraries and their .d files. A job that does
+# not build an output must not find canary's copy. The SDK tests run target/debug/baml-cli
+# when it is there, so they tested canary's CLI, not the PR's. deps/, build/ and
+# .fingerprint/ stay, so a job that builds the output gets it back from deps/ at once.
+fingerprints=$(find "${SRC}/baml_language/target" -maxdepth 3 -type d -name .fingerprint)
+while IFS= read -r fingerprint; do
+	[[ -n ${fingerprint} ]] || continue
+	find "${fingerprint%/.fingerprint}" -maxdepth 1 \( -type f -o -type l \) ! -name '.*' -print -delete
+done <<<"${fingerprints}"
+
 df -h /
 du -sh "${SRC}/baml_language/target" "${MISE_DATA_DIR}"
 echo "sdk legs that failed:"
