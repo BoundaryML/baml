@@ -44,6 +44,8 @@ testset "toolchain status" {
                 `${args.join(" ")} did not report the selection as JSON`,
             );
         }
+        // A command with no output accepts the option and has nothing to apply it to.
+        fixture.manage(candidate, ["self", "update", "--output-format", "json", "--help"]);
         let text = fixture.manage(candidate, ["toolchain", "status", "--output-format", "text"]);
         root.harness.require(
             text.stdout.to_string().starts_with("active selector:"),
@@ -62,6 +64,7 @@ testset "toolchain status" {
                 ["toolchain", "status", "--json"],
                 ["toolchain", "use"],
                 ["toolchain", "bogus"],
+                ["-q", "toolchain", "list"],
             ]
         ) {
             let result = fixture.manage(candidate, args, success = false);

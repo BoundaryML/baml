@@ -304,7 +304,7 @@ export default function QuickstartPage() {
             <p className={`mt-4 border-l-2 border-rule pl-4 ${BODY}`}>
               The <Cmd>baml</Cmd> command is a version manager, so it rarely
               needs updating. Update it with your package manager (
-              <Cmd>brew upgrade baml</Cmd>) or with <Cmd>baml self-update</Cmd>.
+              <Cmd>brew upgrade baml</Cmd>) or with <Cmd>baml self update</Cmd>.
               If you change your project&rsquo;s toolchain version, run{' '}
               <Cmd>baml agent install</Cmd> again when the CLI asks. If
               something doesn&rsquo;t work, tell us on Discord.

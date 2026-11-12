@@ -199,8 +199,12 @@ struct InvocationPaths {
 
 fn invocation_paths(args: &[String]) -> Result<(Vec<String>, InvocationPaths)> {
     let cwd = env::current_dir()?;
-    let mut project = None;
+    // The path, and how deep in the command line it was given: before the
+    // command, after it, or after a wrapper command's subcommand. As a global
+    // option, the deepest one wins and two at one depth conflict.
+    let mut project: Option<(usize, PathBuf)> = None;
     let mut command = None;
+    let mut depth = 0;
     let mut management = Vec::new();
     let mut index = 0;
     while index < args.len() {
@@ -234,18 +238,30 @@ fn invocation_paths(args: &[String]) -> Result<(Vec<String>, InvocationPaths)> {
                     .clone()
             };
             anyhow::ensure!(!value.is_empty(), "{flag} requires a path");
-            anyhow::ensure!(project.is_none(), "{flag} may only be supplied once");
-            project = Some(PathBuf::from(value));
+            if project.as_ref().is_some_and(|(given, _)| *given == depth) {
+                return Err(clap::Error::raw(
+                    clap::error::ErrorKind::ArgumentConflict,
+                    format!("the argument '{flag} <PATH>' cannot be used multiple times\n"),
+                )
+                .into());
+            }
+            project = Some((depth, PathBuf::from(value)));
         } else {
-            if command.is_none() && !arg.starts_with('-') {
-                command = Some(arg.as_str());
+            if !arg.starts_with('-') {
+                let deepest = match command {
+                    None => 1,
+                    Some("toolchain" | "self") => 2,
+                    Some(_) => depth,
+                };
+                depth = deepest.max(depth);
+                command = command.or(Some(arg.as_str()));
             }
             management.push(arg.clone());
         }
         index += 1;
     }
     let directory = cwd;
-    let mut project = project.map_or_else(|| directory.clone(), |path| directory.join(path));
+    let mut project = project.map_or_else(|| directory.clone(), |(_, path)| directory.join(path));
     anyhow::ensure!(
         project.exists(),
         "project path does not exist: {}",
@@ -440,13 +456,13 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
         return toolchain(args, &paths).map(|()| 0);
     }
     if args.first().map(String::as_str) == Some("self") {
+        args = without_output_format(args);
         if args.get(1).is_none_or(|arg| is_help_arg(arg))
             || args.get(2).is_some_and(|arg| is_help_arg(arg))
         {
             print!("{SELF_UPDATE_HELP}");
             return Ok(0);
         }
-        args.retain(|arg| !arg.starts_with("--output-format="));
         if args.get(1).map(String::as_str) != Some("update") || args.len() > 2 {
             return Err(anyhow!(
                 "usage: baml self update\nunexpected arguments: {}",
@@ -459,33 +475,38 @@ fn run_invocation(mut args: Vec<String>) -> Result<i32> {
 }
 
 /// A wrapper command with the global options in front of it applied, or
-/// `None` when the invocation is not one: the command belongs to the
-/// toolchain's CLI, or something other than a global option precedes it.
-/// `--output-format` moves behind the command, where the command's own
-/// parser reads it; the wrapper has no use for the others.
+/// `None` when the command belongs to the toolchain's CLI. `--output-format`
+/// moves behind the command, where the command's own parser reads it; the
+/// wrapper has no use for the other options. Anything else in front of a
+/// wrapper command is not an option it has.
 fn wrapper_command(args: &[String]) -> Result<Option<Vec<String>>> {
     let mut output_format = None;
+    let mut unknown = None;
     let mut index = 0;
     while let Some(arg) = args.get(index).filter(|arg| arg.starts_with('-')) {
+        if is_help_arg(arg) || arg == "--" {
+            return Ok(None);
+        }
         let (name, inline) = match arg.split_once('=') {
             Some((name, value)) => (name, Some(value.to_string())),
             None => (arg.as_str(), None),
         };
-        if !CLI_VALUE_OPTIONS.contains(&name) {
-            return Ok(None);
-        }
-        if inline.is_none() {
-            index += 1;
-        }
-        let Some(value) = inline.or_else(|| args.get(index).cloned()) else {
-            return Err(clap::Error::raw(
-                clap::error::ErrorKind::InvalidValue,
-                format!("a value is required for '{name}' but none was supplied\n"),
-            )
-            .into());
-        };
-        if name == "--output-format" {
-            output_format = Some(value);
+        if CLI_VALUE_OPTIONS.contains(&name) {
+            if inline.is_none() {
+                index += 1;
+            }
+            let Some(value) = inline.or_else(|| args.get(index).cloned()) else {
+                return Err(clap::Error::raw(
+                    clap::error::ErrorKind::InvalidValue,
+                    format!("a value is required for '{name}' but none was supplied\n"),
+                )
+                .into());
+            };
+            if name == "--output-format" {
+                output_format = Some(value);
+            }
+        } else {
+            unknown.get_or_insert(arg);
         }
         index += 1;
     }
@@ -497,9 +518,31 @@ fn wrapper_command(args: &[String]) -> Result<Option<Vec<String>>> {
     {
         return Ok(None);
     }
+    if let Some(unknown) = unknown {
+        return Err(clap::Error::raw(
+            clap::error::ErrorKind::UnknownArgument,
+            format!("unexpected argument '{unknown}' found\n"),
+        )
+        .into());
+    }
     let mut command = args[index..].to_vec();
     command.extend(output_format.map(|format| format!("--output-format={format}")));
     Ok(Some(command))
+}
+
+/// `args` without `--output-format`, which `baml self update` accepts as a
+/// global option and has no output to apply it to.
+fn without_output_format(args: Vec<String>) -> Vec<String> {
+    let mut kept = Vec::new();
+    let mut tokens = args.into_iter();
+    while let Some(token) = tokens.next() {
+        if token == "--output-format" {
+            tokens.next();
+        } else if !token.starts_with("--output-format=") {
+            kept.push(token);
+        }
+    }
+    kept
 }
 
 fn print_version(paths: &InvocationPaths, flag: &str) -> Result<i32> {

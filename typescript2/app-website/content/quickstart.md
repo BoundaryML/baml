@@ -173,7 +173,7 @@ brew upgrade baml
 Or use the built-in updater:
 
 ```sh
-baml self-update
+baml self update
 ```
 
 After changing project toolchain versions, run `baml agent install` again if the CLI tells you the installed agent guidance needs refreshing.

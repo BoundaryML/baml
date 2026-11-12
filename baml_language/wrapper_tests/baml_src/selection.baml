@@ -296,6 +296,45 @@ testset "toolchain selection" {
         fixture.check(candidate, NEXT_VERSION, args = args);
     }
 
+    test "a project option given before and after the command takes the later one" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.project(BASE_VERSION);
+        fixture.write(
+            "outside/baml.toml",
+            `
+                [package]
+                name = "outside"
+                [toolchain]
+                version = "${NEXT_VERSION}"\n
+            `,
+        );
+        let args = ["--project-dir", ".", "check", "--project-dir", "../outside"];
+
+        fixture.behavior(NEXT_VERSION, `${NEXT_VERSION}\n`, args = args);
+        fixture.check(candidate, NEXT_VERSION, args = args);
+    }
+
+    test "a project option given twice in one place is a usage error" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.project(BASE_VERSION);
+        for (
+            let args in [
+                ["--project-dir", ".", "--project-dir", ".", "check"],
+                ["check", "--project-dir", ".", "--project-dir=."],
+                ["toolchain", "list", "--project-dir", ".", "--project-dir", "."],
+            ]
+        ) {
+            let result = fixture.run(candidate, args);
+            root.harness.require(
+                result.exit_code == 2 && result.stderr.to_string().includes("--project-dir"),
+                `${args.join(" ")} exited ${result.exit_code}: ${result.stderr.to_string()}`,
+            );
+        }
+        root.harness.require(fixture.calls().length() == 0, "a rejected invocation launched the CLI");
+    }
+
     test "inline project option selects another project" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
