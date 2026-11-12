@@ -53,7 +53,7 @@ pub use descriptor::{
 };
 pub use gc::{GcStats, Restamp};
 #[cfg(feature = "gc_profiling")]
-pub use gc_profile::GcHeapSnapshot;
+pub use gc_profile::{ConservativeScan, GcHeapSnapshot};
 pub use gc_profile::{GcCycleProfiler, GcProfile};
 pub use heap::{BexHeap, Finalizable, Generation, HeapStats, UnhandledSpawnError};
 pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};

@@ -825,6 +825,12 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn detached_child_completion_rearms_after_root_has_returned() {
+        if bex_vm::compiled_rt::gc_stress() {
+            // The test counts idle collections; under stress every safepoint
+            // poll of the running child collects too, so the count is not
+            // the idle collector's.
+            return;
+        }
         let engine = engine();
         engine
             .call_function(

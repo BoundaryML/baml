@@ -221,6 +221,8 @@ impl BexHeap {
         // Every pin before any copy decision: the conservative ranges first.
         // SAFETY: mutators are parked and the ranges are readable.
         roots.conservative_ranges(&mut |range| unsafe { marker.scan_range(range) });
+        #[cfg(feature = "gc_profiling")]
+        profile.set_conservative(marker.conservative());
         let mut precise = 0;
         let mut restamp = Restamp::new();
         roots.precise_roots(&mut |ptr| {
