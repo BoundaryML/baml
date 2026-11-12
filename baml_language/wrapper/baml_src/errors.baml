@@ -11,7 +11,7 @@ type WrapperFailure = baml.errors.Io
     | baml.json.SerializationError
     | baml.regex.Error
     | InvalidToolchainVersion
-    | root.clap.ParseError
+    | root.clap.Error
     | MissingConfigurationField
     | ProjectNotFound;
 

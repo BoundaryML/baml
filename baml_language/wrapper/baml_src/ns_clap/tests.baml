@@ -1,158 +1,230 @@
-testset "parser" {
-    let _demo_spec = () -> Command {
-        Command.new("tool")
-            .about("Demo tool")
-            .version("1.2.3")
-            .subcommand(
-                Command.new("check")
-                    .about("Run a check")
-                    .arg(
-                        Arg.opt("backend")
-                            .with_value_name("URL")
-                            .help("Backend origin")
-                            .conflicts_with("base"),
-                    )
-                    .arg(Arg.opt("base").with_value_name("REF").help("Comparison base"))
-                    .arg(Arg.flag("force").with_short("f").help("Force it"))
-                    .arg(Arg.pos("file").multiple()),
-            )
-            .subcommand(Command.new("lint").about("Lint only"))
+// What these tests pin down is this library's own contract. Agreement
+// with clap itself is checked by the conformance test in
+// `crates/baml_cli/tests/clap_conformance_e2e.rs`, which runs the same
+// command lines through both.
+
+// A tool with nested subcommands, global args and every kind of arg.
+function _demo() -> Command {
+    Command.new("tool")
+        .about("Demo tool")
+        .version("1.2.3")
+        .arg(Arg.new("dir").long("dir").value_name("PATH").global(true))
+        .arg(Arg.new("verbose").long("verbose").short("v").action(ArgAction.SetTrue).global(true))
+        .arg(Arg.new("mode").long("mode").value_parser(["fast", "slow"]).default_value("fast"))
+        .subcommand(
+            Command.new("check")
+                .about("Run a check")
+                .arg(Arg.new("backend").long("backend").value_name("URL").conflicts_with("base"))
+                .arg(Arg.new("base").long("base").value_name("REF"))
+                .arg(Arg.new("force").long("force").short("f").action(ArgAction.SetTrue))
+                .arg(Arg.new("limit").long("limit").short("l"))
+                .arg(Arg.new("file").action(ArgAction.Append)),
+        )
+        .subcommand(
+            Command.new("tools")
+                .about("Manage tools")
+                .subcommand(Command.new("list").about("List tools"))
+                .subcommand(Command.new("add").arg(Arg.new("name").required(true))),
+        )
+}
+
+// What a command line that is rejected, or asks for help, raises.
+function _error(cmd: Command, args: string[]) -> Error {
+    let parsed = cmd.try_get_matches_from(args) catch (error) {
+        Error => error,
     };
-
-    let _expect_help = (args: string[]) -> string {
-        let result = _demo_spec().parse(args) catch (e) {
-            DisplayHelp => e.text,
-        };
-        match (result) {
-            let text: string => text,
-            _ => "NO_HELP",
-        }
-    };
-
-    let _expect_version = (args: string[]) -> string {
-        let result = _demo_spec().parse(args) catch (e) {
-            DisplayVersion => e.text,
-        };
-        match (result) {
-            let text: string => text,
-            _ => "NO_VERSION",
-        }
-    };
-
-    test "parses values equals shorts and positionals" {
-        let m = _demo_spec().parse(["check", "--backend=https://x.example", "-f", "a.txt", "b.txt"]);
-        assert.equal(m.subcommand(), "check");
-        let sub = m.sub() ?? Matches.empty();
-        assert.equal(sub.get("backend"), "https://x.example");
-        assert.is_true(sub.is_present("force"));
-        assert.equal(sub.get_many("file").join(","), "a.txt,b.txt")
-    }
-
-    test "conflicts duplicates and unknown args are typed errors" {
-        let conflict = _demo_spec().parse(["check", "--backend", "u", "--base", "main"]) catch (e) {
-            ConflictError => `${e.argument}/${e.other}`,
-        };
-        assert.equal(conflict, "backend/base");
-        let dup = _demo_spec().parse(["check", "--base", "a", "--base", "b"]) catch (e) {
-            DuplicateArgumentError => e.argument,
-        };
-        assert.equal(dup, "base");
-        let unknown = _demo_spec().parse(["check", "--nope"]) catch (e) {
-            UnknownArgumentError => e.argument,
-        };
-        assert.equal(unknown, "--nope");
-        let missing = _demo_spec().parse(["check", "--backend"]) catch (e) {
-            MissingValueError => e.message(),
-        };
-        assert.equal(missing, "a value is required for '--backend <URL>' but none was supplied")
-    }
-
-    test "parse_from skips the binary and entry function" {
-        let m = _demo_spec().parse_from(["/bin/tool", "main", "check", "-f"]);
-        assert.equal(m.subcommand(), "check");
-        assert.is_true((m.sub() ?? Matches.empty()).is_present("force"))
-    }
-
-    test "double dash stops flag parsing" {
-        let m = _demo_spec().parse(["check", "--", "--force"]);
-        let sub = m.sub() ?? Matches.empty();
-        assert.equal(sub.get_many("file").join(","), "--force");
-        assert.equal(sub.is_present("force"), false)
-    }
-
-    test "defaults fill values without counting as present" {
-        let spec = Command.new("tool").arg(Arg.opt("mode").default("fast").conflicts_with("slow")).arg(
-            Arg.flag("slow"),
-        );
-        let m = spec.parse(["--slow"]);
-        assert.equal(m.get("mode"), "fast");
-        assert.equal(m.is_present("mode"), false);
-        assert.equal(m.value_source("mode"), ValueSource.Default);
-        assert.equal(spec.parse(["--mode", "eco"]).value_source("mode"), ValueSource.CommandLine)
-    }
-
-    test "help and version are builtin args that can be replaced" {
-        let spec = Command.new("tool").version("9.0").arg(
-            Arg.flag("version").with_short("V").help("Show version").with_action(ArgAction.Version),
-        );
-        let version = spec.parse(["-V"]) catch (e) {
-            DisplayVersion => e.text,
-        };
-        assert.equal(version, "tool 9.0");
-        let help = spec.parse(["-h"]) catch (e) {
-            DisplayHelp => e.text,
-        };
-        assert.equal(
-            help,
-            "Usage: tool [OPTIONS]\n\nOptions:\n  -V, --version  Show version\n  -h, --help     Print help",
-        );
-        let disabled = Command.new("tool").auto_help(false).parse(["--help"]) catch (e) {
-            UnknownArgumentError => e.argument,
-        };
-        assert.equal(disabled, "--help")
-    }
-
-    test "help override replaces generated help" {
-        let spec = Command.new("tool").help_text("CUSTOM HELP");
-        let result = spec.parse(["--help"]) catch (e) {
-            DisplayHelp => e.text,
-        };
-        let text = match (result) {
-            let s: string => s,
-            _ => "NO_HELP",
-        };
-        assert.equal(text, "CUSTOM HELP")
-    }
-
-    test "help and version are display requests" {
-        let help = _expect_help(["check", "--help"]);
-        assert.is_true(help.includes("Usage: tool check"));
-        assert.is_true(help.includes("--backend <URL>"));
-        assert.equal(_expect_version(["--version"]), "tool 1.2.3");
-        assert.is_true(_expect_help(["help", "check"]).includes("Run a check"))
+    match (parsed) {
+        let error: Error => error,
+        _ => {
+            throw baml.errors.InvalidArgument { message: `expected an error from ${args.join(" ")}` }
+        },
     }
 }
 
-testset "globals and external subcommands" {
-    // A launcher: it owns `tools`, and hands every other command on.
-    let _launcher = () -> Command {
-        Command.new("run")
-            .allow_external_subcommands()
-            .arg(Arg.opt("dir").with_value_name("PATH").global())
-            .arg(Arg.opt("format").with_short("F").global().hidden())
-            .arg(Arg.flag("version").with_short("V"))
-            .subcommand(
-                Command.new("tools")
-                    .about("Manage tools")
-                    .subcommand(Command.new("list").about("List tools").arg(Arg.flag("all")))
-                    .subcommand(Command.new("add").arg(Arg.pos("name").required())),
-            )
-    };
+function _sub(matches: ArgMatches) -> ArgMatches {
+    matches.sub?.matches ?? ArgMatches.new()
+}
 
-    let _sub = (matches: Matches) -> Matches {
-        matches.sub() ?? Matches.empty()
-    };
+testset "parsing" {
+    test "values, attached values, short clusters and positionals" {
+        let m = _demo().try_get_matches_from(
+            ["check", "--backend=https://x.example", "-fl5", "a.txt", "b.txt"],
+        );
+        assert.equal(m.subcommand_name(), "check");
+        let check = _sub(m);
+        assert.equal(check.get_one("backend"), "https://x.example");
+        assert.is_true(check.get_flag("force"));
+        assert.equal(check.get_one("limit"), "5");
+        assert.equal(check.get_many("file"), ["a.txt", "b.txt"]);
+        assert.equal(_sub(_demo().try_get_matches_from(["check", "-l=7"])).get_one("limit"), "7");
+        assert.equal(_sub(_demo().try_get_matches_from(["check", "-l", "9"])).get_one("limit"), "9")
+    }
 
+    test "defaults fill values without counting as given" {
+        let m = _demo().try_get_matches_from([]);
+        assert.equal(m.get_one("mode"), "fast");
+        assert.equal(m.value_source("mode"), ValueSource.DefaultValue);
+        assert.equal(m.get_flag("verbose"), false);
+        let given = _demo().try_get_matches_from(["--mode", "slow"]);
+        assert.equal(given.value_source("mode"), ValueSource.CommandLine)
+    }
+
+    test "double dash makes everything after it a value" {
+        let check = _sub(_demo().try_get_matches_from(["check", "--", "--force", "-l"]));
+        assert.equal(check.get_many("file"), ["--force", "-l"]);
+        assert.equal(check.get_flag("force"), false)
+    }
+
+    test "a lone dash is a value" {
+        let check = _sub(_demo().try_get_matches_from(["check", "-"]));
+        assert.equal(check.get_many("file"), ["-"])
+    }
+
+    test "a positional that takes several values takes subcommand names too" {
+        let check = _sub(_demo().try_get_matches_from(["check", "a.txt", "tools"]));
+        assert.equal(check.get_many("file"), ["a.txt", "tools"])
+    }
+
+    test "a value may start with a hyphen only where allowed" {
+        let strict = _error(_demo(), ["check", "--limit", "-5"]);
+        assert.equal(strict.kind, ErrorKind.UnknownArgument);
+        let lenient = Command.new("tool").arg(Arg.new("limit").long("limit").allow_hyphen_values(true));
+        assert.equal(lenient.try_get_matches_from(["--limit", "-5"]).get_one("limit"), "-5")
+    }
+
+    test "a long argv is read in place" {
+        let files = baml.Array.generate(20000, (i: int) -> string {
+            `file${i}.txt`
+        });
+        let check = _sub(_demo().try_get_matches_from(["check"].concat(files)));
+        assert.equal(check.get_many("file").length(), 20000)
+    }
+}
+
+testset "errors" {
+    test "each kind of mistake has its own kind and clap's wording" {
+        let cases: map<string, string[]> = {
+            "unexpected argument '--nope' found": ["check", "--nope"],
+            "unexpected argument '-z' found": ["check", "-fz"],
+            "unrecognized subcommand 'nope'": ["tools", "nope"],
+            "a value is required for '--base <REF>' but none was supplied": ["check", "--base"],
+            "invalid value 'bad' for '--mode <mode>'\n  [possible values: fast, slow]": ["--mode", "bad"],
+            "unexpected value '1' for '--force' found; no more were expected": ["check", "--force=1"],
+            "the argument '--base <REF>' cannot be used multiple times": ["check", "--base", "a", "--base", "b"],
+            "the argument '--backend <URL>' cannot be used with '--base <REF>'": ["check", "--backend", "u", "--base", "b"],
+            "the following required arguments were not provided:\n  <name>": ["tools", "add"],
+        };
+        for (let problem in cases.keys()) {
+            let error = _error(_demo(), cases[problem]);
+            assert.equal(error.message.split("\n\n")[0], problem);
+            assert.equal(error.exit_code(), 2);
+            assert.is_true(error.use_stderr());
+        }
+        assert.equal(_error(_demo(), ["check", "--nope"]).kind, ErrorKind.UnknownArgument);
+        assert.equal(_error(_demo(), ["tools", "nope"]).kind, ErrorKind.InvalidSubcommand);
+        assert.equal(_error(_demo(), ["check", "--base"]).kind, ErrorKind.InvalidValue);
+        assert.equal(_error(_demo(), ["check", "--force=1"]).kind, ErrorKind.TooManyValues);
+        assert.equal(
+            _error(_demo(), ["check", "--base", "a", "--base", "b"]).kind,
+            ErrorKind.ArgumentConflict,
+        );
+        assert.equal(_error(_demo(), ["tools", "add"]).kind, ErrorKind.MissingRequiredArgument)
+    }
+
+    test "an error carries tips, the usage of the command that raised it, and its path" {
+        let error = _error(_demo(), ["tools", "ad"]);
+        assert.equal(
+            error.message,
+            "unrecognized subcommand 'ad'\n\n  tip: a similar subcommand exists: 'add'\n\nUsage: tool tools [OPTIONS] [COMMAND]\n\nFor more information, try '--help'.",
+        );
+        assert.equal(error.command_path, ["tools"]);
+        assert.equal(_error(_demo(), ["tools", "add"]).command_path, ["tools", "add"]);
+        let flag = _error(_demo(), ["check", "--bakend", "u"]);
+        assert.is_true(flag.message.includes("tip: a similar argument exists: '--backend'"));
+        let elsewhere = _error(_demo(), ["--backend", "u", "check"]);
+        assert.is_true(elsewhere.message.includes("tip: 'check --backend' exists"))
+    }
+
+    test "the unknown argument is reported even when a value is still missing" {
+        let error = _error(_demo(), ["check", "--base", "--nope"]);
+        assert.equal(error.kind, ErrorKind.UnknownArgument)
+    }
+
+    test "a required subcommand that is missing is its own kind" {
+        let cmd = Command.new("tool").subcommand_required(true).subcommand(Command.new("run"));
+        let error = _error(cmd, []);
+        assert.equal(error.kind, ErrorKind.MissingSubcommand);
+        assert.equal(
+            error.message.split("\n\n")[0],
+            "'tool' requires a subcommand but one was not provided\n  [subcommands: run, help]",
+        );
+        assert.is_true(error.message.includes("Usage: tool <COMMAND>"))
+    }
+
+    test "requires makes another arg required" {
+        let cmd = Command.new("tool").arg(Arg.new("out").long("out").requires("format")).arg(
+            Arg.new("format").long("format"),
+        );
+        assert.equal(_error(cmd, ["--out", "x"]).kind, ErrorKind.MissingRequiredArgument);
+        assert.equal(
+            cmd.try_get_matches_from(["--out", "x", "--format", "json"]).get_one("format"),
+            "json",
+        )
+    }
+}
+
+testset "help and version" {
+    test "help and version are raised as errors that exit zero" {
+        let help = _error(_demo(), ["check", "--help"]);
+        assert.equal(help.kind, ErrorKind.DisplayHelp);
+        assert.equal(help.exit_code(), 0);
+        assert.equal(help.use_stderr(), false);
+        assert.equal(help.command_path, ["check"]);
+        let version = _error(_demo(), ["--version"]);
+        assert.equal(version.kind, ErrorKind.DisplayVersion);
+        assert.equal(version.message, "tool 1.2.3");
+        assert.equal(_error(_demo(), ["-V"]).message, "tool 1.2.3")
+    }
+
+    test "generated help is laid out like clap's" {
+        assert.equal(
+            _error(_demo(), ["-h"]).message,
+            "Demo tool\n\nUsage: tool [OPTIONS] [COMMAND]\n\nCommands:\n  check  Run a check\n  tools  Manage tools\n  help   Print this message or the help of the given subcommand(s)\n\nOptions:\n      --dir <PATH>   \n  -v, --verbose      \n      --mode <mode>  [default: fast] [possible values: fast, slow]\n  -h, --help         Print help\n  -V, --version      Print version"
+                .split("\n")
+                .map((line: string) -> string {
+                    line.trim_end()
+                })
+                .join("\n"),
+        );
+        assert.equal(
+            _error(_demo(), ["check", "-h"]).message,
+            "Run a check\n\nUsage: tool check [OPTIONS] [file]...\n\nArguments:\n  [file]...\n\nOptions:\n      --backend <URL>\n      --dir <PATH>\n      --base <REF>\n  -v, --verbose\n  -f, --force\n  -l, --limit <limit>\n  -h, --help           Print help",
+        )
+    }
+
+    test "the help subcommand prints help for the path that follows it" {
+        let nested = _error(_demo(), ["help", "tools", "add"]);
+        assert.equal(nested.kind, ErrorKind.DisplayHelp);
+        assert.is_true(nested.message.includes("Usage: tool tools add [OPTIONS] <name>"));
+        assert.equal(nested.command_path, ["tools", "add"]);
+        assert.equal(_error(_demo(), ["tools", "help", "add"]).message, nested.message);
+        assert.equal(_error(_demo(), ["help", "nope"]).kind, ErrorKind.InvalidSubcommand)
+    }
+
+    test "help can be overridden, extended and switched off" {
+        let custom = Command.new("tool").override_help("CUSTOM HELP");
+        assert.equal(_error(custom, ["--help"]).message, "CUSTOM HELP");
+        let extended = Command.new("tool").after_help("See the manual.");
+        assert.is_true(_error(extended, ["-h"]).message.ends_with("\n\nSee the manual."));
+        let disabled = Command.new("tool").disable_help_flag(true);
+        assert.equal(_error(disabled, ["--help"]).kind, ErrorKind.UnknownArgument);
+        let hidden = Command.new("tool").arg(Arg.new("secret").long("secret").hide(true));
+        assert.equal(_error(hidden, ["-h"]).message.includes("--secret"), false);
+        assert.equal(hidden.try_get_matches_from(["--secret", "x"]).get_one("secret"), "x")
+    }
+}
+
+testset "global args" {
     test "a global is accepted at every level and reads the same from each" {
         for (
             let args in [
@@ -161,138 +233,137 @@ testset "globals and external subcommands" {
                 ["tools", "list", "--dir=x"],
             ]
         ) {
-            let m = _launcher().parse(args);
-            assert.equal(m.get("dir"), "x");
-            assert.equal(_sub(m).get("dir"), "x");
-            assert.equal(_sub(_sub(m)).get("dir"), "x");
-            assert.is_true(_sub(_sub(m)).is_present("dir"));
+            let m = _demo().try_get_matches_from(args);
+            assert.equal(m.get_one("dir"), "x");
+            assert.equal(_sub(m).get_one("dir"), "x");
+            assert.equal(_sub(_sub(m)).get_one("dir"), "x");
         }
-        assert.equal(_launcher().parse(["tools", "list"]).get("dir"), null)
+        assert.equal(_demo().try_get_matches_from(["tools", "list"]).get_one("dir"), null)
     }
 
-    test "a global given at two levels is a duplicate" {
-        let duplicate = _launcher().parse(["--dir", "a", "tools", "list", "--dir", "b"]) catch (e) {
-            DuplicateArgumentError => e.argument,
-        };
-        assert.equal(duplicate, "dir")
+    test "given at two levels, the deeper value wins" {
+        let m = _demo().try_get_matches_from(["--dir", "outer", "tools", "--dir", "inner", "list"]);
+        assert.equal(m.get_one("dir"), "inner");
+        assert.equal(_sub(_sub(m)).get_one("dir"), "inner")
     }
 
-    test "a non-global option stays with its own command" {
-        let unknown = _launcher().parse(["tools", "--all", "list"]) catch (e) {
-            UnknownArgumentError => e.argument,
-        };
-        assert.equal(unknown, "--all")
+    test "given twice at one level is a conflict" {
+        let error = _error(_demo(), ["tools", "--dir", "a", "--dir", "b"]);
+        assert.equal(error.kind, ErrorKind.ArgumentConflict)
     }
 
-    test "an undeclared word is an external subcommand with verbatim tokens" {
-        let m = _launcher().parse(["build", "--release", "-j4", "target", "--", "--dir", "y"]);
-        assert.equal(m.subcommand(), "build");
-        assert.is_true(m.is_external());
-        assert.equal(_sub(m).external_args, ["--release", "-j4", "target", "--", "--dir", "y"]);
-        assert.equal(m.get("dir"), null)
+    test "an arg that is not global stays with its command" {
+        assert.equal(_error(_demo(), ["check", "--mode", "slow"]).kind, ErrorKind.UnknownArgument)
+    }
+}
+
+testset "external subcommands" {
+    let _host = () -> Command {
+        Command.new("host")
+            .allow_external_subcommands(true)
+            .arg(Arg.new("dir").long("dir").global(true))
+            .subcommand(Command.new("own"))
+    };
+
+    test "an undeclared word is a subcommand whose arguments are kept verbatim" {
+        let m = _host().try_get_matches_from(["build", "--release", "-j4", "--dir", "x", "--", "y"]);
+        assert.equal(m.subcommand_name(), "build");
+        assert.is_true(_sub(m).is_external());
+        assert.equal(_sub(m).external_args(), ["--release", "-j4", "--dir", "x", "--", "y"]);
+        // Plain clap: the arguments are not read, so no global is found in them.
+        assert.equal(m.get_one("dir"), null);
+        assert.equal(_sub(_host().try_get_matches_from(["own"])).is_external(), false)
     }
 
-    test "globals are read out of an external subcommand's tokens" {
-        let after = _launcher().parse(["build", "--release", "--dir", "x", "-Fjson"]);
-        assert.equal(after.get("dir"), "x");
-        assert.equal(after.get("format"), "json");
-        assert.equal(_sub(after).external_args, ["--release", "--dir", "x", "-Fjson"]);
-
-        let missing = _launcher().parse(["build", "--dir"]) catch (e) {
-            MissingValueError => e.argument,
-        };
-        assert.equal(missing, "dir");
-        let duplicate = _launcher().parse(["--dir", "a", "build", "--dir=b"]) catch (e) {
-            DuplicateArgumentError => e.argument,
-        };
-        assert.equal(duplicate, "dir")
+    test "an option the command lacks is an error even in front of an external subcommand" {
+        assert.equal(_error(_host(), ["-q", "build"]).kind, ErrorKind.UnknownArgument)
     }
 
-    test "undeclared options are tolerated only in front of an external subcommand" {
-        let m = _launcher().parse(["-q", "--color", "build"]);
-        assert.equal(m.subcommand(), "build");
-        assert.equal(m.unknown_options, ["-q", "--color"]);
-
-        let declared = _launcher().parse(["-q", "tools", "list"]) catch (e) {
-            UnknownArgumentError => e.argument,
-        };
-        assert.equal(declared, "-q");
-        let none = _launcher().parse(["--color"]) catch (e) {
-            UnknownArgumentError => e.argument,
-        };
-        assert.equal(none, "--color")
+    test "after a double dash, a word is still an external subcommand" {
+        let m = _host().try_get_matches_from(["--", "own", "x"]);
+        assert.equal(m.subcommand_name(), "own");
+        assert.is_true(_sub(m).is_external());
+        assert.equal(_sub(m).external_args(), ["x"])
     }
+}
 
-    test "help and its own flags are not read out of an external subcommand" {
-        let m = _launcher().parse(["build", "--help", "-V"]);
-        assert.equal(_sub(m).external_args, ["--help", "-V"]);
-        assert.equal(m.is_present("version"), false)
-    }
+// The one setting that goes beyond clap.
+testset "external subcommand passthrough" {
+    let _launcher = () -> Command {
+        Command.new("run")
+            .external_subcommand_passthrough(true)
+            .arg(Arg.new("dir").long("dir").global(true))
+            .arg(Arg.new("format").long("format").short("F").global(true))
+            .arg(Arg.new("local").long("local"))
+            .subcommand(Command.new("tools").subcommand(Command.new("list")))
+    };
 
-    test "help for an external subcommand is handed on with it" {
-        let m = _launcher().parse(["help", "build", "now"]);
-        assert.equal(m.subcommand(), "help");
-        assert.is_true(m.is_external());
-        assert.equal(_sub(m).external_args, ["build", "now"]);
-        let own = _launcher().parse(["help", "tools", "add"]) catch (e) {
-            DisplayHelp => e.text,
-        };
-        assert.is_true(own.to_string().includes("Usage: run tools add [OPTIONS] <NAME>"))
-    }
-
-    test "an escaped word no positional takes is an external subcommand" {
-        let m = _launcher().parse(["--", "tools", "--dir", "x"]);
-        assert.equal(m.subcommand(), "tools");
-        assert.is_true(m.is_external());
-        assert.equal(_sub(m).external_args, ["--dir", "x"]);
-        assert.equal(m.get("dir"), null)
-    }
-
-    test "after_help follows the generated help and errors render their detail" {
-        let spec = Command.new("tool").arg(Arg.flag("x")).after_help("See the manual.");
-        assert.equal(
-            spec.format_help("tool"),
-            "Usage: tool [OPTIONS]\n\nOptions:\n  --x\n  -h, --help  Print help\n\nSee the manual.",
+    test "global args are read out of the external subcommand's arguments" {
+        let m = _launcher().try_get_matches_from(
+            ["build", "--release", "--dir", "x", "-Fjson", "--local", "y"],
         );
-        let unknown = spec.parse(["--nope"]) catch (e) {
-            ParseError => e.to_string(),
-        };
-        assert.equal(unknown, "unexpected argument '--nope' found")
+        assert.equal(m.get_one("dir"), "x");
+        assert.equal(m.get_one("format"), "json");
+        // Only globals: `--local` is the launcher's own, so here it is the external program's.
+        assert.equal(m.get_one("local"), null);
+        assert.equal(_sub(m).external_args(), ["--release", "--dir", "x", "-Fjson", "--local", "y"])
     }
 
-    test "command_path names the subcommands without validating" {
-        let spec = _launcher();
-        assert.equal(
-            spec.command_path(["--dir", "x", "tools", "list", "--bogus"]),
-            ["tools", "list"],
-        );
-        assert.equal(spec.command_path(["tools", "--dir"]), ["tools"]);
-        assert.equal(spec.command_path(["tools", "help", "add"]), ["tools", "help", "add"]);
-        assert.equal(spec.command_path(["help", "tools", "list"]), ["help", "tools", "list"]);
-        assert.equal(spec.command_path(["help", "build", "x"]), ["help", "build"]);
-        assert.equal(spec.command_path(["--help", "tools", "list"]), []);
-        assert.equal(spec.command_path(["tools", "-h", "list"]), ["tools"]);
-        assert.equal(spec.command_path(["-q", "--dir=x", "build", "tools", "list"]), ["build"]);
-        assert.equal(spec.command_path(["--", "tools"]), []);
-        assert.equal(spec.command_path([]), [])
+    test "the value among the external arguments wins over one given before the subcommand" {
+        let m = _launcher().try_get_matches_from(["--dir", "outer", "build", "--dir=inner"]);
+        assert.equal(m.get_one("dir"), "inner")
     }
 
-    test "generated help lists visible globals and nested help walks the path" {
-        let help = _launcher().parse(["tools", "list", "--help"]) catch (e) {
-            DisplayHelp => e.text,
-        };
-        assert.equal(
-            help,
-            "List tools\n\nUsage: run tools list [OPTIONS]\n\nOptions:\n  --all\n  -h, --help    Print help\n  --dir <PATH>",
-        );
-        assert.equal(_launcher().help_for(["tools", "list"], "run"), help);
-        let nested = _launcher().parse(["tools", "help", "list"]) catch (e) {
-            DisplayHelp => e.text,
-        };
-        assert.equal(nested, help);
-        let unknown = _launcher().help_for(["tools", "nope"], "run") catch (e) {
-            UnknownCommandError => e.argument,
-        };
-        assert.equal(unknown, "nope")
+    test "a double dash ends the reading, and nothing is read after a leading one" {
+        let stopped = _launcher().try_get_matches_from(["build", "--", "--dir", "x"]);
+        assert.equal(stopped.get_one("dir"), null);
+        let escaped = _launcher().try_get_matches_from(["--", "build", "--dir", "x"]);
+        assert.equal(escaped.subcommand_name(), "build");
+        assert.equal(escaped.get_one("dir"), null)
+    }
+
+    test "a bad global among the external arguments is an error named after the subcommand" {
+        let missing = _error(_launcher(), ["build", "--dir"]);
+        assert.equal(missing.kind, ErrorKind.InvalidValue);
+        assert.equal(missing.command_path, ["build"]);
+        let twice = _error(_launcher(), ["build", "--dir", "a", "--dir", "b"]);
+        assert.equal(twice.kind, ErrorKind.ArgumentConflict)
+    }
+
+    test "options the launcher lacks are accepted only in front of an external subcommand" {
+        let m = _launcher().try_get_matches_from(["-q", "--color", "build"]);
+        assert.equal(m.subcommand_name(), "build");
+        assert.equal(_error(_launcher(), ["-q", "tools", "list"]).kind, ErrorKind.UnknownArgument);
+        assert.equal(_error(_launcher(), ["--color"]).kind, ErrorKind.UnknownArgument)
+    }
+
+    test "the external program's own help flag is left for it" {
+        let m = _launcher().try_get_matches_from(["build", "--help"]);
+        assert.equal(_sub(m).external_args(), ["--help"])
+    }
+
+    test "a long external argv is read in place" {
+        let files = baml.Array.generate(20000, (i: int) -> string {
+            `file${i}.txt`
+        });
+        let m = _launcher().try_get_matches_from(["build"].concat(files).concat(["--dir", "x"]));
+        assert.equal(_sub(m).external_args().length(), 20002);
+        assert.equal(m.get_one("dir"), "x")
+    }
+}
+
+testset "suggestions" {
+    test "jaro similarity matches the reference values" {
+        assert.equal(Suggestions.jaro("", ""), 1.0);
+        assert.equal(Suggestions.jaro("a", ""), 0.0);
+        assert.equal(Suggestions.jaro("same", "same"), 1.0);
+        assert.approx_equal(Suggestions.jaro("martha", "marhta"), 0.9444, 0.0001);
+        assert.approx_equal(Suggestions.jaro("dixon", "dicksonx"), 0.7667, 0.0001);
+        assert.approx_equal(Suggestions.jaro("dri", "dir"), 0.5556, 0.0001)
+    }
+
+    test "only similar candidates are suggested, most similar last" {
+        assert.equal(Suggestions.did_you_mean("ad", ["add", "list", "added"]), ["added", "add"]);
+        assert.equal(Suggestions.did_you_mean("zzz", ["add", "list"]), [])
     }
 }

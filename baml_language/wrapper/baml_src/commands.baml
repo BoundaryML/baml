@@ -108,27 +108,30 @@ class UninstallCommand {
 }
 
 // The command a parsed `baml toolchain <name>` asks for.
-function management_command(name: string, matches: root.clap.Matches) -> ManagementCommand {
+function management_command(name: string, matches: root.clap.ArgMatches) -> ManagementCommand {
     match (name) {
         "use" => {
             UseCommand {
-                selector: matches.get_or("selector", ""),
-                global: matches.is_present("global"),
+                selector: matches.get_one("selector") ?? "",
+                global: matches.get_flag("global"),
             }
         },
         "install" => {
-            InstallCommand { selector: matches.get("selector"), force: matches.is_present("force") }
+            InstallCommand {
+                selector: matches.get_one("selector"),
+                force: matches.get_flag("force"),
+            }
         },
         "update" => UpdateCommand {},
         "status" => {
             StatusCommand {
-                install_missing: matches.is_present("install"),
+                install_missing: matches.get_flag("install"),
                 format: WrapperCli.output_format(matches),
             }
         },
         "list" => ListCommand { format: WrapperCli.output_format(matches) },
         "uninstall" => {
-            UninstallCommand { version: ManagedVersion.new(matches.get_or("version", "")) }
+            UninstallCommand { version: ManagedVersion.new(matches.get_one("version") ?? "") }
         },
         _ => fail(`unknown toolchain command ${name}`),
     }

@@ -61,27 +61,44 @@ enum OutputFormat {
     Json,
 }
 
+// The commands the wrapper runs itself.
+const WRAPPER_COMMANDS = ["toolchain", "self"];
+
 class WrapperCli {
-    function spec() -> root.clap.Command {
+    function command() -> root.clap.Command {
         let command = root.clap.Command.new("baml")
-            .help_text(ROOT_HELP)
-            .allow_external_subcommands()
+            .override_help(ROOT_HELP)
+            .external_subcommand_passthrough(true)
+            .disable_help_subcommand(true)
             .arg(
-                root.clap.Arg.opt(PROJECT_DIR)
-                    .with_value_name("PATH")
+                root.clap.Arg.new(PROJECT_DIR)
+                    .long(PROJECT_DIR)
+                    .value_name("PATH")
                     .help("Select a filesystem project")
-                    .global(),
+                    .global(true),
             )
             .arg(WrapperCli.output_format_arg())
-            .arg(root.clap.Arg.flag("version").with_short("V"))
+            .arg(
+                root.clap.Arg.new("version").long("version").short("V").action(
+                    root.clap.ArgAction.SetTrue,
+                ),
+            )
             .subcommand(WrapperCli.toolchain())
             .subcommand(WrapperCli.self_command());
         CLI_VALUE_OPTIONS.reduce(
             (spec: root.clap.Command, name: string) -> root.clap.Command {
-                spec.arg(root.clap.Arg.opt(name).global().hidden())
+                spec.arg(root.clap.Arg.new(name).long(name).global(true).hide(true))
             },
             command,
         )
+    }
+
+    function output_format_arg() -> root.clap.Arg {
+        root.clap.Arg.new(OUTPUT_FORMAT)
+            .long(OUTPUT_FORMAT)
+            .value_name("FORMAT")
+            .help("What goes to stdout [possible values: text, json]")
+            .global(true)
     }
 
     function toolchain() -> root.clap.Command {
@@ -97,21 +114,32 @@ class WrapperCli {
                 root.clap.Command.new("use")
                     .about("Install if needed and select in the closest baml.toml")
                     .arg(
-                        root.clap.Arg.pos("selector").required().help(
+                        root.clap.Arg.new("selector").value_name("SELECTOR").required(true).help(
                             "canary, nightly, an exact release version, or a local baml-cli path",
                         ),
                     )
                     .arg(
-                        root.clap.Arg.flag("global").with_short("g").help(
-                            "Set the user default in $BAML_HOME/config.toml instead",
-                        ),
+                        root.clap.Arg.new("global")
+                            .long("global")
+                            .short("g")
+                            .action(root.clap.ArgAction.SetTrue)
+                            .help("Set the user default in $BAML_HOME/config.toml instead"),
                     ),
             )
             .subcommand(
                 root.clap.Command.new("install")
                     .about("Download a managed toolchain without changing the selection")
-                    .arg(root.clap.Arg.pos("selector").help("Defaults to the active selection"))
-                    .arg(root.clap.Arg.flag("force").help("Replace an existing installation")),
+                    .arg(
+                        root.clap.Arg.new("selector").value_name("SELECTOR").help(
+                            "Defaults to the active selection",
+                        ),
+                    )
+                    .arg(
+                        root.clap.Arg.new("force")
+                            .long("force")
+                            .action(root.clap.ArgAction.SetTrue)
+                            .help("Replace an existing installation"),
+                    ),
             )
             .subcommand(
                 root.clap.Command.new("update").about("Advance the resolved machine channel"),
@@ -120,9 +148,10 @@ class WrapperCli {
                 root.clap.Command.new("status")
                     .about("Check the active selection and available releases")
                     .arg(
-                        root.clap.Arg.flag("install").help(
-                            "Install the selected managed toolchain if it is absent",
-                        ),
+                        root.clap.Arg.new("install")
+                            .long("install")
+                            .action(root.clap.ArgAction.SetTrue)
+                            .help("Install the selected managed toolchain if it is absent"),
                     ),
             )
             .subcommand(
@@ -133,7 +162,11 @@ class WrapperCli {
             .subcommand(
                 root.clap.Command.new("uninstall")
                     .about("Remove a concrete version, preserving selectors and channel mappings")
-                    .arg(root.clap.Arg.pos("version").required().help("An exact release version")),
+                    .arg(
+                        root.clap.Arg.new("version").value_name("VERSION").required(true).help(
+                            "An exact release version",
+                        ),
+                    ),
             )
     }
 
@@ -147,48 +180,85 @@ class WrapperCli {
 
     // The CLI's `--output-format` also takes values only it understands,
     // so the wrapper checks the value where one of its own commands reads it.
-    function output_format(
-        matches: root.clap.Matches,
-    ) -> OutputFormat throws root.clap.InvalidValueError {
-        match (matches.get(OUTPUT_FORMAT) ?? "text") {
+    function output_format(matches: root.clap.ArgMatches) -> OutputFormat throws root.clap.Error {
+        match (matches.get_one(OUTPUT_FORMAT) ?? "text") {
             "text" => OutputFormat.Text,
             "json" => OutputFormat.Json,
             let other: string => {
-                throw root.clap.InvalidValueError.not_possible(
+                let command = WrapperCli.command();
+                command.build();
+                throw root.clap.Error.invalid_value(
+                    command,
                     WrapperCli.output_format_arg().value_parser(["text", "json"]),
                     other,
-                    matches.command,
                 )
             },
         }
     }
 
-    function output_format_arg() -> root.clap.Arg {
-        root.clap.Arg.opt(OUTPUT_FORMAT)
-            .with_value_name("FORMAT")
-            .help("What goes to stdout [possible values: text, json]")
-            .global()
+    // Help for one of the wrapper's own commands, as `baml help
+    // <command>...` asks for it: the same as `<command>... --help`.
+    function help_for(names: string[]) -> string throws root.clap.Error {
+        let shown = WrapperCli.command().try_get_matches_from(names.concat(["--help"])) catch (display) {
+            root.clap.Error => {
+                if (display.use_stderr()) {
+                    throw display;
+                }
+                display.message
+            },
+        };
+        match (shown) {
+            let text: string => text,
+            _ => ROOT_HELP,
+        }
     }
 
-    // The canonical name telemetry records for an invocation. Read
-    // leniently, so an invocation that fails to parse is still named.
+    // The canonical name telemetry records for an invocation. A command
+    // line that fails to parse is named after the command that rejected it.
     function command_name(args: string[]) -> string {
-        let path = WrapperCli.spec().command_path(args);
-        let asks_for_help = path.at(0) == "help";
-        let named = if (asks_for_help) {
-            path.slice(1, path.length())
-        } else {
-            path
+        let parsed = WrapperCli.command().try_get_matches_from(args) catch (error) {
+            root.clap.Error => error,
         };
-        match (named.at(0)) {
+        match (parsed) {
+            let error: root.clap.Error => WrapperCli._name_of(error.command_path, false),
+            let matches: root.clap.ArgMatches => match (matches.sub) {
+                null => "baml",
+                let sub: root.clap.SubCommand => {
+                    if (!sub.matches.is_external()) {
+                        WrapperCli._name_of(matches.subcommand_path(), false)
+                    } else if (sub.name == "help") {
+                        WrapperCli._help_name(sub.matches.external_args())
+                    } else {
+                        WrapperCli._name_of([sub.name], true)
+                    }
+                },
+            },
+        }
+    }
+
+    // `baml help <wrapper command>...` is named after that command.
+    function _help_name(names: string[]) -> string {
+        if (WRAPPER_COMMANDS.includes(names.at(0) ?? "")) {
+            WrapperCli.command_name(names)
+        } else {
+            "baml"
+        }
+    }
+
+    function _name_of(path: string[], external: bool) -> string {
+        match (path.at(0)) {
             null => "baml",
-            "toolchain" => ["baml", "toolchain"].concat(named.slice(1, 2)).join(" "),
-            "self" => "baml self update",
             let command: string => {
-                if (!asks_for_help && CLI_COMMANDS.includes(command)) {
-                    `baml ${command}`
+                if (external || !WRAPPER_COMMANDS.includes(command)) {
+                    if (CLI_COMMANDS.includes(command)) {
+                        `baml ${command}`
+                    } else {
+                        "baml"
+                    }
+                } else if (command == "self") {
+                    "baml self update"
                 } else {
-                    "baml"
+                    ["baml"].concat(path.slice(0, 2)).join(" ")
                 }
             },
         }

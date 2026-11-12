@@ -1,6 +1,6 @@
 class WrapperInvocation {
     telemetry: WrapperTelemetry?,
-    matches: root.clap.Matches,
+    matches: root.clap.ArgMatches,
     directory: string,
     project: string,
 
@@ -323,13 +323,16 @@ class WrapperInvocation {
     // and the project `--project-dir` names or the working directory
     // when it names none. A request for help is returned, not thrown,
     // since it is an ordinary outcome of parsing.
-    function parse(raw: string[]) -> WrapperInvocation | root.clap.DisplayHelp {
-        let matches = WrapperCli.spec().parse(raw) catch (help) {
-            root.clap.DisplayHelp => {
-                return help;
+    function parse(raw: string[]) -> WrapperInvocation | root.clap.Error {
+        let matches = WrapperCli.command().try_get_matches_from(raw) catch (error) {
+            root.clap.Error => {
+                if (error.use_stderr()) {
+                    throw error;
+                }
+                return error;
             },
         };
-        let project = matches.get(PROJECT_DIR);
+        let project = matches.get_one(PROJECT_DIR);
         ensure(project != "", `--${PROJECT_DIR} requires a path`);
         let cwd = baml.sys.current_dir();
         ensure(

@@ -49,7 +49,7 @@ function main() -> void throws never {
                 telemetry_event(telemetry, "wrapper_unhandled_error", fields = { "event_kind": "unhandled_error" });
                 baml.io.eprintln(`error: ${error_message(error)}`);
                 baml.sys.exit(
-                    if (error is root.clap.ParseError) {
+                    if (error is root.clap.Error) {
                         EXIT_USAGE
                     } else {
                         EXIT_FAILURE
@@ -77,17 +77,17 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
         $trace = trace.span(inputs = false, output = false, error = false),
     );
     let invocation = match (parsed) {
-        let help: root.clap.DisplayHelp => {
-            baml.io.println(help.text);
+        let display: root.clap.Error => {
+            baml.io.println(display.message);
             return null;
         },
         let invocation: WrapperInvocation => invocation,
     };
     invocation.telemetry = telemetry;
     let matches = invocation.matches;
-    match (matches.sub_match) {
+    match (matches.sub) {
         null => {
-            if (!matches.is_present("version")) {
+            if (!matches.get_flag("version")) {
                 baml.io.println(ROOT_HELP);
                 return null;
             }
@@ -100,17 +100,23 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
             );
             null
         },
-        let sub: root.clap.SubMatch => {
-            if (sub.is_external) {
-                return invocation.launch(forwarded);
+        let sub: root.clap.SubCommand => {
+            if (sub.matches.is_external()) {
+                let names = sub.matches.external_args();
+                // Help for a command of the CLI's is the CLI's to print.
+                if (sub.name != "help" || (names && !WRAPPER_COMMANDS.includes(names[0]))) {
+                    return invocation.launch(forwarded);
+                }
+                baml.io.println(WrapperCli.help_for(names));
+                return null;
             }
-            match (sub.matches.sub_match) {
+            match (sub.matches.sub) {
                 // `baml toolchain` or `baml self` alone: say what it can do.
                 null => {
-                    baml.io.println(WrapperCli.spec().help_for([sub.name], "baml"));
+                    baml.io.println(WrapperCli.help_for([sub.name]));
                     null
                 },
-                let action: root.clap.SubMatch => match (sub.name) {
+                let action: root.clap.SubCommand => match (sub.name) {
                     "toolchain" => {
                         invocation.manage(management_command(action.name, action.matches))
                     },
