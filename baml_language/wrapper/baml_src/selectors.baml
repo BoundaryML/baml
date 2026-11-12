@@ -143,13 +143,17 @@ class ChannelSelector {
         }
 
         function warn_if_outdated(self) -> bool {
-            self.warn_if_outdated_impl() catch (error) {
+            self.warn_if_outdated_impl(
+                $trace = trace.span(inputs = false, output = false, error = true),
+            ) catch (error) {
                 WrapperFailure => false
             }
         }
 
         function refresh_channel(self) -> null {
-            self.refresh_channel_impl() catch (error) {
+            self.refresh_channel_impl(
+                $trace = trace.span(inputs = false, output = false, error = true),
+            ) catch (error) {
                 WrapperFailure => null
             }
         }
