@@ -33,10 +33,9 @@ export async function renderBcsPage(options: RenderOptions): Promise<string> {
     const page = /^\s*(<!--[\s\S]*?-->\s*)*<!doctype/i.test(options.content)
       ? options.content
       : `<!doctype html>\n${options.content}`;
-    // Keep its #links inside the frame (see FRAGMENT_SCRIPT): before </body>, else at the end.
-    const script = `<script>${FRAGMENT_SCRIPT}</script>`;
-    const end = page.search(/<\/body>/i);
-    return end >= 0 ? page.slice(0, end) + script + page.slice(end) : page + script;
+    // Keep its #links inside the frame (see FRAGMENT_SCRIPT). Appended rather than placed before
+    // </body>, which could be text inside the page's own script; browsers run it in the body.
+    return `${page}\n<script>${FRAGMENT_SCRIPT}</script>`;
   }
   // A page that brings its own stylesheet is laid out by it alone: the defaults would fight it.
   const state = { mermaid: false, ownStyles: false };
@@ -159,21 +158,28 @@ function adjust(
 }
 
 /**
- * Runs in the frame, on every page. A srcdoc document resolves links against the site's address,
- * so `href="#intro"` would load the site in the frame instead of scrolling: this scrolls to the
- * element instead. Shown on its own (the raw route), the page has a real address and needs none.
+ * Runs in the frame, on every page, HTML ones included. A srcdoc document resolves links against
+ * the site's address, so `href="#intro"` would load the site in the frame instead of scrolling:
+ * this scrolls to the element instead, and scrolls to the #fragment the site asks for once the
+ * page loads. Shown on its own (the raw route), the page has a real address and needs none.
  */
 const FRAGMENT_SCRIPT = `
 (function () {
   if (window.parent === window) return;
+  function scrollTo(id) {
+    var target = id ? document.getElementById(id) || document.getElementsByName(id)[0] : null;
+    if (target) target.scrollIntoView();
+    else if (!id) window.scrollTo(0, 0);
+  }
   document.addEventListener("click", function (event) {
     var link = event.target && event.target.closest ? event.target.closest("a[href^='#']") : null;
     if (!link || event.defaultPrevented || event.button !== 0) return;
     event.preventDefault();
-    var id = decodeURIComponent(link.getAttribute("href").slice(1));
-    var target = id ? document.getElementById(id) || document.getElementsByName(id)[0] : null;
-    if (target) target.scrollIntoView();
-    else if (!id) window.scrollTo(0, 0);
+    scrollTo(decodeURIComponent(link.getAttribute("href").slice(1)));
+  });
+  window.addEventListener("message", function (event) {
+    if (event.source !== window.parent || !event.data || event.data.type !== "bcs-scroll") return;
+    scrollTo(String(event.data.id));
   });
 })();
 `;
@@ -181,7 +187,7 @@ const FRAGMENT_SCRIPT = `
 /**
  * Runs in the frame, beside the page's own scripts. The frame cannot navigate the site, so a click
  * on a link to another page of the proposal asks the site to open it (the site checks it is one of
- * this proposal's pages), and the site asks the frame to scroll to a #fragment once it loads.
+ * this proposal's pages).
  * Shown on its own (the raw route), the page has no site around it and links work as usual.
  */
 const BRIDGE_SCRIPT = `
@@ -193,11 +199,6 @@ const BRIDGE_SCRIPT = `
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     window.parent.postMessage({ type: "bcs-open-page", href: link.getAttribute("href") }, "*");
-  });
-  window.addEventListener("message", function (event) {
-    if (event.source !== window.parent || !event.data || event.data.type !== "bcs-scroll") return;
-    var target = document.getElementById(String(event.data.id));
-    if (target) target.scrollIntoView();
   });
 })();
 `;

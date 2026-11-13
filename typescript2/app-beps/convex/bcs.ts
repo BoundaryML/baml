@@ -38,10 +38,10 @@ export const MAX_PAGE_BYTES = 900_000;
 /** The most pages a proposal may have, main page included. */
 export const MAX_PAGES = 50;
 /**
- * The most a version's pages may weigh together. `bep bcs` sends and receives every page of a
- * version in one request, and Vercel refuses bodies over 4.5 MB, so this leaves room for JSON.
+ * The most a version's pages may weigh together, as the JSON `bep bcs` sends and receives in one
+ * request: Vercel refuses bodies over 4.5 MB, and escaping can make JSON several times its text.
  */
-export const MAX_VERSION_BYTES = 3_000_000;
+export const MAX_VERSION_JSON_BYTES = 4_000_000;
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
@@ -89,7 +89,6 @@ function checkPages(inputs: PageInput[], title: string): Page[] {
   const mains = inputs.filter((page) => page.slug === "");
   if (mains.length !== 1) fail("invalid", "A proposal needs exactly one main page.");
   const slugs = new Set<string>();
-  let total = 0;
   for (const page of inputs) {
     const name = page.slug || "the main page";
     if (page.slug !== "" && !SLUG.test(page.slug)) {
@@ -100,9 +99,10 @@ function checkPages(inputs: PageInput[], title: string): Page[] {
     if (!page.content.trim()) fail("invalid", `${name === "the main page" ? "The main page" : `Page "${name}"`} is empty.`);
     const size = bytes(page.content);
     if (size > MAX_PAGE_BYTES) fail("invalid", `Page "${name}" is larger than 900 KB.`);
-    total += size;
   }
-  if (total > MAX_VERSION_BYTES) fail("invalid", "The pages together are larger than 3 MB.");
+  if (bytes(JSON.stringify(inputs)) > MAX_VERSION_JSON_BYTES) {
+    fail("invalid", "The pages together are too large: over 4 MB as JSON, which bep bcs could not send.");
+  }
   const parents = new Map(inputs.map((page) => [page.slug, page.parentSlug]));
   for (const page of inputs) {
     if (page.parentSlug === undefined) continue;

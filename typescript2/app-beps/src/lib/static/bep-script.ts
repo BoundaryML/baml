@@ -967,9 +967,15 @@ def bcs_local_edits(folder: Path) -> bool:
     if pulled is None:
         return True
     if "pages" not in meta:
-        # Pulled by a bep script from before sub-pages: the digest is of index.html alone.
-        page = folder / "index.html"
-        return not page.exists() or hashlib.sha256(page.read_bytes()).hexdigest() != pulled
+        # Pulled by a bep script from before sub-pages: the digest is of index.html alone, so the
+        # folder is unedited only while that page is all it holds.
+        try:
+            local = read_local_bcs_pages(folder)
+        except ValueError:
+            return True
+        if len(local) != 1 or local[0]["format"] != "html":
+            return True
+        return hashlib.sha256((folder / "index.html").read_bytes()).hexdigest() != pulled
     try:
         return bcs_digest(read_local_bcs_pages(folder)) != pulled
     except ValueError:
