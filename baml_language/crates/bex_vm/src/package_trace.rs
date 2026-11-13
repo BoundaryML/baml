@@ -506,7 +506,13 @@ fn start_span_impl(
 ) -> Result<Value, VmRustFnError> {
     (|| -> Result<Value, String> {
         let invalid = |message: &str| message.to_owned();
+        // A named span has no function policy, but the engine's still
+        // applies: without HTTP bodies it records no error value.
         let mut options = crate::telemetry::manual::OperationOptions::default();
+        options.errors_withheld = vm
+            .telemetry
+            .as_ref()
+            .is_some_and(|state| !state.records_errors());
         let mut captured_type_args = None;
         let definition = if let Ok(name) = vm.as_string(&target) {
             if name.is_empty() {

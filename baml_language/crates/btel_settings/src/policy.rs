@@ -35,14 +35,33 @@ impl<T> TelemetryPolicy<T> {
     };
 }
 /// **Observability semantics.** Default entry input capture for AI invocations.
-/// Explicit call-site capture options override this default.
+/// It is a policy request: a call-site `false` adds no request and does not
+/// veto it.
 pub const AI_CAPTURE_INPUTS: bool = true;
 /// **Observability semantics.** Sticky default output capture for AI invocations.
-/// Explicit call-site capture options override this default.
+/// It is a policy request: a call-site `false` adds no request and does not
+/// veto it.
 pub const AI_CAPTURE_OUTPUT: bool = true;
 /// **Observability semantics.** Sticky default error capture for AI invocations.
-/// Explicit call-site capture options override this default.
+/// It is a policy request: a call-site `false` adds no request and does not
+/// veto it.
 pub const AI_CAPTURE_ERROR: bool = true;
+
+/// **Observability semantics.** The innermost span a thrown error or a panic
+/// escapes records that error, whatever its function's capture settings: a
+/// failed span without its error says that something failed and not what. The
+/// spans the error unwinds through after that record only that they failed,
+/// since its context holds the whole stack trace and recording it at every
+/// frame would cost the square of the depth. Inputs and outputs stay opt-in,
+/// since every call has them; errors are rare, and a value that must not be
+/// recorded is withheld by `@trace.redact` wherever it is captured. A
+/// cancellation is not a failure of the span's own code, so a cancelled span
+/// records no value. A call that passes `error = false`, as `trace.empty_span`
+/// does, declines this default and leaves it to the next span out. An engine
+/// that keeps HTTP bodies out of its recordings (`http_bodies = false`)
+/// records no error value at all, requested or not, since an error can quote a
+/// response body.
+pub const SPAN_CAPTURE_ERROR: bool = true;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InvocationMode {
