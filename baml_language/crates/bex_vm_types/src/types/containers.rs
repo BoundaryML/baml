@@ -1,6 +1,7 @@
 use std::{cell::UnsafeCell, collections::HashMap};
 
 use indexmap::IndexMap;
+use rustc_hash::FxBuildHasher;
 
 use crate::{AllocDebt, Value, lazy_biased_mutex::LazyBiasedMutex};
 
@@ -483,8 +484,10 @@ pub struct MapEpochChanged;
 /// pointer-based `Value` equality or hashing.
 #[derive(Clone, Debug, Default)]
 pub struct MapData {
-    entries: IndexMap<EntryId, MapEntry>,
-    buckets: HashMap<u64, Vec<EntryId>>,
+    // Keyed by entry ids and finished key hashes, never by key contents:
+    // hashing those again with SipHash buys no collision resistance.
+    entries: IndexMap<EntryId, MapEntry, FxBuildHasher>,
+    buckets: HashMap<u64, Vec<EntryId>, FxBuildHasher>,
     next_id: EntryId,
     // Only membership changes invalidate an in-flight key comparison.
     epoch: u64,
