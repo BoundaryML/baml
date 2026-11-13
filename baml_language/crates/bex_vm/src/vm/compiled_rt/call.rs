@@ -73,9 +73,24 @@ impl BexVm {
         result
     }
 
+    #[inline]
     pub fn reserve_slots(&mut self, frame: &FrameRecord, slots: usize) -> Result<(), Box<VmError>> {
         let end = frame.base() + slots;
-        self.resize_stack(end, Value::NULL).map_err(Box::new)
+        match self.stack.try_resize(end, Value::NULL) {
+            Ok(()) => Ok(()),
+            Err(panic) => Err(self.slots_refused(panic)),
+        }
+    }
+
+    /// Out of line: every compiled body with slots reserves them on entry.
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "boxing out of line keeps the allocation off the inlined fast path"
+    )]
+    #[cold]
+    #[inline(never)]
+    fn slots_refused(&mut self, panic: VmPanic) -> Box<VmError> {
+        Box::new(VmError::thrown_fresh(self.panic_to_exception_value(panic)))
     }
 
     #[inline]
@@ -254,8 +269,7 @@ impl BexVm {
                     .all(crate::reachable::is_statically_declared)
                 && !Self::body_is_framed(function)
             {
-                let type_args = type_args.to_vec();
-                return self.call_record_dispatched(caller, callee, body, type_args, args, pc);
+                return self.call_record_dispatched(caller, callee, body, args, pc);
             }
         }
         caller.note_pc(pc);
