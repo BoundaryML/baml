@@ -22,8 +22,30 @@ pub(crate) fn create_engine_with_context(
     sources: Vec<(String, String)>,
     launch_context: btel_types::context::Context,
 ) -> Result<BexEngine, EngineError> {
-    let boundary = crate::cloud_config::Boundary::read(project_root)
-        .map_err(|error| EngineError::Other(error.to_string()))?;
+    // Disabled recording must not validate or discover an unused destination.
+    let recording = if btel_settings::mode::from_env()
+        .map_err(|error| EngineError::Other(error.to_string()))?
+        .is_none()
+    {
+        None
+    } else {
+        let boundary = crate::cloud_config::Boundary::read(project_root)
+            .map_err(|error| EngineError::Other(error.to_string()))?;
+        Some(
+            TelemetryRecording::from_boundary_defaults(
+                boundary.project.as_deref(),
+                boundary.api_url.as_deref(),
+            )
+            .unwrap_or_else(|| {
+                TelemetryRecording::local_files(
+                    project_root,
+                    btel_settings::publisher::RecordingConfig::default(),
+                )
+            })
+            .with_host("baml")
+            .with_sources(sources),
+        )
+    };
     BexEngine::new_with_config(
         program,
         Arc::new(sys_native::SysOps::native()),
@@ -31,20 +53,7 @@ pub(crate) fn create_engine_with_context(
         bex_engine::EngineConfig {
             launch_context,
             runtime_compiler: Some(bex_project::runtime_compiler()),
-            recording: Some(
-                TelemetryRecording::from_boundary_defaults(
-                    boundary.project.as_deref(),
-                    boundary.api_url.as_deref(),
-                )
-                .unwrap_or_else(|| {
-                    TelemetryRecording::local_files(
-                        project_root,
-                        btel_settings::publisher::RecordingConfig::default(),
-                    )
-                })
-                .with_host("baml")
-                .with_sources(sources),
-            ),
+            recording,
             ..bex_engine::EngineConfig::default()
         },
     )
