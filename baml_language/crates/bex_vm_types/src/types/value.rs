@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use baml_type::Int63;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -22,6 +22,7 @@ use crate::{HeapPtr, Object};
 /// | `0x0000_0000_0000_0006`                | `OmittedArg` sentinel                            |
 /// | `xxxxx...xxx1` (low bit set)           | `Int(i63)` — sign-extend via `(v as i64) >> 1`   |
 /// | `0xxxxx...xxx0` (low 3 bits zero, ≠0)  | `Object(HeapPtr)` — heap pointer (8-byte align)  |
+/// | `0xxxxx...x010` (≠ `Bool(false)`)      | `Object(HeapPtr)` — an instance cell, tagged     |
 ///
 /// # On `Float`
 ///
@@ -210,7 +211,7 @@ impl Value {
             "Value::object called with null heap ptr; use Value::NULL"
         );
         debug_assert!(
-            bits & 0b111 == 0,
+            bits & !(crate::heap_ptr::INSTANCE_TAG as u64) & 0b111 == 0,
             "Value::object called with mis-aligned heap ptr 0x{bits:x}"
         );
         Value(bits)
@@ -236,10 +237,11 @@ impl Value {
         self.0 & 1 != 0
     }
 
-    /// True iff `self` is a non-null heap object pointer.
+    /// True iff `self` is a non-null heap object pointer, instance cells
+    /// included: bits 0 and 2 clear and past the sentinels.
     #[inline(always)]
     pub const fn is_object(self) -> bool {
-        self.0 & 0b111 == 0 && self.0 != 0
+        self.0 & 0b101 == 0 && self.0 > Self::OMITTED_ARG.0
     }
 
     // ── Typed accessors (return None on tag mismatch) ─────────────────────
@@ -310,9 +312,8 @@ impl Value {
             x if x == Self::TRUE.0 => ValueKind::Bool(true),
             x if x == Self::OMITTED_ARG.0 => ValueKind::OmittedArg,
             _ => {
-                // Must be a pointer — low 3 bits zero, non-zero, not a
-                // sentinel pattern.
-                debug_assert_eq!(self.0 & 0b111, 0, "malformed Value bits 0x{:x}", self.0);
+                // Must be a pointer — not a sentinel pattern.
+                debug_assert!(self.is_object(), "malformed Value bits 0x{:x}", self.0);
                 // SAFETY: see [`Value::as_object_ptr`].
                 let ptr = self.0 as *mut Object;
                 #[cfg(feature = "heap_debug")]
@@ -334,11 +335,17 @@ impl Value {
         self.0
     }
 
-    // `from_bits` has no callers yet; the originally-planned atomic-load
-    // path will add one when it lands. Re-introduce as `pub(crate) const
-    // unsafe fn from_bits(bits: u64) -> Self` at that point so the
-    // invariant (bits came from `Value::bits` or a safe constructor) is
-    // upheld by callers via `unsafe`.
+    /// The value whose bits are `bits`, as [`Self::bits`] gave them.
+    ///
+    /// # Safety
+    ///
+    /// `bits` came from [`Self::bits`] of a value that is still live: a heap
+    /// pointer decoded from any other bits names nothing.
+    #[inline(always)]
+    #[allow(unsafe_code)]
+    pub const unsafe fn from_bits(bits: u64) -> Self {
+        Self(bits)
+    }
 }
 
 impl Default for Value {
@@ -352,7 +359,7 @@ impl Default for Value {
 /// Atomic storage for a single [`Value`].
 ///
 /// This is used for heap slots whose value may be read and written by multiple
-/// spawned VM fibers (`Cell.value` and `Instance.fields`). It preserves
+/// spawned VM fibers (`Cell.value` and package slots). It preserves
 /// atomicity of the 8-byte tagged value and uses release/acquire ordering so a
 /// newly stored object pointer is safely published to a racing reader.
 #[repr(transparent)]
@@ -416,78 +423,6 @@ impl BorshSerialize for AtomicValueSlot {
 impl BorshDeserialize for AtomicValueSlot {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         Value::deserialize_reader(reader).map(Self::new)
-    }
-}
-
-/// Per-instance "already cleaned" latch backing BEP-042 `cleanup`.
-///
-/// `cleanup` (the magic finalizer method) must run **at most once** per
-/// instance, regardless of whether it is triggered by an explicit
-/// `obj.cleanup()`, a `defer { obj.cleanup() }`, or the GC finalizer. This is
-/// the shared run-once latch — the analogue of .NET's `GC.SuppressFinalize` bit.
-///
-/// Atomic because a `defer`-driven cleanup can run on a different `spawn` fiber
-/// than another path (and the GC may discover the same instance). The
-/// test-and-set in [`Self::begin`] is the synchronization point: only the first
-/// caller observes "not yet cleaned" and runs the body.
-///
-/// Stored inline on [`Instance`](super::Instance) (not in a side table) so it is
-/// correct by construction across every GC mode: the collector moves the whole
-/// object when it relocates it, and [`Clone`] preserves the bit for a deep copy,
-/// so a surviving instance stays cleaned and a reclaimed slot reused for a fresh
-/// instance starts uncleaned — no stale-pointer aliasing. Like [`AtomicValueSlot`]
-/// it carries manual `Clone`/`Debug`/`Borsh` impls so it can live in the derived
-/// `Instance`.
-#[repr(transparent)]
-pub struct CleanupLatch(AtomicBool);
-
-impl CleanupLatch {
-    #[inline]
-    pub const fn new(cleaned: bool) -> Self {
-        Self(AtomicBool::new(cleaned))
-    }
-
-    /// Test-and-set the latch on cleanup entry. Returns `true` iff this is the
-    /// *first* call (the caller should run the cleanup body); returns `false` if
-    /// the instance was already cleaned (the caller should skip the body).
-    ///
-    /// The latch is set on entry, not on success: a `cleanup` body that throws
-    /// or panics is still considered cleaned and will not be retried (BEP-042).
-    #[inline]
-    pub fn begin(&self) -> bool {
-        // `swap` returns the previous value; the first call observes `false`.
-        !self.0.swap(true, Ordering::AcqRel)
-    }
-
-    #[inline]
-    pub fn is_cleaned(&self) -> bool {
-        self.0.load(Ordering::Acquire)
-    }
-}
-
-impl Clone for CleanupLatch {
-    fn clone(&self) -> Self {
-        Self::new(self.is_cleaned())
-    }
-}
-
-impl std::fmt::Debug for CleanupLatch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("CleanupLatch")
-            .field(&self.is_cleaned())
-            .finish()
-    }
-}
-
-impl BorshSerialize for CleanupLatch {
-    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        self.is_cleaned().serialize(writer)
-    }
-}
-
-impl BorshDeserialize for CleanupLatch {
-    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        bool::deserialize_reader(reader).map(Self::new)
     }
 }
 

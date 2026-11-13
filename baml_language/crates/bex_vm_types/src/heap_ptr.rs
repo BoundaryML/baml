@@ -31,9 +31,22 @@
 //! 3. **Thread safety:** The pointer can be copied across threads (it's just
 //!    8 bytes). Dereferencing only happens within a single VM.
 
+use std::sync::atomic::AtomicU64;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::Object;
+
+/// The pointer bits that mark a reference to an instance cell rather than an
+/// [`Object`] slot. Both are 8-byte aligned, so the bits are free, and a
+/// [`Value`](crate::Value) keeps them: telling an instance apart needs no
+/// memory read.
+pub const INSTANCE_TAG: usize = 0b010;
+
+/// What [`HeapPtr::get`] returns for an instance, whose cell is not an
+/// [`Object`]: enough for code that only asks what kind of object it holds.
+/// The instance itself is read through [`InstanceRef`](crate::InstanceRef).
+static INSTANCE: Object = Object::Instance;
 
 /// A pointer to an object in the heap.
 ///
@@ -103,10 +116,51 @@ impl HeapPtr {
         Self { ptr, epoch }
     }
 
-    /// Get the raw pointer.
+    /// A reference to the instance cell starting at `cell`.
+    ///
+    /// # Safety
+    ///
+    /// `cell` must be an instance cell in a heap cell space.
+    #[cfg(not(feature = "heap_debug"))]
+    #[inline]
+    pub unsafe fn from_cell(cell: *mut AtomicU64) -> Self {
+        Self {
+            ptr: cell.map_addr(|addr| addr | INSTANCE_TAG).cast(),
+        }
+    }
+
+    /// A reference to the instance cell starting at `cell`.
+    ///
+    /// # Safety
+    ///
+    /// `cell` must be an instance cell in a heap cell space.
+    #[cfg(feature = "heap_debug")]
+    #[inline]
+    pub unsafe fn from_cell(cell: *mut AtomicU64, epoch: u32) -> Self {
+        Self {
+            ptr: cell.map_addr(|addr| addr | INSTANCE_TAG).cast(),
+            epoch,
+        }
+    }
+
+    /// Get the raw pointer. For an instance it carries [`INSTANCE_TAG`] and
+    /// must not be dereferenced; use [`Self::cell`].
     #[inline]
     pub fn as_ptr(self) -> *mut Object {
         self.ptr
+    }
+
+    /// Whether this names an instance cell rather than an [`Object`].
+    #[inline]
+    pub fn is_instance(self) -> bool {
+        self.ptr.addr() & INSTANCE_TAG != 0
+    }
+
+    /// The first word of the instance cell this names.
+    #[inline]
+    pub fn cell(self) -> *mut AtomicU64 {
+        debug_assert!(self.is_instance(), "{self:?} is not an instance");
+        self.ptr.map_addr(|addr| addr & !INSTANCE_TAG).cast()
     }
 
     /// Whether this is the inert compile-time/runtime-owner sentinel.
@@ -124,6 +178,9 @@ impl HeapPtr {
     /// - With `heap_debug`: epoch must match current heap epoch
     #[inline]
     pub unsafe fn get(self) -> &'static Object {
+        if self.is_instance() {
+            return &INSTANCE;
+        }
         // SAFETY: Caller guarantees pointer validity and aliasing rules
         unsafe { &*self.ptr }
     }
@@ -137,6 +194,10 @@ impl HeapPtr {
     /// - With `heap_debug`: epoch must match current heap epoch
     #[inline]
     pub unsafe fn get_mut(self) -> &'static mut Object {
+        assert!(
+            !self.is_instance(),
+            "{self:?} is an instance; write it through `InstanceRef`"
+        );
         // SAFETY: Caller guarantees pointer validity and exclusive access
         unsafe { &mut *self.ptr }
     }

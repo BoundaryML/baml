@@ -3,7 +3,7 @@ use std::sync::Arc;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{
-    ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Instance,
+    ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure,
     Uint8ArrayContainer, Value, Variant,
     types::{
         Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
@@ -36,8 +36,10 @@ pub enum Object {
     /// Class object.
     Class(Box<Class>),
 
-    /// Class instance object.
-    Instance(Instance),
+    /// What [`HeapPtr::get`](crate::HeapPtr::get) shows for a class
+    /// instance. An instance lives in a cell of its own, never in an
+    /// `Object` slot; read it through [`InstanceRef`](crate::InstanceRef).
+    Instance,
 
     /// Enum object.
     Enum(Box<Enum>),
@@ -149,7 +151,7 @@ impl Object {
     #[must_use]
     pub fn is_first_class_value(&self) -> bool {
         match self {
-            Object::Instance(_)
+            Object::Instance
             | Object::Variant(_)
             | Object::Function(_)
             | Object::Closure(_)
@@ -219,7 +221,7 @@ impl Object {
             | Object::Type(_)
             | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Instance(_)
+            | Object::Instance
             | Object::Variant(_)
             | Object::Closure(_)
             | Object::BoundMethod(_)
@@ -252,7 +254,7 @@ impl Object {
             | Object::Type(_)
             | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Instance(_)
+            | Object::Instance
             | Object::Variant(_)
             | Object::Closure(_)
             | Object::BoundMethod(_)
@@ -306,7 +308,9 @@ enum ObjectWire {
     Interface(Box<InterfaceDef>),
     ImplRule(Box<RuntimeImplRule>),
     Class(Box<Class>),
-    Instance(Instance),
+    // Reserved tag: an instance is never pooled, and keeping its place
+    // keeps every later tag.
+    Instance,
     Enum(Box<Enum>),
     TypeAlias(Box<TypeAliasDef>),
     Variant(Variant),
@@ -354,7 +358,12 @@ impl BorshSerialize for Object {
             }
             Self::ImplRule(v) => ObjectWire::ImplRule(v.clone()),
             Self::Class(v) => ObjectWire::Class(v.clone()),
-            Self::Instance(v) => ObjectWire::Instance(v.clone()),
+            Self::Instance => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "an instance has no wire form",
+                ));
+            }
             Self::Enum(v) => ObjectWire::Enum(v.clone()),
             Self::TypeAlias(v) => ObjectWire::TypeAlias(v.clone()),
             Self::Variant(v) => ObjectWire::Variant(v.clone()),
@@ -413,7 +422,12 @@ impl BorshDeserialize for Object {
             ObjectWire::Interface(v) => Self::Interface(v),
             ObjectWire::ImplRule(v) => Self::ImplRule(v),
             ObjectWire::Class(v) => Self::Class(v),
-            ObjectWire::Instance(v) => Self::Instance(v),
+            ObjectWire::Instance => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "an instance has no wire form",
+                ));
+            }
             ObjectWire::Enum(v) => Self::Enum(v),
             ObjectWire::TypeAlias(v) => Self::TypeAlias(v),
             ObjectWire::Variant(v) => Self::Variant(v),
@@ -449,7 +463,7 @@ impl std::fmt::Display for Object {
             Object::Package(_) => write!(f, "<package>"),
             Object::ImplRule(_) => write!(f, "<impl_rule>"),
             Object::Class(class) => class.fmt(f),
-            Object::Instance(instance) => instance.fmt(f),
+            Object::Instance => write!(f, "<instance>"),
             Object::Enum(enm) => enm.fmt(f),
             Object::TypeAlias(alias) => alias.fmt(f),
             Object::Variant(value) => value.fmt(f),
@@ -534,7 +548,7 @@ impl ObjectType {
 
             Object::Cell(_) => Self::Cell,
             Object::Class(_) => Self::Class,
-            Object::Instance(_) => Self::Instance,
+            Object::Instance => Self::Instance,
             Object::Enum(_) => Self::Enum,
             Object::TypeAlias(_) => Self::TypeAlias,
             Object::Variant(_) => Self::Enum,

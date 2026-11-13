@@ -165,10 +165,6 @@ impl Object {
                 meter.bytes(2 * size_of::<RealizedTy>());
                 meter.bytes(map.data.get_mut().footprint());
             }
-            Object::Instance(instance) => {
-                meter.bytes(instance.fields.footprint());
-                meter.bytes(size_of_val(&*instance.class_type_args));
-            }
             Object::Closure(closure) => {
                 meter.bytes(size_of_val(&*closure.captures));
                 meter.bytes(size_of_val(&*closure.captured_type_args));
@@ -232,7 +228,11 @@ impl Object {
                     Objects::Program => 0,
                 });
             }
-            Object::Cell(_) | Object::Variant(_) | Object::Float(_) | Object::Tombstone => {}
+            Object::Cell(_)
+            | Object::Variant(_)
+            | Object::Float(_)
+            | Object::Instance
+            | Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
         }
@@ -254,7 +254,7 @@ mod tests {
     use super::*;
     use crate::{
         MapData, Value,
-        types::{Array, Instance, Map},
+        types::{Array, Map},
     };
 
     fn charged(mut object: Object) -> usize {
@@ -291,16 +291,6 @@ mod tests {
         let mut bytes = Vec::with_capacity(4_096);
         bytes.push(7u8);
         assert_eq!(charged(Object::Uint8Array(bytes.into())), 4_096);
-    }
-
-    #[test]
-    fn an_instance_is_measured_by_its_fields() {
-        let instance = Instance::new(
-            crate::HeapPtr::null(),
-            Box::new([]),
-            vec![Value::int(1), Value::int(2), Value::int(3)],
-        );
-        assert_eq!(charged(Object::Instance(instance)), 3 * size_of::<Value>());
     }
 
     #[test]
