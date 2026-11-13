@@ -6,7 +6,7 @@ import { BepStatusBadge } from "@/components/bep/bep-status";
 import { buttonVariants } from "@/components/ui/button";
 import { currentViewer } from "@/lib/bcs-auth";
 import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
-import { flattenOutline } from "@/lib/bcs-outline";
+import { flattenOutline, hasContents } from "@/lib/bcs-outline";
 import { renderBcsPage } from "@/lib/bcs-render";
 import {
   addComment,
@@ -25,6 +25,7 @@ import { TeamOnly } from "../team-only";
 import { BcsUnavailable } from "../unavailable";
 import { HeaderStatus, PeopleForm, RemovePageForm, UpdateProposalForm } from "../forms";
 import { BcsReader } from "./reader";
+import { PageContents } from "./contents";
 import { StancePanel } from "./stances";
 
 export const dynamic = "force-dynamic";
@@ -247,7 +248,7 @@ export default async function BcsProposal({
         </div>
       </header>
       <div className="flex flex-1 min-h-0">
-        {(outline.length > 1 || rendered.headings.length > 1) && (
+        {(outline.length > 1 || hasContents(rendered.headings)) && (
           <div className="w-64 shrink-0 overflow-y-auto border-r p-3 text-sm space-y-4">
             {outline.length > 1 && (
               <nav aria-label="Pages">
@@ -277,28 +278,7 @@ export default async function BcsProposal({
                 </ul>
               </nav>
             )}
-            {rendered.headings.length > 1 && (
-              <nav aria-label="On this page">
-                <h2 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  On this page
-                </h2>
-                <ul className="space-y-0.5">
-                  {rendered.headings.map((heading) => (
-                    <li key={heading.id}>
-                      {/* A plain #link: the frame scrolls to it when the address's #fragment changes. */}
-                      <a
-                        href={`#${heading.id}`}
-                        style={{ paddingLeft: `${0.5 + (heading.depth - 1) * 0.75}rem` }}
-                        className="block truncate rounded py-0.5 pr-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        title={heading.text}
-                      >
-                        {heading.text}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
-            )}
+            <PageContents headings={rendered.headings} />
           </div>
         )}
         <BcsReader

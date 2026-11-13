@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { currentViewer } from "@/lib/bcs-auth";
 import { bcsId, bcsPagePath } from "@/lib/bcs-convex";
 import { openIssue, removeIssue, updateIssue } from "../../actions";
@@ -57,8 +58,12 @@ export default async function BcsIssues({
             {tracking.issues.map((issue) => (
               <li key={issue.id} className={`rounded-lg border p-4 space-y-2 ${issue.resolved ? "opacity-75" : ""}`}>
                 <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="font-medium">
-                    {issue.resolved ? "✅ " : "🚩 "}
+                  <h2 className="flex items-center gap-2 font-medium">
+                    {issue.resolved ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" aria-label="Resolved" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" aria-label="Open" />
+                    )}
                     {issue.title}
                   </h2>
                   <RemoveButton action={removeIssue.bind(null, number)} name="issueId" id={issue.id} what="issue" />

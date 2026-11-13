@@ -7,13 +7,14 @@ import { currentViewer } from "@/lib/bcs-auth";
 import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
 import { TeamOnly } from "../../team-only";
 import { BcsUnavailable } from "../../unavailable";
+import { KindBadge } from "../reader";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "BCS proposal comments" };
 
 const STATES = ["open", "resolved", "all"] as const;
 const KINDS = ["all", "discussion", "concern", "question"] as const;
-const KIND_LABELS = { discussion: "💬 Discussion", concern: "⚠️ Concern", question: "❓ Question" } as const;
+const KIND_LABELS = { discussion: "Discussion", concern: "Concern", question: "Question" } as const;
 
 /** Every thread of a proposal across its pages, the most recently active first, as the BEP feed. */
 export default async function BcsComments({
@@ -96,9 +97,7 @@ export default async function BcsComments({
                   className="block rounded-lg border p-3 hover:bg-muted/50 space-y-1.5"
                 >
                   <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
-                    {thread.type !== "discussion" && (
-                      <span className="font-medium text-foreground">{KIND_LABELS[thread.type]}</span>
-                    )}
+                    <KindBadge type={thread.type} />
                     <span className="font-medium text-foreground">{thread.author}</span>
                     <span>on {thread.pageTitle}</span>
                     <span>{formatDistanceToNow(thread.createdAt, { addSuffix: true })}</span>

@@ -5,6 +5,7 @@
 // offers to start one, and a block's badge or a thread's quote brings the other into view.
 import { createContext, useActionState, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { AlertCircle, Brain, Heart, HelpCircle, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CommentState } from "../actions";
@@ -290,11 +291,24 @@ function Composer({
   );
 }
 
-const TYPES = {
-  discussion: { label: "Discussion", className: "" },
-  concern: { label: "Concern", className: "bg-red-500/15 text-red-700 dark:text-red-300" },
-  question: { label: "Question", className: "bg-blue-500/15 text-blue-700 dark:text-blue-300" },
-} as const;
+/** A thread's kind badge, as BEP comments show it. */
+export function KindBadge({ type }: { type: Comment["type"] }) {
+  if (type === "concern") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/40">
+        <AlertCircle className="h-3 w-3" /> Concern
+      </span>
+    );
+  }
+  if (type === "question") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-blue-600 bg-blue-50 dark:bg-blue-950/40">
+        <HelpCircle className="h-3 w-3" /> Question
+      </span>
+    );
+  }
+  return null;
+}
 
 /** A new thread's kind, as on BEPs. */
 function TypeSelect({ value = "discussion" }: { value?: string }) {
@@ -305,20 +319,17 @@ function TypeSelect({ value = "discussion" }: { value?: string }) {
       aria-label="Kind"
       className="h-8 rounded-md border bg-background px-2 text-xs"
     >
-      <option value="discussion">💬 Discussion</option>
-      <option value="concern">⚠️ Concern (blocks acceptance)</option>
-      <option value="question">❓ Question</option>
+      <option value="discussion">Discussion</option>
+      <option value="concern">Concern (blocks acceptance)</option>
+      <option value="question">Question</option>
     </select>
   );
 }
 
 function Meta({ comment, version, thread }: { comment: Comment; version: number; thread?: boolean }) {
-  const kind = TYPES[comment.type] ?? TYPES.discussion;
   return (
-    <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
-      {thread && comment.type !== "discussion" && (
-        <span className={`rounded px-1.5 py-0.5 font-medium ${kind.className}`}>{kind.label}</span>
-      )}
+    <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+      {thread && <KindBadge type={comment.type} />}
       <span className="font-medium text-foreground">{comment.author}</span>
       <span>{formatDistanceToNow(comment.createdAt, { addSuffix: true })}</span>
       {comment.editedAt && <span title={new Date(comment.editedAt).toLocaleString()}>edited</span>}
@@ -327,11 +338,15 @@ function Meta({ comment, version, thread }: { comment: Comment; version: number;
   );
 }
 
-const REACTION_ICONS = [
-  ["thumbsUp", "👍"],
-  ["thumbsDown", "👎"],
-  ["heart", "❤️"],
-  ["thinking", "🤔"],
+/**
+ * The reactions BEP comments offer, with their icons and the color of one's own; "thinking", which
+ * BCS offered before, shows only on comments that still have it, so it can be taken back.
+ */
+const REACTIONS = [
+  { key: "thumbsUp", Icon: ThumbsUp, mine: "text-blue-500", label: "Thumbs up", always: true },
+  { key: "thumbsDown", Icon: ThumbsDown, mine: "text-blue-500", label: "Thumbs down", always: true },
+  { key: "heart", Icon: Heart, mine: "text-red-500", label: "Heart", always: true },
+  { key: "thinking", Icon: Brain, mine: "text-blue-500", label: "Thinking", always: false },
 ] as const;
 
 /** A comment's reactions, and the buttons to add or take back the viewer's. */
@@ -341,25 +356,27 @@ function ReactionBar({ comment }: { comment: Comment }) {
   return (
     <form action={submit} className="flex flex-wrap items-center gap-1">
       <input type="hidden" name="commentId" value={comment.id} />
-      {REACTION_ICONS.map(([key, icon]) => {
+      {REACTIONS.map(({ key, Icon, mine: mineColor, label, always }) => {
         const who = comment.reactions[key] ?? [];
         const mine = who.includes(tools.viewer);
+        if (!always && who.length === 0) return null;
         return (
-          <button
+          <Button
             key={key}
             type="submit"
             name="reaction"
             value={key}
+            variant="ghost"
+            size="sm"
             disabled={pending}
             aria-pressed={mine}
-            title={who.length > 0 ? who.join(", ") : "React"}
-            className={`rounded-full border px-1.5 text-xs leading-5 ${
-              mine ? "border-violet-500 bg-violet-500/15" : "border-transparent hover:border-border"
-            } ${who.length === 0 ? "opacity-50 hover:opacity-100" : ""}`}
+            aria-label={who.length > 0 ? `${label}, ${who.length}` : label}
+            title={who.length > 0 ? who.join(", ") : label}
+            className={`h-7 px-2 ${mine ? mineColor : "text-muted-foreground"}`}
           >
-            {icon}
-            {who.length > 0 && <span className="ml-0.5">{who.length}</span>}
-          </button>
+            <Icon className="h-3.5 w-3.5" />
+            {who.length > 0 && <span>{who.length}</span>}
+          </Button>
         );
       })}
       <Refused error={state.error} />
@@ -547,7 +564,6 @@ function ThreadCard({
           <Button type="button" size="sm" variant="ghost" onClick={() => setReplying(true)}>
             Reply
           </Button>
-          <ThreadLinks threadId={thread.id} />
           <form action={submitResolve}>
             <input type="hidden" name="commentId" value={thread.id} />
             <input type="hidden" name="resolved" value={thread.resolved ? "false" : "true"} />
@@ -555,6 +571,7 @@ function ThreadCard({
               {thread.resolved ? "Reopen" : "Resolve"}
             </Button>
           </form>
+          <ThreadLinks threadId={thread.id} />
         </div>
       )}
     </div>

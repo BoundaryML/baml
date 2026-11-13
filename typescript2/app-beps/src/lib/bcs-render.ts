@@ -290,7 +290,8 @@ const FRAGMENT_SCRIPT = `
  * pages asks the site to open it (the site checks it is one of this proposal's pages). Hovering a
  * block (or, from the keyboard, picking one) offers a Comment button, which asks the site to start
  * a thread on it; the site sends back how many open threads each block has, shown as badges, and
- * asks the frame to scroll to a block (FRAGMENT_SCRIPT handles #fragments). Shown on its own (the
+ * asks the frame to scroll to a block (FRAGMENT_SCRIPT handles #fragments); the frame reports which
+ * heading is being read, for the table of contents. Shown on its own (the
  * raw route), the page has no site around it and does none of this. Its own styles cannot restyle
  * these controls: they reset every property inline.
  */
@@ -346,7 +347,7 @@ const BRIDGE_SCRIPT = `
     Object.keys(counts).forEach(function (id) {
       var block = find(id);
       if (!block || !counts[id]) return;
-      var badge = control("\u{1F4AC} " + counts[id], "background:#6a45bf;color:#ffffff;border:1px solid #6a45bf;");
+      var badge = control(counts[id] + (counts[id] === 1 ? " comment" : " comments"), "background:#6a45bf;color:#ffffff;border:1px solid #6a45bf;");
       badge.title = counts[id] + " open comment" + (counts[id] === 1 ? "" : "s");
       badge.addEventListener("click", function () { send({ type: "bcs-show-thread", block: id }); });
       place(badge, block, 0);
@@ -369,7 +370,7 @@ const BRIDGE_SCRIPT = `
       return;
     }
     current = block;
-    place(add, block, counts[block.getAttribute("data-bcs-block")] ? 58 : 0);
+    place(add, block, counts[block.getAttribute("data-bcs-block")] ? 96 : 0);
   });
   add.addEventListener("click", function () {
     if (!current) return;
@@ -405,7 +406,7 @@ const BRIDGE_SCRIPT = `
     var block = blockOf(event.target);
     if (!block) return;
     current = block;
-    place(add, block, counts[block.getAttribute("data-bcs-block")] ? 58 : 0);
+    place(add, block, counts[block.getAttribute("data-bcs-block")] ? 96 : 0);
   });
   document.addEventListener("keydown", function (event) {
     if (!picking) return;
@@ -443,6 +444,31 @@ const BRIDGE_SCRIPT = `
       }
     }
   });
+  // The heading being read, for the site's table of contents: the last one scrolled past the top.
+  var headings = document.querySelectorAll("h1[id], h2[id], h3[id]");
+  var lastActive = null;
+  var scheduled = false;
+  function reportActive() {
+    scheduled = false;
+    var active = headings.length ? headings[0].id : null;
+    for (var i = 0; i < headings.length; i++) {
+      if (headings[i].getBoundingClientRect().top <= 96) active = headings[i].id;
+      else break;
+    }
+    // At the bottom a short last section never reaches the top: it is the one being read.
+    var bottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+    if (bottom && headings.length && window.scrollY > 0) active = headings[headings.length - 1].id;
+    if (active !== lastActive) {
+      lastActive = active;
+      send({ type: "bcs-active-heading", id: active });
+    }
+  }
+  window.addEventListener("scroll", function () {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(reportActive);
+  }, { passive: true });
+  window.addEventListener("load", reportActive);
   window.addEventListener("resize", drawBadges);
   window.addEventListener("load", drawBadges);
   if (window.ResizeObserver) new ResizeObserver(drawBadges).observe(document.body);
