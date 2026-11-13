@@ -33,7 +33,7 @@ export async function GET(
   const proposal = found.value;
   if (!proposal) return new NextResponse("Not found", { status: 404 });
   const old = proposal.version !== proposal.currentVersion;
-  const document = await renderBcsPage({
+  const { document } = await renderBcsPage({
     format: proposal.page.format,
     content: proposal.page.content,
     title: slug === "" ? proposal.title : `${proposal.page.title} · ${proposal.title}`,

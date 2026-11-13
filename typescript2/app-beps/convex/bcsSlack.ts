@@ -63,6 +63,58 @@ export interface Overview {
   authors: string[];
   currentVersion: number;
   updatedAt: number;
+  openComments?: number;
+}
+
+/** A comment as its Slack reply shows it. */
+export interface SlackComment {
+  id: string;
+  threadId: string;
+  body: string;
+  isReply: boolean;
+  page: string;
+  pageTitle: string;
+  quote?: string;
+  threadAuthor: string;
+  threadBody: string;
+}
+
+function commentUrl(number: number, comment: SlackComment): string {
+  const query = new URLSearchParams({ comment: comment.threadId });
+  if (comment.page) query.set("page", comment.page);
+  return `${SITE_URL}/bcs/${number}?${query}`;
+}
+
+/** A reply in the thread for a new comment or reply, quoting the block it is on. */
+export function commentBlocks(proposal: Overview, who: string, comment: SlackComment): Block[] {
+  const where = comment.page ? ` on *${escape(clip(comment.pageTitle, 100))}*` : "";
+  const heading = comment.isReply
+    ? `↪️ ${who} replied to *${escape(comment.threadAuthor)}*${where}`
+    : `💬 ${who} commented${where}`;
+  const quote = comment.isReply ? clip(comment.threadBody, 150) : comment.quote;
+  const blocks: Block[] = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          heading +
+          (quote ? `\n>_${escape(clip(quote, 200)).replace(/\n/g, " ")}_` : "") +
+          `\n${escape(clip(comment.body, 1500))}`,
+      },
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: comment.isReply ? "View thread" : "View & reply", emoji: true },
+          url: commentUrl(proposal.number, comment),
+        },
+      ],
+    },
+  ];
+  return blocks;
 }
 
 /** The thread's first message, edited in place whenever the proposal changes. */
@@ -86,6 +138,9 @@ export function overviewBlocks(proposal: Overview, isNew: boolean): Block[] {
         { type: "mrkdwn", text: `*Authors:* ${escape(clip(proposal.authors.join(", "), 300))}` },
         { type: "mrkdwn", text: `*Version:* v${proposal.currentVersion}` },
         { type: "mrkdwn", text: `*Last updated:* ${slackDate(proposal.updatedAt)}` },
+        ...(proposal.openComments
+          ? [{ type: "mrkdwn", text: `*Open comments:* ${proposal.openComments}` }]
+          : []),
       ],
     },
     {
@@ -173,10 +228,13 @@ export const notify = internalAction({
     const channel = process.env.BCS_SLACK_CHANNEL?.trim();
     if (!channel) return;
     const version = args.event.kind === "saved" ? args.event.version : undefined;
+    const commentId =
+      args.event.kind === "comment" || args.event.kind === "resolved" ? args.event.commentId : undefined;
     const proposal = await ctx.runQuery(internal.bcs.slackView, {
       docId: args.docId,
       version,
       githubId: args.githubId,
+      commentId,
     });
     if (!proposal) return;
     const who = proposal.slackUserId ? `<@${proposal.slackUserId}>` : `*${escape(args.login)}*`;
@@ -222,6 +280,35 @@ export const notify = internalAction({
       thread = kept;
     }
 
+    if (args.event.kind === "comment" && proposal.comment) {
+      await slack("chat.postMessage", {
+        channel,
+        thread_ts: thread,
+        blocks: commentBlocks(proposal, who, proposal.comment),
+        text: `${proposal.comment.isReply ? "Reply" : "Comment"} on ${label}`,
+        unfurl_links: false,
+      });
+      return;
+    }
+    if (args.event.kind === "resolved" && proposal.comment) {
+      const verb = args.event.resolved ? "✅ resolved" : "↩️ reopened";
+      await slack("chat.postMessage", {
+        channel,
+        thread_ts: thread,
+        blocks: [
+          {
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `${who} ${verb} <${commentUrl(proposal.number, proposal.comment)}|a comment> by *${escape(proposal.comment.threadAuthor)}*: _${escape(clip(proposal.comment.threadBody, 150)).replace(/\n/g, " ")}_`,
+            },
+          },
+        ],
+        text: `Comment ${args.event.resolved ? "resolved" : "reopened"} on ${label}`,
+        unfurl_links: false,
+      });
+      return;
+    }
     if (args.event.kind !== "saved") return;
     const blocks = savedBlocks(proposal, who, {
       version,

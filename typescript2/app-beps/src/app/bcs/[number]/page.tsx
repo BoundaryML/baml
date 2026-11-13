@@ -8,11 +8,17 @@ import { currentViewer } from "@/lib/bcs-auth";
 import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
 import { flattenOutline } from "@/lib/bcs-outline";
 import { renderBcsPage } from "@/lib/bcs-render";
-import { removePage, updateProposal } from "../actions";
+import {
+  addComment,
+  removePage,
+  replyToComment,
+  setCommentResolved,
+  updateProposal,
+} from "../actions";
 import { TeamOnly } from "../team-only";
 import { BcsUnavailable } from "../unavailable";
 import { RemovePageForm, UpdateProposalForm } from "../forms";
-import { BcsFrame } from "./frame";
+import { BcsReader } from "./reader";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +27,7 @@ export default async function BcsProposal({
   searchParams,
 }: {
   params: Promise<{ number: string }>;
-  searchParams: Promise<{ v?: string; page?: string }>;
+  searchParams: Promise<{ v?: string; page?: string; comment?: string }>;
 }) {
   const viewer = await currentViewer();
   if (!viewer) return <TeamOnly />;
@@ -49,7 +55,12 @@ export default async function BcsProposal({
   const shownVersion = old ? proposal.version : undefined;
   const page = proposal.page;
   const outline = flattenOutline(proposal.outline);
-  const document = await renderBcsPage({
+  const comments = await bcsCall((convex, secret) =>
+    convex.query(api.bcsComments.list, { secret, number, page: page.slug })
+  );
+  if (!comments.ok) return <BcsUnavailable message={comments.failure.message} />;
+  const { threads, openByPage } = comments.value ?? { threads: [], openByPage: {} };
+  const rendered = await renderBcsPage({
     format: page.format,
     content: page.content,
     title: page.slug === "" ? proposal.title : `${page.title} · ${proposal.title}`,
@@ -171,17 +182,32 @@ export default async function BcsProposal({
                     }`}
                   >
                     {entry.title}
+                    {openByPage[entry.slug] ? (
+                      <span
+                        className="ml-1.5 rounded-full bg-violet-600/15 px-1.5 text-xs text-violet-700 dark:text-violet-300"
+                        title={`${openByPage[entry.slug]} open comment${openByPage[entry.slug] === 1 ? "" : "s"}`}
+                      >
+                        {openByPage[entry.slug]}
+                      </span>
+                    ) : null}
                   </Link>
                 </li>
               ))}
             </ul>
           </nav>
         )}
-        <BcsFrame
+        <BcsReader
           key={`${proposal.version}/${page.slug}`}
           title={page.title}
-          document={document}
+          document={rendered.document}
+          blocks={rendered.blocks}
           number={proposal.number}
+          version={proposal.version}
+          threads={threads}
+          focusThread={query.comment}
+          addComment={addComment.bind(null, proposal.number, page.slug, proposal.version)}
+          reply={replyToComment.bind(null, proposal.number)}
+          resolve={setCommentResolved.bind(null, proposal.number)}
         />
       </div>
     </div>
