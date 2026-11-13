@@ -626,6 +626,14 @@ impl BexVm {
             return unsafe { HeapPtr::from_ptr(statics.add(idx.into_raw()).cast_mut()) };
         }
         let _ = statics;
+        self.class_at_slow(record, idx)
+    }
+
+    /// [`Self::class_at`] for a runtime package's body, kept out of line so a
+    /// field access in the program's own code inlines only its fast path.
+    #[cold]
+    #[inline(never)]
+    fn class_at_slow(&self, record: &FrameRecord, idx: bex_vm_types::ObjectIndex) -> HeapPtr {
         self.record_object(record, idx)
     }
 
