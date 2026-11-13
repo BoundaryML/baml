@@ -131,6 +131,12 @@ pub struct Package {
     /// read off the target; the edge itself records only how the target's
     /// exports relate to this package ([`EdgeKind`]).
     pub edges: IndexMap<Name, Edge>,
+    /// What the compile that produced the package recorded about it: its
+    /// content hashes and the identity its manifest claims (BEP-085).
+    /// Carried for telemetry and tooling to correlate builds by. The
+    /// runtime never keys or compares packages by it; `None` for a package
+    /// no compile produced.
+    pub metadata: Option<crate::identity::PackageMetadata>,
     /// Classes defined in the package.
     pub classes: IndexMap<LocalName, HeapPtr>,
     /// Enums defined in the package.
@@ -298,6 +304,7 @@ impl Package {
             name,
             kind: PackageKind::Ordinary,
             edges: IndexMap::new(),
+            metadata: None,
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -420,6 +427,8 @@ pub struct ProgramPackage {
     /// Versioned `PackageInterface` artifact captured at build time and
     /// embedded in generated programs.
     pub interface_blob: Vec<u8>,
+    /// What the compile recorded about the package ([`Package::metadata`]).
+    pub metadata: Option<crate::identity::PackageMetadata>,
     /// The package's synthesized `$init_test`, if present.
     pub test_init: Option<ObjectIndex>,
     /// The package's synthesized `$init`, if it has `let`s.

@@ -867,6 +867,7 @@ impl GlobalState {
                                 self_name: spec.self_name.clone(),
                                 interface: None,
                                 dependencies: Vec::new(),
+                                claim: spec.claim.clone(),
                             })
                             .map_err(|e| LspError::RequestFailed(e.to_string()))?;
                         applied.roots_changed = true;

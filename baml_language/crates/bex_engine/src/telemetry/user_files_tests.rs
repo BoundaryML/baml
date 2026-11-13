@@ -86,7 +86,7 @@ fn recording_starts_in_cwd_project() {
             recording = recording.preferring_cwd_project();
         }
         let (runtime, delivery) = recording
-            .start(None, Arc::default(), &Context::default())
+            .start(None, None, Arc::default(), &Context::default())
             .unwrap();
         let directory = delivery.unwrap().directory().unwrap().to_path_buf();
         runtime.finish().unwrap();

@@ -161,6 +161,7 @@ fn interface_record(payload: &[u8]) -> PackageRecord {
             payload,
         )
         .expect("an interface artifact encodes"),
+        metadata: None,
     }
 }
 
@@ -585,9 +586,11 @@ fn transitive_dependencies_bind_through_the_parent_edge_table() {
 fn layout_is_package_major_in_set_order() {
     let stdlib_record = PackageRecord {
         interface_blob: Vec::new(),
+        metadata: None,
     };
     let user_record = PackageRecord {
         interface_blob: vec![1, 2, 3],
+        metadata: None,
     };
     let mut std_unit = unit_with_fn("baml.x", vec![Instruction::Return]);
     std_unit.classes.push(class("S"));
@@ -1218,6 +1221,7 @@ fn a_prelude_entry_binds_through_no_edge() {
         .push(import(1, DeclPath::Class(item("S"))));
     let empty = PackageRecord {
         interface_blob: Vec::new(),
+        metadata: None,
     };
     let set = LinkSet {
         root: LinkPackageId(1),
@@ -1258,6 +1262,7 @@ fn a_transitive_entry_may_reach_a_language_package() {
         .push(import(2, DeclPath::Class(item("S"))));
     let empty = PackageRecord {
         interface_blob: Vec::new(),
+        metadata: None,
     };
     let set = LinkSet {
         root: LinkPackageId(2),
@@ -1295,6 +1300,7 @@ fn a_prelude_dependency_carries_no_fingerprint() {
     };
     let empty = PackageRecord {
         interface_blob: Vec::new(),
+        metadata: None,
     };
     let set = |consumer| {
         let mut set = LinkSet {
@@ -1331,6 +1337,7 @@ fn a_prelude_dependency_carries_no_fingerprint() {
 fn a_declared_dependency_without_an_interface_payload_is_refused() {
     let empty = PackageRecord {
         interface_blob: Vec::new(),
+        metadata: None,
     };
     let provider = unit_with_class("Widget", "Widget");
     let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);

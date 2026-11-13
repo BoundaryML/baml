@@ -100,10 +100,10 @@ mod thread;
 pub use bex_vm::{CompiledBodies, CompiledBodyTable, compiled_rt::STACKFUL_FIBERS_SUPPORTED};
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
-#[cfg(not(target_arch = "wasm32"))]
-pub use telemetry::TelemetryRecording;
 #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry_diagnostics"))]
 pub use telemetry::append_diagnostics_line;
+#[cfg(not(target_arch = "wasm32"))]
+pub use telemetry::{BuildProvider, TelemetryRecording};
 mod telemetry_network;
 mod telemetry_state;
 pub mod trace_heap;
@@ -1886,7 +1886,9 @@ impl BexEngine {
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
-        let program_id = ProgramId::new_random();
+        let program_id = bytecode_program
+            .linked_id()
+            .map_or_else(ProgramId::new_random, ProgramId);
         let source_snapshot_id = bytecode_program
             .source_content_hash
             .map(bex_events::ids::SourceSnapshotId);
@@ -2067,6 +2069,7 @@ impl BexEngine {
                     // Compile-time metadata is copied once, before any VM executes.
                     Some(recording) => recording.start(
                         source_snapshot_id.map(|id| id.0),
+                        Some(program_id.0),
                         Arc::new(heap.static_function_metadata()),
                         &launch_context,
                     )?,

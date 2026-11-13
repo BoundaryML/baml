@@ -11,11 +11,12 @@ use baml_compiler2_hir::{
         interface_data, let_data,
     },
     loc::{DeclRef, FunctionLoc, LetLoc},
+    package::edge_table,
 };
 use baml_compiler2_hir_ty::{
     cleanup::{CleanupMethod, cleanup_method},
     lower::qualify_def,
-    package_interface::export_interface,
+    package_interface::{COMPILER_VERSION, export_interface, interface_digest},
 };
 use baml_compiler2_mir::{RuntimeLowering, definition_display_name};
 use baml_linker_types::{
@@ -24,6 +25,9 @@ use baml_linker_types::{
 };
 use bex_vm_types::{
     ClassMethodDef, DeclPath, Function, GlobalIndex, Object, ObjectIndex, ObjectPool,
+    identity::{
+        CompilationUnitHasher, PackageInterfaceHash, PackageMetadata, strip_source_positions,
+    },
 };
 
 use super::{
@@ -76,7 +80,6 @@ pub(super) fn finish<'db>(
     fill_class_methods(db, &files, &tables, &mut classes, &placed);
     let mut refs = refs.attach(db, root, scope.own(&tables));
     let impl_rules = bake_rules(db, root, &files, &offsets, &mut refs);
-    let record = package_record(db, root);
     let (tail, initializers) = match emit_tail(db, class_fields, root, &files, &lets, opt, scope)? {
         Some(parts) => (
             Some(seal_tail(db, (parts.tail, parts.refs))),
@@ -85,25 +88,21 @@ pub(super) fn finish<'db>(
         None => (None, Vec::new()),
     };
 
-    Ok((
-        EmittedPackage {
-            unit: CompilationUnit {
-                dependencies: crate::refs::dependency_locators(db, &refs.deps),
-                classes,
-                enums,
-                interfaces,
-                type_alias_objects: aliases,
-                code: code.into_iter().collect(),
-                object_imports: refs.imports.objects.into_entries(),
-                global_imports: refs.imports.globals.into_entries(),
-                exports,
-                impl_rules,
-            },
-            record,
-            tail,
-        },
-        initializers,
-    ))
+    let unit = CompilationUnit {
+        dependencies: crate::refs::dependency_locators(db, &refs.deps),
+        classes,
+        enums,
+        interfaces,
+        type_alias_objects: aliases,
+        code: code.into_iter().collect(),
+        object_imports: refs.imports.objects.into_entries(),
+        global_imports: refs.imports.globals.into_entries(),
+        exports,
+        impl_rules,
+    };
+    let record = package_record(db, root, &unit, tail.as_ref());
+
+    Ok((EmittedPackage { unit, record, tail }, initializers))
 }
 
 /// Where each compiled function sits in the unit's object space.
@@ -292,8 +291,13 @@ fn seal_tail(db: &dyn crate::Db, (mut tail, tail_refs): (InitTail, RefTables)) -
 }
 
 /// The whole-package product beside the unit: the interface a dependent
-/// compiles against.
-fn package_record(db: &dyn crate::Db, root: SourceRoot) -> PackageRecord {
+/// compiles against, and what the compile records about the package.
+fn package_record(
+    db: &dyn crate::Db,
+    root: SourceRoot,
+    unit: &CompilationUnit,
+    tail: Option<&InitTail>,
+) -> PackageRecord {
     // Runtime compilers already own the exact stdlib sources, so only
     // mountable packages need to carry a serialized compiler surface.
     let interface_blob = if root.kind(db) == SourceRootKind::Stdlib {
@@ -305,7 +309,53 @@ fn package_record(db: &dyn crate::Db, root: SourceRoot) -> PackageRecord {
         )
         .expect("PackageInterface artifact serialization into Vec is infallible")
     };
-    PackageRecord { interface_blob }
+    PackageRecord {
+        interface_blob,
+        metadata: Some(package_metadata(db, root, unit, tail)),
+    }
+}
+
+/// `root`'s metadata for this compile (BEP-085): the hash of the interface
+/// its dependents bind, the hash of the output emitted here, the interfaces
+/// it reaches, and its claim.
+fn package_metadata(
+    db: &dyn crate::Db,
+    root: SourceRoot,
+    unit: &CompilationUnit,
+    tail: Option<&InitTail>,
+) -> PackageMetadata {
+    let package_interface = PackageInterfaceHash(interface_digest(db, root));
+    // Hashed without source positions, which costs a copy of the output.
+    let mut content = (unit.clone(), tail.cloned());
+    for objects in [
+        &mut content.0.classes,
+        &mut content.0.enums,
+        &mut content.0.interfaces,
+        &mut content.0.type_alias_objects,
+        &mut content.0.code,
+    ] {
+        strip_source_positions(objects);
+    }
+    if let Some(tail) = &mut content.1 {
+        strip_source_positions(&mut tail.objects);
+    }
+    let mut hasher = CompilationUnitHasher::new(package_interface);
+    borsh::BorshSerialize::serialize(&content, &mut hasher)
+        .unwrap_or_else(|_| unreachable!("hashing a compiled package cannot fail"));
+    let mut dependencies = Vec::new();
+    for &(_, dependency) in edge_table(db, root) {
+        let reached = PackageInterfaceHash(interface_digest(db, dependency));
+        if !dependencies.contains(&reached) {
+            dependencies.push(reached);
+        }
+    }
+    PackageMetadata {
+        compilation_unit_hash: hasher.finish(),
+        package_interface,
+        dependencies,
+        claimed: root.claim(db),
+        compiler_version: COMPILER_VERSION.to_owned(),
+    }
 }
 
 /// A tail before its tables are sealed, with what a submission's tail

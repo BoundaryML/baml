@@ -182,6 +182,7 @@ borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
 bytesize = "2.4.2"
 cargo_metadata = { version = "0.23.1" }
+caseless = "0.2.2"
 cbindgen = "=0.29.0"
 cc = "1.2"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
@@ -201,6 +202,9 @@ flate2 = { version = "1" }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
+# Read-only repository facts for build records: HEAD, branch, origin and
+# work-tree status. No network, no mutation.
+gix = { version = "0.90.0", default-features = false, features = [ "sha1", "sha256", "status" ] }
 hex = "0.4"
 httpdate = "1.0.3"
 hmac = "0.12"

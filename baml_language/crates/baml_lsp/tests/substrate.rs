@@ -22,6 +22,7 @@ fn workspace(state: &mut GlobalState, root: &str, files: &[(&str, &str)]) {
             path: PathBuf::from(root),
             self_name: None,
             kind: SourceRootKind::Workspace,
+            claim: baml_base::ClaimedIdentity::default(),
         },
         files: files
             .iter()

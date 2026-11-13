@@ -451,11 +451,18 @@ impl TestArgs {
         let cached_engine = cached_program.and_then(|program| {
             // Bytecode-cache hit: the Program carries the in-VM test registry,
             // so the database (typecheck, HIR discovery, emit) is skipped.
+            let build = crate::build_record::provider(
+                &session.db,
+                session.package,
+                &program,
+                btel_types::BuildOrigin::Test,
+            );
             match crate::runtime_telemetry::create_engine(
                 program,
                 Vec::new(),
                 session.root(),
                 crate::runtime_telemetry::session_sources(&session),
+                build,
             ) {
                 Ok(engine) => Some(Arc::new(engine)),
                 Err(_) => None,
@@ -511,12 +518,19 @@ impl TestArgs {
                 )?;
             }
 
+            let build = crate::build_record::provider(
+                &session.db,
+                session.package,
+                &program,
+                btel_types::BuildOrigin::Test,
+            );
             Arc::new(
                 crate::runtime_telemetry::create_engine(
                     program,
                     Vec::new(),
                     session.root(),
                     crate::runtime_telemetry::session_sources(&session),
+                    build,
                 )
                 .context("failed to create engine")?,
             )

@@ -98,6 +98,9 @@ pub struct PackageInterface<N: Head = DeclName> {
     pub reexports: IndexMap<Vec<Name>, IndexMap<Name, ReExport<N>>>,
 }
 
+/// The version every interface this compiler exports is stamped with.
+pub const COMPILER_VERSION: &str = baml_version::CANONICAL_VERSION;
+
 /// A package interface as an artifact carries it: the rows, with every head
 /// addressed by a slot of the blob's own dependency table.
 ///
@@ -113,6 +116,13 @@ pub struct PackageInterface<N: Head = DeclName> {
 /// bytes mean the same declarations in every database and under every alias.
 #[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct WireInterface {
+    /// What the exporting package's manifest claims it is (BEP-085). Part of
+    /// the payload, so the interface digest covers it: the same rows under
+    /// another name or version are another interface.
+    pub claimed: baml_base::ClaimedIdentity,
+    /// The compiler that exported the interface ([`COMPILER_VERSION`]), in
+    /// the payload for the same reason.
+    pub compiler_version: String,
     pub dependencies: Vec<Locator>,
     pub rows: PackageInterface<WireName>,
 }
@@ -1391,7 +1401,12 @@ pub fn export_interface(
         })
         .unwrap_or_else(|never| match never {});
     let dependencies = table.locators(db, |dependency| interface_digest(db, dependency));
-    WireInterface { dependencies, rows }
+    WireInterface {
+        claimed: root.claim(db),
+        compiler_version: COMPILER_VERSION.to_owned(),
+        dependencies,
+        rows,
+    }
 }
 
 /// The digest of the interface a dependent of `root` compiles against:

@@ -188,9 +188,9 @@ impl Assembler<'_, '_> {
 
     /// Copy the package record in.
     fn fill_record(&self, id: LinkPackageId, package: &mut ProgramPackage) {
-        package
-            .interface_blob
-            .clone_from(&self.set.package(id).record.interface_blob);
+        let record = self.set.package(id).record;
+        package.interface_blob.clone_from(&record.interface_blob);
+        package.metadata.clone_from(&record.metadata);
     }
 
     /// Resolve a unit's impl rules: the interface head through its operand

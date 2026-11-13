@@ -44,6 +44,8 @@ impl Recording {
             process_started_at_unix_ns: self.process.map(|_| 1_790_000_000_000_000_000),
             source_cas_id: None,
             initial_context_cas_id: None,
+            program_id: None,
+            build: None,
         });
         file.sequence = sequence;
         let part = self.dir.join(format!("{sequence:020}.btel.part"));

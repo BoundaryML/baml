@@ -28,6 +28,84 @@ pub struct ProcessInfo {
     pub started_at_unix_ns: i64,
 }
 
+/// A git commit ID, in the repository's object format.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GitHash {
+    Sha1([u8; 20]),
+    Sha256([u8; 32]),
+}
+
+impl GitHash {
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            Self::Sha1(bytes) => bytes,
+            Self::Sha256(bytes) => bytes,
+        }
+    }
+}
+
+/// Where a build's package sat in git when it was built (BEP-088).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitInfo {
+    /// URL of `origin` in `https` form with credentials removed; `None`
+    /// when the repository has no `origin`.
+    pub remote: Option<String>,
+    /// The commit at `HEAD`.
+    pub hash: GitHash,
+    /// The package's files differ from `hash`: a tracked file is modified,
+    /// staged or deleted, or a file is untracked and not ignored. The commit
+    /// then only says what the build started from.
+    pub dirty: bool,
+    /// The branch `HEAD` is on; `None` when it is detached and the CI names
+    /// no branch.
+    pub branch: Option<String>,
+    /// Where the package sits relative to the repository root, `/`-separated.
+    /// Empty when the package is the root.
+    pub package_path: String,
+}
+
+/// What ran the compiler for a build.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BuildOrigin {
+    Pack,
+    Generate,
+    Run,
+    Test,
+    /// A package compiled at run time.
+    Dynamic,
+}
+
+impl BuildOrigin {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pack => "pack",
+            Self::Generate => "generate",
+            Self::Run => "run",
+            Self::Test => "test",
+            Self::Dynamic => "dynamic",
+        }
+    }
+}
+
+/// One run of the compiler building one package (BEP-088's `build` row).
+/// Unlike a package's metadata it is not a function of the package: two
+/// builds of the same code are two records.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BuildRecord {
+    /// Identifies this run of the compiler: a random UUID.
+    pub build_id: [u8; 16],
+    pub timestamp_unix_ns: i64,
+    pub origin: BuildOrigin,
+    /// `None` when the package is not in a git repository.
+    pub git: Option<GitInfo>,
+    /// Hash of the package's formatted, normalized source text.
+    pub source_hash: [u8; 32],
+    /// The package this build produced.
+    pub compilation_unit_hash: [u8; 32],
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProcessStatus {
     /// The host finalized its SDK lifetime without reporting an exit outcome.

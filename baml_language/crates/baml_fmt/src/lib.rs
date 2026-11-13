@@ -1,5 +1,6 @@
 pub mod ast;
 mod newline_style;
+pub mod package_source;
 pub mod printer;
 mod trivia_classifier;
 

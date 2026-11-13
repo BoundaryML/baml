@@ -33,6 +33,8 @@ fn sdk_completion_is_emitted_only_in_the_terminal_file() {
             sources: None,
             context: None,
             exit: Arc::clone(&exit),
+            program_id: None,
+            build: None,
         });
     exit.set(btel_types::ProcessExit {
         status: btel_types::ProcessStatus::Unknown,
@@ -1376,6 +1378,7 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
         lambda_path: None,
         definition_key: None,
         package_name: Some("user".into()),
+        compilation_unit_hash: None,
         namespace: Vec::new(),
         argument_layout: Some(btel_types::ArgumentLayout {
             slots: vec![btel_types::ArgumentSlot {

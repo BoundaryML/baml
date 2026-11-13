@@ -20,10 +20,13 @@ workspace = true
 baml_db = { workspace = true }
 baml_parser = { workspace = true }
 baml_syntax = { workspace = true }
+bex_vm_types = { workspace = true }
+caseless = { workspace = true }
 ouroboros = { workspace = true }
 salsa = { workspace = true }
 text-size = { workspace = true }
 thiserror = { workspace = true }
+unicode-normalization = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
