@@ -11,7 +11,7 @@ use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     Rejection,
     analysis::{CallShape, Repr, builtin_is_callable, reads_frame, static_realized},
-    render::{binop_name, cmp_name, object_ptr, object_value},
+    render::{binop_name, class_ptr, cmp_name, object_value},
 };
 
 impl<'db> Generator<'_, 'db> {
@@ -99,7 +99,7 @@ impl<'db> Generator<'_, 'db> {
                         fields.len()
                     ));
                 }
-                let class = object_ptr(object);
+                let class = class_ptr(object);
                 if type_arg_templates.is_empty() {
                     let words = self.slot_words(block, object, fields)?.join(", ");
                     format!("vm.new_instance_of({class}, [{words}])")

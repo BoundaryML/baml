@@ -8,7 +8,7 @@ use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     admit::Rejection,
     analysis::Repr,
-    render::{coerce, object_ptr},
+    render::{class_ptr, coerce},
 };
 
 /// The accessor suffix and representation of a field stored as `kind`.
@@ -33,7 +33,7 @@ impl ClassField<'_> {
     /// its slot.
     fn args(&self) -> String {
         let slot = self.layout.slot(self.field);
-        format!("{}, {}, {slot}", object_ptr(self.object), self.field)
+        format!("{}, {}, {slot}", class_ptr(self.object), self.field)
     }
 }
 

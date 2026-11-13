@@ -81,6 +81,12 @@ pub(crate) fn object_ptr(object: usize) -> String {
     format!("vm.record_object(fr, ObjectIndex::from_raw({object}))")
 }
 
+/// The heap pointer to the class `object`, through the `statics` base the
+/// body reads at entry.
+pub(crate) fn class_ptr(object: usize) -> String {
+    format!("vm.class_at(statics, fr, ObjectIndex::from_raw({object}))")
+}
+
 pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {
     use Repr::{Bool, Float, Int, Value};
     match (from, to) {

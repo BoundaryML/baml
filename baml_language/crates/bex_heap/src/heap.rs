@@ -711,6 +711,13 @@ impl BexHeap {
         unsafe { self.make_heap_ptr(raw_ptr) }
     }
 
+    /// The first compile-time object. The array is never resized, so an
+    /// object's address is this base plus its index for the heap's lifetime.
+    #[must_use]
+    pub fn compile_time_base(&self) -> *const Object {
+        self.compile_time.as_ptr()
+    }
+
     /// Get a shared reference to Gen0 (the nursery / active allocation space).
     ///
     /// # Safety

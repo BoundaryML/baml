@@ -348,6 +348,7 @@ impl<'db> Generator<'_, 'db> {
         if iterations {
             self.emit_line("let mut iterations: u32 = 0;");
         }
+        self.emit_line("let statics = vm.static_objects(fr);");
         for block in &self.body.blocks {
             let declaration = match &block.terminator {
                 Some(
