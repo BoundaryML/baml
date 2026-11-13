@@ -697,7 +697,7 @@ fn interface_calls_dispatch_on_known_classes() {
             "{task}: {body}"
         );
     }
-    assert_eq!(body.matches("if class == vm.record_object(").count(), 4);
+    assert_eq!(body.matches("if class == Some(vm.record_object(").count(), 4);
     assert!(body.contains("vm.virtual_target("), "{body}");
 }
 
