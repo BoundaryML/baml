@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "../../../../../../convex/_generated/api";
 import { BCS_COOKIE, isBcsOrgMember, sessionCookie, signSession } from "@/lib/bcs-auth";
+import { USER_COOKIE, signUser, userCookie } from "@/lib/beps-user";
 import { bcsCall } from "@/lib/bcs-convex";
 
 const PRODUCTION_URL = "https://beps.boundaryml.com";
@@ -199,6 +200,9 @@ export async function GET(request: NextRequest) {
     } else {
       response.cookies.set(BCS_COOKIE, "", { ...sessionCookie, maxAge: 0 });
     }
+    // Who signed in, member or not, for BEP API tokens (src/lib/beps-user.ts).
+    const user = signUser({ githubId, login: githubUser.login });
+    if (user) response.cookies.set(USER_COOKIE, user, userCookie);
     return response;
   } catch (error) {
     console.error("GitHub OAuth error:", error);
