@@ -190,7 +190,7 @@ class WrapperInvocation {
         // Reapply the selection to the latest validated document after downloads.
         let updated = selection_document(path, read_text(path), selected, global);
         write_atomic(path, updated);
-        baml.io.println(
+        baml.io.eprintln(
             `selected BAML toolchain ${describe_selector(selected)} in ${path} (previous: ${previous})`,
         );
         null

@@ -835,7 +835,9 @@ testset "toolchain management" {
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let selector = NEXT_VERSION;
-        let output = fixture.manage(candidate, ["toolchain", "use", selector]).stdout.to_string();
+        let result = fixture.manage(candidate, ["toolchain", "use", selector]);
+        root.harness.require(result.stdout.to_string() == "", "selection report reached stdout");
+        let output = result.stderr.to_string();
         root.harness.require(
             output.includes("previous:")
                 && output.includes(BASE_VERSION)
@@ -849,7 +851,9 @@ testset "toolchain management" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project("canary", key = "channel");
-        let output = fixture.manage(candidate, ["toolchain", "use", "nightly"]).stdout.to_string();
+        let result = fixture.manage(candidate, ["toolchain", "use", "nightly"]);
+        root.harness.require(result.stdout.to_string() == "", "selection report reached stdout");
+        let output = result.stderr.to_string();
         root.harness.require(
             output.includes("previous:")
                 && output.includes(BASE_VERSION)

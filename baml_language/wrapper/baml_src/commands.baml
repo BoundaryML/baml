@@ -101,7 +101,7 @@ class UninstallCommand {
             let path = `${toolchains()}/${self.version}`;
             ensure(baml.fs.exists(path), `toolchain ${self.version} is not installed`);
             baml.fs.remove_dir_all(path);
-            baml.io.println(`uninstalled BAML toolchain ${self.version}`);
+            baml.io.eprintln(`uninstalled BAML toolchain ${self.version}`);
             null
         }
     }

@@ -71,8 +71,8 @@ class WrapperUpdater {
         } else {
             baml.fs.rename(temp, self.executable);
         }
-        baml.io.println(`updated BAML wrapper to ${release.version}`);
-        baml.io.println("To check language toolchain updates, run: baml toolchain status");
+        baml.io.eprintln(`updated BAML wrapper to ${release.version}`);
+        baml.io.eprintln("To check language toolchain updates, run: baml toolchain status");
         helper
     }
 

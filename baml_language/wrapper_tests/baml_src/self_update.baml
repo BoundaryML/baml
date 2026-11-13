@@ -39,7 +39,16 @@ testset "wrapper self update" {
             };
             fixture.wrapper_archive(mode = "valid");
             let state = fixture.read(CHANNEL_STATE_FILE);
-            fixture.manage(copy, ["self", "update"], success = true);
+            let updated = fixture.manage(
+                copy,
+                ["self", "update", "--output-format", "json"],
+                success = true,
+            );
+            root.harness.require(updated.stdout.to_string() == "", "update report reached stdout");
+            root.harness.require(
+                updated.stderr.to_string().includes("updated BAML wrapper"),
+                "update report was not written to stderr",
+            );
             fixture.behavior(REPLACEMENT_WRAPPER_IDENTITY, "replacement\n");
             let attempts = 0;
             while (attempts < 100) {
