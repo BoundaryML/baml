@@ -70,6 +70,13 @@ Target options:
       --hot
           Watch the project's files and hot swap each save into the running program
 
+      --no-hotswap
+          Turn hot swapping from Boundary Cloud off for this process
+
+      --hotswap-startup-wait <DURATION>
+          How long to wait for this process's hot swaps before serving, such as `5s`. Overrides
+          `[hotswap] startup_wait`
+
       --list
           List runnable targets (scripts, functions)
 

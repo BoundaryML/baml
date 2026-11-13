@@ -108,6 +108,9 @@ pub struct FunctionMetadata {
     /// An `ai.Client.invoke` implementation or a stream's settle step: the
     /// model calls its returned turn made are its own usage.
     pub model_invoke: bool,
+    /// The hot swap (BEP-087) whose code this function is, or `None` for the
+    /// code as built.
+    pub hotswap_id: Option<String>,
 }
 
 /// Line table of one function's compact bytecode. PCs are byte offsets into

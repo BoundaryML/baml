@@ -306,6 +306,11 @@ pub const SPANS: Relation = Relation {
             "text",
             "policy_promoted (recorded only after it finished, by a policy), or other",
         ),
+        col(
+            "hotswap_id",
+            "text",
+            "the hot swap whose code ran the function (BEP-087); NULL for the code as built, and for futures and network spans",
+        ),
     ],
     view: "
 CREATE TEMP VIEW spans AS
@@ -340,6 +345,7 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   __btel_usage_value(IIF(f.model_invoke = 1, c.usage, NULL)) AS self_usage,
   __btel_usage_value(c.total_usage) AS total_usage,
   CASE WHEN c.late = 1 THEN 'policy_promoted' ELSE 'other' END AS span_reason,
+  f.hotswap_id AS hotswap_id,
   c.rec AS __span_id_rec, c.call_id AS __span_id_key,
   c.rec AS __future_id_rec, c.thread_id AS __future_id_key,
   c.rec AS __parent_span_id_rec, c.parent_id AS __parent_span_id_key
@@ -388,6 +394,7 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   __btel_usage_value(NULL) AS self_usage,
   __btel_usage_value(t.total_usage) AS total_usage,
   'other' AS span_reason,
+  NULL AS hotswap_id,
   t.rec AS __span_id_rec, t.thread_id AS __span_id_key,
   t.rec AS __future_id_rec, COALESCE(pt.thread_id, pc.thread_id) AS __future_id_key,
   t.rec AS __parent_span_id_rec, t.parent_id AS __parent_span_id_key
@@ -433,6 +440,7 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   __btel_usage_value(NULL) AS self_usage,
   __btel_usage_value(NULL) AS total_usage,
   'other' AS span_reason,
+  NULL AS hotswap_id,
   n.rec AS __span_id_rec, n.span_id AS __span_id_key,
   n.rec AS __future_id_rec, n.thread_id AS __future_id_key,
   n.rec AS __parent_span_id_rec, n.parent_id AS __parent_span_id_key

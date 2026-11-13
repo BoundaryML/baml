@@ -82,6 +82,7 @@ impl GcTelemetry {
                         argument_layout: None,
                         source_map: None,
                         model_invoke: false,
+                        hotswap_id: None,
                     })
             })
             .as_ref()

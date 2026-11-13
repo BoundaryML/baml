@@ -1388,6 +1388,7 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
         }),
         source_map: None,
         model_invoke: false,
+        hotswap_id: None,
     };
     let table = std::sync::Arc::new(btel_types::FunctionMetadataTable {
         functions: vec![metadata_for(known)],
@@ -1848,6 +1849,7 @@ fn package_identity_is_recorded_unless_the_destination_declines_it() {
                 definition_key: None,
                 package_name: Some("user".into()),
                 compilation_unit_hash: Some([7; 32]),
+                hotswap_id: None,
                 namespace: Vec::new(),
                 argument_layout: None,
                 source_map: None,
@@ -1945,6 +1947,7 @@ fn a_log_carries_its_line_and_raises_the_file_minor_only_with_one() {
         definition_key: None,
         package_name: Some("user".into()),
         compilation_unit_hash: None,
+        hotswap_id: None,
         namespace: Vec::new(),
         argument_layout: None,
         source_map,

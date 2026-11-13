@@ -153,6 +153,8 @@ CREATE TABLE function_def (
   -- 1 for an ai.Client.invoke implementation or a stream's settle step
   -- (format minor 13): its spans' usage is its own.
   model_invoke INTEGER,
+  -- The hot swap whose code the function is (format minor 14); NULL as built.
+  hotswap_id TEXT,
   conflict INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (rec, function_id)
 ) STRICT, WITHOUT ROWID;

@@ -101,6 +101,7 @@ fn companion_def(
         is_tagged_template_tag: parent.is_tagged_template_tag,
         directives: crate::ast::NativeDirectives::default(),
         trace_hook: None,
+        hotswap: parent.hotswap,
         span: parent.span,
         name_span: parent.name_span,
     }

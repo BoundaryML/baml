@@ -1588,9 +1588,10 @@ impl<'t> Applier<'t> {
                            definition_key, kind, kind_detail, origin, source_file, source_file_id,
                            source_start, source_end, package, namespace, namespace_json,
                            owner_type_key, parent_function_key, lambda_path, argument_names,
-                           parameter_count, metadata, source_map, source_map_state, model_invoke)
+                           parameter_count, metadata, source_map, source_map_state, model_invoke,
+                           hotswap_id)
                          VALUES (?1, ?2, 2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                           ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
+                           ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
                          ON CONFLICT (rec, function_id) DO UPDATE SET
                            state = 2, fqn = excluded.fqn, display_name = excluded.display_name,
                            definition_key = excluded.definition_key, kind = excluded.kind,
@@ -1608,7 +1609,8 @@ impl<'t> Applier<'t> {
                            metadata = excluded.metadata,
                            source_map = excluded.source_map,
                            source_map_state = excluded.source_map_state,
-                           model_invoke = excluded.model_invoke",
+                           model_invoke = excluded.model_invoke,
+                           hotswap_id = excluded.hotswap_id",
                     )?
                     .execute(params![
                         self.rec,
@@ -1634,7 +1636,8 @@ impl<'t> Applier<'t> {
                         encoded,
                         map_blob,
                         map_state,
-                        metadata.model_invoke
+                        metadata.model_invoke,
+                        metadata.hotswap_id
                     ])?;
                 if let Some(layout) = layout {
                     let mut insert = self.tx.prepare_cached(

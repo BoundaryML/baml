@@ -387,3 +387,30 @@ fn tree_index_links_parents_owners_and_covering_nodes() {
     assert_eq!(all.len(), tree.arenas().all_ids().len());
     assert!(descendants(tree, sum).count() >= 3);
 }
+
+/// `/// baml:hotswap` marks a function, once, under a built-in rule (BEP-087).
+#[test]
+fn a_hotswap_mark_is_a_function_directive_with_a_built_in_rule() {
+    use baml_syntax::nodes::{AnyDoc, DirectiveKind, FunctionDef};
+    let text = "/// Summarizes.\n/// baml:hotswap=hotswap.select_only([A, B])\nfunction f(x: int) -> int { x }\n";
+    let parsed = parse(text);
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    let t = &parsed.tree;
+    let f = t.get(t.arenas().ids::<FunctionDef>().next().expect("f"));
+    assert!(t.list(f.docs).iter().any(
+        |doc| matches!(doc, AnyDoc::Directive(id) if t.get(*id).kind == DirectiveKind::Hotswap)
+    ));
+    let messages = |text: &str| -> Vec<String> {
+        parse(text)
+            .errors
+            .iter()
+            .map(|error| format!("{error:?}"))
+            .collect()
+    };
+    let unknown = messages("/// baml:hotswap=my_rule\nfunction f() -> int { 1 }\n");
+    assert!(unknown.iter().any(|m| m.contains("is not a built-in rule")), "{unknown:?}");
+    let twice = messages("/// baml:hotswap\n/// baml:hotswap=hotswap.any\nfunction f() -> int { 1 }\n");
+    assert!(twice.iter().any(|m| m.contains("more than once")), "{twice:?}");
+    let misplaced = messages("/// baml:hotswap\nclass C {\n  x: int\n}\n");
+    assert!(misplaced.iter().any(|m| m.contains("Only functions can be hot swapped")), "{misplaced:?}");
+}

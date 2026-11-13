@@ -15,6 +15,8 @@ pub mod diagnostics;
 #[cfg(feature = "auth")]
 pub mod error;
 #[cfg(feature = "auth")]
+pub mod hotswaps;
+#[cfg(feature = "auth")]
 pub mod query;
 #[cfg(feature = "auth")]
 mod store;

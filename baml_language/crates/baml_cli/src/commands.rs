@@ -250,6 +250,14 @@ pub(crate) enum CloudCommands {
         after_long_help = "Examples:\n  Run a query:\n    baml cloud recordings query \"SELECT span_name FROM spans LIMIT 5\"\n\n  Pick the project and environment:\n    baml cloud recordings query \"SELECT span_name FROM spans\" --project acme/app --env staging"
     )]
     Recordings(RecordingsCommands),
+
+    #[command(
+        subcommand,
+        about = "Swap marked functions in running processes",
+        long_about = "Swap functions marked `/// baml:hotswap` in running processes without a deploy (BEP-087).\n\n`create` swaps the working tree's changes against a baseline commit into the processes a query selects, once someone approves. `list`, `show`, `update` and `delete` manage swaps.",
+        after_long_help = "Examples:\n  Swap into every process in production:\n    baml cloud --env production hotswaps create \"SELECT process_id FROM processes\"\n\n  Approve a swap:\n    baml cloud hotswaps update hs_6Jp1 --approve\n\n  Show a swap's full history:\n    baml cloud hotswaps show hs_7Kq2 --events"
+    )]
+    Hotswaps(crate::hotswaps::HotswapsCommands),
 }
 
 impl RuntimeCli {
@@ -346,6 +354,7 @@ impl RuntimeCli {
             Commands::Cloud(cloud) => match &cloud.command {
                 CloudCommands::Auth(command) => command.run(cx, &cloud.scope),
                 CloudCommands::Recordings(command) => command.run(cx, Backend::Cloud(&cloud.scope)),
+                CloudCommands::Hotswaps(command) => command.run(cx, &cloud.scope),
             },
             Commands::Query(args) => run_command(
                 &Query {

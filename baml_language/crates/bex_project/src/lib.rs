@@ -49,6 +49,7 @@ use thiserror::Error;
 mod bex;
 mod fs;
 pub mod hotswap_fingerprint;
+pub mod hotswap_rules;
 mod precompiled_stdlib;
 mod precompiled_stdlib_config;
 mod runtime_compile;

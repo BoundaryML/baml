@@ -637,7 +637,8 @@ impl BexVm {
 
     /// Link `artifact`, the complete new source of `live` whose declarations
     /// are `fingerprints`, against the running package and check every swap
-    /// it implies relative to `baseline`, the source as built. A function the new source leaves as built goes back to its
+    /// it implies relative to `baseline`, the source as built. A replacement
+    /// whose name is in `swap_ids` records that swap on its spans. A function the new source leaves as built goes back to its
     /// own body. Installs nothing: the patch waits on this VM, previewed, for
     /// its initializers and [`Self::hotswap_queue`]. Returns how many
     /// initializers it has.
@@ -648,6 +649,7 @@ impl BexVm {
         baseline: &DeclFingerprints,
         fingerprints: &DeclFingerprints,
         dependencies: &IndexMap<String, HeapPtr>,
+        swap_ids: &std::collections::BTreeMap<String, std::sync::Arc<str>>,
     ) -> Result<usize, Vec<String>> {
         let vm = self;
         let classification = classify(baseline, fingerprints);
@@ -709,6 +711,17 @@ impl BexVm {
             });
             match checked {
                 Ok((function, entered, companions)) => {
+                    // Spans of the replacement name the swap it belongs to.
+                    if let Some(id) = swap_ids.get(&name) {
+                        for &(_, new) in &companions {
+                            if let Object::Function(function) = vm.get_object(new) {
+                                function.hotswap_redirect.set_swap_id(id.clone());
+                            }
+                        }
+                        if let Some((_, function)) = function_behind(vm, entered) {
+                            function.hotswap_redirect.set_swap_id(id.clone());
+                        }
+                    }
                     swaps.extend(
                         companions
                             .into_iter()

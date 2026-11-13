@@ -126,6 +126,7 @@ fn convert(m: &FunctionMetadata) -> proto::FunctionMetadata {
             }),
         source_map: m.source_map.as_ref().map(|map| source_map(m, map)),
         model_invoke: m.model_invoke,
+        hotswap_id: m.hotswap_id.clone(),
     }
 }
 
@@ -187,6 +188,7 @@ mod tests {
             definition_key: None,
             package_name: Some("user".into()),
             compilation_unit_hash: None,
+            hotswap_id: None,
             namespace: Vec::new(),
             argument_layout: None,
             source_map,

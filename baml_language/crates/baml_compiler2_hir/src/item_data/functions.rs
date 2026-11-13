@@ -486,6 +486,13 @@ pub fn function_trace_hook<'db>(
         .map(|hook| hook.path.clone())
 }
 
+/// Whether the function is marked `/// baml:hotswap` (BEP-087): a running
+/// program may replace it, so no caller may look through it.
+#[salsa::tracked]
+pub fn function_is_hotswappable<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> bool {
+    crate::file_item_tree(db, function.file(db))[function.id(db)].hotswap
+}
+
 #[salsa::tracked]
 pub fn function_trace_hook_span<'db>(
     db: &'db dyn crate::Db,

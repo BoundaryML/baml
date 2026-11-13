@@ -47,6 +47,7 @@ message RecordingHeader {
                                  // and the build of the program's package.
                                  // 15 adds the source line of a log event and the
                                  // error a thread ended with.
+                                 // 16 adds hot swap IDs on function metadata.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -136,6 +137,9 @@ message FunctionMetadata {
   // build of the package its spans ran. Exactly 32 bytes when supplied.
   // Absent for functions no compiled package owns and for older producers.
   optional bytes compilation_unit_hash = 17;
+  // Minor 16. The hot swap (BEP-087) whose code this function is; absent for
+  // the code as built.
+  optional string hotswap_id = 18;
 }
 
 // Line table of the code the VM executed, sorted by strictly increasing PC.

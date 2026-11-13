@@ -40,10 +40,12 @@ baml run
   --context <SOURCE> [env: BAML_CONTEXT]
   --file <PATH>
   --hot [default: false]
+  --hotswap-startup-wait <DURATION>
   --include-generated [default: false]
   --list [default: false]
   --log <LEVEL> [default: info] [env: BAML_LOG]
   --log-file <LOG_FILE>
+  --no-hotswap [default: false]
   --shutdown-timeout <DURATION> [default: 15s]
   -F, --features <FEATURES>
   -e, --expression <EXPRESSION>
@@ -54,6 +56,7 @@ baml pack
   --embed-telemetry [default: false]
   --file <PATH>
   --host-binary <PATH>
+  --no-hotswap [default: false]
   --rust [default: false]
   --rust-build-dir <DIR>
   --rust-profile <PROFILE> [default: release]
@@ -112,6 +115,24 @@ baml cloud recordings query
   <sql>
 baml cloud recordings schema
   <table>
+baml cloud hotswaps
+baml cloud hotswaps create
+  --baseline <COMMIT> [default: HEAD]
+  --no-wait [default: false]
+  --process <ID>
+  --replace <ID>
+  <query>
+baml cloud hotswaps list
+baml cloud hotswaps show
+  --events [default: false]
+  <id>
+baml cloud hotswaps update
+  --approve [default: false]
+  --disable [default: false]
+  --enable [default: false]
+  <id>
+baml cloud hotswaps delete
+  <id>
 baml query
   --max-rows <N>
   --max-wall <DURATION>

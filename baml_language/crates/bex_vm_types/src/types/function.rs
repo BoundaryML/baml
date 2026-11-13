@@ -436,7 +436,9 @@ fn impl_body_tail(body: &ImplBodyKey, label: Option<&Name>) -> String {
 /// collector forwarding the replacement, so the heap permit hand-off orders
 /// each write before any later read and a relaxed load is enough. `BexHeap`
 /// keeps the matching table that makes an occupied redirect a GC root.
-pub struct HotswapRedirect(AtomicValueSlot);
+///
+/// On a replacement, it also names the swap that installed it, for its spans.
+pub struct HotswapRedirect(AtomicValueSlot, std::sync::OnceLock<std::sync::Arc<str>>);
 
 impl HotswapRedirect {
     /// The installed replacement, or `None` for the function's own body.
@@ -444,6 +446,18 @@ impl HotswapRedirect {
     #[must_use]
     pub fn get(&self) -> Option<HeapPtr> {
         self.0.load_relaxed().as_object_ptr()
+    }
+
+    /// The swap that installed this function as a replacement, if one named
+    /// itself (BEP-087 stage 2); `None` for code as built and for `--hot`.
+    #[must_use]
+    pub fn swap_id(&self) -> Option<&str> {
+        self.1.get().map(|id| &**id)
+    }
+
+    /// Name the swap this replacement belongs to, before anything calls it.
+    pub fn set_swap_id(&self, id: std::sync::Arc<str>) {
+        let _ = self.1.set(id);
     }
 
     /// Install `replacement`. The caller must hold every heap permit.
@@ -455,7 +469,7 @@ impl HotswapRedirect {
 
 impl Default for HotswapRedirect {
     fn default() -> Self {
-        Self(AtomicValueSlot::new(Value::NULL))
+        Self(AtomicValueSlot::new(Value::NULL), std::sync::OnceLock::new())
     }
 }
 
@@ -940,6 +954,7 @@ impl Function {
             argument_layout: self.telemetry_argument_layout(),
             source_map: self.telemetry_source_map(),
             model_invoke: matches!(self.body_meta, Some(FunctionMeta::ModelInvoke)),
+            hotswap_id: self.hotswap_redirect.swap_id().map(str::to_string),
         })
     }
 

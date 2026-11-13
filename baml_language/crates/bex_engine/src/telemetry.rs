@@ -492,6 +492,21 @@ impl TelemetryRecording {
         self
     }
 
+    /// The endpoint and credential cloud delivery uses, for the other
+    /// requests a process makes to BCS, such as hot swapping (BEP-087).
+    /// `None` when recordings stay local.
+    pub fn cloud_link(&self) -> Option<bcs_api::credentials::RequestAuthorization> {
+        match &self.destination {
+            Destination::Cloud { delivery, .. } => delivery.authorization.clone(),
+            _ => None,
+        }
+    }
+
+    /// The host this engine reports, as `with_host` set it.
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
     /// What runs this engine: `baml` (the CLI), `lsp`, `pack`, `python`, ...
     #[must_use]
     pub fn with_host(mut self, host: impl Into<String>) -> Self {

@@ -76,13 +76,60 @@ fn build_argv(exe: &str, target_identifier: &str, tokens: &[String]) -> Vec<Stri
     argv
 }
 
-/// The OS argv split into the executable name and the user's tokens.
+/// The OS argv split into the executable name and the user's tokens, less
+/// the binary's own hot swapping flags, which [`HOTSWAP_FLAGS`] keeps.
 fn os_args() -> (String, Vec<String>) {
     let mut os_args = std::env::args();
     let exe = os_args
         .next()
         .unwrap_or_else(|| "baml-pack-host".to_string());
-    (exe, os_args.collect())
+    let (tokens, flags) = take_hotswap_flags(os_args.collect());
+    let _ = HOTSWAP_FLAGS.set(flags);
+    (exe, tokens)
+}
+
+/// `--no-hotswap` and `--hotswap-startup-wait DURATION` on a packed binary
+/// (BEP-087), as `baml run` takes them.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct HotswapFlags {
+    disabled: bool,
+    startup_wait: Option<std::time::Duration>,
+    /// A `--hotswap-startup-wait` that is no duration.
+    invalid: Option<String>,
+}
+
+static HOTSWAP_FLAGS: std::sync::OnceLock<HotswapFlags> = std::sync::OnceLock::new();
+
+/// Remove the hot swapping flags from `tokens`, before a `--`.
+fn take_hotswap_flags(tokens: Vec<String>) -> (Vec<String>, HotswapFlags) {
+    let mut flags = HotswapFlags::default();
+    let mut kept = Vec::with_capacity(tokens.len());
+    let mut tokens = tokens.into_iter();
+    let mut wait = |value: Option<String>, flags: &mut HotswapFlags| match value
+        .as_deref()
+        .map(baml_db::manifest::parse_duration)
+    {
+        Some(Ok(duration)) => flags.startup_wait = Some(duration),
+        Some(Err(problem)) => flags.invalid = Some(problem),
+        None => flags.invalid = Some("`--hotswap-startup-wait` needs a duration".into()),
+    };
+    while let Some(token) = tokens.next() {
+        if token == "--" {
+            kept.push(token);
+            kept.extend(tokens.by_ref());
+            break;
+        }
+        if token == "--no-hotswap" {
+            flags.disabled = true;
+        } else if token == "--hotswap-startup-wait" {
+            wait(tokens.next(), &mut flags);
+        } else if let Some(value) = token.strip_prefix("--hotswap-startup-wait=") {
+            wait(Some(value.to_string()), &mut flags);
+        } else {
+            kept.push(token);
+        }
+    }
+    (kept, flags)
 }
 
 /// Whether the target is typed — i.e. has one or more parameters whose
@@ -110,21 +157,56 @@ fn new_engine(
     telemetry: btel_settings::artifact::ArtifactTelemetry,
     launch_context: btel_types::context::Context,
     compiled_bodies: Option<bex_engine::CompiledBodies>,
-) -> Result<BexEngine, bex_engine::EngineError> {
+    hotswap: Option<baml_exec::PackedHotswap>,
+) -> Result<(BexEngine, Option<bex_hotswap::Prepared>), bex_engine::EngineError> {
     let recording = bex_engine::TelemetryRecording::from_artifact(&telemetry)?.with_host("pack");
-    BexEngine::new_with_config(
+    let flags = HOTSWAP_FLAGS.get_or_init(HotswapFlags::default);
+    if let Some(problem) = &flags.invalid {
+        return Err(bex_engine::EngineError::Other(problem.clone()));
+    }
+    let prepared = match hotswap {
+        Some(packed) => {
+            let default_rule = packed
+                .default_rule
+                .as_deref()
+                .map(bex_project::hotswap_rules::Rule::parse)
+                .transpose()
+                .map_err(bex_engine::EngineError::Other)?;
+            let build = bex_hotswap::HotswapBuild {
+                sources: packed.sources.into_iter().collect(),
+                commit: packed.commit,
+                config: bex_hotswap::HotswapConfig {
+                    enabled: true,
+                    default_rule,
+                    require_approval: packed.require_approval,
+                    startup_wait: flags
+                        .startup_wait
+                        .unwrap_or(std::time::Duration::from_millis(packed.startup_wait_ms)),
+                },
+            };
+            bex_hotswap::Prepared::new(build, flags.disabled, &recording)
+                .map_err(bex_engine::EngineError::Other)?
+        }
+        None => None,
+    };
+    let mut config = bex_engine::EngineConfig {
+        launch_context,
+        runtime_compiler: Some(bex_project::runtime_compiler()),
+        artifact_telemetry: Some(telemetry),
+        recording: Some(recording),
+        compiled_bodies,
+        ..Default::default()
+    };
+    if let Some(prepared) = &prepared {
+        prepared.configure(&mut config);
+    }
+    let engine = BexEngine::new_with_config(
         program,
         Arc::new(sys_native::SysOps::native()),
         argv,
-        bex_engine::EngineConfig {
-            launch_context,
-            runtime_compiler: Some(bex_project::runtime_compiler()),
-            artifact_telemetry: Some(telemetry),
-            recording: Some(recording),
-            compiled_bodies,
-            ..Default::default()
-        },
-    )
+        config,
+    )?;
+    Ok((engine, prepared))
 }
 
 fn function_catalog(program: &bex_vm_types::Program) -> Option<UserFunctionCatalog> {
@@ -282,19 +364,22 @@ fn launch(
 
     let has_compiled_bodies =
         compiled_bodies.is_some_and(|bodies| !bodies.table.entries.is_empty());
-    let engine = match new_engine(
+    let (engine, hotswap) = match new_engine(
         envelope.program,
         argv,
         envelope.telemetry,
         launch_context,
         compiled_bodies,
+        envelope.hotswap,
     ) {
-        Ok(e) => Arc::new(e),
+        Ok((engine, hotswap)) => (Arc::new(engine), hotswap),
         Err(e) => {
             print_error(format_args!("failed to initialize engine: {e}"));
             return ExitCode::FAILURE;
         }
     };
+    // Registers with BCS, and waits up to `startup_wait` for its swaps.
+    let _agent = hotswap.and_then(|hotswap| hotswap.start(Arc::clone(&engine), "pack"));
     finalize_dispatch(
         &engine,
         target_name,
@@ -401,5 +486,42 @@ mod tests {
             assert!(!compiled_bodies_disabled(Some(value)), "{value:?}");
         }
         assert!(!compiled_bodies_disabled(None));
+    }
+}
+
+#[cfg(test)]
+mod hotswap_flag_tests {
+    use super::{HotswapFlags, take_hotswap_flags};
+
+    fn take(tokens: &[&str]) -> (Vec<String>, HotswapFlags) {
+        take_hotswap_flags(tokens.iter().map(ToString::to_string).collect())
+    }
+
+    #[test]
+    fn the_binary_takes_its_hot_swapping_flags() {
+        let (tokens, flags) = take(&[
+            "--no-hotswap",
+            "--text",
+            "hi",
+            "--hotswap-startup-wait",
+            "5s",
+        ]);
+        assert_eq!(tokens, ["--text", "hi"]);
+        assert!(flags.disabled);
+        assert_eq!(flags.startup_wait, Some(std::time::Duration::from_secs(5)));
+        // After `--`, every token is the program's.
+        let (tokens, flags) = take(&["--hotswap-startup-wait=500ms", "--", "--no-hotswap"]);
+        assert_eq!(tokens, ["--", "--no-hotswap"]);
+        assert!(!flags.disabled);
+        assert_eq!(
+            flags.startup_wait,
+            Some(std::time::Duration::from_millis(500))
+        );
+        assert!(
+            take(&["--hotswap-startup-wait", "soon"])
+                .1
+                .invalid
+                .is_some()
+        );
     }
 }

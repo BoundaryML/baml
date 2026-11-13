@@ -65,4 +65,22 @@ pub struct PackEnvelope {
 
     /// Recording defaults and the runtime overrides permitted by the publisher.
     pub telemetry: btel_settings::artifact::ArtifactTelemetry,
+
+    /// What hot swapping from Boundary Cloud needs (BEP-087); `None` for a
+    /// binary that cannot be swapped (`baml pack --no-hotswap`, `[hotswap]
+    /// enabled = false`, or a project that marks no function).
+    pub hotswap: Option<PackedHotswap>,
+}
+
+/// A packed program's source and `[hotswap]` settings, as packed.
+#[derive(Clone, Debug, Default, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct PackedHotswap {
+    /// The project's source, by project-relative path: a swap is spliced
+    /// into it and compiled against the running program.
+    pub sources: Vec<(String, String)>,
+    /// The git commit the binary was packed from.
+    pub commit: Option<String>,
+    pub default_rule: Option<String>,
+    pub require_approval: bool,
+    pub startup_wait_ms: u64,
 }

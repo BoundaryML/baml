@@ -156,6 +156,10 @@ pub struct PackArgs {
     )]
     pub host_binary: Option<PathBuf>,
 
+    /// Build a binary that cannot be hot swapped from Boundary Cloud.
+    #[arg(long, help_heading = "Build options")]
+    pub no_hotswap: bool,
+
     /// The global `--project-dir`, set by [`Command::run`].
     #[arg(skip)]
     pub project_dir: Option<PathBuf>,
@@ -241,6 +245,7 @@ impl PackArgs {
                 })
                 .collect(),
             telemetry,
+            hotswap: self.packed_hotswap()?,
         };
 
         let (serialized, fingerprint) = baml_artifact::encode_with_digest(
@@ -512,6 +517,46 @@ impl PackArgs {
             )
         })?;
         Ok(())
+    }
+
+    /// What the binary needs to be swapped from Boundary Cloud: its source,
+    /// commit and `[hotswap]` settings, unless `--no-hotswap`, `[hotswap]
+    /// enabled = false`, `--rust` (native code cannot be swapped), or no
+    /// function is marked.
+    fn packed_hotswap(&self) -> Result<Option<baml_exec::PackedHotswap>> {
+        if self.no_hotswap || self.rust || self.file.is_some() {
+            return Ok(None);
+        }
+        let Some(root) = crate::project_load::find_project_root_from(self.project_dir.as_deref())?
+        else {
+            return Ok(None);
+        };
+        let config = crate::runtime_telemetry::hotswap_config(&root)?;
+        if !config.enabled {
+            return Ok(None);
+        }
+        let Some(sources) =
+            crate::hot_reload::read_sources(&crate::hot_reload::HotFiles::Project(root.clone()))
+        else {
+            anyhow::bail!("failed to read the project's sources for hot swapping");
+        };
+        let build = bex_hotswap::HotswapBuild {
+            sources,
+            commit: bex_hotswap::git_commit(&root),
+            config,
+        };
+        if build.marked().is_empty() {
+            return Ok(None);
+        }
+        build.check_marks().map_err(anyhow::Error::msg)?;
+        Ok(Some(baml_exec::PackedHotswap {
+            sources: build.sources.into_iter().collect(),
+            commit: build.commit,
+            default_rule: build.config.default_rule.map(|rule| rule.to_string()),
+            require_approval: build.config.require_approval,
+            startup_wait_ms: u64::try_from(build.config.startup_wait.as_millis())
+                .unwrap_or(u64::MAX),
+        }))
     }
 
     fn artifact_manifest(&self) -> Result<toml::Value> {
@@ -1004,6 +1049,7 @@ mod tests {
             rust_profile: RustProfile::Release,
             target_triple: None,
             host_binary: None,
+            no_hotswap: false,
             project_dir: None,
             expression: None,
         }
@@ -1576,6 +1622,7 @@ mod tests {
                 subcommand_name: "main".to_string(),
             }],
             telemetry: Default::default(),
+            hotswap: None,
         };
         let bytes =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope).unwrap();

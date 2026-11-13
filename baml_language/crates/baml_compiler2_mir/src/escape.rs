@@ -419,6 +419,10 @@ fn can_summarize(db: &dyn crate::Db, caller: SourceRoot, callee: FunctionLoc<'_>
     if baml_env::hotswap_enabled() {
         return root.kind(db) == SourceRootKind::Stdlib;
     }
+    // A marked function can be swapped in production (BEP-087).
+    if *baml_compiler2_hir::item_data::function_is_hotswappable(db, callee) {
+        return false;
+    }
     root == caller || root.kind(db) == SourceRootKind::Stdlib
 }
 

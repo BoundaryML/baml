@@ -37,6 +37,7 @@ bex_cache = { workspace = true }
 bex_engine = { workspace = true }
 bex_events = { workspace = true }
 bex_project = { workspace = true }
+bex_hotswap = { workspace = true }
 bex_vm_types = { workspace = true }
 btel_settings = { workspace = true }
 btel_types = { workspace = true }

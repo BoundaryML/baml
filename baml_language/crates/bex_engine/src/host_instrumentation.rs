@@ -105,6 +105,7 @@ impl BexEngine {
                     argument_layout: None,
                     source_map: None,
                     model_invoke: false,
+                    hotswap_id: None,
                 });
                 definitions.insert(definition.key(), Arc::clone(&metadata));
                 metadata

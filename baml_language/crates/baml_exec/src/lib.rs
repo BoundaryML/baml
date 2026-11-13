@@ -40,7 +40,7 @@ pub use dispatch::{
     DispatchResult, build_args_from_signature, clamp_exit_code, dispatch_target,
     dispatch_target_with_context, validate_help_param, validate_help_param_names,
 };
-pub use envelope::{PACK_SECTION_NAME, PackEnvelope, PackMode, TargetEntry};
+pub use envelope::{PACK_SECTION_NAME, PackEnvelope, PackMode, PackedHotswap, TargetEntry};
 #[cfg(not(target_arch = "wasm32"))]
 pub use interrupt::{Interrupt, InterruptReport, Interrupts};
 pub use json_coerce::load_json_source;

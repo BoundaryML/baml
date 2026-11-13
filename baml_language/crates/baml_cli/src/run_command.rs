@@ -256,6 +256,21 @@ pub struct RunArgs {
     #[arg(long, help_heading = "Target options", conflicts_with = "expression")]
     pub hot: bool,
 
+    /// Turn hot swapping from Boundary Cloud off for this process.
+    #[arg(long, help_heading = "Target options", conflicts_with = "hot")]
+    pub no_hotswap: bool,
+
+    /// How long to wait for this process's hot swaps before serving, such as
+    /// `5s`. Overrides `[hotswap] startup_wait`.
+    #[arg(
+        long,
+        value_name = "DURATION",
+        value_parser = parse_startup_wait,
+        help_heading = "Target options",
+        conflicts_with = "no_hotswap"
+    )]
+    pub hotswap_startup_wait: Option<std::time::Duration>,
+
     /// Load one standalone source file instead of discovering a project.
     ///
     /// Mutually exclusive with `--project-dir`.
@@ -314,6 +329,10 @@ pub struct RunArgs {
 
 pub use baml_exec::OutputFormat;
 
+fn parse_startup_wait(text: &str) -> std::result::Result<std::time::Duration, String> {
+    baml_db::manifest::parse_duration(text)
+}
+
 // ============================================================================
 // Main entry point
 // ============================================================================
@@ -337,22 +356,26 @@ struct ResolvedInvocation {
 }
 
 impl Prepared {
-    fn into_engine(self, argv: Vec<String>) -> Result<BexEngine> {
+    fn into_engine(
+        self,
+        argv: Vec<String>,
+        hotswap: crate::runtime_telemetry::HotswapFlags,
+    ) -> Result<(BexEngine, Option<bex_hotswap::Prepared>)> {
         let build = crate::build_record::provider(
             &self.db,
             self.package,
             &self.program,
             btel_types::BuildOrigin::Run,
         );
-        crate::runtime_telemetry::create_engine_with_context(
+        crate::runtime_telemetry::create_engine_with_hotswap(
             self.program,
             argv,
             &self.recording_root,
             self.recording_sources,
             build,
             self.launch_context,
+            hotswap,
         )
-        .context("failed to create engine")
     }
 }
 
@@ -799,10 +822,17 @@ impl RunArgs {
         } else {
             None
         };
-        let engine = prepared.into_engine(invocation.argv)?;
+        let (engine, hotswap) = prepared.into_engine(
+            invocation.argv,
+            crate::runtime_telemetry::HotswapFlags {
+                disabled: self.no_hotswap,
+                startup_wait: self.hotswap_startup_wait,
+            },
+        )?;
         self.dispatch_and_finish(
             engine,
             hot_watch,
+            hotswap,
             &invocation.function_name,
             invocation.args,
             json_args,
@@ -816,6 +846,7 @@ impl RunArgs {
         &self,
         engine: BexEngine,
         hot_watch: Option<crate::hot_reload::HotWatch>,
+        hotswap: Option<bex_hotswap::Prepared>,
         function_name: &str,
         args: baml_exec::ParsedTargetArgs,
         json_args: Option<serde_json::Value>,
@@ -831,6 +862,8 @@ impl RunArgs {
         let (call_context, logs) = Self::call_context(log_output, &interrupts);
         let hot_watcher =
             hot_watch.map(|watch| crate::hot_reload::spawn(&rt, Arc::clone(&engine), watch));
+        // Registers with BCS, and waits up to `startup_wait` for its swaps.
+        let hotswap_agent = hotswap.and_then(|hotswap| hotswap.start(Arc::clone(&engine), "baml"));
         let dispatch_result = log_output.block_on(
             &rt,
             baml_exec::dispatch_target_with_context(
@@ -846,6 +879,9 @@ impl RunArgs {
         );
         if let Some(watcher) = hot_watcher {
             watcher.abort();
+        }
+        if let Some(agent) = hotswap_agent {
+            agent.stop();
         }
         interrupts.root_finished();
         let status = match &dispatch_result {
@@ -1214,7 +1250,13 @@ impl RunArgs {
             recording_sources: Vec::new(),
             needs_format_hint: false,
         };
-        let engine = prepared.into_engine(self.build_argv_for_expression(expr_body))?;
+        let (engine, _) = prepared.into_engine(
+            self.build_argv_for_expression(expr_body),
+            crate::runtime_telemetry::HotswapFlags {
+                disabled: true,
+                startup_wait: None,
+            },
+        )?;
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
@@ -2298,6 +2340,8 @@ mod tests {
     fn run_args() -> RunArgs {
         RunArgs {
             hot: false,
+            no_hotswap: false,
+            hotswap_startup_wait: None,
             compiler: crate::commands::CompilerArgs::default(),
             target: None,
             functions: Vec::new(),

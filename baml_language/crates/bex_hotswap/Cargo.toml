@@ -1,0 +1,44 @@
+[package]
+name = "bex_hotswap"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Function hot swapping from Boundary Cloud in a running process (BEP-087, stage 2)"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_db = { workspace = true }
+bcs_api = { workspace = true, features = [ "auth" ] }
+bex_engine = { workspace = true }
+bex_project = { workspace = true }
+bex_vm = { workspace = true }
+bex_vm_types = { workspace = true }
+btel_types = { workspace = true }
+indexmap = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "time", "sync" ] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+baml_env = { workspace = true }
+baml_test_support = { workspace = true }
+serde_json = { workspace = true }
+sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
+sys_ops = { workspace = true }
+tokio = { workspace = true, features = [ "macros", "rt-multi-thread" ] }
+wiremock = { workspace = true }
+
+[features]
+default = [ "aws-crypto" ]
+aws-crypto = [ "bex_engine/aws-crypto", "bex_project/aws-crypto", "bcs_api/aws-crypto" ]
+ring-crypto = [ "bex_engine/ring-crypto", "bex_project/ring-crypto", "bcs_api/ring-crypto" ]

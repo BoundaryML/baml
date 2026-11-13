@@ -48,10 +48,94 @@ pub struct BamlToml {
     #[serde(default)]
     pub test: TestManifest,
 
+    /// `[hotswap]` — function hot swapping from Boundary Cloud (BEP-087).
+    #[serde(default)]
+    pub hotswap: HotswapManifest,
+
     /// Stray top-level keys. Captured (not denied) so typos surface as
     /// warnings and forward-compatible manifests still load.
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
+}
+
+/// `[hotswap]` as written; [`HotswapConfig::from_manifest`] checks it.
+#[derive(Debug, Default, Deserialize)]
+pub struct HotswapManifest {
+    /// `false` turns hot swapping off.
+    pub enabled: Option<bool>,
+    /// The rule for marks that name none.
+    pub default_rule: Option<String>,
+    /// Whether a swap waits for approval in Boundary Cloud; the default.
+    pub require_approval: Option<bool>,
+    /// How long a new process waits for its swaps before it serves.
+    pub startup_wait: Option<String>,
+
+    #[serde(flatten)]
+    pub unknown: IndexMap<String, toml::Value>,
+}
+
+/// `[hotswap]`, checked, with its defaults.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HotswapConfig {
+    pub enabled: bool,
+    pub default_rule: Option<baml_syntax::hotswap::Rule>,
+    pub require_approval: bool,
+    pub startup_wait: std::time::Duration,
+}
+
+impl Default for HotswapConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            default_rule: None,
+            require_approval: true,
+            startup_wait: std::time::Duration::ZERO,
+        }
+    }
+}
+
+impl HotswapConfig {
+    pub fn from_manifest(manifest: &HotswapManifest) -> Result<Self, String> {
+        let default_rule = manifest
+            .default_rule
+            .as_deref()
+            .map(baml_syntax::hotswap::Rule::parse)
+            .transpose()
+            .map_err(|problem| format!("[hotswap] default_rule: {problem}"))?;
+        let startup_wait = manifest
+            .startup_wait
+            .as_deref()
+            .map(parse_duration)
+            .transpose()
+            .map_err(|problem| format!("[hotswap] startup_wait: {problem}"))?
+            .unwrap_or_default();
+        Ok(Self {
+            enabled: manifest.enabled.unwrap_or(true),
+            default_rule,
+            require_approval: manifest.require_approval.unwrap_or(true),
+            startup_wait,
+        })
+    }
+}
+
+/// A duration written as a number and a unit: `0s`, `500ms`, `5s`, `2m`.
+pub fn parse_duration(text: &str) -> Result<std::time::Duration, String> {
+    let text = text.trim();
+    let split = text
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(text.len());
+    let (number, unit) = text.split_at(split);
+    let number: u64 = number
+        .parse()
+        .map_err(|_| format!("`{text}` is not a duration such as `0s`, `500ms` or `5s`"))?;
+    match unit {
+        "ms" => Ok(std::time::Duration::from_millis(number)),
+        "s" => Ok(std::time::Duration::from_secs(number)),
+        "m" => Ok(std::time::Duration::from_secs(number * 60)),
+        _ => Err(format!(
+            "`{text}` is not a duration such as `0s`, `500ms` or `5s`"
+        )),
+    }
 }
 
 /// Test profiles deliberately store argv rather than duplicating the test
@@ -318,6 +402,9 @@ pub fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
                 "ignoring unrecognized key `{key}` in [generator.{name}]"
             ));
         }
+    }
+    for key in manifest.hotswap.unknown.keys() {
+        warnings.push(format!("ignoring unrecognized key `{key}` in [hotswap]"));
     }
     for key in manifest.test.unknown.keys() {
         warnings.push(format!("ignoring unrecognized key `{key}` in [test]"));

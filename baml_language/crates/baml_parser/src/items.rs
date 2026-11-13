@@ -382,6 +382,8 @@ pub(crate) enum DocProblem {
     UnknownDirective,
     /// `baml:$trace` with no `=a.b.c` hook path after it.
     MalformedTraceHook,
+    /// `baml:hotswap=` naming no built-in rule (BEP-087).
+    MalformedHotswap,
 }
 
 /// What a run of docs belongs to: decides what its directives may be.
@@ -398,6 +400,16 @@ pub(crate) enum DocOwner<'a> {
 const TRACE_HOOK_MISPLACED: &str = "Trace hooks can only be attached to function definitions.\nhelp: Place `/// baml:$trace=...` immediately before a function definition.";
 const TRACE_PASSTHROUGH_MISPLACED: &str =
     "The internal trace_passthrough directive must immediately precede a function definition.";
+const HOTSWAP_MISPLACED: &str = "Only functions can be hot swapped.\nhelp: Place `/// baml:hotswap` immediately before a function definition.";
+
+/// Why a `baml:hotswap` line names no rule.
+fn hotswap_problem(text: &str) -> String {
+    match baml_syntax::hotswap::parse_mark(text) {
+        Some(Err(problem)) => format!("Invalid hotswap mark: {problem}."),
+        _ => format!("Invalid hotswap mark `{text}`."),
+    }
+}
+
 const TRACE_HOOK_MALFORMED: &str = "Expected `/// baml:$trace=hook_name` with a function reference.\nhelp: Use a function name without call parentheses, for example `/// baml:$trace=trace.empty_span`.";
 
 impl DocPart {
@@ -435,9 +447,23 @@ fn leading_docs(p: &mut Parser<'_, '_>) -> Vec<DocPart> {
 /// hook.
 fn doc_line(p: &Parser<'_, '_>, token: Token![DocComment]) -> DocPart {
     let text = p.cur.text_of(token.idx);
+    if let Some(mark) = baml_syntax::hotswap::parse_mark(text) {
+        return hotswap_mark(token.widen(), &mark);
+    }
     match DirectiveKind::trace_hook_value(text) {
         Some(value) => trace_hook(token.widen(), value),
         None => DocPart::Doc(token),
+    }
+}
+
+/// A `baml:hotswap` line: the mark when it names no rule or a built-in one.
+fn hotswap_mark(
+    token: Token![DocToken],
+    mark: &Result<baml_syntax::hotswap::Mark, String>,
+) -> DocPart {
+    match mark {
+        Ok(_) => DocPart::Directive(token, DirectiveKind::Hotswap),
+        Err(_) => DocPart::Invalid(token, DocProblem::MalformedHotswap),
     }
 }
 
@@ -447,6 +473,9 @@ fn directive(p: &Parser<'_, '_>, token: Token![DirectiveComment]) -> DocPart {
     let text = p.cur.text_of(token.idx);
     if let Some(value) = DirectiveKind::trace_hook_value(text) {
         return trace_hook(token.widen(), value);
+    }
+    if let Some(mark) = baml_syntax::hotswap::parse_mark(text) {
+        return hotswap_mark(token.widen(), &mark);
     }
     let name = text.strip_prefix("//baml:").unwrap_or_default().trim_end();
     match DirectiveKind::named(name) {
@@ -470,6 +499,7 @@ fn trace_hook(token: Token![DocToken], value: &str) -> DocPart {
 /// node is always one its owner accepts.
 fn alloc_docs(p: &mut Parser<'_, '_>, docs: Vec<DocPart>, owner: DocOwner<'_>) -> Vec<AnyDoc> {
     let mut hook_seen = false;
+    let mut hotswap_seen = false;
     let mut header_seen = false;
     docs.into_iter()
         .map(|part| {
@@ -510,8 +540,13 @@ fn alloc_docs(p: &mut Parser<'_, '_>, docs: Vec<DocPart>, owner: DocOwner<'_>) -
                         "Function `{}` declares more than one trace hook.\nhelp: Keep one `/// baml:$trace=...` directive.",
                         name.unwrap_or_default()
                     ),
+                    DocPart::Directive(_, DirectiveKind::Hotswap) if hotswap_seen => format!(
+                        "Function `{}` is marked `/// baml:hotswap` more than once.\nhelp: Keep one mark.",
+                        name.unwrap_or_default()
+                    ),
                     DocPart::Directive(token, kind) => {
                         hook_seen |= kind == DirectiveKind::Trace;
+                        hotswap_seen |= kind == DirectiveKind::Hotswap;
                         return AnyDoc::Directive(p.alloc_to(
                             Mark::of(token),
                             end,
@@ -521,6 +556,7 @@ fn alloc_docs(p: &mut Parser<'_, '_>, docs: Vec<DocPart>, owner: DocOwner<'_>) -
                     DocPart::Invalid(_, DocProblem::UnknownDirective) => {
                         format!("unknown directive `{text}`")
                     }
+                    DocPart::Invalid(_, DocProblem::MalformedHotswap) => hotswap_problem(text),
                     DocPart::Invalid(_, DocProblem::MalformedTraceHook) => match name {
                         Some(name) => format!(
                             "Invalid trace hook directive on function `{name}`.\n{TRACE_HOOK_MALFORMED}"
@@ -539,6 +575,10 @@ fn alloc_docs(p: &mut Parser<'_, '_>, docs: Vec<DocPart>, owner: DocOwner<'_>) -
                     }
                     DocPart::Directive(_, DirectiveKind::TracePassthrough) => {
                         TRACE_PASSTHROUGH_MISPLACED.to_string()
+                    }
+                    DocPart::Directive(_, DirectiveKind::Hotswap)
+                    | DocPart::Invalid(_, DocProblem::MalformedHotswap) => {
+                        HOTSWAP_MISPLACED.to_string()
                     }
                     DocPart::Directive(
                         _,

@@ -453,6 +453,7 @@ pub(crate) fn synthesize_init_test_function<R: TestRegistration>(
         is_tagged_template_tag: false,
         directives: crate::ast::NativeDirectives::default(),
         trace_hook: None,
+        hotswap: false,
         span,
         name_span: span,
     }

@@ -71,3 +71,7 @@ pub const LOG_LINE_FORMAT_MINOR: u32 = 15;
 /// (`ThreadCompletion.error_cas_id`), so a failed future, a failed root call
 /// among them, says what it failed with as a failed function span does.
 pub const THREAD_ERROR_FORMAT_MINOR: u32 = 15;
+
+/// Function metadata names the hot swap whose code a function is
+/// (`FunctionMetadata.hotswap_id`, BEP-087).
+pub const HOTSWAP_FORMAT_MINOR: u32 = 16;

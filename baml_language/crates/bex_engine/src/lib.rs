@@ -1065,6 +1065,12 @@ pub struct EngineConfig {
     /// been compiled after `baml_env::set_hotswap_enabled`, so no caller looks
     /// through a function a swap can replace.
     pub hotswap_baseline: Option<bex_vm_types::DeclFingerprints>,
+    /// The functions marked `/// baml:hotswap`, by the names swaps report
+    /// (BEP-087 stage 2): only these may be swapped, and the program needs
+    /// no `baml_env::set_hotswap_enabled`, since no caller looks through a
+    /// marked function. `None` makes every function swappable, as
+    /// `baml run --hot` does.
+    pub hotswap_marked: Option<std::collections::BTreeSet<String>>,
     pub clock_mode: btel_clock::ClockMode,
     /// Publisher-owned artifact settings; absent for ordinary source execution.
     pub artifact_telemetry: Option<btel_settings::artifact::ArtifactTelemetry>,
@@ -1080,6 +1086,7 @@ impl Default for EngineConfig {
             launch_context: btel_types::context::Context::default(),
             runtime_compiler: None,
             hotswap_baseline: None,
+            hotswap_marked: None,
             clock_mode: btel_settings::clock::DEFAULT_MODE,
             artifact_telemetry: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -1236,6 +1243,8 @@ pub struct BexEngine {
     /// The source as built, when hot swapping is on: what every patch is
     /// compared with.
     hotswap_baseline: Option<bex_vm_types::DeclFingerprints>,
+    /// See `EngineConfig::hotswap_marked`.
+    hotswap_marked: Option<std::collections::BTreeSet<String>>,
     /// The source the last installed patch, or the build, declared: what the
     /// next patch reports its changes against.
     hotswap_applied: std::sync::Mutex<bex_vm_types::DeclFingerprints>,
@@ -1947,6 +1956,7 @@ impl BexEngine {
             launch_context,
             runtime_compiler,
             hotswap_baseline,
+            hotswap_marked,
             clock_mode,
             artifact_telemetry,
             #[cfg(not(target_arch = "wasm32"))]
@@ -2073,7 +2083,8 @@ impl BexEngine {
         let packages = Arc::new(package_index);
         let root_package = packages.root();
         // Calls consult redirects only in a program that can be swapped.
-        let hotswap_baseline = hotswap_baseline.filter(|_| baml_env::hotswap_enabled());
+        let hotswap_baseline =
+            hotswap_baseline.filter(|_| baml_env::hotswap_enabled() || hotswap_marked.is_some());
         if hotswap_baseline.is_some() {
             heap.hotswap_enable();
         }
@@ -2491,6 +2502,7 @@ impl BexEngine {
             runtime_compiler,
             hotswap_lock: tokio::sync::Mutex::new(()),
             hotswap_baseline,
+            hotswap_marked,
             hotswap_applied: std::sync::Mutex::new(hotswap_applied),
             sys_op_ctx,
             argv,
@@ -4032,6 +4044,17 @@ impl BexEngine {
         self: &Arc<Self>,
         files: IndexMap<String, String>,
     ) -> Result<Vec<String>, HotswapError> {
+        self.hotswap_patch_named(files, &std::collections::BTreeMap::new())
+            .await
+    }
+
+    /// [`Self::hotswap_patch`], where each swapped function named in
+    /// `swap_ids` records that swap's ID on its spans (`hotswap_id`).
+    pub async fn hotswap_patch_named(
+        self: &Arc<Self>,
+        files: IndexMap<String, String>,
+        swap_ids: &std::collections::BTreeMap<String, Arc<str>>,
+    ) -> Result<Vec<String>, HotswapError> {
         let Some(baseline) = &self.hotswap_baseline else {
             return Err(HotswapError::Disabled);
         };
@@ -4084,12 +4107,26 @@ impl BexEngine {
             }
             Err(_) => return Err(HotswapError::Compile("the compiler panicked".to_string())),
         };
+        // Only marked functions may change, unless every function is
+        // swappable (`baml run --hot`).
+        if let Some(marked) = &self.hotswap_marked {
+            let unmarked: Vec<String> = bex_vm::hotswap::hotswap_changes(baseline, &fingerprints)
+                .into_iter()
+                .filter(|name| !marked.contains(name))
+                .map(|name| {
+                    format!("`{name}` is not marked `/// baml:hotswap`, which needs a restart")
+                })
+                .collect();
+            if !unmarked.is_empty() {
+                return Err(HotswapError::Rejected(unmarked));
+            }
+        }
         // Pointers may have moved while the permit was released.
         let root = thread.vm.hotswap_root();
         let aliased = thread.vm.hotswap_dependencies(root);
         let initializers = thread
             .vm
-            .hotswap_prepare_patch(root, &artifact, baseline, &fingerprints, &aliased)
+            .hotswap_prepare_patch(root, &artifact, baseline, &fingerprints, &aliased, swap_ids)
             .map_err(HotswapError::Rejected)?;
         // Changed clients build once, before anything is installed, with this
         // VM seeing the patched call graph.
@@ -8865,3 +8902,13 @@ mod type_identity_tests {
 
 #[cfg(test)]
 mod completion_tests;
+
+/// This OS process's ID as recordings and `processes.process_id` spell it:
+/// lowercase hex.
+pub fn process_id_hex() -> String {
+    bex_events::ids::ProcessEuid::current()
+        .0
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}

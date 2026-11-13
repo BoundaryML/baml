@@ -540,6 +540,7 @@ fn start_span_impl(
                 argument_layout: None,
                 source_map: None,
                 model_invoke: false,
+                hotswap_id: None,
             }
         } else {
             let function = target

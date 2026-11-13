@@ -84,6 +84,7 @@ impl ItemTreeBuilder {
                 header_title: f.header_title.clone(),
                 is_tagged_template_tag: f.is_tagged_template_tag,
                 trace_hook: f.trace_hook.clone(),
+                hotswap: f.hotswap,
                 span: f.span,
             },
         );
@@ -290,6 +291,7 @@ impl ItemTreeBuilder {
                 header_title: None,
                 is_tagged_template_tag: false,
                 trace_hook: None,
+                hotswap: false,
                 span: m.span,
             },
         );

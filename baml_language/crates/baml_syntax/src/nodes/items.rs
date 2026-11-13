@@ -535,6 +535,10 @@ pub enum DirectiveKind {
     /// [`DirectiveKind::trace_hook_path`] of the token's text, valid by
     /// construction.
     Trace,
+    /// `/// baml:hotswap` or `/// baml:hotswap=rule` (BEP-087): the function
+    /// can be hot swapped, under the rule [`crate::hotswap::parse_mark`]
+    /// reads, valid by construction.
+    Hotswap,
 }
 
 impl DirectiveKind {

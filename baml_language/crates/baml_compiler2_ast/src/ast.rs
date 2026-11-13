@@ -1795,6 +1795,9 @@ pub struct FunctionDef {
     pub directives: NativeDirectives,
     /// Declaration-only trace policy; resolved in the declaration scope.
     pub trace_hook: Option<TraceHookDirective>,
+    /// Marked `/// baml:hotswap` (BEP-087): a running program may replace
+    /// it, so no caller looks through it.
+    pub hotswap: bool,
     pub span: TextRange,
     pub name_span: TextRange,
 }

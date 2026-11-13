@@ -38,6 +38,8 @@ pub struct Function {
     /// tagged-template tags without re-reading the CST.
     pub is_tagged_template_tag: bool,
     pub trace_hook: Option<ast::TraceHookDirective>,
+    /// Marked `/// baml:hotswap` (BEP-087).
+    pub hotswap: bool,
     /// Full source span of the function.
     pub span: TextRange,
 }

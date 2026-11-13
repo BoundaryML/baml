@@ -1389,8 +1389,8 @@ impl Bulk {
                kind_detail, origin, source_file, source_file_id, source_start, source_end,
                package, namespace, namespace_json, owner_type_key, parent_function_key,
                lambda_path, argument_names, parameter_count, metadata, source_map,
-               source_map_state, model_invoke, conflict)",
-            26,
+               source_map_state, model_invoke, hotswap_id, conflict)",
+            27,
             &ids,
             |b, function_id| {
                 let row = &self.functions[&function_id];
@@ -1398,7 +1398,7 @@ impl Bulk {
                 b.bind(id(function_id))?;
                 b.bind(row.state)?;
                 let Some(meta) = &row.metadata else {
-                    b.nulls(22)?;
+                    b.nulls(23)?;
                     return b.bind(row.conflict);
                 };
                 let metadata = &meta.wire;
@@ -1428,6 +1428,7 @@ impl Bulk {
                 b.bind(&meta.map_blob)?;
                 b.bind(meta.map_state)?;
                 b.bind(metadata.model_invoke)?;
+                b.bind(&metadata.hotswap_id)?;
                 b.bind(row.conflict)
             },
         )?;

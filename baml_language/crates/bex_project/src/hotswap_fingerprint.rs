@@ -9,7 +9,7 @@
 //! by bare names) are fingerprinted together, in an order that does not
 //! depend on the files', so an edit to either one is seen.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use baml_syntax::{
     index::descendants,
@@ -26,19 +26,39 @@ use bex_vm_types::DeclFingerprints;
 pub fn declaration_fingerprints<'a>(
     files: impl Iterator<Item = (&'a str, &'a str)>,
 ) -> DeclFingerprints {
+    declarations(files).0
+}
+
+/// Where a declaration is written: its file and its text, leading docs and
+/// directives included.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeclSource {
+    pub file: String,
+    pub text: String,
+}
+
+/// The fingerprints of `files`, and the source of each declaration under the
+/// same key. A key that several declarations share keeps the first.
+pub fn declarations<'a>(
+    files: impl Iterator<Item = (&'a str, &'a str)>,
+) -> (DeclFingerprints, BTreeMap<String, DeclSource>) {
     let mut fingerprints = DeclFingerprints::default();
+    let sources = std::cell::RefCell::new(BTreeMap::new());
     for (path, text) in files {
         let parsed = baml_parser::parse(text);
         let tree = &parsed.tree;
         let file = File {
             tree,
             namespace: namespace_of(path),
+            path,
+            text,
+            sources: &sources,
         };
         for &item in tree.list(tree.get(tree.root()).items) {
             file.declaration(item, &mut fingerprints);
         }
     }
-    fingerprints
+    (fingerprints, sources.into_inner())
 }
 
 /// `a.b.` for a file under `ns_a/ns_b/`, empty at the package root: the
@@ -80,6 +100,9 @@ fn insert(fingerprints: &mut DeclFingerprints, key: String, value: String) {
 struct File<'t> {
     tree: &'t FileTree,
     namespace: String,
+    path: &'t str,
+    text: &'t str,
+    sources: &'t std::cell::RefCell<BTreeMap<String, DeclSource>>,
 }
 
 impl File<'_> {
@@ -141,6 +164,14 @@ impl File<'_> {
             skip,
             fingerprints.refs.entry(key.clone()).or_default(),
         );
+        let range = self.tree.tokens().text_range(self.tree.arenas().span(node));
+        self.sources
+            .borrow_mut()
+            .entry(key.clone())
+            .or_insert_with(|| DeclSource {
+                file: self.path.to_string(),
+                text: self.text[range].to_string(),
+            });
         insert(fingerprints, key, self.text_of(node, skip));
     }
 

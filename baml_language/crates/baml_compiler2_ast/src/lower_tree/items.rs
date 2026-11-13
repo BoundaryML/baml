@@ -231,7 +231,8 @@ impl<'t> Items<'t> {
                 DirectiveKind::LocalTwin => ast::NativeDirective::LocalTwin,
                 DirectiveKind::TaggedString
                 | DirectiveKind::TracePassthrough
-                | DirectiveKind::Trace => continue,
+                | DirectiveKind::Trace
+                | DirectiveKind::Hotswap => continue,
             };
             directives = directives.with(directive);
         }
@@ -469,6 +470,7 @@ impl<'t> Items<'t> {
         let is_tagged_template_tag = self.has_directive(func.docs, DirectiveKind::TaggedString);
         let directives = self.native_directives(func.docs);
         let trace_hook = self.trace_hook(func.docs);
+        let hotswap = self.has_directive(func.docs, DirectiveKind::Hotswap);
         let explicit_trace_passthrough =
             self.has_directive(func.docs, DirectiveKind::TracePassthrough);
 
@@ -492,6 +494,7 @@ impl<'t> Items<'t> {
             is_tagged_template_tag,
             directives,
             trace_hook,
+            hotswap,
             span,
             name_span,
         })

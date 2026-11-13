@@ -42,7 +42,7 @@ pub(crate) fn file_key(path: &Path) -> String {
 /// The sources as they stand on disk, keyed as the baseline keys them:
 /// relative to the project root, or by file name for a standalone file.
 /// `None` when a file cannot be read, such as while an editor replaces it.
-fn read_sources(files: &HotFiles) -> Option<BTreeMap<String, String>> {
+pub(crate) fn read_sources(files: &HotFiles) -> Option<BTreeMap<String, String>> {
     match files {
         HotFiles::Project(root) => {
             baml_db::discover_baml_files(&baml_db::project_source_root(root))
