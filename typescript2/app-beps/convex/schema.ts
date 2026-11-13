@@ -444,6 +444,8 @@ export default defineSchema({
     // are open, and who has commented. Absent on proposals from before they were kept.
     openComments: v.optional(v.number()),
     commenters: v.optional(v.array(v.string())),
+    // Kept by the issue mutations, for the board.
+    openIssues: v.optional(v.number()),
   }).index("by_number", ["number"]),
 
   // A version's metadata and its pages' outline, listed without their content so that reading a
@@ -506,6 +508,36 @@ export default defineSchema({
   })
     .index("by_doc", ["docId"])
     .index("by_parent", ["parentId"]),
+
+  // Decisions made on a proposal, as on BEPs: what was decided and why, and the comment threads it
+  // came from, whose authors are its participants.
+  bcsDecisions: defineTable({
+    docId: v.id("bcsDocs"),
+    title: v.string(),
+    description: v.string(),
+    rationale: v.optional(v.string()),
+    sourceCommentIds: v.array(v.id("bcsComments")),
+    participants: v.array(v.string()),
+    decidedBy: v.string(),
+    decidedAt: v.number(),
+    createdAt: v.number(),
+  }).index("by_doc", ["docId"]),
+
+  // Open issues on a proposal, as on BEPs: something to settle before it moves on, raised by a
+  // member, possibly from a comment thread, assigned to one, and resolved with a resolution.
+  bcsIssues: defineTable({
+    docId: v.id("bcsDocs"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    raisedBy: v.string(),
+    assignedTo: v.optional(v.string()),
+    sourceCommentId: v.optional(v.id("bcsComments")),
+    resolved: v.boolean(),
+    resolution: v.optional(v.string()),
+    resolvedBy: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_doc", ["docId"]),
 
   // Where each member stands on a version of a proposal, as BEP stances do: support, neutral or
   // oppose, with an optional reason. One per member per version.

@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowUpDown, Columns3, FileText, LayoutList, MessageSquare, Search } from "lucide-react";
+import { AlertCircle, ArrowUpDown, Columns3, FileText, LayoutList, MessageSquare, Search } from "lucide-react";
 import { BepStatusBadge } from "@/components/bep/bep-status";
 import { badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ export type BoardProposal = {
   currentVersion: number;
   updatedAt: number;
   openComments: number;
+  openIssues: number;
   pageCount: number;
 };
 
@@ -56,6 +57,12 @@ function Meta({ proposal }: { proposal: BoardProposal }) {
         <MessageSquare className="h-3 w-3" />
         {proposal.openComments}
       </span>
+      {proposal.openIssues > 0 && (
+        <span className="flex items-center gap-1 text-yellow-600" title="Open issues">
+          <AlertCircle className="h-3 w-3" />
+          {proposal.openIssues}
+        </span>
+      )}
       {proposal.pageCount > 1 && (
         <span className="flex items-center gap-1" title="Pages">
           <FileText className="h-3 w-3" />

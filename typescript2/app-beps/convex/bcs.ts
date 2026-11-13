@@ -176,6 +176,7 @@ export const list = query({
         currentVersion: doc.currentVersion,
         updatedAt: doc.updatedAt,
         openComments,
+        openIssues: doc.openIssues ?? 0,
         pageCount: row ? outlineOf(row, doc.title).length : 1,
       });
     }
@@ -186,7 +187,7 @@ export const list = query({
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
 
 /** GitHub logins from an editor: trimmed, without a leading @, unique, each a valid login. */
-function checkLogins(logins: string[], what: string): string[] {
+export function checkLogins(logins: string[], what: string): string[] {
   const result: string[] = [];
   for (const raw of logins) {
     const login = raw.trim().replace(/^@/, "");
@@ -564,7 +565,14 @@ export const slackEvent = v.union(
   v.object({ kind: v.literal("comment"), commentId: v.id("bcsComments") }),
   v.object({ kind: v.literal("resolved"), commentId: v.id("bcsComments"), resolved: v.boolean() }),
   // Only the thread's overview changes (an open thread was deleted): no reply.
-  v.object({ kind: v.literal("refresh") })
+  v.object({ kind: v.literal("refresh") }),
+  v.object({ kind: v.literal("decision"), title: v.string() }),
+  v.object({
+    kind: v.literal("issue"),
+    title: v.string(),
+    change: v.union(v.literal("opened"), v.literal("resolved"), v.literal("reopened")),
+    resolution: v.optional(v.string()),
+  })
 );
 
 export async function tellSlack(
@@ -629,6 +637,7 @@ export const slackView = internalQuery({
       changed: version?.changed,
       slackUserId: user?.slackUserId,
       openComments,
+      openIssues: doc.openIssues,
       comment:
         comment && thread
           ? {

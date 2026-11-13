@@ -82,6 +82,9 @@ export default async function BcsProposal({
   );
   // Without its comments the proposal still reads; the panel says why they are missing.
   const { threads, openByPage } = (comments.ok && comments.value) || { threads: [], openByPage: {} };
+  const tracked = await bcsCall((convex, secret) => convex.query(api.bcsTracking.list, { secret, number }));
+  const decisionCount = tracked.ok && tracked.value ? tracked.value.decisions.length : 0;
+  const openIssueCount = tracked.ok && tracked.value ? tracked.value.issues.filter((each) => !each.resolved).length : 0;
   const stances = await bcsCall((convex, secret) =>
     convex.query(api.bcsStances.list, { secret, number, version: proposal.version })
   );
@@ -135,6 +138,18 @@ export default async function BcsProposal({
             className={buttonVariants({ variant: "outline", size: "sm" })}
           >
             All comments
+          </Link>
+          <Link
+            href={`/bcs/${proposal.number}/decisions`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            Decisions{decisionCount > 0 ? ` · ${decisionCount}` : ""}
+          </Link>
+          <Link
+            href={`/bcs/${proposal.number}/issues`}
+            className={buttonVariants({ variant: openIssueCount > 0 ? "default" : "outline", size: "sm" })}
+          >
+            Issues{openIssueCount > 0 ? ` · ${openIssueCount} open` : ""}
           </Link>
           <details className="relative">
             <summary className="cursor-pointer list-none text-sm rounded-md border px-3 py-1.5 hover:bg-muted">

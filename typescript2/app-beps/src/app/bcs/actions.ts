@@ -449,3 +449,101 @@ export async function setStance(
   revalidatePath(`/bcs/${number}`);
   return { attempt: Date.now() };
 }
+
+/** Records a decision on the proposal, from the comment thread named by sourceCommentId if any. */
+export async function recordDecision(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const title = String(form.get("title") ?? "");
+  const description = String(form.get("description") ?? "");
+  const rationale = String(form.get("rationale") ?? "");
+  const saved = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsTracking.decide, {
+      secret,
+      number,
+      title,
+      description,
+      rationale: rationale || undefined,
+      sourceCommentId: optional(form.get("sourceCommentId")),
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!saved.ok) {
+    return { error: saved.failure.message, values: { title, content: description, note: rationale }, attempt: Date.now() };
+  }
+  revalidatePath(`/bcs/${number}`);
+  redirect(`/bcs/${number}/decisions`);
+}
+
+export async function removeDecision(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  await viewerOrFail();
+  const removed = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsTracking.removeDecision, {
+      secret,
+      number,
+      decisionId: String(form.get("decisionId") ?? ""),
+    })
+  );
+  if (!removed.ok) return { error: removed.failure.message, attempt: Date.now() };
+  revalidatePath(`/bcs/${number}/decisions`);
+  return { attempt: Date.now() };
+}
+
+/** Opens an issue on the proposal, from the comment thread named by sourceCommentId if any. */
+export async function openIssue(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const title = String(form.get("title") ?? "");
+  const description = String(form.get("description") ?? "");
+  const assignedTo = String(form.get("assignedTo") ?? "").trim();
+  const saved = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsTracking.openIssue, {
+      secret,
+      number,
+      title,
+      description: description || undefined,
+      assignedTo: assignedTo || undefined,
+      sourceCommentId: optional(form.get("sourceCommentId")),
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!saved.ok) {
+    return { error: saved.failure.message, values: { title, content: description, shepherds: assignedTo }, attempt: Date.now() };
+  }
+  revalidatePath(`/bcs/${number}`);
+  redirect(`/bcs/${number}/issues`);
+}
+
+/** Resolves (with the form's resolution), reopens, or reassigns the form's issueId, per its `change`. */
+export async function updateIssue(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const change = form.get("change");
+  const resolution = String(form.get("resolution") ?? "");
+  const saved = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsTracking.updateIssue, {
+      secret,
+      number,
+      issueId: String(form.get("issueId") ?? ""),
+      resolved: change === "resolve" ? true : change === "reopen" ? false : undefined,
+      resolution: change === "resolve" ? resolution : undefined,
+      assignedTo: change === "assign" ? String(form.get("assignedTo") ?? "") : undefined,
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!saved.ok) return { error: saved.failure.message, values: { content: resolution }, attempt: Date.now() };
+  revalidatePath(`/bcs/${number}/issues`);
+  revalidatePath(`/bcs/${number}`);
+  return { attempt: Date.now() };
+}
+
+export async function removeIssue(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  await viewerOrFail();
+  const removed = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsTracking.removeIssue, { secret, number, issueId: String(form.get("issueId") ?? "") })
+  );
+  if (!removed.ok) return { error: removed.failure.message, attempt: Date.now() };
+  revalidatePath(`/bcs/${number}/issues`);
+  revalidatePath(`/bcs/${number}`);
+  return { attempt: Date.now() };
+}
