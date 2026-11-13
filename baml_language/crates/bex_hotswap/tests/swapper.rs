@@ -321,3 +321,26 @@ fn marks_without_a_rule_need_a_default_rule() {
     };
     assert_eq!(defaulted.check_marks(), Ok(()));
 }
+
+/// A replacement retires the swap it replaces here, though BCS keeps that one
+/// live until the replacement installs everywhere; a rejected replacement
+/// leaves the swap it replaces running.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_rejected_replacement_leaves_the_swap_it_replaces() {
+    let (engine, mut swapper) = swapper();
+    swapper
+        .install(&swap("hs_a", &[("guarded", "helper(x)", "helper(x) + 5")]))
+        .await
+        .unwrap();
+    let mut bad = swap("hs_b", &[("guarded", "helper(x)", "other(x)")]);
+    bad.replaces = Some("hs_a".into());
+    rejected(swapper.install(&bad).await, "hotswap.no_new_calls");
+    assert_eq!(int(&engine, "guarded", 1).await, 7);
+    assert!(!swapper.is_retired("hs_a"));
+
+    let mut good = swap("hs_c", &[("guarded", "helper(x)", "helper(x) + 6")]);
+    good.replaces = Some("hs_a".into());
+    swapper.install(&good).await.unwrap();
+    assert_eq!(int(&engine, "guarded", 1).await, 8);
+    assert!(swapper.is_retired("hs_a"));
+}

@@ -90,6 +90,14 @@ impl Swapper {
             .collect()
     }
 
+    /// Whether an installed swap replaced `id`: BCS keeps `id` live until its
+    /// replacement installs everywhere, and this process must not take it back.
+    pub fn is_retired(&self, id: &str) -> bool {
+        self.installed
+            .values()
+            .any(|installed| installed.swap.replaces.as_deref() == Some(id))
+    }
+
     pub fn is_installed(&self, id: &str, revision: u64) -> bool {
         self.installed
             .get(id)

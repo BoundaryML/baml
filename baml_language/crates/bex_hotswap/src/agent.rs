@@ -232,6 +232,9 @@ impl Loop {
                 continue;
             }
             match notification.status.as_str() {
+                // Retired here by its replacement; BCS retires it once every
+                // process has the replacement.
+                _ if self.swapper.is_retired(&notification.id) => {}
                 "active"
                     if self
                         .swapper
