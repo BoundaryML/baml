@@ -25,7 +25,8 @@ impl BexVm {
         self.container_len_in::<true>(container)
     }
 
-    #[inline]
+    #[allow(clippy::inline_always, reason = "the array length's fast path")]
+    #[inline(always)]
     fn container_len_in<const THREAD_LOCAL: bool>(
         &self,
         container: Value,
@@ -72,7 +73,8 @@ impl BexVm {
         self.load_array_element_in::<true>(array, index)
     }
 
-    #[inline]
+    #[allow(clippy::inline_always, reason = "the array element read's fast path")]
+    #[inline(always)]
     fn load_array_element_in<const THREAD_LOCAL: bool>(
         &mut self,
         array: Value,
@@ -141,7 +143,8 @@ impl BexVm {
         self.store_array_element_in::<true>(array, index, new_value)
     }
 
-    #[inline]
+    #[allow(clippy::inline_always, reason = "the array element store's fast path")]
+    #[inline(always)]
     fn store_array_element_in<const THREAD_LOCAL: bool>(
         &mut self,
         array: Value,
