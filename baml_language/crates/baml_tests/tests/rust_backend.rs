@@ -370,7 +370,7 @@ const CONSTRUCTS: &[ShapeCase] = &[
     ("interface_defaults.Plot", r#"class Plot { side int implements Grows { function grow(self, by: int, extra: int = 1) -> int throws never { self.side * by + extra } } }"#,
         &[], &[]),
     ("interface_defaults.grow_by", r#"function grow_by(g: Grows, by: int) -> int { g.grow(by) }"#,
-        &[], &[]),
+        &["vm.virtual_target("], &["vm.instance_class("]),
     ("truthiness.tr_and", r#"function tr_and(a: string?, b: int) -> bool { a && b }"#,
         &[], &[]),
     ("reservations.own_id", r#"function own_id() -> trace.SpanId? { trace.current_span_id() }"#,
@@ -432,9 +432,9 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
     ("interfaces.Person", r#"class Person { name: string implements Named {} }"#,
         &[], &[]),
     ("interfaces.total", r#"function total(shapes: Shape[]) -> int { let sum = 0; for (let s in shapes) { sum += s.area(); } sum }"#,
-        &[], &[]),
+        &["vm.instance_class(", "Square_as_user_interfaces_Shape___area_", "Rect_as_user_interfaces_Shape___area_", "vm.virtual_target("], &[]),
     ("interfaces.scaled", r#"function scaled(s: Shape, by: int) -> int { s.scaled(by) }"#,
-        &[], &[]),
+        &["vm.virtual_target("], &["vm.instance_class("]),
     ("interfaces.area_fn", r#"function area_fn(s: Shape) -> () -> int throws never { s.area }"#,
         &[], &[]),
     ("interfaces.rename", r#"function rename(n: Named, to: string) -> string { n.name = to; n.name }"#,
@@ -556,7 +556,20 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
     ("trace.Probe", r#"class Probe { implements Reader { function read(self, n: int) -> int throws never { n } } }"#,
         &[], &[]),
     ("trace.traced", r#"function traced(p: Reader, xs: int[]) -> int { p.read(xs[0], $trace = trace.hidden()) }"#,
+        &[], &["vm.instance_class("]),
+    ("megamorphic.Nine", r#"interface Nine { function n(self) -> int throws never }
+        class N1 { implements Nine { function n(self) -> int throws never { 1 } } }
+        class N2 { implements Nine { function n(self) -> int throws never { 2 } } }
+        class N3 { implements Nine { function n(self) -> int throws never { 3 } } }
+        class N4 { implements Nine { function n(self) -> int throws never { 4 } } }
+        class N5 { implements Nine { function n(self) -> int throws never { 5 } } }
+        class N6 { implements Nine { function n(self) -> int throws never { 6 } } }
+        class N7 { implements Nine { function n(self) -> int throws never { 7 } } }
+        class N8 { implements Nine { function n(self) -> int throws never { 8 } } }
+        class N9 { implements Nine { function n(self) -> int throws never { 9 } } }"#,
         &[], &[]),
+    ("megamorphic.nine", r#"function nine(x: Nine) -> int { x.n() }"#,
+        &["vm.virtual_target("], &["vm.instance_class("]),
     ("compute.uses_closure", "",
         &["vm.suspend("], &[]),
     ("<lambda(uses_closure, 0)>", "",
@@ -700,6 +713,26 @@ function make_kept(i: int) -> Kept { Kept { n: i } }
     let kept = body_of(&module, "user.make_kept");
     assert!(kept.contains("vm.new_instance_of("), "{kept}");
     assert!(!kept.contains("vm.new_plain_instance("), "{kept}");
+}
+
+/// Richards' `Task.run` site enters each of its four implementations
+/// directly, which needs every provided method's impl frame to be empty.
+#[test]
+fn interface_calls_dispatch_on_known_classes() {
+    let db = baml_test_support::setup_test_db(include_str!(
+        "../../../tools/speedtest/workloads/programs/richards-50/main.baml"
+    ));
+    let program = lower(&db, OptLevel::Two);
+    let module = render(&db, &program, OptLevel::Two, None);
+    let body = body_of(&module, "user.tcb_run");
+    for task in ["Idle", "Worker", "Handler", "Device"] {
+        assert!(
+            body.contains(&format!("_user_{task}Task_as_user_Task___run_")),
+            "{task}: {body}"
+        );
+    }
+    assert_eq!(body.matches("if class == vm.record_object(").count(), 4);
+    assert!(body.contains("vm.virtual_target("), "{body}");
 }
 
 #[test]
