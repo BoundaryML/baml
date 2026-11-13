@@ -275,6 +275,7 @@ impl TelemetryRecording {
 
     /// Resolve the selected endpoint and credential without making a network request.
     pub fn from_boundary_env() -> Option<Self> {
+        btel_settings::mode::from_env().ok().flatten()?;
         if baml_env::string_var(BOUNDARY_API_KEY).ok()?.as_deref()
             == Some(bcs_api::credentials::LOCAL_API_KEY)
         {
@@ -288,6 +289,7 @@ impl TelemetryRecording {
     /// `None` selects the host's local
     /// default, either because there is no cloud credential or the key is `local`.
     pub fn from_boundary_defaults(project: Option<&str>, api_url: Option<&str>) -> Option<Self> {
+        btel_settings::mode::from_env().ok().flatten()?;
         let api_key = baml_env::string_var(BOUNDARY_API_KEY).ok()?;
         if api_key.as_deref() == Some(bcs_api::credentials::LOCAL_API_KEY) {
             return None;
@@ -805,7 +807,7 @@ fn artifact_recovery(policy: &ArtifactTelemetry) -> RecordingOverride {
         _ => None,
     };
     RecordingOverride::Artifact {
-        level: policy.recording_level_envvar.clone(),
+        level: policy.recording_control_envvar().map(str::to_owned),
         project: names.as_ref().map(|names| names.0.clone()),
         api_key: names.map(|names| names.1),
     }

@@ -40,7 +40,7 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 | `BAML_BUILD_CACHE` | `false` turns off the build cache. |
 | `BAML_BUILD_CACHE_REMOTE`, `BAML_BUILD_CACHE_REMOTE_TOKEN` | Shared build cache for CI. URL must be https (or localhost). |
 | `BAML_LOG` | Level for `log.*` output from `baml run` and `baml test` (same as `--log`): `off`, `error`, `warn`, `info` (default), `debug`, `trace`. |
-| `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. Set `off` to disable recording and cloud uploads in CLI runs/tests and ordinary generated SDKs, including when logged in. See [Runtime traces](#runtime-traces). |
+| `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. Set `off` to disable recording and cloud uploads in CLI runs/tests and native generated SDKs/packed programs using the standard control, including when logged in. See [Runtime traces](#runtime-traces). |
 | `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.prod.bcs.boundaryml.com`. |
 | `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. The sentinel `local` selects local recordings instead of cloud uploads. |
 | `BOUNDARY_PROJECT` | Cloud target as `org_handle/project_name`. Overrides `[boundary].project`; query's `--project` flag takes precedence. |
@@ -50,7 +50,7 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 
 ## Runtime traces
 
-Set `BAML_TELEMETRY=off` before starting your process to disable runtime recording, including cloud upload preparation and heartbeats. CLI `run`/`test` and ordinary generated SDKs honor it even when `baml auth status` reports a saved login or `BOUNDARY_API_KEY` contains a cloud credential. It creates no local trace files either. The native runtime reads the setting when it initializes; for Node, set it before importing `baml_sdk`.
+Set `BAML_TELEMETRY=off` before starting your process to disable runtime recording, including cloud upload preparation and heartbeats. CLI `run`/`test` and native generated SDKs/packed programs using the standard control honor it even when `baml auth status` reports a saved login or `BOUNDARY_API_KEY` contains a cloud credential. It creates no local trace files either. The native runtime samples its effective control during engine startup; for Node, set it before importing `baml_sdk`. Calls through a cached SDK/runtime keep that engine’s resolved policy. Changing the environment does not reconfigure an existing engine; a newly initialized engine samples it again. Browser/Cloudflare Workers WASM bridges have no native BCS recording publisher or OS environment switch.
 
 ```sh
 BAML_TELEMETRY=off baml run main
@@ -64,7 +64,17 @@ To keep traces locally instead, set `BOUNDARY_API_KEY=local` and leave recording
 
 When recording is enabled, an explicit API key or saved login still selects cloud delivery. `BAML_TELEMETRY=medium`/`high` controls recording detail, not the destination. Runtime traces and CLI usage analytics are separate: use `DO_NOT_TRACK=1` or `baml telemetry disable` for usage analytics.
 
-Publisher-owned artifacts can explicitly freeze or rename the recording variable. `[bridge.env_var_names] BAML_TELEMETRY = false` freezes a generated SDK's recording level, and a string names its accepted variable. An explicit destination binding that reuses the `BAML_TELEMETRY` name also takes precedence over the implicit recording switch. Bridges built with `--embed-telemetry`, and packed programs, keep their baked recording level unless the publisher explicitly binds a recording variable. For those artifacts, use the publisher's declared control; see [artifact telemetry policy](crates/bcs_api/README.md#embedded-telemetry-in-artifacts).
+Publisher recording controls are independent of embedded credentials and destination selection. New packed programs and generated bridges use `BAML_TELEMETRY` when the recording binding is omitted, including with embedded credentials. A renamed binding owns the decision: set that variable to `off`, even if the built-in variable says `medium`. The built-in variable is ignored when a distinct custom recording variable is configured.
+
+| Artifact recording binding | Effective off control | Other values / precedence |
+| --- | --- | --- |
+| Omitted in a newly produced artifact | `BAML_TELEMETRY=off` | Standard variable controls detail; unset keeps baked `medium`. |
+| Explicit `BAML_TELEMETRY = "BAML_TELEMETRY"` | `BAML_TELEMETRY=off` | Standard variable controls detail. |
+| Explicit `BAML_TELEMETRY = "ACME_TELEMETRY"` | `ACME_TELEMETRY=off` | Only the custom variable is read. Custom enabled beats built-in off; custom off beats built-in enabled; unset custom keeps baked detail. |
+| Explicit `BAML_TELEMETRY = false`, or legacy serialized policy with no recording binding | `BAML_TELEMETRY=off` | Baked detail stays fixed: enabling booleans, detail levels and invalid values cannot change it. Only supported off aliases veto recording. |
+| A destination/API-key binding owns the name `BAML_TELEMETRY`, with no distinct recording binding | No environment recording control | That name is a destination, never a level. The publisher must provide a distinct recording variable (for example `ACME_TELEMETRY`) to offer an environment opt-out. |
+
+`off`, `false`, `0`, and `no`, ignoring case and surrounding whitespace, work for every effective off control above. Frozen policies deliberately retain the off-only veto, including artifacts with embedded credentials. This changes the earlier contract that a frozen detail level could prevent all runtime opt-out. Legacy metadata cannot distinguish omitted from explicit `false`, so it receives the same off-only veto without guessing provenance or changing its serialized layout. Invalid publisher bindings are rejected at generation/pack time; malformed bindings and nonstandard recording/destination collisions in deserialized metadata disable recording without reading destination credentials as levels. Ownership of the standard `BAML_TELEMETRY` name instead keeps baked detail with no environment recording control, including case aliases on Windows when metadata was generated on another host. See [artifact telemetry policy](crates/bcs_api/README.md#embedded-telemetry-in-artifacts).
 
 ## Bridges
 

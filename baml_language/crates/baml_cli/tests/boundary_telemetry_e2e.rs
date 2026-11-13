@@ -56,7 +56,7 @@ fn assert_api_key_rejection(
     recording_off_allowed: bool,
 ) {
     let actual = diagnostic(output);
-    let prefix = if !query && recording_off_allowed {
+    let prefix = if !query && output.status.success() {
         "warning"
     } else {
         "error"
@@ -65,11 +65,16 @@ fn assert_api_key_rejection(
         r#"    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
 
   Query failed."#
-    } else if recording_off_allowed {
+    } else if output.status.success() {
         r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
     • Disable recording: rerun with BAML_TELEMETRY=off.
 
   Cloud telemetry disabled. Program execution continues."#
+    } else if recording_off_allowed {
+        r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
+    • Disable recording: rerun with BAML_TELEMETRY=off.
+
+  Execution cancelled."#
     } else {
         r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
 
@@ -868,7 +873,7 @@ async fn standalone_binary_reports_initial_refusal_after_a_fast_main() {
         .output()
         .unwrap();
     assert!(!output.status.success(), "{output:?}");
-    assert_api_key_rejection(&output, &server.uri(), false, false);
+    assert_api_key_rejection(&output, &server.uri(), false, true);
 }
 
 #[test]
@@ -1002,4 +1007,49 @@ fn corrupt_saved_login_errors_for_query_and_execution_but_explicit_local_recordi
         assert!(output.status.success(), "{output:?}");
         assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
     }
+}
+
+/// Off precedes unused runtime destination validation on cold and cached paths.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn telemetry_off_ignores_unused_boundary_configuration() {
+    let server = MockServer::start().await;
+    let temp = fixture(
+        "function main() -> int { 7 }\ntestset \"smoke\" { test \"ok\" { assert.is_true(true) } }\n",
+    );
+    let home = temp.path().join("home");
+    common::share_build_cache(&home);
+    for boundary in [
+        "project = 42\napi_url = false",
+        "project = \"fixture/app\"\napi_url = \"not a URL\"",
+    ] {
+        std::fs::write(
+            temp.path().join("baml.toml"),
+            format!("[package]\nname = \"off_e2e\"\n[boundary]\n{boundary}\n"),
+        )
+        .unwrap();
+        for args in [&["run", "main"][..], &["run", "main"][..], &["test"][..]] {
+            let output = Command::new(common::baml_cli())
+                .args(args)
+                .current_dir(temp.path())
+                .env("BAML_HOME", &home)
+                .env("HOME", &home)
+                .env("USERPROFILE", &home)
+                .env("BAML_CLI_ALLOW_DIRECT", "1")
+                .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+                .env("DO_NOT_TRACK", "1")
+                .env("BAML_TELEMETRY", " FaLsE ")
+                .env("BOUNDARY_API_URL", server.uri())
+                .env("BOUNDARY_API_KEY", KEY)
+                .env("BOUNDARY_PROJECT", "ignored/fixture")
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{boundary}/{args:?}: {output:?}");
+            if args[0] == "run" {
+                assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+            }
+            assert!(!temp.path().join(RECORDINGS).exists());
+            assert!(!home.join("btel").exists());
+        }
+    }
+    assert!(server.received_requests().await.unwrap().is_empty());
 }
