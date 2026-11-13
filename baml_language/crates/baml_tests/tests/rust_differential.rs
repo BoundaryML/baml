@@ -51,6 +51,7 @@ const PROBES: &[&str] = &[
     "Scalars",
     "Overflow",
     "Containers",
+    "DirectContainerOps",
     "Shapes",
     "Closures",
     "Interfaces",

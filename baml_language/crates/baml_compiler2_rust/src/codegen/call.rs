@@ -44,7 +44,8 @@ impl<'db> Generator<'_, 'db> {
             return self.compiled_call(block, object, symbol, &name, info, layout, args, &types);
         }
         let values = self.laid_out_args(block, &name, info, layout, args)?;
-        let args = format!("&[{}]", values.join(", "));
+        let operands = values.join(", ");
+        let args = format!("&[{operands}]");
         match info.kind {
             FunctionKind::Bytecode => Err(Rejection::Invalid(format!(
                 "call to uncompiled `{name}` emitted directly"
@@ -82,12 +83,27 @@ impl<'db> Generator<'_, 'db> {
                     local.as_deref().unwrap_or_default(),
                     locked.as_deref().unwrap_or_default(),
                 );
+                let call = self.direct_or(key, needs, &operands, call);
                 self.fallible_expr(block, &call, Repr::Value)
             }
             FunctionKind::SysOp(_) => Err(Rejection::Invalid(format!(
                 "sys op `{name}` emitted inline"
             ))),
         }
+    }
+
+    /// The builtin `call` behind the inline fast path [`DIRECT_OPS`] has for
+    /// `key`, at the same locality; `call` itself when there is none.
+    fn direct_or(&self, key: &str, needs: u64, operands: &str, call: String) -> String {
+        let Some(op) = DIRECT_OPS.iter().find(|op| op.key == key) else {
+            return call;
+        };
+        let helper = self.by_locality(
+            needs,
+            &format!("vm.{}_local({operands})", op.helper),
+            &format!("vm.{}({operands})", op.helper),
+        );
+        format!("(match {helper} {{ {}, _ => {call} }})", op.hit)
     }
 
     /// [`Self::compiled_entry`] with its error routed.
@@ -525,6 +541,45 @@ impl<'db> Generator<'_, 'db> {
     }
 }
 
+/// A builtin with an inline fast path in `bex_vm::compiled_rt::direct`.
+struct DirectOp {
+    key: &'static str,
+    helper: &'static str,
+    /// The match arm turning the helper's result into the call's value; any
+    /// other result makes the builtin call itself.
+    hit: &'static str,
+}
+
+/// The hottest container builtins, which skip the builtin call path.
+const DIRECT_OPS: &[DirectOp] = &[
+    DirectOp {
+        key: "baml.Array.push",
+        helper: "list_push",
+        hit: "Some(v) => Ok(v)",
+    },
+    DirectOp {
+        key: "baml.Map.get",
+        helper: "map_get_str",
+        hit: "Some(v) => Ok(v.unwrap_or(Value::NULL))",
+    },
+    // A missing key is the builtin's error to raise.
+    DirectOp {
+        key: "baml.Map.index",
+        helper: "map_get_str",
+        hit: "Some(Some(v)) => Ok(v)",
+    },
+    DirectOp {
+        key: "baml.Map.has",
+        helper: "map_get_str",
+        hit: "Some(v) => Ok(Value::bool(v.is_some()))",
+    },
+    DirectOp {
+        key: "baml.Map.set",
+        helper: "map_set_str",
+        hit: "Some(v) => Ok(v)",
+    },
+];
+
 /// Named arguments in callee slot order; positional calls keep their original order.
 fn layout_args<T>(
     name: &str,
@@ -577,4 +632,23 @@ fn decl_display_name(db: &dyn baml_compiler2_mir::Db, name: &baml_type::DeclName
     parts.extend(name.namespace().iter().map(ToString::to_string));
     parts.push(name.name().to_string());
     parts.join(".")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DIRECT_OPS;
+    use crate::analysis::{CallShape, builtin_is_callable};
+
+    /// A renamed builtin would silently lose its fast path.
+    #[test]
+    fn direct_ops_name_builtins_called_inline() {
+        let string_keys = CallShape {
+            type_args_primitive: true,
+            map_key_primitive: true,
+            equality_primitive: false,
+        };
+        for op in DIRECT_OPS {
+            assert!(builtin_is_callable(op.key, string_keys), "{}", op.key);
+        }
+    }
 }
