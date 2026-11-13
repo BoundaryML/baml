@@ -142,7 +142,7 @@ const SUPPORTED_TARGETS: string[] = [
 function validate_artifacts(schema: int, artifacts: map<string, Artifact>) -> null {
     ensure(
         schema == MANIFEST_SCHEMA_VERSION,
-        `unsupported manifest schema ${schema}; run baml self-update`,
+        `unsupported manifest schema ${schema}; run baml self update`,
     );
     ensure(
         artifacts.keys().length() == SUPPORTED_TARGETS.length(),

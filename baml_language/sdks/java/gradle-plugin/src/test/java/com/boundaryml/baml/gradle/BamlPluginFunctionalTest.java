@@ -524,7 +524,7 @@ class BamlPluginFunctionalTest {
         + "  exit 0\n"
         + "fi\n"
         + "\n"
-        + "# Expected: generate --from <dir> -o <outdir> [...]\n"
+        + "# Expected: generate --project-dir <dir> -o <outdir> [...]\n"
         + "OUT=\"\"\n"
         + "while [ \"$#\" -gt 0 ]; do\n"
         + "  case \"$1\" in\n"

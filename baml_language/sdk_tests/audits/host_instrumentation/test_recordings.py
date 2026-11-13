@@ -76,11 +76,12 @@ def recording(request, tmp_path_factory):
         output = run(
             [
                 str(CLI),
+                "local",
+                "recordings",
                 "query",
-                "--local",
-                "--from",
+                "--project-dir",
                 str(tmp_path / "config"),
-                "--format",
+                "--output-format",
                 "json",
                 sql,
             ],

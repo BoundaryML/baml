@@ -218,7 +218,7 @@ fn example_tests_pass() {
         let project = materialize(&skill);
         let output = Command::new(common::baml_cli())
             .arg("test")
-            .arg("--project")
+            .arg("--project-dir")
             .arg(project.path())
             .args(["--agent-skill-check", "off", "--color", "never"])
             .env("BAML_CLI_ALLOW_DIRECT", "1")
@@ -226,9 +226,7 @@ fn example_tests_pass() {
             .env("BAML_TELEMETRY", "off")
             .output()
             .expect("spawn baml-cli test");
-        // A skill whose examples declare no `test` blocks has nothing to run.
-        let no_tests = output.status.code() == Some(baml_cli::ExitCode::NoTestsRun.into());
-        if !output.status.success() && !no_tests {
+        if !output.status.success() {
             failures.push(format!(
                 "{}: `baml test` over its examples failed (paths are ns_line_<n>/example.baml, \
                  line numbers are SKILL.md's):\n{}{}",

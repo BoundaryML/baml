@@ -48,6 +48,7 @@ args = [
     "--include", "root::toolchain management::failed project use download preserves selection",
     "--include", "root::toolchain management::explicit force install repairs damaged active toolchain",
     "--include", "root::toolchain management::uninstall leaves active toolchain removed",
+    "--include", "root::toolchain management::list reports the inventory as json",
     "--include", "root::toolchain management::explicit target acquisition skips absent old selection",
     "--include", "root::toolchain management::same target acquisition failure is attempted once",
     "--include", "root::toolchain management::list observes absent active toolchain without acquisition",
@@ -64,6 +65,8 @@ args = [
     # toolchain status
     "--include", "root::toolchain status::json status describes installed version",
     "--include", "root::toolchain status::json status with install downloads absent version",
+    "--include", "root::toolchain status::output format is a global option of every wrapper command",
+    "--include", "root::toolchain status::invalid invocations of wrapper commands are usage errors",
     "--include", "root::toolchain status::json status installs absent version by default",
     "--include", "root::toolchain status::json status initializes unrecorded channel by default",
     "--include", "root::toolchain status::plain json status installs absent recorded version without advancing channel",

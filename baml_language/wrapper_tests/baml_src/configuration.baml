@@ -398,9 +398,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the BAML wrapper omits the configuration filename here.
-    // Once fixed, remove this marker and assert expected behavior for every candidate.
-    test "project use validates package before writing" with root.harness.failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
+    test "project use validates package before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -428,9 +426,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the BAML wrapper omits the configuration filename here.
-    // Once fixed, remove this marker and assert expected behavior for every candidate.
-    test "project use validates dependencies before writing" with root.harness.failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
+    test "project use validates dependencies before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -458,9 +454,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the BAML wrapper omits the configuration filename here.
-    // Once fixed, remove this marker and assert expected behavior for every candidate.
-    test "project use validates scripts before writing" with root.harness.failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
+    test "project use validates scripts before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -488,9 +482,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the BAML wrapper omits the configuration filename here.
-    // Once fixed, remove this marker and assert expected behavior for every candidate.
-    test "project use validates generator before writing" with root.harness.failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
+    test "project use validates generator before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -518,9 +510,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the BAML wrapper omits the configuration filename here.
-    // Once fixed, remove this marker and assert expected behavior for every candidate.
-    test "project use validates test profile before writing" with root.harness.failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
+    test "project use validates test profile before writing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -702,9 +692,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the BAML wrapper omits the configuration filename here.
-    // Once fixed, remove this marker and assert expected behavior for every candidate.
-    test "global use rejects config syntax before installing" with root.harness.failure_intended("missing diagnostic config.toml:", enabled = candidate.label.starts_with("baml")) {
+    test "global use rejects config syntax before installing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = USER_CONFIG_FILE;
@@ -729,9 +717,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the BAML wrapper omits the configuration filename here.
-    // Once fixed, remove this marker and assert expected behavior for every candidate.
-    test "update rejects state syntax before installing" with root.harness.failure_intended("missing diagnostic state.toml:", enabled = candidate.label.starts_with("baml")) {
+    test "update rejects state syntax before installing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = CHANNEL_STATE_FILE;
@@ -759,9 +745,7 @@ testset "configuration validation" {
         );
     }
 
-    // Failure intended: the BAML wrapper omits the configuration filename here.
-    // Once fixed, remove this marker and assert expected behavior for every candidate.
-    test "project use rejects project syntax before installing" with root.harness.failure_intended("missing diagnostic baml.toml:", enabled = candidate.label.starts_with("baml")) {
+    test "project use rejects project syntax before installing" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         let path = PROJECT_MANIFEST_FILE;
@@ -789,7 +773,7 @@ testset "configuration validation" {
     test "project option requires value" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["--project"];
+        let args = ["--project-dir"];
         let result = fixture.run(candidate, args);
         root.harness.require(!result.ok(), "invalid project flags succeeded");
         root.harness.require(
@@ -801,7 +785,7 @@ testset "configuration validation" {
     test "project option requires existing project" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["--project", "../absent", "check"];
+        let args = ["--project-dir", "../absent", "check"];
         let result = fixture.run(candidate, args);
         root.harness.require(!result.ok(), "invalid project flags succeeded");
         root.harness.require(
@@ -813,7 +797,7 @@ testset "configuration validation" {
     test "duplicate project option is rejected" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["--project", ".", "--project", ".", "check"];
+        let args = ["--project-dir", ".", "--project-dir", ".", "check"];
         let result = fixture.run(candidate, args);
         root.harness.require(!result.ok(), "invalid project flags succeeded");
         root.harness.require(

@@ -8,8 +8,31 @@ use std::{io::IsTerminal, sync::RwLock};
 use baml_db::baml_compiler_diagnostics::render::{DiagnosticFormat, RenderConfig};
 use clap::{Args, ValueEnum};
 
+mod report;
+
+#[cfg(test)]
+pub(crate) use report::text_of;
+pub(crate) use report::{
+    Command, CommandContext, Outcome, OutputFormat, RawCommand, Report, Style, run_command,
+    run_raw, write,
+};
+
 #[derive(Args, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct OutputArgs {
+    #[arg(
+        long = "output-format",
+        value_enum,
+        value_name = "FORMAT",
+        help = "What goes to stdout [default: text] [possible values: text, json, jsonl]",
+        hide_default_value = true,
+        hide_possible_values = true,
+        default_value_t = OutputFormat::Text,
+        global = true,
+        help_heading = "Global options",
+        display_order = 25
+    )]
+    pub format: OutputFormat,
+
     #[arg(
         long = "output-preset",
         value_enum,
@@ -35,15 +58,6 @@ pub(crate) struct OutputArgs {
         display_order = 30
     )]
     pub color: Option<ColorChoice>,
-
-    #[arg(
-        long,
-        global = true,
-        help = "Disable progress output",
-        help_heading = "Global options",
-        display_order = 40
-    )]
-    pub no_progress: bool,
 
     #[arg(
         long,
@@ -203,19 +217,52 @@ pub(crate) fn init(args: OutputArgs) -> Result<(), baml_env::EnvError> {
     Ok(())
 }
 
-pub(crate) fn policy() -> OutputPolicy {
+/// Private: stdout styling reaches commands only as the [`Style`] handed to
+/// [`Report::text`], so no command can render stdout differently for agents.
+fn policy() -> OutputPolicy {
     *OUTPUT_POLICY
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-impl OutputPolicy {
-    pub(crate) fn diagnostic_render_config(self) -> RenderConfig {
-        RenderConfig {
-            format: self.diagnostics.format,
-            color: self.stderr.color,
-            show_error_codes: self.diagnostics.show_error_codes,
-        }
+/// The dispatcher's view of the resolved policy for one command.
+pub(crate) fn context(
+    format: OutputFormat,
+    project_dir: Option<std::path::PathBuf>,
+) -> CommandContext {
+    CommandContext {
+        project_dir,
+        format,
+    }
+}
+
+/// Resolved when the result is written, so a command that re-resolves the
+/// policy (`test` profiles) styles its result with the final one.
+fn stdout_style() -> Style {
+    let stdout = policy().stdout;
+    Style::new(stdout.color, stdout.hyperlinks)
+}
+
+/// Styling for stderr-bound text: status, warnings, diagnostics.
+pub(crate) fn stderr_painter() -> crate::paint::Painter {
+    let stderr = policy().stderr;
+    crate::paint::Painter::new(stderr.color, stderr.hyperlinks)
+}
+
+pub(crate) fn progress() -> bool {
+    policy().progress
+}
+
+pub(crate) fn agent_skill_check() -> AgentSkillCheckPolicy {
+    policy().agent_skill_check
+}
+
+pub(crate) fn diagnostic_render_config() -> RenderConfig {
+    let policy = policy();
+    RenderConfig {
+        format: policy.diagnostics.format,
+        color: policy.stderr.color,
+        show_error_codes: policy.diagnostics.show_error_codes,
     }
 }
 
@@ -241,9 +288,6 @@ fn resolve(args: OutputArgs, signals: OutputSignals) -> OutputPolicy {
             DiagnosticFormatChoice::Agent => DiagnosticFormat::Agent,
             DiagnosticFormatChoice::Concise => DiagnosticFormat::Concise,
         };
-    }
-    if args.no_progress {
-        policy.progress = false;
     }
     policy.agent_skill_check = match args.agent_skill_check {
         AgentSkillCheckChoice::Auto if signals.running_in_agent => AgentSkillCheckPolicy::Require,
@@ -352,8 +396,8 @@ mod tests {
     fn args(preset: OutputPreset) -> OutputArgs {
         OutputArgs {
             preset,
+            format: OutputFormat::Text,
             color: None,
-            no_progress: false,
             hyperlinks: None,
             diagnostic_format: None,
             agent_skill_check: AgentSkillCheckChoice::Auto,
@@ -415,16 +459,6 @@ mod tests {
         assert!(policy.stdout.hyperlinks);
         assert!(policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
-        assert!(!policy.progress);
-    }
-
-    #[test]
-    fn no_progress_overrides_human_preset() {
-        let mut output_args = args(OutputPreset::Human);
-        output_args.no_progress = true;
-
-        let policy = resolve(output_args, INTERACTIVE);
-
         assert!(!policy.progress);
     }
 

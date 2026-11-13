@@ -104,7 +104,6 @@ jobs:
             ':.github/workflows/ci.yaml' \
             ':.github/workflows/release-baml-language.yml' \
             ':.github/workflows/build2-baml-wrapper.reusable.yaml' \
-            ':.github/workflows/build2-wrapper.reusable.yaml' \
             ':.github/workflows/nightly-release.yml' \
             ':.github/workflows/build2-bridge-cffi.reusable.yaml' \
             ':.github/workflows/build2-python-sdk.reusable.yaml' \

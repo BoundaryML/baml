@@ -14,6 +14,10 @@ use crate::describe_command::{
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 
+fn plain() -> crate::paint::Painter {
+    crate::paint::Painter::new(false, false)
+}
+
 /// Build a `ProjectDatabase` with the given BAML source files.
 ///
 /// `files` is a list of `(relative_path, content)` pairs. The project root
@@ -50,13 +54,13 @@ fn capture_description(
     budget: usize,
 ) -> String {
     let mut buf = Vec::new();
-    write_description(&mut buf, db, desc, budget, Path::new("/test")).unwrap();
+    write_description(&mut buf, &plain(), db, desc, budget, Path::new("/test")).unwrap();
     String::from_utf8(buf).unwrap()
 }
 
 fn truncation_budgets(output: &str) -> Vec<usize> {
     output
-        .split("`--budget ")
+        .split("`--limit ")
         .skip(1)
         .map(|suffix| {
             suffix
@@ -108,14 +112,14 @@ fn assert_reported_budget_is_minimum(
 /// Capture `write_keyword` output as a String.
 fn capture_keyword(name: &str) -> String {
     let mut buf = Vec::new();
-    write_keyword(&mut buf, name).unwrap();
+    write_keyword(&mut buf, &plain(), name).unwrap();
     String::from_utf8(buf).unwrap()
 }
 
 /// Capture `write_listing` output as a String.
 fn capture_listing(entries: &[baml_ide::ListingEntry]) -> String {
     let mut buf = Vec::new();
-    write_listing(&mut buf, entries, Path::new("/test")).unwrap();
+    write_listing(&mut buf, &plain(), entries, Path::new("/test")).unwrap();
     String::from_utf8(buf).unwrap()
 }
 
@@ -1509,7 +1513,7 @@ fn render_describe_methods_respect_budget() {
     for needle in [
         "methods:",
         "static_methods:",
-        "more lines (re-run with a higher `--budget` to see more; use `--budget ",
+        "more lines (re-run with a higher `--limit` to see more; use `--limit ",
     ] {
         assert!(
             tight.contains(needle),
@@ -1539,7 +1543,7 @@ fn render_describe_methods_respect_budget() {
         );
     }
     assert!(
-        !full.contains("re-run with a higher `--budget`"),
+        !full.contains("re-run with a higher `--limit`"),
         "no elision marker expected at budget 1000:\n{full}"
     );
     assert!(
@@ -1595,7 +1599,7 @@ fn render_describe_fields_only_body_fits_tight_budget() {
     let body_part = |s: &str| s[..s.find("\nmethods:").expect("methods section")].to_string();
     assert_eq!(body_part(&tight), body_part(&full));
     assert!(
-        tight.contains("more lines (re-run with a higher `--budget` to see more; use `--budget "),
+        tight.contains("more lines (re-run with a higher `--limit` to see more; use `--limit "),
         "methods exceeding the tight budget must be elided with a marker:\n{tight}"
     );
     for needle in ["class User {", "    name: string,", "    age: int,", "}"] {

@@ -33,7 +33,7 @@ testset "wrapper telemetry" {
                     ["help"],
                     ["private-command", "private-argument"],
                     ["--", "toolchain", "update"],
-                    ["--project", fixture.cwd, "--help"],
+                    ["--project-dir", fixture.cwd, "--help"],
                 ],
                 "baml toolchain": [
                     ["toolchain", "--help"],
@@ -43,15 +43,18 @@ testset "wrapper telemetry" {
                 ],
                 "baml toolchain update": [["toolchain", "update", "--help"], ["help", "toolchain", "update"]],
                 "baml toolchain status": [
-                    ["toolchain", "status", "--json"],
-                    ["--project", fixture.cwd, "toolchain", "status", "--json"],
-                    ["toolchain", "--project", fixture.cwd, "status", "--json"],
-                    ["toolchain", "--project=" + fixture.cwd, "status", "--json"],
+                    ["toolchain", "status", "--output-format", "json"],
+                    ["--project-dir", fixture.cwd, "toolchain", "status", "--output-format", "json"],
+                    ["toolchain", "--project-dir", fixture.cwd, "status", "--output-format", "json"],
+                    ["toolchain", "--project-dir=" + fixture.cwd, "status", "--output-format", "json"],
                 ],
-                "baml self-update": [["self-update", "--help"], ["help", "self-update"]],
-                "baml query": [["--color", "toolchain", "query", "--project", "private-cloud-project"]],
+                "baml self update": [["self", "update", "--help"], ["help", "self", "update"]],
+                "baml cloud": [
+                    ["--color", "toolchain", "cloud", "recordings", "query", "--project", "private-cloud-project"],
+                    ["cloud", "auth", "login", "--token", "private-token"],
+                ],
+                "baml query": [["--output-format", "toolchain", "query", "private-sql"]],
                 "baml run": [["run", "--", "toolchain", "update", "private-argument"]],
-                "baml auth": [["auth", "login", "--token", "private-token"]],
             };
             for (let name in ["use", "install", "list", "uninstall"]) {
                 cases[`baml toolchain ${name}`] = [["toolchain", name, "--help"]];
@@ -68,13 +71,13 @@ testset "wrapper telemetry" {
                     "new",
                     "pack",
                     "describe",
-                    "feedback",
                     "ide",
                     "agent",
                     "telemetry",
-                    "clean",
-                    "update",
-                    "upgrade",
+                    "codequality",
+                    "local",
+                    "login",
+                    "logout",
                 ]
             ) {
                 cases[`baml ${name}`] = [[name, "--help", "private-argument"]];
@@ -104,14 +107,7 @@ testset "wrapper telemetry" {
                     );
                     for (let event in events) {
                         root.harness.require(
-                            capture_string(event, "client")
-                                == (
-                                    if (candidate.label.starts_with("rust")) {
-                                        "rust-wrapper"
-                                    } else {
-                                        "baml-in-baml"
-                                    }
-                                ),
+                            capture_string(event, "client") == "baml-in-baml",
                             "client discriminator is missing from an event",
                         );
                         root.harness.require(
@@ -138,10 +134,10 @@ testset "wrapper telemetry" {
             fixture.env["CI"] = "true";
             for (
                 let args in [
-                    ["--project"],
-                    ["--project", `${fixture.root}/private-project`, "toolchain", "status"],
+                    ["--project-dir"],
+                    ["--project-dir", `${fixture.root}/private-project`, "toolchain", "status"],
                     ["toolchain", "private-command"],
-                    ["self-update", "private-argument"],
+                    ["self", "update", "private-argument"],
                 ]
             ) {
                 let before = fixture.captures().length();
@@ -265,7 +261,7 @@ testset "wrapper telemetry" {
                     command: [`${fixture.root}/wrapper${fixture.suffix}`],
                     self_update: true,
                 };
-                root.harness.require(fixture.run(copy, ["self-update"]).ok(), "self-update failed");
+                root.harness.require(fixture.run(copy, ["self", "update"]).ok(), "self-update failed");
                 // The replacement is a CLI stub, so use the original wrapper to
                 // deliver its predecessor's durable queue.
                 root.harness.require(
@@ -275,7 +271,7 @@ testset "wrapper telemetry" {
                 fixture.await_telemetry(2);
                 let events = fixture.captures();
                 root.harness.require(
-                    events.length() == 2 && events[0].event == "baml self-update",
+                    events.length() == 2 && events[0].event == "baml self update",
                     "successful replacement lost its command event",
                 );
                 root.harness.require(
@@ -410,35 +406,6 @@ testset "wrapper telemetry" {
             fixture.check(candidate, BASE_VERSION, expected_stderr = "");
         }
 
-        if (candidate.label.starts_with("rust")) {
-            test "rust wrapper sends only posthog even when bcs credentials are present" {
-                let fixture = root.harness.Fixture.start();
-                defer { fixture.close(); }
-                fixture.env["DO_NOT_TRACK"] = "0";
-                fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
-                fixture.env["BAML_TELEMETRY"] = "on";
-                fixture.env["BOUNDARY_API_URL"] = fixture.env["BAML_MANIFEST_BASE_URL"];
-                fixture.env["BOUNDARY_API_KEY"] = "bdry_secret_fixture";
-                fixture.env["BOUNDARY_PROJECT"] = "fixture/project";
-                fixture.env["CI"] = "true";
-                fixture.manage(candidate, ["toolchain", "list"]);
-                fixture.await_telemetry(3);
-                let requests = fixture.read("post-requests.jsonl").split("\n").filter((line) -> bool {
-                    line.trim() != ""
-                });
-                root.harness.require(
-                    requests.length() == 3,
-                    "Rust wrapper made unexpected telemetry requests",
-                );
-                root.harness.require(
-                    requests.every((line) -> bool {
-                        baml.json.decode<string>(line) == "/capture/"
-                    }),
-                    "Rust wrapper attempted BCS delivery",
-                );
-            }
-        }
-
         test "payload has stable identity and private context" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
@@ -448,7 +415,7 @@ testset "wrapper telemetry" {
             baml.fs.mkdir(`${fixture.root}/project/.git`, baml.fs.MkdirOptions { recursive: true });
             fixture.cwd = `${fixture.root}/project/nested/deep`;
             fixture.manage(candidate, ["toolchain", "list"]);
-            fixture.await_telemetry(3);
+            fixture.await_telemetry(2);
             let config = baml.toml.Table.parse(fixture.read("baml/wrapper-telemetry.toml"));
             let identity = baml.json.path<string>(config.to_json(), ".anonymous_id");
             let salt = baml.json.path<string>(config.to_json(), ".salt");
@@ -482,14 +449,7 @@ testset "wrapper telemetry" {
                 "event creates a person profile",
             );
             root.harness.require(
-                capture_string(first, "client")
-                    == (
-                        if (candidate.label.starts_with("rust")) {
-                            "rust-wrapper"
-                        } else {
-                            "baml-in-baml"
-                        }
-                    ),
+                capture_string(first, "client") == "baml-in-baml",
                 "implementation missing",
             );
             root.harness.require(
@@ -521,10 +481,10 @@ testset "wrapper telemetry" {
                 "project hash differs from CLI",
             );
             fixture.env["DO_NOT_TRACK"] = "false";
-            let resolved = fixture.manage(candidate, ["toolchain", "status", "--json"]);
+            let resolved = fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"]);
             baml.json.decode<root.harness.ResolutionResult>(resolved.stdout.to_string());
-            fixture.await_telemetry(6);
-            let second = fixture.captures()[3];
+            fixture.await_telemetry(5);
+            let second = fixture.captures()[2];
             root.harness.require(
                 second.distinct_id == identity,
                 "identity changed between invocations",
@@ -678,9 +638,9 @@ testset "wrapper telemetry" {
             );
             fixture.remove("telemetry.status");
             fixture.manage(candidate, ["toolchain", "list"]);
-            fixture.await_telemetry(7);
+            fixture.await_telemetry(5);
             root.harness.require(
-                fixture.captures().length() == 7,
+                fixture.captures().length() == 5,
                 "retry did not deliver the old and new event",
             );
         }
@@ -891,7 +851,7 @@ testset "wrapper telemetry" {
             fixture.env["CI"] = "true";
 
             fixture.manage(candidate, ["toolchain", "--help"]);
-            fixture.manage(candidate, ["self-update", "--help"]);
+            fixture.manage(candidate, ["self", "update", "--help"]);
             fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = ["--version"]);
             root.harness.require(
                 fixture.run(candidate, ["--version"]).ok(),
@@ -919,7 +879,7 @@ testset "wrapper telemetry" {
             fixture.channel("canary", NEXT_VERSION);
             fixture.manage(candidate, ["toolchain", "update"]);
             fixture.await_telemetry(8);
-            fixture.manage(candidate, ["self-update"], success = false);
+            fixture.manage(candidate, ["self", "update"], success = false);
             fixture.await_telemetry(10);
             let events = fixture.captures();
             for (let name in ["wrapper_selection", "wrapper_install", "wrapper_update"]) {
@@ -951,7 +911,7 @@ testset "wrapper telemetry" {
             );
             root.harness.require(
                 events.some((event) -> bool {
-                    event.event == "baml self-update"
+                    event.event == "baml self update"
                 }),
                 "self-update command event missing",
             );

@@ -115,7 +115,7 @@ fn pack_signal_cancels_main_and_runs_defer() {
     common::write_project(tmp.path(), SERVE_WITH_DEFER);
     let bin = tmp.path().join("out");
     let output = Command::new(&built.baml_cli)
-        .args(["pack", "--from"])
+        .args(["pack", "--project-dir"])
         .arg(tmp.path())
         .arg("-o")
         .arg(&bin)

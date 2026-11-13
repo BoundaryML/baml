@@ -86,7 +86,7 @@ class PackageManagerArtifactsTest(unittest.TestCase):
             self.assertNotIn('ENV.delete "BAML_TOOLCHAIN"', formula)
             self.assertIn('assert_match "installed toolchains: (none)"', formula)
             self.assertIn('shell_output("#{bin}/baml toolchain list")', formula)
-            self.assertIn("self-update is disabled in this build", formula)
+            self.assertIn("baml self update is disabled in this build", formula)
             self.assertNotIn('"toolchain", "use"', formula)
             self.assertNotIn('system bin/"baml", "init"', formula)
             self.assertNotIn('system bin/"baml", "check"', formula)

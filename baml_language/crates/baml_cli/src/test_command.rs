@@ -1,7 +1,7 @@
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(clippy::print_stderr)]
 
 use std::{
-    path::PathBuf,
+    io::{self, Write},
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -14,11 +14,14 @@ use bex_engine::{
     FunctionCallContextBuilder, WireTy, logger::TraceLogger,
 };
 use clap::{Args, FromArgMatches};
+use serde::Serialize;
 use sys_native::CallId;
 
 use crate::{
+    ExitCode,
     bytecode_cache::CacheContext,
     log_output::{LogLevel as TestLogLevel, LogOutput},
+    output::{Command, CommandContext, Outcome, Report, Style},
     reporter::Reporter,
     test_filter::TestFilter,
 };
@@ -48,8 +51,8 @@ PROFILES:
   Profile includes establish the initial candidates; direct CLI includes narrow
   them. Excludes accumulate and always win. Direct scalar options override
   profile scalar options. Profile args cannot contain --profile, --no-profile,
-  --project, --agent-skill-check, --from, --features, or --help. With no default profile,
-  all tests are selected.
+  --project-dir, --agent-skill-check, --features, --output-format, or --help.
+  With no default profile, all tests are selected.
 
 Examples:
   List available tests:
@@ -63,9 +66,6 @@ Examples:
 pub struct TestArgs {
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
-
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
 
     /// Apply a named test profile from `baml.toml`.
     ///
@@ -176,7 +176,6 @@ struct ParsedProfileArgs {
 pub(crate) struct TestOutputOverrides {
     pub(crate) preset: Option<crate::output::OutputPreset>,
     pub(crate) color: Option<crate::output::ColorChoice>,
-    pub(crate) no_progress: Option<bool>,
     pub(crate) hyperlinks: Option<crate::output::HyperlinkChoice>,
     pub(crate) diagnostic_format: Option<crate::output::DiagnosticFormatChoice>,
 }
@@ -194,7 +193,6 @@ impl TestOutputOverrides {
         Self {
             preset: explicitly_set("preset").then_some(output.preset),
             color: explicitly_set("color").then_some(output.color).flatten(),
-            no_progress: explicitly_set("no_progress").then_some(output.no_progress),
             hyperlinks: explicitly_set("hyperlinks")
                 .then_some(output.hyperlinks)
                 .flatten(),
@@ -210,7 +208,6 @@ impl TestOutputOverrides {
         Self {
             preset: supplied("preset").then_some(output.preset),
             color: supplied("color").then_some(output.color).flatten(),
-            no_progress: supplied("no_progress").then_some(output.no_progress),
             hyperlinks: supplied("hyperlinks")
                 .then_some(output.hyperlinks)
                 .flatten(),
@@ -226,9 +223,6 @@ impl TestOutputOverrides {
         }
         if let Some(color) = self.color {
             output.color = Some(color);
-        }
-        if let Some(no_progress) = self.no_progress {
-            output.no_progress = no_progress;
         }
         if let Some(hyperlinks) = self.hyperlinks {
             output.hyperlinks = Some(hyperlinks);
@@ -292,7 +286,7 @@ impl RunCtx<'_> {
     fn call_context(&self, call_id: CallId) -> (FunctionCallContext, Option<TraceLogger>) {
         let builder =
             FunctionCallContextBuilder::new(call_id).with_cancel_token(self.cancel.clone());
-        LogOutput::new(self.logs, "test").call_context(builder)
+        LogOutput::status(self.logs, "test").call_context(builder)
     }
 
     fn block_on_with_logs<T>(
@@ -300,7 +294,7 @@ impl RunCtx<'_> {
         future: impl std::future::Future<Output = T>,
         producer: Option<&TraceLogger>,
     ) -> T {
-        LogOutput::new(self.logs, "test").block_on(self.rt, future, producer)
+        LogOutput::status(self.logs, "test").block_on(self.rt, future, producer)
     }
 }
 
@@ -320,24 +314,122 @@ fn finish_engine(
     ctx.unhandled_spawn_failures.load(Ordering::SeqCst)
 }
 
+/// The selected tests and, unless `--list`, how they went.
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct TestReport {
+    pub tests: Vec<TestResult>,
+    /// Absent for `--list`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<TestSummary>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct TestResult {
+    /// The canonical ID, valid as an `--include` or `--exclude` selector.
+    pub id: String,
+    /// Absent for `--list`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<TestStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TestStatus {
+    Pass,
+    /// Failed, but its testset runner still passed the suite.
+    Tolerated,
+    Fail,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct TestSummary {
+    /// The aggregate verdict of the testset runners.
+    pub outcome: String,
+    pub passed: usize,
+    pub failed: usize,
+    pub tolerated: usize,
+    pub total: usize,
+    pub messages: Vec<String>,
+}
+
+impl Report for TestReport {
+    const JSONL: bool = true;
+
+    fn text(&self, out: &mut dyn Write, _style: &Style) -> io::Result<()> {
+        for test in &self.tests {
+            let ms = test
+                .duration_ms
+                .map(|ms| format!(" ({ms}ms)"))
+                .unwrap_or_default();
+            match test.status {
+                None => writeln!(out, "  {}  (<testset>)", test.id)?,
+                Some(TestStatus::Pass) => writeln!(out, "PASS {}{ms}", test.id)?,
+                Some(TestStatus::Tolerated) => writeln!(out, "TOLERATED {}{ms}", test.id)?,
+                Some(TestStatus::Fail) => writeln!(out, "FAIL {}{ms}", test.id)?,
+            }
+        }
+        let Some(summary) = &self.summary else {
+            return Ok(());
+        };
+        if summary.total == 0 {
+            return Ok(());
+        }
+        if summary.outcome != "pass" {
+            writeln!(out, "AGGREGATE FAIL [outcome={}]", summary.outcome)?;
+        } else if summary.tolerated > 0 {
+            writeln!(
+                out,
+                "AGGREGATE PASS [outcome=pass; {} tolerated {}]",
+                summary.tolerated,
+                pluralize(summary.tolerated, "failure", "failures")
+            )?;
+        }
+        Ok(())
+    }
+
+    /// One object per test, then a terminal `{"summary": ...}` frame.
+    fn jsonl(&self) -> Vec<serde_json::Value> {
+        let mut lines: Vec<serde_json::Value> = self
+            .tests
+            .iter()
+            .map(|test| serde_json::to_value(test).expect("a test result serializes"))
+            .collect();
+        if let Some(summary) = &self.summary {
+            lines.push(serde_json::json!({ "summary": summary }));
+        }
+        lines
+    }
+}
+
+impl Command for TestArgs {
+    type Output = TestReport;
+
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<TestReport>> {
+        let mut report = TestReport::default();
+        let status = self.execute(cx, &mut report)?;
+        Ok(Outcome::new(report, status))
+    }
+}
+
 impl TestArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+    fn execute(&self, cx: &CommandContext, report: &mut TestReport) -> Result<ExitCode> {
         let reporter = Reporter::new();
         // ── 1. Load project ────────────────────────────────────────────────
         let mut session = crate::project_session::ProjectSession::open(
-            self.from.as_deref(),
+            cx.project_dir.as_deref(),
             crate::project_session::CacheUse::ReadWrite,
         )?;
         let invocation =
             self.resolve_invocation(session.resolved.manifest.as_deref(), session.root())?;
         crate::output::init(invocation.output)?;
         if session.is_empty() {
-            reporter.abandon();
             crate::reporter::print_error(format_args!(
                 "no .baml files found in {}",
                 session.root().display()
             ));
-            return Ok(crate::ExitCode::NoTestsRun);
+            return Ok(crate::ExitCode::Failure);
         }
 
         // Warm `--list` fast path. The fully-expanded test leaf names are a pure
@@ -349,9 +441,8 @@ impl TestArgs {
         // discovery); any miss/corruption falls through to the
         // honest path below.
         if invocation.list {
-            if let Some(exit) = self.try_cached_list(&reporter, session.cache.as_ref(), &invocation)
-            {
-                return Ok(exit);
+            if let Some(names) = self.try_cached_list(session.cache.as_ref(), &invocation) {
+                return Ok(list_tests(&reporter, names, report));
             }
         }
 
@@ -399,9 +490,8 @@ impl TestArgs {
                 Err(refused) => {
                     let rendered =
                         crate::check_command::render_project_diagnostics(db, refused.errors());
-                    reporter.abandon();
                     eprintln!("{rendered}");
-                    return Ok(crate::ExitCode::Other);
+                    return Ok(crate::ExitCode::Failure);
                 }
             };
 
@@ -463,7 +553,6 @@ impl TestArgs {
         // discovery/filtering/execution then happens inside that package via
         // `run_filtered` / `list_filtered`.
         reporter.spin("Discovering", "tests");
-        let discovery_started = std::time::Instant::now();
         let registry = match rt.block_on(engine.collect_tests(CallId::next(), cancel.clone())) {
             Ok(BexExternalValue::Null) => None,
             Ok(handle @ BexExternalValue::Handle(_)) => Some(handle),
@@ -478,27 +567,11 @@ impl TestArgs {
                 // A failure resolving the registry (vs. a project with no
                 // tests, which returns Null) is a real error — don't silently
                 // continue as if there were no testset tests.
-                reporter.abandon();
                 crate::reporter::print_error(format_args!("testset discovery failed: {e}"));
-                return Ok(
-                    if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error) != 0 {
-                        crate::ExitCode::TestFailure
-                    } else {
-                        crate::ExitCode::Other
-                    },
-                );
+                finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error);
+                return Ok(crate::ExitCode::Failure);
             }
         };
-
-        crate::reporter::print_verbose(format_args!(
-            "discovered tests in {:.2?} (test registry: {})",
-            discovery_started.elapsed(),
-            if registry.is_some() {
-                "present"
-            } else {
-                "none"
-            },
-        ));
 
         // 5. List mode
         if invocation.list {
@@ -506,24 +579,16 @@ impl TestArgs {
                 Some(reg) => match list_selected_testset_names(&run_ctx, reg, &invocation) {
                     Ok(names) => names,
                     Err(e) => {
-                        reporter.abandon();
                         crate::reporter::print_error(format_args!("failed to list tests: {e}"));
-                        return Ok(
-                            if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error)
-                                != 0
-                            {
-                                crate::ExitCode::TestFailure
-                            } else {
-                                crate::ExitCode::Other
-                            },
-                        );
+                        finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Error);
+                        return Ok(crate::ExitCode::Failure);
                     }
                 },
                 None => Vec::new(),
             };
 
             if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Success) != 0 {
-                return Ok(crate::ExitCode::TestFailure);
+                return Ok(crate::ExitCode::Failure);
             }
 
             // Write-through the discovery cache (+ DEV_BAML_BUILD_CACHE_VERIFY=always oracle) so a
@@ -550,19 +615,15 @@ impl TestArgs {
                 ctx.store_test_discovery(&disco);
             }
 
-            return Ok(render_test_list(&reporter, &testset_names));
+            return Ok(list_tests(&reporter, testset_names, report));
         }
 
         // 6. Execute
         // Test execution writes per-test PASS/FAIL lines to stdout; clear the
         // spinner so those lines don't fight with the ticks.
-        reporter.abandon();
 
-        let mut passed = 0usize;
-        let mut failed = 0usize;
-        let mut tolerated = 0usize;
-        let mut total = 0usize;
         let mut command_failed = false;
+        let mut summary = TestSummary::default();
 
         // Tests run inside the stdlib: a single `run_filtered` call
         // expands, filters, runs (concurrently via spawn/await), and aggregates
@@ -570,49 +631,56 @@ impl TestArgs {
         if let Some(reg) = &registry {
             match run_filtered_report(&run_ctx, reg, &invocation) {
                 Ok(value) => match parse_flat_report(&value) {
-                    Some(flat) => consume_flat_report(
-                        &flat,
-                        &mut passed,
-                        &mut failed,
-                        &mut tolerated,
-                        &mut total,
-                        &mut command_failed,
-                    ),
+                    Some(flat) => {
+                        command_failed = consume_flat_report(flat, report, &mut summary);
+                    }
                     None => {
-                        eprintln!("AGGREGATE FAIL - could not read test report");
-                        failed += 1;
-                        total += 1;
+                        crate::reporter::print_error("could not read the test report");
+                        summary.failed += 1;
+                        summary.total += 1;
                         command_failed = true;
                     }
                 },
                 Err(e) => {
-                    eprintln!("AGGREGATE FAIL");
-                    eprintln!("  => {e}");
-                    failed += 1;
-                    total += 1;
+                    crate::reporter::print_error(format_args!("{e}"));
+                    summary.failed += 1;
+                    summary.total += 1;
                     command_failed = true;
                 }
             }
         }
 
-        let status = if failed == 0 {
+        let status = if summary.failed == 0 {
             bex_engine::ProcessStatus::Success
         } else {
             bex_engine::ProcessStatus::Error
         };
         let unhandled_spawn_failure_count = finish_engine(&run_ctx, &reporter, status);
         if unhandled_spawn_failure_count != 0 {
-            failed += unhandled_spawn_failure_count;
-            total += unhandled_spawn_failure_count;
+            summary.failed += unhandled_spawn_failure_count;
+            summary.total += unhandled_spawn_failure_count;
             command_failed = true;
+            summary.outcome = "fail".to_owned();
         }
+        // No flat report was read: nothing ran, or the run itself failed.
+        if summary.outcome.is_empty() {
+            summary.outcome = if command_failed { "fail" } else { "pass" }.to_owned();
+        }
+        let TestSummary {
+            passed,
+            failed,
+            tolerated,
+            total,
+            ..
+        } = summary;
+        report.summary = Some(summary);
 
         if total == 0 {
             reporter.finish("Finished", "no tests selected");
-            return Ok(crate::ExitCode::NoTestsRun);
+            return Ok(crate::ExitCode::Success);
         }
 
-        let summary = if command_failed && tolerated > 0 {
+        let line = if command_failed && tolerated > 0 {
             format!(
                 "{passed} passed, {failed} failed, {tolerated} tolerated {}, {total} total",
                 pluralize(tolerated, "failure", "failures")
@@ -628,10 +696,10 @@ impl TestArgs {
         if command_failed {
             // `reporter.finish` styles success — print as an error so the
             // bold-red `Error:` carries the visual weight of "tests failed".
-            crate::reporter::print_error(format_args!("test failures — {summary}"));
-            Ok(crate::ExitCode::TestFailure)
+            crate::reporter::print_error(format_args!("test failures: {line}"));
+            Ok(crate::ExitCode::Failure)
         } else {
-            reporter.finish("Finished", summary);
+            reporter.finish("Finished", line);
             Ok(crate::ExitCode::Success)
         }
     }
@@ -737,20 +805,20 @@ impl TestArgs {
                 token.as_str(),
                 "--profile"
                     | "--no-profile"
-                    | "--project"
+                    | "--project-dir"
                     | "--agent-skill-check"
-                    | "--from"
                     | "--features"
+                    | "--output-format"
                     | "--help"
                     | "-h"
             ) || token.starts_with("--profile=")
-                || token.starts_with("--project=")
+                || token.starts_with("--project-dir=")
                 || token.starts_with("--agent-skill-check=")
-                || token.starts_with("--from=")
-                || token.starts_with("--features=");
+                || token.starts_with("--features=")
+                || token.starts_with("--output-format=");
             if bootstrap {
                 anyhow::bail!(
-                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project, --agent-skill-check, --from, --features, or --help"
+                    "invalid argument `{token}` in test profile `{name}`: profile args cannot contain --profile, --no-profile, --project-dir, --agent-skill-check, --features, --output-format, or --help"
                 );
             }
         }
@@ -793,43 +861,40 @@ impl TestArgs {
     /// miss/corruption — every case falls through to honest discovery.
     fn try_cached_list(
         &self,
-        reporter: &Reporter,
         cache: Option<&CacheContext>,
         invocation: &TestInvocation,
-    ) -> Option<crate::ExitCode> {
+    ) -> Option<Vec<String>> {
         if CacheContext::verify_enabled() {
             return None;
         }
         let disco = cache?.load_test_discovery()?;
-        let testset_names: Vec<String> = disco
-            .testset_leaf_names
-            .into_iter()
-            .filter(|name| invocation.includes_id(name))
-            .collect();
-        Some(render_test_list(reporter, &testset_names))
+        Some(
+            disco
+                .testset_leaf_names
+                .into_iter()
+                .filter(|name| invocation.includes_id(name))
+                .collect(),
+        )
     }
 }
 
-/// Render the selected `--list` output to stdout and return the exit code.
-/// Shared by the honest path and the warm discovery-cache path so both produce
-/// byte-identical stdout. Status/`Selected` lines go to stderr (via the
-/// reporter); only the list itself is stdout content.
-fn render_test_list(reporter: &Reporter, testset_names: &[String]) -> crate::ExitCode {
-    if testset_names.is_empty() {
+/// Record the selected `--list` IDs. Shared by the honest path and the warm
+/// discovery-cache path so both produce byte-identical stdout.
+fn list_tests(reporter: &Reporter, names: Vec<String>, report: &mut TestReport) -> ExitCode {
+    if names.is_empty() {
         reporter.finish("Finished", "no tests selected");
-        return crate::ExitCode::NoTestsRun;
+        return ExitCode::Success;
     }
-    reporter.status("Selected", format!("{} test(s)", testset_names.len()));
-    // Indented list under the cargo-style status line. These are content (the
-    // actual list), not status updates, so they go to stdout as plain prints.
-    //
-    // Canonicalize the order at this single render point — both the fresh-compile
-    // and bytecode-cache paths flow through here — so `--list` output is
-    // byte-identical between them regardless of upstream map/enumeration order.
-    for name in testset_names {
-        println!("  {name}  (<testset>)");
-    }
-    crate::ExitCode::Success
+    reporter.status("Selected", format!("{} test(s)", names.len()));
+    report.tests = names
+        .into_iter()
+        .map(|id| TestResult {
+            id,
+            status: None,
+            duration_ms: None,
+        })
+        .collect();
+    ExitCode::Success
 }
 
 // ---------------------------------------------------------------------------
@@ -912,83 +977,67 @@ fn list_selected_testset_names(
     Ok(string_array_values(&value))
 }
 
-/// Print a flat report and fold its counts into the running totals.
+/// Fold a flat report into the test report and its summary; returns whether
+/// the aggregate failed.
 ///
-/// Print the aggregate testset result and fold its counts into the running
-/// totals. Both filtered and unfiltered runs go through the same aggregate path
+/// Both filtered and unfiltered runs go through the same aggregate path
 /// (filtered selections still run under their testset runners), so a failing
-/// leaf whose runner still passes the suite is reported as a *tolerated* failure
-/// — kept out of the hard `failed` count and not failing the command. Every
-/// leaf line uses the same canonical ID emitted by `baml test --list`; aggregate
-/// runner verdicts are labeled as aggregates rather than presented as test IDs.
+/// leaf whose runner still passes the suite is reported as a *tolerated*
+/// failure: kept out of the hard `failed` count and not failing the command.
+/// Every test uses the canonical ID emitted by `baml test --list`.
 fn consume_flat_report(
-    flat: &FlatReport,
-    passed: &mut usize,
-    failed: &mut usize,
-    tolerated: &mut usize,
-    total: &mut usize,
-    command_failed: &mut bool,
-) {
-    *passed += flat.passed;
-    *failed += flat.failed;
-    *tolerated += flat.tolerated;
-    *total += flat.total;
+    flat: FlatReport,
+    report: &mut TestReport,
+    summary: &mut TestSummary,
+) -> bool {
+    summary.passed += flat.passed;
+    summary.failed += flat.failed;
+    summary.tolerated += flat.tolerated;
+    summary.total += flat.total;
+    summary.outcome = flat.outcome;
 
-    // An empty selection (a filter that matched no testset tests) aggregates
-    // to a vacuous `pass` over zero tests. Printing a green aggregate pass
-    // for that contradicts the `NoTestsRun` exit the caller then returns and
-    // reads as success to anything parsing stdout, so skip the aggregate line
-    // entirely and let the caller's "no tests selected" guard speak.
-    //
-    // Guard *only* the vacuous-pass case: a zero-test report with a non-pass
-    // outcome must still fall through to the FAIL branch so it prints, sets
-    // `command_failed`, and synthesizes a displayed failure — a real failure
-    // is never silently dropped just because it carried no leaves.
-    if flat.total == 0 && flat.outcome == "pass" {
-        return;
-    }
-
-    // Duration suffixes come from the parallel `*_ms` arrays; a missing or
-    // negative entry (fallback-correlated identities, expansion sentinels)
-    // prints the bare line the output always had.
-    let with_ms = |ms: &[i64], i: usize| -> String {
-        match ms.get(i) {
-            Some(ms) if *ms >= 0 => format!(" ({ms}ms)"),
-            _ => String::new(),
-        }
+    // Durations come from the parallel `*_ms` arrays; a missing or negative
+    // entry (fallback-correlated identities, expansion sentinels) has none.
+    let mut record = |names: Vec<String>, ms: &[i64], status| {
+        report
+            .tests
+            .extend(names.into_iter().enumerate().map(|(i, id)| TestResult {
+                id,
+                status: Some(status),
+                duration_ms: ms.get(i).copied().filter(|ms| *ms >= 0),
+            }));
     };
-    for (i, name) in flat.passed_names.iter().enumerate() {
-        println!("PASS {name}{}", with_ms(&flat.passed_ms, i));
-    }
-    for (i, name) in flat.tolerated_names.iter().enumerate() {
-        println!("TOLERATED {name}{}", with_ms(&flat.tolerated_ms, i));
-    }
-    for (i, name) in flat.failed_names.iter().enumerate() {
-        println!("FAIL {name}{}", with_ms(&flat.failed_ms, i));
-    }
+    record(flat.passed_names, &flat.passed_ms, TestStatus::Pass);
+    record(
+        flat.tolerated_names,
+        &flat.tolerated_ms,
+        TestStatus::Tolerated,
+    );
+    record(flat.failed_names, &flat.failed_ms, TestStatus::Fail);
 
-    if flat.outcome == "pass" {
-        if flat.tolerated > 0 {
-            println!(
-                "AGGREGATE PASS [outcome=pass; {} tolerated {}]",
-                flat.tolerated,
-                pluralize(flat.tolerated, "failure", "failures")
-            );
-        }
-    } else {
-        println!("AGGREGATE FAIL [outcome={}]", flat.outcome);
+    // An empty selection aggregates to a vacuous `pass` over zero tests; the
+    // caller's "no tests selected" guard speaks for it. A zero-test report
+    // with a non-pass outcome is still a real failure.
+    // A tolerated failure keeps its message in the report; only a failed
+    // aggregate also prints them.
+    let aggregate_passed = summary.outcome == "pass";
+    if !aggregate_passed {
         for message in &flat.messages {
             eprintln!("  => {message}");
         }
-        // A testset runner can fail the aggregate without marking any child
-        // failed. Count that verdict as one displayed failure so the summary
-        // does not read "0 failed" when the aggregate itself failed.
-        if flat.failed == 0 {
-            *failed += 1;
-            *total += 1;
-        }
-        *command_failed = true;
     }
+    summary.messages.extend(flat.messages);
+    if aggregate_passed {
+        return false;
+    }
+    // A testset runner can fail the aggregate without marking any child
+    // failed. Count that verdict as one failure so the summary does not read
+    // "0 failed" when the aggregate itself failed.
+    if flat.failed == 0 {
+        summary.failed += 1;
+        summary.total += 1;
+    }
+    true
 }
 
 fn pluralize(n: usize, singular: &str, plural: &str) -> String {
@@ -1256,18 +1305,16 @@ mod tests {
         assert_eq!(parsed.passed_names, ["root::passes"]);
     }
 
-    fn consume(report: &FlatReport) -> (usize, usize, usize, usize, bool) {
-        let (mut passed, mut failed, mut tolerated, mut total, mut command_failed) =
-            (0, 0, 0, 0, false);
-        consume_flat_report(
-            report,
-            &mut passed,
-            &mut failed,
-            &mut tolerated,
-            &mut total,
-            &mut command_failed,
-        );
-        (passed, failed, tolerated, total, command_failed)
+    fn consume(flat: FlatReport) -> (usize, usize, usize, usize, bool) {
+        let (mut report, mut summary) = (TestReport::default(), TestSummary::default());
+        let command_failed = consume_flat_report(flat, &mut report, &mut summary);
+        (
+            summary.passed,
+            summary.failed,
+            summary.tolerated,
+            summary.total,
+            command_failed,
+        )
     }
 
     #[test]
@@ -1275,10 +1322,10 @@ mod tests {
         // A no-match selector aggregates to a vacuous `pass` over zero tests.
         // Folding it must leave every counter at zero (so the caller's
         // `total == 0` guard fires "no tests selected") and must NOT print a
-        // green aggregate pass line contradicting the non-zero exit (B-628).
+        // green aggregate pass line when nothing ran (B-628).
         let parsed =
             parse_flat_report(&flat_report("pass", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (0, 0, 0, 0, false));
+        assert_eq!(consume(parsed), (0, 0, 0, 0, false));
     }
 
     #[test]
@@ -1290,7 +1337,7 @@ mod tests {
         // while the aggregate failed). Regression guard for the narrowed guard.
         let parsed =
             parse_flat_report(&flat_report("fail", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (0, 1, 0, 1, true));
+        assert_eq!(consume(parsed), (0, 1, 0, 1, true));
     }
 
     #[test]
@@ -1298,7 +1345,7 @@ mod tests {
         // PassRate-style: aggregate passes; the failing leaf is tolerated, not hard.
         let parsed =
             parse_flat_report(&flat_report("pass", 2, 0, 1, 3, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (2, 0, 1, 3, false));
+        assert_eq!(consume(parsed), (2, 0, 1, 3, false));
     }
 
     #[test]
@@ -1314,7 +1361,7 @@ mod tests {
             Vec::new(),
         ))
         .unwrap();
-        assert_eq!(consume(&parsed), (1, 1, 1, 3, true));
+        assert_eq!(consume(parsed), (1, 1, 1, 3, true));
     }
 
     #[test]
@@ -1322,7 +1369,7 @@ mod tests {
         // Runner fails the aggregate without marking any child failed.
         let parsed =
             parse_flat_report(&flat_report("fail", 1, 0, 0, 1, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (1, 1, 0, 2, true));
+        assert_eq!(consume(parsed), (1, 1, 0, 2, true));
     }
 
     #[test]
@@ -1347,7 +1394,8 @@ mod tests {
             &[
                 "--color".to_string(),
                 "never".to_string(),
-                "--no-progress".to_string(),
+                "--diagnostic-format".to_string(),
+                "concise".to_string(),
             ],
         )
         .unwrap()
@@ -1356,13 +1404,27 @@ mod tests {
             globals.output.color,
             Some(crate::output::ColorChoice::Never)
         );
-        assert_eq!(globals.output.no_progress, Some(true));
+        assert_eq!(
+            globals.output.diagnostic_format,
+            Some(crate::output::DiagnosticFormatChoice::Concise)
+        );
 
         let error = TestArgs::parse_profile_args("bad_features", &["--features=beta".to_string()])
             .unwrap_err()
             .to_string();
         assert!(
             error.contains("cannot contain") && error.contains("--features"),
+            "{error}"
+        );
+
+        let error = TestArgs::parse_profile_args(
+            "bad_format",
+            &["--output-format".to_string(), "json".to_string()],
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.contains("cannot contain") && error.contains("--output-format"),
             "{error}"
         );
 

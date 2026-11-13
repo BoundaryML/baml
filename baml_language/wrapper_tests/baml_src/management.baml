@@ -601,6 +601,26 @@ testset "toolchain management" {
         );
     }
 
+    test "list reports the inventory as json" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.env["BAML_TOOLCHAIN"] = NEXT_VERSION;
+        let output = fixture.manage(candidate, ["toolchain", "list", "--output-format", "json"]);
+        let inventory = baml.json.decode<root.harness.InventoryResult>(output.stdout.to_string());
+        root.harness.require(
+            inventory.schema_version == 1
+                && inventory.default_selector == BASE_VERSION
+                && inventory.active_selector == NEXT_VERSION
+                && inventory.source == "$BAML_TOOLCHAIN",
+            "json list misreported the selectors",
+        );
+        root.harness.require(
+            inventory.installed.includes(NEXT_VERSION) && inventory.installed.includes(LATEST_VERSION),
+            "json list omitted installed versions",
+        );
+        root.harness.require(fixture.requests().length() == 0, "json list downloaded");
+    }
+
     test "list reports environment override" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
@@ -817,7 +837,9 @@ testset "toolchain management" {
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         let selector = NEXT_VERSION;
-        let output = fixture.manage(candidate, ["toolchain", "use", selector]).stdout.to_string();
+        let result = fixture.manage(candidate, ["toolchain", "use", selector]);
+        root.harness.require(result.stdout.to_string() == "", "selection report reached stdout");
+        let output = result.stderr.to_string();
         root.harness.require(
             output.includes("previous:")
                 && output.includes(BASE_VERSION)
@@ -831,7 +853,9 @@ testset "toolchain management" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project("canary", key = "channel");
-        let output = fixture.manage(candidate, ["toolchain", "use", "nightly"]).stdout.to_string();
+        let result = fixture.manage(candidate, ["toolchain", "use", "nightly"]);
+        root.harness.require(result.stdout.to_string() == "", "selection report reached stdout");
+        let output = result.stderr.to_string();
         root.harness.require(
             output.includes("previous:")
                 && output.includes(BASE_VERSION)
@@ -1018,7 +1042,7 @@ testset "toolchain management" {
         fixture.absent(BASE_VERSION);
         fixture.write(`server/${BASE_VERSION}.tar.gz.status`, "404");
         fixture.write(`server/${BASE_VERSION}.zip.status`, "404");
-        let output = fixture.manage(candidate, ["toolchain", "status", "--json"]);
+        let output = fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"]);
         root.harness.require(
             !baml.json.decode<root.harness.ResolutionResult>(output.stdout.to_string()).installed,
             "plain status misreported failed installation",
@@ -1033,7 +1057,7 @@ testset "toolchain management" {
                 ],
             "plain status did not attempt acquisition exactly once",
         );
-        fixture.manage(candidate, ["toolchain", "status", "--install", "--json"], success = false);
+        fixture.manage(candidate, ["toolchain", "status", "--install", "--output-format", "json"], success = false);
         // The optional attempt populated the exact-version cache. The strict
         // invocation must make one artifact request, without a best-effort retry.
         let extension = if (fixture.windows) {
@@ -1068,7 +1092,7 @@ testset "toolchain management" {
         fixture.remove(`baml/toolchains/${BASE_VERSION}/VERSION`);
         fixture.manage(
             candidate,
-            ["toolchain", "status", "--json"],
+            ["toolchain", "status", "--output-format", "json"],
             success = false,
             diagnostic = "--force",
         );
@@ -1244,7 +1268,7 @@ testset "toolchain management" {
                     ["install", "--force"],
                     ["use", selector],
                     ["use", "--global", selector],
-                    ["status", "--install", "--json"],
+                    ["status", "--install", "--output-format", "json"],
                 ]
             ) {
                 let fixture = root.harness.Fixture.start();

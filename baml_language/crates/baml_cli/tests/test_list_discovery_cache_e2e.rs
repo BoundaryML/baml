@@ -83,7 +83,7 @@ fn stdout_of(output: &Output) -> String {
 /// covered too.
 fn assert_honest_equals_warm(cli: &Path, dir: &Path, warm_home: &Path, extra: &[&str]) -> String {
     static COLD_HOMES: AtomicUsize = AtomicUsize::new(0);
-    let mut args = vec!["test", "--list", "--from", "."];
+    let mut args = vec!["test", "--list", "--project-dir", "."];
     args.extend_from_slice(extra);
 
     // The cold side never sees the populated entry. The warm side applies
@@ -116,7 +116,7 @@ fn assert_honest_equals_warm(cli: &Path, dir: &Path, warm_home: &Path, extra: &[
 }
 
 fn populate_unfiltered_cache(cli: &Path, dir: &Path, home: &Path) -> String {
-    let populate = run_list(cli, dir, home, &["test", "--list", "--from", "."]);
+    let populate = run_list(cli, dir, home, &["test", "--list", "--project-dir", "."]);
     assert!(
         populate.status.success(),
         "unfiltered cache population failed:\n{}",

@@ -102,7 +102,7 @@ pub enum FetchError {
     },
     #[error("manifest 404 for version {version} (not released yet?)")]
     ManifestNotFound { version: String },
-    #[error("manifest schema {got} not supported (max {max}); run `baml self-update`")]
+    #[error("manifest schema {got} not supported (max {max}); run `baml self update`")]
     ManifestSchemaTooNew { got: u32, max: u32 },
     #[error("target {target} not built for version {version}")]
     TargetNotInManifest { target: String, version: String },

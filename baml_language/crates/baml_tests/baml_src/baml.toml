@@ -21,10 +21,10 @@ name = "baml_tests"
 # leaves) and `root.fixtures.<ns>.<Function>::<Test>` (legacy tests).
 #
 #   offline (default):
-#     target/debug/baml-cli test --from crates/baml_tests/baml_src
+#     target/debug/baml-cli test --project-dir crates/baml_tests/baml_src
 #   live (real provider calls, needs keys):
 #     infisical run -- baml_language/target/debug/baml-cli test \
-#       --from baml_language/crates/baml_tests/baml_src --profile live
+#       --project-dir baml_language/crates/baml_tests/baml_src --profile live
 #
 # See ns_llm_mock/README.md for the authoring rules these profiles assume.
 [test]

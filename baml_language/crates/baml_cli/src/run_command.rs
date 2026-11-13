@@ -1,7 +1,8 @@
-#![allow(clippy::print_stdout, clippy::print_stderr)]
+#![allow(clippy::print_stderr)]
 
 use std::{
     collections::{HashMap, HashSet},
+    io::{self, Write},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -19,6 +20,7 @@ use sys_native::CallId;
 
 use crate::{
     log_output::{LogLevel as RunLogLevel, LogOutput},
+    output::{CommandContext, RawCommand, Report, Style},
     project_load::{
         find_project_root_from, load_project_or_default, resolve_standalone_file,
         validate_file_project_flags, workspace_db,
@@ -148,6 +150,9 @@ fn parse_script_body(tokens: &[String]) -> Result<ScriptExpansion> {
 // CLI Args
 // ============================================================================
 
+/// The function `run` and `pack` use when no target is named.
+pub(crate) const ENTRY_POINT: &str = "main";
+
 /// Run a BAML function, script, or expression.
 ///
 /// Choose one execution mode: a positional function or script, one or more
@@ -178,7 +183,7 @@ pub struct RunArgs {
 
     /// Function or script to run as the sole entry point.
     ///
-    /// Mutually exclusive with `--function` and `--expression`.
+    /// Defaults to `main` when the project or file has one. Mutually exclusive with `--function` and `--expression`.
     #[arg(value_name = "TARGET")]
     pub target: Option<String>,
 
@@ -197,7 +202,7 @@ pub struct RunArgs {
 
     /// Evaluate a BAML expression.
     ///
-    /// Optionally, combine with `--file` or `--project` to make existing BAML
+    /// Optionally, combine with `--file` or `--project-dir` to make existing BAML
     /// functions available to the expression.
     ///
     /// Use `-e @file` to read an expression from a file or `-e -` for standard
@@ -228,8 +233,7 @@ pub struct RunArgs {
 
     /// Load one standalone source file instead of discovering a project.
     ///
-    /// Runs its `main` function when no target is supplied. Mutually exclusive
-    /// with `--project`.
+    /// Mutually exclusive with `--project-dir`.
     #[arg(long, value_name = "PATH", help_heading = "Project options")]
     pub file: Option<PathBuf>,
 
@@ -237,18 +241,13 @@ pub struct RunArgs {
     #[arg(long, help_heading = "Target options")]
     pub list: bool,
 
-    #[arg(
-        long = "output-format",
-        default_value = "debug",
-        value_name = "FORMAT",
-        help = "Format returned values [default: debug] [possible values: debug, json]",
-        hide_default_value = true,
-        hide_possible_values = true,
-        help_heading = "Run output options"
-    )]
+    /// The global `--output-format`, set by [`RawCommand::run`]. Formats the
+    /// returned value only: the program's own stdout passes through.
+    #[arg(skip)]
     pub output_format: OutputFormat,
 
-    /// Print BAML `log.*` events to stdout at or above this level.
+    /// Print BAML `log.*` events at or above this level: to stdout as text,
+    /// to stderr when stdout is structured.
     #[arg(
         long = "log",
         env = "BAML_LOG",
@@ -277,9 +276,9 @@ pub struct RunArgs {
     #[arg(long, help_heading = "Run output options")]
     pub include_generated: bool,
 
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
+    /// The global `--project-dir`, set by [`RawCommand::run`].
+    #[arg(skip)]
+    pub project_dir: Option<PathBuf>,
 
     /// Arguments for the generated target CLI.
     ///
@@ -335,27 +334,24 @@ struct StandaloneSource {
 }
 
 impl RunArgs {
+    /// Where the logs of a run that renders its value as `format` go. They
+    /// share the program's stdout as text. A structured stdout carries the
+    /// program's own output and the returned value only, so there the logs
+    /// are status.
+    fn log_output(&self, format: OutputFormat) -> LogOutput {
+        match format {
+            OutputFormat::Text => LogOutput::passthrough(self.log, "run"),
+            OutputFormat::Json => LogOutput::status(self.log, "run"),
+        }
+    }
+
     fn call_context(
-        &self,
-        call_id: CallId,
+        log_output: LogOutput,
         interrupts: &baml_exec::Interrupts,
     ) -> (FunctionCallContext, Option<TraceLogger>) {
         let builder =
-            FunctionCallContextBuilder::new(call_id).with_cancel_token(interrupts.token());
-        LogOutput::new(self.log, "run").call_context(builder)
-    }
-
-    fn print_logs(&self, producer: Option<&TraceLogger>) {
-        LogOutput::new(self.log, "run").print(producer);
-    }
-
-    fn block_on_with_logs<T>(
-        &self,
-        rt: &tokio::runtime::Runtime,
-        future: impl std::future::Future<Output = T>,
-        producer: Option<&TraceLogger>,
-    ) -> T {
-        LogOutput::new(self.log, "run").block_on(rt, future, producer)
+            FunctionCallContextBuilder::new(CallId::next()).with_cancel_token(interrupts.token());
+        log_output.call_context(builder)
     }
 
     /// Emit the "your code is unformatted" advisory. This is the one
@@ -363,14 +359,6 @@ impl RunArgs {
     fn emit_format_hint_if_needed(reporter: &Reporter, needs_format_hint: bool) {
         if needs_format_hint {
             reporter.warning(FORMAT_HINT);
-        }
-    }
-
-    /// Keep execution silent even when legacy call sites still pass
-    /// diagnostics-oriented strings through `vlog`.
-    fn vlog(&self, args: std::fmt::Arguments<'_>) {
-        if crate::reporter::verbose() {
-            crate::reporter::print_verbose(args);
         }
     }
 
@@ -389,11 +377,23 @@ impl RunArgs {
             input_source,
             input_flag,
         )
+        .map_err(|error| crate::UsageError::new(error.to_string()).into())
     }
+}
 
-    pub fn run(&self) -> Result<crate::ExitCode> {
-        let reporter = Reporter::new();
-        self.run_with_reporter(&reporter)
+/// `run` owns stdout: the program's own output passes through untouched, and
+/// the returned value follows it in the selected format.
+impl RawCommand for RunArgs {
+    fn run(&self, cx: &CommandContext) -> Result<crate::ExitCode> {
+        let mut args = self.clone();
+        args.project_dir.clone_from(&cx.project_dir);
+        args.output_format = match cx.format {
+            crate::output::OutputFormat::Text => OutputFormat::Text,
+            crate::output::OutputFormat::Json | crate::output::OutputFormat::Jsonl => {
+                OutputFormat::Json
+            }
+        };
+        args.run_with_reporter(&Reporter::new())
     }
 }
 
@@ -411,20 +411,20 @@ impl RunArgs {
             .filter_map(|(name, given)| given.then_some(*name))
             .collect();
         if used.len() > 1 {
-            anyhow::bail!(
+            crate::usage_bail!(
                 "{} are mutually exclusive dispatch modes — pick one.",
                 used.join(" and ")
             );
         }
 
-        // `--file` is the standalone-source alternative to `--project`. Both
+        // `--file` is the standalone-source alternative to `--project-dir`. Both
         // pointing at sources would be ambiguous (which one wins?), so
         // reject an explicit combination up front.
-        validate_file_project_flags(self.file.as_deref(), self.from.as_deref())?;
+        validate_file_project_flags(self.file.as_deref(), self.project_dir.as_deref())?;
 
         if self.expression.is_some() {
             if self.list {
-                anyhow::bail!(
+                crate::usage_bail!(
                     "`-e` is not compatible with `--list`. Expression mode \
                      evaluates an expression; `--list` enumerates targets — \
                      pick one."
@@ -448,7 +448,7 @@ impl RunArgs {
                 package,
                 program,
                 ..
-            } = self.load_and_compile(reporter)?;
+            } = self.load_and_compile()?;
             let catalog = UserFunctionCatalog::from_program(&program)?;
             // `--file` mode is hermetic — skip the project `[scripts]`
             // lookup the same way `run_single_target` does.
@@ -459,18 +459,22 @@ impl RunArgs {
                 Self::parse_scripts(&toml_content)
             };
             let namespaces = collect_namespaces(&catalog);
-            return self.print_list(&catalog, &scripts, &namespaces, &self.output_format);
+            let mut functions = catalog.user_functions();
+            functions.sort_by(|a, b| a.display_name.cmp(&b.display_name));
+            crate::output::write(
+                self.output_format.into(),
+                &TargetList {
+                    functions,
+                    scripts,
+                    namespaces,
+                    include_generated: self.include_generated,
+                },
+            )?;
+            return Ok(crate::ExitCode::Success);
         }
 
-        if self.file.is_some() && self.target.is_none() && self.functions.is_empty() {
-            return self.run_single_target("main", reporter);
-        }
-
-        // No target → print help and exit non-zero. (Implicit `main` no
-        // longer exists.)
         if self.target.is_none() && self.functions.is_empty() {
-            Self::print_run_help();
-            return Ok(crate::ExitCode::Other);
+            return self.run_default_target(reporter);
         }
 
         if let Some(target) = &self.target {
@@ -479,7 +483,7 @@ impl RunArgs {
             // `<TARGET>` is always a function name; for a `.baml` source
             // use `--file`.
             if looks_like_path(target) {
-                anyhow::bail!(
+                crate::usage_bail!(
                     "positional `<TARGET>` is a function name, not a file path. \
                      For a single-file source, use `--file {target}` and pass the \
                      function via `-f <NAME>`. For example:\n\
@@ -493,9 +497,42 @@ impl RunArgs {
 
     /// Positional `<TARGET>` path: one function, no subcommand layer.
     /// `[scripts]` aliases are resolved here too (positional only).
+    /// With no target, `main` is the entry point. A project that has no
+    /// `main`, or a directory that is not a project, gets the help instead.
+    fn run_default_target(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
+        let print_help = || {
+            Self::print_run_help_to_stderr();
+            Ok(crate::ExitCode::Failure)
+        };
+        if self.file.is_some() {
+            return self.run_single_target(ENTRY_POINT, reporter);
+        }
+        if crate::project_load::resolve_project_layout(self.project_dir.as_deref())?.is_none() {
+            return print_help();
+        }
+        let prepared = self.load_and_compile()?;
+        let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
+        let (_toml_path, toml_content) = Self::project_toml(&prepared.db, prepared.package);
+        if catalog.find_user_function(ENTRY_POINT).is_none()
+            && !Self::parse_scripts(&toml_content).contains_key(ENTRY_POINT)
+        {
+            return print_help();
+        }
+        self.run_prepared_target(ENTRY_POINT, prepared, reporter)
+    }
+
     fn run_single_target(&self, target: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
+        let prepared = self.load_and_compile()?;
+        self.run_prepared_target(target, prepared, reporter)
+    }
+
+    fn run_prepared_target(
+        &self,
+        target: &str,
+        prepared: Prepared,
+        reporter: &Reporter,
+    ) -> Result<crate::ExitCode> {
         let mut argv = self.build_argv_for_single(target);
-        let prepared = self.load_and_compile(reporter)?;
         let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
         Self::emit_format_hint_if_needed(reporter, prepared.needs_format_hint);
         let project_root = Self::project_root(&prepared.db, prepared.package);
@@ -520,16 +557,22 @@ impl RunArgs {
         // Resolve to (function_name, effective_args, was_script).
         let (function_name, effective_target_args, was_script) =
             if let Some(script_tokens) = scripts.get(target) {
-                self.vlog(format_args!(
-                    "Expanding script `{target}`: {script_tokens:?}"
-                ));
                 let expansion = parse_script_body(script_tokens)?;
-                let func = expansion.function.ok_or_else(|| {
-                    anyhow!(
-                        "script `{target}` has no `--function` and there is no implicit \
-                         entry point. Add `--function <name>` to the script body."
-                    )
-                })?;
+                // Validation accepts a script without `--function` when the
+                // project has the entry point; run it the same way.
+                let func = expansion
+                    .function
+                    .or_else(|| {
+                        catalog
+                            .find_user_function(ENTRY_POINT)
+                            .map(|_| ENTRY_POINT.to_owned())
+                    })
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "script `{target}` has no `--function` and the project has no \
+                             `{ENTRY_POINT}`. Add `--function <name>` to the script body."
+                        )
+                    })?;
                 if catalog.find_user_function(&func).is_none() {
                     return Err(Self::function_not_found_error(&catalog, &func));
                 }
@@ -577,7 +620,7 @@ impl RunArgs {
                 &effective_target_args,
             ) {
                 Ok(p) => p,
-                Err(err) => return surface_clap_error(reporter, err),
+                Err(err) => return surface_clap_error(err),
             }
         } else {
             baml_exec::ParsedTargetArgs::default()
@@ -597,7 +640,7 @@ impl RunArgs {
     /// `-f` mode: build a multi-subcommand parser, dispatch the chosen one.
     fn run_subcommand_targets(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         let mut argv = self.build_argv_for_subcommand();
-        let prepared = self.load_and_compile(reporter)?;
+        let prepared = self.load_and_compile()?;
         let catalog = UserFunctionCatalog::from_program(&prepared.program)?;
         Self::emit_format_hint_if_needed(reporter, prepared.needs_format_hint);
 
@@ -620,7 +663,7 @@ impl RunArgs {
             &self.target_args,
         ) {
             Ok(v) => v,
-            Err(err) => return surface_clap_error(reporter, err),
+            Err(err) => return surface_clap_error(err),
         };
 
         // Patch argv[1] to the chosen subcommand name.
@@ -712,6 +755,7 @@ impl RunArgs {
             &invocation.function_name,
             invocation.args.cli_values,
             json_args,
+            invocation.args.output_format,
             reporter,
         )
     }
@@ -724,19 +768,18 @@ impl RunArgs {
         function_name: &str,
         cli_values: HashMap<String, bex_engine::BexExternalValue>,
         json_args: Option<serde_json::Value>,
+        output_format: Option<OutputFormat>,
         reporter: &Reporter,
     ) -> Result<crate::ExitCode> {
-        self.vlog(format_args!("Calling {function_name}"));
         // Preserve the old cleanup call shape before program output.
-        reporter.abandon();
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
-        let output_format = self.output_format;
-        let start = std::time::Instant::now();
+        let output_format = output_format.unwrap_or(self.output_format);
         let interrupts = install_interrupts(&rt)?;
-        let (call_context, logs) = self.call_context(CallId::next(), &interrupts);
-        let dispatch_result = self.block_on_with_logs(
+        let log_output = self.log_output(output_format);
+        let (call_context, logs) = Self::call_context(log_output, &interrupts);
+        let dispatch_result = log_output.block_on(
             &rt,
             baml_exec::dispatch_target_with_context(
                 Arc::clone(&engine),
@@ -745,7 +788,7 @@ impl RunArgs {
                 json_args,
                 output_format,
                 call_context,
-                || self.print_logs(logs.as_ref()),
+                || log_output.print(logs.as_ref()),
             ),
             logs.as_ref(),
         );
@@ -756,7 +799,7 @@ impl RunArgs {
             }
             _ => failure_status(&engine),
         };
-        self.block_on_with_logs(
+        log_output.block_on(
             &rt,
             crate::shutdown::shutdown_engine_future(
                 &engine,
@@ -771,24 +814,22 @@ impl RunArgs {
         }
         let unhandled_spawn_failed = report_unhandled_spawn_errors(&engine, reporter);
 
-        self.vlog(format_args!("Completed in {:.2?}", start.elapsed()));
-
         match dispatch_result {
             Ok(baml_exec::DispatchResult::Ok) if !unhandled_spawn_failed => {
                 Ok(crate::ExitCode::Success)
             }
-            Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::TargetError),
-            Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::TargetError),
+            Ok(baml_exec::DispatchResult::Ok) => Ok(crate::ExitCode::Failure),
+            Ok(baml_exec::DispatchResult::TargetError) => Ok(crate::ExitCode::Failure),
             Ok(baml_exec::DispatchResult::Exit(code)) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Ok(baml_exec::DispatchResult::Interrupted) => match interrupts.received() {
                 Some(interrupt) => interrupt.terminate(),
-                None => Ok(crate::ExitCode::TargetError),
+                None => Ok(crate::ExitCode::Failure),
             },
             Err(e) => {
                 crate::reporter::print_error(format_args!("{e:#}"));
-                Ok(crate::ExitCode::TargetError)
+                Ok(crate::ExitCode::Failure)
             }
         }
     }
@@ -852,27 +893,21 @@ impl RunArgs {
 
     /// Load the project (or standalone `--file`), check diagnostics,
     /// and compile to bytecode without executing user code.
-    fn load_and_compile(&self, reporter: &Reporter) -> Result<Prepared> {
+    fn load_and_compile(&self) -> Result<Prepared> {
         if let Some(file) = self.file.as_deref() {
-            return self.load_and_compile_standalone(file, reporter);
+            return self.load_and_compile_standalone(file);
         }
 
         let mut session = crate::project_session::ProjectSession::open(
-            self.from.as_deref(),
+            self.project_dir.as_deref(),
             crate::project_session::CacheUse::ReadWrite,
         )?;
-        self.vlog(format_args!(
-            "Loading project from {}",
-            session.root().display()
-        ));
         if session.is_empty() {
             anyhow::bail!("no `.baml` files found in {}", session.root().display());
         }
-        self.vlog(format_args!("Found {} .baml file(s)", session.file_count()));
         let needs_format_hint = session.needs_format_hint();
 
         if let Some(program) = session.try_cached_program() {
-            self.vlog(format_args!("Bytecode cache hit — skipping compile"));
             if program.validate().is_ok() {
                 return Ok(Prepared {
                     recording_root: session.root().to_path_buf(),
@@ -892,12 +927,6 @@ impl RunArgs {
         // setup `check` and `test` run.
         let warmth = session.warm_prep();
         let (served, stdlib_interface_hit) = (warmth.served, warmth.stdlib_interface_hit);
-        if let Some(served) = &served {
-            self.vlog(format_args!(
-                "Check rows served for {} file(s)",
-                served.diagnostics.len()
-            ));
-        }
         let db = &session.db;
         let package = session.package;
         let cache = &session.cache;
@@ -921,9 +950,7 @@ impl RunArgs {
             &diagnostics,
             package,
             "cannot run: compilation errors found",
-            reporter,
         )?;
-        self.vlog(format_args!("Compiling..."));
         let program = crate::bytecode_cache::compile_program(&world, cache.as_ref())
             .map_err(|e| anyhow!("compilation failed: {e}"))?;
         if let Some(ctx) = cache {
@@ -953,11 +980,7 @@ impl RunArgs {
     ///
     /// Does NOT load the surrounding project — only the specified file.
     /// The same file runs identically on any machine regardless of project context.
-    fn load_and_compile_standalone(
-        &self,
-        file_path: &Path,
-        reporter: &Reporter,
-    ) -> Result<Prepared> {
+    fn load_and_compile_standalone(&self, file_path: &Path) -> Result<Prepared> {
         let display = file_path.display().to_string();
         let StandaloneSource {
             db,
@@ -975,7 +998,6 @@ impl RunArgs {
                 &diagnostics,
                 package,
                 &format!("cannot run: compilation errors in {display}"),
-                reporter,
             )?;
             crate::bytecode_cache::compile_program(&world, None)
                 .map_err(|e| anyhow!("compilation failed: {e}"))?
@@ -994,10 +1016,6 @@ impl RunArgs {
     /// Load one standalone source into a fresh workspace database.
     fn load_standalone_source(&self, file_path: &Path) -> Result<StandaloneSource> {
         let canonical = resolve_standalone_file(file_path)?;
-        self.vlog(format_args!(
-            "Standalone mode: loading {}",
-            canonical.display()
-        ));
 
         let content = std::fs::read_to_string(&canonical)
             .with_context(|| format!("failed to read {}", canonical.display()))?;
@@ -1035,11 +1053,6 @@ impl RunArgs {
     /// from inline / `@file` / stdin by the caller. We avoid re-reading
     /// because `-e -` reads stdin once.
     fn run_expression(&self, expr_body: &str, reporter: &Reporter) -> Result<crate::ExitCode> {
-        self.vlog(format_args!(
-            "Expression mode: evaluating {} byte(s)",
-            expr_body.len()
-        ));
-
         // An explicit standalone file is always part of the expression's
         // compilation context. Without one, preserve the isolation-first path
         // that keeps unrelated project errors from blocking independent probes.
@@ -1054,7 +1067,7 @@ impl RunArgs {
             .map(|file| self.load_standalone_source(file))
             .transpose()?;
         let discovered_root = if standalone.is_none() {
-            find_project_root_from(self.from.as_deref())?
+            find_project_root_from(self.project_dir.as_deref())?
         } else {
             None
         };
@@ -1092,33 +1105,19 @@ impl RunArgs {
         .map(|_| ());
 
         let (db, package) = match isolated {
-            Ok(()) => {
-                if self.file.is_some() {
-                    self.vlog(format_args!(
-                        "Expression compiled with standalone file context"
-                    ));
-                } else {
-                    self.vlog(format_args!("Expression compiled without project context"));
-                }
-                (expression_db, expression_workspace)
-            }
+            Ok(()) => (expression_db, expression_workspace),
             Err(refused) => {
                 if discovered_root.is_none() {
                     return Err(crate::check_command::refused_world_error(
                         &expression_db,
                         &refused,
                         "cannot evaluate expression: compilation errors",
-                        reporter,
                     ));
                 }
                 // The expression may refer to project declarations. Preserve
                 // that existing behavior by retrying with the surrounding
                 // project only when the isolated compile proves it necessary.
-                let mut project = load_project_or_default(self.from.as_deref())?;
-                self.vlog(format_args!(
-                    "Expression requires project context: loaded {} file(s)",
-                    project.files.len()
-                ));
+                let mut project = load_project_or_default(self.project_dir.as_deref())?;
                 let expr_path = synthetic_expression_path(project.root(), &project.files);
                 project
                     .db
@@ -1139,7 +1138,6 @@ impl RunArgs {
                 &diagnostics,
                 package,
                 "cannot evaluate expression: compilation errors",
-                reporter,
             )?;
             crate::bytecode_cache::compile_program(&world, None)
                 .map_err(|e| anyhow!("compilation failed: {e}"))?
@@ -1159,17 +1157,18 @@ impl RunArgs {
         let engine = Arc::new(engine);
         let output_format = self.output_format;
         let interrupts = install_interrupts(&rt)?;
-        let (call_context, logs) = self.call_context(CallId::next(), &interrupts);
+        let log_output = self.log_output(output_format);
+        let (call_context, logs) = Self::call_context(log_output, &interrupts);
         let host_cancel = call_context.cancel.clone();
         let helper_context = baml_exec::HelperCallContext::from_call_context(&call_context);
-        let call_result = self.block_on_with_logs(
+        let call_result = log_output.block_on(
             &rt,
             engine.call_function(EXPRESSION_ENTRY, vec![], call_context, true),
             logs.as_ref(),
         );
         interrupts.root_finished();
-        let output_succeeded: std::result::Result<bool, bex_engine::EngineError> = self
-            .block_on_with_logs(
+        let output_succeeded: std::result::Result<bool, bex_engine::EngineError> = log_output
+            .block_on(
                 &rt,
                 async {
                     let value = call_result?;
@@ -1181,7 +1180,7 @@ impl RunArgs {
                         value,
                         output_format,
                         &helper_context,
-                        || self.print_logs(logs.as_ref()),
+                        || log_output.print(logs.as_ref()),
                     )
                     .await
                     {
@@ -1200,7 +1199,7 @@ impl RunArgs {
             }
             _ => failure_status(&engine),
         };
-        self.block_on_with_logs(
+        log_output.block_on(
             &rt,
             crate::shutdown::shutdown_engine_future(
                 &engine,
@@ -1217,19 +1216,19 @@ impl RunArgs {
 
         match output_succeeded {
             Ok(true) if !unhandled_spawn_failed => Ok(crate::ExitCode::Success),
-            Ok(_) => Ok(crate::ExitCode::TargetError),
+            Ok(_) => Ok(crate::ExitCode::Failure),
             Err(bex_engine::EngineError::Exit { code }) => {
                 std::process::exit(baml_exec::clamp_exit_code(code));
             }
             Err(e) if host_cancel.is_cancelled() && bex_engine::is_cancelled_engine_error(&e) => {
                 match interrupts.received() {
                     Some(interrupt) => interrupt.terminate(),
-                    None => Ok(crate::ExitCode::TargetError),
+                    None => Ok(crate::ExitCode::Failure),
                 }
             }
             Err(e) => {
                 crate::reporter::print_error(format_args!("{e:#}"));
-                Ok(crate::ExitCode::TargetError)
+                Ok(crate::ExitCode::Failure)
             }
         }
     }
@@ -1336,8 +1335,8 @@ impl RunArgs {
                         } else {
                             Some(func.as_str())
                         }
-                    } else if catalog.find_user_function("main").is_some() {
-                        Some("main")
+                    } else if catalog.find_user_function(ENTRY_POINT).is_some() {
+                        Some(ENTRY_POINT)
                     } else {
                         None
                     };
@@ -1510,56 +1509,25 @@ impl RunArgs {
     // --list
     // ========================================================================
 
-    fn print_list(
-        &self,
-        catalog: &UserFunctionCatalog,
-        scripts: &HashMap<String, Vec<String>>,
-        namespaces: &HashSet<String>,
-        output: &OutputFormat,
-    ) -> Result<crate::ExitCode> {
-        let mut functions = catalog.user_functions();
-        functions.sort_by(|a, b| a.display_name.cmp(&b.display_name));
-
-        // Empty-target case must still honor `--output-format json` so
-        // scripted consumers always receive a parseable document. The
-        // human-readable "No runnable targets found." message is for
-        // Debug mode only; JSON mode falls through to emit an empty
-        // shape via `print_list_json`.
-        if functions.is_empty() && scripts.is_empty() && namespaces.is_empty() {
-            if matches!(output, OutputFormat::Debug) {
-                println!("no runnable targets found");
-                return Ok(crate::ExitCode::Success);
-            }
-        }
-
-        match output {
-            OutputFormat::Debug => {
-                Self::print_list_debug(&functions, scripts, namespaces, self.include_generated);
-            }
-            OutputFormat::Json => {
-                Self::print_list_json(&functions, scripts, namespaces, self.include_generated)
-            }
-        }
-
-        Ok(crate::ExitCode::Success)
-    }
-
     /// Just/npm-style flat list of runnable targets, grouped by kind
     /// (scripts → namespaces → functions) under bold-purple section
     /// headers. Auto-derived `to_json` / `from_json`, companion
     /// constructors, and other compiler-synthesized helpers are hidden
     /// by default — `--include-generated` shows them.
-    fn print_list_debug(
+    fn write_list(
+        out: &mut dyn Write,
+        style: &Style,
         functions: &[UserFunctionInfo],
         scripts: &HashMap<String, Vec<String>>,
         namespaces: &HashSet<String>,
         include_generated: bool,
-    ) {
+    ) -> io::Result<()> {
+        if functions.is_empty() && scripts.is_empty() && namespaces.is_empty() {
+            return writeln!(out, "no runnable targets found");
+        }
         use bex_vm_types::FunctionOrigin;
 
-        let header_style = crate::reporter::accent_style();
-        let dim = crate::reporter::secondary_style();
-        let header = |s: &str| println!("{}", header_style.apply_to(s));
+        let header = |out: &mut dyn Write, s: &str| writeln!(out, "{}", style.accent(s));
 
         // Visible by default: user-authored entries only. Pass
         // `--include-generated` to expose compiler-synthesized helpers
@@ -1590,25 +1558,25 @@ impl RunArgs {
         namespace_mains.dedup();
 
         if !scripts.is_empty() {
-            header("Scripts");
+            header(out, "Scripts")?;
             let mut names: Vec<&String> = scripts.keys().collect();
             names.sort();
             for name in names {
-                println!("  {name}");
+                writeln!(out, "  {name}")?;
             }
-            println!();
+            writeln!(out)?;
         }
 
         if !namespace_mains.is_empty() {
-            header("Namespaces");
+            header(out, "Namespaces")?;
             for ns in &namespace_mains {
-                println!("  {ns}");
+                writeln!(out, "  {ns}")?;
             }
-            println!();
+            writeln!(out)?;
         }
 
         if !visible.is_empty() {
-            header("Functions");
+            header(out, "Functions")?;
             for func in &visible {
                 let params: Vec<String> = func
                     .param_names
@@ -1630,51 +1598,41 @@ impl RunArgs {
                     format!("<{}>", func.display_type_params.join(", "))
                 };
                 let suffix = if func.is_llm {
-                    format!("  {}", dim.apply_to("[llm]"))
+                    format!("  {}", style.dim("[llm]"))
                 } else {
                     String::new()
                 };
-                println!(
+                writeln!(
+                    out,
                     "  {}{}({}) -> {}{suffix}",
                     func.display_name,
                     generic_suffix,
                     params.join(", "),
                     func.display_return_type,
-                );
+                )?;
             }
-            println!();
+            writeln!(out)?;
         }
 
         // When the default filter hid everything, surface that fact
         // rather than leaving the user staring at an empty section.
         if !include_generated && visible.is_empty() && !functions.is_empty() {
-            println!(
+            writeln!(
+                out,
                 "{}",
-                dim.apply_to(format!(
+                style.dim(format!(
                     "(hiding {} compiler-synthesized function(s); pass --include-generated to show them)",
                     functions.len()
                 ))
-            );
+            )?;
         }
+        Ok(())
     }
 
-    fn print_list_json(
-        functions: &[UserFunctionInfo],
-        scripts: &HashMap<String, Vec<String>>,
-        namespaces: &HashSet<String>,
-        include_generated: bool,
-    ) {
-        let output = Self::build_list_json_value(functions, scripts, namespaces, include_generated);
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&output).unwrap_or_else(|_| "{}".to_string())
-        );
-    }
-
-    /// Pure value-builder behind [`print_list_json`], split out so the
+    /// The JSON shape of `--list`, split out so the
     /// JSON shape (including the empty-targets case, per BEP-027 §`--list`)
     /// can be unit-tested without capturing stdout. Always returns the
-    /// same three keys (`scripts`, `namespace_mains`, `functions`); when
+    /// same three keys (`scripts`, `namespaces`, `functions`); when
     /// every input is empty the arrays are empty — scripted callers must
     /// still get a parseable document, never the human-readable "No
     /// runnable targets found." text.
@@ -1750,19 +1708,21 @@ impl RunArgs {
 
         serde_json::json!({
             "scripts": script_items,
-            "namespace_mains": namespace_mains_items,
+            "namespaces": namespace_mains_items,
             "functions": function_items,
         })
     }
 
-    fn print_run_help() {
+    /// Guidance for a `baml run` that found nothing to run. The command
+    /// failed, so stdout stays empty.
+    fn print_run_help_to_stderr() {
         let mut command = crate::commands::RuntimeCli::command();
         command.build();
         let Some(run) = command.find_subcommand("run") else {
             return;
         };
-        let mut run = run.clone();
-        let _ = run.print_help();
+        let help = run.clone().render_help();
+        let _ = write!(std::io::stderr(), "{help}");
     }
 }
 
@@ -1841,14 +1801,13 @@ fn looks_like_path(target: &str) -> bool {
 /// Render a clap error and return the matching CLI exit code.
 /// Help / version requests render to stdout and exit success; all other
 /// kinds go to stderr with a non-zero exit.
-fn surface_clap_error(reporter: &Reporter, err: clap::Error) -> Result<crate::ExitCode> {
+fn surface_clap_error(err: clap::Error) -> Result<crate::ExitCode> {
     use baml_exec::clap_reexport::ErrorKind;
     let kind = err.kind();
-    reporter.abandon();
     let _ = err.print();
     Ok(match kind {
         ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => crate::ExitCode::Success,
-        _ => crate::ExitCode::Other,
+        _ => crate::ExitCode::Usage,
     })
 }
 
@@ -1927,6 +1886,39 @@ fn synthetic_expression_path(root: &Path, occupied: &[PathBuf]) -> PathBuf {
 // ============================================================================
 // Tests
 // ============================================================================
+
+/// `baml run --list`: scripts, runnable namespaces and functions.
+struct TargetList {
+    functions: Vec<UserFunctionInfo>,
+    scripts: HashMap<String, Vec<String>>,
+    namespaces: HashSet<String>,
+    include_generated: bool,
+}
+
+impl serde::Serialize for TargetList {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        RunArgs::build_list_json_value(
+            &self.functions,
+            &self.scripts,
+            &self.namespaces,
+            self.include_generated,
+        )
+        .serialize(serializer)
+    }
+}
+
+impl Report for TargetList {
+    fn text(&self, out: &mut dyn Write, style: &Style) -> io::Result<()> {
+        RunArgs::write_list(
+            out,
+            style,
+            &self.functions,
+            &self.scripts,
+            &self.namespaces,
+            self.include_generated,
+        )
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -2132,53 +2124,11 @@ mod tests {
             .join(" ");
         assert!(
             normalized_detailed_help.contains(
-                "Optionally, combine with `--file` or `--project` to make existing BAML functions available to the expression"
+                "Optionally, combine with `--file` or `--project-dir` to make existing BAML functions available to the expression"
             ),
             "{detailed_help}"
         );
         assert!(!help.contains("not compatible with `--file`"), "{help}");
-    }
-
-    /// BEP-027 Appendix A: the flag is `--output-format`, not `--output`.
-    /// (`baml pack` uses `--output` for output path; `--output-format`
-    /// names the serialization format on both verbs.)
-    #[test]
-    fn test_output_format_flag_name() {
-        use clap::{CommandFactory, FromArgMatches, Parser};
-        #[derive(Parser)]
-        struct Wrapper {
-            #[command(flatten)]
-            args: RunArgs,
-        }
-        let cmd = Wrapper::command();
-        // Long form parses and binds.
-        let matches = cmd
-            .clone()
-            .try_get_matches_from(["run", "--output-format", "json"])
-            .unwrap();
-        let parsed = Wrapper::from_arg_matches(&matches).unwrap();
-        assert!(matches!(parsed.args.output_format, OutputFormat::Json));
-        // Old flag name is rejected.
-        assert!(
-            cmd.clone()
-                .try_get_matches_from(["run", "--output", "json"])
-                .is_err()
-        );
-    }
-
-    /// BEP-027: `--output-format` defaults to `debug` under `baml run`
-    /// (human reader). Pack defaults to `json` — tested separately.
-    #[test]
-    fn test_run_output_format_defaults_to_debug() {
-        use clap::{CommandFactory, FromArgMatches, Parser};
-        #[derive(Parser)]
-        struct Wrapper {
-            #[command(flatten)]
-            args: RunArgs,
-        }
-        let matches = Wrapper::command().try_get_matches_from(["run"]).unwrap();
-        let parsed = Wrapper::from_arg_matches(&matches).unwrap();
-        assert!(matches!(parsed.args.output_format, OutputFormat::Debug));
     }
 
     // ── Default-valued `RunArgs` fixture for behavior tests ───────────
@@ -2259,7 +2209,7 @@ mod tests {
         args.context =
             Some(r#"{"distinct_id":"pipe-user","metadata":{"phase":"launch"}}"#.to_string());
         let reporter = Reporter::new();
-        let prepared = args.load_and_compile(&reporter).unwrap();
+        let prepared = args.load_and_compile().unwrap();
         assert!(
             prepared.program.packages[prepared.program.root as usize]
                 .init
@@ -2291,12 +2241,12 @@ mod tests {
             context: None,
             file: None,
             list: false,
-            output_format: OutputFormat::Debug,
+            output_format: OutputFormat::Text,
             log: RunLogLevel::Off,
             log_file: None,
             shutdown: crate::shutdown::ShutdownArgs::default(),
             include_generated: false,
-            from: None,
+            project_dir: None,
             target_args: Vec::new(),
         }
     }
@@ -2309,7 +2259,7 @@ mod tests {
         let mut args = run_args();
         args.target = Some("eval".into());
         args.functions = vec!["X".into()];
-        let err = args.run().unwrap_err();
+        let err = args.run_with_reporter(&Reporter::new()).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(
@@ -2324,7 +2274,7 @@ mod tests {
         let mut args = run_args();
         args.target = Some("eval".into());
         args.expression = Some("2 + 2".into());
-        let err = args.run().unwrap_err();
+        let err = args.run_with_reporter(&Reporter::new()).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(
@@ -2339,7 +2289,7 @@ mod tests {
         let mut args = run_args();
         args.functions = vec!["X".into()];
         args.expression = Some("2 + 2".into());
-        let err = args.run().unwrap_err();
+        let err = args.run_with_reporter(&Reporter::new()).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(msg.contains("`-f`") && msg.contains("`-e`"), "got: {msg}");
@@ -2352,7 +2302,7 @@ mod tests {
         args.target = Some("t".into());
         args.functions = vec!["F".into()];
         args.expression = Some("e".into());
-        let err = args.run().unwrap_err();
+        let err = args.run_with_reporter(&Reporter::new()).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("`<target>`"));
         assert!(msg.contains("`-f`"));
@@ -2366,32 +2316,32 @@ mod tests {
         let mut args = run_args();
         args.expression = Some("2 + 2".into());
         args.list = true;
-        let err = args.run().unwrap_err();
+        let err = args.run_with_reporter(&Reporter::new()).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("`-e`"), "got: {msg}");
         assert!(msg.contains("--list"), "got: {msg}");
     }
 
-    /// `--file` and `--from` are mutually exclusive (both name a source).
+    /// `--file` and `--project-dir` are mutually exclusive (both name a source).
     #[test]
     fn test_run_rejects_file_plus_explicit_from() {
         let mut args = run_args();
         args.target = Some("X".into());
         args.file = Some(PathBuf::from("a.baml"));
-        args.from = Some(PathBuf::from("./project"));
-        let err = args.run().unwrap_err();
+        args.project_dir = Some(PathBuf::from("./project"));
+        let err = args.run_with_reporter(&Reporter::new()).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("mutually exclusive"), "got: {msg}");
         assert!(msg.contains("--file"), "got: {msg}");
     }
 
-    /// `--file` with omitted `--from` is fine.
+    /// `--file` with omitted `--project-dir` is fine.
     #[test]
     fn test_run_allows_file_with_omitted_from() {
         let mut args = run_args();
         args.target = Some("X".into());
         args.file = Some(PathBuf::from("a.baml"));
-        validate_file_project_flags(args.file.as_deref(), args.from.as_deref()).unwrap();
+        validate_file_project_flags(args.file.as_deref(), args.project_dir.as_deref()).unwrap();
     }
 
     // ── Clap derive parse tests ──────────────────────────────────────
@@ -2490,7 +2440,7 @@ mod tests {
     /// `println!("No runnable targets found.")` in the empty case
     /// regardless of `--output-format`, breaking JSON readers. The
     /// empty-targets path now still builds a JSON value with empty
-    /// arrays for `scripts`, `namespace_mains`, and `functions`.
+    /// arrays for `scripts`, `namespaces`, and `functions`.
     #[test]
     fn list_empty_json_shape_has_all_keys_with_empty_arrays() {
         let scripts: HashMap<String, Vec<String>> = HashMap::new();
@@ -2502,12 +2452,12 @@ mod tests {
         let obj = value.as_object().expect("top-level must be an object");
         assert!(
             obj.contains_key("scripts")
-                && obj.contains_key("namespace_mains")
+                && obj.contains_key("namespaces")
                 && obj.contains_key("functions"),
             "missing keys; got: {value}"
         );
         assert!(obj["scripts"].as_array().unwrap().is_empty());
-        assert!(obj["namespace_mains"].as_array().unwrap().is_empty());
+        assert!(obj["namespaces"].as_array().unwrap().is_empty());
         assert!(obj["functions"].as_array().unwrap().is_empty());
 
         // Round-trips through serde_json — the same property scripted

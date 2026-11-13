@@ -290,10 +290,48 @@ testset "toolchain selection" {
                 version = "${NEXT_VERSION}"\n
             `,
         );
-        let args = ["--project", "../outside", "check"];
+        let args = ["--project-dir", "../outside", "check"];
 
         fixture.behavior(NEXT_VERSION, `${NEXT_VERSION}\n`, args = args);
         fixture.check(candidate, NEXT_VERSION, args = args);
+    }
+
+    test "a project option given before and after the command takes the later one" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.project(BASE_VERSION);
+        fixture.write(
+            "outside/baml.toml",
+            `
+                [package]
+                name = "outside"
+                [toolchain]
+                version = "${NEXT_VERSION}"\n
+            `,
+        );
+        let args = ["--project-dir", ".", "check", "--project-dir", "../outside"];
+
+        fixture.behavior(NEXT_VERSION, `${NEXT_VERSION}\n`, args = args);
+        fixture.check(candidate, NEXT_VERSION, args = args);
+    }
+
+    test "a project option given twice in one place is a usage error" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.project(BASE_VERSION);
+        for (
+            let args in [
+                ["--project-dir", ".", "--project-dir", ".", "check"],
+                ["toolchain", "list", "--project-dir", ".", "--project-dir", "."],
+            ]
+        ) {
+            let result = fixture.run(candidate, args);
+            root.harness.require(
+                result.exit_code == 2 && result.stderr.to_string().includes("--project-dir"),
+                `${args.join(" ")} exited ${result.exit_code}: ${result.stderr.to_string()}`,
+            );
+        }
+        root.harness.require(fixture.calls().length() == 0, "a rejected invocation launched the CLI");
     }
 
     test "inline project option selects another project" {
@@ -309,7 +347,7 @@ testset "toolchain selection" {
                 version = "${NEXT_VERSION}"\n
             `,
         );
-        let args = ["check", "--project=../outside"];
+        let args = ["check", "--project-dir=../outside"];
 
         fixture.behavior(NEXT_VERSION, `${NEXT_VERSION}\n`, args = args);
         fixture.check(candidate, NEXT_VERSION, args = args);
@@ -347,7 +385,7 @@ testset "toolchain selection" {
                 version = "${NEXT_VERSION}"\n
             `,
         );
-        let args = ["--project", "../outside", "check"];
+        let args = ["--project-dir", "../outside", "check"];
         fixture.env["BAML_TOOLCHAIN"] = BASE_VERSION;
 
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
@@ -367,7 +405,7 @@ testset "toolchain selection" {
                 version = "${NEXT_VERSION}"\n
             `,
         );
-        let args = ["run", "main", "--", "--project", "../outside"];
+        let args = ["run", "main", "--", "--project-dir", "../outside"];
 
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
@@ -386,7 +424,7 @@ testset "toolchain selection" {
                 version = "${NEXT_VERSION}"\n
             `,
         );
-        let args = ["query", "--project", "org/cloud-project"];
+        let args = ["cloud", "recordings", "query", "--project", "org/cloud-project"];
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
     }
@@ -396,7 +434,7 @@ testset "toolchain selection" {
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
         fixture.write("outside/baml.toml", `[toolchain]\nversion = "${NEXT_VERSION}"\n`);
-        let args = ["--project", "../outside", "query", "--project", "org/cloud-project"];
+        let args = ["--project-dir", "../outside", "cloud", "recordings", "query", "--project", "org/cloud-project"];
         fixture.behavior(NEXT_VERSION, `${NEXT_VERSION}\n`, args = args);
         fixture.check(candidate, NEXT_VERSION, args = args);
         root.harness.require(!fixture.requests(), "installed query selection used the network");
@@ -416,7 +454,7 @@ testset "toolchain selection" {
             `,
         );
 
-        let args = ["--directory=../outside", "--project=../project", "check"];
+        let args = ["--directory=../outside", "--project-dir=../project", "check"];
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
     }
@@ -434,9 +472,9 @@ testset "toolchain selection" {
                 version = "${NEXT_VERSION}"\n
             `,
         );
-        let args = ["--project", "../outside", "check"];
+        let args = ["--project-dir", "../outside", "check"];
 
-        fixture.manage(candidate, ["--project", "../outside", "toolchain", "use", LATEST_VERSION]);
+        fixture.manage(candidate, ["--project-dir", "../outside", "toolchain", "use", LATEST_VERSION]);
         root.harness.require(fixture.read(PROJECT_MANIFEST_FILE).includes(BASE_VERSION), "use changed cwd project");
         fixture.behavior(LATEST_VERSION, `${LATEST_VERSION}\n`, args = args);
         fixture.check(candidate, LATEST_VERSION, args = args);
@@ -456,7 +494,7 @@ testset "toolchain selection" {
             `,
         );
 
-        let args = ["--output-preset", "agent", "query", "--project", "org/cloud-project"];
+        let args = ["--output-preset", "agent", "cloud", "recordings", "query", "--project", "org/cloud-project"];
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
     }
@@ -509,7 +547,7 @@ testset "toolchain selection" {
         defer { fixture.close(); }
         fixture.project(NEXT_VERSION);
         fixture.write("outside/baml.toml", `[package]\nname = "outside"\n`);
-        let args = ["--project", "../outside", "check"];
+        let args = ["--project-dir", "../outside", "check"];
         fixture.behavior(BASE_VERSION, `${BASE_VERSION}\n`, args = args);
         fixture.check(candidate, BASE_VERSION, args = args);
         root.harness.require(!fixture.requests(), "installed explicit project used the network");

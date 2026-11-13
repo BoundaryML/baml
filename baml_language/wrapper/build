@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 
 repo = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
@@ -28,15 +29,8 @@ parser.add_argument("--telemetry-environment", help="environment written to pack
 args = parser.parse_args()
 if (args.telemetry_project or args.telemetry_environment) and not args.embed_telemetry:
     parser.error("telemetry project/environment require --embed-telemetry")
-# Match a Cargo package version declaration, e.g. version = "0.2.5".
-version = (
-    args.version
-    or re.search(
-        r'^version = "([^"]+)"',
-        (repo / "baml_language/crates/baml/Cargo.toml").read_text(),
-        re.M,
-    )[1]
-)
+release = tomllib.loads((repo / "baml_language/wrapper/release.toml").read_text())
+version = args.version or release["package"]["version"]
 # Wrapper release identifiers, e.g. 0.2.5 or 0.2.5-canary.1.
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", version):
     parser.error("invalid wrapper version")
@@ -66,17 +60,11 @@ with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
         if value is not None:
             content = set_manifest_value(content, table, name, value)
     manifest.write_text(content)
-    post = (repo / "baml_language/crates/baml/src/telemetry.rs").read_text()
-
-    # Named Rust string constants, e.g. const POSTHOG_HOST: &str = "https://...".
-    def constant(source, name):
-        return re.search(rf'const {name}: &str = "([^"]*)";', source)[1]
-
     constants = {
         "wrapper_version": version,
         "self_update_enabled": not args.no_self_update,
-        "telemetry_api_key": constant(post, "POSTHOG_API_KEY"),
-        "telemetry_default_host": constant(post, "POSTHOG_HOST"),
+        "telemetry_api_key": release["posthog"]["api_key"],
+        "telemetry_default_host": release["posthog"]["host"],
     }
     (project / "baml_src/build.baml").write_text(
         "\n".join(
@@ -87,7 +75,7 @@ with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
     command = [
         str(args.cli.resolve()),
         "pack",
-        "--from",
+        "--project-dir",
         str(project),
         "main",
         "--output",

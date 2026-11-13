@@ -2,20 +2,15 @@ use std::{
     env,
     ffi::OsString,
     fs,
+    io::{self, Write},
     path::{Path, PathBuf},
-    process::Command,
+    process,
 };
 
 use anyhow::{Context, Result, anyhow};
 use clap::Args;
 
-use crate::ExitCode;
-
-#[derive(Args, Clone, Debug)]
-pub(crate) struct IdeArgs {
-    #[command(subcommand)]
-    pub command: IdeCommand,
-}
+use crate::output::{Command, CommandContext, Outcome};
 
 #[derive(clap::Subcommand, Clone, Debug)]
 pub(crate) enum IdeCommand {
@@ -25,7 +20,7 @@ pub(crate) enum IdeCommand {
 
 /// Install the active toolchain's BAML editor extension.
 ///
-/// Select Cursor or VS Code explicitly, or use `--output-dir` to copy the VSIX for a
+/// Select Cursor or VS Code explicitly, or use `--output` to copy the VSIX for a
 /// manual installation. With no option, BAML selects an available supported
 /// editor.
 #[derive(Args, Clone, Debug)]
@@ -38,7 +33,7 @@ Examples:
     baml ide install --cursor
 
   Copy the extension for manual installation:
-    baml ide install --output-dir ./extensions")]
+    baml ide install --output ./extensions")]
 pub(crate) struct IdeInstallArgs {
     /// Install the active toolchain's BAML VSIX into Cursor.
     #[arg(long, help_heading = "Editor options")]
@@ -49,24 +44,19 @@ pub(crate) struct IdeInstallArgs {
     /// Copy the active toolchain's BAML VSIX into a directory for manual
     /// install.
     #[arg(
-        long = "output-dir",
-        alias = "dir",
+        long = "output",
+        short,
         value_name = "PATH",
         help_heading = "Editor options"
     )]
     pub dir: Option<PathBuf>,
 }
 
-impl IdeArgs {
-    pub fn run(&self) -> Result<ExitCode> {
-        match &self.command {
-            IdeCommand::Install(args) => args.run(),
-        }
-    }
-}
+impl Command for IdeInstallArgs {
+    type Output = ();
 
-impl IdeInstallArgs {
-    pub fn run(&self) -> Result<ExitCode> {
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<()>> {
+        let reporter = crate::reporter::Reporter::new();
         let vsix = active_toolchain_vsix()?;
         if let Some(dir) = &self.dir {
             fs::create_dir_all(dir)
@@ -75,19 +65,30 @@ impl IdeInstallArgs {
             fs::copy(&vsix, &dest).with_context(|| {
                 format!("failed to copy {} to {}", vsix.display(), dest.display())
             })?;
-            #[allow(clippy::print_stdout)]
-            {
-                println!("extracted BAML IDE extension to {}", dest.display());
-            }
-            return Ok(ExitCode::Success);
+            reporter.status("Extracted", dest.display().to_string());
+            return Ok(Outcome::ok(()));
         }
 
         let editor = self.resolve_editor()?;
-        let status = Command::new(&editor)
-            .arg("--install-extension")
-            .arg(&vsix)
-            .status()
-            .with_context(|| format!("failed to run {}", editor.to_string_lossy()))?;
+        let mut install = process::Command::new(&editor);
+        install.arg("--install-extension").arg(&vsix);
+        let failed_to_run = || format!("failed to run {}", editor.to_string_lossy());
+        let status = if crate::reporter::quiet() {
+            // The editor's progress is status output; keep it only to explain a failure.
+            let output = install.output().with_context(failed_to_run)?;
+            if !output.status.success() {
+                let mut stderr = io::stderr().lock();
+                stderr.write_all(&output.stdout)?;
+                stderr.write_all(&output.stderr)?;
+            }
+            output.status
+        } else {
+            // The editor CLI narrates on its stdout; ours carries only the result.
+            install
+                .stdout(io::stderr())
+                .status()
+                .with_context(failed_to_run)?
+        };
 
         if !status.success() {
             anyhow::bail!(
@@ -97,13 +98,12 @@ impl IdeInstallArgs {
             );
         }
 
-        #[allow(clippy::print_stdout)]
-        {
-            println!("installed BAML IDE extension from {}", vsix.display());
-        }
-        Ok(ExitCode::Success)
+        reporter.status("Installed", vsix.display().to_string());
+        Ok(Outcome::ok(()))
     }
+}
 
+impl IdeInstallArgs {
     fn resolve_editor(&self) -> Result<OsString> {
         if self.cursor {
             return command_on_path("cursor")
@@ -190,7 +190,7 @@ fn manual_install_help(ide: &str, os: HostOs) -> String {
 
   1. Save baml-vscode.vsix somewhere easy to find:
 
-         baml ide install --output-dir {dir}
+         baml ide install --output {dir}
 
   2. In {ide}, press {chord} and run "Extensions: Install from VSIX...".
 
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn install_dir_flag_binds() {
-        let parsed = Wrapper::try_parse_from(["install", "--output-dir", "out"]).unwrap();
+        let parsed = Wrapper::try_parse_from(["install", "--output", "out"]).unwrap();
         assert_eq!(parsed.args.dir, Some(PathBuf::from("out")));
     }
 
@@ -267,7 +267,7 @@ Install it manually instead:
 
   1. Save baml-vscode.vsix somewhere easy to find:
 
-         baml ide install --output-dir %USERPROFILE%\Downloads
+         baml ide install --output %USERPROFILE%\Downloads
 
   2. In VS Code, press Ctrl+Shift+P and run "Extensions: Install from VSIX...".
 

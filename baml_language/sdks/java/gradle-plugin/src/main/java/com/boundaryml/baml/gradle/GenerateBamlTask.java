@@ -39,7 +39,7 @@ public abstract class GenerateBamlTask extends DefaultTask {
     @Internal
     public abstract Property<String> getBamlExecutable();
 
-    /** The project directory passed to the CLI as {@code --from}. */
+    /** The project directory passed to the CLI as {@code --project-dir}. */
     @Internal
     public abstract DirectoryProperty getSrcDir();
 
@@ -119,7 +119,7 @@ public abstract class GenerateBamlTask extends DefaultTask {
             spec.setExecutable(executablePath);
             spec.args(
                 "generate",
-                "--from", from.getAbsolutePath(),
+                "--project-dir", from.getAbsolutePath(),
                 "-o", sdkDir.getAbsolutePath());
         });
     }

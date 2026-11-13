@@ -818,8 +818,8 @@ fn wrapper_command_boundaries_record_spans_without_values() {
     for (scenario, args, success) in [
         ("help", vec!["--help"], true),
         ("update", vec!["toolchain", "update"], false),
-        ("self-update", vec!["self-update"], false),
-        ("parse-error", vec!["--project"], false),
+        ("self-update", vec!["self", "update"], false),
+        ("parse-error", vec!["--project-dir"], false),
         ("helper", vec!["__flush-wrapper-telemetry"], true),
     ] {
         let output = Command::new(&binary)
@@ -842,7 +842,14 @@ fn wrapper_command_boundaries_record_spans_without_values() {
 
     let query = |sql: &str| {
         let output = Command::new(&built.baml_cli)
-            .args(["query", "--local", "--format", "json", "--from"])
+            .args([
+                "local",
+                "recordings",
+                "query",
+                "--output-format",
+                "json",
+                "--project-dir",
+            ])
             .arg(&home)
             .arg(sql)
             .env("BAML_HOME", home.join(".baml"))
