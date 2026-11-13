@@ -27,7 +27,10 @@ export function StancePanel({
   stances,
   summary,
   viewer,
+  error,
 }: {
+  /** Why stances could not be loaded: the panel says so instead of showing none. */
+  error?: string;
   action: (previous: FormState, form: FormData) => Promise<FormState>;
   version: number;
   stances: Stance[];
@@ -36,6 +39,13 @@ export function StancePanel({
 }) {
   const [state, submit, pending] = useActionState(action, {});
   const mine = stances.find((each) => each.author === viewer);
+  if (error) {
+    return (
+      <span className="text-sm rounded-md border px-3 py-1.5 text-muted-foreground" title={error}>
+        Stances unavailable
+      </span>
+    );
+  }
   return (
     <details className="relative">
       <summary

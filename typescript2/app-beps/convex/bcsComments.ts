@@ -295,6 +295,7 @@ export const remove = mutation({
       if (thread?.deleted && !left) {
         await ctx.db.delete(thread._id);
         await recount(ctx, doc._id, thread.resolved ? 0 : -1);
+        await tellSlack(ctx, doc._id, { kind: "refresh" }, args.author, undefined);
       }
       return;
     }
@@ -308,6 +309,7 @@ export const remove = mutation({
     }
     await ctx.db.delete(comment._id);
     await recount(ctx, doc._id, comment.resolved ? 0 : -1);
+    await tellSlack(ctx, doc._id, { kind: "refresh" }, args.author, undefined);
   },
 });
 

@@ -305,6 +305,8 @@ export const notify = internalAction({
       thread = kept;
     }
 
+    // The overview was brought up to date above; a refresh has nothing to say in the thread.
+    if (args.event.kind === "refresh") return;
     if (args.event.kind === "comment" && proposal.comment) {
       await slack("chat.postMessage", {
         channel,

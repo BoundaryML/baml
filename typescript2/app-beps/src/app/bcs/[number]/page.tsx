@@ -121,6 +121,9 @@ export default async function BcsProposal({
         </span>
         <div className="ml-auto flex items-center gap-2">
           <StancePanel
+            // A new version starts a fresh panel, so a reason typed for another is never saved here.
+            key={proposal.version}
+            error={stances.ok ? undefined : stances.failure.message}
             action={setStance.bind(null, proposal.number, proposal.version)}
             version={proposal.version}
             stances={stanceList}
