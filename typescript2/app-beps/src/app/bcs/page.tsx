@@ -4,8 +4,9 @@ import { api } from "../../../convex/_generated/api";
 import { BepStatusBadge } from "@/components/bep/bep-status";
 import { Button } from "@/components/ui/button";
 import { currentViewer } from "@/lib/bcs-auth";
-import { bcsConvex, bcsId } from "@/lib/bcs-convex";
+import { bcsCall, bcsId } from "@/lib/bcs-convex";
 import { TeamOnly } from "./team-only";
+import { BcsUnavailable } from "./unavailable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "BCS design proposals" };
@@ -13,8 +14,9 @@ export const metadata = { title: "BCS design proposals" };
 export default async function BcsProposals() {
   const viewer = await currentViewer();
   if (!viewer) return <TeamOnly />;
-  const { convex, secret } = bcsConvex();
-  const proposals = await convex.query(api.bcs.list, { secret });
+  const listed = await bcsCall((convex, secret) => convex.query(api.bcs.list, { secret }));
+  if (!listed.ok) return <BcsUnavailable message={listed.failure.message} />;
+  const proposals = listed.value;
 
   return (
     <div className="min-h-screen bg-background">

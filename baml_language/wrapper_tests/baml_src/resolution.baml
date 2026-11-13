@@ -78,16 +78,100 @@ testset "toolchain status" {
         root.harness.require(!fixture.requests(), "an invalid invocation contacted the release server");
     }
 
-    test "json status reports failed best effort install" {
+    test "json status installs absent version by default" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project(BASE_VERSION);
-        let args = ["toolchain", "status", "--output-format", "json"];
+        fixture.absent(BASE_VERSION);
+        let output = fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"]);
+        let result = baml.json.decode<root.harness.ResolutionResult>(output.stdout.to_string());
+        result.expect_project_selection(
+            selector = BASE_VERSION,
+            version = BASE_VERSION,
+            managed = true,
+            installed = true,
+        );
+        let extension = if (fixture.windows) {
+            ".zip"
+        } else {
+            ".tar.gz"
+        };
+        root.harness.require(
+            fixture.requests()
+                == [
+                    `/version/${BASE_VERSION}.json`,
+                    `/${BASE_VERSION}${extension}`,
+                    "/canary.json",
+                    "/nightly.json",
+                ],
+            "plain status did not acquire its target once",
+        );
+        root.harness.require(!fixture.calls(), "status launched the selected CLI");
+        fixture.check(candidate, BASE_VERSION);
+    }
 
+    test "plain and json status warn and report absent version after failed acquisition" {
+        for (let flags in [[], ["--output-format", "json"]]) {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.project(BASE_VERSION);
+            fixture.absent(BASE_VERSION);
+            let state = fixture.read(CHANNEL_STATE_FILE);
+            let config = fixture.read(USER_CONFIG_FILE);
+            let project = fixture.read(PROJECT_MANIFEST_FILE);
+            let extension = if (fixture.windows) {
+                ".zip"
+            } else {
+                ".tar.gz"
+            };
+            fixture.write(`server/${BASE_VERSION}${extension}.status`, "404");
+            let output = fixture.manage(candidate, ["toolchain", "status"].concat(flags));
+            if (flags) {
+                let result = baml.json.decode<root.harness.ResolutionResult>(output.stdout.to_string());
+                result.expect_project_selection(
+                    selector = BASE_VERSION,
+                    version = BASE_VERSION,
+                    managed = true,
+                    installed = false,
+                );
+            } else {
+                root.harness.require(
+                    output.stdout.to_string().includes("installed: false"),
+                    "status hid absent installation",
+                );
+            }
+            root.harness.require(
+                output.stderr.to_string().includes("warning: could not ensure"),
+                "status omitted optional acquisition warning",
+            );
+            root.harness.require(
+                fixture.requests()
+                    == [
+                        `/version/${BASE_VERSION}.json`,
+                        `/${BASE_VERSION}${extension}`,
+                        "/canary.json",
+                        "/nightly.json",
+                    ],
+                "status retried failed acquisition or skipped metadata",
+            );
+            root.harness.require(
+                !baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}`)
+                    && fixture.read(CHANNEL_STATE_FILE) == state
+                    && fixture.read(USER_CONFIG_FILE) == config
+                    && fixture.read(PROJECT_MANIFEST_FILE) == project
+                    && !fixture.calls(),
+                "failed optional acquisition changed selection or launched the CLI",
+            );
+        }
+    }
+
+    test "json status fails open when selected manifest is unavailable" {
+        let fixture = root.harness.Fixture.start();
+        defer { fixture.close(); }
+        fixture.project(BASE_VERSION);
         fixture.absent(BASE_VERSION);
         fixture.write(`server/version/${BASE_VERSION}.json.status`, "500");
-
-        let output = fixture.manage(candidate, args);
+        let output = fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"]);
         let result = baml.json.decode<root.harness.ResolutionResult>(output.stdout.to_string());
         result.expect_project_selection(
             selector = BASE_VERSION,
@@ -95,11 +179,15 @@ testset "toolchain status" {
             managed = true,
             installed = false,
         );
-        let binary = `${fixture.root}/baml/toolchains/${BASE_VERSION}/bin/baml-cli${fixture.suffix}`;
         root.harness.require(
-            result.toolchain_path.replace_all("\\", "/") == binary.replace_all("\\", "/"),
-            "wrong toolchain path",
+            output.stderr.to_string().includes("warning: could not ensure"),
+            "manifest failure was not advisory",
         );
+        root.harness.require(
+            fixture.requests() == [`/version/${BASE_VERSION}.json`, "/canary.json", "/nightly.json"],
+            "status retried unavailable manifest or skipped release metadata",
+        );
+        root.harness.require(!fixture.calls(), "status launched the CLI after acquisition failed");
     }
 
     test "json status with install downloads absent version" {
@@ -226,21 +314,36 @@ testset "toolchain status" {
         );
     }
 
-    test "json status installs unrecorded channel" {
+    test "json status initializes unrecorded channel by default" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        let args = ["toolchain", "status", "--output-format", "json"];
         fixture.project("nightly", key = "channel");
         fixture.remove(CHANNEL_STATE_FILE);
-        let result = baml.json.decode<root.harness.ResolutionResult>(fixture.manage(candidate, args).stdout.to_string());
-        root.harness.require(result.version == NEXT_VERSION && result.installed, "unrecorded channel was not installed");
+        fixture.absent(NEXT_VERSION);
+        let output = fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"]);
+        let result = baml.json.decode<root.harness.ResolutionResult>(output.stdout.to_string());
+        result.expect_project_selection(
+            selector = "nightly",
+            version = NEXT_VERSION,
+            managed = true,
+            installed = true,
+        );
+        let extension = if (fixture.windows) {
+            ".zip"
+        } else {
+            ".tar.gz"
+        };
         root.harness.require(
-            fixture.read(CHANNEL_STATE_FILE).includes(NEXT_VERSION),
-            "channel mapping was not recorded",
+            fixture.requests() == ["/nightly.json", `/${NEXT_VERSION}${extension}`, "/nightly.json"],
+            "plain status did not initialize the selected channel once",
+        );
+        root.harness.require(
+            fixture.channel_version("nightly") == NEXT_VERSION,
+            "plain status did not record its channel",
         );
     }
 
-    test "plain json status installs the recorded version without advancing the channel" {
+    test "plain json status installs absent recorded version without advancing channel" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
@@ -255,17 +358,41 @@ testset "toolchain status" {
             managed = true,
             installed = true,
         );
-        root.harness.require(fixture.read(CHANNEL_STATE_FILE) == state, "status advanced the recorded channel");
-        fixture.check(candidate, NEXT_VERSION);
+        root.harness.require(
+            fixture.read(CHANNEL_STATE_FILE) == state,
+            "status advanced the recorded channel",
+        );
+        root.harness.require(
+            fixture.requests()
+                == [
+                    `/version/${NEXT_VERSION}.json`,
+                    `/${NEXT_VERSION}${if (fixture.windows) { ".zip" } else { ".tar.gz" }}`,
+                    "/nightly.json",
+                ],
+            "plain channel status did not acquire only the recorded version",
+        );
+        root.harness.require(
+            baml.fs.exists(`${fixture.root}/baml/toolchains/${NEXT_VERSION}`),
+            "plain status did not install recorded version",
+        );
     }
 
-    test "json status cannot resolve an unrecorded channel after installation fails" {
+    test "json status leaves unavailable unrecorded channel untouched" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
         fixture.project("nightly", key = "channel");
         fixture.remove(CHANNEL_STATE_FILE);
         fixture.write("server/nightly.json.status", "500");
-        fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"], success = false);
+        fixture.manage(
+            candidate,
+            ["toolchain", "status", "--output-format", "json"],
+            success = false,
+            diagnostic = "status --install",
+        );
+        root.harness.require(
+            fixture.requests() == ["/nightly.json"],
+            "plain status retried unavailable channel acquisition",
+        );
         root.harness.require(
             !baml.fs.exists(`${fixture.root}/${CHANNEL_STATE_FILE}`),
             "failed resolution recorded a channel",
@@ -294,6 +421,10 @@ testset "toolchain status" {
                     && !result.managed
                     && result.installed,
                 "unexpected local resolution state",
+            );
+            root.harness.require(
+                !output.stderr.to_string().includes("could not ensure"),
+                "valid local status emitted a managed-toolchain installation warning",
             );
             root.harness.require(
                 result.source.ends_with("baml.toml") && baml.fs.exists(result.wrapper_path),

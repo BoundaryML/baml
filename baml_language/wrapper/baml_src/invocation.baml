@@ -181,7 +181,6 @@ class WrapperInvocation {
                 }
             }
         }
-        self.best_effort_install();
         if (channel(selected) && !ChannelState.new().source_matches(selected)) {
             ReleaseStore.new().install(selected, true, false, false, telemetry = self.telemetry);
         } else {
@@ -213,6 +212,20 @@ class WrapperInvocation {
     }
 
     function status(self, install_missing: bool, format: OutputFormat) -> null {
+        // Plain status attempts preparation once; --install makes it required.
+        if (!install_missing) {
+            let active = self.selection();
+            if (!is_path(active.selector.to_string())) {
+                active.ensure_installed(telemetry = self.telemetry) catch (error) {
+                    WrapperFailure => {
+                        baml.io.eprintln(
+                            `warning: could not ensure active baml-cli is installed: ${error_message(error)}`,
+                        );
+                        null
+                    }
+                };
+            }
+        }
         let result = self.resolve(install_missing);
         if (result.managed) {
             let channels = if (channel(result.selector)) {
@@ -255,18 +268,6 @@ class WrapperInvocation {
         null
     }
 
-    function best_effort_install(self) -> null {
-        self.selection().ensure_installed(telemetry = self.telemetry) catch (error) {
-            WrapperFailure => {
-                baml.io.eprintln(
-                    `warning: could not ensure active baml-cli is installed: ${error_message(error)}`,
-                );
-                null
-            }
-        };
-        null
-    }
-
     function list_toolchains(self, format: OutputFormat) -> null {
         let inventory = ToolchainInventory.read(self.selection());
         baml.io.println(
@@ -280,10 +281,22 @@ class WrapperInvocation {
 
     function print_version(self, flag: string) -> null {
         baml.io.println(`baml wrapper ${wrapper_version()}`);
+        let exit_code = self.run_cli_version(flag) catch (error) {
+            WrapperFailure => {
+                baml.io.eprintln(
+                    `warning: could not report selected baml-cli version: ${error_message(error)}`,
+                );
+                0
+            }
+        };
+        baml.sys.exit(exit_code)
+    }
+
+    function run_cli_version(self, flag: string) -> int {
         let binary = self.selection().ensure_installed(telemetry = self.telemetry);
         WrapperTelemetry.finish(self.telemetry);
         let result = baml.sys.run(binary, args = [flag], env = { "BAML_CLI_ALLOW_DIRECT": "1" });
-        baml.sys.exit(result.exit_code)
+        result.exit_code
     }
 
     function manage(self, command: ManagementCommand) -> null {
@@ -304,19 +317,6 @@ class WrapperInvocation {
             active.warn_if_outdated();
         }
         baml.sys.exit(result.exit_code)
-    }
-
-    function install_selector(self) -> string {
-        let active = self.selection();
-        ensure(
-            !is_path(active.selector.to_string()),
-            "active toolchain is a local path; there is nothing to install",
-        );
-        if (channel(active.selector.to_string())) {
-            // Keep an already-resolved channel on its recorded concrete version.
-            return ChannelState.new().recorded(active.selector.to_string()) ?? active.selector.to_string();
-        }
-        active.selector.to_string()
     }
 
     // Reads the command line and where it runs: the working directory,

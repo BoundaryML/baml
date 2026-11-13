@@ -415,7 +415,7 @@ testset "wrapper telemetry" {
             baml.fs.mkdir(`${fixture.root}/project/.git`, baml.fs.MkdirOptions { recursive: true });
             fixture.cwd = `${fixture.root}/project/nested/deep`;
             fixture.manage(candidate, ["toolchain", "list"]);
-            fixture.await_telemetry(3);
+            fixture.await_telemetry(2);
             let config = baml.toml.Table.parse(fixture.read("baml/wrapper-telemetry.toml"));
             let identity = baml.json.path<string>(config.to_json(), ".anonymous_id");
             let salt = baml.json.path<string>(config.to_json(), ".salt");
@@ -483,8 +483,8 @@ testset "wrapper telemetry" {
             fixture.env["DO_NOT_TRACK"] = "false";
             let resolved = fixture.manage(candidate, ["toolchain", "status", "--output-format", "json"]);
             baml.json.decode<root.harness.ResolutionResult>(resolved.stdout.to_string());
-            fixture.await_telemetry(6);
-            let second = fixture.captures()[3];
+            fixture.await_telemetry(5);
+            let second = fixture.captures()[2];
             root.harness.require(
                 second.distinct_id == identity,
                 "identity changed between invocations",
@@ -638,9 +638,9 @@ testset "wrapper telemetry" {
             );
             fixture.remove("telemetry.status");
             fixture.manage(candidate, ["toolchain", "list"]);
-            fixture.await_telemetry(7);
+            fixture.await_telemetry(5);
             root.harness.require(
-                fixture.captures().length() == 7,
+                fixture.captures().length() == 5,
                 "retry did not deliver the old and new event",
             );
         }

@@ -152,13 +152,11 @@ class WrapperCli {
                         root.clap.Arg.new("install")
                             .long("install")
                             .action(root.clap.ArgAction.SetTrue)
-                            .help("Install the selected managed toolchain if it is absent"),
+                            .help("Fail if the selected managed toolchain cannot be installed"),
                     ),
             )
             .subcommand(
-                root.clap.Command.new("list").about(
-                    "Show the local inventory after attempting active-toolchain installation",
-                ),
+                root.clap.Command.new("list").about("Show the local inventory"),
             )
             .subcommand(
                 root.clap.Command.new("uninstall")

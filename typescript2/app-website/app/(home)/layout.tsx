@@ -1,10 +1,10 @@
-import appleIcon from '@boundaryml/brand/logo/favicon/boundary/apple-touch-icon.png';
-import favicon32 from '@boundaryml/brand/logo/favicon/boundary/favicon-32.png';
 import type { Metadata, Viewport } from 'next';
 import { OG_SITE, SITE_URL, TWITTER_HANDLE } from '@/app/_lib/metadata';
 import { SiteStructuredData } from '@/components/structured-data';
 import { AnalyticsProvider } from '@/context/analytics';
 import { FONT_VARIABLES } from './fonts';
+import appleIcon from './icons/apple-touch-icon.png';
+import favicon32 from './icons/favicon-32.png';
 import './globals.css';
 
 // The site's root layout. Every page follows the brand package's BAML lane (Clover purple on a dark
@@ -17,7 +17,7 @@ const DESCRIPTION =
 
 export const metadata: Metadata = {
   description: DESCRIPTION,
-  // The brand package's Boundary favicons.
+  // The Boundary alt mark, from ./icons. Both PNGs are rendered from ./icons/favicon.svg.
   icons: { apple: appleIcon.src, icon: favicon32.src },
   metadataBase: new URL(SITE_URL),
   openGraph: {

@@ -3,14 +3,13 @@ import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { api } from "../../../../convex/_generated/api";
 import { BepStatusBadge } from "@/components/bep/bep-status";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { buttonVariants } from "@/components/ui/button";
 import { currentViewer } from "@/lib/bcs-auth";
-import { BCS_STATUSES, bcsConvex, bcsId } from "@/lib/bcs-convex";
+import { bcsCall, bcsId } from "@/lib/bcs-convex";
 import { saveVersion, updateProposal } from "../actions";
-import { HtmlField } from "../proposal-fields";
 import { TeamOnly } from "../team-only";
+import { BcsUnavailable } from "../unavailable";
+import { SaveVersionForm, UpdateProposalForm } from "../forms";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +31,15 @@ export default async function BcsProposal({
   const number = Number((await params).number);
   const asked = Number((await searchParams).v);
   if (!Number.isInteger(number)) notFound();
-  const { convex, secret } = bcsConvex();
-  const proposal = await convex.query(api.bcs.get, {
-    secret,
-    number,
-    version: Number.isInteger(asked) && asked > 0 ? asked : undefined,
-  });
+  const found = await bcsCall((convex, secret) =>
+    convex.query(api.bcs.get, {
+      secret,
+      number,
+      version: Number.isInteger(asked) && asked > 0 ? asked : undefined,
+    })
+  );
+  if (!found.ok) return <BcsUnavailable message={found.failure.message} />;
+  const proposal = found.value;
   if (!proposal) notFound();
   const old = proposal.version !== proposal.currentVersion;
 
@@ -92,42 +94,15 @@ export default async function BcsProposal({
               Edit
             </summary>
             <div className="absolute right-0 z-10 mt-1 w-[28rem] rounded-md border bg-background p-4 shadow-lg space-y-6">
-              <form action={saveVersion.bind(null, proposal.number)} className="space-y-3">
-                <h2 className="font-medium">Save a new version</h2>
-                <input type="hidden" name="baseVersion" value={proposal.currentVersion} />
-                <HtmlField />
-                <div className="space-y-2">
-                  <Label htmlFor="note">What changed</Label>
-                  <Input id="note" name="note" placeholder="Answered Paulo's questions" />
-                </div>
-                <Button type="submit" size="sm">
-                  Save v{proposal.currentVersion + 1}
-                </Button>
-              </form>
-              <form
+              <SaveVersionForm
+                action={saveVersion.bind(null, proposal.number)}
+                baseVersion={proposal.currentVersion}
+              />
+              <UpdateProposalForm
                 action={updateProposal.bind(null, proposal.number)}
-                className="space-y-3 border-t pt-4"
-              >
-                <h2 className="font-medium">Title and status</h2>
-                <input type="hidden" name="originalTitle" value={proposal.title} />
-                <input type="hidden" name="originalStatus" value={proposal.status} />
-                <Input name="title" defaultValue={proposal.title} aria-label="Title" />
-                <select
-                  name="status"
-                  defaultValue={proposal.status}
-                  aria-label="Status"
-                  className="h-9 rounded-md border bg-background px-3 text-sm"
-                >
-                  {BCS_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-                <Button type="submit" size="sm" variant="outline">
-                  Update
-                </Button>
-              </form>
+                title={proposal.title}
+                status={proposal.status}
+              />
             </div>
           </details>
         </div>

@@ -11,6 +11,7 @@
 import type * as analysisJobs from "../analysisJobs.js";
 import type * as analysisJobsNode from "../analysisJobsNode.js";
 import type * as bcs from "../bcs.js";
+import type * as bcsSlack from "../bcsSlack.js";
 import type * as beps from "../beps.js";
 import type * as comments from "../comments.js";
 import type * as decisions from "../decisions.js";
@@ -20,6 +21,7 @@ import type * as issues from "../issues.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as migrations from "../migrations.js";
 import type * as presence from "../presence.js";
+import type * as serverSecret from "../serverSecret.js";
 import type * as slack from "../slack.js";
 import type * as userStances from "../userStances.js";
 import type * as users from "../users.js";
@@ -34,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   analysisJobs: typeof analysisJobs;
   analysisJobsNode: typeof analysisJobsNode;
   bcs: typeof bcs;
+  bcsSlack: typeof bcsSlack;
   beps: typeof beps;
   comments: typeof comments;
   decisions: typeof decisions;
@@ -43,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   "lib/prompts": typeof lib_prompts;
   migrations: typeof migrations;
   presence: typeof presence;
+  serverSecret: typeof serverSecret;
   slack: typeof slack;
   userStances: typeof userStances;
   users: typeof users;

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { BCS_COOKIE, bcsMembership, sessionCookie, signSession } from "@/lib/bcs-auth";
+import { api } from "../../../../../../convex/_generated/api";
+import { BCS_COOKIE, isBcsOrgMember, sessionCookie, signSession } from "@/lib/bcs-auth";
+import { bcsCall } from "@/lib/bcs-convex";
 
 const PRODUCTION_URL = "https://beps.boundaryml.com";
 const ALLOWED_PREVIEW_PATTERNS = [
@@ -128,7 +130,6 @@ export async function GET(request: NextRequest) {
 
     // Fetch all emails to check for @boundaryml.com (special account)
     let boundaryEmail: string | undefined;
-    let verifiedEmails: string[] = [];
     try {
       const emailsResponse = await fetch("https://api.github.com/user/emails", {
         headers: {
@@ -139,7 +140,6 @@ export async function GET(request: NextRequest) {
 
       if (emailsResponse.ok) {
         const emails: GitHubEmail[] = await emailsResponse.json();
-        verifiedEmails = emails.filter((e) => e.verified).map((e) => e.email);
         const boundaryEmailObj = emails.find(
           (e) => e.verified && e.email.endsWith("@boundaryml.com")
         );
@@ -149,6 +149,24 @@ export async function GET(request: NextRequest) {
       }
     } catch (error) {
       console.warn("Failed to fetch GitHub emails:", error);
+    }
+
+    // Record the sign-in with what GitHub verified, so a team email (and the Slack link it brings)
+    // never comes from the browser, which only learns its user ID below.
+    const recorded = await bcsCall((convex, secret) =>
+      convex.mutation(api.users.recordGitHubSignIn, {
+        secret,
+        githubId: githubUser.id.toString(),
+        name: githubUser.name || githubUser.login,
+        avatarUrl: githubUser.avatar_url,
+        boundaryEmail,
+      })
+    );
+    if (!recorded.ok) {
+      // Without the server's record the account would stay unlinked from GitHub (and get no API
+      // token), so stop here rather than finish a half sign-in.
+      console.error("Could not record the GitHub sign-in:", recorded.failure.message);
+      return NextResponse.redirect(new URL("/login?error=sign_in_not_recorded", baseUrl));
     }
 
     const userData = {
@@ -163,11 +181,19 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.redirect(
       new URL(`/login?github_user=${encodedUser}`, baseUrl)
     );
-    // The server knows who this is here, so here it decides who may read BCS proposals. A
-    // non-member signing in on a browser a member used ends that member's BCS session.
+    // The server knows who this is here, so here it decides who may read BCS proposals: active
+    // members of the BoundaryML organization. A non-member signing in on a browser a member used
+    // ends that member's BCS session.
     const githubId = githubUser.id.toString();
-    const via = bcsMembership(githubId, verifiedEmails);
-    const token = via && signSession({ githubId, login: githubUser.login, via });
+    const member = await isBcsOrgMember(tokenData.access_token);
+    const token =
+      member &&
+      signSession({
+        githubId,
+        login: githubUser.login,
+        via: "org",
+        checkedAt: Math.floor(Date.now() / 1000),
+      });
     if (token) {
       response.cookies.set(BCS_COOKIE, token, sessionCookie);
     } else {

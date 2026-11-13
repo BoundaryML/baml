@@ -1,3 +1,4 @@
+import { isoPostDate } from './format';
 import type { Post } from './get-posts';
 
 // How the blog index sorts and filters posts. A post's topics come from its frontmatter tags, which
@@ -49,9 +50,15 @@ export function isListed(post: Post) {
   return Boolean(post.isPublished) && !post.archived;
 }
 
-/** Whether a post shows on the blog index: every listed post, old or new. */
+/** The first date the blog index shows: posts dated before it are left off. It is a fixed date,
+ *  not a rolling window, so the index never empties as time passes. Move it by hand to hide or
+ *  show more. */
+const INDEX_SINCE = '2026-09-12';
+
+/** Whether a post shows on the blog index: a listed post dated INDEX_SINCE or later. Older posts
+ *  keep their URLs and stay in the feed and in "Read next"; only the index leaves them out. */
 export function isOnIndex(post: Post) {
-  return isListed(post);
+  return isListed(post) && isoPostDate(post.date) >= INDEX_SINCE;
 }
 
 /** Launch Week is six short posts in one week of January 2025, listed as one group. */

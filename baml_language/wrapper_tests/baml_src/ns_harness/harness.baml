@@ -553,6 +553,7 @@ class InventoryResult {
 // Fixture corruption modes are wire values accepted by fixture.py.
 type FixtureReleaseMode = "valid"
     | "missing-cli"
+    | "non-executable-cli"
     | "layout"
     | "traversal"
     | "link"

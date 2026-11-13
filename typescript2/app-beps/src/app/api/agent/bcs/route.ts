@@ -1,8 +1,8 @@
 // The `bep bcs` CLI's routes: list every proposal, and create one.
 import { NextRequest } from "next/server";
 import { api } from "../../../../../convex/_generated/api";
-import { bcsConvex } from "@/lib/bcs-convex";
-import { authenticate, failure, json, status } from "./shared";
+import { bcsCall } from "@/lib/bcs-convex";
+import { authenticate, json, refused, status } from "./shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,10 +14,10 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const viewer = authenticate(request);
   if (!("login" in viewer)) return viewer;
-  const { convex, secret } = bcsConvex();
-  const listed = await convex.query(api.bcs.list, { secret });
+  const listed = await bcsCall((convex, secret) => convex.query(api.bcs.list, { secret }));
+  if (!listed.ok) return refused(listed.failure);
   return json({
-    proposals: listed.map((each) => ({
+    proposals: listed.value.map((each) => ({
       number: each.number,
       title: each.title,
       status: each.status,
@@ -38,17 +38,16 @@ export async function POST(request: NextRequest) {
   }
   const asked = status(body.status);
   if (asked && typeof asked === "object") return json(asked, 400);
-  const { convex, secret } = bcsConvex();
-  try {
-    const number = await convex.mutation(api.bcs.create, {
+  const created = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcs.create, {
       secret,
       title: body.title,
       html: body.html,
       status: asked ?? "draft",
       author: viewer.login,
-    });
-    return json({ number, version: 1 }, 201);
-  } catch (error) {
-    return failure(error);
-  }
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!created.ok) return refused(created.failure);
+  return json({ number: created.value, version: 1 }, 201);
 }

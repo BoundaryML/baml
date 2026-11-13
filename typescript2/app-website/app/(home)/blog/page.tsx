@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 // `featured: true`), the latest release notes, and the articles by date, Engineering by default. A
 // filter (`?tags=research`, `?tags=release`, `?tags=all` for everything, ...) changes only that last
 // list; the sections above it stay. /changelog redirects to `?tags=release`. Archived posts aren't
-// listed.
+// listed, and neither are posts from before a fixed cutoff date (INDEX_SINCE in ./_lib/topics).
 
 type Filter = 'all' | 'release' | Topic;
 

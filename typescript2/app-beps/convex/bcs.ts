@@ -3,36 +3,48 @@
 // Every function takes `secret`, which must equal the deployment's BCS_CONVEX_SECRET. Only this
 // app's server holds it, and it calls these functions after it has checked that the viewer is on
 // the team (src/lib/bcs-auth.ts), so the browser can neither read nor write these tables.
-import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import type { QueryCtx } from "./_generated/server";
+//
+// Errors meant for people are ConvexErrors carrying a `BcsFailure`: production Convex replaces the
+// message of any other error with "Server Error", so a stale save would otherwise reach the editor
+// as a crash.
+import { ConvexError, v } from "convex/values";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { bepStatus } from "./schema";
+import { requireServerSecret } from "./serverSecret";
+
+/**
+ * Why a BCS call was refused. `not_configured`: the deployments' BCS_CONVEX_SECRET is missing or
+ * differs from the server's. `stale`: someone saved since the editor started. `missing`: no such
+ * proposal. `invalid`: the request itself is wrong (empty page, no title, too large).
+ */
+export type BcsFailure = {
+  kind: "not_configured" | "stale" | "missing" | "invalid";
+  message: string;
+  // For `stale`: the version someone else saved, which the editor can compare and save over.
+  currentVersion?: number;
+};
+
+function fail(kind: BcsFailure["kind"], message: string, currentVersion?: number): never {
+  throw new ConvexError<BcsFailure>({ kind, message, currentVersion });
+}
 
 /** The longest HTML page a version may hold, under Convex's 1 MiB document limit. */
 export const MAX_HTML_BYTES = 900_000;
 
-/** Refuses a call without the server secret, comparing in constant time. */
+/** Refuses a call without the server secret. */
 function guard(secret: string) {
-  const expected = process.env.BCS_CONVEX_SECRET;
-  if (!expected || expected.length < 32) {
-    throw new Error("BCS proposals are not configured");
-  }
-  let difference = secret.length === expected.length ? 0 : 1;
-  for (let i = 0; i < expected.length; i++) {
-    difference |= expected.charCodeAt(i) ^ (i < secret.length ? secret.charCodeAt(i) : 0);
-  }
-  if (difference !== 0) {
-    throw new Error("Not allowed");
-  }
+  requireServerSecret(secret);
 }
 
 function checkHtml(html: string) {
   if (!html.trim()) {
-    throw new Error("The page is empty");
+    fail("invalid", "The page is empty.");
   }
   if (new TextEncoder().encode(html).length > MAX_HTML_BYTES) {
-    throw new Error("The page is larger than 900 KB");
+    fail("invalid", "The page is larger than 900 KB.");
   }
 }
 
@@ -109,11 +121,12 @@ export const create = mutation({
     status: bepStatus,
     html: v.string(),
     author: v.string(),
+    authorGithubId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     guard(args.secret);
     const title = args.title.trim();
-    if (!title) throw new Error("A proposal needs a title");
+    if (!title) fail("invalid", "A proposal needs a title.");
     checkHtml(args.html);
     const latest = await ctx.db.query("bcsDocs").withIndex("by_number").order("desc").first();
     const number = (latest?.number ?? 0) + 1;
@@ -129,6 +142,7 @@ export const create = mutation({
     });
     await ctx.db.insert("bcsDocVersions", { docId, version: 1, createdBy: args.author, createdAt: now });
     await ctx.db.insert("bcsVersionPages", { docId, version: 1, html: args.html });
+    await tellSlack(ctx, docId, { kind: "created" }, args.author, args.authorGithubId);
     return number;
   },
 });
@@ -143,6 +157,7 @@ export const save = mutation({
     secret: v.string(),
     number: v.number(),
     author: v.string(),
+    authorGithubId: v.optional(v.string()),
     baseVersion: v.optional(v.number()),
     html: v.optional(v.string()),
     note: v.optional(v.string()),
@@ -152,10 +167,12 @@ export const save = mutation({
   handler: async (ctx, args) => {
     guard(args.secret);
     const doc = await byNumber(ctx, args.number);
-    if (!doc) throw new Error("No such proposal");
+    if (!doc) fail("missing", "No such proposal.");
     if (args.baseVersion !== undefined && args.baseVersion !== doc.currentVersion) {
-      throw new Error(
-        `Someone saved v${doc.currentVersion} since you started from v${args.baseVersion}: reload it and save again`
+      fail(
+        "stale",
+        `Someone saved v${doc.currentVersion} since you started from v${args.baseVersion}: reload it and save again.`,
+        doc.currentVersion
       );
     }
     const now = Date.now();
@@ -175,17 +192,103 @@ export const save = mutation({
         await ctx.db.insert("bcsVersionPages", { docId: doc._id, version, html: args.html });
       }
     }
-    const title = args.title?.trim();
-    const changed = version !== doc.currentVersion || title || args.status;
-    if (changed) {
+    const newVersion = version !== doc.currentVersion;
+    const title = args.title?.trim() || undefined;
+    const newTitle = title !== undefined && title !== doc.title;
+    const newStatus = args.status !== undefined && args.status !== doc.status;
+    if (newVersion || newTitle || newStatus) {
       await ctx.db.patch(doc._id, {
         currentVersion: version,
         updatedAt: now,
-        ...(title ? { title } : {}),
-        ...(args.status ? { status: args.status } : {}),
+        ...(newTitle ? { title } : {}),
+        ...(newStatus ? { status: args.status } : {}),
         authors: doc.authors.includes(args.author) ? doc.authors : [...doc.authors, args.author],
       });
+      await tellSlack(
+        ctx,
+        doc._id,
+        {
+          kind: "saved",
+          version: newVersion ? version : undefined,
+          status: newStatus ? { from: doc.status, to: args.status! } : undefined,
+        },
+        args.author,
+        args.authorGithubId
+      );
     }
     return version;
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slack: each proposal gets a thread in the BCS channel (bcsSlack.ts). These are internal, so only
+// this deployment's own functions can call them.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const slackEvent = v.union(
+  v.object({ kind: v.literal("created") }),
+  v.object({
+    kind: v.literal("saved"),
+    version: v.optional(v.number()),
+    status: v.optional(v.object({ from: bepStatus, to: bepStatus })),
+  })
+);
+
+async function tellSlack(
+  ctx: MutationCtx,
+  docId: Id<"bcsDocs">,
+  event: typeof slackEvent.type,
+  login: string,
+  githubId: string | undefined
+) {
+  await ctx.scheduler.runAfter(0, internal.bcsSlack.notify, { docId, event, login, githubId });
+}
+
+/** What a proposal's Slack messages show, and its thread. */
+export const slackView = internalQuery({
+  args: { docId: v.id("bcsDocs"), version: v.optional(v.number()), githubId: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const doc = await ctx.db.get(args.docId);
+    if (!doc) return null;
+    const version =
+      args.version === undefined
+        ? null
+        : await ctx.db
+            .query("bcsDocVersions")
+            .withIndex("by_doc_version", (q) => q.eq("docId", doc._id).eq("version", args.version!))
+            .unique();
+    // The member's Slack account, linked when they signed in with a verified BoundaryML email.
+    const user = args.githubId
+      ? await ctx.db
+          .query("users")
+          .withIndex("by_github_id", (q) => q.eq("githubId", args.githubId))
+          .unique()
+      : null;
+    return {
+      number: doc.number,
+      title: doc.title,
+      status: doc.status,
+      authors: doc.authors,
+      currentVersion: doc.currentVersion,
+      updatedAt: doc.updatedAt,
+      slackThreadTs: doc.slackThreadTs,
+      note: version?.note,
+      slackUserId: user?.slackUserId,
+    };
+  },
+});
+
+/**
+ * Keeps `ts` as the proposal's thread unless another message got there first, and returns the
+ * thread that won, so a notification that lost the race can delete its message and reply there.
+ */
+export const storeSlackThread = internalMutation({
+  args: { docId: v.id("bcsDocs"), ts: v.string() },
+  handler: async (ctx, args) => {
+    const doc = await ctx.db.get(args.docId);
+    if (!doc) return null;
+    if (doc.slackThreadTs) return doc.slackThreadTs;
+    await ctx.db.patch(args.docId, { slackThreadTs: args.ts });
+    return args.ts;
   },
 });
