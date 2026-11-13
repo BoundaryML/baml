@@ -67,6 +67,8 @@ pub(crate) struct Api {
     pub(crate) register_host_cancel_callback: unsafe extern "C" fn(HostCancelFn),
     pub(crate) trace_selection: unsafe extern "C" fn(u64, u64, *mut Buffer, *mut u64) -> u32,
     pub(crate) invocation_context: unsafe extern "C" fn(u64, *mut Buffer) -> u32,
+    pub(crate) host_span_begin: unsafe extern "C" fn(*const u8, usize, *mut u64, *mut u64) -> u32,
+    pub(crate) host_span_finish: unsafe extern "C" fn(u64, u32, *const u8, usize) -> u32,
     pub(crate) invocation_clock_ns: unsafe extern "C" fn(u64, *mut u64) -> u32,
     pub(crate) release_function_call: unsafe extern "C" fn(u64) -> i32,
     pub(crate) register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
@@ -213,6 +215,8 @@ struct BamlApiV1 {
             *mut i32,
         ) -> u32,
     >,
+    host_span_begin: Option<unsafe extern "C" fn(*const u8, usize, *mut u64, *mut u64) -> u32>,
+    host_span_finish: Option<unsafe extern "C" fn(u64, u32, *const u8, usize) -> u32>,
 }
 
 #[repr(C)]
@@ -335,6 +339,8 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         &path,
     )?;
     let shutdown_runtime = required_slot(table.shutdown_runtime, "shutdown_runtime", &path)?;
+    let host_span_begin = required_slot(table.host_span_begin, "host_span_begin", &path)?;
+    let host_span_finish = required_slot(table.host_span_finish, "host_span_finish", &path)?;
 
     required_slot(
         table.invocation_protocol_version,
@@ -376,6 +382,8 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         register_host_cancel_callback,
         trace_selection,
         invocation_context,
+        host_span_begin,
+        host_span_finish,
         invocation_clock_ns,
         release_function_call,
         register_host_release_callback,
