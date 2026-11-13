@@ -13,8 +13,9 @@ use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef, GlobalRe
 use baml_compiler2_mir::{FunctionOwner, MirFunctionId};
 use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
-    Bytecode, ClassLayout, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TypeHead,
-    types::{FunctionIdentity, PackageKind},
+    Bytecode, ClassLayout, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TyTemplate,
+    TypeHead,
+    types::{FunctionIdentity, PackageKind, ProgramImplRule},
 };
 
 use crate::coords::{
@@ -205,6 +206,22 @@ impl<'p> ProgramIndex<'p> {
 
     pub(crate) fn interface_at(&self, head: &baml_type::DeclName) -> Option<usize> {
         self.lookup(interface_head_coords(head))
+    }
+
+    /// The implementations of `method` on `interface` that a receiver's class
+    /// alone selects, as (class, method body) objects.
+    ///
+    /// Sound because the orphan rule and coherence stop any later package
+    /// from implementing a static interface for a static class: the
+    /// assumption `BexVm::virtual_target`'s static cache already makes.
+    pub(crate) fn class_dispatch(&self, interface: usize, method: &str) -> Vec<(usize, usize)> {
+        self.program
+            .packages
+            .iter()
+            .filter_map(|package| package.impl_rules.get(&ObjectIndex::from_raw(interface)))
+            .flatten()
+            .filter_map(|rule| class_method(rule, method))
+            .collect()
     }
 
     pub(crate) fn enum_at(&self, head: &baml_type::DeclName) -> Option<usize> {
@@ -444,4 +461,22 @@ fn package_ordinals(
         }
     }
     ordinals
+}
+
+/// The (class, body) of `rule`'s `method` when the rule is for one
+/// non-generic class, unbounded, and provides the method itself: an adopted
+/// default or a generic impl binds frame type arguments a direct call lacks.
+fn class_method(rule: &ProgramImplRule, method: &str) -> Option<(usize, usize)> {
+    let TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
+        return None;
+    };
+    if !args.is_empty() || !rule.generic_param_bounds.is_empty() || !rule.interface_args.is_empty()
+    {
+        return None;
+    }
+    let body = rule.methods.get(method)?;
+    if !body.frame.is_empty() {
+        return None;
+    }
+    Some((head.tag().static_index()?, body.fqn.raw()))
 }
