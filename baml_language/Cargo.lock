@@ -705,7 +705,6 @@ dependencies = [
  "baml_db",
  "baml_parser",
  "baml_syntax",
- "bex_vm_types",
  "caseless",
  "insta",
  "ouroboros",

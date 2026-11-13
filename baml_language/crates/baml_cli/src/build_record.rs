@@ -43,7 +43,13 @@ pub(crate) fn provider(
             timestamp_unix_ns,
             origin,
             git: git_info(package.path(&db)),
-            source_hash: source.hash.0,
+            source_hash: bex_vm_types::identity::package_source_hash(
+                source
+                    .files
+                    .iter()
+                    .map(|(path, text)| (path.as_str(), text.as_bytes())),
+            )
+            .0,
             compilation_unit_hash: unit.0,
         })
     }))

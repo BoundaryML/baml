@@ -5,18 +5,17 @@
 use std::{collections::BTreeMap, path::Path};
 
 use baml_db::SourceRoot;
-use bex_vm_types::identity::{SourceHash, package_source_hash};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::{FormatOptions, format_salsa};
 
-/// A package's formatted, normalized source text and its hash.
+/// A package's formatted, normalized source text: what its source hash is
+/// taken over.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageSource {
-    /// Normalized path ([`normalize_path`]) to normalized text.
+    /// Normalized path (package-relative, `/`-separated, NFC, case-folded) to
+    /// normalized text.
     pub files: BTreeMap<String, String>,
-    /// [`package_source_hash`] over [`Self::files`].
-    pub hash: SourceHash,
 }
 
 /// Why a package's source has no normalized form.
@@ -66,12 +65,7 @@ pub fn package_source(
             .map_or_else(|_| text.clone(), |formatted| formatted.apply_to(text));
         files.insert(normalized, normalize_text(&formatted));
     }
-    let hash = package_source_hash(
-        files
-            .iter()
-            .map(|(path, text)| (path.as_str(), text.as_bytes())),
-    );
-    Ok(PackageSource { files, hash })
+    Ok(PackageSource { files })
 }
 
 /// A package-relative path as it is recorded: components joined with `/`, in
@@ -126,7 +120,7 @@ mod tests {
     const FORMATTED: &str = "function f() -> int {\n    1\n}\n";
 
     #[test]
-    fn formatting_line_endings_and_bom_do_not_change_the_hash() {
+    fn formatting_line_endings_and_bom_do_not_change_the_source() {
         let base = package(&[("a.baml", FORMATTED)]).unwrap();
         assert_eq!(base.files["a.baml"], FORMATTED);
         for variant in [
@@ -135,20 +129,19 @@ mod tests {
             "\u{feff}function f() -> int {\n    1\n}\n",
         ] {
             let other = package(&[("a.baml", variant)]).unwrap();
-            assert_eq!(other.files, base.files, "{variant:?}");
-            assert_eq!(other.hash, base.hash, "{variant:?}");
+            assert_eq!(other, base, "{variant:?}");
         }
     }
 
     #[test]
-    fn edits_that_survive_formatting_change_the_hash() {
+    fn edits_that_survive_formatting_change_the_source() {
         let base = package(&[("a.baml", FORMATTED)]).unwrap();
         let commented = package(&[("a.baml", "// why\nfunction f() -> int {\n    1\n}\n")]);
-        assert_ne!(commented.unwrap().hash, base.hash);
+        assert_ne!(commented.unwrap(), base);
         let body = package(&[("a.baml", "function f() -> int {\n    2\n}\n")]);
-        assert_ne!(body.unwrap().hash, base.hash);
+        assert_ne!(body.unwrap(), base);
         let moved = package(&[("b.baml", FORMATTED)]);
-        assert_ne!(moved.unwrap().hash, base.hash);
+        assert_ne!(moved.unwrap(), base);
     }
 
     #[test]
@@ -174,7 +167,7 @@ mod tests {
             composed.files.keys().collect::<Vec<_>>(),
             ["ns_caf\u{e9}/main.baml"]
         );
-        assert_eq!(composed.hash, decomposed.hash);
+        assert_eq!(composed, decomposed);
     }
 
     #[test]
