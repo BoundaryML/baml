@@ -13,11 +13,13 @@ import {
   removePage,
   replyToComment,
   setCommentResolved,
+  setPeople,
+  setStatus,
   updateProposal,
 } from "../actions";
 import { TeamOnly } from "../team-only";
 import { BcsUnavailable } from "../unavailable";
-import { RemovePageForm, UpdateProposalForm } from "../forms";
+import { HeaderStatus, PeopleForm, RemovePageForm, UpdateProposalForm } from "../forms";
 import { BcsReader } from "./reader";
 
 export const dynamic = "force-dynamic";
@@ -75,6 +77,9 @@ export default async function BcsProposal({
   );
   // Without its comments the proposal still reads; the panel says why they are missing.
   const { threads, openByPage } = (comments.ok && comments.value) || { threads: [], openByPage: {} };
+  // GitHub logins seen across proposals, suggested when choosing shepherds.
+  const everyone = await bcsCall((convex, secret) => convex.query(api.bcs.list, { secret }));
+  const people = everyone.ok ? everyone.value.people : [];
   const rendered = await renderBcsPage({
     format: page.format,
     content: page.content,
@@ -90,9 +95,17 @@ export default async function BcsProposal({
         </Link>
         <span className="font-mono text-sm text-muted-foreground">{bcsId(proposal.number)}</span>
         <h1 className="text-lg font-semibold">{proposal.title}</h1>
-        <BepStatusBadge status={proposal.status} />
+        {old ? (
+          <BepStatusBadge status={proposal.status} />
+        ) : (
+          <HeaderStatus action={setStatus.bind(null, proposal.number)} status={proposal.status} />
+        )}
         <span className="text-sm text-muted-foreground">
           {proposal.authors.join(", ")} · updated {format(proposal.updatedAt, "PP")}
+          {proposal.shepherds.length > 0 && <> · Shepherds: {proposal.shepherds.join(", ")}</>}
+          {proposal.status === "implemented" && proposal.implementedBy.length > 0 && (
+            <> · Implemented by: {proposal.implementedBy.join(", ")}</>
+          )}
         </span>
         <div className="ml-auto flex items-center gap-2">
           <details className="relative">
@@ -174,7 +187,15 @@ export default async function BcsProposal({
                   <UpdateProposalForm
                     action={updateProposal.bind(null, proposal.number)}
                     title={proposal.title}
-                    status={proposal.status}
+                  />
+                </div>
+                <div className="border-t pt-4">
+                  <PeopleForm
+                    action={setPeople.bind(null, proposal.number)}
+                    shepherds={proposal.shepherds}
+                    implementedBy={proposal.implementedBy}
+                    showImplemented={proposal.status === "implemented" || proposal.implementedBy.length > 0}
+                    people={people}
                   />
                 </div>
               </div>
@@ -183,33 +204,59 @@ export default async function BcsProposal({
         </div>
       </header>
       <div className="flex flex-1 min-h-0">
-        {outline.length > 1 && (
-          <nav aria-label="Pages" className="w-64 shrink-0 overflow-y-auto border-r p-3 text-sm">
-            <ul className="space-y-0.5">
-              {outline.map((entry) => (
-                <li key={entry.slug}>
-                  <Link
-                    href={bcsPagePath(proposal.number, entry.slug, shownVersion)}
-                    aria-current={entry.slug === page.slug ? "page" : undefined}
-                    style={{ paddingLeft: `${0.5 + entry.depth * 0.75}rem` }}
-                    className={`block rounded py-1 pr-2 hover:bg-muted ${
-                      entry.slug === page.slug ? "bg-muted font-medium" : "text-muted-foreground"
-                    }`}
-                  >
-                    {entry.title}
-                    {openByPage[entry.slug] ? (
-                      <span
-                        className="ml-1.5 rounded-full bg-violet-600/15 px-1.5 text-xs text-violet-700 dark:text-violet-300"
-                        title={`${openByPage[entry.slug]} open comment${openByPage[entry.slug] === 1 ? "" : "s"}`}
+        {(outline.length > 1 || rendered.headings.length > 1) && (
+          <div className="w-64 shrink-0 overflow-y-auto border-r p-3 text-sm space-y-4">
+            {outline.length > 1 && (
+              <nav aria-label="Pages">
+                <ul className="space-y-0.5">
+                  {outline.map((entry) => (
+                    <li key={entry.slug}>
+                      <Link
+                        href={bcsPagePath(proposal.number, entry.slug, shownVersion)}
+                        aria-current={entry.slug === page.slug ? "page" : undefined}
+                        style={{ paddingLeft: `${0.5 + entry.depth * 0.75}rem` }}
+                        className={`block rounded py-1 pr-2 hover:bg-muted ${
+                          entry.slug === page.slug ? "bg-muted font-medium" : "text-muted-foreground"
+                        }`}
                       >
-                        {openByPage[entry.slug]}
-                      </span>
-                    ) : null}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+                        {entry.title}
+                        {openByPage[entry.slug] ? (
+                          <span
+                            className="ml-1.5 rounded-full bg-violet-600/15 px-1.5 text-xs text-violet-700 dark:text-violet-300"
+                            title={`${openByPage[entry.slug]} open comment${openByPage[entry.slug] === 1 ? "" : "s"}`}
+                          >
+                            {openByPage[entry.slug]}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            )}
+            {rendered.headings.length > 1 && (
+              <nav aria-label="On this page">
+                <h2 className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  On this page
+                </h2>
+                <ul className="space-y-0.5">
+                  {rendered.headings.map((heading) => (
+                    <li key={heading.id}>
+                      {/* A plain #link: the frame scrolls to it when the address's #fragment changes. */}
+                      <a
+                        href={`#${heading.id}`}
+                        style={{ paddingLeft: `${0.5 + (heading.depth - 1) * 0.75}rem` }}
+                        className="block truncate rounded py-0.5 pr-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        title={heading.text}
+                      >
+                        {heading.text}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            )}
+          </div>
         )}
         <BcsReader
           // A new ?comment= remounts it, so the newly linked thread and block are focused.

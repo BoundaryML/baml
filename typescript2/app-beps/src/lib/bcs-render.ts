@@ -30,6 +30,8 @@ export type RenderedPage = {
   document: string;
   /** The ids of the blocks comments can be attached to, in reading order: none for HTML pages. */
   blocks: string[];
+  /** The page's h1 to h3 headings, for a table of contents: none for HTML pages. */
+  headings: { id: string; text: string; depth: number }[];
 };
 
 /** Renders a page for the sandboxed frame. */
@@ -42,11 +44,11 @@ export async function renderBcsPage(options: RenderOptions): Promise<RenderedPag
       : `<!doctype html>\n${options.content}`;
     // Keep its #links inside the frame (see FRAGMENT_SCRIPT). Appended rather than placed before
     // </body>, which could be text inside the page's own script; browsers run it in the body.
-    return { document: `${page}\n<script>${FRAGMENT_SCRIPT}</script>`, blocks: [] };
+    return { document: `${page}\n<script>${FRAGMENT_SCRIPT}</script>`, blocks: [], headings: [] };
   }
   const blocks: string[] = [];
   // A page that brings its own stylesheet is laid out by it alone: the defaults would fight it.
-  const state = { mermaid: false, ownStyles: false };
+  const state = { mermaid: false, ownStyles: false, headings: [] as RenderedPage["headings"] };
   const body = String(
     await unified()
       .use(remarkParse)
@@ -82,7 +84,7 @@ ${
 }
 </body>
 </html>`;
-  return { document, blocks };
+  return { document, blocks, headings: state.headings };
 }
 
 function escapeHtml(text: string): string {
@@ -123,9 +125,18 @@ function headingId(value: string): string {
 function adjust(
   tree: Root,
   pageHref: (slug: string) => string,
-  state: { mermaid: boolean; ownStyles: boolean }
+  state: { mermaid: boolean; ownStyles: boolean; headings: RenderedPage["headings"] }
 ) {
-  const used = new Map<string, number>();
+  // Every id on the page, given or made, so a made one never repeats another.
+  const used = new Set<string>();
+  const collect = (node: Root | Element) => {
+    for (const child of node.children) {
+      if (child.type !== "element") continue;
+      if (typeof child.properties.id === "string") used.add(child.properties.id);
+      collect(child);
+    }
+  };
+  collect(tree);
   const walk = (node: Root | Element) => {
     node.children.forEach((child, index) => {
       if (child.type !== "element") return;
@@ -140,11 +151,19 @@ function adjust(
           child.properties.dataBcsPage = "";
         }
       }
-      if (/^h[1-6]$/.test(child.tagName) && child.properties.id === undefined) {
-        const base = headingId(text(child)) || "section";
-        const seen = used.get(base) ?? 0;
-        used.set(base, seen + 1);
-        child.properties.id = seen === 0 ? base : `${base}-${seen}`;
+      if (/^h[1-6]$/.test(child.tagName)) {
+        if (child.properties.id === undefined) {
+          const base = headingId(text(child)) || "section";
+          let id = base;
+          for (let n = 1; used.has(id); n++) id = `${base}-${n}`;
+          used.add(id);
+          child.properties.id = id;
+        }
+        const depth = Number(child.tagName[1]);
+        const words = text(child).replace(/\s+/g, " ").trim();
+        if (depth <= 3 && words) {
+          state.headings.push({ id: String(child.properties.id), text: words.slice(0, 120), depth });
+        }
       }
       const code = child.tagName === "pre" ? child.children.find((each) => each.type === "element") : undefined;
       if (

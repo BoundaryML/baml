@@ -22,6 +22,8 @@ export type FormState = {
     note?: string;
     slug?: string;
     parentSlug?: string;
+    shepherds?: string;
+    implementedBy?: string;
   };
   // The version to save over next time, after someone else saved one meanwhile.
   baseVersion?: number;
@@ -200,7 +202,7 @@ export async function removePage(
   redirect(bcsPagePath(number, ""));
 }
 
-/** Saves the title and status, each only when the editor changed it from what the form showed. */
+/** Renames the proposal, when the editor changed the title from what the form showed. */
 export async function updateProposal(
   number: number,
   _previous: FormState,
@@ -208,7 +210,6 @@ export async function updateProposal(
 ): Promise<FormState> {
   const viewer = await viewerOrFail();
   const title = String(form.get("title") ?? "").trim();
-  const newStatus = status(form.get("status"));
   const saved = await bcsCall((convex, secret) =>
     convex.mutation(api.bcs.save, {
       secret,
@@ -216,19 +217,62 @@ export async function updateProposal(
       author: viewer.login,
       authorGithubId: viewer.githubId,
       title: title && title !== form.get("originalTitle") ? title : undefined,
-      status: newStatus !== form.get("originalStatus") ? newStatus : undefined,
     })
   );
-  if (!saved.ok) {
-    return {
-      error: saved.failure.message,
-      values: { title, status: newStatus },
-      attempt: Date.now(),
-    };
-  }
+  if (!saved.ok) return { error: saved.failure.message, values: { title }, attempt: Date.now() };
   revalidatePath(`/bcs/${number}`);
   revalidatePath("/bcs");
   return {};
+}
+
+/** Changes the proposal's status, from the header. */
+export async function setStatus(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const chosen = BCS_STATUSES.find((each) => each === form.get("status"));
+  if (!chosen) return { error: "Choose a status.", attempt: Date.now() };
+  const saved = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcs.save, {
+      secret,
+      number,
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+      status: chosen,
+    })
+  );
+  if (!saved.ok) return { error: saved.failure.message, attempt: Date.now() };
+  revalidatePath(`/bcs/${number}`);
+  revalidatePath("/bcs");
+  return { attempt: Date.now() };
+}
+
+function logins(value: FormDataEntryValue | null): string[] {
+  return String(value ?? "")
+    .split(/[\s,]+/)
+    .map((each) => each.trim())
+    .filter(Boolean);
+}
+
+/** Sets who shepherds the proposal, and who implemented it: GitHub logins, comma-separated. */
+export async function setPeople(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const shepherds = String(form.get("shepherds") ?? "");
+  const implementedBy = String(form.get("implementedBy") ?? "");
+  const saved = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcs.save, {
+      secret,
+      number,
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+      shepherds: logins(shepherds),
+      implementedBy: form.has("implementedBy") ? logins(implementedBy) : undefined,
+    })
+  );
+  if (!saved.ok) {
+    return { error: saved.failure.message, values: { shepherds, implementedBy }, attempt: Date.now() };
+  }
+  revalidatePath(`/bcs/${number}`);
+  revalidatePath("/bcs");
+  return { attempt: Date.now() };
 }
 
 /** What a comment form shows after a submission: why it was refused, with the draft, or that it posted. */

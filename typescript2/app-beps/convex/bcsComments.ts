@@ -84,6 +84,34 @@ export const locate = query({
   },
 });
 
+/**
+ * Keeps the proposal's open-thread count and commenters up to date for the board: `opened` threads
+ * opened (negative when resolved), and the comment's author. A proposal from before they were kept
+ * gets them counted from its comments once, here.
+ */
+async function recount(ctx: MutationCtx, docId: Id<"bcsDocs">, opened: number, author?: string) {
+  const doc = await ctx.db.get(docId);
+  if (!doc) return;
+  let open = doc.openComments;
+  let commenters = doc.commenters;
+  if (open === undefined || commenters === undefined) {
+    // Counted after this mutation's own write, so `opened` is already included.
+    const comments = await ctx.db
+      .query("bcsComments")
+      .withIndex("by_doc", (q) => q.eq("docId", docId))
+      .collect();
+    open = comments.filter((each) => !each.parentId && !each.resolved).length;
+    commenters = [...new Set(comments.map((each) => each.author))];
+  } else {
+    open = Math.max(0, open + opened);
+  }
+  if (author && !commenters.includes(author)) commenters = [...commenters, author];
+  await ctx.db.patch(docId, {
+    openComments: open,
+    commenters: [...commenters].sort((a, b) => a.localeCompare(b)),
+  });
+}
+
 async function commentOrFail(ctx: MutationCtx, id: string, docId: Id<"bcsDocs">) {
   const normalized = ctx.db.normalizeId("bcsComments", id);
   const comment = normalized ? await ctx.db.get(normalized) : null;
@@ -126,6 +154,7 @@ export const add = mutation({
       resolved: false,
       createdAt: Date.now(),
     });
+    await recount(ctx, doc._id, 1, args.author);
     await tellSlack(ctx, doc._id, { kind: "comment", commentId }, args.author, args.authorGithubId);
     return commentId;
   },
@@ -154,7 +183,8 @@ export const reply = mutation({
     const body = checkBody(args.body);
     const version = args.version ?? doc.currentVersion;
     if (!(await versionRow(ctx, doc._id, version))) fail("missing", "No such version.");
-    if (thread.resolved) {
+    const reopens = thread.resolved;
+    if (reopens) {
       await ctx.db.patch(thread._id, { resolved: false, resolvedBy: undefined, resolvedAt: undefined });
     }
     const replyId = await ctx.db.insert("bcsComments", {
@@ -167,6 +197,7 @@ export const reply = mutation({
       resolved: false,
       createdAt: Date.now(),
     });
+    await recount(ctx, doc._id, reopens ? 1 : 0, args.author);
     await tellSlack(ctx, doc._id, { kind: "comment", commentId: replyId }, args.author, args.authorGithubId);
     return replyId;
   },
@@ -194,6 +225,7 @@ export const setResolved = mutation({
       resolvedBy: args.resolved ? args.author : undefined,
       resolvedAt: args.resolved ? Date.now() : undefined,
     });
+    await recount(ctx, doc._id, args.resolved ? -1 : 1);
     await tellSlack(
       ctx,
       doc._id,

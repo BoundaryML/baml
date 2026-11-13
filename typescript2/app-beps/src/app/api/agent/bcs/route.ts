@@ -17,11 +17,12 @@ export async function GET(request: NextRequest) {
   const listed = await bcsCall((convex, secret) => convex.query(api.bcs.list, { secret }));
   if (!listed.ok) return refused(listed.failure);
   return json({
-    proposals: listed.value.map((each) => ({
+    proposals: listed.value.proposals.map((each) => ({
       number: each.number,
       title: each.title,
       status: each.status,
       authors: each.authors,
+      shepherds: each.shepherds,
       version: each.currentVersion,
       updatedAt: each.updatedAt,
     })),

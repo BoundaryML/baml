@@ -437,6 +437,13 @@ export default defineSchema({
     updatedAt: v.number(),
     // The proposal's thread in BCS_SLACK_CHANNEL, once its first message was posted.
     slackThreadTs: v.optional(v.string()),
+    // GitHub logins of who shepherds it through review, and of who implemented it.
+    shepherds: v.optional(v.array(v.string())),
+    implementedBy: v.optional(v.array(v.string())),
+    // Kept by the comment mutations, so the board never reads comment histories: how many threads
+    // are open, and who has commented. Absent on proposals from before they were kept.
+    openComments: v.optional(v.number()),
+    commenters: v.optional(v.array(v.string())),
   }).index("by_number", ["number"]),
 
   // A version's metadata and its pages' outline, listed without their content so that reading a
