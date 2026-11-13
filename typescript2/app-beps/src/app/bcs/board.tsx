@@ -4,7 +4,7 @@
 // status and sorted by update, both searchable by number, title, author or shepherd. The view and
 // the filters are kept in the address, so a link shows the same board.
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { ArrowUpDown, Columns3, FileText, LayoutList, MessageSquare, Search } from "lucide-react";
@@ -124,16 +124,26 @@ export function BcsBoard({ proposals }: { proposals: BoardProposal[] }) {
   const oldestFirst = params.get("sort") === "oldest";
   const [query, setQuery] = useState(params.get("q") ?? "");
 
-  /** Changes the board's address, keeping the search box as typed. */
-  const setParam = (key: string, value: string | null) => {
+  /** Changes the board's address: one parameter, and the search box as typed. */
+  const setParam = (key: string, value: string | null, search = query) => {
     const next = new URLSearchParams(params.toString());
     if (value === null) next.delete(key);
     else next.set(key, value);
-    if (query) next.set("q", query);
+    if (search) next.set("q", search);
     else next.delete("q");
-    const search = next.toString();
-    router.replace(`/bcs${search ? `?${search}` : ""}`, { scroll: false });
+    const address = next.toString();
+    router.replace(`/bcs${address ? `?${address}` : ""}`, { scroll: false });
   };
+
+  // The search goes into the address too, a moment after typing stops, so a link or a reload keeps it.
+  const typed = useRef(false);
+  useEffect(() => {
+    if (!typed.current) return;
+    const timer = setTimeout(() => setParam("q", query.trim() || null, query.trim()), 300);
+    return () => clearTimeout(timer);
+    // setParam reads the current address; only the typed search should schedule it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const shown = useMemo(
     () =>
@@ -171,7 +181,10 @@ export function BcsBoard({ proposals }: { proposals: BoardProposal[] }) {
               placeholder="Search proposals…"
               aria-label="Search proposals"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                typed.current = true;
+                setQuery(event.target.value);
+              }}
               className="pl-9"
             />
           </div>

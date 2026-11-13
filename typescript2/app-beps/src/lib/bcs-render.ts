@@ -127,7 +127,16 @@ function adjust(
   pageHref: (slug: string) => string,
   state: { mermaid: boolean; ownStyles: boolean; headings: RenderedPage["headings"] }
 ) {
-  const used = new Map<string, number>();
+  // Every id on the page, given or made, so a made one never repeats another.
+  const used = new Set<string>();
+  const collect = (node: Root | Element) => {
+    for (const child of node.children) {
+      if (child.type !== "element") continue;
+      if (typeof child.properties.id === "string") used.add(child.properties.id);
+      collect(child);
+    }
+  };
+  collect(tree);
   const walk = (node: Root | Element) => {
     node.children.forEach((child, index) => {
       if (child.type !== "element") return;
@@ -145,9 +154,10 @@ function adjust(
       if (/^h[1-6]$/.test(child.tagName)) {
         if (child.properties.id === undefined) {
           const base = headingId(text(child)) || "section";
-          const seen = used.get(base) ?? 0;
-          used.set(base, seen + 1);
-          child.properties.id = seen === 0 ? base : `${base}-${seen}`;
+          let id = base;
+          for (let n = 1; used.has(id); n++) id = `${base}-${n}`;
+          used.add(id);
+          child.properties.id = id;
         }
         const depth = Number(child.tagName[1]);
         const words = text(child).replace(/\s+/g, " ").trim();

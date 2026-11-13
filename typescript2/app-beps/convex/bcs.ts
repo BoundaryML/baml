@@ -145,15 +145,27 @@ export const list = query({
     const people = new Set<string>();
     const proposals = [];
     for (const doc of docs) {
-      const comments = await ctx.db
-        .query("bcsComments")
-        .withIndex("by_doc", (q) => q.eq("docId", doc._id))
-        .collect();
+      // The comment mutations keep these on the proposal; only one from before they did is counted
+      // from its comments (until its next comment, which stores them).
+      let openComments = doc.openComments;
+      let commenters = doc.commenters;
+      if (openComments === undefined || commenters === undefined) {
+        const comments = await ctx.db
+          .query("bcsComments")
+          .withIndex("by_doc", (q) => q.eq("docId", doc._id))
+          .collect();
+        openComments = comments.filter((each) => !each.parentId && !each.resolved).length;
+        commenters = comments.map((each) => each.author);
+      }
       const row = await versionRow(ctx, doc._id, doc.currentVersion);
-      for (const login of [...doc.authors, ...(doc.shepherds ?? []), ...(doc.implementedBy ?? [])]) {
+      for (const login of [
+        ...doc.authors,
+        ...(doc.shepherds ?? []),
+        ...(doc.implementedBy ?? []),
+        ...commenters,
+      ]) {
         people.add(login);
       }
-      for (const comment of comments) people.add(comment.author);
       proposals.push({
         number: doc.number,
         title: doc.title,
@@ -163,7 +175,7 @@ export const list = query({
         implementedBy: doc.implementedBy ?? [],
         currentVersion: doc.currentVersion,
         updatedAt: doc.updatedAt,
-        openComments: comments.filter((each) => !each.parentId && !each.resolved).length,
+        openComments,
         pageCount: row ? outlineOf(row, doc.title).length : 1,
       });
     }
