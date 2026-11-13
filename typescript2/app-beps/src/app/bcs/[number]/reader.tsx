@@ -34,6 +34,8 @@ type Props = {
   threads: Thread[];
   /** The thread a link pointed at (?comment=). */
   focusThread?: string;
+  /** Why the comments could not be loaded; the page still shows, without them. */
+  commentsError?: string;
   addComment: CommentAction;
   /** Server actions that read the thread from the form's commentId (and resolved). */
   reply: CommentAction;
@@ -57,13 +59,13 @@ export function BcsReader(props: Props) {
     return result;
   }, [props.threads, onPage]);
 
-  // A ?comment= link: show its thread, and its block once the page has loaded.
-  useEffect(() => {
-    const thread = props.threads.find((each) => each.id === props.focusThread);
-    if (!thread?.anchor) return;
-    const timer = setTimeout(() => frame.current?.focus(thread.anchor!.block), 800);
-    return () => clearTimeout(timer);
-  }, [props.focusThread, props.threads]);
+  // A ?comment= link: show its thread, and its block once the page's bridge is listening.
+  const linkedBlock = props.threads.find((each) => each.id === props.focusThread)?.anchor?.block;
+  const pendingFocus = useRef(linkedBlock);
+  const onReady = () => {
+    if (pendingFocus.current) frame.current?.focus(pendingFocus.current);
+    pendingFocus.current = undefined;
+  };
 
   const openThreads = props.threads.filter((thread) => !thread.resolved);
   const resolvedThreads = props.threads.filter((thread) => thread.resolved);
@@ -85,6 +87,7 @@ export function BcsReader(props: Props) {
           setOpen(true);
           if (thread) setFocused(thread.id);
         }}
+        onReady={onReady}
       />
       {open ? (
         <aside aria-label="Comments" className="w-[22rem] shrink-0 border-l flex flex-col min-h-0">
@@ -101,7 +104,11 @@ export function BcsReader(props: Props) {
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
-            {draft ? (
+            {props.commentsError ? (
+              <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-sm">
+                Comments could not be loaded: {props.commentsError}
+              </p>
+            ) : draft ? (
               <Composer
                 key={`${draft.block ?? "page"}`}
                 action={props.addComment}
@@ -114,12 +121,20 @@ export function BcsReader(props: Props) {
                 Comment on this page
               </Button>
             )}
-            {props.blocks.length > 0 && !draft && (
+            {props.blocks.length > 0 && !draft && !props.commentsError && (
               <p className="text-xs text-muted-foreground">
-                Or hover a paragraph, list item or diagram and click &ldquo;+ Comment&rdquo;.
+                Or hover a paragraph, list item or diagram and click &ldquo;+ Comment&rdquo;, or{" "}
+                <button
+                  type="button"
+                  onClick={() => frame.current?.pick()}
+                  className="underline hover:text-foreground"
+                >
+                  pick a part with the keyboard
+                </button>{" "}
+                (Tab between parts, Enter to comment, Escape to stop).
               </p>
             )}
-            {openThreads.length === 0 && !draft && (
+            {openThreads.length === 0 && !draft && !props.commentsError && (
               <p className="text-sm text-muted-foreground">No open comments on this page.</p>
             )}
             {openThreads.map((thread) => (

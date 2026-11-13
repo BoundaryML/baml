@@ -525,7 +525,9 @@ export const slackView = internalQuery({
       .query("bcsComments")
       .withIndex("by_doc", (q) => q.eq("docId", doc._id))
       .collect();
-    const openComments = comments.filter((each) => !each.parentId && !each.resolved).length;
+    // Shown once a proposal has threads, then kept, so resolving the last one shows 0.
+    const threads = comments.filter((each) => !each.parentId);
+    const openComments = threads.length > 0 ? threads.filter((each) => !each.resolved).length : undefined;
     const comment = args.commentId ? comments.find((each) => each._id === args.commentId) : undefined;
     const thread = comment?.parentId ? comments.find((each) => each._id === comment.parentId) : comment;
     const outline = outlineOf((await versionRow(ctx, doc._id, doc.currentVersion)) ?? {}, doc.title);

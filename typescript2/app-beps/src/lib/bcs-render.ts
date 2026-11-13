@@ -200,26 +200,41 @@ function withoutPositions(node: unknown): unknown {
  * block again in later versions as long as the block's text is unchanged. Returns the ids.
  */
 function markBlocks(tree: Root): string[] {
-  const ids: string[] = [];
-  const seen = new Map<string, number>();
+  const found: { node: Element; key: string }[] = [];
   const walk = (node: Root | Element) => {
     for (const child of node.children) {
       if (child.type !== "element" || child.tagName === "style" || child.tagName === "script") continue;
       if (BLOCK_TAGS.has(child.tagName)) {
-        const words = text(child).replace(/\s+/g, " ").trim().slice(0, 400);
-        const key = `${child.tagName}:${words || JSON.stringify(withoutPositions(child)).slice(0, 2000)}`;
-        const base = `${child.tagName}-${hash(key)}`;
-        const count = seen.get(base) ?? 0;
-        seen.set(base, count + 1);
-        const id = count === 0 ? base : `${base}-${count + 1}`;
-        child.properties.dataBcsBlock = id;
-        ids.push(id);
+        // The whole text, so an edit anywhere in the block makes it a different block.
+        const words = text(child).replace(/\s+/g, " ").trim();
+        found.push({
+          node: child,
+          key: `${child.tagName}:${words || JSON.stringify(withoutPositions(child))}`,
+        });
         continue;
       }
       walk(child);
     }
   };
   walk(tree);
+  const repeats = new Map<string, number>();
+  for (const block of found) repeats.set(block.key, (repeats.get(block.key) ?? 0) + 1);
+  const ids: string[] = [];
+  const used = new Map<string, number>();
+  found.forEach((block, index) => {
+    // A block whose text repeats ("TBD" twice) is told apart by its neighbours, so inserting
+    // another copy elsewhere does not move comments onto the wrong one.
+    const context =
+      (repeats.get(block.key) ?? 0) > 1
+        ? `|${found[index - 1]?.key ?? ""}|${found[index + 1]?.key ?? ""}`
+        : "";
+    const base = `${block.node.tagName}-${hash(block.key + context)}`;
+    const count = used.get(base) ?? 0;
+    used.set(base, count + 1);
+    const id = count === 0 ? base : `${base}-${count + 1}`;
+    block.node.properties.dataBcsBlock = id;
+    ids.push(id);
+  });
   return ids;
 }
 
@@ -254,11 +269,11 @@ const FRAGMENT_SCRIPT = `
  * Runs in the frame, beside the page's own scripts, and is all the frame and the site say to each
  * other. The frame cannot navigate the site, so a click on a link to another of the proposal's
  * pages asks the site to open it (the site checks it is one of this proposal's pages). Hovering a
- * block offers a Comment button, which asks the site to start a thread on it; the site sends back
- * how many open threads each block has, shown as badges, and asks the frame to scroll to a block
- * (FRAGMENT_SCRIPT handles #fragments). Shown on its own (the raw route), the page has no site
- * around it and does none of this. Its own styles cannot restyle these controls: they reset every
- * property inline.
+ * block (or, from the keyboard, picking one) offers a Comment button, which asks the site to start
+ * a thread on it; the site sends back how many open threads each block has, shown as badges, and
+ * asks the frame to scroll to a block (FRAGMENT_SCRIPT handles #fragments). Shown on its own (the
+ * raw route), the page has no site around it and does none of this. Its own styles cannot restyle
+ * these controls: they reset every property inline.
  */
 const BRIDGE_SCRIPT = `
 (function () {
@@ -343,6 +358,48 @@ const BRIDGE_SCRIPT = `
     send({ type: "bcs-comment", block: current.getAttribute("data-bcs-block"), text: words.slice(0, 280) });
   });
 
+  // Keyboard: the site asks to pick a part; blocks become focusable until Escape, Tab moves between
+  // them, the focused one shows + Comment, and Enter comments on it.
+  var picking = false;
+  function stopPicking() {
+    picking = false;
+    var all = document.querySelectorAll("[data-bcs-pick]");
+    for (var i = 0; i < all.length; i++) {
+      all[i].removeAttribute("tabindex");
+      all[i].removeAttribute("data-bcs-pick");
+    }
+    add.style.display = "none";
+  }
+  function startPicking() {
+    var all = document.querySelectorAll("[data-bcs-block]");
+    if (!all.length) return;
+    picking = true;
+    for (var i = 0; i < all.length; i++) {
+      if (!all[i].hasAttribute("tabindex")) {
+        all[i].setAttribute("tabindex", "0");
+        all[i].setAttribute("data-bcs-pick", "");
+      }
+    }
+    all[0].focus();
+  }
+  document.addEventListener("focusin", function (event) {
+    var block = blockOf(event.target);
+    if (!block) return;
+    current = block;
+    place(add, block, counts[block.getAttribute("data-bcs-block")] ? 58 : 0);
+  });
+  document.addEventListener("keydown", function (event) {
+    if (!picking) return;
+    if (event.key === "Escape") {
+      stopPicking();
+    } else if (event.key === "Enter" && event.target && event.target.hasAttribute && event.target.hasAttribute("data-bcs-pick")) {
+      event.preventDefault();
+      current = event.target;
+      add.click();
+      stopPicking();
+    }
+  });
+
   function flash(block) {
     var outline = block.style.outline;
     var offset = block.style.outlineOffset;
@@ -354,7 +411,9 @@ const BRIDGE_SCRIPT = `
   window.addEventListener("message", function (event) {
     if (event.source !== window.parent || !event.data) return;
     var data = event.data;
-    if (data.type === "bcs-marks" && data.counts && typeof data.counts === "object") {
+    if (data.type === "bcs-pick") {
+      startPicking();
+    } else if (data.type === "bcs-marks" && data.counts && typeof data.counts === "object") {
       counts = data.counts;
       drawBadges();
     } else if (data.type === "bcs-focus") {

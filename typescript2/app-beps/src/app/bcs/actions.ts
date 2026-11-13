@@ -262,9 +262,10 @@ export async function addComment(
   return { posted: Date.now() };
 }
 
-/** Replies to the thread named by the form's commentId. */
+/** Replies to the thread named by the form's commentId, written while reading `version`. */
 export async function replyToComment(
   number: number,
+  version: number,
   _previous: CommentState,
   form: FormData
 ): Promise<CommentState> {
@@ -276,6 +277,7 @@ export async function replyToComment(
       secret,
       number,
       commentId,
+      version,
       body,
       author: viewer.login,
       authorGithubId: viewer.githubId,

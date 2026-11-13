@@ -34,7 +34,18 @@ export default async function BcsProposal({
   const number = Number((await params).number);
   const query = await searchParams;
   const asked = Number(query.v);
+  const askedVersion = Number.isInteger(asked) && asked > 0 ? asked : undefined;
   if (!Number.isInteger(number)) notFound();
+  // A ?comment= link opens its thread's page, whatever page the link named (or none).
+  const linked = query.comment
+    ? await bcsCall((convex, secret) =>
+        convex.query(api.bcsComments.locate, { secret, number, commentId: query.comment! })
+      )
+    : undefined;
+  const thread = linked?.ok ? linked.value : null;
+  if (thread && thread.page !== (query.page ?? "")) {
+    redirect(bcsPagePath(number, thread.page, askedVersion, thread.id));
+  }
   const found = await bcsCall((convex, secret) =>
     convex.query(api.bcs.get, {
       secret,
@@ -45,9 +56,13 @@ export default async function BcsProposal({
   );
   if (!found.ok) return <BcsUnavailable message={found.failure.message} />;
   const proposal = found.value;
-  // A sub-page the chosen version does not have (added later, or removed since): open its main page.
+  // A sub-page the chosen version does not have (added later, or removed since): a linked thread's
+  // own version has it; otherwise open the chosen version's main page.
   if (!proposal && query.page) {
-    redirect(bcsPagePath(number, "", Number.isInteger(asked) && asked > 0 ? asked : undefined));
+    if (thread && thread.page === query.page && thread.version !== askedVersion) {
+      redirect(bcsPagePath(number, thread.page, thread.version, thread.id));
+    }
+    redirect(bcsPagePath(number, "", askedVersion));
   }
   if (!proposal) notFound();
   const old = proposal.version !== proposal.currentVersion;
@@ -58,8 +73,8 @@ export default async function BcsProposal({
   const comments = await bcsCall((convex, secret) =>
     convex.query(api.bcsComments.list, { secret, number, page: page.slug })
   );
-  if (!comments.ok) return <BcsUnavailable message={comments.failure.message} />;
-  const { threads, openByPage } = comments.value ?? { threads: [], openByPage: {} };
+  // Without its comments the proposal still reads; the panel says why they are missing.
+  const { threads, openByPage } = (comments.ok && comments.value) || { threads: [], openByPage: {} };
   const rendered = await renderBcsPage({
     format: page.format,
     content: page.content,
@@ -205,8 +220,9 @@ export default async function BcsProposal({
           version={proposal.version}
           threads={threads}
           focusThread={query.comment}
+          commentsError={comments.ok ? undefined : comments.failure.message}
           addComment={addComment.bind(null, proposal.number, page.slug, proposal.version)}
-          reply={replyToComment.bind(null, proposal.number)}
+          reply={replyToComment.bind(null, proposal.number, proposal.version)}
           resolve={setCommentResolved.bind(null, proposal.number)}
         />
       </div>

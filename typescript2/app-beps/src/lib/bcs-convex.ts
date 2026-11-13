@@ -54,11 +54,15 @@ export const BCS_STATUSES = [
 ] as const;
 export type BcsStatus = (typeof BCS_STATUSES)[number];
 
-/** A proposal page's address on the site: the main page, or a sub-page by slug, at a version. */
-export function bcsPagePath(number: number, slug: string, version?: number): string {
+/**
+ * A proposal page's address on the site: the main page, or a sub-page by slug, at a version, and
+ * optionally with a comment thread open.
+ */
+export function bcsPagePath(number: number, slug: string, version?: number, comment?: string): string {
   const query = new URLSearchParams();
   if (slug) query.set("page", slug);
   if (version !== undefined) query.set("v", String(version));
+  if (comment) query.set("comment", comment);
   const search = query.toString();
   return `/bcs/${number}${search ? `?${search}` : ""}`;
 }

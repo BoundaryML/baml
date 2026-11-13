@@ -79,10 +79,9 @@ export interface SlackComment {
   threadBody: string;
 }
 
+/** A link to a thread; the site finds its page and version, even after a page was removed. */
 function commentUrl(number: number, comment: SlackComment): string {
-  const query = new URLSearchParams({ comment: comment.threadId });
-  if (comment.page) query.set("page", comment.page);
-  return `${SITE_URL}/bcs/${number}?${query}`;
+  return `${SITE_URL}/bcs/${number}?comment=${comment.threadId}`;
 }
 
 /** A reply in the thread for a new comment or reply, quoting the block it is on. */
@@ -138,7 +137,7 @@ export function overviewBlocks(proposal: Overview, isNew: boolean): Block[] {
         { type: "mrkdwn", text: `*Authors:* ${escape(clip(proposal.authors.join(", "), 300))}` },
         { type: "mrkdwn", text: `*Version:* v${proposal.currentVersion}` },
         { type: "mrkdwn", text: `*Last updated:* ${slackDate(proposal.updatedAt)}` },
-        ...(proposal.openComments
+        ...(proposal.openComments !== undefined
           ? [{ type: "mrkdwn", text: `*Open comments:* ${proposal.openComments}` }]
           : []),
       ],

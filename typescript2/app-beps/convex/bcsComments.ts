@@ -67,6 +67,23 @@ export const list = query({
   },
 });
 
+/**
+ * Where a thread lives: its page, and the version it was started on (which has that page even if a
+ * later version removed it), so a bare ?comment= link can open the right page.
+ */
+export const locate = query({
+  args: { secret: v.string(), number: v.number(), commentId: v.string() },
+  handler: async (ctx, args) => {
+    requireServerSecret(args.secret);
+    const doc = await byNumber(ctx, args.number);
+    const id = ctx.db.normalizeId("bcsComments", args.commentId);
+    const found = doc && id ? await ctx.db.get(id) : null;
+    if (!doc || !found || found.docId !== doc._id) return null;
+    const thread = found.parentId ? await ctx.db.get(found.parentId) : found;
+    return thread ? { id: thread._id, page: thread.page, version: thread.version } : null;
+  },
+});
+
 async function commentOrFail(ctx: MutationCtx, id: string, docId: Id<"bcsDocs">) {
   const normalized = ctx.db.normalizeId("bcsComments", id);
   const comment = normalized ? await ctx.db.get(normalized) : null;
@@ -114,12 +131,16 @@ export const add = mutation({
   },
 });
 
-/** Replies to a thread; a reply to a reply joins the same thread. */
+/**
+ * Replies to a thread, written while reading `version`; a reply to a reply joins the same thread,
+ * and a reply to a resolved thread reopens it, since it asks for attention again.
+ */
 export const reply = mutation({
   args: {
     secret: v.string(),
     number: v.number(),
     commentId: v.string(),
+    version: v.optional(v.number()),
     body: v.string(),
     author: v.string(),
     authorGithubId: v.optional(v.string()),
@@ -131,10 +152,15 @@ export const reply = mutation({
     const target = await commentOrFail(ctx, args.commentId, doc._id);
     const thread = target.parentId ? await commentOrFail(ctx, target.parentId, doc._id) : target;
     const body = checkBody(args.body);
+    const version = args.version ?? doc.currentVersion;
+    if (!(await versionRow(ctx, doc._id, version))) fail("missing", "No such version.");
+    if (thread.resolved) {
+      await ctx.db.patch(thread._id, { resolved: false, resolvedBy: undefined, resolvedAt: undefined });
+    }
     const replyId = await ctx.db.insert("bcsComments", {
       docId: doc._id,
       page: thread.page,
-      version: doc.currentVersion,
+      version,
       parentId: thread._id,
       author: args.author,
       body,
