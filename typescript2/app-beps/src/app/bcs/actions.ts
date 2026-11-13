@@ -296,6 +296,7 @@ export async function addComment(
       page,
       version,
       anchor: block ? { block, text: String(form.get("blockText") ?? "") } : undefined,
+      type: commentType(form.get("type")),
       body,
       author: viewer.login,
       authorGithubId: viewer.githubId,
@@ -354,4 +355,97 @@ export async function setCommentResolved(
   if (!changed.ok) return { error: changed.failure.message };
   revalidatePath(`/bcs/${number}`);
   return { posted: Date.now() };
+}
+
+function commentType(value: FormDataEntryValue | null): "discussion" | "concern" | "question" {
+  return value === "concern" || value === "question" ? value : "discussion";
+}
+
+/** Rewrites the viewer's own comment named by the form's commentId. */
+export async function editComment(number: number, _previous: CommentState, form: FormData): Promise<CommentState> {
+  const viewer = await viewerOrFail();
+  const body = String(form.get("body") ?? "");
+  const edited = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsComments.edit, {
+      secret,
+      number,
+      commentId: String(form.get("commentId") ?? ""),
+      body,
+      type: form.has("type") ? commentType(form.get("type")) : undefined,
+      author: viewer.login,
+    })
+  );
+  if (!edited.ok) return { error: edited.failure.message, body };
+  revalidatePath(`/bcs/${number}`);
+  return { posted: Date.now() };
+}
+
+/** Deletes the viewer's own comment named by the form's commentId. */
+export async function deleteComment(number: number, _previous: CommentState, form: FormData): Promise<CommentState> {
+  const viewer = await viewerOrFail();
+  const removed = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsComments.remove, {
+      secret,
+      number,
+      commentId: String(form.get("commentId") ?? ""),
+      author: viewer.login,
+    })
+  );
+  if (!removed.ok) return { error: removed.failure.message };
+  revalidatePath(`/bcs/${number}`);
+  return { posted: Date.now() };
+}
+
+const REACTIONS = ["thumbsUp", "thumbsDown", "heart", "thinking"] as const;
+
+/** Adds or takes back the viewer's reaction (the form's reaction) on the form's commentId. */
+export async function toggleReaction(number: number, _previous: CommentState, form: FormData): Promise<CommentState> {
+  const viewer = await viewerOrFail();
+  const reaction = REACTIONS.find((each) => each === form.get("reaction"));
+  if (!reaction) return { error: "Unknown reaction." };
+  const toggled = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsComments.toggleReaction, {
+      secret,
+      number,
+      commentId: String(form.get("commentId") ?? ""),
+      reaction,
+      author: viewer.login,
+    })
+  );
+  if (!toggled.ok) return { error: toggled.failure.message };
+  revalidatePath(`/bcs/${number}`);
+  return { posted: Date.now() };
+}
+
+/** Takes or changes the viewer's stance on a version; "clear" withdraws it. */
+export async function setStance(
+  number: number,
+  version: number,
+  _previous: FormState,
+  form: FormData
+): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const choice = form.get("stance");
+  const comment = String(form.get("comment") ?? "");
+  const saved =
+    choice === "clear"
+      ? await bcsCall((convex, secret) =>
+          convex.mutation(api.bcsStances.clear, { secret, number, version, author: viewer.login })
+        )
+      : choice === "support" || choice === "neutral" || choice === "oppose"
+        ? await bcsCall((convex, secret) =>
+            convex.mutation(api.bcsStances.set, {
+              secret,
+              number,
+              version,
+              stance: choice,
+              comment,
+              author: viewer.login,
+            })
+          )
+        : null;
+  if (!saved) return { error: "Choose support, neutral or oppose.", attempt: Date.now() };
+  if (!saved.ok) return { error: saved.failure.message, values: { note: comment }, attempt: Date.now() };
+  revalidatePath(`/bcs/${number}`);
+  return { attempt: Date.now() };
 }

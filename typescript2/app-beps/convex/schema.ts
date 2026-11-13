@@ -485,6 +485,20 @@ export default defineSchema({
     parentId: v.optional(v.id("bcsComments")),
     author: v.string(),
     body: v.string(),
+    // A thread's kind, as on BEPs: discussion (the default), a blocking concern, or a question.
+    type: v.optional(commentType),
+    // GitHub logins per reaction.
+    reactions: v.optional(
+      v.object({
+        thumbsUp: v.optional(v.array(v.string())),
+        thumbsDown: v.optional(v.array(v.string())),
+        heart: v.optional(v.array(v.string())),
+        thinking: v.optional(v.array(v.string())),
+      })
+    ),
+    editedAt: v.optional(v.number()),
+    // A thread's first comment deleted by its author while it had replies: the replies stay.
+    deleted: v.optional(v.boolean()),
     resolved: v.boolean(),
     resolvedBy: v.optional(v.string()),
     resolvedAt: v.optional(v.number()),
@@ -492,4 +506,18 @@ export default defineSchema({
   })
     .index("by_doc", ["docId"])
     .index("by_parent", ["parentId"]),
+
+  // Where each member stands on a version of a proposal, as BEP stances do: support, neutral or
+  // oppose, with an optional reason. One per member per version.
+  bcsStances: defineTable({
+    docId: v.id("bcsDocs"),
+    version: v.number(),
+    author: v.string(),
+    stance: userStance,
+    comment: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_doc_version", ["docId", "version"])
+    .index("by_doc_version_author", ["docId", "version", "author"]),
 });

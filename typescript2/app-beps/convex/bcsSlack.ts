@@ -78,6 +78,7 @@ export interface SlackComment {
   quote?: string;
   threadAuthor: string;
   threadBody: string;
+  type?: string;
 }
 
 /** A link to a thread; the site finds its page and version, even after a page was removed. */
@@ -85,12 +86,20 @@ function commentUrl(number: number, comment: SlackComment): string {
   return `${SITE_URL}/bcs/${number}?comment=${comment.threadId}`;
 }
 
+/** How a new thread reads in Slack, by its kind. */
+const COMMENT_KINDS: Record<string, { emoji: string; verb: string }> = {
+  discussion: { emoji: "💬", verb: "commented" },
+  concern: { emoji: "⚠️", verb: "raised a concern" },
+  question: { emoji: "❓", verb: "asked a question" },
+};
+
 /** A reply in the thread for a new comment or reply, quoting the block it is on. */
 export function commentBlocks(proposal: Overview, who: string, comment: SlackComment): Block[] {
   const where = comment.page ? ` on *${escape(clip(comment.pageTitle, 100))}*` : "";
+  const kind = COMMENT_KINDS[comment.type ?? "discussion"] ?? COMMENT_KINDS.discussion;
   const heading = comment.isReply
     ? `↪️ ${who} replied to *${escape(comment.threadAuthor)}*${where}`
-    : `💬 ${who} commented${where}`;
+    : `${kind.emoji} ${who} ${kind.verb}${where}`;
   const quote = comment.isReply ? clip(comment.threadBody, 150) : comment.quote;
   const blocks: Block[] = [
     {
