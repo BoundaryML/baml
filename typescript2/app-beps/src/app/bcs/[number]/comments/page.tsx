@@ -8,6 +8,7 @@ import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
 import { TeamOnly } from "../../team-only";
 import { BcsUnavailable } from "../../unavailable";
 import { KindBadge } from "../reader";
+import { GitHubAvatar } from "../../avatar";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "BCS proposal comments" };
@@ -96,9 +97,12 @@ export default async function BcsComments({
                   href={bcsPagePath(number, thread.page, undefined, thread.id)}
                   className="block rounded-lg border p-3 hover:bg-muted/50 space-y-1.5"
                 >
-                  <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                     <KindBadge type={thread.type} />
-                    <span className="font-medium text-foreground">{thread.author}</span>
+                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                      <GitHubAvatar login={thread.author} />
+                      {thread.author}
+                    </span>
                     <span>on {thread.pageTitle}</span>
                     <span>{formatDistanceToNow(thread.createdAt, { addSuffix: true })}</span>
                     {thread.resolved && <span>· resolved{thread.resolvedBy ? ` by ${thread.resolvedBy}` : ""}</span>}

@@ -9,6 +9,7 @@ import { AlertCircle, Brain, Heart, HelpCircle, ThumbsDown, ThumbsUp } from "luc
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CommentState } from "../actions";
+import { GitHubAvatar } from "../avatar";
 import { BcsFrame, type BcsFrameHandle } from "./frame";
 
 export type Reactions = {
@@ -328,9 +329,12 @@ function TypeSelect({ value = "discussion" }: { value?: string }) {
 
 function Meta({ comment, version, thread }: { comment: Comment; version: number; thread?: boolean }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+      <span className="inline-flex items-center gap-1.5">
+        <GitHubAvatar login={comment.author} size={thread ? "md" : "sm"} />
+        <span className="font-medium text-foreground">{comment.author}</span>
+      </span>
       {thread && <KindBadge type={comment.type} />}
-      <span className="font-medium text-foreground">{comment.author}</span>
       <span>{formatDistanceToNow(comment.createdAt, { addSuffix: true })}</span>
       {comment.editedAt && <span title={new Date(comment.editedAt).toLocaleString()}>edited</span>}
       {comment.version !== version && <span>on v{comment.version}</span>}

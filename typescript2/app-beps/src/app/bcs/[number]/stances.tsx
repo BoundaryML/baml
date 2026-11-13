@@ -8,6 +8,7 @@ import { Minus, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { FormState } from "../actions";
+import { GitHubAvatar } from "../avatar";
 
 export type Stance = {
   author: string;
@@ -74,8 +75,11 @@ export function StancePanel({
           <ul className="space-y-2 max-h-64 overflow-y-auto">
             {stances.map((each) => (
               <li key={each.author} className="text-sm">
-                <StanceIcon stance={each.stance} />{" "}
-                <span className="font-medium">{each.author}</span>{" "}
+                <span className="inline-flex items-center gap-1.5 align-middle">
+                  <StanceIcon stance={each.stance} />
+                  <GitHubAvatar login={each.author} size="sm" />
+                  <span className="font-medium">{each.author}</span>
+                </span>{" "}
                 <span className="text-xs text-muted-foreground">
                   {LABELS[each.stance].label.toLowerCase()} ·{" "}
                   {formatDistanceToNow(each.updatedAt, { addSuffix: true })}
