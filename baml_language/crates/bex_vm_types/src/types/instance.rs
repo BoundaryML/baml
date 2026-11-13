@@ -8,6 +8,10 @@
 //! the header is its class pointer's bits, with bit 0 the BEP-042 cleanup
 //! latch. Other kinds are reserved for objects that move into cell spaces.
 //!
+#![allow(
+    clippy::inline_always,
+    reason = "every accessor is a compiled field access's fast path"
+)]
 //! Every slot is one atomic word, since an instance can be shared across
 //! `spawn` fibers. A shared access orders like [`AtomicValueSlot`](crate::AtomicValueSlot)
 //! whatever the slot's kind, so a field still publishes the writes before
@@ -48,6 +52,7 @@ pub enum SlotKind {
 impl SlotKind {
     /// The slot a field of type `ty` gets.
     #[must_use]
+    #[inline(always)]
     pub fn of(ty: &RuntimeTy) -> Self {
         match ty {
             RuntimeTy::Int => Self::Int,
@@ -73,6 +78,7 @@ pub struct ClassLayout<'a> {
 
 impl<'a> ClassLayout<'a> {
     #[must_use]
+    #[inline(always)]
     pub fn of(class: &'a Class) -> Self {
         Self {
             fields: &class.fields,
@@ -82,22 +88,26 @@ impl<'a> ClassLayout<'a> {
 
     /// Words in an instance cell, the header included.
     #[must_use]
+    #[inline(always)]
     pub fn words(self) -> usize {
         self.first_field + self.fields.len()
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn field_count(self) -> usize {
         self.fields.len()
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn kind(self, field: usize) -> SlotKind {
         SlotKind::of(&self.fields[field].field_type)
     }
 
     /// The word holding `field`.
     #[must_use]
+    #[inline(always)]
     pub fn slot(self, field: usize) -> usize {
         self.first_field + field
     }
@@ -157,6 +167,7 @@ impl InstanceRef {
     ///
     /// As for [`HeapPtr::get`]: the cell must be live.
     #[must_use]
+    #[inline(always)]
     pub unsafe fn of(ptr: HeapPtr) -> Option<Self> {
         // SAFETY: the caller guarantees the cell is live.
         ptr.is_instance()
@@ -169,6 +180,7 @@ impl InstanceRef {
     ///
     /// `cell` is a live instance cell, or one being built.
     #[must_use]
+    #[inline(always)]
     pub unsafe fn from_cell(cell: *mut AtomicU64) -> Self {
         Self {
             cell: NonNull::new(cell).expect("a cell is never null"),
@@ -177,6 +189,7 @@ impl InstanceRef {
 
     /// The header of a fresh cell of `class`.
     #[must_use]
+    #[inline(always)]
     pub fn header(class: HeapPtr) -> u64 {
         let bits = class.as_ptr() as u64;
         debug_assert_eq!(bits & HEADER_FLAGS, 0, "class {class:?} is misaligned");
@@ -185,6 +198,7 @@ impl InstanceRef {
 
     /// The class pointer a header names, as a [`Value`] holds one.
     #[must_use]
+    #[inline(always)]
     pub fn class_of_header(header: u64) -> HeapPtr {
         // SAFETY: a header holds its class pointer's bits.
         let class = unsafe { Value::from_bits(header & !HEADER_FLAGS) }.as_object_ptr();
@@ -193,6 +207,7 @@ impl InstanceRef {
 
     /// The `HeapPtr` naming this instance.
     #[must_use]
+    #[inline(always)]
     pub fn ptr(self) -> HeapPtr {
         #[cfg(not(feature = "heap_debug"))]
         // SAFETY: `self` names an instance cell.
@@ -210,23 +225,27 @@ impl InstanceRef {
     /// `slot` is within the cell: below its class layout's
     /// [`words`](ClassLayout::words).
     #[must_use]
+    #[inline(always)]
     pub unsafe fn word(self, slot: usize) -> &'static AtomicU64 {
         // SAFETY: the cell is live, and the caller keeps `slot` within it.
         unsafe { &*self.cell.as_ptr().add(slot) }
     }
 
+    #[inline(always)]
     fn header_word(self) -> &'static AtomicU64 {
         // SAFETY: every cell has its header.
         unsafe { self.word(0) }
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn class(self) -> HeapPtr {
         Self::class_of_header(self.header_word().load(Ordering::Relaxed))
     }
 
     /// Whether this is an instance of exactly `class`, from its header alone.
     #[must_use]
+    #[inline(always)]
     pub fn is_of(self, class: HeapPtr) -> bool {
         self.header_word().load(Ordering::Relaxed) & !HEADER_FLAGS == Self::header(class)
     }
@@ -262,6 +281,7 @@ impl InstanceRef {
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn class_object(self) -> &'static Class {
         // SAFETY: an instance keeps its class alive.
         match unsafe { self.class().get() } {
@@ -271,11 +291,13 @@ impl InstanceRef {
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn layout(self) -> ClassLayout<'static> {
         ClassLayout::of(self.class_object())
     }
 
     #[must_use]
+    #[inline(always)]
     pub fn field_len(self) -> usize {
         self.layout().field_count()
     }
@@ -318,18 +340,28 @@ impl InstanceRef {
 
     /// `field`, ordered for an instance other threads can reach.
     #[must_use]
+    #[inline(always)]
     pub fn load(self, field: usize) -> Field {
         self.load_ordered(field, Ordering::Acquire)
     }
 
     /// [`Self::load`] on an instance no other thread can reach.
     #[must_use]
+    #[inline(always)]
     pub fn load_relaxed(self, field: usize) -> Field {
         self.load_ordered(field, Ordering::Relaxed)
     }
 
+    #[inline(always)]
     fn load_ordered(self, field: usize, order: Ordering) -> Field {
-        let layout = self.layout();
+        self.load_in(self.layout(), field, order)
+    }
+
+    /// [`Self::load`] with `order`, for a caller that already holds the
+    /// instance's `layout`.
+    #[must_use]
+    #[inline(always)]
+    pub fn load_in(self, layout: ClassLayout<'_>, field: usize, order: Ordering) -> Field {
         // SAFETY: the layout places `field` within the cell.
         let bits = unsafe { self.word(layout.slot(field)) }.load(order);
         match layout.kind(field) {
@@ -375,22 +407,37 @@ impl InstanceRef {
     /// Store `value` into `field`, ordered for an instance other threads can
     /// reach. A value of the wrong kind for the slot is refused, never
     /// stored.
+    #[inline(always)]
     pub fn store(self, field: usize, value: Value) -> Result<(), SlotKindMismatch> {
         self.store_ordered(field, value, Ordering::Release)
     }
 
     /// [`Self::store`] on an instance no other thread can reach.
+    #[inline(always)]
     pub fn store_relaxed(self, field: usize, value: Value) -> Result<(), SlotKindMismatch> {
         self.store_ordered(field, value, Ordering::Relaxed)
     }
 
+    #[inline(always)]
     fn store_ordered(
         self,
         field: usize,
         value: Value,
         order: Ordering,
     ) -> Result<(), SlotKindMismatch> {
-        let layout = self.layout();
+        self.store_in(self.layout(), field, value, order)
+    }
+
+    /// [`Self::store`] with `order`, for a caller that already holds the
+    /// instance's `layout`.
+    #[inline(always)]
+    pub fn store_in(
+        self,
+        layout: ClassLayout<'_>,
+        field: usize,
+        value: Value,
+        order: Ordering,
+    ) -> Result<(), SlotKindMismatch> {
         let kind = layout.kind(field);
         let bits = slot_bits(kind, value).ok_or(SlotKindMismatch { field, kind, value })?;
         // SAFETY: the layout places `field` within the cell.
@@ -400,6 +447,7 @@ impl InstanceRef {
 }
 
 /// The bits a slot of `kind` holds for `value`, if it is of that kind.
+#[inline(always)]
 fn slot_bits(kind: SlotKind, value: Value) -> Option<u64> {
     match kind {
         SlotKind::Int => value.as_int().map(i64::cast_unsigned),

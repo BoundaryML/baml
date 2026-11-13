@@ -20,7 +20,10 @@
 
 #![allow(unsafe_code)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, atomic::Ordering},
+};
 
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
@@ -93,9 +96,9 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Finalizable, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, Field, FunctionKind, FutureRead, GlobalIndex, HeapPtr, InstanceRef, Object,
-    ObjectIndex, ObjectPool, ObjectType, PanicClass, PermitProof, RustDataArc as _, SlotKind,
-    SlotKindMismatch, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    BinOp, ClassLayout, CmpOp, Field, FunctionKind, FutureRead, GlobalIndex, HeapPtr, InstanceRef,
+    Object, ObjectIndex, ObjectPool, ObjectType, PanicClass, PermitProof, RustDataArc as _,
+    SlotKind, SlotKindMismatch, StackIndex, UnaryOp, Value, Variant, VmGlobals,
     bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Type, TypeValue,
@@ -3408,6 +3411,7 @@ impl BexVm {
     }
 
     /// `field` as a value, boxing a raw float.
+    #[inline]
     pub fn field_to_value(&mut self, field: Field) -> Value {
         match field {
             Field::Value(value) => value,
@@ -6347,23 +6351,28 @@ impl BexVm {
     /// Field `index` of the instance `value` names, as a value: the
     /// interpreter's field load. `thread_local` loads without ordering, for
     /// an instance escape analysis proved no other thread can reach.
+    #[allow(clippy::inline_always, reason = "the generic field read's fast path")]
+    #[inline(always)]
     pub(crate) fn load_instance_field(
         &mut self,
         value: Value,
         index: usize,
         thread_local: bool,
     ) -> Result<Value, VmError> {
-        let instance = self.checked_field(value, index)?;
-        let field = if thread_local {
-            instance.load_relaxed(index)
+        let (instance, layout) = self.checked_field(value, index)?;
+        let order = if thread_local {
+            Ordering::Relaxed
         } else {
-            instance.load(index)
+            Ordering::Acquire
         };
+        let field = instance.load_in(layout, index, order);
         Ok(self.field_to_value(field))
     }
 
     /// Store `new_value` into field `index` of the instance `value` names. A
     /// value of the wrong kind for a raw slot is a type error.
+    #[allow(clippy::inline_always, reason = "the generic field store's fast path")]
+    #[inline(always)]
     pub(crate) fn store_instance_field(
         &mut self,
         value: Value,
@@ -6371,24 +6380,47 @@ impl BexVm {
         new_value: Value,
         thread_local: bool,
     ) -> Result<(), VmError> {
-        let instance = self.checked_field(value, index)?;
-        let stored = if thread_local {
-            instance.store_relaxed(index, new_value)
+        let (instance, layout) = self.checked_field(value, index)?;
+        let order = if thread_local {
+            Ordering::Relaxed
         } else {
-            instance.store(index, new_value)
+            Ordering::Release
         };
-        stored.map_err(|mismatch| self.slot_kind_error(mismatch).into())
+        instance
+            .store_in(layout, index, new_value, order)
+            .map_err(|mismatch| self.slot_kind_error(mismatch).into())
     }
 
-    /// The instance `value` names, once `index` is known to be one of its
-    /// fields.
-    fn checked_field(&mut self, value: Value, index: usize) -> Result<InstanceRef, VmError> {
-        let instance = self.as_instance(&value)?;
-        let field_count = instance.field_len();
-        if index >= field_count {
-            return Err(self.invalid_field_access_error(index, field_count));
+    /// The instance `value` names and its layout, once `index` is known to
+    /// be one of its fields.
+    #[allow(
+        clippy::inline_always,
+        reason = "every generic field access starts here"
+    )]
+    #[inline(always)]
+    fn checked_field(
+        &mut self,
+        value: Value,
+        index: usize,
+    ) -> Result<(InstanceRef, ClassLayout<'static>), VmError> {
+        let Some(instance) = value.as_object_ptr().and_then(|ptr| self.get_instance(ptr)) else {
+            return Err(self.not_an_instance(value));
+        };
+        let layout = instance.layout();
+        if index >= layout.field_count() {
+            return Err(self.invalid_field_access_error(index, layout.field_count()));
         }
-        Ok(instance)
+        Ok((instance, layout))
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn not_an_instance(&self, value: Value) -> VmError {
+        VmInternalError::TypeError {
+            expected: Type::Object(ObjectType::Instance),
+            got: self.type_of(&value),
+        }
+        .into()
     }
 
     /// A store of a value of the wrong kind into a raw slot: refused, never
@@ -6406,6 +6438,8 @@ impl BexVm {
         }
     }
 
+    #[cold]
+    #[inline(never)]
     fn invalid_field_access_error(&mut self, field_index: usize, field_count: usize) -> VmError {
         VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::InvalidFieldAccess {
             field_index,

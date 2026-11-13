@@ -694,7 +694,11 @@ impl BexHeap {
     /// # Panics
     ///
     /// Panics if the index is out of bounds.
-    #[inline]
+    #[allow(
+        clippy::inline_always,
+        reason = "names a class on every compiled field access"
+    )]
+    #[inline(always)]
     pub fn compile_time_ptr(&self, index: usize) -> HeapPtr {
         assert!(
             index < self.compile_time.len(),

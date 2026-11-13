@@ -238,6 +238,8 @@ impl BexVm {
         self.load_field_in::<true>(instance, idx)
     }
 
+    #[allow(clippy::inline_always, reason = "the generic field read's fast path")]
+    #[inline(always)]
     fn load_field_in<const THREAD_LOCAL: bool>(
         &mut self,
         instance: Value,
@@ -269,6 +271,8 @@ impl BexVm {
         self.store_field_in::<true>(instance, idx, new_value)
     }
 
+    #[allow(clippy::inline_always, reason = "the generic field store's fast path")]
+    #[inline(always)]
     fn store_field_in<const THREAD_LOCAL: bool>(
         &mut self,
         instance: Value,
