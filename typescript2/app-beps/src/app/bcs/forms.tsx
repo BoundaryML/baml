@@ -203,7 +203,7 @@ export function RemovePageForm({
     >
       <h2 className="font-medium">Remove this page</h2>
       <Refused state={state} />
-      <input type="hidden" name="baseVersion" value={baseVersion} />
+      <input type="hidden" name="baseVersion" value={state.baseVersion ?? baseVersion} />
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
         Remove &ldquo;{title}&rdquo;
       </Button>

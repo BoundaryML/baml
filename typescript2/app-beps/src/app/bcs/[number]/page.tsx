@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { format } from "date-fns";
 import { api } from "../../../../convex/_generated/api";
 import { BepStatusBadge } from "@/components/bep/bep-status";
@@ -39,6 +39,10 @@ export default async function BcsProposal({
   );
   if (!found.ok) return <BcsUnavailable message={found.failure.message} />;
   const proposal = found.value;
+  // A sub-page the chosen version does not have (added later, or removed since): open its main page.
+  if (!proposal && query.page) {
+    redirect(bcsPagePath(number, "", Number.isInteger(asked) && asked > 0 ? asked : undefined));
+  }
   if (!proposal) notFound();
   const old = proposal.version !== proposal.currentVersion;
   // Links keep the version being read; the current one needs no ?v.

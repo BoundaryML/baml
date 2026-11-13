@@ -25,6 +25,13 @@ export function BcsFrame({ title, document, number }: { title: string; document:
       const target = new URL(data.href, window.location.origin);
       if (target.origin !== window.location.origin || target.pathname !== `/bcs/${number}`) return;
       router.push(target.pathname + target.search + target.hash);
+      // The same page and version: the frame does not reload, so scroll it now.
+      if (target.search === window.location.search && target.hash) {
+        frame.current?.contentWindow?.postMessage(
+          { type: "bcs-scroll", id: decodeURIComponent(target.hash.slice(1)) },
+          "*"
+        );
+      }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);

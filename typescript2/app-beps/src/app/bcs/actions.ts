@@ -130,7 +130,8 @@ export async function savePage(
   if (!saved.ok) {
     return {
       error: refusal(saved.failure),
-      values: { ...source, note, parentSlug },
+      // "" keeps an explicit top-level choice, so the form shows it again.
+      values: { ...source, note, parentSlug: parentSlug ?? "" },
       baseVersion: saved.failure.kind === "stale" ? saved.failure.currentVersion : undefined,
       attempt: Date.now(),
     };
@@ -160,7 +161,7 @@ export async function addPage(number: number, _previous: FormState, form: FormDa
   if (!saved.ok) {
     return {
       error: refusal(saved.failure),
-      values: { ...source, note, slug, parentSlug },
+      values: { ...source, note, slug, parentSlug: parentSlug ?? "" },
       baseVersion: saved.failure.kind === "stale" ? saved.failure.currentVersion : undefined,
       attempt: Date.now(),
     };
@@ -188,7 +189,13 @@ export async function removePage(
       note: String(form.get("note") ?? "") || undefined,
     })
   );
-  if (!saved.ok) return { error: refusal(saved.failure), attempt: Date.now() };
+  if (!saved.ok) {
+    return {
+      error: refusal(saved.failure),
+      baseVersion: saved.failure.kind === "stale" ? saved.failure.currentVersion : undefined,
+      attempt: Date.now(),
+    };
+  }
   revalidatePath(`/bcs/${number}`);
   redirect(bcsPagePath(number, ""));
 }

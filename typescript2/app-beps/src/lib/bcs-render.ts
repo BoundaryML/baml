@@ -30,13 +30,16 @@ export async function renderBcsPage(options: RenderOptions): Promise<string> {
   if (options.format === "html") {
     // A page written without a doctype (an artifact, say) was designed in standards mode; on its
     // own a browser would render it in quirks mode, with different table and line spacing.
-    return /^\s*(<!--[\s\S]*?-->\s*)*<!doctype/i.test(options.content)
+    const page = /^\s*(<!--[\s\S]*?-->\s*)*<!doctype/i.test(options.content)
       ? options.content
       : `<!doctype html>\n${options.content}`;
+    // Keep its #links inside the frame (see FRAGMENT_SCRIPT): before </body>, else at the end.
+    const script = `<script>${FRAGMENT_SCRIPT}</script>`;
+    const end = page.search(/<\/body>/i);
+    return end >= 0 ? page.slice(0, end) + script + page.slice(end) : page + script;
   }
-  const state = { mermaid: false };
   // A page that brings its own stylesheet is laid out by it alone: the defaults would fight it.
-  const ownStyles = /<style[\s>]/i.test(options.content);
+  const state = { mermaid: false, ownStyles: false };
   const body = String(
     await unified()
       .use(remarkParse)
@@ -54,13 +57,13 @@ export async function renderBcsPage(options: RenderOptions): Promise<string> {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(options.title)}</title>
 <base target="_blank">
-${ownStyles ? "" : `<style>${DEFAULT_CSS}</style>`}
+${state.ownStyles ? "" : `<style>${DEFAULT_CSS}</style>`}
 </head>
 <body>
-<article${ownStyles ? "" : ' class="bcs-page"'}>
+<article${state.ownStyles ? "" : ' class="bcs-page"'}>
 ${body}
 </article>
-<script>${BRIDGE_SCRIPT}</script>
+<script>${FRAGMENT_SCRIPT}${BRIDGE_SCRIPT}</script>
 ${
   state.mermaid
     ? `<script src="${MERMAID_SCRIPT}"></script>
@@ -77,11 +80,11 @@ function escapeHtml(text: string): string {
 
 /**
  * A link to another page of the proposal, as the `bep` folder lays them out: `pages/<slug>.md`
- * (or `.html`, possibly nested), `./<slug>.md`, and `index.md` or `README.md` for the main page.
+ * (or `.markdown` or `.html`, possibly nested), `./<slug>.md`, and `index.md` or `README.md` for the main page.
  * Returns the slug and any #fragment, or null for any other link.
  */
 export function pageLink(href: string): { slug: string; hash: string } | null {
-  const match = href.match(/^(?:\.\/|\.\.\/)*(?:pages\/)?(?:[a-z0-9-]+\/)*([A-Za-z0-9-]+)\.(?:md|html?)(#.*)?$/);
+  const match = href.match(/^(?:\.\/|\.\.\/)*(?:pages\/)?(?:[a-z0-9-]+\/)*([A-Za-z0-9-]+)\.(?:md|markdown|html?)(#.*)?$/);
   if (!match) return null;
   const name = match[1];
   const slug = /^(index|readme)$/i.test(name) ? "" : name.toLowerCase();
@@ -103,20 +106,24 @@ function headingId(value: string): string {
 }
 
 /**
- * Marks links between pages for the site to open, keeps #fragment links in the frame, gives
- * headings ids for those links, and turns ```mermaid blocks into diagrams.
+ * Marks links between pages for the site to open, gives headings ids for #fragment links, notes a
+ * page's own stylesheet, and turns ```mermaid blocks into diagrams.
  */
-function adjust(tree: Root, pageHref: (slug: string) => string, state: { mermaid: boolean }) {
+function adjust(
+  tree: Root,
+  pageHref: (slug: string) => string,
+  state: { mermaid: boolean; ownStyles: boolean }
+) {
   const used = new Map<string, number>();
   const walk = (node: Root | Element) => {
     node.children.forEach((child, index) => {
       if (child.type !== "element") return;
+      // A real stylesheet, not one shown in a code example (that is text inside <code>).
+      if (child.tagName === "style") state.ownStyles = true;
       if (child.tagName === "a" && typeof child.properties.href === "string") {
         const href = child.properties.href;
         const link = pageLink(href);
-        if (href.startsWith("#")) {
-          child.properties.target = "_self";
-        } else if (link) {
+        if (link) {
           // The site opens it (see BRIDGE_SCRIPT); a modifier-click opens it in a new tab.
           child.properties.href = pageHref(link.slug) + link.hash;
           child.properties.dataBcsPage = "";
@@ -150,6 +157,26 @@ function adjust(tree: Root, pageHref: (slug: string) => string, state: { mermaid
   };
   walk(tree);
 }
+
+/**
+ * Runs in the frame, on every page. A srcdoc document resolves links against the site's address,
+ * so `href="#intro"` would load the site in the frame instead of scrolling: this scrolls to the
+ * element instead. Shown on its own (the raw route), the page has a real address and needs none.
+ */
+const FRAGMENT_SCRIPT = `
+(function () {
+  if (window.parent === window) return;
+  document.addEventListener("click", function (event) {
+    var link = event.target && event.target.closest ? event.target.closest("a[href^='#']") : null;
+    if (!link || event.defaultPrevented || event.button !== 0) return;
+    event.preventDefault();
+    var id = decodeURIComponent(link.getAttribute("href").slice(1));
+    var target = id ? document.getElementById(id) || document.getElementsByName(id)[0] : null;
+    if (target) target.scrollIntoView();
+    else if (!id) window.scrollTo(0, 0);
+  });
+})();
+`;
 
 /**
  * Runs in the frame, beside the page's own scripts. The frame cannot navigate the site, so a click

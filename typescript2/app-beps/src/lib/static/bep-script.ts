@@ -916,20 +916,31 @@ def read_bcs_source(path: Path) -> list:
     return [{"slug": "", "format": fmt, "content": path.read_text(encoding="utf-8")}]
 
 
-def write_local_bcs(proposal: dict) -> Path:
-    """Writes a proposal's pages and metadata, replacing its folder's pages and renaming it if its title changed."""
-    import shutil
+def bcs_page_files(folder: Path) -> list:
+    """The page files in a proposal folder: index.* and pages/**, with a page extension. Other files are the user's."""
+    files = [f for f in folder.glob("index.*") if f.is_file() and bcs_format_of(f)]
+    pages_dir = folder / "pages"
+    if pages_dir.is_dir():
+        files += [f for f in pages_dir.rglob("*") if f.is_file() and bcs_format_of(f)]
+    return files
 
+
+def write_local_bcs(proposal: dict) -> Path:
+    """Writes a proposal's pages and metadata, replacing only its page files, and renames its folder if its title changed."""
     number = proposal["number"]
     folder = BCS_DIR / f"{format_bcs_number(number)}-{slugify(proposal['title'])}"
     old = find_local_bcs(str(number))
     if old and old != folder:
         old.rename(folder)
     folder.mkdir(parents=True, exist_ok=True)
-    for f in folder.glob("index.*"):
+    for f in bcs_page_files(folder):
         f.unlink()
-    if (folder / "pages").is_dir():
-        shutil.rmtree(folder / "pages")
+    pages_dir = folder / "pages"
+    if pages_dir.is_dir():
+        # Folders left empty by pages that moved or went away; anything else stays.
+        for d in sorted((d for d in pages_dir.rglob("*") if d.is_dir()), key=lambda d: len(d.parts), reverse=True):
+            if not any(d.iterdir()):
+                d.rmdir()
     pages = proposal["pages"]
     parents = {p["slug"]: p.get("parentSlug") for p in pages}
     for page in pages:
@@ -945,13 +956,22 @@ def write_local_bcs(proposal: dict) -> Path:
 
 
 def bcs_local_edits(folder: Path) -> bool:
-    """Whether the local pages differ from what was last pulled or pushed."""
+    """Whether the local pages may differ from what was last pulled or pushed; without a record of that, assume so."""
+    import hashlib
+
     meta_path = folder / "meta.json"
     if not meta_path.exists():
-        return False
-    pulled = json.loads(meta_path.read_text(encoding="utf-8")).get("pulledSha256")
+        return True
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    pulled = meta.get("pulledSha256")
+    if pulled is None:
+        return True
+    if "pages" not in meta:
+        # Pulled by a bep script from before sub-pages: the digest is of index.html alone.
+        page = folder / "index.html"
+        return not page.exists() or hashlib.sha256(page.read_bytes()).hexdigest() != pulled
     try:
-        return pulled is not None and bcs_digest(read_local_bcs_pages(folder)) != pulled
+        return bcs_digest(read_local_bcs_pages(folder)) != pulled
     except ValueError:
         return True
 

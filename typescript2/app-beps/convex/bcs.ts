@@ -37,8 +37,11 @@ function fail(kind: BcsFailure["kind"], message: string, currentVersion?: number
 export const MAX_PAGE_BYTES = 900_000;
 /** The most pages a proposal may have, main page included. */
 export const MAX_PAGES = 50;
-/** The most a version's pages may weigh together, so one save stays well inside a mutation. */
-export const MAX_VERSION_BYTES = 8_000_000;
+/**
+ * The most a version's pages may weigh together. `bep bcs` sends and receives every page of a
+ * version in one request, and Vercel refuses bodies over 4.5 MB, so this leaves room for JSON.
+ */
+export const MAX_VERSION_BYTES = 3_000_000;
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
@@ -99,7 +102,7 @@ function checkPages(inputs: PageInput[], title: string): Page[] {
     if (size > MAX_PAGE_BYTES) fail("invalid", `Page "${name}" is larger than 900 KB.`);
     total += size;
   }
-  if (total > MAX_VERSION_BYTES) fail("invalid", "The pages together are larger than 8 MB.");
+  if (total > MAX_VERSION_BYTES) fail("invalid", "The pages together are larger than 3 MB.");
   const parents = new Map(inputs.map((page) => [page.slug, page.parentSlug]));
   for (const page of inputs) {
     if (page.parentSlug === undefined) continue;
@@ -350,8 +353,8 @@ function applyChanges(
   if (upsert) {
     const at = pages.findIndex((page) => page.slug === upsert.slug);
     if (at >= 0) {
-      // Editing a page keeps it where it is unless the editor named a new parent.
-      pages[at] = { ...upsert, parentSlug: upsert.slug === "" ? undefined : upsert.parentSlug ?? pages[at].parentSlug };
+      // The editor sends where the page sits: no parent means the top level.
+      pages[at] = { ...upsert, parentSlug: upsert.slug === "" ? undefined : upsert.parentSlug };
     } else {
       pages.push(upsert);
     }
@@ -399,7 +402,7 @@ function changedTitles(before: Page[], after: Page[]): string[] {
 /**
  * Saves what an editor changed, in one transaction: a new version when the pages differ from the
  * current ones, and the title or status when given. Pages come as the whole set (`pages`), one
- * page replaced or added (`upsert`), one added that must be new (`add`), one removed (`remove`),
+ * page replaced or added with its parent (`upsert`, no parent being the top level), one added that must be new (`add`), one removed (`remove`),
  * or, from older `bep` scripts, the
  * main page as `html`. Refused when `baseVersion`, the version the editor started from, is no
  * longer the current one, so a stale editor cannot hide a newer save.
