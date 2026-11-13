@@ -511,6 +511,23 @@ impl Client {
         self.post_hotswap(authorization, &path, body, None)
     }
 
+    /// Say the process is stopping, so no rollout waits on it.
+    pub fn process_stopped(
+        &self,
+        authorization: &RequestAuthorization,
+        process_id: &str,
+    ) -> Result<()> {
+        let path = format!("/v1/processes/{}/stop", checked_id(process_id)?);
+        let body = with_target(authorization, json!({}));
+        self.send_authorized(authorization, || {
+            self.http
+                .post(self.url(&path))
+                .timeout(Duration::from_secs(2))
+                .json(&body)
+        })?;
+        Ok(())
+    }
+
     /// Hold the connection until BCS has a notification for the process, or
     /// for about `hold`.
     pub fn wait_for_notifications(

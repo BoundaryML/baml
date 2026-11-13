@@ -47,11 +47,13 @@ pub struct AgentOptions {
     pub retry: Option<Duration>,
 }
 
-/// The running agent. Dropping it leaves the agent running for the life of
-/// the process; [`Agent::stop`] ends it at its next request.
+/// The running agent. [`Agent::stop`], or dropping it, ends it at its next
+/// request and tells BCS the process is stopping, so no rollout waits on it.
 pub struct Agent {
     ready: Arc<(Mutex<bool>, Condvar)>,
     stop: Arc<AtomicBool>,
+    link: Arc<CloudLink>,
+    process_id: String,
 }
 
 impl Agent {
@@ -70,7 +72,26 @@ impl Agent {
     }
 
     pub fn stop(&self) {
-        self.stop.store(true, Ordering::Relaxed);
+        if self.stop.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        // On a thread of its own: the blocking client cannot run inside an
+        // async runtime, which a host may be in.
+        let (link, process_id) = (Arc::clone(&self.link), self.process_id.clone());
+        let told = std::thread::spawn(move || {
+            link.client
+                .process_stopped(&link.authorization, &process_id)
+        })
+        .join();
+        if let Ok(Err(error)) = told {
+            tracing::debug!(%error, "BCS did not hear that the process stopped");
+        }
+    }
+}
+
+impl Drop for Agent {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 
@@ -83,9 +104,12 @@ pub fn start(
 ) -> std::io::Result<Agent> {
     let ready = Arc::new((Mutex::new(false), Condvar::new()));
     let stop = Arc::new(AtomicBool::new(false));
+    let link = Arc::new(link);
     let agent = Agent {
         ready: Arc::clone(&ready),
         stop: Arc::clone(&stop),
+        link: Arc::clone(&link),
+        process_id: options.process_id.clone(),
     };
     std::thread::Builder::new()
         .name("baml-hotswap".into())
@@ -126,7 +150,7 @@ fn signal(ready: &(Mutex<bool>, Condvar)) {
 
 struct Loop {
     swapper: Swapper,
-    link: CloudLink,
+    link: Arc<CloudLink>,
     options: AgentOptions,
     runtime: tokio::runtime::Runtime,
     ready: Arc<(Mutex<bool>, Condvar)>,
