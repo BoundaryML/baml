@@ -40,6 +40,24 @@ version = (
 # Wrapper release identifiers, e.g. 0.2.5 or 0.2.5-canary.1.
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", version):
     parser.error("invalid wrapper version")
+# Inspect the explicit build compiler, never the (possibly foreign) target host
+# or the independently selected runtime toolchain. Version discovery is build-only.
+compiler_environment = dict(
+    os.environ, BAML_CLI_ALLOW_DIRECT="1", BAML_TELEMETRY="off", DO_NOT_TRACK="1"
+)
+compiler_output = subprocess.check_output(
+    [str(args.cli.resolve()), "--version"],
+    text=True,
+    timeout=30,
+    cwd=repo,
+    env=compiler_environment,
+).strip()
+compiler_version = re.fullmatch(
+    r"baml-cli ([0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)",
+    compiler_output,
+)
+if compiler_version is None:
+    parser.error(f"unrecognized build compiler version: {compiler_output!r}")
 with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
     project = Path(temporary) / "wrapper"
     shutil.copytree(repo / "baml_language/wrapper", project)
@@ -73,13 +91,15 @@ with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
         return re.search(rf'const {name}: &str = "([^"]*)";', source)[1]
 
     constants = {
-        "wrapper_version": version,
         "self_update_enabled": not args.no_self_update,
         "telemetry_api_key": constant(post, "POSTHOG_API_KEY"),
         "telemetry_default_host": constant(post, "POSTHOG_HOST"),
     }
     (project / "baml_src/build.baml").write_text(
-        "\n".join(
+        f"const WRAPPER_APP_VERSION = {json.dumps(version)};\n"
+        f"const WRAPPER_BAML_VERSION = {json.dumps(compiler_version[1])};\n\n"
+        "function wrapper_version() -> string {\n    WRAPPER_APP_VERSION\n}\n\n"
+        + "\n".join(
             f"function {name}() -> {'bool' if isinstance(value, bool) else 'string'} {{\n    {json.dumps(value)}\n}}\n"
             for name, value in constants.items()
         )

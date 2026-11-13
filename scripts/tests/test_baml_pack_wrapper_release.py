@@ -21,6 +21,7 @@ from scripts.baml_release_platforms import (
 
 ROOT = Path(__file__).resolve().parents[2]
 VERSION = "9.8.7"
+COMPILER_VERSION = "7.6.5-canary.fixture"
 
 
 class WrapperReleasePackingTests(unittest.TestCase):
@@ -47,6 +48,9 @@ class WrapperReleasePackingTests(unittest.TestCase):
             f"#!{sys.executable}\n"
             "import json, pathlib, sys, tomllib\n"
             "args = sys.argv[1:]\n"
+            "if args == ['--version']:\n"
+            f"    print('baml-cli {COMPILER_VERSION}')\n"
+            "    raise SystemExit(0)\n"
             "assert args[0] == 'pack' and '--embed-telemetry' in args\n"
             "project = pathlib.Path(args[args.index('--from') + 1])\n"
             "manifest = tomllib.loads((project / 'baml.toml').read_text())\n"
@@ -96,6 +100,8 @@ class WrapperReleasePackingTests(unittest.TestCase):
                     self.assertEqual(payload["environment"], "Test")
                     self.assertEqual(payload["key_variable"], "BAML_WRAPPER_BOUNDARY_API_KEY")
                     self.assertIn(f'"{VERSION}"', payload["source"])
+                    self.assertIn(f'const WRAPPER_APP_VERSION = "{VERSION}";', payload["source"])
+                    self.assertIn(f'const WRAPPER_BAML_VERSION = "{COMPILER_VERSION}";', payload["source"])
                     enabled = "true" if variant == "self-update" else "false"
                     self.assertIn(f"function self_update_enabled() -> bool {{\n    {enabled}\n}}", payload["source"])
                     self.assertEqual(license_text, (ROOT / "LICENSE").read_bytes())

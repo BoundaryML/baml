@@ -82,6 +82,10 @@ def run(command, **kwargs):
 
 
 if not args.no_build:
+    run([
+        sys.executable, "-m", "unittest", "discover",
+        "-s", repo / "baml_language/wrapper_tests", "-p", "test_build_versions.py", "-v",
+    ])
     run(
         [
             "cargo",
@@ -121,6 +125,12 @@ if not args.no_build:
                 cross_target,
             ]
         )
+    if not cross_target and not args.release_artifacts and os.name != "nt":
+        run([
+            sys.executable, repo / "baml_language/wrapper_tests/verify_version_tags.py",
+            "--cli", target / ("baml-cli" + suffix),
+            "--pack-host", target / ("baml-pack-host" + suffix),
+        ])
 with tempfile.TemporaryDirectory(prefix="wrapper-suite-") as directory:
     environment["WRAPPER_E2E_ARCHIVES"] = str(Path(directory) / "archives")
     candidates = (
