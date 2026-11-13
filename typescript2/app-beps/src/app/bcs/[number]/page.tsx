@@ -212,14 +212,16 @@ export default async function BcsProposal({
           </nav>
         )}
         <BcsReader
-          key={`${proposal.version}/${page.slug}`}
+          // A new ?comment= remounts it, so the newly linked thread and block are focused.
+          key={`${proposal.version}/${page.slug}/${query.comment ?? ""}`}
           title={page.title}
           document={rendered.document}
           blocks={rendered.blocks}
           number={proposal.number}
           version={proposal.version}
           threads={threads}
-          focusThread={query.comment}
+          // The thread a link to one of its replies points into.
+          focusThread={thread?.id ?? query.comment}
           commentsError={comments.ok ? undefined : comments.failure.message}
           addComment={addComment.bind(null, proposal.number, page.slug, proposal.version)}
           reply={replyToComment.bind(null, proposal.number, proposal.version)}
