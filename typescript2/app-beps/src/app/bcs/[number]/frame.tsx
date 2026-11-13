@@ -65,6 +65,10 @@ export const BcsFrame = forwardRef<BcsFrameHandle, Props>(function BcsFrame(
       if (data.type === "bcs-ready") {
         post({ type: "bcs-marks", counts: latest.current.counts });
         latest.current.onReady();
+      } else if (data.type === "bcs-active-heading") {
+        // For the table of contents, which lives outside this component.
+        const id = typeof (data as { id?: unknown }).id === "string" ? (data as { id: string }).id : null;
+        window.dispatchEvent(new CustomEvent("bcs-active-heading", { detail: id }));
       } else if (data.type === "bcs-open-page" && typeof data.href === "string") {
         // Only this proposal's pages: anything else the page sends is ignored.
         const target = new URL(data.href, window.location.origin);

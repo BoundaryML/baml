@@ -4,6 +4,7 @@
 // a panel listing each member's stance with the buttons to take, change or withdraw one's own.
 import { useActionState } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { Minus, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { FormState } from "../actions";
@@ -15,11 +16,17 @@ export type Stance = {
   updatedAt: number;
 };
 
+/** The same icons and colors as BEP stances. */
 const LABELS = {
-  support: { icon: "👍", label: "Support" },
-  neutral: { icon: "😐", label: "Neutral" },
-  oppose: { icon: "👎", label: "Oppose" },
+  support: { Icon: ThumbsUp, label: "Support", color: "text-green-600" },
+  neutral: { Icon: Minus, label: "Neutral", color: "text-gray-500" },
+  oppose: { Icon: ThumbsDown, label: "Oppose", color: "text-red-600" },
 } as const;
+
+function StanceIcon({ stance }: { stance: keyof typeof LABELS }) {
+  const { Icon, color } = LABELS[stance];
+  return <Icon className={`inline h-3.5 w-3.5 ${color}`} aria-hidden />;
+}
 
 export function StancePanel({
   action,
@@ -52,8 +59,11 @@ export function StancePanel({
         className="cursor-pointer list-none text-sm rounded-md border px-3 py-1.5 hover:bg-muted"
         title={`Stances on v${version}`}
       >
-        {LABELS.support.icon} {summary.support} · {LABELS.neutral.icon} {summary.neutral} ·{" "}
-        {LABELS.oppose.icon} {summary.oppose}
+        <span className="inline-flex items-center gap-2" aria-label={`${summary.support} support, ${summary.neutral} neutral, ${summary.oppose} oppose`}>
+          <span className="inline-flex items-center gap-1"><StanceIcon stance="support" /> {summary.support}</span>
+          <span className="inline-flex items-center gap-1"><StanceIcon stance="neutral" /> {summary.neutral}</span>
+          <span className="inline-flex items-center gap-1"><StanceIcon stance="oppose" /> {summary.oppose}</span>
+        </span>
       </summary>
       <div className="absolute right-0 z-10 mt-1 w-80 rounded-md border bg-background p-3 shadow-lg space-y-3">
         <h2 className="text-sm font-medium">Stances on v{version}</h2>
@@ -63,7 +73,7 @@ export function StancePanel({
           <ul className="space-y-2 max-h-64 overflow-y-auto">
             {stances.map((each) => (
               <li key={each.author} className="text-sm">
-                <span>{LABELS[each.stance].icon}</span>{" "}
+                <StanceIcon stance={each.stance} />{" "}
                 <span className="font-medium">{each.author}</span>{" "}
                 <span className="text-xs text-muted-foreground">
                   {LABELS[each.stance].label.toLowerCase()} ·{" "}
@@ -101,7 +111,7 @@ export function StancePanel({
                 variant={mine?.stance === key ? "default" : "outline"}
                 disabled={pending}
               >
-                {LABELS[key].icon} {LABELS[key].label}
+                <StanceIcon stance={key} /> {LABELS[key].label}
               </Button>
             ))}
             {mine && (
