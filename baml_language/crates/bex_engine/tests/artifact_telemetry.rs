@@ -13,6 +13,32 @@ use wiremock::{
     matchers::{method, path, path_regex},
 };
 
+/// Run enabled delivery fixtures in their own environment, even when the caller
+/// has opted out. The parent never changes its environment or accesses user auth.
+/// Returns true when the parent has completed the isolated test.
+fn enabled_recording_child(test_name: &str) -> bool {
+    const CHILD: &str = "BAML_TEST_ENABLED_ARTIFACT_RECORDING";
+    if baml_env::raw_var(CHILD).as_deref() == Some(test_name) {
+        return false;
+    }
+    let home = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", test_name, "--nocapture"])
+        .env(CHILD, test_name)
+        .env("BAML_TELEMETRY", "medium")
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("BAML_HOME", home.path())
+        .env_remove("BOUNDARY_API_URL")
+        .env_remove("BOUNDARY_API_KEY")
+        .env_remove("BOUNDARY_PROJECT")
+        .env_remove("DEV_BAML_TELEMETRY_DIAGNOSTICS_FILE")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{test_name}: {output:?}");
+    true
+}
+
 fn engine(server: &MockServer, policy: ArtifactTelemetry) -> Arc<BexEngine> {
     let mut delivery = DeliveryConfig::new(server.uri().parse().unwrap());
     delivery.max_attempts = 2;
@@ -59,6 +85,11 @@ async fn execute(engine: &Arc<BexEngine>) -> bool {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_rejections_follow_the_artifact_policy_and_join_even_short_programs() {
+    if enabled_recording_child(
+        "initial_rejections_follow_the_artifact_policy_and_join_even_short_programs",
+    ) {
+        return;
+    }
     for status in [401, 403, 400, 503] {
         for action in [
             InitialFailureAction::Abort,
@@ -100,6 +131,11 @@ async fn initial_rejections_follow_the_artifact_policy_and_join_even_short_progr
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_short_program_waits_for_an_unanswered_endpoint_only_the_shutdown_timeout() {
+    if enabled_recording_child(
+        "a_short_program_waits_for_an_unanswered_endpoint_only_the_shutdown_timeout",
+    ) {
+        return;
+    }
     // Accepts connections and never answers them, like a firewall that drops
     // replies. The default retry window for the first connection is 40.6 s.
     let stalled = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -149,6 +185,9 @@ async fn recording_off_starts_no_telemetry_authorization() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn later_rejection_never_becomes_an_initial_failure_for_any_policy() {
+    if enabled_recording_child("later_rejection_never_becomes_an_initial_failure_for_any_policy") {
+        return;
+    }
     for action in [
         InitialFailureAction::Abort,
         InitialFailureAction::Warn,
