@@ -265,7 +265,7 @@ export default function ProfilePage() {
                     <div className="flex-1">
                       <div className="font-medium">API Token</div>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Use this token to authenticate API requests from agents or scripts. Tokens are for BoundaryML organization members.
+                        Use this token to authenticate API requests from agents or scripts. Tokens are for BoundaryML organization members and invited collaborators.
                       </p>
                     </div>
                   </div>
