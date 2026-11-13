@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use bex_vm_types::{
-    FutureRead, HeapPtr, Object, Value,
+    FutureRead, HeapPtr, InstanceRef, Object, Value,
     types::{ObjectType, SentinelKind},
 };
 
@@ -196,6 +196,17 @@ impl BexHeap {
         let ct_len = self.compile_time_len();
         let _max_index = ct_len + runtime_len;
 
+        // Verify every instance in Gen0's cells.
+        unsafe { &*self.gen0_cells.get() }.for_each_cell(|cell| {
+            let instance = unsafe { InstanceRef::from_cell(cell) };
+            let layout = instance.layout();
+            for slot in layout.value_slots() {
+                // SAFETY: the layout names these value slots.
+                self.debug_assert_valid_value(&unsafe { instance.slot_value(slot) });
+            }
+            layout.words()
+        });
+
         let handles = self.handles.read().expect("handles lock poisoned");
         for (handle_key, idx) in handles.iter() {
             let ptr_addr = idx.as_ptr() as usize;
@@ -292,23 +303,7 @@ impl BexHeap {
                     self.debug_assert_valid_value(value);
                 }
             }
-            Object::Instance(instance) => {
-                let class_idx = instance.class;
-                self.debug_assert_valid_index(class_idx);
-                let class_obj = unsafe { self.get_object(class_idx) };
-                let Object::Class(class) = class_obj else {
-                    panic!("instance.class not Class: obj_idx={idx:?} class_idx={class_idx:?}");
-                };
-                assert!(
-                    instance.fields.len() == class.fields.len(),
-                    "instance field count mismatch: obj_idx={idx:?} fields_len={} class_fields_len={}",
-                    instance.fields.len(),
-                    class.fields.len()
-                );
-                for slot in &instance.fields {
-                    self.debug_assert_valid_value(&slot.load());
-                }
-            }
+            Object::Instance => panic!("an object slot holds an instance: obj_idx={idx:?}"),
             Object::Variant(variant) => {
                 let enm_idx = variant.enm;
                 self.debug_assert_valid_index(enm_idx);

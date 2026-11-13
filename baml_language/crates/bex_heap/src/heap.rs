@@ -17,15 +17,18 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex, RwLock, Weak,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
 };
 
 use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
-use bex_vm_types::{HeapPtr, Object};
+use bex_vm_types::{HeapPtr, InstanceRef, Object};
 
-use crate::{HeapDebuggerConfig, HeapDebuggerState, chunked_vec::ChunkedVec, tlab::TlabChunk};
+use crate::{
+    HeapDebuggerConfig, HeapDebuggerState, cell_space::CellSpace, chunked_vec::ChunkedVec,
+    tlab::TlabChunk,
+};
 
 /// Which generation of the heap an object lives in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,11 +105,9 @@ pub struct HeapStats {
 ///
 /// Kept by:
 /// - [`BexHeap::register_finalizable`], called when such an instance is
-///   allocated ([`Tlab::alloc`](crate::Tlab::alloc)) or, through
-///   [`BexHeap::note_rewrite`], written in place (the VM's `ObjectMut`, or
-///   [`Tlab::publish`](crate::Tlab::publish) filling a reservation). That
-///   covers compile-time classes, runtime-compiled and session classes, and an
-///   instance whose class changes.
+///   allocated ([`Tlab::alloc_instance_zeroed`](crate::Tlab::alloc_instance_zeroed)).
+///   That covers compile-time classes and runtime-compiled and session
+///   classes.
 /// - [`BexHeap::invalidate_finalizable_instances`], when a rewrite gives a
 ///   class a finalizer: instances of it may exist, unregistered, so the next
 ///   collection rebuilds the list from a walk of every generation, before it
@@ -125,23 +126,16 @@ pub(crate) struct FinalizableInstances {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Finalizable {
     Neither,
-    /// An instance of a class with a `cleanup` finalizer.
-    Instance,
     /// A class with a `cleanup` finalizer.
     Class,
 }
 
 impl Finalizable {
-    /// What `object` is to the finalizable list.
-    ///
-    /// # Safety
-    ///
-    /// As for [`BexHeap::needs_finalizer_registration`].
-    pub unsafe fn of(object: &Object) -> Self {
+    /// What `object` is to the finalizable list. An instance is never an
+    /// `Object`, so no rewrite makes one; it registers when allocated.
+    pub fn of(object: &Object) -> Self {
         match object {
             Object::Class(class) if class.cleanup.is_some() => Self::Class,
-            // SAFETY: the caller guarantees an instance's class object is live.
-            _ if unsafe { BexHeap::needs_finalizer_registration(object) } => Self::Instance,
             _ => Self::Neither,
         }
     }
@@ -194,6 +188,12 @@ pub struct BexHeap {
 
     /// Inactive scratch space — copy destination during full GC.
     pub(crate) inactive: UnsafeCell<ChunkedVec<Object>>,
+
+    /// The cells of each space: class instances, sized by their class.
+    /// Gen0's cells are carved into TLAB blocks under `growth_lock`.
+    pub(crate) gen0_cells: UnsafeCell<CellSpace>,
+    pub(crate) gen2_cells: UnsafeCell<CellSpace>,
+    pub(crate) inactive_cells: UnsafeCell<CellSpace>,
 
     /// Next TLAB chunk start index within Gen0.
     ///
@@ -401,6 +401,9 @@ impl BexHeap {
             gen0: UnsafeCell::new(ChunkedVec::new()),
             gen2: UnsafeCell::new(ChunkedVec::new()),
             inactive: UnsafeCell::new(ChunkedVec::new()),
+            gen0_cells: UnsafeCell::default(),
+            gen2_cells: UnsafeCell::default(),
+            inactive_cells: UnsafeCell::default(),
             gen0_next_chunk: AtomicUsize::new(0),
             handles: RwLock::new(HashMap::new()),
             handles_by_ptr: RwLock::new(HashMap::new()),
@@ -789,6 +792,15 @@ impl BexHeap {
     /// Gen0 pointer falls through to the `Generation::Gen0` fallback.
     #[inline]
     pub fn generation_of(&self, ptr: HeapPtr) -> Generation {
+        if ptr.is_instance() {
+            // SAFETY: as for Gen2's objects below.
+            let in_gen2 = unsafe { (*self.gen2_cells.get()).contains(ptr.cell()) };
+            return if in_gen2 {
+                Generation::Gen2
+            } else {
+                Generation::Gen0
+            };
+        }
         if self.is_compile_time_ptr(ptr) {
             return Generation::CompileTime;
         }
@@ -831,34 +843,6 @@ impl BexHeap {
         let raw = ptr.as_ptr() as *const Object;
         // SAFETY: GC has parked all permits before the engine calls this.
         unsafe { Self::ptr_in_chunked_vec(&*self.inactive.get(), raw) }
-    }
-
-    /// Locate a raw pointer within a `ChunkedVec`, returning `(chunk_idx, offset_in_chunk)`.
-    ///
-    /// Returns `None` if the pointer is not within any chunk of `vec`.
-    ///
-    /// # Safety
-    ///
-    /// Must only be called at safepoints or with appropriate external synchronization.
-    #[inline]
-    pub(crate) unsafe fn locate_in_chunked_vec(
-        vec: &ChunkedVec<Object>,
-        raw_ptr: *const Object,
-    ) -> Option<(usize, usize)> {
-        // `num_chunks` and `chunk_start_ptr` are lock-free reads of the
-        // ChunkedVec's append-only chunk directory, safe under concurrent growth.
-        let num_chunks = vec.num_chunks();
-        for chunk_idx in 0..num_chunks {
-            // SAFETY: `chunk_idx < num_chunks` by loop bound.
-            let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
-            let chunk_end = unsafe { chunk_start.add(ChunkedVec::<Object>::CHUNK_SIZE) };
-            if raw_ptr >= chunk_start && raw_ptr < chunk_end {
-                // SAFETY: Both pointers are within the same allocated chunk.
-                let offset = unsafe { raw_ptr.offset_from(chunk_start) as usize };
-                return Some((chunk_idx, offset));
-            }
-        }
-        None
     }
 
     /// Monotonic change token for GC roots disappearing, including after
@@ -1018,6 +1002,19 @@ impl BexHeap {
         )
     }
 
+    /// Reserve `words` words of Gen0's cells for one allocator, spending
+    /// their bytes from the budget. Returns the first word and whether that
+    /// spending crossed the budget.
+    pub(crate) fn alloc_cell_block(&self, words: usize) -> (*mut AtomicU64, bool) {
+        let bytes = isize::try_from(words * size_of::<u64>()).unwrap_or(isize::MAX);
+        let crossed = self.gc_policy.adjust(bytes);
+        let _guard = self.growth_lock.lock().unwrap();
+        // SAFETY: Gen0's cell space is only carved under `growth_lock`, and
+        // the collector, which clears it, runs with every allocator parked.
+        let block = unsafe { (*self.gen0_cells.get()).carve(words) };
+        (block, crossed)
+    }
+
     /// Read an object by HeapPtr (direct pointer dereference).
     ///
     /// # Safety
@@ -1143,37 +1140,21 @@ impl BexHeap {
         self.has_finalizable_classes.store(true, Ordering::Release);
     }
 
-    /// BEP-042: whether `object` is an instance of a class with a `cleanup`
-    /// finalizer, and so belongs in the collector's finalizable list.
-    ///
-    /// # Safety
-    ///
-    /// If `object` is an instance, its class pointer must name a live object:
-    /// the caller holds a heap permit, or is the collector before it moves
-    /// anything.
-    #[inline]
-    pub unsafe fn needs_finalizer_registration(object: &Object) -> bool {
-        let Object::Instance(instance) = object else {
-            return false;
-        };
-        // SAFETY: the caller guarantees the class object is live.
-        matches!(unsafe { instance.class.get() }, Object::Class(class) if class.cleanup.is_some())
+    /// BEP-042: whether `instance`'s class has a `cleanup` finalizer, so
+    /// the instance belongs in the collector's finalizable list. Its class
+    /// must not have moved.
+    pub(crate) fn needs_finalizer(instance: InstanceRef) -> bool {
+        instance.class_object().cleanup.is_some()
     }
 
-    /// BEP-042: keep the finalizable list complete after the object at `ptr`
-    /// was rewritten in place, from an object that was `before` to one that
-    /// is `after`. An object that became a finalizable instance is
-    /// registered. One that became a class with a finalizer invalidates the
+    /// BEP-042: keep the finalizable list complete after an object was
+    /// rewritten in place, from an object that was `before` to one that is
+    /// `after`. One that became a class with a finalizer invalidates the
     /// list: instances of it may already exist, unregistered, since an
     /// instance is checked against its class only when it is allocated.
-    pub fn note_rewrite(&self, ptr: HeapPtr, before: Finalizable, after: Finalizable) {
-        if after == before {
-            return;
-        }
-        match after {
-            Finalizable::Instance => self.register_finalizable(ptr),
-            Finalizable::Class => self.invalidate_finalizable_instances(),
-            Finalizable::Neither => {}
+    pub fn note_rewrite(&self, before: Finalizable, after: Finalizable) {
+        if before != after && after == Finalizable::Class {
+            self.invalidate_finalizable_instances();
         }
     }
 

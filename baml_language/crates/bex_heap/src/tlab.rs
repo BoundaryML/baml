@@ -7,11 +7,11 @@
 //! quanta, at every refill, when the owner asks, and when the TLAB is dropped.
 //! Ordinary yields preserve unused capacity.
 
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicU64};
 
 use bex_vm_types::{
-    AllocDebt, HeapPtr, Meter, Object, Value,
-    types::{Array, Instance, Map, Variant},
+    AllocDebt, ClassLayout, HeapPtr, InstanceRef, Meter, Object, RealizedTy, TypeHead, Value,
+    types::{Array, Map, TypeValue, Variant},
 };
 use indexmap::IndexMap;
 
@@ -32,6 +32,33 @@ impl TlabChunk {
         self.end - self.start
     }
 }
+
+/// Words in the block of Gen0 cells a TLAB takes at a time; a larger cell
+/// gets a block of its own size.
+const CELL_BLOCK_WORDS: usize = 2048;
+
+/// The unallocated rest of a TLAB's block of cells.
+#[derive(Clone, Copy)]
+struct CellBlock {
+    next: *mut AtomicU64,
+    end: *mut AtomicU64,
+}
+
+impl CellBlock {
+    const EMPTY: Self = Self {
+        next: std::ptr::null_mut(),
+        end: std::ptr::null_mut(),
+    };
+
+    fn words_left(self) -> usize {
+        (self.end.addr() - self.next.addr()) / size_of::<u64>()
+    }
+}
+
+// SAFETY: a block is reserved for one TLAB alone, which carries it along
+// when it moves to another thread.
+#[allow(unsafe_code)]
+unsafe impl Send for CellBlock {}
 
 /// Payload bytes an allocator may hold unsettled before it settles with the
 /// shared budget. Settling is one shared atomic update, so this bounds both
@@ -84,6 +111,8 @@ pub struct Tlab {
     /// End of current chunk (exclusive).
     alloc_limit: usize,
 
+    cells: CellBlock,
+
     /// Reference to the shared heap.
     heap: Arc<BexHeap>,
 
@@ -135,6 +164,7 @@ impl Tlab {
         Self {
             alloc_ptr: 0,
             alloc_limit: 0,
+            cells: CellBlock::EMPTY,
 
             // Zero marks the first reservation, so the first size is repeated:
             // 32, 32, 64, ... gives aligned cumulative reservations of
@@ -163,17 +193,15 @@ impl Tlab {
     /// If the current chunk is exhausted, refill from the heap.
     #[inline]
     pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
+        debug_assert!(
+            !matches!(obj, Object::Instance),
+            "an instance is allocated as a cell"
+        );
         self.charge(&mut obj);
 
         if self.alloc_ptr >= self.alloc_limit {
             self.refill();
         }
-
-        // BEP-042: an instance of a class with a finalizer joins the
-        // collector's finalizable list. Checked before the write moves `obj`.
-        // SAFETY: the allocating VM holds a heap permit, so an instance's
-        // class object is live.
-        let finalizable = unsafe { BexHeap::needs_finalizer_registration(&obj) };
 
         let global_idx = self.alloc_ptr;
         self.alloc_ptr += 1;
@@ -192,11 +220,7 @@ impl Tlab {
         self.heap.record_alloc();
 
         // SAFETY: The pointer is valid and points to a valid object we just wrote
-        let ptr = unsafe { self.heap.make_heap_ptr(ptr) };
-        if finalizable {
-            self.heap.register_finalizable(ptr);
-        }
-        ptr
+        unsafe { self.heap.make_heap_ptr(ptr) }
     }
 
     /// Assign a fresh telemetry identity without registering a weak reference.
@@ -230,9 +254,7 @@ impl Tlab {
     /// `reservation` must come from a TLAB of this heap.
     pub unsafe fn publish(&mut self, reservation: Reservation, mut obj: Object) -> HeapPtr {
         self.charge(&mut obj);
-        // SAFETY: the publishing VM holds a heap permit, so an instance's
-        // class object is live.
-        let finalizable = unsafe { crate::Finalizable::of(&obj) };
+        let finalizable = crate::Finalizable::of(&obj);
         let ptr = reservation.ptr;
         // SAFETY: the caller guarantees the slot is still the one reserved. It
         // holds a tombstone, which nothing reads: the only references to it are
@@ -246,7 +268,7 @@ impl Tlab {
         // Publishing rewrites the tombstone in place, so the finalizable list
         // hears of it as of any other rewrite.
         self.heap
-            .note_rewrite(ptr, crate::Finalizable::Neither, finalizable);
+            .note_rewrite(crate::Finalizable::Neither, finalizable);
         ptr
     }
 
@@ -305,23 +327,90 @@ impl Tlab {
         self.alloc(Object::Map(Map::new(key_ty, value_ty, values)))
     }
 
-    /// Allocate a non-generic instance object (empty class type args).
+    /// Allocate an instance with no class type args.
     #[inline]
     pub fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
         self.alloc_instance_with_type_args(class, Box::new([]), fields)
     }
 
-    /// Allocate an instance object carrying its concrete class type args (De
-    /// Bruijn order). Used by the inbound FFI path to land a generic instance's
-    /// wire-supplied `type_args` into `Object::Instance::class_type_args`.
-    #[inline]
+    /// Allocate an instance carrying its concrete class type args (De Bruijn
+    /// order), with `fields` in declaration order.
+    ///
+    /// # Panics
+    ///
+    /// When `fields` does not match the class: a constructor that builds an
+    /// instance from values of the wrong kind is a bug, never stored.
     pub fn alloc_instance_with_type_args(
         &mut self,
         class: HeapPtr,
-        type_args: Box<[bex_vm_types::RealizedTy]>,
+        type_args: Box<[RealizedTy]>,
         fields: Vec<Value>,
     ) -> HeapPtr {
-        self.alloc(Object::Instance(Instance::new(class, type_args, fields)))
+        let instance = self.alloc_instance_zeroed(class, type_args);
+        assert_eq!(fields.len(), instance.field_len(), "fields for {class:?}");
+        for (field, value) in fields.into_iter().enumerate() {
+            if let Err(mismatch) = instance.store_relaxed(field, value) {
+                panic!("building an instance of {class:?}: {mismatch:?}");
+            }
+        }
+        instance.ptr()
+    }
+
+    /// Allocate an instance of `class` whose fields are all zero: null in a
+    /// value slot, 0, 0.0 or false in a raw one. The caller stores them.
+    pub fn alloc_instance_zeroed(
+        &mut self,
+        class: HeapPtr,
+        type_args: Box<[RealizedTy]>,
+    ) -> InstanceRef {
+        // SAFETY: the allocating VM holds a heap permit, so the class is live.
+        let Object::Class(declaration) = (unsafe { class.get() }) else {
+            panic!("instantiating {class:?}, which is not a class");
+        };
+        let layout = ClassLayout::of(declaration);
+        let type_args = match layout.type_args_slot() {
+            Some(slot) if !type_args.is_empty() => {
+                let head = TypeHead::new(class, declaration.type_tag);
+                let ty = TypeValue::new(RealizedTy::Class(head, type_args));
+                Some((slot, Value::object(self.alloc_type(ty))))
+            }
+            _ => None,
+        };
+        // SAFETY: the cell was just carved for this instance alone.
+        let instance = unsafe { InstanceRef::from_cell(self.alloc_cell(layout.words())) };
+        instance.set_class(class);
+        if let Some((slot, value)) = type_args {
+            // SAFETY: the layout gives a generic class this type-args slot.
+            unsafe { instance.set_slot_value(slot, value) };
+        }
+        // BEP-042: an instance of a class with a finalizer joins the
+        // collector's finalizable list.
+        if declaration.cleanup.is_some() {
+            self.heap.register_finalizable(instance.ptr());
+        }
+        instance
+    }
+
+    /// Carve `words` zeroed words from this TLAB's block of cells.
+    #[inline]
+    fn alloc_cell(&mut self, words: usize) -> *mut AtomicU64 {
+        if self.cells.words_left() < words {
+            self.refill_cells(words);
+        }
+        let cell = self.cells.next;
+        self.cells.next = self.cells.next.wrapping_add(words);
+        cell
+    }
+
+    #[cold]
+    fn refill_cells(&mut self, words: usize) {
+        let words = words.max(CELL_BLOCK_WORDS);
+        let (next, crossed) = self.heap.alloc_cell_block(words);
+        self.budget_crossed |= crossed;
+        self.cells = CellBlock {
+            next,
+            end: next.wrapping_add(words),
+        };
     }
 
     /// Allocate a variant object.
@@ -406,6 +495,7 @@ impl Tlab {
     pub fn invalidate(&mut self) {
         self.alloc_limit = 0;
         self.alloc_ptr = 0;
+        self.cells = CellBlock::EMPTY;
         // A full collection counted everything this balance covers.
         let full_collections = self.heap.gc_budget().full_collections;
         if full_collections != self.debt_epoch {
@@ -808,16 +898,10 @@ mod tests {
         let fields = vec![Value::int(10), Value::int(20)];
         let instance_ptr = tlab.alloc_instance(class_ptr, fields);
 
-        unsafe {
-            match instance_ptr.get() {
-                Object::Instance(inst) => {
-                    assert_eq!(inst.class, class_ptr);
-                    assert_eq!(inst.fields.len(), 2);
-                    assert_eq!(inst.load_field(0), Value::int(10));
-                }
-                _ => panic!("Expected Instance"),
-            }
-        }
+        let inst = unsafe { InstanceRef::of(instance_ptr) }.expect("an instance");
+        assert_eq!(inst.class(), class_ptr);
+        assert_eq!(inst.field_len(), 2);
+        assert_eq!(inst.load_value(0), Value::int(10));
     }
 
     #[test]
