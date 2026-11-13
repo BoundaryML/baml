@@ -2,7 +2,32 @@ This is the standalone BAML implementation of the `baml` toolchain wrapper. It r
 
 The wrapper uses the process APIs adopted in #5456 and the filesystem, path, archive, atomic-write, locking, and typed TOML implementations adopted in #5457. Host telemetry metadata and strict archive preflight are included in #5457. Subprocess execution retains normal platform signal delivery without automatic parent-to-child signal forwarding.
 
-BCS retains explicit spans for dispatch, argument parsing, management command preflight/execution, and self-update. These spans capture no arguments, outputs, or error payloads. Counting argument-parser spans excludes detached telemetry/replacement helpers; update handler spans exclude command help. An error escaping dispatch is a wrapper failure, while recovered internal errors and delegated CLI exit codes are excluded. These boundaries remain queryable independently of completed aggregate profiles.
+BCS retains explicit operational spans with canonical command context and error payloads. Full inputs and argument-bearing returned objects are excluded:
+
+| Boundary | Captured values |
+| --- | --- |
+| `WrapperInvocation.parse`, `management_command`, `WrapperInvocation.selection_impl` | Thrown errors; no argv, parsed command, project/working-directory or selector result snapshots. |
+| Toolchain acquisition, channel freshness/refresh implementations, selected-CLI version reporting, management `preflight` / `execute`, `WrapperUpdater.update`, `dispatch` | Error payloads; no input or returned-value snapshots, including null or updater-copy paths. |
+| `run_toolchain` | Only returned `baml.sys.ProcessExit { exit_code, signal }` and launch errors. The selected binary and forwarded arguments are not captured. Version reporting uses this boundary too. |
+
+Child stdout/stderr remain inherited and uncaptured. A delegated CLI/project keeps its own recording policy. Functions unwound by `sys.exit` have no returned output; the child-status boundary preserves exit code/signal before that unwind. Full errors are intentionally recorded and may quote offending arguments, selectors or paths, including secrets. Omitting input/result snapshots does not redact error payloads. PostHog sender objects and internal sender payloads are excluded from inputs/results; no identities or destinations are added.
+
+Internal telemetry/replacement helpers bypass parsing. Management and self-update help bypass their handlers. Acquisition, selected-CLI version reporting, and passive freshness/refresh implementation spans retain errors before their existing recovery handlers. Version preparation or launch failures remain advisory and leave wrapper version reporting successful; a child that runs still propagates its exit code. Errors escaping a traced boundary remain visible even if its caller recovers; errors recovered entirely within an untraced utility retain its automatic policy. Panic errors and cancellation keep their runtime classifications. Explicit capture applies only to the requested invocation, not descendants; `high` promotes automatic function spans without enabling additional value capture. Packed `BAML_TELEMETRY=on` retains the baked level (normally medium), while `off` disables recording, including explicit spans. HTTP bodies remain excluded by `http_bodies = false`. This BCS policy is separate from bounded PostHog usage events and the automatic cloud OS metadata collector, which omits argv.
+
+The foreground `user.dispatch` span carries `context_metadata['command']`, computed by the same `WrapperTelemetry.command(args)` normalization used for PostHog. It is attached before parsing and inherited by parser, management, and other descendant spans, independently of argument capture and PostHog collection/delivery. Values remain bounded canonical labels such as `baml check`, `baml query`, and `baml toolchain use`; no flags or argument values enter this metadata. The label `baml` is ambiguous: empty argv, root help, version, unknown commands, and `--` termination can all normalize to it. Internal telemetry and replacement dispatches remove the foreground `command` key, including a caller-supplied launch value.
+
+This is invocation-span context, not process launch context: it does not populate `processes.context_metadata['command']` or `processes.command`. Join the one `user.dispatch` row per invocation to `processes` using `process_id` to group commands with process outcomes, without raw argv or PostHog joins. Delegated exits can cancel dispatch even when the process succeeds, so use the process status for invocation outcomes; dispatch `user_error` identifies errors escaping the wrapper handler. Recording must be enabled; `BAML_TELEMETRY=off` disables local sinks too. For an isolated local run, use `DO_NOT_TRACK=1 BOUNDARY_API_KEY=local BAML_TELEMETRY=medium BAML_HOME=/tmp/wrapper-command-home/.baml /path/to/baml toolchain list`, then query with:
+
+```sh
+DO_NOT_TRACK=1 BOUNDARY_API_KEY=local BAML_TELEMETRY=off /path/to/baml-cli query --local --from /tmp/wrapper-command-home --format json \
+  "SELECT s.context_metadata['command'] AS command, p.status, COUNT(*) AS invocations
+   FROM spans s JOIN processes p ON s.process_id = p.process_id
+   WHERE s.span_name = 'user.dispatch'
+     AND baml_value_state(s.context_metadata['command']) = 'present'
+   GROUP BY s.context_metadata['command'], p.status"
+```
+
+For a cloud query, use the same SQL against the wrapper recording project. Select only dispatch rows when counting invocations: descendant spans inherit the command, and `span_announcements` exposes it for announced spans before completion, but counting both relations or every descendant would duplicate invocations. A recording lost before dispatch is announced cannot supply the label. No shared end-user identity is added.
 
 The code is organized around the data each operation owns: `WrapperInvocation` parses arguments and coordinates selection/management; version, channel, and path selectors implement their own behavior through `ToolchainSelector`; command classes carry only their applicable options. Configuration constructors validate documents before writes, and `ReleaseStore` keeps a validated release source with its cache. `WrapperTelemetry` owns a session and `TelemetryQueue` distinguishes delivered, rejected, and unavailable outcomes. Recoverable I/O/configuration failures are handled at the operation that can recover; the entry point renders remaining errors. Shared wrapper tests use descriptive `test` blocks with their setup and assertions in one place.
 
