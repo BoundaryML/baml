@@ -61,6 +61,7 @@ export interface Overview {
   title: string;
   status: string;
   authors: string[];
+  shepherds?: string[];
   currentVersion: number;
   updatedAt: number;
   openComments?: number;
@@ -136,6 +137,9 @@ export function overviewBlocks(proposal: Overview, isNew: boolean): Block[] {
         { type: "mrkdwn", text: `*Status:* ${emoji} ${proposal.status}` },
         { type: "mrkdwn", text: `*Authors:* ${escape(clip(proposal.authors.join(", "), 300))}` },
         { type: "mrkdwn", text: `*Version:* v${proposal.currentVersion}` },
+        ...(proposal.shepherds && proposal.shepherds.length > 0
+          ? [{ type: "mrkdwn", text: `*Shepherds:* ${escape(clip(proposal.shepherds.join(", "), 300))}` }]
+          : []),
         { type: "mrkdwn", text: `*Last updated:* ${slackDate(proposal.updatedAt)}` },
         ...(proposal.openComments !== undefined
           ? [{ type: "mrkdwn", text: `*Open comments:* ${proposal.openComments}` }]
@@ -165,6 +169,7 @@ export function savedBlocks(
     note?: string;
     changed?: string[];
     status?: { from: string; to: string };
+    shepherds?: string[];
   }
 ): Block[] {
   const blocks: Block[] = [];
@@ -181,6 +186,18 @@ export function savedBlocks(
             ? `\n_Changed: ${escape(clip(change.changed.join(", "), 300))}_`
             : "") +
           (change.note ? `\n>${escape(clip(change.note, 500)).replace(/\n/g, "\n>")}` : ""),
+      },
+    });
+  }
+  if (change.shepherds) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          change.shepherds.length > 0
+            ? `🧭 ${who} made *${escape(clip(change.shepherds.join(", "), 300))}* the shepherds of ${bcsId(proposal.number)}`
+            : `🧭 ${who} removed the shepherds of ${bcsId(proposal.number)}`,
       },
     });
   }
@@ -314,6 +331,7 @@ export const notify = internalAction({
       note: proposal.note,
       changed: proposal.changed,
       status: args.event.status,
+      shepherds: args.event.shepherds,
     });
     if (blocks.length === 0) return;
     await slack("chat.postMessage", {

@@ -211,26 +211,97 @@ export function RemovePageForm({
   );
 }
 
-export function UpdateProposalForm({
+export function UpdateProposalForm({ action, title }: { action: Action; title: string }) {
+  const [state, submit, pending] = useActionState(action, {});
+  return (
+    <form key={state.attempt} action={submit} className="space-y-3">
+      <h2 className="font-medium">Title</h2>
+      <Refused state={state} />
+      <input type="hidden" name="originalTitle" value={title} />
+      <Input name="title" defaultValue={state.values?.title ?? title} aria-label="Title" />
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        Rename
+      </Button>
+    </form>
+  );
+}
+
+/** The header's status menu: choosing a status saves it. */
+export function HeaderStatus({ action, status }: { action: Action; status: string }) {
+  const [state, submit, pending] = useActionState(action, {});
+  return (
+    <form key={state.attempt} action={submit} className="flex items-center gap-2">
+      <select
+        name="status"
+        defaultValue={status}
+        aria-label="Status"
+        disabled={pending}
+        onChange={(event) => event.currentTarget.form?.requestSubmit()}
+        className="h-8 rounded-md border bg-background px-2 text-sm capitalize"
+      >
+        {BCS_STATUSES.map((each) => (
+          <option key={each} value={each}>
+            {each}
+          </option>
+        ))}
+      </select>
+      {state.error && (
+        <span role="alert" className="text-xs text-destructive">
+          {state.error}
+        </span>
+      )}
+    </form>
+  );
+}
+
+/** Who shepherds the proposal, and once implemented, who implemented it. */
+export function PeopleForm({
   action,
-  title,
-  status,
+  shepherds,
+  implementedBy,
+  showImplemented,
+  people,
 }: {
   action: Action;
-  title: string;
-  status: string;
+  shepherds: string[];
+  implementedBy: string[];
+  showImplemented: boolean;
+  people: string[];
 }) {
   const [state, submit, pending] = useActionState(action, {});
   return (
     <form key={state.attempt} action={submit} className="space-y-3">
-      <h2 className="font-medium">Title and status</h2>
+      <h2 className="font-medium">People</h2>
       <Refused state={state} />
-      <input type="hidden" name="originalTitle" value={title} />
-      <input type="hidden" name="originalStatus" value={status} />
-      <Input name="title" defaultValue={state.values?.title ?? title} aria-label="Title" />
-      <StatusSelect value={state.values?.status ?? status} />
+      <div className="space-y-1">
+        <Label htmlFor="shepherds">Shepherds</Label>
+        <Input
+          id="shepherds"
+          name="shepherds"
+          list="bcs-people"
+          defaultValue={state.values?.shepherds ?? shepherds.join(", ")}
+          placeholder="GitHub logins, comma-separated"
+        />
+      </div>
+      {showImplemented && (
+        <div className="space-y-1">
+          <Label htmlFor="implementedBy">Implemented by</Label>
+          <Input
+            id="implementedBy"
+            name="implementedBy"
+            list="bcs-people"
+            defaultValue={state.values?.implementedBy ?? implementedBy.join(", ")}
+            placeholder="GitHub logins, comma-separated"
+          />
+        </div>
+      )}
+      <datalist id="bcs-people">
+        {people.map((login) => (
+          <option key={login} value={login} />
+        ))}
+      </datalist>
       <Button type="submit" size="sm" variant="outline" disabled={pending}>
-        Update
+        Save
       </Button>
     </form>
   );

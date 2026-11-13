@@ -84,11 +84,16 @@ export const BcsFrame = forwardRef<BcsFrameHandle, Props>(function BcsFrame(
     return () => window.removeEventListener("message", onMessage);
   }, [number, post, router]);
 
-  // Every page, HTML ones included, scrolls to the address's #fragment once it loads.
-  const scrollToHash = () => {
+  // Every page, HTML ones included, scrolls to the address's #fragment once it loads, and again
+  // when it changes (the table of contents links to #fragments).
+  const scrollToHash = useCallback(() => {
     const id = decodeURIComponent(window.location.hash.slice(1));
     if (id) post({ type: "bcs-scroll", id });
-  };
+  }, [post]);
+  useEffect(() => {
+    window.addEventListener("hashchange", scrollToHash);
+    return () => window.removeEventListener("hashchange", scrollToHash);
+  }, [scrollToHash]);
 
   return (
     <iframe
