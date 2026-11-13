@@ -312,7 +312,10 @@ class WrapperInvocation {
 
     function print_version(self, flag: string) -> null {
         baml.io.println(`baml wrapper ${wrapper_version()}`);
-        let exit_code = self.run_cli_version(flag) catch (error) {
+        let exit_code = self.run_cli_version(
+            flag,
+            $trace = trace.span(inputs = false, output = false, error = true),
+        ) catch (error) {
             WrapperFailure => {
                 baml.io.eprintln(
                     `warning: could not report selected baml-cli version: ${error_message(error)}`,
