@@ -125,14 +125,16 @@ impl BexVm {
     /// Tick the interpreter's call countdown; GC stress yields whenever it expires.
     #[inline]
     pub fn should_yield_at_call(&mut self) -> bool {
-        self.yield_at_call(super::gc_stress())
+        self.yield_at_call(super::gc_stress)
     }
 
     /// Poll before forcing the stress yield: the poll is what restarts the
     /// countdown, and a countdown left at zero underflows on the next tick.
+    /// `stress` is read only when the countdown expires: `gc_stress` is an
+    /// acquire load, which on every call would wait behind the record's stores.
     #[inline]
-    pub(super) fn yield_at_call(&mut self, stress: bool) -> bool {
-        self.early_yield.tick() && (self.poll_for_yield() || stress)
+    pub(super) fn yield_at_call(&mut self, stress: impl FnOnce() -> bool) -> bool {
+        self.early_yield.tick() && (self.poll_for_yield() || stress())
     }
 
     /// Return the caught value and its `baml.errors.Context`, propagating internal errors.
