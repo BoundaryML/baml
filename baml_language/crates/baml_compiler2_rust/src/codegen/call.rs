@@ -12,6 +12,10 @@ use crate::{
     render::coerce,
 };
 
+/// Beyond this many implementations a site is megamorphic: each arm inlines
+/// a whole call, code size spent on a guess the VM's cache makes as well.
+const MAX_DISPATCH_ARMS: usize = 8;
+
 impl<'db> Generator<'_, 'db> {
     pub(super) fn call(
         &mut self,
@@ -86,7 +90,7 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Use a typed direct entry when the callee has no VM-frame state and the VM allows it.
+    /// [`Self::compiled_entry`] with its error routed.
     #[allow(clippy::too_many_arguments)]
     fn compiled_call(
         &mut self,
@@ -99,6 +103,27 @@ impl<'db> Generator<'_, 'db> {
         args: &[Operand<'db>],
         types: &[String],
     ) -> Gen<Expr> {
+        let (call, repr) =
+            self.compiled_entry(block, object, symbol, name, info, layout, args, types)?;
+        let code = self.call_code(block, object, &call)?;
+        Ok(Expr::new(code, repr))
+    }
+
+    /// Use a typed direct entry when the callee has no VM-frame state and the
+    /// VM allows it: the call's `R<_>` expression and the representation of
+    /// its result.
+    #[allow(clippy::too_many_arguments)]
+    fn compiled_entry(
+        &mut self,
+        block: BlockId,
+        object: usize,
+        symbol: &str,
+        name: &str,
+        info: &Function,
+        layout: Option<&baml_type::CallLayout>,
+        args: &[Operand<'db>],
+        types: &[String],
+    ) -> Gen<(String, Repr)> {
         let site = self.site_pc(block);
         let callee = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
         // A generic callee's frame starts with the call's type arguments (a
@@ -153,8 +178,7 @@ impl<'db> Generator<'_, 'db> {
                     "(if vm.direct_calls_typed({type_args}) {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
                 )
             };
-            let code = self.call_code(block, object, &call)?;
-            return Ok(Expr::new(code, Repr::Value));
+            return Ok((call, Repr::Value));
         };
         // Arguments are bound once, as the callee holds them.
         let mut typed_args = Vec::with_capacity(slots.len());
@@ -217,8 +241,7 @@ impl<'db> Generator<'_, 'db> {
             format!("vm.direct_calls_typed({type_args})")
         };
         let call = format!("(if {allowed} {{ {direct} }} else {boxed})");
-        let code = self.call_code(block, object, &call)?;
-        Ok(Expr::new(code, signature.ret))
+        Ok((call, signature.ret))
     }
 
     /// Route a compiled call's error, rooting the caller's live values when
@@ -373,7 +396,7 @@ impl<'db> Generator<'_, 'db> {
         self_arg: usize,
         layout: Option<&baml_type::CallLayout>,
     ) -> Gen<String> {
-        let (iface, iface_args) = self.interface_operands(iface)?;
+        let (iface_ptr, iface_args) = self.interface_operands(iface)?;
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
         let types = self.type_operands("interface method call", type_args)?;
         let values = self.arg_values(block, args)?;
@@ -396,10 +419,10 @@ impl<'db> Generator<'_, 'db> {
             .get(block.0)
             .and_then(|pcs| pcs.terminator)
             .map_or_else(|| "None".to_string(), |pc| format!("Some({pc})"));
-        self.emit_statement(&format!(
-            "let callee = vm.virtual_target({receiver}, {iface}, {iface_args}, {method:?}, &[{}], {cache_site})?;",
+        let resolve = format!(
+            "let callee = vm.virtual_target({receiver}, {iface_ptr}, {iface_args}, {method:?}, &[{}], {cache_site})?;",
             types.join(", ")
-        ));
+        );
         let site = self.site_pc(block);
         let values = values.join(", ");
         let suspend = if traced {
@@ -416,12 +439,89 @@ impl<'db> Generator<'_, 'db> {
         };
         // The VM must apply trace attachments, so traced calls cannot run inline.
         if named || traced {
-            return Ok(suspend);
+            return Ok(format!("{{ {resolve} {suspend} }}"));
         }
-        Ok(format!(
-            "match vm.call_inline(fr, callee, &[{values}], {site}) {{ \
-             Ok(Some(v)) => Ok(v), Ok(None) => {suspend}, Err(e) => Err(e) }}"
-        ))
+        let fallback = format!(
+            "{{ {resolve} match vm.call_inline(fr, callee, &[{values}], {site}) {{ \
+             Ok(Some(v)) => Ok(v), Ok(None) => {suspend}, Err(e) => Err(e) }} }}"
+        );
+        let arms = self.dispatch_arms(iface, method, ntypeargs, self_arg, args.len());
+        self.class_dispatch(block, &arms, args, receiver, fallback)
+    }
+
+    /// `fallback` behind a comparison of the receiver's class with each class
+    /// whose implementation compiled code can call directly.
+    fn class_dispatch(
+        &mut self,
+        block: BlockId,
+        arms: &[(usize, usize)],
+        args: &[Operand<'db>],
+        receiver: &str,
+        fallback: String,
+    ) -> Gen<String> {
+        if arms.is_empty() {
+            return Ok(fallback);
+        }
+        // Each arm binds its own arguments; the site's stay outside.
+        let site_bindings = std::mem::take(&mut self.pending);
+        let index = self.index;
+        let mut code = format!("{{ let class = vm.instance_class({receiver}); ");
+        for &(class, object) in arms {
+            let symbol = self.symbols[&object].clone();
+            let (call, repr) = self.compiled_entry(
+                block,
+                object,
+                &symbol,
+                index.display(object),
+                index.info(object),
+                None,
+                args,
+                &[],
+            )?;
+            let bindings = std::mem::take(&mut self.pending).concat();
+            let call = match repr {
+                Repr::Value => call,
+                _ => format!("{call}.map(|v| {})", coerce("v", repr, Repr::Value)),
+            };
+            let _ = write!(
+                code,
+                "if class == Some(vm.record_object(fr, ObjectIndex::from_raw({class}))) {{ {bindings} {call} }} else "
+            );
+        }
+        self.pending = site_bindings;
+        Ok(format!("{code}{fallback} }}"))
+    }
+
+    /// The (class, body) arms of a site that dispatches on its first
+    /// argument with no type arguments, on a non-generic interface: each
+    /// implementation compiled and of the call's arity. None past
+    /// [`MAX_DISPATCH_ARMS`].
+    fn dispatch_arms(
+        &self,
+        iface: &TyTemplateInterface,
+        method: &str,
+        ntypeargs: usize,
+        self_arg: usize,
+        arity: usize,
+    ) -> Vec<(usize, usize)> {
+        if ntypeargs != 0 || self_arg != 0 || !iface.generics.is_empty() {
+            return Vec::new();
+        }
+        let Some(interface) = self.index.interface_at(&iface.name) else {
+            return Vec::new();
+        };
+        let arms: Vec<_> = self
+            .index
+            .class_dispatch(interface, method)
+            .into_iter()
+            .filter(|(_, object)| {
+                self.symbols.contains_key(object) && self.index.info(*object).arity == arity
+            })
+            .collect();
+        if arms.len() > MAX_DISPATCH_ARMS {
+            return Vec::new();
+        }
+        arms
     }
 }
 
