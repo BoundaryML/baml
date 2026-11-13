@@ -730,7 +730,7 @@ impl BamlClassClass for PackageReflectImpl {
                 ));
             };
             (
-                instance.load_value(index),
+                vm.load_field_value(instance, index),
                 class.name().display_name().to_string(),
             )
         };
