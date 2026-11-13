@@ -124,9 +124,12 @@ export function BcsBoard({ proposals }: { proposals: BoardProposal[] }) {
   const oldestFirst = params.get("sort") === "oldest";
   const [query, setQuery] = useState(params.get("q") ?? "");
 
-  /** Changes the board's address: one parameter, and the search box as typed. */
+  /**
+   * Changes the board's address: one parameter, and the search box as typed. It starts from the
+   * address as it is now, so the delayed search update never brings back an older view or filter.
+   */
   const setParam = (key: string, value: string | null, search = query) => {
-    const next = new URLSearchParams(params.toString());
+    const next = new URLSearchParams(window.location.search);
     if (value === null) next.delete(key);
     else next.set(key, value);
     if (search) next.set("q", search);
@@ -141,7 +144,7 @@ export function BcsBoard({ proposals }: { proposals: BoardProposal[] }) {
     if (!typed.current) return;
     const timer = setTimeout(() => setParam("q", query.trim() || null, query.trim()), 300);
     return () => clearTimeout(timer);
-    // setParam reads the current address; only the typed search should schedule it.
+    // setParam reads the address when it runs; only the typed search should schedule it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
