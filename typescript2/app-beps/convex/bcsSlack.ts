@@ -65,6 +65,7 @@ export interface Overview {
   currentVersion: number;
   updatedAt: number;
   openComments?: number;
+  openIssues?: number;
 }
 
 /** A comment as its Slack reply shows it. */
@@ -152,6 +153,9 @@ export function overviewBlocks(proposal: Overview, isNew: boolean): Block[] {
         { type: "mrkdwn", text: `*Last updated:* ${slackDate(proposal.updatedAt)}` },
         ...(proposal.openComments !== undefined
           ? [{ type: "mrkdwn", text: `*Open comments:* ${proposal.openComments}` }]
+          : []),
+        ...(proposal.openIssues !== undefined
+          ? [{ type: "mrkdwn", text: `*Open issues:* ${proposal.openIssues}` }]
           : []),
       ],
     },
@@ -332,6 +336,28 @@ export const notify = internalAction({
           },
         ],
         text: `Comment ${args.event.resolved ? "resolved" : "reopened"} on ${label}`,
+        unfurl_links: false,
+      });
+      return;
+    }
+    if (args.event.kind === "decision" || args.event.kind === "issue") {
+      const event = args.event;
+      const tracking = `${SITE_URL}/bcs/${proposal.number}/${event.kind === "decision" ? "decisions" : "issues"}`;
+      const title = `<${tracking}|*${escape(clip(event.title, 200))}*>`;
+      const line =
+        event.kind === "decision"
+          ? `📌 ${who} recorded a decision: ${title}`
+          : event.change === "opened"
+            ? `🚩 ${who} opened an issue: ${title}`
+            : event.change === "resolved"
+              ? `✅ ${who} resolved the issue ${title}` +
+                (event.resolution ? `\n>${escape(clip(event.resolution, 500)).replace(/\n/g, "\n>")}` : "")
+              : `↩️ ${who} reopened the issue ${title}`;
+      await slack("chat.postMessage", {
+        channel,
+        thread_ts: thread,
+        blocks: [{ type: "section", text: { type: "mrkdwn", text: line } }],
+        text: `${event.kind === "decision" ? "Decision" : "Issue"} on ${label}`,
         unfurl_links: false,
       });
       return;

@@ -65,6 +65,7 @@ const CommentTools = createContext<{
   remove: CommentAction;
   react: CommentAction;
   viewer: string;
+  number: number;
 } | null>(null);
 
 export function BcsReader(props: Props) {
@@ -93,8 +94,14 @@ export function BcsReader(props: Props) {
   };
 
   const tools = useMemo(
-    () => ({ edit: props.edit, remove: props.remove, react: props.react, viewer: props.viewer }),
-    [props.edit, props.remove, props.react, props.viewer]
+    () => ({
+      edit: props.edit,
+      remove: props.remove,
+      react: props.react,
+      viewer: props.viewer,
+      number: props.number,
+    }),
+    [props.edit, props.remove, props.react, props.viewer, props.number]
   );
   const openThreads = props.threads.filter((thread) => !thread.resolved);
   const resolvedThreads = props.threads.filter((thread) => thread.resolved);
@@ -436,6 +443,27 @@ function CommentBody({ comment, thread }: { comment: Comment; thread?: boolean }
   );
 }
 
+/** Turning a thread into a recorded decision or an open issue, on their pages. */
+function ThreadLinks({ threadId }: { threadId: string }) {
+  const tools = useContext(CommentTools)!;
+  return (
+    <>
+      <a
+        href={`/bcs/${tools.number}/decisions?from=${threadId}`}
+        className="inline-flex h-8 items-center px-2 text-xs text-muted-foreground hover:text-foreground"
+      >
+        Record decision
+      </a>
+      <a
+        href={`/bcs/${tools.number}/issues?from=${threadId}`}
+        className="inline-flex h-8 items-center px-2 text-xs text-muted-foreground hover:text-foreground"
+      >
+        Open issue
+      </a>
+    </>
+  );
+}
+
 function ThreadCard({
   thread,
   version,
@@ -515,10 +543,11 @@ function ThreadCard({
           </div>
         </form>
       ) : (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-x-2">
           <Button type="button" size="sm" variant="ghost" onClick={() => setReplying(true)}>
             Reply
           </Button>
+          <ThreadLinks threadId={thread.id} />
           <form action={submitResolve}>
             <input type="hidden" name="commentId" value={thread.id} />
             <input type="hidden" name="resolved" value={thread.resolved ? "false" : "true"} />
