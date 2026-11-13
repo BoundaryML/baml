@@ -49,10 +49,11 @@ impl ThreadStackBudget {
         additional: usize,
         #[cfg(test)] refuse_next_growth: &mut bool,
     ) -> Result<(), VmPanic> {
-        let needed = storage
-            .len()
-            .checked_add(additional)
-            .ok_or(VmPanic::StackOverflow)?;
+        // Not `ok_or`: an eagerly built `VmPanic` is dropped through its glue
+        // on every reservation.
+        let Some(needed) = storage.len().checked_add(additional) else {
+            return Err(VmPanic::StackOverflow);
+        };
         if needed <= storage.capacity() {
             return Ok(());
         }
