@@ -64,3 +64,24 @@ export function sections(headings: Heading[]): Section[] {
   }
   return result;
 }
+
+/** Whether a page's headings make a table of contents worth showing: two sections, or one with sub-sections. */
+export function hasContents(headings: Heading[]): boolean {
+  const list = sections(headings);
+  return list.length > 1 || list.some((section) => section.children.length > 0);
+}
+
+/**
+ * The section a heading belongs to: itself if it is one, else the last section before it in the
+ * page (a sub-section, or a deeper heading the table of contents does not list).
+ */
+export function sectionOf(headings: Heading[], id: string | null): string | null {
+  if (!id) return null;
+  const ids = new Set(sections(headings).map((section) => section.id));
+  let current: string | null = null;
+  for (const heading of headings) {
+    if (ids.has(heading.id)) current = heading.id;
+    if (heading.id === id) return current;
+  }
+  return null;
+}

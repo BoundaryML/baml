@@ -455,6 +455,9 @@ const BRIDGE_SCRIPT = `
       if (headings[i].getBoundingClientRect().top <= 96) active = headings[i].id;
       else break;
     }
+    // At the bottom a short last section never reaches the top: it is the one being read.
+    var bottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+    if (bottom && headings.length && window.scrollY > 0) active = headings[headings.length - 1].id;
     if (active !== lastActive) {
       lastActive = active;
       send({ type: "bcs-active-heading", id: active });

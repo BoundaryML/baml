@@ -5,7 +5,7 @@
 // view; the frame passes that on as a "bcs-active-heading" window event.
 import { useEffect, useMemo, useState } from "react";
 
-import { type Heading, sections } from "@/lib/bcs-outline";
+import { type Heading, hasContents, sectionOf, sections } from "@/lib/bcs-outline";
 
 export function PageContents({ headings }: { headings: Heading[] }) {
   const list = useMemo(() => sections(headings), [headings]);
@@ -17,9 +17,10 @@ export function PageContents({ headings }: { headings: Heading[] }) {
     return () => window.removeEventListener("bcs-active-heading", onActive);
   }, []);
 
-  // The section being read: the one whose heading, or one of whose sub-headings, is in view.
-  const open = list.find((section) => section.id === active || section.children.some((each) => each.id === active));
-  if (list.length < 2 && !list.some((section) => section.children.length > 0)) return null;
+  // The section being read: the one containing the heading in view, however deep that heading is.
+  const openId = sectionOf(headings, active);
+  const open = list.find((section) => section.id === openId);
+  if (!hasContents(headings)) return null;
 
   const link = (heading: Heading, nested: boolean) => (
     // A plain #link: the frame scrolls to it when clicked (frame.tsx), even if already in the address.

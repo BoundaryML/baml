@@ -58,8 +58,9 @@ export function StancePanel({
       <summary
         className="cursor-pointer list-none text-sm rounded-md border px-3 py-1.5 hover:bg-muted"
         title={`Stances on v${version}`}
+        aria-label={`Stances on v${version}: ${summary.support} support, ${summary.neutral} neutral, ${summary.oppose} oppose`}
       >
-        <span className="inline-flex items-center gap-2" aria-label={`${summary.support} support, ${summary.neutral} neutral, ${summary.oppose} oppose`}>
+        <span className="inline-flex items-center gap-2" aria-hidden>
           <span className="inline-flex items-center gap-1"><StanceIcon stance="support" /> {summary.support}</span>
           <span className="inline-flex items-center gap-1"><StanceIcon stance="neutral" /> {summary.neutral}</span>
           <span className="inline-flex items-center gap-1"><StanceIcon stance="oppose" /> {summary.oppose}</span>

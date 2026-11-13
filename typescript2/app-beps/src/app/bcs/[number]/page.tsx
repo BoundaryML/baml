@@ -6,7 +6,7 @@ import { BepStatusBadge } from "@/components/bep/bep-status";
 import { buttonVariants } from "@/components/ui/button";
 import { currentViewer } from "@/lib/bcs-auth";
 import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
-import { flattenOutline, sections } from "@/lib/bcs-outline";
+import { flattenOutline, hasContents } from "@/lib/bcs-outline";
 import { renderBcsPage } from "@/lib/bcs-render";
 import {
   addComment,
@@ -248,7 +248,7 @@ export default async function BcsProposal({
         </div>
       </header>
       <div className="flex flex-1 min-h-0">
-        {(outline.length > 1 || sections(rendered.headings).length > 1) && (
+        {(outline.length > 1 || hasContents(rendered.headings)) && (
           <div className="w-64 shrink-0 overflow-y-auto border-r p-3 text-sm space-y-4">
             {outline.length > 1 && (
               <nav aria-label="Pages">

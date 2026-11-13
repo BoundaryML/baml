@@ -5,7 +5,7 @@
 // offers to start one, and a block's badge or a thread's quote brings the other into view.
 import { createContext, useActionState, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { AlertCircle, Heart, HelpCircle, ThumbsDown, ThumbsUp } from "lucide-react";
+import { AlertCircle, Brain, Heart, HelpCircle, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CommentState } from "../actions";
@@ -338,11 +338,15 @@ function Meta({ comment, version, thread }: { comment: Comment; version: number;
   );
 }
 
-/** The reactions BEP comments offer, with their icons and the color of one's own. */
+/**
+ * The reactions BEP comments offer, with their icons and the color of one's own; "thinking", which
+ * BCS offered before, shows only on comments that still have it, so it can be taken back.
+ */
 const REACTIONS = [
-  { key: "thumbsUp", Icon: ThumbsUp, mine: "text-blue-500", label: "Thumbs up" },
-  { key: "thumbsDown", Icon: ThumbsDown, mine: "text-blue-500", label: "Thumbs down" },
-  { key: "heart", Icon: Heart, mine: "text-red-500", label: "Heart" },
+  { key: "thumbsUp", Icon: ThumbsUp, mine: "text-blue-500", label: "Thumbs up", always: true },
+  { key: "thumbsDown", Icon: ThumbsDown, mine: "text-blue-500", label: "Thumbs down", always: true },
+  { key: "heart", Icon: Heart, mine: "text-red-500", label: "Heart", always: true },
+  { key: "thinking", Icon: Brain, mine: "text-blue-500", label: "Thinking", always: false },
 ] as const;
 
 /** A comment's reactions, and the buttons to add or take back the viewer's. */
@@ -352,9 +356,10 @@ function ReactionBar({ comment }: { comment: Comment }) {
   return (
     <form action={submit} className="flex flex-wrap items-center gap-1">
       <input type="hidden" name="commentId" value={comment.id} />
-      {REACTIONS.map(({ key, Icon, mine: mineColor, label }) => {
+      {REACTIONS.map(({ key, Icon, mine: mineColor, label, always }) => {
         const who = comment.reactions[key] ?? [];
         const mine = who.includes(tools.viewer);
+        if (!always && who.length === 0) return null;
         return (
           <Button
             key={key}
@@ -365,7 +370,7 @@ function ReactionBar({ comment }: { comment: Comment }) {
             size="sm"
             disabled={pending}
             aria-pressed={mine}
-            aria-label={label}
+            aria-label={who.length > 0 ? `${label}, ${who.length}` : label}
             title={who.length > 0 ? who.join(", ") : label}
             className={`h-7 px-2 ${mine ? mineColor : "text-muted-foreground"}`}
           >
