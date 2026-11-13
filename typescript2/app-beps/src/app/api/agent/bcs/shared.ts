@@ -36,3 +36,36 @@ const FAILURE_STATUS: Record<BcsFailure["kind"], number> = {
 export function refused(failure: BcsFailure): NextResponse {
   return json({ error: failure.message }, FAILURE_STATUS[failure.kind]);
 }
+
+export type PageBody = { slug: string; parentSlug?: string; format: "markdown" | "html"; content: string };
+
+/**
+ * A request's `pages`: undefined when omitted, else each `{ slug, parentSlug?, format, content }`
+ * with the main page's slug "", or an error naming what is wrong. Convex checks the rest (one main
+ * page, parents that exist, sizes).
+ */
+export function pages(value: unknown): PageBody[] | undefined | { error: string } {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) return { error: "pages must be a list." };
+  const result: PageBody[] = [];
+  for (const [index, page] of value.entries()) {
+    if (
+      !page ||
+      typeof page.slug !== "string" ||
+      typeof page.content !== "string" ||
+      (page.format !== "markdown" && page.format !== "html") ||
+      (page.parentSlug !== undefined && page.parentSlug !== null && typeof page.parentSlug !== "string")
+    ) {
+      return {
+        error: `pages[${index}] must be { slug, parentSlug?, format: "markdown" | "html", content }.`,
+      };
+    }
+    result.push({
+      slug: page.slug,
+      parentSlug: page.parentSlug ?? undefined,
+      format: page.format,
+      content: page.content,
+    });
+  }
+  return result;
+}

@@ -2,7 +2,7 @@
 import { NextRequest } from "next/server";
 import { api } from "../../../../../convex/_generated/api";
 import { bcsCall } from "@/lib/bcs-convex";
-import { authenticate, json, refused, status } from "./shared";
+import { authenticate, json, pages, refused, status } from "./shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,21 +28,30 @@ export async function GET(request: NextRequest) {
   });
 }
 
-/** Creates a proposal: `{ title, html, status? }`. */
+/**
+ * Creates a proposal: `{ title, pages, status? }`, where pages holds the main page (slug "") and
+ * any sub-pages; `{ title, html }` (an HTML main page) still works for older `bep` scripts.
+ */
 export async function POST(request: NextRequest) {
   const viewer = authenticate(request);
   if (!("login" in viewer)) return viewer;
   const body = await request.json().catch(() => null);
-  if (!body || typeof body.title !== "string" || typeof body.html !== "string") {
-    return json({ error: "Send { title, html } and optionally status." }, 400);
+  if (!body || typeof body.title !== "string") {
+    return json({ error: "Send { title, pages } and optionally status." }, 400);
   }
   const asked = status(body.status);
   if (asked && typeof asked === "object") return json(asked, 400);
+  const sent = pages(body.pages);
+  if (sent && !Array.isArray(sent)) return json(sent, 400);
+  if (!sent && typeof body.html !== "string") {
+    return json({ error: "Send { title, pages } and optionally status." }, 400);
+  }
   const created = await bcsCall((convex, secret) =>
     convex.mutation(api.bcs.create, {
       secret,
       title: body.title,
-      html: body.html,
+      pages: sent,
+      html: sent ? undefined : body.html,
       status: asked ?? "draft",
       author: viewer.login,
       authorGithubId: viewer.githubId,

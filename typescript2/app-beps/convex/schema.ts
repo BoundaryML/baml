@@ -49,6 +49,17 @@ export const userRole = v.union(
 // SCHEMA
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** How a BCS page is written: Markdown (raw HTML allowed) or a whole HTML page. */
+export const bcsPageFormat = v.union(v.literal("markdown"), v.literal("html"));
+
+/** A BCS page in a version's outline: where it sits and how it is written, without its content. */
+export const bcsPageOutline = v.object({
+  slug: v.string(),
+  title: v.string(),
+  parentSlug: v.optional(v.string()),
+  format: bcsPageFormat,
+});
+
 export default defineSchema({
   // ─────────────────────────────────────────────────────────────────────────
   // USERS (GitHub OAuth or passkey auth)
@@ -409,11 +420,12 @@ export default defineSchema({
   // ─────────────────────────────────────────────────────────────────────────
   // BCS DESIGN PROPOSALS (team only)
   // ─────────────────────────────────────────────────────────────────────────
-  // System design proposals for Boundary Cloud, each a whole HTML page (diagrams, styles),
-  // shown in a sandboxed frame. Team only: every function in bcs.ts takes the server secret,
-  // which only this app's server holds after checking the viewer, so the browser never reads
-  // these tables. Kept apart from `beps` so that nothing that reads every BEP (Slack, export,
-  // AI analysis, the agent pull API) can reach them.
+  // System design proposals for Boundary Cloud: a main page and optional sub-pages, each written in
+  // Markdown (raw HTML allowed, for illustrations) or as a whole HTML page, shown in a sandboxed
+  // frame. Team only: every public function in bcs.ts takes the server secret, which only this
+  // app's server holds after checking the viewer, so the browser never reads these tables. Kept
+  // apart from `beps` so that nothing that reads every BEP (Slack, export, AI analysis, the agent
+  // pull API) can reach them.
   bcsDocs: defineTable({
     number: v.number(),
     title: v.string(),
@@ -427,20 +439,30 @@ export default defineSchema({
     slackThreadTs: v.optional(v.string()),
   }).index("by_number", ["number"]),
 
-  // A version's metadata, listed without its page so that reading a proposal never loads every
-  // version's HTML.
+  // A version's metadata and its pages' outline, listed without their content so that reading a
+  // proposal never loads every version's pages. Versions saved before sub-pages existed have no
+  // `pages`: they are one HTML main page.
   bcsDocVersions: defineTable({
     docId: v.id("bcsDocs"),
     version: v.number(),
     note: v.optional(v.string()),
     createdBy: v.string(),
     createdAt: v.number(),
+    pages: v.optional(v.array(bcsPageOutline)),
+    // Titles of the pages this version changed from the one before it.
+    changed: v.optional(v.array(v.string())),
   }).index("by_doc_version", ["docId", "version"]),
 
-  // A version's page, read one at a time.
+  // A page of a version, read one at a time. `slug` is "" for the main page. Rows saved before
+  // sub-pages existed have only `html`, the main page.
   bcsVersionPages: defineTable({
     docId: v.id("bcsDocs"),
     version: v.number(),
-    html: v.string(),
-  }).index("by_doc_version", ["docId", "version"]),
+    slug: v.optional(v.string()),
+    format: v.optional(bcsPageFormat),
+    content: v.optional(v.string()),
+    html: v.optional(v.string()),
+  })
+    .index("by_doc_version", ["docId", "version"])
+    .index("by_doc_version_slug", ["docId", "version", "slug"]),
 });

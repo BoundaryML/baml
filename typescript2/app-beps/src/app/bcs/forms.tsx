@@ -8,9 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BCS_STATUSES } from "@/lib/bcs-convex";
 import type { FormState } from "./actions";
-import { HtmlField } from "./proposal-fields";
+import { ContentField } from "./proposal-fields";
 
 type Action = (previous: FormState, form: FormData) => Promise<FormState>;
+
+/** A page that can be another page's parent: its slug, title and depth in the outline. */
+export type ParentChoice = { slug: string; title: string; depth: number };
 
 function Refused({ state }: { state: FormState }) {
   if (!state.error) return null;
@@ -39,6 +42,37 @@ function StatusSelect({ id, value }: { id?: string; value: string }) {
   );
 }
 
+function ParentSelect({ choices, value }: { choices: ParentChoice[]; value?: string }) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="parentSlug">Inside</Label>
+      <select
+        id="parentSlug"
+        name="parentSlug"
+        defaultValue={value ?? ""}
+        className="h-9 rounded-md border bg-background px-3 text-sm"
+      >
+        <option value="">The main page (top level)</option>
+        {choices.map((choice) => (
+          <option key={choice.slug} value={choice.slug}>
+            {"  ".repeat(choice.depth)}
+            {choice.title}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function Note({ value }: { value?: string }) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="note">What changed</Label>
+      <Input id="note" name="note" defaultValue={value} placeholder="Answered Paulo's questions" />
+    </div>
+  );
+}
+
 export function NewProposalForm({ action }: { action: Action }) {
   const [state, submit, pending] = useActionState(action, {});
   return (
@@ -58,7 +92,10 @@ export function NewProposalForm({ action }: { action: Action }) {
         <Label htmlFor="status">Status</Label>
         <StatusSelect id="status" value={state.values?.status ?? "proposed"} />
       </div>
-      <HtmlField defaultValue={state.values?.html} />
+      <ContentField defaultValue={state.values?.content} defaultFormat={state.values?.format} />
+      <p className="text-sm text-muted-foreground">
+        This is the main page. Add sub-pages once the proposal exists.
+      </p>
       <Button type="submit" disabled={pending}>
         {pending ? "Creating…" : "Create"}
       </Button>
@@ -66,26 +103,109 @@ export function NewProposalForm({ action }: { action: Action }) {
   );
 }
 
-export function SaveVersionForm({ action, baseVersion }: { action: Action; baseVersion: number }) {
+/** Edits one page: its content, format, and for a sub-page, where it sits. */
+export function EditPageForm({
+  action,
+  baseVersion,
+  content,
+  format,
+  parentSlug,
+  parents,
+}: {
+  action: Action;
+  baseVersion: number;
+  content: string;
+  format: string;
+  // Absent for the main page, which has no parent.
+  parentSlug?: string;
+  parents?: ParentChoice[];
+}) {
   const [state, submit, pending] = useActionState(action, {});
   const base = state.baseVersion ?? baseVersion;
   return (
-    <form key={state.attempt} action={submit} className="space-y-3">
-      <h2 className="font-medium">Save a new version</h2>
+    <form key={state.attempt} action={submit} className="space-y-5">
       <Refused state={state} />
       <input type="hidden" name="baseVersion" value={base} />
-      <HtmlField defaultValue={state.values?.html} />
-      <div className="space-y-2">
-        <Label htmlFor="note">What changed</Label>
-        <Input
-          id="note"
-          name="note"
-          defaultValue={state.values?.note}
-          placeholder="Answered Paulo's questions"
-        />
-      </div>
-      <Button type="submit" size="sm" disabled={pending}>
+      {parents && <ParentSelect choices={parents} value={state.values?.parentSlug ?? parentSlug} />}
+      <ContentField
+        defaultValue={state.values?.content ?? content}
+        defaultFormat={state.values?.format ?? format}
+        rows={28}
+      />
+      <Note value={state.values?.note} />
+      <Button type="submit" disabled={pending}>
         {pending ? "Saving…" : `Save v${base + 1}`}
+      </Button>
+    </form>
+  );
+}
+
+export function AddPageForm({
+  action,
+  baseVersion,
+  parents,
+  parentSlug,
+}: {
+  action: Action;
+  baseVersion: number;
+  parents: ParentChoice[];
+  parentSlug?: string;
+}) {
+  const [state, submit, pending] = useActionState(action, {});
+  const base = state.baseVersion ?? baseVersion;
+  return (
+    <form key={state.attempt} action={submit} className="space-y-5">
+      <Refused state={state} />
+      <input type="hidden" name="baseVersion" value={base} />
+      <div className="space-y-2">
+        <Label htmlFor="slug">Slug</Label>
+        <Input
+          id="slug"
+          name="slug"
+          required
+          pattern="[a-z0-9][a-z0-9-]*"
+          defaultValue={state.values?.slug}
+          placeholder="scheduler"
+        />
+        <p className="text-sm text-muted-foreground">
+          Lowercase letters, digits and dashes: the page&apos;s address, and its file name with
+          <code> bep bcs</code>. Its title is its first # heading.
+        </p>
+      </div>
+      <ParentSelect choices={parents} value={state.values?.parentSlug ?? parentSlug} />
+      <ContentField defaultValue={state.values?.content} defaultFormat={state.values?.format} rows={20} />
+      <Note value={state.values?.note} />
+      <Button type="submit" disabled={pending}>
+        {pending ? "Adding…" : `Add it as v${base + 1}`}
+      </Button>
+    </form>
+  );
+}
+
+export function RemovePageForm({
+  action,
+  baseVersion,
+  title,
+}: {
+  action: Action;
+  baseVersion: number;
+  title: string;
+}) {
+  const [state, submit, pending] = useActionState(action, {});
+  return (
+    <form
+      key={state.attempt}
+      action={submit}
+      onSubmit={(event) => {
+        if (!confirm(`Remove "${title}"? Earlier versions keep it.`)) event.preventDefault();
+      }}
+      className="space-y-2 border-t pt-4"
+    >
+      <h2 className="font-medium">Remove this page</h2>
+      <Refused state={state} />
+      <input type="hidden" name="baseVersion" value={baseVersion} />
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        Remove &ldquo;{title}&rdquo;
       </Button>
     </form>
   );
@@ -102,7 +222,7 @@ export function UpdateProposalForm({
 }) {
   const [state, submit, pending] = useActionState(action, {});
   return (
-    <form key={state.attempt} action={submit} className="space-y-3 border-t pt-4">
+    <form key={state.attempt} action={submit} className="space-y-3">
       <h2 className="font-medium">Title and status</h2>
       <Refused state={state} />
       <input type="hidden" name="originalTitle" value={title} />

@@ -1,4 +1,6 @@
-// BCS design proposals: team-only system design docs, each a whole HTML page with versions.
+// BCS design proposals: team-only system design docs with versions. Each version has a main page
+// and optional sub-pages (a tree, like BEP pages), each Markdown with raw HTML allowed or a whole
+// HTML page; the site renders them in a sandboxed frame.
 //
 // Every function takes `secret`, which must equal the deployment's BCS_CONVEX_SECRET. Only this
 // app's server holds it, and it calls these functions after it has checked that the viewer is on
@@ -12,7 +14,7 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { bepStatus } from "./schema";
+import { bcsPageFormat, bcsPageOutline, bepStatus } from "./schema";
 import { requireServerSecret } from "./serverSecret";
 
 /**
@@ -31,21 +33,94 @@ function fail(kind: BcsFailure["kind"], message: string, currentVersion?: number
   throw new ConvexError<BcsFailure>({ kind, message, currentVersion });
 }
 
-/** The longest HTML page a version may hold, under Convex's 1 MiB document limit. */
-export const MAX_HTML_BYTES = 900_000;
+/** The longest page a version may hold, under Convex's 1 MiB document limit. */
+export const MAX_PAGE_BYTES = 900_000;
+/** The most pages a proposal may have, main page included. */
+export const MAX_PAGES = 50;
+/** The most a version's pages may weigh together, so one save stays well inside a mutation. */
+export const MAX_VERSION_BYTES = 8_000_000;
+
+const SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /** Refuses a call without the server secret. */
 function guard(secret: string) {
   requireServerSecret(secret);
 }
 
-function checkHtml(html: string) {
-  if (!html.trim()) {
-    fail("invalid", "The page is empty.");
+type PageFormat = typeof bcsPageFormat.type;
+type Outline = typeof bcsPageOutline.type;
+/** A page as an editor sends it: its title comes from its content. */
+type PageInput = { slug: string; parentSlug?: string; format: PageFormat; content: string };
+type Page = Outline & { content: string };
+
+export const pageInput = v.object({
+  slug: v.string(),
+  parentSlug: v.optional(v.string()),
+  format: bcsPageFormat,
+  content: v.string(),
+});
+
+function bytes(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
+
+/**
+ * A sub-page's title: its first Markdown `# ` heading, or an HTML page's <title> or first <h1>,
+ * else its slug. The main page's title is the proposal's.
+ */
+export function pageTitle(page: PageInput): string {
+  const fromMarkdown = page.content.match(/^#[ \t]+(.+?)[ \t#]*$/m)?.[1];
+  const fromHtml =
+    page.content.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ??
+    page.content.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1]?.replace(/<[^>]+>/g, "");
+  const found = (page.format === "markdown" ? fromMarkdown ?? fromHtml : fromHtml ?? fromMarkdown)?.trim();
+  return found ? found.slice(0, 200) : page.slug;
+}
+
+/**
+ * Checks a version's pages and returns them with titles: one main page (slug ""), sub-page slugs
+ * unique and URL-safe, each parent another sub-page, no cycles, nothing empty or too large.
+ */
+function checkPages(inputs: PageInput[], title: string): Page[] {
+  if (inputs.length > MAX_PAGES) fail("invalid", `A proposal can have at most ${MAX_PAGES} pages.`);
+  const mains = inputs.filter((page) => page.slug === "");
+  if (mains.length !== 1) fail("invalid", "A proposal needs exactly one main page.");
+  const slugs = new Set<string>();
+  let total = 0;
+  for (const page of inputs) {
+    const name = page.slug || "the main page";
+    if (page.slug !== "" && !SLUG.test(page.slug)) {
+      fail("invalid", `"${page.slug}" is not a page slug: use lowercase letters, digits and dashes.`);
+    }
+    if (slugs.has(page.slug)) fail("invalid", `Two pages are called "${page.slug}".`);
+    slugs.add(page.slug);
+    if (!page.content.trim()) fail("invalid", `${name === "the main page" ? "The main page" : `Page "${name}"`} is empty.`);
+    const size = bytes(page.content);
+    if (size > MAX_PAGE_BYTES) fail("invalid", `Page "${name}" is larger than 900 KB.`);
+    total += size;
   }
-  if (new TextEncoder().encode(html).length > MAX_HTML_BYTES) {
-    fail("invalid", "The page is larger than 900 KB.");
+  if (total > MAX_VERSION_BYTES) fail("invalid", "The pages together are larger than 8 MB.");
+  const parents = new Map(inputs.map((page) => [page.slug, page.parentSlug]));
+  for (const page of inputs) {
+    if (page.parentSlug === undefined) continue;
+    if (page.slug === "") fail("invalid", "The main page cannot have a parent.");
+    if (page.parentSlug === "" || !slugs.has(page.parentSlug)) {
+      fail("invalid", `Page "${page.slug}" names a parent page "${page.parentSlug}" that does not exist.`);
+    }
+    // Walk up: a parent chain that comes back to this page is a cycle.
+    const seen = new Set([page.slug]);
+    for (let up: string | undefined = page.parentSlug; up !== undefined; up = parents.get(up)) {
+      if (seen.has(up)) fail("invalid", `Page "${page.slug}" ends up inside itself: its parents loop back to it.`);
+      seen.add(up);
+    }
   }
+  return inputs.map((page) => ({
+    slug: page.slug,
+    title: page.slug === "" ? title : pageTitle(page),
+    parentSlug: page.parentSlug,
+    format: page.format,
+    content: page.content,
+  }));
 }
 
 async function byNumber(ctx: QueryCtx, number: number) {
@@ -71,24 +146,73 @@ export const list = query({
   },
 });
 
-/** A version's page: one document, read by itself. */
-async function page(ctx: QueryCtx, docId: Id<"bcsDocs">, version: number) {
+async function versionRow(ctx: QueryCtx, docId: Id<"bcsDocs">, version: number) {
   return ctx.db
-    .query("bcsVersionPages")
+    .query("bcsDocVersions")
     .withIndex("by_doc_version", (q) => q.eq("docId", docId).eq("version", version))
     .unique();
 }
 
-/** A proposal with one version's page, its current one unless `version` names another. */
+/** A version's outline; one saved before sub-pages existed is its HTML main page. */
+function outlineOf(row: { pages?: Outline[] }, title: string): Outline[] {
+  return row.pages ?? [{ slug: "", title, format: "html" }];
+}
+
+/** One page's content and format, read by itself. */
+async function pageContent(ctx: QueryCtx, docId: Id<"bcsDocs">, version: number, slug: string) {
+  const row = await ctx.db
+    .query("bcsVersionPages")
+    .withIndex("by_doc_version_slug", (q) => q.eq("docId", docId).eq("version", version).eq("slug", slug))
+    .unique();
+  if (row) return { format: row.format ?? "html", content: row.content ?? row.html ?? "" };
+  if (slug !== "") return null;
+  // A version saved before sub-pages existed: its one row, without a slug, is the main page.
+  const legacy = await ctx.db
+    .query("bcsVersionPages")
+    .withIndex("by_doc_version", (q) => q.eq("docId", docId).eq("version", version))
+    .first();
+  return legacy && legacy.slug === undefined
+    ? { format: "html" as const, content: legacy.html ?? legacy.content ?? "" }
+    : null;
+}
+
+/** Every page of a version with its content, in outline order. */
+async function allPages(ctx: QueryCtx, docId: Id<"bcsDocs">, version: number, title: string) {
+  const row = await versionRow(ctx, docId, version);
+  if (!row) return null;
+  const pages: Page[] = [];
+  for (const outline of outlineOf(row, title)) {
+    const found = await pageContent(ctx, docId, version, outline.slug);
+    if (found) pages.push({ ...outline, format: found.format, content: found.content });
+  }
+  return pages;
+}
+
+/**
+ * A proposal with one page of one version: its current version and main page unless `version`
+ * or `page` (a slug) names another. The outline lists every page of that version.
+ */
 export const get = query({
-  args: { secret: v.string(), number: v.number(), version: v.optional(v.number()) },
+  args: {
+    secret: v.string(),
+    number: v.number(),
+    version: v.optional(v.number()),
+    page: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     guard(args.secret);
     const doc = await byNumber(ctx, args.number);
     if (!doc) return null;
     const version = args.version ?? doc.currentVersion;
-    const shown = await page(ctx, doc._id, version);
-    if (!shown) return null;
+    const row = await versionRow(ctx, doc._id, version);
+    if (!row) return null;
+    const outline = outlineOf(row, doc.title).map((page) =>
+      page.slug === "" ? { ...page, title: doc.title } : page
+    );
+    const slug = args.page ?? "";
+    const shown = outline.find((page) => page.slug === slug);
+    const found = shown && (await pageContent(ctx, doc._id, version, slug));
+    if (!shown || !found) return null;
     const versions = await ctx.db
       .query("bcsDocVersions")
       .withIndex("by_doc_version", (q) => q.eq("docId", doc._id))
@@ -103,23 +227,77 @@ export const get = query({
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
       version,
-      html: shown.html,
+      outline,
+      page: { ...shown, format: found.format, content: found.content },
       versions: versions.map((each) => ({
         version: each.version,
         note: each.note,
         createdBy: each.createdBy,
         createdAt: each.createdAt,
+        changed: each.changed,
       })),
     };
   },
 });
+
+/** Every page of a proposal's version with its content, for the `bep bcs` CLI. */
+export const getAll = query({
+  args: { secret: v.string(), number: v.number(), version: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    guard(args.secret);
+    const doc = await byNumber(ctx, args.number);
+    if (!doc) return null;
+    const version = args.version ?? doc.currentVersion;
+    const pages = await allPages(ctx, doc._id, version, doc.title);
+    if (!pages) return null;
+    return {
+      number: doc.number,
+      title: doc.title,
+      status: doc.status,
+      authors: doc.authors,
+      version,
+      updatedAt: doc.updatedAt,
+      pages: pages.map((page) => (page.slug === "" ? { ...page, title: doc.title } : page)),
+    };
+  },
+});
+
+/** Stores a new version's outline and pages. */
+async function storeVersion(
+  ctx: MutationCtx,
+  docId: Id<"bcsDocs">,
+  version: number,
+  pages: Page[],
+  meta: { note?: string; createdBy: string; createdAt: number; changed?: string[] }
+) {
+  await ctx.db.insert("bcsDocVersions", {
+    docId,
+    version,
+    note: meta.note,
+    createdBy: meta.createdBy,
+    createdAt: meta.createdAt,
+    changed: meta.changed,
+    pages: pages.map(({ slug, title, parentSlug, format }) => ({ slug, title, parentSlug, format })),
+  });
+  for (const page of pages) {
+    await ctx.db.insert("bcsVersionPages", {
+      docId,
+      version,
+      slug: page.slug,
+      format: page.format,
+      content: page.content,
+    });
+  }
+}
 
 export const create = mutation({
   args: {
     secret: v.string(),
     title: v.string(),
     status: bepStatus,
-    html: v.string(),
+    // The main page and any sub-pages; `html` is the main page alone, from older `bep` scripts.
+    pages: v.optional(v.array(pageInput)),
+    html: v.optional(v.string()),
     author: v.string(),
     authorGithubId: v.optional(v.string()),
   },
@@ -127,7 +305,10 @@ export const create = mutation({
     guard(args.secret);
     const title = args.title.trim();
     if (!title) fail("invalid", "A proposal needs a title.");
-    checkHtml(args.html);
+    const inputs =
+      args.pages ??
+      (args.html !== undefined ? [{ slug: "", format: "html" as const, content: args.html }] : []);
+    const pages = checkPages(inputs, title);
     const latest = await ctx.db.query("bcsDocs").withIndex("by_number").order("desc").first();
     const number = (latest?.number ?? 0) + 1;
     const now = Date.now();
@@ -140,17 +321,88 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
-    await ctx.db.insert("bcsDocVersions", { docId, version: 1, createdBy: args.author, createdAt: now });
-    await ctx.db.insert("bcsVersionPages", { docId, version: 1, html: args.html });
+    await storeVersion(ctx, docId, 1, pages, { createdBy: args.author, createdAt: now });
     await tellSlack(ctx, docId, { kind: "created" }, args.author, args.authorGithubId);
     return number;
   },
 });
 
+/** The pages a save leaves, from the current ones and what the editor sent. */
+function applyChanges(
+  current: Page[],
+  change: {
+    pages?: PageInput[];
+    html?: string;
+    upsert?: PageInput;
+    add?: PageInput;
+    remove?: string;
+  }
+): PageInput[] {
+  if (change.pages) return change.pages;
+  let pages: PageInput[] = current.map(({ slug, parentSlug, format, content }) => ({
+    slug,
+    parentSlug,
+    format,
+    content,
+  }));
+  // An older `bep` script sends the main page alone as HTML.
+  const upsert = change.upsert ?? (change.html !== undefined ? { slug: "", format: "html" as const, content: change.html } : undefined);
+  if (upsert) {
+    const at = pages.findIndex((page) => page.slug === upsert.slug);
+    if (at >= 0) {
+      // Editing a page keeps it where it is unless the editor named a new parent.
+      pages[at] = { ...upsert, parentSlug: upsert.slug === "" ? undefined : upsert.parentSlug ?? pages[at].parentSlug };
+    } else {
+      pages.push(upsert);
+    }
+  }
+  if (change.add) {
+    const added = change.add;
+    if (pages.some((page) => page.slug === added.slug)) {
+      fail("invalid", `There is already a page called "${added.slug}".`);
+    }
+    pages.push(added);
+  }
+  if (change.remove !== undefined) {
+    if (change.remove === "") fail("invalid", "The main page cannot be removed.");
+    if (!pages.some((page) => page.slug === change.remove)) fail("missing", "No such page.");
+    if (pages.some((page) => page.parentSlug === change.remove)) {
+      fail("invalid", "Move or remove this page's sub-pages first.");
+    }
+    pages = pages.filter((page) => page.slug !== change.remove);
+  }
+  return pages;
+}
+
+/** Titles of pages that differ between two versions, including added and removed ones. */
+function changedTitles(before: Page[], after: Page[]): string[] {
+  const old = new Map(before.map((page) => [page.slug, page]));
+  const now = new Map(after.map((page) => [page.slug, page]));
+  const titles: string[] = [];
+  for (const page of after) {
+    const was = old.get(page.slug);
+    if (
+      !was ||
+      was.content !== page.content ||
+      was.format !== page.format ||
+      was.parentSlug !== page.parentSlug ||
+      was.title !== page.title
+    ) {
+      titles.push(page.title);
+    }
+  }
+  for (const page of before) if (!now.has(page.slug)) titles.push(page.title);
+  const sameOrder = before.map((page) => page.slug).join("/") === after.map((page) => page.slug).join("/");
+  return titles.length === 0 && !sameOrder ? ["page order"] : titles;
+}
+
 /**
- * Saves what an editor changed, in one transaction: a new version when `html` differs from the
- * current page, and the title or status when given. Refused when `baseVersion`, the version the
- * editor started from, is no longer the current one, so a stale editor cannot hide a newer save.
+ * Saves what an editor changed, in one transaction: a new version when the pages differ from the
+ * current ones, and the title or status when given. Pages come as the whole set (`pages`), one
+ * page replaced or added (`upsert`), one added that must be new (`add`), one removed (`remove`),
+ * or, from older `bep` scripts, the
+ * main page as `html`. Refused when `baseVersion`, the version the editor started from, is no
+ * longer the current one, so a stale editor cannot hide a newer save.
  */
 export const save = mutation({
   args: {
@@ -159,6 +411,10 @@ export const save = mutation({
     author: v.string(),
     authorGithubId: v.optional(v.string()),
     baseVersion: v.optional(v.number()),
+    pages: v.optional(v.array(pageInput)),
+    upsert: v.optional(pageInput),
+    add: v.optional(pageInput),
+    remove: v.optional(v.string()),
     html: v.optional(v.string()),
     note: v.optional(v.string()),
     title: v.optional(v.string()),
@@ -176,26 +432,31 @@ export const save = mutation({
       );
     }
     const now = Date.now();
-    let version = doc.currentVersion;
-    if (args.html !== undefined) {
-      checkHtml(args.html);
-      const current = await page(ctx, doc._id, doc.currentVersion);
-      if (current?.html !== args.html) {
-        version = doc.currentVersion + 1;
-        await ctx.db.insert("bcsDocVersions", {
-          docId: doc._id,
-          version,
-          note: args.note?.trim() || undefined,
-          createdBy: args.author,
-          createdAt: now,
-        });
-        await ctx.db.insert("bcsVersionPages", { docId: doc._id, version, html: args.html });
-      }
-    }
-    const newVersion = version !== doc.currentVersion;
     const title = args.title?.trim() || undefined;
     const newTitle = title !== undefined && title !== doc.title;
     const newStatus = args.status !== undefined && args.status !== doc.status;
+    let version = doc.currentVersion;
+    const touchesPages =
+      args.pages !== undefined ||
+      args.upsert !== undefined ||
+      args.add !== undefined ||
+      args.remove !== undefined ||
+      args.html !== undefined;
+    if (touchesPages) {
+      const current = (await allPages(ctx, doc._id, doc.currentVersion, doc.title)) ?? [];
+      const pages = checkPages(applyChanges(current, args), title ?? doc.title);
+      const changed = changedTitles(current, pages);
+      if (changed.length > 0) {
+        version = doc.currentVersion + 1;
+        await storeVersion(ctx, doc._id, version, pages, {
+          note: args.note?.trim() || undefined,
+          createdBy: args.author,
+          createdAt: now,
+          changed,
+        });
+      }
+    }
+    const newVersion = version !== doc.currentVersion;
     if (newVersion || newTitle || newStatus) {
       await ctx.db.patch(doc._id, {
         currentVersion: version,
@@ -273,6 +534,7 @@ export const slackView = internalQuery({
       updatedAt: doc.updatedAt,
       slackThreadTs: doc.slackThreadTs,
       note: version?.note,
+      changed: version?.changed,
       slackUserId: user?.slackUserId,
     };
   },

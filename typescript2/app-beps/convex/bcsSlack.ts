@@ -106,7 +106,12 @@ export function overviewBlocks(proposal: Overview, isNew: boolean): Block[] {
 export function savedBlocks(
   proposal: Overview,
   who: string,
-  change: { version?: number; note?: string; status?: { from: string; to: string } }
+  change: {
+    version?: number;
+    note?: string;
+    changed?: string[];
+    status?: { from: string; to: string };
+  }
 ): Block[] {
   const blocks: Block[] = [];
   if (change.version !== undefined) {
@@ -117,6 +122,10 @@ export function savedBlocks(
         type: "mrkdwn",
         text:
           `📝 ${who} saved <${url}|*v${change.version}*> of ${bcsId(proposal.number)}` +
+          // Which pages changed, when the proposal has more than its main page.
+          (change.changed && (change.changed.length > 1 || change.changed[0] !== proposal.title)
+            ? `\n_Changed: ${escape(clip(change.changed.join(", "), 300))}_`
+            : "") +
           (change.note ? `\n>${escape(clip(change.note, 500)).replace(/\n/g, "\n>")}` : ""),
       },
     });
@@ -217,6 +226,7 @@ export const notify = internalAction({
     const blocks = savedBlocks(proposal, who, {
       version,
       note: proposal.note,
+      changed: proposal.changed,
       status: args.event.status,
     });
     if (blocks.length === 0) return;
