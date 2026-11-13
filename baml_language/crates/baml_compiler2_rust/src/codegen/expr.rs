@@ -1,7 +1,7 @@
 //! Rvalues: operators, type tests, and aggregates.
 
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, BoundFrame, Rvalue, TyTemplate, TypeTest, UnaryOp,
+    AggregateKind, BinOp, BlockId, BoundFrame, Operand, Rvalue, TyTemplate, TypeTest, UnaryOp,
     class_display_name, enum_display_name, function_display_name,
 };
 use baml_type::typetag;
@@ -11,7 +11,7 @@ use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     Rejection,
     analysis::{CallShape, Repr, builtin_is_callable, reads_frame, static_realized},
-    render::{binop_name, cmp_name, object_value},
+    render::{binop_name, cmp_name, object_ptr, object_value},
 };
 
 impl<'db> Generator<'_, 'db> {
@@ -99,12 +99,12 @@ impl<'db> Generator<'_, 'db> {
                         fields.len()
                     ));
                 }
-                let values = self.arg_values(block, fields)?;
-                let class = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
-                let values = values.join(", ");
+                let class = object_ptr(object);
                 if type_arg_templates.is_empty() {
-                    format!("vm.new_instance({class}, vec![{values}])")
+                    let words = self.slot_words(block, object, fields)?.join(", ");
+                    format!("vm.new_instance_of({class}, [{words}])")
                 } else {
+                    let values = self.arg_values(block, fields)?.join(", ");
                     let type_args = self.realized_all(type_arg_templates)?.join(", ");
                     format!(
                         "vm.new_generic_instance({class}, Box::new([{type_args}]), vec![{values}])"
@@ -388,6 +388,34 @@ impl<'db> Generator<'_, 'db> {
             "vm.is_type_constant(vm.record_object(fr, ObjectIndex::from_raw({})), {index}, {value})?",
             self.object
         ))
+    }
+
+    /// Each of a class literal's `fields`, in the encoding of its slot.
+    fn slot_words(
+        &mut self,
+        block: BlockId,
+        object: usize,
+        fields: &[Operand<'db>],
+    ) -> Gen<Vec<String>> {
+        let Some(layout) = self.index.class_layout(object) else {
+            return unsupported("class literal of a non-class object");
+        };
+        fields
+            .iter()
+            .enumerate()
+            .map(|(field, operand)| {
+                let value = self.operand(block, operand)?;
+                let (_, repr) = super::place::slot_repr(layout.kind(field));
+                // Bound first: a coercion may itself call into the VM.
+                let code = self.repr_arg(&value, repr);
+                Ok(match repr {
+                    Repr::Int => format!("i64::cast_unsigned({code})"),
+                    Repr::Float => format!("f64::to_bits({code})"),
+                    Repr::Bool => format!("u64::from({code})"),
+                    Repr::Value => format!("Value::bits({code})"),
+                })
+            })
+            .collect()
     }
 
     fn realized_type(&mut self, template: &TyTemplate) -> Gen<String> {

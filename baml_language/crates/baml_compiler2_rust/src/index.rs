@@ -13,7 +13,7 @@ use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef, GlobalRe
 use baml_compiler2_mir::{FunctionOwner, MirFunctionId};
 use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
-    Bytecode, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TypeHead,
+    Bytecode, ClassLayout, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TypeHead,
     types::{FunctionIdentity, PackageKind},
 };
 
@@ -209,6 +209,14 @@ impl<'p> ProgramIndex<'p> {
 
     pub(crate) fn enum_at(&self, head: &baml_type::DeclName) -> Option<usize> {
         self.lookup(enum_head_coords(head))
+    }
+
+    /// Where an instance of the class at `object` keeps its fields.
+    pub(crate) fn class_layout(&self, object: usize) -> Option<ClassLayout<'p>> {
+        let Object::Class(class) = &self.program.objects[ObjectIndex::from_raw(object)] else {
+            return None;
+        };
+        Some(ClassLayout::of(class))
     }
 
     fn class_fields(&self, coords: DeclCoords) -> Option<(usize, usize)> {
