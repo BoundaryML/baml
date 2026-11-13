@@ -121,6 +121,10 @@ const PROBES: &[&str] = &[
     "InitializerTestErrors",
     "GlobalCalls",
     "GlobalCallPending",
+    "InstanceFields",
+    "InstanceGeneric",
+    "InstanceCleanupLatch",
+    "InstanceWrongKind",
 ];
 
 /// Name, `BAML_COMPILED_BODIES`, `BAML_GC_STRESS`, `BAML_COMPILED_FRAMES`,

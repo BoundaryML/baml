@@ -19,7 +19,7 @@ function Compute(n: int) -> int {
     i
 }
 function ChurnAndWait() -> int {
-    let n = Churn(1000000);
+    let n = Churn(3000000);
     baml.sys.sleep(baml.time.Duration.from_milliseconds(30000n));
     n
 }
@@ -126,7 +126,9 @@ async fn spawn_services_pressure_after_rooting_child_and_future() {
 #[tokio::test]
 async fn long_compute_collects_before_returning() {
     let engine = engine();
-    let n = 2_100_000;
+    // A `Node` is a 16-byte cell: enough of them spend the 32 MiB initial
+    // allowance more than once.
+    let n = 5_000_000;
     assert_eq!(
         call(&engine, "Churn", vec![Ext::Int(n)], true).await,
         Ext::Int(n * (n - 1) / 2)
@@ -374,8 +376,8 @@ async fn cancellation_after_pressure_does_not_latch_the_checker() {
     assert!(bex_engine::is_cancelled_engine_error(&result.unwrap_err()));
     let before = engine.heap().gc_budget().full_collections;
     assert_eq!(
-        call(&engine, "Churn", vec![Ext::Int(2_100_000)], true).await,
-        Ext::Int(2_100_000 * 2_099_999 / 2)
+        call(&engine, "Churn", vec![Ext::Int(5_000_000)], true).await,
+        Ext::Int(5_000_000 * 4_999_999 / 2)
     );
     assert!(engine.heap().gc_budget().full_collections > before);
     engine.shutdown().await;
