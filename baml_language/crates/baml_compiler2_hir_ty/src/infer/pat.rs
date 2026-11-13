@@ -1184,7 +1184,7 @@ impl<'db> InferenceContext<'db> {
             }
             // Nothing provably claimed: possible-but-not-covering.
             return PatternOutcome {
-                dpat: DPat::single(dpat_ty(pat_ty), dpat_ty(scrut)),
+                dpat: DPat::type_test(dpat_ty(pat_ty), dpat_ty(scrut)),
                 matched_ty: pat_ty.clone(),
                 recorded_ty: None,
                 covers_type: false,
@@ -1232,13 +1232,13 @@ impl<'db> InferenceContext<'db> {
         }
         match pat_ty.kind() {
             InferTy::Literal(..) | InferTy::EnumVariant(..) | InferTy::Null => {
-                DPat::single(pat_plain, col_plain)
+                DPat::type_test(pat_plain, col_plain)
             }
             InferTy::Bool => DPat::or(
                 [true, false]
                     .into_iter()
                     .map(|value| {
-                        DPat::single(
+                        DPat::type_test(
                             baml_type::Ty::Literal(
                                 baml_base::Literal::Bool(value),
                                 Freshness::Regular,
@@ -1255,7 +1255,7 @@ impl<'db> InferenceContext<'db> {
                     variants
                         .into_iter()
                         .map(|variant| {
-                            DPat::single(
+                            DPat::type_test(
                                 baml_type::Ty::EnumVariant(qtn.clone(), variant),
                                 col_plain.clone(),
                             )
@@ -1290,14 +1290,14 @@ impl<'db> InferenceContext<'db> {
                 if pat_ty == col {
                     DPat::wildcard(col_plain)
                 } else {
-                    DPat::single(pat_plain, col_plain)
+                    DPat::type_test(pat_plain, col_plain)
                 }
             }
             _ => {
                 if self.provable_subtype(col, pat_ty) {
                     DPat::wildcard(col_plain)
                 } else {
-                    DPat::single(pat_plain, col_plain)
+                    DPat::type_test(pat_plain, col_plain)
                 }
             }
         }
@@ -2144,16 +2144,16 @@ impl PatCtx for HirPatCtx<'_, '_> {
         let ty = self.peel_aliases(ty.clone(), 8);
         match &ty {
             P::Bool => vec![
-                Ctor::Single(P::Literal(
+                Ctor::Type(P::Literal(
                     baml_base::Literal::Bool(true),
                     Freshness::Regular,
                 )),
-                Ctor::Single(P::Literal(
+                Ctor::Type(P::Literal(
                     baml_base::Literal::Bool(false),
                     Freshness::Regular,
                 )),
             ],
-            P::Null | P::Literal(..) | P::EnumVariant(..) => vec![Ctor::Single(ty.clone())],
+            P::Null | P::Literal(..) | P::EnumVariant(..) => vec![Ctor::Type(ty.clone())],
             P::Never => vec![],
             P::Union(members) => members
                 .iter()
@@ -2165,7 +2165,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
                 .enum_variants(qtn)
                 .unwrap_or_default()
                 .into_iter()
-                .map(|variant| Ctor::Single(P::EnumVariant(qtn.clone(), variant)))
+                .map(|variant| Ctor::Type(P::EnumVariant(qtn.clone(), variant)))
                 .collect(),
             P::Class(qtn, args) => vec![Ctor::Class(qtn.clone(), args.clone())],
             // An existential column is a single-constructor STRUCT VIEW
