@@ -10,17 +10,22 @@ import { flattenOutline } from "@/lib/bcs-outline";
 import { renderBcsPage } from "@/lib/bcs-render";
 import {
   addComment,
+  deleteComment,
+  editComment,
   removePage,
   replyToComment,
   setCommentResolved,
   setPeople,
+  setStance,
   setStatus,
+  toggleReaction,
   updateProposal,
 } from "../actions";
 import { TeamOnly } from "../team-only";
 import { BcsUnavailable } from "../unavailable";
 import { HeaderStatus, PeopleForm, RemovePageForm, UpdateProposalForm } from "../forms";
 import { BcsReader } from "./reader";
+import { StancePanel } from "./stances";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +82,13 @@ export default async function BcsProposal({
   );
   // Without its comments the proposal still reads; the panel says why they are missing.
   const { threads, openByPage } = (comments.ok && comments.value) || { threads: [], openByPage: {} };
+  const stances = await bcsCall((convex, secret) =>
+    convex.query(api.bcsStances.list, { secret, number, version: proposal.version })
+  );
+  const { stances: stanceList, summary } = (stances.ok && stances.value) || {
+    stances: [],
+    summary: { support: 0, neutral: 0, oppose: 0 },
+  };
   // GitHub logins seen across proposals, suggested when choosing shepherds.
   const everyone = await bcsCall((convex, secret) => convex.query(api.bcs.list, { secret }));
   const people = everyone.ok ? everyone.value.people : [];
@@ -108,6 +120,22 @@ export default async function BcsProposal({
           )}
         </span>
         <div className="ml-auto flex items-center gap-2">
+          <StancePanel
+            // A new version starts a fresh panel, so a reason typed for another is never saved here.
+            key={proposal.version}
+            error={stances.ok ? undefined : stances.failure.message}
+            action={setStance.bind(null, proposal.number, proposal.version)}
+            version={proposal.version}
+            stances={stanceList}
+            summary={summary}
+            viewer={viewer.login}
+          />
+          <Link
+            href={`/bcs/${proposal.number}/comments`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            All comments
+          </Link>
           <details className="relative">
             <summary className="cursor-pointer list-none text-sm rounded-md border px-3 py-1.5 hover:bg-muted">
               v{proposal.version}
@@ -273,6 +301,10 @@ export default async function BcsProposal({
           addComment={addComment.bind(null, proposal.number, page.slug, proposal.version)}
           reply={replyToComment.bind(null, proposal.number, proposal.version)}
           resolve={setCommentResolved.bind(null, proposal.number)}
+          edit={editComment.bind(null, proposal.number)}
+          remove={deleteComment.bind(null, proposal.number)}
+          react={toggleReaction.bind(null, proposal.number)}
+          viewer={viewer.login}
         />
       </div>
     </div>

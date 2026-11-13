@@ -562,7 +562,9 @@ export const slackEvent = v.union(
     shepherds: v.optional(v.array(v.string())),
   }),
   v.object({ kind: v.literal("comment"), commentId: v.id("bcsComments") }),
-  v.object({ kind: v.literal("resolved"), commentId: v.id("bcsComments"), resolved: v.boolean() })
+  v.object({ kind: v.literal("resolved"), commentId: v.id("bcsComments"), resolved: v.boolean() }),
+  // Only the thread's overview changes (an open thread was deleted): no reply.
+  v.object({ kind: v.literal("refresh") })
 );
 
 export async function tellSlack(
@@ -592,7 +594,9 @@ export const slackView = internalQuery({
       .collect();
     // Shown once a proposal has threads, then kept, so resolving the last one shows 0.
     const threads = comments.filter((each) => !each.parentId);
-    const openComments = threads.length > 0 ? threads.filter((each) => !each.resolved).length : undefined;
+    // The stored count once kept (it stays at 0 after the last thread goes), else counted here.
+    const openComments =
+      doc.openComments ?? (threads.length > 0 ? threads.filter((each) => !each.resolved).length : undefined);
     const comment = args.commentId ? comments.find((each) => each._id === args.commentId) : undefined;
     const thread = comment?.parentId ? comments.find((each) => each._id === comment.parentId) : comment;
     const outline = outlineOf((await versionRow(ctx, doc._id, doc.currentVersion)) ?? {}, doc.title);
@@ -637,6 +641,7 @@ export const slackView = internalQuery({
               quote: thread.anchor?.text,
               threadAuthor: thread.author,
               threadBody: thread.body,
+              type: thread.type,
             }
           : undefined,
     };

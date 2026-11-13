@@ -3,12 +3,19 @@
 // A proposal page and its comments: the sandboxed frame, and beside it the page's threads. A
 // thread is on the whole page or on one block of a Markdown page; hovering a block in the frame
 // offers to start one, and a block's badge or a thread's quote brings the other into view.
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useActionState, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CommentState } from "../actions";
 import { BcsFrame, type BcsFrameHandle } from "./frame";
+
+export type Reactions = {
+  thumbsUp?: string[];
+  thumbsDown?: string[];
+  heart?: string[];
+  thinking?: string[];
+};
 
 export type Comment = {
   id: string;
@@ -16,6 +23,10 @@ export type Comment = {
   anchor?: { block: string; text: string };
   author: string;
   body: string;
+  type: "discussion" | "concern" | "question";
+  reactions: Reactions;
+  editedAt?: number;
+  deleted: boolean;
   resolved: boolean;
   resolvedBy?: string;
   createdAt: number;
@@ -40,7 +51,21 @@ type Props = {
   /** Server actions that read the thread from the form's commentId (and resolved). */
   reply: CommentAction;
   resolve: CommentAction;
+  /** Server actions on one comment, named by the form's commentId. */
+  edit: CommentAction;
+  remove: CommentAction;
+  react: CommentAction;
+  /** The viewer's GitHub login: their own comments can be edited and deleted. */
+  viewer: string;
 };
+
+/** What every comment needs to offer reactions, and editing and deleting to its author. */
+const CommentTools = createContext<{
+  edit: CommentAction;
+  remove: CommentAction;
+  react: CommentAction;
+  viewer: string;
+} | null>(null);
 
 export function BcsReader(props: Props) {
   const frame = useRef<BcsFrameHandle>(null);
@@ -67,10 +92,15 @@ export function BcsReader(props: Props) {
     pendingFocus.current = undefined;
   };
 
+  const tools = useMemo(
+    () => ({ edit: props.edit, remove: props.remove, react: props.react, viewer: props.viewer }),
+    [props.edit, props.remove, props.react, props.viewer]
+  );
   const openThreads = props.threads.filter((thread) => !thread.resolved);
   const resolvedThreads = props.threads.filter((thread) => thread.resolved);
 
   return (
+    <CommentTools.Provider value={tools}>
     <div className="flex flex-1 min-w-0">
       <BcsFrame
         ref={frame}
@@ -182,6 +212,7 @@ export function BcsReader(props: Props) {
         </button>
       )}
     </div>
+    </CommentTools.Provider>
   );
 }
 
@@ -229,6 +260,7 @@ function Composer({
       <Refused error={state.error} />
       <input type="hidden" name="block" value={block ?? ""} />
       <input type="hidden" name="blockText" value={text ?? ""} />
+      <TypeSelect />
       <Textarea
         name="body"
         required
@@ -251,12 +283,155 @@ function Composer({
   );
 }
 
-function Meta({ comment, version }: { comment: Comment; version: number }) {
+const TYPES = {
+  discussion: { label: "Discussion", className: "" },
+  concern: { label: "Concern", className: "bg-red-500/15 text-red-700 dark:text-red-300" },
+  question: { label: "Question", className: "bg-blue-500/15 text-blue-700 dark:text-blue-300" },
+} as const;
+
+/** A new thread's kind, as on BEPs. */
+function TypeSelect({ value = "discussion" }: { value?: string }) {
+  return (
+    <select
+      name="type"
+      defaultValue={value}
+      aria-label="Kind"
+      className="h-8 rounded-md border bg-background px-2 text-xs"
+    >
+      <option value="discussion">💬 Discussion</option>
+      <option value="concern">⚠️ Concern (blocks acceptance)</option>
+      <option value="question">❓ Question</option>
+    </select>
+  );
+}
+
+function Meta({ comment, version, thread }: { comment: Comment; version: number; thread?: boolean }) {
+  const kind = TYPES[comment.type] ?? TYPES.discussion;
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
+      {thread && comment.type !== "discussion" && (
+        <span className={`rounded px-1.5 py-0.5 font-medium ${kind.className}`}>{kind.label}</span>
+      )}
       <span className="font-medium text-foreground">{comment.author}</span>
       <span>{formatDistanceToNow(comment.createdAt, { addSuffix: true })}</span>
+      {comment.editedAt && <span title={new Date(comment.editedAt).toLocaleString()}>edited</span>}
       {comment.version !== version && <span>on v{comment.version}</span>}
+    </div>
+  );
+}
+
+const REACTION_ICONS = [
+  ["thumbsUp", "👍"],
+  ["thumbsDown", "👎"],
+  ["heart", "❤️"],
+  ["thinking", "🤔"],
+] as const;
+
+/** A comment's reactions, and the buttons to add or take back the viewer's. */
+function ReactionBar({ comment }: { comment: Comment }) {
+  const tools = useContext(CommentTools)!;
+  const [state, submit, pending] = useActionState(tools.react, {});
+  return (
+    <form action={submit} className="flex flex-wrap items-center gap-1">
+      <input type="hidden" name="commentId" value={comment.id} />
+      {REACTION_ICONS.map(([key, icon]) => {
+        const who = comment.reactions[key] ?? [];
+        const mine = who.includes(tools.viewer);
+        return (
+          <button
+            key={key}
+            type="submit"
+            name="reaction"
+            value={key}
+            disabled={pending}
+            aria-pressed={mine}
+            title={who.length > 0 ? who.join(", ") : "React"}
+            className={`rounded-full border px-1.5 text-xs leading-5 ${
+              mine ? "border-violet-500 bg-violet-500/15" : "border-transparent hover:border-border"
+            } ${who.length === 0 ? "opacity-50 hover:opacity-100" : ""}`}
+          >
+            {icon}
+            {who.length > 0 && <span className="ml-0.5">{who.length}</span>}
+          </button>
+        );
+      })}
+      <Refused error={state.error} />
+    </form>
+  );
+}
+
+/** A comment's text, with editing and deleting for its author. */
+function CommentBody({ comment, thread }: { comment: Comment; thread?: boolean }) {
+  const tools = useContext(CommentTools)!;
+  const [editing, setEditing] = useState(false);
+  const [editState, submitEdit, editPending] = useActionState(tools.edit, {});
+  const [removeState, submitRemove, removePending] = useActionState(tools.remove, {});
+  useEffect(() => {
+    if (editState.posted) setEditing(false);
+  }, [editState.posted]);
+  if (comment.deleted) {
+    return <p className="text-sm italic text-muted-foreground">This comment was deleted.</p>;
+  }
+  if (editing) {
+    return (
+      <form action={submitEdit} className="space-y-2">
+        <input type="hidden" name="commentId" value={comment.id} />
+        <Refused error={editState.error} />
+        {thread && <TypeSelect value={comment.type} />}
+        <Textarea
+          name="body"
+          required
+          autoFocus
+          rows={3}
+          defaultValue={editState.body ?? comment.body}
+          aria-label="Edit comment"
+          className="text-sm"
+        />
+        <div className="flex gap-2">
+          <Button type="submit" size="sm" disabled={editPending}>
+            {editPending ? "Saving…" : "Save"}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    );
+  }
+  const own = comment.author === tools.viewer;
+  return (
+    <div className="space-y-1">
+      <p className="text-sm whitespace-pre-wrap break-words">{comment.body}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <ReactionBar comment={comment} />
+        {own && (
+          <>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Edit
+            </button>
+            <form
+              action={submitRemove}
+              onSubmit={(event) => {
+                if (!confirm("Delete this comment?")) event.preventDefault();
+              }}
+            >
+              <input type="hidden" name="commentId" value={comment.id} />
+              <button
+                type="submit"
+                disabled={removePending}
+                className="text-xs text-muted-foreground hover:text-destructive"
+              >
+                Delete
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+      <Refused error={removeState.error} />
     </div>
   );
 }
@@ -304,12 +479,12 @@ function ThreadCard({
           {stale && <p className="text-xs text-muted-foreground">This text changed in a later version.</p>}
         </div>
       )}
-      <Meta comment={thread} version={version} />
-      <p className="text-sm whitespace-pre-wrap break-words">{thread.body}</p>
+      <Meta comment={thread} version={version} thread />
+      <CommentBody comment={thread} thread />
       {thread.replies.map((each) => (
         <div key={each.id} className="border-l pl-2 space-y-1">
           <Meta comment={each} version={version} />
-          <p className="text-sm whitespace-pre-wrap break-words">{each.body}</p>
+          <CommentBody comment={each} />
         </div>
       ))}
       {thread.resolved && thread.resolvedBy && (
