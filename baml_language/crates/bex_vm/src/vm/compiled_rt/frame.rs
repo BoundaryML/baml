@@ -477,7 +477,7 @@ impl BexVm {
             .last()
             .is_some_and(|hook| hook.frame == depth && hook.evaluating)
             && !self.as_instance(&exception_value).is_ok_and(|instance| {
-                instance.class == self.panic_class_ptrs[PanicClass::Cancelled as usize]
+                instance.class() == self.panic_class_ptrs[PanicClass::Cancelled as usize]
             })
         {
             self.stack.truncate(kept);

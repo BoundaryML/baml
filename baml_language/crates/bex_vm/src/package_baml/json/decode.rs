@@ -34,7 +34,7 @@ use baml_type::MediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     BexStr, HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, TypeHead, Value, ValueKind,
-    types::{Array, Instance},
+    types::Array,
 };
 use indexmap::IndexMap;
 use rustc_hash::FxHashMap;
@@ -219,11 +219,10 @@ impl Container {
     /// The container's value, once every child is decoded.
     fn finish(self, vm: &mut BexVm) -> Value {
         Value::object(match self {
-            Self::Class { plan, decoded, .. } => vm.alloc(Object::Instance(Instance::new(
-                plan.class,
-                plan.type_args.clone(),
-                decoded,
-            ))),
+            Self::Class { plan, decoded, .. } => {
+                vm.tlab
+                    .alloc_instance_with_type_args(plan.class, plan.type_args.clone(), decoded)
+            }
             // Type-directed: the list carries the element type it decoded.
             Self::List {
                 element, decoded, ..
@@ -1889,11 +1888,11 @@ impl<'p> Structural<'p> {
             )?;
             values.push(value);
         }
-        Ok(Value::object(vm.alloc(Object::Instance(Instance::new(
+        Ok(Value::object(vm.tlab.alloc_instance_with_type_args(
             plan.class,
             plan.type_args.clone(),
             values,
-        )))))
+        )))
     }
 
     fn media(

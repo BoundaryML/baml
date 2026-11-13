@@ -7,7 +7,7 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     MapReadGuard,
     trace::{ReservedSpanData, SpanId, TraceOptionsData},
-    types::{Instance, Object, Type, Value},
+    types::{InstanceRef, Object, Type, Value},
 };
 use btel_types::{
     InvocationMode,
@@ -46,14 +46,14 @@ pub struct PackageTraceImpl;
 
 fn options_data(vm: &BexVm, value: Value) -> TraceOptionsData {
     let instance = vm.as_instance(&value).expect("trace.Options receiver");
-    vm.as_rust_data::<TraceOptionsData>(&instance.load_field(0))
+    vm.as_rust_data::<TraceOptionsData>(&instance.load_value(0))
         .expect("trace.Options handle")
         .clone()
 }
 
 fn reservation_data(vm: &BexVm, value: Value) -> &ReservedSpanData {
     let instance = vm.as_instance(&value).expect("trace.ReservedSpan receiver");
-    vm.as_rust_data::<ReservedSpanData>(&instance.load_field(0))
+    vm.as_rust_data::<ReservedSpanData>(&instance.load_value(0))
         .expect("trace.ReservedSpan handle")
 }
 
@@ -424,7 +424,7 @@ impl BamlClassReservedSpan for PackageTraceImpl {
 fn span_data(vm: &BexVm, value: Value) -> Arc<crate::telemetry::manual::ManualSpan> {
     use bex_vm_types::RustDataArc as _;
     let instance = vm.as_instance(&value).expect("trace.Span receiver");
-    let handle = instance.load_field(0).as_object_ptr().expect("span handle");
+    let handle = instance.load_value(0).as_object_ptr().expect("span handle");
     let Object::RustData(data) = vm.get_object(handle) else {
         unreachable!("span handle")
     };
@@ -467,8 +467,8 @@ impl BamlClassSpan for PackageTraceImpl {
             }));
         }
         let original = vm.as_instance(context).expect("validated error Context");
-        let stack = original.load_field(1);
-        let cause = original.load_field(2);
+        let stack = original.load_value(1);
+        let cause = original.load_value(2);
         // Preserve the supplied stack/cause while recording the supplied error,
         // even when it differs from the Context's original error value.
         let recorded = vm.alloc_error_value(

@@ -1165,10 +1165,10 @@ fn compiled_delivery_survives_collection_before_resume() {
             .suspend(Step::Yield)
             .expect_err("expected a delivered exception");
         let (value, context) = vm.catch(error, fr)?;
-        let Object::Instance(context) = vm.get_object(context.as_object_ptr().unwrap()) else {
+        let Some(context) = vm.get_instance(context.as_object_ptr().unwrap()) else {
             panic!("expected error context");
         };
-        assert_eq!(context.load_field(0), value);
+        assert_eq!(context.load_value(0), value);
         assert_eq!(vm.as_string(&value).unwrap(), "delivered error");
         Ok(value)
     }

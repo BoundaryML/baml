@@ -7385,8 +7385,9 @@ impl BexEngine {
             };
             let package_ptr = match vm.get_object(wrapper_ptr) {
                 Object::Package(_) => wrapper_ptr,
-                Object::Instance(wrapper) => {
-                    wrapper.load_field(0).as_object_ptr().ok_or_else(|| {
+                Object::Instance => {
+                    let wrapper = vm.get_instance(wrapper_ptr).expect("an instance pointer");
+                    wrapper.load_value(0).as_object_ptr().ok_or_else(|| {
                         EngineError::TypeMismatch {
                             message: format!(
                                 "Package.compile dependency `{alias}` is not initialized"
@@ -7454,8 +7455,10 @@ impl BexEngine {
             .ok_or_else(|| invalid("Session.eval receiver is not an instance".to_string()))?;
         let package_ptr = match vm.get_object(wrapper_ptr) {
             Object::Package(_) => wrapper_ptr,
-            Object::Instance(wrapper) => wrapper
-                .load_field(0)
+            Object::Instance => vm
+                .get_instance(wrapper_ptr)
+                .expect("an instance pointer")
+                .load_value(0)
                 .as_object_ptr()
                 .ok_or_else(|| invalid("Session is not initialized".to_string()))?,
             _ => {

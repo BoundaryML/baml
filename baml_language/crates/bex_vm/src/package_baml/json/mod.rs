@@ -700,18 +700,11 @@ fn build_media(
 }
 
 pub(crate) fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<bex_vm_types::MediaValue>> {
-    let ptr = value.as_object_ptr()?;
-    let (class, data_value) = match vm.get_object(ptr) {
-        Object::Instance(inst) => (inst.class, inst.fields.first()?.load()),
-        _ => return None,
-    };
-    let class_head = match vm.get_object(class) {
-        Object::Class(c) => TypeHead::new(class, c.type_tag),
-        _ => return None,
-    };
+    let instance = vm.get_instance(value.as_object_ptr()?)?;
+    let class_head = TypeHead::new(instance.class(), instance.class_object().type_tag);
     vm.stdlib_heads().media_kind(class_head)?;
 
-    let data_ptr = data_value.as_object_ptr()?;
+    let data_ptr = instance.load_value(0).as_object_ptr()?;
     match vm.get_object(data_ptr) {
         Object::RustData(arc) => {
             use bex_vm_types::RustDataArc as _;

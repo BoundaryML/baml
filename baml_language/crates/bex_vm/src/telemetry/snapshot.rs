@@ -2,7 +2,9 @@
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
 use std::borrow::Cow;
 
-use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind};
+use bex_vm_types::{
+    Field, HeapPtr, InstanceRef, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind,
+};
 use btel_snapshot::{
     Builder, Carried, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType,
     RedactionReason, Reserved, Shaper, Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue,
@@ -52,6 +54,14 @@ impl Scratch {
     }
     /// The value as the capture holds it. An object gets its identity here
     /// and its content later, so that what it holds can name it.
+    /// [`Self::add`] for an instance field, which may be a raw float.
+    fn add_field(&mut self, leaves: &mut Leaves<'_>, field: Field, depth: usize) -> SnapshotValue {
+        match field {
+            Field::Value(value) => self.add(leaves, value, depth),
+            Field::Float(float) => SnapshotValue::Float(float),
+        }
+    }
+
     fn add(&mut self, leaves: &mut Leaves<'_>, value: Value, depth: usize) -> SnapshotValue {
         if let Some(ptr) = value.as_object_ptr() {
             if let Some(value) = self.seen.get(&ptr) {
@@ -119,7 +129,10 @@ impl Scratch {
             // A class declared redacted is withheld whole: nothing of the
             // instance enters the capture, which records only that it was.
             // SAFETY: the class lives under the same heap permit.
-            Object::Instance(instance) if matches!(unsafe { instance.class.get() }, Object::Class(class) if class.redact) => {
+            Object::Instance
+                if unsafe { InstanceRef::of(ptr) }
+                    .is_some_and(|instance| instance.class_object().redact) =>
+            {
                 SnapshotValue::Redacted(RedactionReason::Declared)
             }
             _ => {
@@ -175,22 +188,21 @@ impl Scratch {
                         )
                     })
                 }
-                Object::Instance(instance) => {
-                    let class = Value::object(instance.class);
+                Object::Instance => {
+                    // SAFETY: the instance lives under the same heap permit.
+                    let instance = unsafe { InstanceRef::of(ptr) }.expect("an instance pointer");
+                    let class = Value::object(instance.class());
                     match self.add(&mut b.leaves(), class, depth + 1) {
                         SnapshotValue::Object(declaration) => {
-                            // SAFETY: class lives under the same heap permit.
-                            let Object::Class(class) = (unsafe { instance.class.get() }) else {
-                                unreachable!("instance class")
-                            };
+                            let class = instance.class_object();
                             // A generic instance's type arguments; most have none.
                             let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
-                                if instance.class_type_args.is_empty() {
+                                if instance.type_args().is_empty() {
                                     SmallVec::new()
                                 } else {
                                     let mut leaves = b.leaves();
                                     instance
-                                        .class_type_args
+                                        .type_args()
                                         .iter()
                                         .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
                                         .collect()
@@ -205,7 +217,7 @@ impl Scratch {
                                     let value = if field.redact {
                                         SnapshotValue::Redacted(RedactionReason::Declared)
                                     } else {
-                                        self.add(leaves, instance.load_field(at), depth + 1)
+                                        self.add_field(leaves, instance.load(at), depth + 1)
                                     };
                                     (field.name.as_str().into(), value)
                                 },
@@ -949,10 +961,8 @@ mod tests {
         );
         let snapshot = capture(&[Value::object(map)]);
         unsafe {
-            let Object::Instance(instance) = instance.get() else {
-                unreachable!()
-            };
-            instance.store_field(0, Value::int(99));
+            let instance = InstanceRef::of(instance).unwrap();
+            instance.store(0, Value::int(99)).unwrap();
             let Object::Map(map) = map.get() else {
                 unreachable!()
             };

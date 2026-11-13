@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use bex_heap::TlabHolder;
 use bex_str::BexStr;
-use bex_vm_types::{
-    HeapPtr, PromptAst, PromptAstSimple, RootHaver, RootVisitor,
-    types::{Object, Value},
-};
+use bex_vm_types::{HeapPtr, PromptAst, PromptAstSimple, RootHaver, RootVisitor, types::Value};
 
 use super::{
     Continuation, NativeCallResult, make_to_string_callee,
@@ -106,21 +103,15 @@ struct PromptRole {
 /// The `args` of an `ai.CacheDelimiter` instance, which is what `${cache(args)}`
 /// interpolates. `None` for any other value.
 fn read_cache_delimiter(vm: &BexVm, value: Value) -> Option<serde_json::Value> {
-    let ptr = value.as_object_ptr()?;
-    let (class, args) = match vm.get_object(ptr) {
-        Object::Instance(instance) => (instance.class, instance.fields.first()?.load()),
-        _ => return None,
-    };
-    let is_delimiter = match vm.get_object(class) {
-        Object::Class(c) => vm
-            .stdlib_heads()
-            .is_class(StdlibClass::CacheDelimiter, c.type_tag),
-        _ => false,
-    };
-    if !is_delimiter {
+    let instance = vm.get_instance(value.as_object_ptr()?)?;
+    let type_tag = instance.class_object().type_tag;
+    if !vm
+        .stdlib_heads()
+        .is_class(StdlibClass::CacheDelimiter, type_tag)
+    {
         return None;
     }
-    Some(super::json::json_value_to_serde(vm, args))
+    Some(super::json::json_value_to_serde(vm, instance.load_value(0)))
 }
 
 /// Trim leading whitespace off a run of content parts: whitespace-only text
@@ -193,32 +184,18 @@ fn message(role: PromptRole, mut content: PromptContentSink, trim: bool) -> Arc<
 }
 
 fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
-    let ptr = value.as_object_ptr()?;
-    let (class_ptr, fields) = match vm.get_object(ptr) {
-        Object::Instance(instance) => (
-            instance.class,
-            instance.field_values().collect::<Vec<Value>>(),
-        ),
-        _ => return None,
-    };
-    let (name_index, metadata_index) = match vm.get_object(class_ptr) {
-        Object::Class(class)
-            if vm
-                .stdlib_heads()
-                .is_class(StdlibClass::PromptRole, class.type_tag) =>
-        {
-            (
-                class.fields.iter().position(|field| field.name == "name")?,
-                class
-                    .fields
-                    .iter()
-                    .position(|field| field.name == "metadata")?,
-            )
-        }
-        _ => return None,
-    };
-    let name = vm.as_string(fields.get(name_index)?).ok()?;
-    let mut metadata = super::json::json_value_to_serde(vm, *fields.get(metadata_index)?);
+    let instance = vm.get_instance(value.as_object_ptr()?)?;
+    let class = instance.class_object();
+    if !vm
+        .stdlib_heads()
+        .is_class(StdlibClass::PromptRole, class.type_tag)
+    {
+        return None;
+    }
+    let field = |name: &str| class.fields.iter().position(|field| field.name == name);
+    let name = vm.as_string(&instance.load_value(field("name")?)).ok()?;
+    let mut metadata =
+        super::json::json_value_to_serde(vm, instance.load_value(field("metadata")?));
     let mut synthetic = false;
     if let serde_json::Value::Object(entries) = &mut metadata {
         synthetic = entries.remove("__baml_synthetic_role").is_some();
@@ -350,7 +327,7 @@ impl Continuation for PromptAssembly {
 
 impl BamlClassPrompt for PackageAiImpl {
     fn text(vm: &BexVm, prompt: &ai_view::Prompt<'_>) -> bex_str::BexStr {
-        let data = prompt.instance.load_field(0);
+        let data = prompt.instance.load_value(0);
         let prompt = vm
             .as_rust_data::<PromptAst>(&data)
             .expect("ai.Prompt._data must contain bex_vm_types::PromptAst");
@@ -362,7 +339,7 @@ impl BamlClassPrompt for PackageAiImpl {
             let instance = vm
                 .as_instance(prompt)
                 .expect("ai.Prompt.messages receiver must be an ai.Prompt instance");
-            let data = instance.load_field(0);
+            let data = instance.load_value(0);
             vm.as_rust_data::<PromptAst>(&data)
                 .expect("ai.Prompt._data must contain bex_vm_types::PromptAst")
                 .to_structured_messages()
