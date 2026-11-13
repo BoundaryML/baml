@@ -222,9 +222,15 @@ export const updateIssue = mutation({
   },
 });
 
-/** Removes an issue opened by mistake. */
+/** Removes an issue opened by mistake; an open one updates the Slack overview's count. */
 export const removeIssue = mutation({
-  args: { secret: v.string(), number: v.number(), issueId: v.string() },
+  args: {
+    secret: v.string(),
+    number: v.number(),
+    issueId: v.string(),
+    author: v.string(),
+    authorGithubId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     requireServerSecret(args.secret);
     const doc = await docOrFail(ctx, args.number);
@@ -233,5 +239,6 @@ export const removeIssue = mutation({
     if (!found || found.docId !== doc._id) fail("missing", "No such issue.");
     await ctx.db.delete(found._id);
     await countOpenIssues(ctx, doc._id);
+    if (!found.resolved) await tellSlack(ctx, doc._id, { kind: "refresh" }, args.author, args.authorGithubId);
   },
 });

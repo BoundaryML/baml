@@ -519,6 +519,7 @@ export async function updateIssue(number: number, _previous: FormState, form: Fo
   const viewer = await viewerOrFail();
   const change = form.get("change");
   const resolution = String(form.get("resolution") ?? "");
+  const assignedTo = String(form.get("assignedTo") ?? "");
   const saved = await bcsCall((convex, secret) =>
     convex.mutation(api.bcsTracking.updateIssue, {
       secret,
@@ -526,21 +527,30 @@ export async function updateIssue(number: number, _previous: FormState, form: Fo
       issueId: String(form.get("issueId") ?? ""),
       resolved: change === "resolve" ? true : change === "reopen" ? false : undefined,
       resolution: change === "resolve" ? resolution : undefined,
-      assignedTo: change === "assign" ? String(form.get("assignedTo") ?? "") : undefined,
+      assignedTo: change === "assign" ? assignedTo : undefined,
       author: viewer.login,
       authorGithubId: viewer.githubId,
     })
   );
-  if (!saved.ok) return { error: saved.failure.message, values: { content: resolution }, attempt: Date.now() };
+  if (!saved.ok) {
+    // What was typed comes back, so a refused resolution or assignee can be corrected.
+    return { error: saved.failure.message, values: { content: resolution, shepherds: assignedTo }, attempt: Date.now() };
+  }
   revalidatePath(`/bcs/${number}/issues`);
   revalidatePath(`/bcs/${number}`);
   return { attempt: Date.now() };
 }
 
 export async function removeIssue(number: number, _previous: FormState, form: FormData): Promise<FormState> {
-  await viewerOrFail();
+  const viewer = await viewerOrFail();
   const removed = await bcsCall((convex, secret) =>
-    convex.mutation(api.bcsTracking.removeIssue, { secret, number, issueId: String(form.get("issueId") ?? "") })
+    convex.mutation(api.bcsTracking.removeIssue, {
+      secret,
+      number,
+      issueId: String(form.get("issueId") ?? ""),
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
   );
   if (!removed.ok) return { error: removed.failure.message, attempt: Date.now() };
   revalidatePath(`/bcs/${number}/issues`);

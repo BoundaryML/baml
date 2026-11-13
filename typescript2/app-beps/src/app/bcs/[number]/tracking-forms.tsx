@@ -132,7 +132,8 @@ export function IssueActions({
 }) {
   const [state, submit, pending] = useActionState(action, {});
   const [mode, setMode] = useState<"none" | "resolve" | "assign">("none");
-  // Back to the buttons once a change is saved, so the issue's new state shows its actions.
+  // Back to the buttons once a change is saved, so the issue's new state shows its actions; a
+  // refused change keeps its form open with what was typed.
   useEffect(() => {
     if (state.attempt && !state.error) setMode("none");
   }, [state.attempt, state.error]);
@@ -169,7 +170,7 @@ export function IssueActions({
           <Input
             name="assignedTo"
             autoFocus
-            defaultValue={assignedTo}
+            defaultValue={state.error ? state.values?.shepherds : assignedTo}
             list="bcs-tracking-people"
             aria-label="Assigned to"
             placeholder="GitHub login, or empty"
