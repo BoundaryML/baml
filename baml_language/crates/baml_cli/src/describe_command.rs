@@ -665,8 +665,11 @@ pub fn write_description(
         "{} {name_display}{fqn_part}{implements_part}  {loc}",
         painter.keyword(kind_str)
     )?;
-
     let mut lines_used = ITEM_HEADER_COST;
+    if let Some(hotswap) = Hotswap::of(desc, project_root) {
+        writeln!(w, "{}", painter.dim(hotswap.describe()))?;
+        lines_used += 1;
+    }
 
     // ── Body ─────────────────────────────────────────────────────────────────
     // The body slice already includes any leading `///` doc-comments
@@ -1747,6 +1750,52 @@ fn method_json(
         .collect()
 }
 
+/// Whether a function is marked `/// baml:hotswap`, and the rule its swaps
+/// run (BEP-087). `describe` stays local: what a process runs is
+/// `baml cloud hotswaps`'.
+struct Hotswap {
+    /// The mark's rule, or `[hotswap] default_rule` for a mark that names none.
+    rule: Option<String>,
+    /// From the mark itself rather than `default_rule`.
+    named: bool,
+    /// `[hotswap] enabled`.
+    enabled: bool,
+}
+
+impl Hotswap {
+    fn of(desc: &SymbolDescription, project_root: &std::path::Path) -> Option<Self> {
+        let Ok(bex_project::hotswap_rules::Mark { rule }) =
+            bex_project::hotswap_rules::mark_of(&desc.full_body)?
+        else {
+            return None;
+        };
+        let config = crate::runtime_telemetry::hotswap_config(project_root).unwrap_or_default();
+        let named = rule.is_some();
+        Some(Self {
+            rule: rule.or(config.default_rule).map(|rule| rule.to_string()),
+            named,
+            enabled: config.enabled,
+        })
+    }
+
+    fn describe(&self) -> String {
+        let rule = match (&self.rule, self.named) {
+            (Some(rule), true) => format!("rule {rule}"),
+            (Some(rule), false) => format!("rule {rule}, baml.toml's default_rule"),
+            (None, _) => "no rule, and baml.toml sets no [hotswap] default_rule".to_string(),
+        };
+        if self.enabled {
+            format!("hot swappable, {rule}")
+        } else {
+            format!("marked hot swappable, {rule}; [hotswap] enabled = false turns it off")
+        }
+    }
+
+    fn json(&self) -> serde_json::Value {
+        serde_json::json!({ "rule": self.rule, "enabled": self.enabled })
+    }
+}
+
 fn description_to_json(
     db: &ProjectDatabase,
     desc: &SymbolDescription,
@@ -1780,6 +1829,7 @@ fn description_to_json(
         "body": body,
         "docstring": desc.docstring,
         "resolved_type": desc.resolved_type,
+        "hotswap": Hotswap::of(desc, project_root).map(|hotswap| hotswap.json()),
         "dependencies": desc.dependencies.iter().map(|dep| {
             let dep_path = relative_path(&dep.file.path(db), project_root);
             serde_json::json!({

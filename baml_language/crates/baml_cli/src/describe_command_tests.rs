@@ -2002,3 +2002,27 @@ fn dispatch_root_prefix_nonexistent() {
         "expected NOT FOUND, got: {output}"
     );
 }
+
+/// A function marked `/// baml:hotswap` says so, with its rule (BEP-087); an
+/// unmarked one says nothing of hot swapping.
+#[test]
+fn describe_says_whether_a_function_is_hot_swappable() {
+    let db = make_db(&[(
+        "main.baml",
+        "/// baml:hotswap=hotswap.text_only\nfunction Marked(x: int) -> int { x }\n\n/// baml:hotswap\nfunction Defaulted(x: int) -> int { x }\n\nfunction Plain(x: int) -> int { x }\n",
+    )]);
+    let marked = describe_via_dispatch(&db, "Marked");
+    assert_eq!(
+        marked.lines().nth(1),
+        Some("hot swappable, rule hotswap.text_only"),
+        "{marked}"
+    );
+    // `/test` has no baml.toml, so there is no default rule.
+    let defaulted = describe_via_dispatch(&db, "Defaulted");
+    assert_eq!(
+        defaulted.lines().nth(1),
+        Some("hot swappable, no rule, and baml.toml sets no [hotswap] default_rule"),
+        "{defaulted}"
+    );
+    assert!(!describe_via_dispatch(&db, "Plain").contains("hot swappable"));
+}
