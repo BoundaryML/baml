@@ -8,11 +8,17 @@ import { currentViewer } from "@/lib/bcs-auth";
 import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
 import { flattenOutline } from "@/lib/bcs-outline";
 import { renderBcsPage } from "@/lib/bcs-render";
-import { removePage, updateProposal } from "../actions";
+import {
+  addComment,
+  removePage,
+  replyToComment,
+  setCommentResolved,
+  updateProposal,
+} from "../actions";
 import { TeamOnly } from "../team-only";
 import { BcsUnavailable } from "../unavailable";
 import { RemovePageForm, UpdateProposalForm } from "../forms";
-import { BcsFrame } from "./frame";
+import { BcsReader } from "./reader";
 
 export const dynamic = "force-dynamic";
 
@@ -21,14 +27,25 @@ export default async function BcsProposal({
   searchParams,
 }: {
   params: Promise<{ number: string }>;
-  searchParams: Promise<{ v?: string; page?: string }>;
+  searchParams: Promise<{ v?: string; page?: string; comment?: string }>;
 }) {
   const viewer = await currentViewer();
   if (!viewer) return <TeamOnly />;
   const number = Number((await params).number);
   const query = await searchParams;
   const asked = Number(query.v);
+  const askedVersion = Number.isInteger(asked) && asked > 0 ? asked : undefined;
   if (!Number.isInteger(number)) notFound();
+  // A ?comment= link opens its thread's page, whatever page the link named (or none).
+  const linked = query.comment
+    ? await bcsCall((convex, secret) =>
+        convex.query(api.bcsComments.locate, { secret, number, commentId: query.comment! })
+      )
+    : undefined;
+  const thread = linked?.ok ? linked.value : null;
+  if (thread && thread.page !== (query.page ?? "")) {
+    redirect(bcsPagePath(number, thread.page, askedVersion, thread.id));
+  }
   const found = await bcsCall((convex, secret) =>
     convex.query(api.bcs.get, {
       secret,
@@ -39,9 +56,13 @@ export default async function BcsProposal({
   );
   if (!found.ok) return <BcsUnavailable message={found.failure.message} />;
   const proposal = found.value;
-  // A sub-page the chosen version does not have (added later, or removed since): open its main page.
+  // A sub-page the chosen version does not have (added later, or removed since): a linked thread's
+  // own version has it; otherwise open the chosen version's main page.
   if (!proposal && query.page) {
-    redirect(bcsPagePath(number, "", Number.isInteger(asked) && asked > 0 ? asked : undefined));
+    if (thread && thread.page === query.page && thread.version !== askedVersion) {
+      redirect(bcsPagePath(number, thread.page, thread.version, thread.id));
+    }
+    redirect(bcsPagePath(number, "", askedVersion));
   }
   if (!proposal) notFound();
   const old = proposal.version !== proposal.currentVersion;
@@ -49,7 +70,12 @@ export default async function BcsProposal({
   const shownVersion = old ? proposal.version : undefined;
   const page = proposal.page;
   const outline = flattenOutline(proposal.outline);
-  const document = await renderBcsPage({
+  const comments = await bcsCall((convex, secret) =>
+    convex.query(api.bcsComments.list, { secret, number, page: page.slug })
+  );
+  // Without its comments the proposal still reads; the panel says why they are missing.
+  const { threads, openByPage } = (comments.ok && comments.value) || { threads: [], openByPage: {} };
+  const rendered = await renderBcsPage({
     format: page.format,
     content: page.content,
     title: page.slug === "" ? proposal.title : `${page.title} · ${proposal.title}`,
@@ -171,17 +197,35 @@ export default async function BcsProposal({
                     }`}
                   >
                     {entry.title}
+                    {openByPage[entry.slug] ? (
+                      <span
+                        className="ml-1.5 rounded-full bg-violet-600/15 px-1.5 text-xs text-violet-700 dark:text-violet-300"
+                        title={`${openByPage[entry.slug]} open comment${openByPage[entry.slug] === 1 ? "" : "s"}`}
+                      >
+                        {openByPage[entry.slug]}
+                      </span>
+                    ) : null}
                   </Link>
                 </li>
               ))}
             </ul>
           </nav>
         )}
-        <BcsFrame
-          key={`${proposal.version}/${page.slug}`}
+        <BcsReader
+          // A new ?comment= remounts it, so the newly linked thread and block are focused.
+          key={`${proposal.version}/${page.slug}/${query.comment ?? ""}`}
           title={page.title}
-          document={document}
+          document={rendered.document}
+          blocks={rendered.blocks}
           number={proposal.number}
+          version={proposal.version}
+          threads={threads}
+          // The thread a link to one of its replies points into.
+          focusThread={thread?.id ?? query.comment}
+          commentsError={comments.ok ? undefined : comments.failure.message}
+          addComment={addComment.bind(null, proposal.number, page.slug, proposal.version)}
+          reply={replyToComment.bind(null, proposal.number, proposal.version)}
+          resolve={setCommentResolved.bind(null, proposal.number)}
         />
       </div>
     </div>

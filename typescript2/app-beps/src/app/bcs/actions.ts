@@ -230,3 +230,84 @@ export async function updateProposal(
   revalidatePath("/bcs");
   return {};
 }
+
+/** What a comment form shows after a submission: why it was refused, with the draft, or that it posted. */
+export type CommentState = { error?: string; body?: string; posted?: number };
+
+/** Starts a thread on a page, or on one of its blocks when the form carries one. */
+export async function addComment(
+  number: number,
+  page: string,
+  version: number,
+  _previous: CommentState,
+  form: FormData
+): Promise<CommentState> {
+  const viewer = await viewerOrFail();
+  const body = String(form.get("body") ?? "");
+  const block = optional(form.get("block"));
+  const added = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsComments.add, {
+      secret,
+      number,
+      page,
+      version,
+      anchor: block ? { block, text: String(form.get("blockText") ?? "") } : undefined,
+      body,
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!added.ok) return { error: added.failure.message, body };
+  revalidatePath(`/bcs/${number}`);
+  return { posted: Date.now() };
+}
+
+/** Replies to the thread named by the form's commentId, written while reading `version`. */
+export async function replyToComment(
+  number: number,
+  version: number,
+  _previous: CommentState,
+  form: FormData
+): Promise<CommentState> {
+  const viewer = await viewerOrFail();
+  const body = String(form.get("body") ?? "");
+  const commentId = String(form.get("commentId") ?? "");
+  const replied = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsComments.reply, {
+      secret,
+      number,
+      commentId,
+      version,
+      body,
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!replied.ok) return { error: replied.failure.message, body };
+  revalidatePath(`/bcs/${number}`);
+  return { posted: Date.now() };
+}
+
+/** Resolves the thread named by the form's commentId, or reopens it when `resolved` is "false". */
+export async function setCommentResolved(
+  number: number,
+  _previous: CommentState,
+  form: FormData
+): Promise<CommentState> {
+  const viewer = await viewerOrFail();
+  const commentId = String(form.get("commentId") ?? "");
+  const resolved = form.get("resolved") !== "false";
+  const changed = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsComments.setResolved, {
+      secret,
+      number,
+      commentId,
+      resolved,
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!changed.ok) return { error: changed.failure.message };
+  revalidatePath(`/bcs/${number}`);
+  return { posted: Date.now() };
+}

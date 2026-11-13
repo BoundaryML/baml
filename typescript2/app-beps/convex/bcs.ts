@@ -29,7 +29,7 @@ export type BcsFailure = {
   currentVersion?: number;
 };
 
-function fail(kind: BcsFailure["kind"], message: string, currentVersion?: number): never {
+export function fail(kind: BcsFailure["kind"], message: string, currentVersion?: number): never {
   throw new ConvexError<BcsFailure>({ kind, message, currentVersion });
 }
 
@@ -126,7 +126,7 @@ function checkPages(inputs: PageInput[], title: string): Page[] {
   }));
 }
 
-async function byNumber(ctx: QueryCtx, number: number) {
+export async function byNumber(ctx: QueryCtx, number: number) {
   return ctx.db
     .query("bcsDocs")
     .withIndex("by_number", (q) => q.eq("number", number))
@@ -149,7 +149,7 @@ export const list = query({
   },
 });
 
-async function versionRow(ctx: QueryCtx, docId: Id<"bcsDocs">, version: number) {
+export async function versionRow(ctx: QueryCtx, docId: Id<"bcsDocs">, version: number) {
   return ctx.db
     .query("bcsDocVersions")
     .withIndex("by_doc_version", (q) => q.eq("docId", docId).eq("version", version))
@@ -157,7 +157,7 @@ async function versionRow(ctx: QueryCtx, docId: Id<"bcsDocs">, version: number) 
 }
 
 /** A version's outline; one saved before sub-pages existed is its HTML main page. */
-function outlineOf(row: { pages?: Outline[] }, title: string): Outline[] {
+export function outlineOf(row: { pages?: Outline[] }, title: string): Outline[] {
   return row.pages ?? [{ slug: "", title, format: "html" }];
 }
 
@@ -495,10 +495,12 @@ export const slackEvent = v.union(
     kind: v.literal("saved"),
     version: v.optional(v.number()),
     status: v.optional(v.object({ from: bepStatus, to: bepStatus })),
-  })
+  }),
+  v.object({ kind: v.literal("comment"), commentId: v.id("bcsComments") }),
+  v.object({ kind: v.literal("resolved"), commentId: v.id("bcsComments"), resolved: v.boolean() })
 );
 
-async function tellSlack(
+export async function tellSlack(
   ctx: MutationCtx,
   docId: Id<"bcsDocs">,
   event: typeof slackEvent.type,
@@ -510,10 +512,27 @@ async function tellSlack(
 
 /** What a proposal's Slack messages show, and its thread. */
 export const slackView = internalQuery({
-  args: { docId: v.id("bcsDocs"), version: v.optional(v.number()), githubId: v.optional(v.string()) },
+  args: {
+    docId: v.id("bcsDocs"),
+    version: v.optional(v.number()),
+    githubId: v.optional(v.string()),
+    commentId: v.optional(v.id("bcsComments")),
+  },
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.docId);
     if (!doc) return null;
+    const comments = await ctx.db
+      .query("bcsComments")
+      .withIndex("by_doc", (q) => q.eq("docId", doc._id))
+      .collect();
+    // Shown once a proposal has threads, then kept, so resolving the last one shows 0.
+    const threads = comments.filter((each) => !each.parentId);
+    const openComments = threads.length > 0 ? threads.filter((each) => !each.resolved).length : undefined;
+    const comment = args.commentId ? comments.find((each) => each._id === args.commentId) : undefined;
+    const thread = comment?.parentId ? comments.find((each) => each._id === comment.parentId) : comment;
+    const outline = outlineOf((await versionRow(ctx, doc._id, doc.currentVersion)) ?? {}, doc.title);
+    const pageTitle = (slug: string) =>
+      slug === "" ? doc.title : outline.find((page) => page.slug === slug)?.title ?? slug;
     const version =
       args.version === undefined
         ? null
@@ -539,6 +558,21 @@ export const slackView = internalQuery({
       note: version?.note,
       changed: version?.changed,
       slackUserId: user?.slackUserId,
+      openComments,
+      comment:
+        comment && thread
+          ? {
+              id: comment._id,
+              threadId: thread._id,
+              body: comment.body,
+              isReply: comment.parentId !== undefined,
+              page: thread.page,
+              pageTitle: pageTitle(thread.page),
+              quote: thread.anchor?.text,
+              threadAuthor: thread.author,
+              threadBody: thread.body,
+            }
+          : undefined,
     };
   },
 });

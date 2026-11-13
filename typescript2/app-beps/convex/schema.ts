@@ -465,4 +465,24 @@ export default defineSchema({
   })
     .index("by_doc_version", ["docId", "version"])
     .index("by_doc_version_slug", ["docId", "version", "slug"]),
+
+  // Comments on a proposal's page: on the whole page, or on one block of a Markdown page
+  // (`anchor`: the block's id from its text, and the text quoted). Replies point to their thread's
+  // first comment, which alone can be resolved. `version` is the version the comment was written
+  // on, so a comment whose block a later version rewrote can say so.
+  bcsComments: defineTable({
+    docId: v.id("bcsDocs"),
+    page: v.string(),
+    version: v.number(),
+    anchor: v.optional(v.object({ block: v.string(), text: v.string() })),
+    parentId: v.optional(v.id("bcsComments")),
+    author: v.string(),
+    body: v.string(),
+    resolved: v.boolean(),
+    resolvedBy: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_doc", ["docId"])
+    .index("by_parent", ["parentId"]),
 });
