@@ -87,6 +87,20 @@ function error_message(error: unknown) -> string {
 }
 
 function main() -> void throws never {
+    wrapper_entry(
+        $trace = trace
+            .context(
+                metadata = {
+                    "baml.ctx.app_version": WRAPPER_APP_VERSION,
+                    "baml.ctx.baml_version": WRAPPER_BAML_VERSION,
+                },
+            )
+            .empty_span(),
+    );
+}
+
+// Scope setup, dispatch, helpers, and error handling without capturing values.
+function wrapper_entry() -> void throws never {
     let argv = baml.sys.argv();
     let args = argv.slice(2, argv.length());
     let telemetry: WrapperTelemetry? = null;
