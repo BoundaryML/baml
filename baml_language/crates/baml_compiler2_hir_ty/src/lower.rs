@@ -1661,6 +1661,31 @@ pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::intern
     )
 }
 
+/// [`substitute_params`] for one arm of a union `Self`. `args` binds `Self`
+/// (slot 0) to the union and `arm_args` binds it to the arm. A bare `Self`
+/// is the union, but an associated-type projection is taken over the arm:
+/// the value's own impl binds it, and the arms of one union can bind it
+/// differently.
+pub(crate) fn substitute_params_through_arm(
+    ty: &baml_type::interned::Ty,
+    args: &[baml_type::interned::Ty],
+    arm_args: &[baml_type::interned::Ty],
+) -> Ty {
+    use baml_type::interned::TypeFlags;
+    if !ty.flags().contains(TypeFlags::HAS_TYPEVAR) {
+        return ty.clone();
+    }
+    match ty.kind() {
+        InferTy::AssociatedTypeProjection { .. } => substitute_params(ty, arm_args),
+        InferTy::TypeVar(param) if args.get(param.index() as usize).is_some() => {
+            args[param.index() as usize].clone()
+        }
+        kind => Ty::intern(
+            kind.map_children(|child| substitute_params_through_arm(child, args, arm_args)),
+        ),
+    }
+}
+
 /// Generic-arity recovery: extras truncated, missing padded with
 /// `Error`. The arity report is `record_arity`'s, made before this runs;
 /// a sink-less re-lowering (MIR, emit) only sees signatures the checked

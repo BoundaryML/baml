@@ -2072,22 +2072,31 @@ pub(crate) fn reduce_ground_projections_plain(
 }
 
 pub(crate) fn reduce_ground_projections(db: &dyn baml_compiler2_hir::Db, ty: &Ty, fuel: u32) -> Ty {
-    if fuel == 0 || !ty.has_projection() || ty.has_infer() {
+    if ty.has_infer() {
+        return ty.clone();
+    }
+    reduce_closed_projections(&crate::facts::Facts::new(db), ty, fuel)
+}
+
+/// [`reduce_ground_projections`] against the caller's facts, node by node:
+/// each projection with no inference variable of its own reduces, whatever
+/// the rest of the type carries.
+pub(crate) fn reduce_closed_projections(facts: &crate::facts::Facts<'_>, ty: &Ty, fuel: u32) -> Ty {
+    if fuel == 0 || !ty.has_projection() {
         return ty.clone();
     }
     let rebuilt = Ty::intern(
         ty.kind()
-            .map_children(|child| reduce_ground_projections(db, child, fuel)),
+            .map_children(|child| reduce_closed_projections(facts, child, fuel)),
     );
-    if let InferTy::AssociatedTypeProjection {
-        base,
-        interface,
-        member,
-        ..
-    } = rebuilt.kind()
+    if !rebuilt.has_infer()
+        && let InferTy::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } = rebuilt.kind()
     {
-        let facts = crate::facts::Facts::new(db);
-        // The entry gate (`has_infer` bail) proved the whole tree closed.
         let closed = |ty: &Ty| -> baml_type::Ty {
             baml_type::interned::ClosedTy::try_from(ty)
                 .unwrap_or_else(|_| unreachable!("gated ground: no inference variables"))
@@ -2105,14 +2114,14 @@ pub(crate) fn reduce_ground_projections(db: &dyn baml_compiler2_hir::Db, ty: &Ty
         );
         if let baml_type::normalize::ProjectionStep::Reduced(step) =
             baml_type::normalize::TypeContext::project(
-                &facts,
+                facts,
                 &plain_base,
                 &plain_interface,
                 member,
                 fuel,
             )
         {
-            return reduce_ground_projections(db, &Ty::from_plain(&step), fuel - 1);
+            return reduce_closed_projections(facts, &Ty::from_plain(&step), fuel - 1);
         }
     }
     rebuilt

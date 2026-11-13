@@ -659,6 +659,7 @@ fn resolved_call_function<'db>(
                 MethodCallee::Virtual {
                     interface: DeclRef::Source(interface),
                     method,
+                    ..
                 },
             ..
         }) => {
