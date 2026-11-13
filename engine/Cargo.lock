@@ -4175,6 +4175,7 @@ dependencies = [
  "log",
  "peak_alloc",
  "pest",
+ "quick-xml",
  "regex",
  "serde",
  "serde_json",
