@@ -405,6 +405,7 @@ CREATE TABLE log (
   PRIMARY KEY (rec, seq)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX log_by_parent ON log (rec, parent_id);
+CREATE INDEX log_by_thread ON log (rec, thread_id);
 -- Most sections have no context snapshot, so only those that do are indexed.
 CREATE INDEX log_by_context ON log (context_cas) WHERE context_cas IS NOT NULL;
 

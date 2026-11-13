@@ -315,21 +315,34 @@ async fn logs_link_to_the_span_and_future_they_ran_under() {
         ),
         json!(13)
     );
-    let plan: Vec<String> = index
-        .connection()
-        .prepare(
-            "EXPLAIN QUERY PLAN SELECT * FROM logs
-             WHERE __span_id_rec = 1 AND __span_id_key = x'0000000000000001'",
-        )
-        .unwrap()
-        .query_map([], |row| row.get(3))
-        .unwrap()
-        .collect::<Result<_, _>>()
-        .unwrap();
-    assert!(
-        plan.iter().any(|step| step.contains("log_by_parent")),
-        "{plan:?}"
+    // Filtering by future finds everything but the spawned future's log.
+    assert_eq!(
+        single(
+            &mut index,
+            &format!(
+                "SELECT COUNT(*) FROM logs WHERE future_id = '{}'",
+                root.as_str().unwrap()
+            )
+        ),
+        json!(13)
     );
+    for (key, index_name) in [("span_id", "log_by_parent"), ("future_id", "log_by_thread")] {
+        let plan: Vec<String> = index
+            .connection()
+            .prepare(&format!(
+                "EXPLAIN QUERY PLAN SELECT * FROM logs
+                 WHERE __{key}_rec = 1 AND __{key}_key = x'0000000000000001'"
+            ))
+            .unwrap()
+            .query_map([], |row| row.get(3))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            plan.iter().any(|step| step.contains(index_name)),
+            "{key}: {plan:?}"
+        );
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

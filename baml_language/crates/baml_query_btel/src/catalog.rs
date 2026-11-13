@@ -822,7 +822,8 @@ SELECT __btel_log_id(r.recording_id, l.seq) AS log_id,
   COALESCE(l.line, __btel_line(IIF(f.source_map_state = 1, f.source_map, NULL), l.pc)) AS line,
   cx.distinct_id AS context_distinct_id,
   __btel_context_metadata(l.context_state, l.context_cas, cx.state) AS context_metadata,
-  l.rec AS __span_id_rec, l.parent_id AS __span_id_key
+  l.rec AS __span_id_rec, l.parent_id AS __span_id_key,
+  l.rec AS __future_id_rec, l.thread_id AS __future_id_key
 FROM main.log l
 JOIN main.recording r ON r.rec = l.rec
 LEFT JOIN main.context_snapshot cx ON cx.cas = l.context_cas
@@ -910,6 +911,7 @@ pub const KEYS: &[(&str, &str, &str)] = &[
     ("span_announcements", "future_id", ""),
     ("span_announcements", "parent_span_id", ""),
     ("logs", "span_id", ""),
+    ("logs", "future_id", ""),
 ];
 
 /// The kind of `relation.column` when it is an indexable id.
@@ -1009,9 +1011,9 @@ mod tests {
                 "SELECT * FROM {relation} WHERE __{column}_rec = 1 AND __{column}_key = x'0000000000000001'"
             );
             let plan = plan(&conn, &sql);
-            // A future's own future_id is derived from its parent: that
-            // branch reads the recording's futures once.
-            if *column != "future_id" {
+            // A span's future_id is derived from its parent: that branch
+            // reads the recording's futures once. A log stores its own.
+            if *column != "future_id" || *relation == "logs" {
                 assert_no_rescan(relation, &plan);
                 assert!(
                     plan.iter()
