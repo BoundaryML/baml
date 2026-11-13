@@ -125,6 +125,7 @@ const PROBES: &[&str] = &[
     "InstanceGeneric",
     "InstanceCleanupLatch",
     "InstanceWrongKind",
+    "InstanceOptionalBase",
 ];
 
 /// Name, `BAML_COMPILED_BODIES`, `BAML_GC_STRESS`, `BAML_COMPILED_FRAMES`,

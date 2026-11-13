@@ -229,7 +229,11 @@ impl<'a> Generator<'a, '_> {
             return None;
         };
         let decl = &self.body.locals[local.0];
-        let RuntimeTy::Class(head, _) = &decl.ty else {
+        // A `C?` local reads its fields only where the checker narrowed it
+        // to `C`; a null base misses the header compare and takes the
+        // generic path, which reports it.
+        let ty = decl.ty.strip_null();
+        let RuntimeTy::Class(head, _) = &ty else {
             return None;
         };
         if decl.is_captured {

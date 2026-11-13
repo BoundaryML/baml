@@ -89,3 +89,37 @@ function InstanceWrongKind() -> void {
     };
     baml.io.println(`stored:${refused.value}`);
 }
+
+class Link {
+    next: Link?,
+    value: int,
+    weight: float,
+}
+
+// A local declared `Link?` and narrowed by a null check reaches its fields
+// at their slots too; the walk, the stores and the nested hop must agree
+// with bytecode.
+function InstanceOptionalBase() -> void {
+    let head: Link? = null;
+    let i = 0;
+    while (i < 6) {
+        head = Link { next: head, value: i, weight: i * 0.5 };
+        i += 1;
+    }
+    let sum = 0;
+    let total = 0.0;
+    let cursor = head;
+    while (cursor != null) {
+        sum += cursor.value;
+        cursor.value *= 2;
+        cursor.weight += 1.0;
+        total += cursor.weight;
+        let after = cursor.next;
+        if (after != null) {
+            sum += after.value;
+        }
+        cursor = cursor.next;
+    }
+    let first: Link = head ?? Link { next: null, value: -1, weight: 0.0 };
+    baml.io.println(`optional:${sum}:${total}:${first.value}:${first.weight}`);
+}
