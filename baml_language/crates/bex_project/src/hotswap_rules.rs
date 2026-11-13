@@ -261,49 +261,64 @@ fn telemetry_only(change: &Change<'_>) -> Result<(), String> {
     }
 }
 
-/// An LLM function's parts as `text_only` sees them.
-struct Prompt<'s> {
-    /// Every token, with the prompt's own contents left out.
+/// A function as `text_only` sees it.
+struct Text<'s> {
+    /// Every token, with the static text of each string and template literal
+    /// left out, and each template's `${...}` too.
     skeleton: Vec<Token<'s>>,
-    /// Each `${...}` in the prompt, as written.
+    /// Each `${...}`, as written.
     expressions: Vec<String>,
     /// The same, by tokens, to compare without formatting.
     expression_tokens: Vec<Vec<Token<'s>>>,
-    client: Vec<Token<'s>>,
 }
 
-fn prompt_of<'s>(source: &'s str, tokens: &[Token<'s>]) -> Option<Prompt<'s>> {
-    let start = tokens
-        .windows(2)
-        .position(|pair| pair[0].kind == TokenKind::Prompt && pair[1].kind == TokenKind::Colon)?
-        + 2;
-    let mut skeleton: Vec<Token<'s>> = tokens[..start].to_vec();
-    let mut expressions = Vec::new();
-    let mut expression_tokens = Vec::new();
-    let mut index = start;
-    match tokens.get(index)?.kind {
-        TokenKind::BacktickStart => {
-            index += 1;
-            while index < tokens.len() && tokens[index].kind != TokenKind::BacktickEnd {
-                if tokens[index].kind == TokenKind::DollarLBrace {
-                    let end = past_close(tokens, index);
-                    let from = tokens[index].start;
-                    let to = tokens[end - 1].start + tokens[end - 1].text.len();
-                    expressions.push(source[from..to].to_string());
-                    expression_tokens.push(tokens[index..end].to_vec());
-                    index = end;
-                } else {
-                    index += 1;
-                }
+fn text_of<'s>(source: &'s str, tokens: &[Token<'s>]) -> Text<'s> {
+    let mut text = Text {
+        skeleton: Vec::with_capacity(tokens.len()),
+        expressions: Vec::new(),
+        expression_tokens: Vec::new(),
+    };
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = tokens[index];
+        match token.kind {
+            // A literal's text is no code: it stands as its kind alone.
+            TokenKind::String | TokenKind::RawString => {
+                text.skeleton.push(Token { text: "", ..token });
+                index += 1;
             }
-            index += 1;
+            TokenKind::BacktickStart => {
+                text.skeleton.push(Token { text: "`", ..token });
+                index += 1;
+                while index < tokens.len() && tokens[index].kind != TokenKind::BacktickEnd {
+                    if tokens[index].kind == TokenKind::DollarLBrace {
+                        let end = past_close(tokens, index);
+                        let from = tokens[index].start;
+                        let to = tokens[end - 1].start + tokens[end - 1].text.len();
+                        text.expressions.push(source[from..to].to_string());
+                        text.expression_tokens.push(tokens[index..end].to_vec());
+                        index = end;
+                    } else {
+                        index += 1;
+                    }
+                }
+                if let Some(end) = tokens.get(index) {
+                    text.skeleton.push(Token { text: "`", ..*end });
+                }
+                index += 1;
+            }
+            _ => {
+                text.skeleton.push(token);
+                index += 1;
+            }
         }
-        // A plain string prompt is text alone.
-        TokenKind::String | TokenKind::RawString => index += 1,
-        _ => return None,
     }
-    skeleton.extend_from_slice(&tokens[index.min(tokens.len())..]);
-    let client = tokens
+    text
+}
+
+/// The client an LLM function names, as tokens.
+fn client_of<'s>(tokens: &[Token<'s>]) -> Vec<Token<'s>> {
+    tokens
         .windows(2)
         .position(|pair| pair[0].kind == TokenKind::Client && pair[1].kind == TokenKind::Colon)
         .map(|at| {
@@ -318,29 +333,22 @@ fn prompt_of<'s>(source: &'s str, tokens: &[Token<'s>]) -> Option<Prompt<'s>> {
                 })
                 .collect()
         })
-        .unwrap_or_default();
-    Some(Prompt {
-        skeleton,
-        expressions,
-        expression_tokens,
-        client,
-    })
+        .unwrap_or_default()
 }
 
+/// Only the static text of string and template literals changes, a prompt's
+/// included, and no `${...}` is new, so the change runs no new code. Text can
+/// still change behavior, such as a string the code compares or a URL.
 fn text_only(change: &Change<'_>) -> Result<(), String> {
     let (original_tokens, replacement_tokens) =
         (tokens(change.original), tokens(change.replacement));
-    let (Some(original), Some(replacement)) = (
-        prompt_of(change.original, &original_tokens),
-        prompt_of(change.replacement, &replacement_tokens),
-    ) else {
-        return Err("only an LLM function's prompt text can change".to_string());
-    };
-    if original.client != replacement.client {
+    if client_of(&original_tokens) != client_of(&replacement_tokens) {
         return Err("the change edits `client`".to_string());
     }
+    let original = text_of(change.original, &original_tokens);
+    let replacement = text_of(change.replacement, &replacement_tokens);
     if original.skeleton != replacement.skeleton {
-        return Err("the change edits more than the prompt text".to_string());
+        return Err("the change edits more than static text".to_string());
     }
     for (text, expression) in replacement
         .expressions
@@ -348,7 +356,7 @@ fn text_only(change: &Change<'_>) -> Result<(), String> {
         .zip(&replacement.expression_tokens)
     {
         if !original.expression_tokens.contains(expression) {
-            return Err(format!("the prompt adds an expression, `{text}`"));
+            return Err(format!("the change adds an expression, `{text}`"));
         }
     }
     Ok(())
@@ -550,7 +558,7 @@ mod tests {
     const SUMMARIZE: &str = "/// baml:hotswap=hotswap.text_only\nfunction Summarize(doc: string) -> Summary {\n  client: Writer\n  prompt: `Summarize this document: ${doc}`\n}";
 
     #[test]
-    fn text_only_accepts_prompt_text_without_new_expressions() {
+    fn text_only_accepts_static_text_without_new_expressions() {
         let rule = Rule::TextOnly;
         let reworded = SUMMARIZE.replace(
             "Summarize this document:",
@@ -562,7 +570,7 @@ mod tests {
         let added = SUMMARIZE.replace("${doc}`", "${doc}\\n\\nRelated: ${lookup(doc)}`");
         assert_eq!(
             run(&rule, SUMMARIZE, &added),
-            Err("the prompt adds an expression, `${lookup(doc)}`".to_string())
+            Err("the change adds an expression, `${lookup(doc)}`".to_string())
         );
         let client = SUMMARIZE.replace("client: Writer", "client: Other");
         assert_eq!(
@@ -571,7 +579,24 @@ mod tests {
         );
         let signature = SUMMARIZE.replace("-> Summary", "-> string");
         assert!(run(&rule, SUMMARIZE, &signature).is_err());
-        assert!(run(&rule, TRIAGE, TRIAGE).is_err());
+
+        // Any function's strings and templates, not only a prompt.
+        let greeting = "/// baml:hotswap=hotswap.text_only\nfunction Greet(n: int) -> string {\n  log.info(\"greeting\");\n  `hello #${n}`\n}";
+        let edited = greeting
+            .replace("\"greeting\"", "\"greeting someone\"")
+            .replace("`hello #${n}`", "`hi there, number ${n}!`");
+        assert_eq!(run(&rule, greeting, &edited), Ok(()));
+        let code = greeting.replace("${n}`", "${n + 1}`");
+        assert_eq!(
+            run(&rule, greeting, &code),
+            Err("the change adds an expression, `${n + 1}`".to_string())
+        );
+        let call = greeting.replace("log.info(\"greeting\");\n", "");
+        assert_eq!(
+            run(&rule, greeting, &call),
+            Err("the change edits more than static text".to_string())
+        );
+        assert!(run(&rule, TRIAGE, TRIAGE).is_ok(), "no change at all");
     }
 
     const REPLY: &str = "/// baml:hotswap=hotswap.no_new_calls\nfunction Reply(ticket: Ticket) -> string {\n  let customer = LookupCustomer(ticket.customer_id)\n  DraftReply(ticket, customer)\n}";

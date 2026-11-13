@@ -10,8 +10,8 @@ pub enum Rule {
     /// `hotswap.telemetry_only`: only log lines, `$trace` arguments and
     /// `$trace` hooks may change.
     TelemetryOnly,
-    /// `hotswap.text_only`: only an LLM function's prompt text, with no new
-    /// `${...}` expression.
+    /// `hotswap.text_only`: only the static text of string and template
+    /// literals, prompts included, with no new `${...}` expression.
     TextOnly,
     /// `hotswap.no_new_calls`: nothing called that the original did not call.
     NoNewCalls,
