@@ -204,7 +204,7 @@ pub struct PendingOwnGenerics<'db> {
     pub callable: FunctionRef<'db>,
     pub prefix: Vec<Ty>,
     /// The arms of a union receiver: the signature is instantiated once per
-    /// arm ([`instantiate_member_signature`]). `None` for every other
+    /// arm (`instantiate_member_signature`). `None` for every other
     /// receiver.
     pub arms: Option<Vec<Ty>>,
 }
