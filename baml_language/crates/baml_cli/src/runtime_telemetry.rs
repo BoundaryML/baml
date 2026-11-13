@@ -31,6 +31,22 @@ pub(crate) fn create_engine_with_context(
     build: Option<bex_engine::BuildProvider>,
     launch_context: btel_types::context::Context,
 ) -> Result<BexEngine, EngineError> {
+    // Disabled recording must not validate or discover an unused destination.
+    if btel_settings::mode::from_env()
+        .map_err(|error| EngineError::Other(error.to_string()))?
+        .is_none()
+    {
+        return BexEngine::new_with_config(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            argv,
+            bex_engine::EngineConfig {
+                launch_context,
+                runtime_compiler: Some(bex_project::runtime_compiler()),
+                ..bex_engine::EngineConfig::default()
+            },
+        );
+    }
     let boundary = crate::cloud_config::Boundary::read(project_root)
         .map_err(|error| EngineError::Other(error.to_string()))?;
     let recording = TelemetryRecording::from_boundary_defaults(

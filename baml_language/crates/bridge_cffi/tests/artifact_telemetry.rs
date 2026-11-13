@@ -5,8 +5,12 @@ use bridge_cffi::baml_bridge::cffi::{
     call_function_args::CallTarget,
 };
 use prost::Message;
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
+};
 
-/// Explicit frozen and renamed controls retain the publisher's chosen policy.
+/// Frozen controls permit an off-only veto; renamed controls remain authoritative.
 #[tokio::test]
 async fn generated_bridge_honors_only_the_publishers_recording_variable() {
     const SCENARIO: &str = "BAML_TEST_ARTIFACT_SCENARIO";
@@ -41,11 +45,7 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
             );
             let recorded =
                 std::fs::read_dir(home.path().join("btel/recordings")).map_or(0, Iterator::count);
-            assert_eq!(
-                recorded,
-                usize::from(scenario != "custom_off"),
-                "{scenario}"
-            );
+            assert_eq!(recorded, usize::from(scenario == "custom_on"), "{scenario}");
         }
         return;
     };
@@ -73,6 +73,15 @@ async fn generated_bridge_loads_silently_with_unusable_telemetry_settings() {
     for (scenario, env, recordings) in [
         ("level_false", &[("ACME_TELEMETRY", "false")][..], 0),
         ("level_typo", &[("ACME_TELEMETRY", "hgih")], 0),
+        (
+            "off_invalid_destination",
+            &[
+                ("ACME_TELEMETRY", "off"),
+                ("BOUNDARY_API_URL", url_with_query.as_str()),
+                ("BOUNDARY_API_KEY", "bdry_secret_test"),
+            ],
+            0,
+        ),
         ("level_empty", &[("ACME_TELEMETRY", "")], 1),
         (
             "malformed_url",
@@ -121,6 +130,14 @@ async fn generated_bridge_loads_silently_with_unusable_telemetry_settings() {
 
 /// Load `function main() -> int { 7 }` as a generated SDK does and run it.
 async fn run_generated_main(original_manifest: &str) {
+    run_generated_policy(original_manifest, |_| {}).await;
+}
+
+/// Exercise serialized generated metadata rather than injecting engine options.
+async fn run_generated_policy(
+    original_manifest: &str,
+    configure: impl FnOnce(&mut btel_settings::artifact::ArtifactTelemetry),
+) {
     bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
         language: bridge_cffi::BridgeLanguage::Python,
         bridge_runtime_name: "baml-bridge-test".into(),
@@ -128,15 +145,29 @@ async fn run_generated_main(original_manifest: &str) {
         toolchain_version: baml_version::CANONICAL_VERSION.into(),
     })
     .unwrap();
-    let program = baml_test_support::compile_source("function main() -> int { 7 }");
+    let http = baml_env::raw_var("BAML_TEST_APPLICATION_URL").map_or(String::new(), |url| format!(r#"
+        let response = baml.http.send(baml.http.Request {{ method: "GET", url: {url:?}, headers: {{}}, body: "" }});
+        assert.is_true(response.text() == "ok");
+    "#));
+    let program = baml_test_support::compile_source(&format!(
+        r#"
+        function main() -> int {{
+            let span = trace.start_span("explicit");
+            let result = span.run(() -> int {{ {http} 7 }});
+            span.finish(result);
+            result
+        }}
+    "#
+    ));
     let artifact = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
     let bytecode = baml_artifact::encode_embedded(&artifact);
     let mut manifest: toml::Table = original_manifest.parse().unwrap();
-    let policy = btel_settings::artifact::ArtifactTelemetry::from_manifest(
+    let mut policy = btel_settings::artifact::ArtifactTelemetry::from_manifest(
         &toml::Value::Table(manifest.clone()),
         btel_settings::artifact::ArtifactKind::Bridge,
     )
     .unwrap();
+    configure(&mut policy);
     let mut metadata = toml::Table::new();
     metadata.insert("metadata_version".into(), 1.into());
     metadata.insert(
@@ -151,20 +182,23 @@ async fn run_generated_main(original_manifest: &str) {
     let manifest = toml::to_string(&manifest).unwrap();
     let runtime =
         bridge_cffi::initialize_runtime_from_blob(bytecode.as_bytes(), Some(&manifest)).unwrap();
-    let args = CallFunctionArgs {
-        call_id: bridge_cffi::new_function_call_id(),
-        call_target: Some(CallTarget::FunctionName("main".into())),
-        invocation: Some(Default::default()),
-        ..Default::default()
+    for _ in 0..2 {
+        let args = CallFunctionArgs {
+            call_id: bridge_cffi::new_function_call_id(),
+            call_target: Some(CallTarget::FunctionName("main".into())),
+            invocation: Some(Default::default()),
+            ..Default::default()
+        }
+        .encode_to_vec();
+        let request = bridge_cffi::decode_invocation_request(&args).unwrap();
+        let response = bridge_cffi::execute_invocation(request).await;
+        let result = BamlOutboundResult::decode(response.as_slice()).unwrap();
+        let Some(baml_outbound_result::Result::Ok(value)) = result.result else {
+            panic!("BAML operation failed: {result:?}");
+        };
+        assert_eq!(value.value, Some(baml_outbound_value::Value::IntValue(7)));
     }
-    .encode_to_vec();
-    let request = bridge_cffi::decode_invocation_request(&args).unwrap();
-    let response = bridge_cffi::execute_invocation(request).await;
-    let result = BamlOutboundResult::decode(response.as_slice()).unwrap();
-    let Some(baml_outbound_result::Result::Ok(value)) = result.result else {
-        panic!("BAML operation failed: {result:?}");
-    };
-    assert_eq!(value.value, Some(baml_outbound_value::Value::IntValue(7)));
+    runtime.clone().shutdown(None).await;
     runtime.shutdown(None).await;
 }
 
@@ -190,7 +224,6 @@ async fn ordinary_bridge_honors_telemetry_off() {
         run_generated_main("").await;
         return;
     }
-    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
     for scenario in ["api_key", "saved_login", "no_credentials", "local"] {
         for level in ["off", "0", "false", "no", "medium"] {
             let server = MockServer::start().await;
@@ -265,7 +298,6 @@ async fn destination_bindings_can_reuse_the_default_recording_variable() {
         }).await;
         return;
     }
-    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
     for scenario in ["api_key", "project"] {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -322,7 +354,6 @@ async fn bridge_embedded_ingestion_respects_bindings() {
     };
     const SCENARIO: &str = "BAML_TEST_BRIDGE_EMBEDDED";
     let Some(scenario) = baml_env::raw_var(SCENARIO) else {
-        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
         for scenario in ["fixed", "custom", "off"] {
             let server = MockServer::start().await;
             Mock::given(method("POST"))
@@ -442,4 +473,118 @@ async fn bridge_embedded_ingestion_respects_bindings() {
     };
     assert_eq!(value.value, Some(baml_outbound_value::Value::IntValue(7)));
     runtime.shutdown(None).await;
+}
+
+/// Every effective off control is tested without a blanket built-in off setting.
+/// Explicit spans, application HTTP, repeated calls and shutdown remain usable.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn generated_policy_opt_out_matrix() {
+    use btel_settings::artifact::{EmbeddedCredential, EmbeddedIngestion, InitialFailureAction};
+    const CHILD: &str = "BAML_TEST_POLICY_MATRIX";
+    if let Some(policy_name) = baml_env::raw_var(CHILD) {
+        if baml_env::raw_var("BAML_TEST_CREDENTIAL").as_deref() == Some("saved") {
+            let endpoint = bcs_api::Endpoint::from_env().unwrap();
+            bcs_api::Store::new(&endpoint)
+                .unwrap()
+                .write(&bcs_api::StoredSession {
+                    refresh_token: bcs_api::Secret::new("bdry_session_matrix".into()),
+                    caller: bcs_api::auth::Caller {
+                        user_id: "fixture".into(),
+                        email: "fixture@example.invalid".into(),
+                    },
+                })
+                .unwrap();
+        }
+        let binding = if policy_name.contains("custom") {
+            "[bridge.env_var_names]\nBAML_TELEMETRY = \"ACME_TELEMETRY\""
+        } else if policy_name.contains("frozen") {
+            "[bridge.env_var_names]\nBAML_TELEMETRY = false"
+        } else if policy_name == "standard" {
+            "[bridge.env_var_names]\nBAML_TELEMETRY = \"BAML_TELEMETRY\""
+        } else {
+            ""
+        };
+        run_generated_policy(binding, |policy| {
+            // Abort would stop execution if recording authorization were attempted.
+            policy.initial_failure.action = InitialFailureAction::Abort;
+            if policy_name == "legacy" {
+                policy.recording_level_envvar = None;
+            }
+            if policy_name.starts_with("embedded") {
+                policy.embedded = Some(Box::new(EmbeddedIngestion {
+                    api_key: EmbeddedCredential::new("bdry_secret_matrix_embedded".into()),
+                }));
+            }
+        })
+        .await;
+        return;
+    }
+    for policy_name in [
+        "omitted",
+        "standard",
+        "frozen",
+        "legacy",
+        "custom",
+        "embedded_omitted",
+        "embedded_frozen",
+        "embedded_custom",
+    ] {
+        for credential in ["key", "saved", "local", "none"] {
+            let server = MockServer::start().await;
+            Mock::given(method("GET"))
+                .and(path("/application"))
+                .respond_with(ResponseTemplate::new(200).set_body_string("ok"))
+                .expect(2)
+                .mount(&server)
+                .await;
+            let home = tempfile::tempdir().unwrap();
+            let custom = policy_name.contains("custom");
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "generated_policy_opt_out_matrix", "--nocapture"])
+                .env(CHILD, policy_name)
+                .env("BAML_TEST_CREDENTIAL", credential)
+                .env("HOME", home.path())
+                .env("USERPROFILE", home.path())
+                .env("BAML_HOME", home.path())
+                .env(
+                    "BAML_TEST_APPLICATION_URL",
+                    format!("{}/application", server.uri()),
+                )
+                .env("BOUNDARY_API_URL", server.uri())
+                .env("BOUNDARY_PROJECT", "fixture/app")
+                .env_remove("BOUNDARY_API_KEY")
+                .envs(match credential {
+                    "key" => Some(("BOUNDARY_API_KEY", "bdry_secret_matrix")),
+                    "local" => Some(("BOUNDARY_API_KEY", "local")),
+                    _ => None,
+                })
+                .env("BAML_TELEMETRY", if custom { "medium" } else { " Off " })
+                .env("ACME_TELEMETRY", " FaLsE ")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{policy_name}/{credential}: {output:?}"
+            );
+            assert!(
+                output.stderr.is_empty(),
+                "{policy_name}/{credential}: {output:?}"
+            );
+            assert!(
+                !home.path().join("btel").exists(),
+                "{policy_name}/{credential}"
+            );
+            let requests = server.received_requests().await.unwrap();
+            assert_eq!(
+                requests.len(),
+                2,
+                "{policy_name}/{credential}: {requests:?}"
+            );
+            assert!(
+                requests
+                    .iter()
+                    .all(|request| request.method == "GET" && request.url.path() == "/application")
+            );
+        }
+    }
 }

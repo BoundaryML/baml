@@ -343,13 +343,13 @@ mod bytecode_artifact_tests {
         ] {
             assert_eq!(engine.telemetry_recording_id(), None);
         }
-        // An explicit publisher policy still controls generated artifacts.
+        // Legacy frozen policies also honor the standard off-only veto.
         let artifact = prepare_from_bytecode(&bytecode, sys_ops::SysOps::native())
             .unwrap()
             .with_artifact_telemetry(btel_settings::artifact::ArtifactTelemetry::default())
             .build()
             .unwrap();
-        assert!(artifact.telemetry_recording_id().is_some());
+        assert_eq!(artifact.telemetry_recording_id(), None);
     }
 
     #[test]
