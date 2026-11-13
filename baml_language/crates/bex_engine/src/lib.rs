@@ -2992,6 +2992,7 @@ impl BexEngine {
         }
 
         self.collect_garbage_with_reason("shutdown").await;
+        self.finish_network_spans();
         #[cfg(not(target_arch = "wasm32"))]
         {
             // All normal executions and their poll scopes have ended. Joining

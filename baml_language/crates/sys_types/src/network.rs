@@ -6,9 +6,12 @@
 //! thread, which sanitizes and records each event. Raw header values pass
 //! through the queue in memory, so it stays private to the engine.
 
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc, Mutex, Weak,
+        atomic::{AtomicU8, Ordering},
+    },
 };
 
 use bex_vm_types::{BexRustData, RustDataArc};
@@ -45,7 +48,7 @@ pub enum NetworkEventKind {
     Await,
     /// The program closed a stream before its end. Written by the engine.
     Close,
-    /// The response was collected without being read.
+    /// The response was collected, or the engine shut down, before a full read.
     Drop,
 }
 
@@ -60,37 +63,96 @@ pub struct NetworkEvent {
 /// Events the IO side queued, waiting for the engine to drain them on a VM
 /// thread. One per engine.
 #[derive(Debug, Default)]
-pub struct NetworkQueue(Mutex<Vec<Queued>>);
+pub struct NetworkQueue(Mutex<Queue>);
 
-/// A queued event, with its span's open flag when it was pushed through a
+#[derive(Debug, Default)]
+struct Queue {
+    events: Vec<Queued>,
+    // Weak ownership: tracing must not keep a response or its reader alive.
+    active: HashMap<u64, Weak<Lifecycle>>,
+}
+
+const OPEN: u8 = 0;
+const CLOSED: u8 = 1;
+const ABANDONED: u8 = 2;
+
+struct Lifecycle {
+    state: AtomicU8,
+    now: Arc<dyn Fn() -> u64 + Send + Sync>,
+}
+
+impl std::fmt::Debug for Lifecycle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Lifecycle")
+            .field("state", &self.state)
+            .finish_non_exhaustive()
+    }
+}
+
+/// A queued event, with its span's lifecycle when it was pushed through a
 /// [`NetworkContext`].
 #[derive(Debug)]
 struct Queued {
     event: NetworkEvent,
-    open: Option<Arc<AtomicBool>>,
+    open: Option<Arc<Lifecycle>>,
 }
 
 impl NetworkQueue {
     pub fn push(&self, event: NetworkEvent) {
-        self.events().push(Queued { event, open: None });
+        self.queue().events.push(Queued { event, open: None });
     }
 
     /// Everything queued so far, in the order it was pushed, except the
-    /// events of a span that ended since: nothing follows a completion.
+    /// events of an explicitly closed span: nothing follows a completion.
+    /// Abandonment retains preceding events, including the response status.
     pub fn drain(&self) -> Vec<NetworkEvent> {
-        std::mem::take(&mut *self.events())
+        let mut queue = self.queue();
+        queue.active.retain(|_, weak| {
+            weak.upgrade()
+                .is_some_and(|life| life.state.load(Ordering::Acquire) == OPEN)
+        });
+        std::mem::take(&mut queue.events)
             .into_iter()
             .filter(|queued| {
                 queued
                     .open
                     .as_ref()
-                    .is_none_or(|open| open.load(Ordering::Acquire))
+                    .is_none_or(|open| open.state.load(Ordering::Acquire) != CLOSED)
             })
             .map(|queued| queued.event)
             .collect()
     }
 
-    fn events(&self) -> std::sync::MutexGuard<'_, Vec<Queued>> {
+    /// Abandon responses still retained by host handles or globals at shutdown.
+    /// Uses each request's issuing clock, just like its IO events.
+    pub fn abandon_open(&self) {
+        let mut queue = self.queue();
+        let active = std::mem::take(&mut queue.active);
+        for (span, weak) in active {
+            if let Some(life) = weak.upgrade() {
+                Self::abandon(&mut queue, span, &life);
+            }
+        }
+    }
+
+    fn abandon(queue: &mut Queue, span: u64, life: &Arc<Lifecycle>) {
+        if life
+            .state
+            .compare_exchange(OPEN, ABANDONED, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            queue.events.push(Queued {
+                event: NetworkEvent {
+                    span,
+                    at_ticks: (life.now)(),
+                    kind: NetworkEventKind::Drop,
+                },
+                open: Some(Arc::clone(life)),
+            });
+        }
+    }
+
+    fn queue(&self) -> std::sync::MutexGuard<'_, Queue> {
         // A push never panics while holding the lock, so a poisoned queue
         // still holds whole events.
         self.0
@@ -109,8 +171,8 @@ pub struct NetworkContext {
     /// Reads the issuing run's clock. Any OS thread of the run may call it.
     pub now: Arc<dyn Fn() -> u64 + Send + Sync>,
     pub sink: Arc<NetworkQueue>,
-    /// Shared by every clone: false once the engine ended the span.
-    open: Arc<AtomicBool>,
+    /// Shared terminal state: closed by a read/error, or abandoned by its owner.
+    open: Arc<Lifecycle>,
 }
 
 impl NetworkContext {
@@ -119,21 +181,27 @@ impl NetworkContext {
         now: Arc<dyn Fn() -> u64 + Send + Sync>,
         sink: Arc<NetworkQueue>,
     ) -> Self {
+        let open = Arc::new(Lifecycle {
+            state: AtomicU8::new(OPEN),
+            now: Arc::clone(&now),
+        });
+        sink.queue().active.insert(span, Arc::downgrade(&open));
         Self {
             span,
             now,
             sink,
-            open: Arc::new(AtomicBool::new(true)),
+            open,
         }
     }
 
     /// Queue `kind` for this request, stamped now. Nothing once the span
     /// ended: a stream closed early can still be read on the wire.
     pub fn push(&self, kind: NetworkEventKind) {
+        let mut queue = self.sink.queue();
         if !self.is_open() {
             return;
         }
-        self.sink.events().push(Queued {
+        queue.events.push(Queued {
             event: NetworkEvent {
                 span: self.span,
                 at_ticks: (self.now)(),
@@ -144,13 +212,16 @@ impl NetworkContext {
     }
 
     pub fn is_open(&self) -> bool {
-        self.open.load(Ordering::Acquire)
+        self.open.state.load(Ordering::Acquire) == OPEN
     }
 
     /// End the span, for every clone: later events, and events queued but
     /// not drained yet, are dropped. True the first time.
     pub fn close(&self) -> bool {
-        self.open.swap(false, Ordering::AcqRel)
+        self.open
+            .state
+            .compare_exchange(OPEN, CLOSED, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
     }
 }
 
@@ -167,12 +238,21 @@ impl std::fmt::Debug for NetworkContext {
 /// `dyn Any` cannot be downcast to a trait: the engine finds the span on it
 /// without knowing the IO side's types, and closes it once.
 ///
-/// Data collected without being read leaves its span open. A `Drop` impl
-/// here is where its `drop` event, and a marker to close the span, will be
-/// queued for the next drain.
+/// The last carrier queues a terminal `drop` when collected unread. Context
+/// clones held by IO tasks do not own the response and cannot delay this.
 pub struct NetworkTraced {
     network: NetworkContext,
     data: Arc<dyn BexRustData>,
+}
+
+impl Drop for NetworkTraced {
+    fn drop(&mut self) {
+        NetworkQueue::abandon(
+            &mut self.network.sink.queue(),
+            self.network.span,
+            &self.network.open,
+        );
+    }
 }
 
 impl BexRustData for NetworkTraced {
@@ -270,6 +350,69 @@ mod tests {
             NetworkTraced::inner(plain).downcast_ref::<TestRustData>(),
             Some(&TestRustData(5))
         );
+    }
+
+    #[test]
+    fn last_carrier_drop_preserves_connection_and_ignores_io_context_clones() {
+        let sink = Arc::new(NetworkQueue::default());
+        let network = context(&sink);
+        let io = network.clone();
+        network.push(NetworkEventKind::Connection {
+            status: 504,
+            headers: vec![],
+        });
+        let body = NetworkTraced::wrap(network, Arc::new(TestRustData(0)));
+        let alias = Arc::clone(&body);
+        drop(body);
+        assert!(io.is_open());
+        drop(alias);
+        assert!(!io.is_open());
+        io.push(NetworkEventKind::StreamEnd);
+        assert!(!io.close());
+        sink.abandon_open();
+        let events = sink.drain();
+        assert_eq!(
+            events.iter().map(|event| &event.kind).collect::<Vec<_>>(),
+            [
+                &NetworkEventKind::Connection {
+                    status: 504,
+                    headers: vec![]
+                },
+                &NetworkEventKind::Drop,
+            ]
+        );
+        assert_eq!(events[1].at_ticks, 11);
+        assert!(sink.drain().is_empty());
+    }
+
+    #[test]
+    fn shutdown_abandons_retained_carriers_once() {
+        let sink = Arc::new(NetworkQueue::default());
+        let body = NetworkTraced::wrap(context(&sink), Arc::new(TestRustData(0)));
+        sink.abandon_open();
+        sink.abandon_open();
+        drop(body);
+        assert_eq!(
+            sink.drain()
+                .iter()
+                .map(|event| &event.kind)
+                .collect::<Vec<_>>(),
+            [&NetworkEventKind::Drop]
+        );
+        assert!(sink.drain().is_empty());
+    }
+
+    #[test]
+    fn completed_body_drop_never_queues_a_terminal_event() {
+        let sink = Arc::new(NetworkQueue::default());
+        let body = NetworkTraced::wrap(context(&sink), Arc::new(TestRustData(0)));
+        assert_eq!(
+            NetworkTraced::of(body.as_ref()).unwrap().take_span(),
+            Some(7)
+        );
+        drop(body);
+        sink.abandon_open();
+        assert!(sink.drain().is_empty());
     }
 
     #[test]
