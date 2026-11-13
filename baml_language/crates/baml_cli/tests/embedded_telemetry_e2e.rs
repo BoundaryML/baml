@@ -911,6 +911,8 @@ function main() -> void {
         ("helper", vec!["__flush-wrapper-telemetry"], 0),
         ("delegated", vec!["check", "delegated-input-sentinel"], 7),
         ("version", vec!["--version"], 7),
+        ("version-acquisition-error", vec!["--version"], 0),
+        ("version-selection-error", vec!["--version"], 0),
         ("passive-errors", vec!["check", "exit-zero"], 0),
         ("high", vec!["--help"], 0),
         ("on", vec!["--help"], 0),
@@ -918,7 +920,7 @@ function main() -> void {
     ] {
         let toolchain = match scenario {
             "delegated" | "version" => child.to_str().unwrap(),
-            "list" => "0.0.78",
+            "list" | "version-acquisition-error" => "0.0.78",
             "passive-errors" => "canary",
             _ => "invalid-version-sentinel",
         };
@@ -974,17 +976,22 @@ function main() -> void {
         )
         .unwrap();
         std::fs::set_permissions(&invalid_binary, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let output = local(&binary)
-            .args(["check", "launch-input-sentinel"])
-            .env("BAML_TOOLCHAIN", &invalid_binary)
-            .env("BAML_TELEMETRY", "medium")
-            .env(
-                "BAML_CONTEXT",
-                json!({"metadata": {"scenario": "launch-error"}}).to_string(),
-            )
-            .output()
-            .unwrap();
-        assert_eq!(output.status.code(), Some(1), "{output:?}");
+        for (scenario, args, code) in [
+            ("launch-error", vec!["check", "launch-input-sentinel"], 1),
+            ("version-launch-error", vec!["--version"], 0),
+        ] {
+            let output = local(&binary)
+                .args(args)
+                .env("BAML_TOOLCHAIN", &invalid_binary)
+                .env("BAML_TELEMETRY", "medium")
+                .env(
+                    "BAML_CONTEXT",
+                    json!({"metadata": {"scenario": scenario}}).to_string(),
+                )
+                .output()
+                .unwrap();
+            assert_eq!(output.status.code(), Some(code), "{scenario}: {output:?}");
+        }
     }
     #[cfg(unix)]
     {
@@ -1122,10 +1129,17 @@ function main() -> void {
     assert_eq!(
         span("list", "user.dispatch")[0],
         "return",
-        "recovered preflight failures stay recovered"
+        "local inventory needs no acquisition"
+    );
+    assert_eq!(
+        query(
+            "SELECT COUNT(*) FROM spans WHERE context_metadata['scenario'] = 'list'
+            AND span_name LIKE '%ensure_installed%'"
+        ),
+        json!([[0]])
     );
     let acquired = span(
-        "list",
+        "version-acquisition-error",
         "user.<(user.VersionSelector as user.ToolchainSelector)>.ensure_installed",
     );
     assert_eq!(
@@ -1144,7 +1158,21 @@ function main() -> void {
     );
     assert_eq!(acquired[4], "no_value");
     assert_eq!(acquired[5], "no_value");
-    assert_eq!(acquired[7], "baml toolchain list");
+    assert_eq!(acquired[7], "baml");
+    for scenario in ["version-acquisition-error", "version-selection-error"] {
+        let reported = span(scenario, "user.WrapperInvocation.run_cli_version");
+        assert_eq!(reported[0], "user_error");
+        assert_eq!(reported[4], "no_value");
+        assert_eq!(reported[5], "no_value");
+        assert_eq!(reported[6], "present");
+        assert_eq!(span(scenario, "user.dispatch")[0], "cancel_error");
+        assert_eq!(
+            query(&format!(
+                "SELECT DISTINCT status FROM processes WHERE context_metadata['scenario'] = '{scenario}'"
+            )),
+            json!([["success"]])
+        );
+    }
     assert_eq!(
         span(
             "list",
@@ -1288,6 +1316,23 @@ function main() -> void {
         assert_eq!(launch[4], "no_value");
         assert_eq!(launch[5], "no_value");
         assert_eq!(launch[7], "baml check");
+        let recovered_launch = span("version-launch-error", "user.run_toolchain");
+        assert_eq!(recovered_launch[0], "user_error");
+        assert_eq!(recovered_launch[3]["error"]["$class"], "baml.errors.Io");
+        assert_eq!(recovered_launch[5], "no_value");
+        assert_eq!(
+            span(
+                "version-launch-error",
+                "user.WrapperInvocation.run_cli_version"
+            )[0],
+            "user_error"
+        );
+        assert_eq!(
+            query(
+                "SELECT DISTINCT status FROM processes WHERE context_metadata['scenario'] = 'version-launch-error'"
+            ),
+            json!([["success"]])
+        );
     }
     let automatic = span("high", "user.root_help");
     assert_eq!(automatic[0], "return");
