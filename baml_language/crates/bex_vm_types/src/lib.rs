@@ -22,6 +22,7 @@ pub mod lazy_biased_mutex;
 pub mod limit;
 pub mod media;
 pub mod meter;
+pub mod monitor;
 pub mod prompt;
 pub mod relink;
 mod roots;
@@ -41,6 +42,7 @@ pub use indexable::{
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};
+pub use monitor::{MonitorTable, Waiter};
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{
     CollectRoots, ForwardRoots, NothingCollected, PermitProof, RootHaver, RootHaverExt,

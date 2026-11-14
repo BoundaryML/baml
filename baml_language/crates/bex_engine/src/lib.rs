@@ -1037,10 +1037,11 @@ type ExtractedEnumDefinitions = (
     indexmap::IndexMap<::sys_types::DefKey, Vec<String>>,
 );
 
-/// The task id every `$init` VM runs under, and any VM that runs no code.
-/// `$init` VMs run one after another, before any other task exists, so they can
-/// share one id. Reserved outside the counter that numbers every other task,
-/// which starts at 1.
+/// The task id every `$init` VM runs under, and any VM that runs no code. It
+/// owns the `baml.sync.atomic` keys `$init`'s initializers take. `$init` VMs run
+/// one after another, before any other task exists, so they never contend and
+/// can share one id. Reserved outside the counter that numbers every other
+/// task, which starts at 1.
 const INIT_TASK: NonZeroU64 = NonZeroU64::MAX;
 
 /// The async runtime that drives VM execution.
@@ -1210,6 +1211,11 @@ pub struct BexEngine {
     dynamic_dispatch: Arc<bex_vm::package_load::DynDispatchTables>,
     /// Weak-table forwarding/sweep participant registered for every GC.
     _dynamic_dispatch_permit: bex_heap::InactiveHeapPermit<bex_vm::package_load::DynDispatchRoot>,
+
+    /// The `baml.sync.atomic` locks every VM of this engine shares.
+    monitors: Arc<bex_vm_types::MonitorTable>,
+    /// Forwards the lock table's keys on every GC.
+    _monitors_permit: bex_heap::InactiveHeapPermit<bex_vm::package_baml::MonitorRoot>,
 
     /// Builtin `baml.errors.*` / `baml.panics.*` class pointers, resolved once
     /// from `packages` and shared with every spawned VM (each `BexVm` would
@@ -2063,6 +2069,9 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let park_requested = Arc::new(AtomicBool::new(false));
 
+        // Every VM shares the `baml.sync.atomic` lock table, `$init`'s too.
+        let monitors = Arc::new(bex_vm_types::MonitorTable::new());
+
         let telemetry = auto_telemetry_level
             .map(|auto_level| {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -2146,6 +2155,7 @@ impl BexEngine {
                 Arc::clone(&error_class_ptrs),
                 Arc::clone(&panic_class_ptrs),
                 Arc::clone(&stdlib_heads),
+                Arc::clone(&monitors),
                 INIT_TASK,
                 EngineTelemetry::new_root(telemetry.as_ref()),
                 trace_scope,
@@ -2306,6 +2316,10 @@ impl BexEngine {
             &heap_permit_manager,
             bex_vm::package_load::DynDispatchRoot::new(Arc::clone(&dynamic_dispatch)),
         );
+        let monitors_permit = permit_before_any_collector(
+            &heap_permit_manager,
+            bex_vm::package_baml::MonitorRoot::new(Arc::clone(&monitors)),
+        );
 
         // Build a default RuntimeIo from the SysOps table with an empty context.
         // This is replaced per-call in execute_sys_op with a live context that
@@ -2390,6 +2404,8 @@ impl BexEngine {
             packages,
             dynamic_dispatch,
             _dynamic_dispatch_permit: dynamic_dispatch_permit,
+            monitors,
+            _monitors_permit: monitors_permit,
             error_class_ptrs,
             panic_class_ptrs,
             stdlib_heads,
@@ -3819,6 +3835,7 @@ impl BexEngine {
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.stdlib_heads),
+            Arc::clone(&self.monitors),
             thread_id,
             telemetry,
             self.trace_scope,
@@ -5943,6 +5960,7 @@ impl BexEngine {
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.stdlib_heads),
+            Arc::clone(&self.monitors),
             thread_id,
             EngineTelemetry::new_child(self.telemetry.as_ref(), telemetry.as_ref()),
             self.trace_scope,

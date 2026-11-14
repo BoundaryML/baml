@@ -94,3 +94,22 @@ client LiteralKey = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "literal-key",
 );
+
+// ── CLEAN: taking a `baml.sync.atomic` lock ──────────────────────────────────
+// `atomic` parks on a sys-op only when another task holds the lock, and
+// `$init` runs with no other task alive, so the wait never runs there. A
+// client whose construction locks something must stay allowed.
+class InitKeyStore {
+    key: string,
+
+    function read(self) -> string {
+        baml.sync.atomic(self, () -> string {
+            self.key
+        })
+    }
+}
+
+client LockedKey = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = InitKeyStore { key: "literal-key" }.read(),
+);
