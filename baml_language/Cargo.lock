@@ -1344,6 +1344,7 @@ dependencies = [
  "bytecount",
  "divan",
  "indexmap",
+ "memchr",
  "xxhash-rust",
 ]
 
