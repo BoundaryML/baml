@@ -1,15 +1,17 @@
-//! The public relations: `processes`, `profiler`, `spans` and
-//! `span_announcements`, the tables local `baml query` and the cloud share.
+//! The public relations: `processes`, `profiler`, `spans`,
+//! `span_announcements`, `logs` and `functions`, the tables local
+//! `baml query` and the cloud share.
 //! Each is a TEMP view over the internal tables, created on every query
 //! connection so its definition always matches this binary.
 //!
 //! IDs render as text. `process_id` is 32 hex digits. Spans (function calls,
 //! futures and network requests) are `<recording_id>:<n>`, unique across
-//! recordings, the pair `trace.SpanId` holds. Profiler nodes are 16 hex
+//! recordings, the pair `trace.SpanId` holds. Logs are
+//! `<recording_id>:<file>.<n>`. Profiler nodes are 16 hex
 //! digits hashed from the function names on their path, so the same node
 //! has the same ID in every process. Timestamps are RFC 3339 UTC; durations are nanoseconds, NULL
 //! when the clock evidence cannot support them. `type_args`, `input_args`, `output_value`, `network_event_values`,
-//! `error_value`, `context_metadata`, `status_history`, `self_usage`
+//! `error_value`, `data`, `context_metadata`, `status_history`, `self_usage`
 //! and `total_usage` are BAML values: navigate them with `['key']` and
 //! `[index]`.
 use serde::Serialize;
@@ -125,6 +127,34 @@ pub const SPAN_TYPE_LABELS: &[ValueLabel] = &[
 pub const NODE_TYPE_LABELS: &[ValueLabel] = &[
     shown("function", "Function", "a function on the code path"),
     shown("future", "Task", "a spawned future on the code path"),
+];
+
+pub const ORIGIN_LABELS: &[ValueLabel] = &[
+    shown(
+        "user",
+        "Your code",
+        "a function the project's sources define",
+    ),
+    shown(
+        "companion",
+        "Your code",
+        "a function the compiler makes beside one of the project's, such as a prompt function's @spec; show it as part of that function",
+    ),
+    shown(
+        "auto_derive",
+        "Generated",
+        "a function the compiler derives for a type, such as its conversion to a string",
+    ),
+    shown(
+        "builtin",
+        "Standard library",
+        "a function of the baml packages",
+    ),
+    shown(
+        "internal",
+        "BAML runtime",
+        "a function of the runtime itself",
+    ),
 ];
 
 /// How to word what a row is and how to print the shapes every relation shares, for whoever
@@ -725,7 +755,148 @@ LEFT JOIN main.epoch e ON e.rec = n.rec AND e.epoch_id = t.epoch_id AND e.define
 WHERE n.defined = 1 OR n.outcome IS NOT NULL",
 };
 
-pub const RELATIONS: &[Relation] = &[PROCESSES, PROFILER, SPANS, SPAN_ANNOUNCEMENTS];
+pub const LOGS: Relation = Relation {
+    name: "logs",
+    doc: "One row per log event (`log.info/debug/warn/error`).",
+    columns: &[
+        col(
+            "log_id",
+            "text",
+            "<recording_id>:<file sequence>.<position among the file's log events>",
+        ),
+        col("process_id", "text", "").heading("Process"),
+        col(
+            "span_id",
+            "text",
+            "the innermost recorded span it ran under, as spans.span_id; a future when no function span encloses it",
+        ),
+        col("future_id", "text", "the future that logged").heading("Task"),
+        col(
+            "timestamp",
+            "text",
+            "RFC 3339 UTC; NULL when the clock evidence cannot support it",
+        ),
+        col("level", "text", "info, debug, warn or error"),
+        col(
+            "event_name",
+            "text",
+            "NULL when unnamed; an empty name stays empty",
+        ),
+        value("data", "the logged value"),
+        col(
+            "function_name",
+            "text",
+            "fully qualified name of the function whose code logged, which need not be a span; NULL when not recorded",
+        ),
+        col("source_file", "text", "that function's source file"),
+        col(
+            "line",
+            "integer",
+            "one-based line of the log call in source_file, as the event recorded it, otherwise from the function's line table, which is where a recorder takes it from (recordings before format minor 14 carry none); NULL when neither places the call",
+        ),
+        col(
+            "context_distinct_id",
+            "text",
+            "identity in effect when it logged; NULL when absent or unavailable",
+        )
+        .heading("User"),
+        value(
+            "context_metadata",
+            "metadata in effect when it logged; explicit empty context is an empty map, unknown context is unavailable",
+        ),
+    ],
+    view: "
+CREATE TEMP VIEW logs AS
+SELECT __btel_log_id(r.recording_id, l.seq) AS log_id,
+  lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
+  __btel_pubid(r.recording_id, l.parent_id) AS span_id,
+  __btel_pubid(r.recording_id, l.thread_id) AS future_id,
+  __btel_utc(l.at_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
+    e.multiplier, e.shift) AS timestamp,
+  CASE l.level WHEN 1 THEN 'info' WHEN 2 THEN 'debug' WHEN 3 THEN 'warn'
+    WHEN 4 THEN 'error' END AS level,
+  l.event_name,
+  __btel_ref(2, l.data_cas, NULL, 0) AS data,
+  f.fqn AS function_name,
+  f.source_file,
+  COALESCE(l.line, __btel_line(IIF(f.source_map_state = 1, f.source_map, NULL), l.pc)) AS line,
+  cx.distinct_id AS context_distinct_id,
+  __btel_context_metadata(l.context_state, l.context_cas, cx.state) AS context_metadata,
+  l.rec AS __span_id_rec, l.parent_id AS __span_id_key,
+  l.rec AS __future_id_rec, l.thread_id AS __future_id_key
+FROM main.log l
+JOIN main.recording r ON r.rec = l.rec
+LEFT JOIN main.context_snapshot cx ON cx.cas = l.context_cas
+LEFT JOIN main.function_def f ON f.rec = l.rec AND f.function_id = l.function_id
+LEFT JOIN main.thread t ON t.rec = l.rec AND t.thread_id = l.thread_id
+LEFT JOIN main.epoch e ON e.rec = l.rec AND e.epoch_id = t.epoch_id AND e.defined = 1",
+};
+
+pub const FUNCTIONS: Relation = Relation {
+    name: "functions",
+    doc: "One row per function a process defined in its recording, per source revision.",
+    columns: &[
+        col(
+            "baml_source_code_content_id",
+            "text",
+            "as in processes: the sources the definition was compiled from; NULL when not recorded, and then one row per function, from the newest such recording indexed",
+        )
+        .heading("Revision"),
+        col("function_name", "text", "fully qualified, package included"),
+        col("display_name", "text", ""),
+        col(
+            "kind",
+            "text",
+            "bytecode, sysop, native or native_unresolved",
+        ),
+        col(
+            "origin",
+            "text",
+            "user, companion, internal, builtin or auto_derive",
+        )
+        .labels(ORIGIN_LABELS),
+        col("package", "text", ""),
+        col("namespace", "text", "its components joined with '.'"),
+        col("source_file", "text", "NULL for a function without source"),
+        col(
+            "source_start",
+            "integer",
+            "byte offset of the definition in source_file",
+        ),
+        col(
+            "source_end",
+            "integer",
+            "byte offset one past the definition's end",
+        ),
+    ],
+    // Recordings of one source revision repeat its definitions. SQLite takes
+    // the other columns of a group from the row holding its single MAX, so
+    // each row is the definition in the newest recording indexed. Recordings
+    // without a revision cannot be told apart, so they form one group too:
+    // repeated runs of unversioned code list each function once.
+    view: "
+CREATE TEMP VIEW functions AS
+SELECT d.baml_source_code_content_id, d.function_name, d.display_name, d.kind, d.origin,
+  d.package, d.namespace, d.source_file, d.source_start, d.source_end
+FROM (
+  SELECT IIF(r.source_cas IS NULL, NULL, lower(hex(r.source_cas))) AS baml_source_code_content_id,
+    f.fqn AS function_name, f.display_name, f.kind, f.origin, f.package, f.namespace,
+    f.source_file, f.source_start, f.source_end, MAX(f.rec) AS newest
+  FROM main.function_def f
+  JOIN main.recording r ON r.rec = f.rec
+  WHERE f.state = 2
+  GROUP BY r.source_cas, f.fqn
+) d",
+};
+
+pub const RELATIONS: &[Relation] = &[
+    PROCESSES,
+    PROFILER,
+    SPANS,
+    SPAN_ANNOUNCEMENTS,
+    LOGS,
+    FUNCTIONS,
+];
 
 /// Id columns a filter can use indexes for: `(relation, column, prefix)`.
 /// The relation's view also selects the id's stored parts as hidden columns
@@ -739,6 +910,8 @@ pub const KEYS: &[(&str, &str, &str)] = &[
     ("span_announcements", "span_id", ""),
     ("span_announcements", "future_id", ""),
     ("span_announcements", "parent_span_id", ""),
+    ("logs", "span_id", ""),
+    ("logs", "future_id", ""),
 ];
 
 /// The kind of `relation.column` when it is an indexable id.
@@ -838,9 +1011,9 @@ mod tests {
                 "SELECT * FROM {relation} WHERE __{column}_rec = 1 AND __{column}_key = x'0000000000000001'"
             );
             let plan = plan(&conn, &sql);
-            // A future's own future_id is derived from its parent: that
-            // branch reads the recording's futures once.
-            if *column != "future_id" {
+            // A span's future_id is derived from its parent: that branch
+            // reads the recording's futures once. A log stores its own.
+            if *column != "future_id" || *relation == "logs" {
                 assert_no_rescan(relation, &plan);
                 assert!(
                     plan.iter()
@@ -857,6 +1030,50 @@ mod tests {
         }
     }
 
+    /// Recordings of one source revision repeat a definition: `functions`
+    /// lists it once, as the newest of them recorded it, and leaves out
+    /// functions a recording only referenced.
+    #[test]
+    fn functions_take_a_definition_from_the_newest_recording_of_its_revision() {
+        let conn = connection();
+        conn.execute_batch(
+            "INSERT INTO recording (rec, recording_id, source_cas) VALUES
+               (1, x'01', x'aa'), (2, x'02', x'aa'), (3, x'03', x'aa'), (4, x'04', NULL);
+             INSERT INTO function_def (rec, function_id, state, fqn, source_file) VALUES
+               (1, x'0000000000000001', 2, 'user.f', 'old.baml'),
+               (3, x'0000000000000001', 2, 'user.f', 'new.baml'),
+               (2, x'0000000000000001', 2, 'user.f', 'middle.baml'),
+               (4, x'0000000000000001', 2, 'user.f', 'unversioned.baml'),
+               (3, x'0000000000000002', 1, NULL, NULL),
+               (3, x'0000000000000003', 0, NULL, NULL);",
+        )
+        .unwrap();
+        let rows: Vec<(Option<String>, String, String)> = conn
+            .prepare(
+                "SELECT baml_source_code_content_id, function_name, source_file FROM functions
+                 ORDER BY baml_source_code_content_id",
+            )
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![
+                (None, "user.f".to_owned(), "unversioned.baml".to_owned()),
+                (
+                    Some("aa".to_owned()),
+                    "user.f".to_owned(),
+                    "new.baml".to_owned()
+                ),
+            ]
+        );
+    }
+
+    /// Every profiler row of a process carries the process's start and its
+    /// end: the end it reported (a known outcome's over a later unknown
+    /// one's), else the newest file indexed, else its start.
     #[test]
     fn profiler_rows_carry_their_process_times() {
         let conn = connection();
@@ -1038,6 +1255,7 @@ mod tests {
                 "spans.span_type",
                 "spans.status",
                 "span_announcements.span_type",
+                "functions.origin",
             ]
         );
 

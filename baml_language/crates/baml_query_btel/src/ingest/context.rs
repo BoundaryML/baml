@@ -88,12 +88,7 @@ impl Contexts {
              WHERE excluded.priority > event_context.priority",
         )?;
         for (&(node, slot), &(priority, context)) in &self.0 {
-            let (state, cas) = match context {
-                ContextReference::Unavailable => (0, None),
-                ContextReference::Empty => (1, None),
-                ContextReference::Snapshot(id) => (2, Some(*id.as_bytes())),
-                ContextReference::Invalid => (3, None),
-            };
+            let (state, cas) = stored(context);
             if let Some(cas) = cas {
                 snapshot.execute([cas])?;
             }
@@ -101,6 +96,21 @@ impl Contexts {
         }
         Ok(())
     }
+}
+
+/// A context reference as its `state` and `cas` columns.
+pub(super) fn stored(context: ContextReference) -> (i64, Option<[u8; 16]>) {
+    match context {
+        ContextReference::Unavailable => (0, None),
+        ContextReference::Empty => (1, None),
+        ContextReference::Snapshot(id) => (2, Some(*id.as_bytes())),
+        ContextReference::Invalid => (3, None),
+    }
+}
+
+/// A log's context is its section's: the context in effect when it logged.
+pub(super) fn of_section(section: &proto::ThreadSection) -> (i64, Option<[u8; 16]>) {
+    stored(reference(section))
 }
 
 pub(super) fn resolve(
@@ -123,6 +133,8 @@ fn resolve_with(
         conn.execute(
             "DELETE FROM context_snapshot WHERE NOT EXISTS
              (SELECT 1 FROM event_context WHERE event_context.cas = context_snapshot.cas)
+             AND NOT EXISTS
+             (SELECT 1 FROM log WHERE log.context_cas = context_snapshot.cas)
              AND NOT EXISTS
              (SELECT 1 FROM recording WHERE recording.initial_context_cas = context_snapshot.cas)",
             [],
