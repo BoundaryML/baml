@@ -1,6 +1,6 @@
 use baml_sdk::tuple_streams::{
-    stream_tuple_final, stream_tuple_final_stream, stream_tuple_final_stream_async,
-    stream_tuple_items, stream_tuple_items_stream, stream_tuple_items_stream_async,
+    stream_tuple_final_stream, stream_tuple_final_stream_sync, stream_tuple_final_sync,
+    stream_tuple_items_stream, stream_tuple_items_stream_sync, stream_tuple_items_sync,
 };
 
 fn s(value: &str) -> String {
@@ -26,34 +26,34 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
 // SDK_PARITY_LINT(skip): C# streams tuples from its own tuples fixture
 #[test]
 fn test_tuples_stream_items() {
-    let stream = stream_tuple_items_stream(s("x")).unwrap();
+    let stream = stream_tuple_items_stream_sync(s("x")).unwrap();
     let mut partials = Vec::new();
-    while let Some(partial) = stream.next().unwrap() {
+    while let Some(partial) = stream.next_sync().unwrap() {
         partials.push(partial);
     }
     check_item_partials(&partials);
-    assert_eq!(stream.final_().unwrap(), final_items());
+    assert_eq!(stream.final_sync().unwrap(), final_items());
 
     let (partials, last) = block_on(async {
-        let stream = stream_tuple_items_stream_async(s("x")).await.unwrap();
+        let stream = stream_tuple_items_stream(s("x")).await.unwrap();
         let mut partials = Vec::new();
-        while let Some(partial) = stream.next_async().await.unwrap() {
+        while let Some(partial) = stream.next().await.unwrap() {
             partials.push(partial);
         }
-        (partials, stream.final_async().await.unwrap())
+        (partials, stream.final_().await.unwrap())
     });
     check_item_partials(&partials);
     assert_eq!(last, final_items());
 
-    assert_eq!(stream_tuple_items(s("x")).unwrap(), final_items());
+    assert_eq!(stream_tuple_items_sync(s("x")).unwrap(), final_items());
 }
 
 // SDK_PARITY_LINT(skip): C# streams tuples from its own tuples fixture
 #[test]
 fn test_tuples_stream_final() {
-    let stream = stream_tuple_final_stream(s("x")).unwrap();
+    let stream = stream_tuple_final_stream_sync(s("x")).unwrap();
     let mut partials: Vec<(i64, String)> = Vec::new();
-    while let Some(partial) = stream.next().unwrap() {
+    while let Some(partial) = stream.next_sync().unwrap() {
         partials.push(partial);
     }
     assert!(!partials.is_empty(), "expected at least one partial");
@@ -64,18 +64,18 @@ fn test_tuples_stream_final() {
         "{partials:?}"
     );
     assert_eq!(partials.last(), Some(&(1, s("a"))));
-    assert_eq!(stream.final_().unwrap(), (1, s("a")));
+    assert_eq!(stream.final_sync().unwrap(), (1, s("a")));
 
     let (partials, last) = block_on(async {
-        let stream = stream_tuple_final_stream_async(s("x")).await.unwrap();
+        let stream = stream_tuple_final_stream(s("x")).await.unwrap();
         let mut partials: Vec<(i64, String)> = Vec::new();
-        while let Some(partial) = stream.next_async().await.unwrap() {
+        while let Some(partial) = stream.next().await.unwrap() {
             partials.push(partial);
         }
-        (partials, stream.final_async().await.unwrap())
+        (partials, stream.final_().await.unwrap())
     });
     assert_eq!(partials.last(), Some(&(1, s("a"))));
     assert_eq!(last, (1, s("a")));
 
-    assert_eq!(stream_tuple_final(s("x")).unwrap(), (1, s("a")));
+    assert_eq!(stream_tuple_final_sync(s("x")).unwrap(), (1, s("a")));
 }
