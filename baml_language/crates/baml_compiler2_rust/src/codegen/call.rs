@@ -46,7 +46,6 @@ impl<'db> Generator<'_, 'db> {
             return Ok(Expr::new(self.call_code(block, object, &call)?, repr));
         }
         let values = self.laid_out_args(block, &name, info, layout, args)?;
-        let args = format!("&[{}]", values.join(", "));
         match info.kind {
             FunctionKind::Bytecode => Err(Rejection::Invalid(format!(
                 "call to uncompiled `{name}` emitted directly"
@@ -60,25 +59,17 @@ impl<'db> Generator<'_, 'db> {
                         "yielding builtin `{key}` emitted inline"
                     )));
                 }
-                let call = |ordinal: usize| {
-                    if types.is_empty() {
-                        format!("vm.call_builtin(builtin_{ordinal}()?, {args})")
-                    } else {
-                        format!(
-                            "vm.call_builtin_typed(builtin_{ordinal}()?, &[{}], {args})",
-                            types.join(", ")
-                        )
-                    }
-                };
+                let call = |local: bool| Self::builtin_call(key, local, &values, &types);
                 // A thread-local receiver takes the builtin's lock-free twin.
                 let needs = if matches!(info.kind, FunctionKind::Native(_, Some(_))) {
                     self.analysis.escape.twin_needs(block)
                 } else {
                     baml_compiler2_mir::escape::NEVER
                 };
-                let locked = (needs != 0).then(|| call(self.builtin_ordinal(key)));
+                let locked = (needs != 0).then(|| call(false)).transpose()?;
                 let local = (needs != baml_compiler2_mir::escape::NEVER)
-                    .then(|| call(self.builtin_ordinal(&format!("{key}$local"))));
+                    .then(|| call(true))
+                    .transpose()?;
                 let call = self.by_locality(
                     needs,
                     local.as_deref().unwrap_or_default(),

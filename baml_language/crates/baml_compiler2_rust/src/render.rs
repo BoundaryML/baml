@@ -1,6 +1,6 @@
 //! Renders the module wrapper and Rust expression syntax.
 
-use std::{collections::BTreeMap, fmt::Write as _};
+use std::fmt::Write as _;
 
 use baml_compiler2_mir::BinOp;
 
@@ -11,7 +11,7 @@ const PRELUDE: &str = "\
 #![allow(unused_imports, unused_mut, unused_variables, unused_assignments, unused_labels,
     unused_parens, unreachable_code, unreachable_patterns, non_snake_case, clippy::all,
     clippy::pedantic)]
-use bex_vm::{BexVm, NativeFunction, CompiledBodyTable, errors::VmError};
+use bex_vm::{BexVm, CompiledBodyTable, errors::VmError};
 use bex_vm::compiled_rt::{CompiledEntry, FrameRecord, Step};
 use bex_vm_types::{BinOp, CmpOp, GlobalIndex, ObjectIndex, RealizedTy, Value};
 type R<T> = Result<T, Box<VmError>>;
@@ -20,26 +20,10 @@ type R<T> = Result<T, Box<VmError>>;
 pub(crate) fn render_module(
     bodies: &str,
     functions: &[CompiledFunction],
-    builtins: &BTreeMap<String, usize>,
     artifact_path: &str,
     fingerprint: [u8; 32],
 ) -> String {
     let mut out = String::from(PRELUDE);
-    // A builtin the VM does not bind is an internal error, not a panic.
-    for (key, ordinal) in builtins {
-        writeln!(
-            out,
-            "fn builtin_{ordinal}() -> R<NativeFunction> {{
-                static F: std::sync::OnceLock<Option<NativeFunction>> = std::sync::OnceLock::new();
-                F.get_or_init(|| bex_vm::package_baml::resolve_native({key:?})).ok_or_else(|| {{
-                    Box::new(VmError::from(bex_vm::errors::VmInternalError::CompiledBody {{
-                        message: String::from(\"the VM binds no builtin {key}\"),
-                    }}))
-                }})
-            }}"
-        )
-        .unwrap();
-    }
     out.push_str(bodies);
     writeln!(
         out,
