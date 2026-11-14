@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { createMetadata } from '@/app/_lib/metadata';
 import { section } from '@/components/home/analytics';
+import { FounderNote } from '@/components/home/founder-note';
 import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { Button, LINKS } from '@/components/home/ui';
 
@@ -195,6 +196,10 @@ export default function WhoAreWePage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className={`${PAGE_WRAP} pb-16 md:pb-24`}>
+        <FounderNote />
       </section>
 
       <section
