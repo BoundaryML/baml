@@ -143,9 +143,38 @@ impl BexVm {
         self.store_array_element_in::<true>(array, index, new_value)
     }
 
+    /// An in-bounds store into a list, small enough to inline; byte arrays
+    /// and every error take [`Self::store_array_element_slow`].
     #[allow(clippy::inline_always, reason = "the array element store's fast path")]
     #[inline(always)]
     fn store_array_element_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        array: Value,
+        index: Value,
+        new_value: Value,
+    ) -> Result<(), Box<VmError>> {
+        if let (Some(ptr), Some(i)) = (array.as_object_ptr(), index.as_int())
+            && let Object::Array(arr) = self.get_object(ptr)
+        {
+            let debt = self.tlab.alloc_debt();
+            // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
+            #[allow(unsafe_code)]
+            let mut guard = if THREAD_LOCAL {
+                unsafe { arr.lock_mut_thread_local(debt) }
+            } else {
+                arr.lock_mut(debt)
+            };
+            if let Some(idx) = crate::array_index::resolve_index_inline(i, guard.len()) {
+                guard[idx] = new_value;
+                return Ok(());
+            }
+        }
+        self.store_array_element_slow::<THREAD_LOCAL>(array, index, new_value)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn store_array_element_slow<const THREAD_LOCAL: bool>(
         &mut self,
         array: Value,
         index: Value,
@@ -436,6 +465,27 @@ mod tests {
         };
         assert_eq!(*object.key_ty, RealizedTy::String);
         assert_eq!(*object.value_ty, RealizedTy::Int);
+    }
+
+    /// In-bounds stores take the inline path; the rest take the slow one.
+    /// (Out-of-bounds panics need the program's panic classes, so the
+    /// `DirectContainerOps` differential probe covers them.)
+    #[test]
+    fn stores_land_in_bounds_and_leave_the_rest_to_the_slow_path() {
+        let mut vm = test_vm(Vec::new());
+        let list = vm.new_array(RealizedTy::Int, vec![Value::int(0); 3]);
+        vm.store_array_element(list, Value::int(0), Value::int(1))
+            .unwrap();
+        vm.store_array_element_local(list, Value::int(-1), Value::int(3))
+            .unwrap();
+        assert!(
+            vm.store_array_element(list, Value::TRUE, Value::int(9))
+                .is_err()
+        );
+        let elements: Vec<_> = (0..3)
+            .map(|i| vm.load_array_element(list, Value::int(i)).unwrap())
+            .collect();
+        assert_eq!(elements, [Value::int(1), Value::int(0), Value::int(3)]);
     }
 
     #[test]

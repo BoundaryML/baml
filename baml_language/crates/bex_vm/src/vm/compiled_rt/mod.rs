@@ -5,6 +5,7 @@ mod call;
 #[cfg(test)]
 pub(crate) use call::{FORCE_CALL_FUNNEL, FORCE_VM_FRAMES};
 mod cell;
+mod direct;
 mod fiber;
 pub use fiber::STACKFUL_FIBERS_SUPPORTED;
 mod field;
