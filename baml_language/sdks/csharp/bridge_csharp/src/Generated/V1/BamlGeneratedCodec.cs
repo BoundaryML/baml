@@ -308,6 +308,36 @@ public readonly partial struct BamlGeneratedCodecContext
             itemTypeMetadata);
     }
 
+    /// <summary>
+    /// A tuple stated as its own tuple type: one carrier per slot, in slot
+    /// order. It crosses inbound as a list stating that tuple type.
+    /// </summary>
+    public BamlGeneratedValue Tuple(
+        IEnumerable<BamlGeneratedValue> values,
+        ReadOnlySpan<byte> tupleTypeMetadata)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        if (tupleTypeMetadata.IsEmpty)
+        {
+            throw new ArgumentException(
+                "Generated tuple type metadata cannot be empty.",
+                nameof(tupleTypeMetadata));
+        }
+
+        IReadOnlyList<BamlGeneratedValue> items = SnapshotValues(values, "tuple");
+        int arity = BamlGeneratedValue.TupleArity(tupleTypeMetadata);
+        if (items.Count != arity)
+        {
+            throw new BamlTypeMappingException(
+                typeof(BamlGeneratedValue),
+                "tuple",
+                "$",
+                $"A tuple of arity {arity} received {items.Count} slots.");
+        }
+
+        return BamlGeneratedValue.CreateTuple(items, tupleTypeMetadata.ToArray());
+    }
+
     public BamlGeneratedValue Map(
         IEnumerable<KeyValuePair<string, BamlGeneratedValue>> entries,
         ReadOnlySpan<byte> keyTypeMetadata,
@@ -699,6 +729,42 @@ public readonly partial struct BamlGeneratedCodecContext
             "list item",
             allowCanaryUnknownFallback: true);
         return required.ReadList();
+    }
+
+    /// <summary>
+    /// The slots of a tuple the bridge returned for the tuple type
+    /// <paramref name="expectedTupleType"/>, after checking its arity. A tuple
+    /// that carries its own type must carry exactly that one; one that carries
+    /// none (a plain list taking a requested tuple shape) takes the declared
+    /// type's identity.
+    /// </summary>
+    public IReadOnlyList<BamlGeneratedValue> ReadTuple(
+        BamlGeneratedValue value,
+        ReadOnlySpan<byte> expectedTupleType,
+        int arity)
+    {
+        if (expectedTupleType.IsEmpty)
+        {
+            throw new ArgumentException(
+                "Generated tuple type metadata cannot be empty.",
+                nameof(expectedTupleType));
+        }
+
+        BamlGeneratedValue required = Require(value);
+        IReadOnlyList<BamlGeneratedValue> items = required.ReadTuple();
+        if (required.TupleTypeMetadata is { Length: > 0 } carried)
+        {
+            required.RequireTypeMetadata(expectedTupleType, carried, "tuple");
+        }
+
+        if (items.Count != arity)
+        {
+            throw new BamlProtocolException(
+                "The native bridge returned a tuple of the wrong arity.",
+                $"Expected {arity} tuple slots, received {items.Count}.");
+        }
+
+        return items;
     }
 
     public IReadOnlyDictionary<string, BamlGeneratedValue> ReadMap(
@@ -1204,6 +1270,10 @@ public sealed class BamlGeneratedValue
 
     internal byte[]? ItemTypeMetadata => itemTypeMetadata;
 
+    /// <summary>A tuple's own type, when it carries one.</summary>
+    internal byte[]? TupleTypeMetadata =>
+        kind == PrimitiveCarrierKind.Tuple ? itemTypeMetadata : null;
+
     internal byte[]? KeyTypeMetadata => keyTypeMetadata;
 
     internal byte[]? ValueTypeMetadata => valueTypeMetadata;
@@ -1276,6 +1346,48 @@ public sealed class BamlGeneratedValue
             listValue: values,
             itemTypeMetadata: itemTypeMetadata.ToArray(),
             sourcePath: sourcePath);
+    }
+
+    /// <summary>
+    /// A tuple, one carrier per slot. <paramref name="tupleTypeMetadata"/> is
+    /// the tuple's own type: a tuple a codec built states it, and one the
+    /// engine returned carries its instantiated type (the wire's
+    /// <c>tuple_value.tuple_type</c>). Only a plain list taking a requested
+    /// tuple shape has none; its identity is the type it decodes as.
+    /// </summary>
+    internal static BamlGeneratedValue CreateTuple(
+        IReadOnlyList<BamlGeneratedValue> values,
+        byte[]? tupleTypeMetadata,
+        string sourcePath = "generated argument") =>
+        new(
+            PrimitiveCarrierKind.Tuple,
+            listValue: values,
+            itemTypeMetadata: tupleTypeMetadata,
+            sourcePath: sourcePath);
+
+    /// <summary>The arity of a serialized tuple type.</summary>
+    internal static int TupleArity(ReadOnlySpan<byte> tupleTypeMetadata)
+    {
+        BamlTy type;
+        try
+        {
+            type = BamlTy.Parser.ParseFrom(tupleTypeMetadata);
+        }
+        catch (InvalidProtocolBufferException error)
+        {
+            throw new BamlProtocolException(
+                "Generated BAML type metadata is malformed.",
+                error.Message);
+        }
+
+        if (type.TyCase != BamlTy.TyOneofCase.Tuple || type.Tuple.Items.Count == 0)
+        {
+            throw new ArgumentException(
+                "Generated tuple type metadata must describe a tuple with at least one slot.",
+                nameof(tupleTypeMetadata));
+        }
+
+        return type.Tuple.Items.Count;
     }
 
     /// <summary>
@@ -1569,6 +1681,11 @@ public sealed class BamlGeneratedValue
         {
             declaredItem = structural.List.Item.ToByteArray();
         }
+        else if (kind == PrimitiveCarrierKind.Tuple
+            && structural.TyCase == BamlTy.TyOneofCase.Tuple)
+        {
+            declaredItem = structural.ToByteArray();
+        }
         else if (kind == PrimitiveCarrierKind.Map
             && structural.TyCase == BamlTy.TyOneofCase.Map)
         {
@@ -1645,6 +1762,12 @@ public sealed class BamlGeneratedValue
     internal IReadOnlyList<BamlGeneratedValue> ReadList()
     {
         RequireKind(PrimitiveCarrierKind.List);
+        return listValue!;
+    }
+
+    internal IReadOnlyList<BamlGeneratedValue> ReadTuple()
+    {
+        RequireKind(PrimitiveCarrierKind.Tuple);
         return listValue!;
     }
 
@@ -1986,4 +2109,5 @@ internal enum PrimitiveCarrierKind
     Type,
     Handle,
     HostCallable,
+    Tuple,
 }

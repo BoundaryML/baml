@@ -213,7 +213,7 @@ function plan(input: ai.ModelTurnInput) -> Plan {
     if (!input.toolbox.is_empty()) {
         throw reject("Decisions does not support tools")
     }
-    let rendered = input.prompt(ai.internal.build_output_format(input.output_type));
+    let rendered = (input.prompt)(ai.internal.build_output_format(input.output_type));
     let prefix: ai.content.Block[] = [];
     let evidence: ai.content.Block[] = [];
     for (let message in rendered.messages()) {

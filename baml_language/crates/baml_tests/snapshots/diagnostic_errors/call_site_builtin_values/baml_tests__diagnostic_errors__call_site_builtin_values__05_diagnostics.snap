@@ -81,3 +81,11 @@ source: crates/baml_tests/src/generated_tests.rs
  51 │     let current = reflect.Package.current;
     ·                   ───────────────────────
     ╰────
+
+  [type] E0177
+
+  × `log.info` can only be called directly, not used as a value; to pass it along, wrap the call in a lambda
+    ╭─[call_site_builtin_values.baml:59:6]
+ 59 │     (log.info)("parenthesized");
+    ·      ────────
+    ╰────

@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0067
+
+  × map keys must implement `baml.Hash`; got `(int, int)`
+   ╭─[map_keys.baml:2:15]
+ 2 │ type ByPair = map<(int, int), string>
+   ·               ───────────────────────
+   ╰────
+
+  [type] E0067
+
+  × map keys must implement `baml.Hash`; got `(int, int)`
+   ╭─[map_keys.baml:5:11]
+ 5 │     cells map<(int, int), string>
+   ·           ───────────────────────
+   ╰────
+
+  [type] E0067
+
+  × map keys must implement `baml.Hash`; got `(string,)`
+   ╭─[map_keys.baml:8:20]
+ 8 │ function lookup(m: map<(string,), int>) -> int {
+   ·                    ───────────────────
+   ╰────
+
+  [type] E0067
+
+  × map keys must implement `baml.Hash`; got `(int, bool)`
+    ╭─[map_keys.baml:13:12]
+ 13 │     let m: map<(int, bool), int> = {};
+    ·            ─────────────────────
+    ╰────
+
+  [type] E0067
+
+  × map keys must implement `baml.Hash`; got `(int, bool)`
+    ╭─[map_keys.baml:13:36]
+ 13 │     let m: map<(int, bool), int> = {};
+    ·                                    ──
+    ╰────
+
+  [type] E0001
+
+  × type `(int, int)` does not implement interface `baml.Hash`
+    ╭─[map_keys.baml:22:5]
+ 22 │     hash_of((1, 2))
+    ·     ───────────────
+    ╰────

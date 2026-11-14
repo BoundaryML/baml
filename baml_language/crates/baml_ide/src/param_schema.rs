@@ -107,6 +107,9 @@ pub enum FieldSchema {
         key: Box<FieldSchema>,
         value: Box<FieldSchema>,
     },
+    Tuple {
+        elements: Vec<FieldSchema>,
+    },
     /// A nullable union (`T?` / `T | null`), folded to its non-null payload.
     Optional {
         inner: Box<FieldSchema>,
@@ -323,6 +326,12 @@ impl SchemaCx<'_, '_> {
             Ty::Map { key, value, .. } => FieldSchema::Map {
                 key: Box::new(self.field_schema(key, depth + 1)),
                 value: Box::new(self.field_schema(value, depth + 1)),
+            },
+            Ty::Tuple(elements) => FieldSchema::Tuple {
+                elements: elements
+                    .iter()
+                    .map(|element| self.field_schema(element, depth + 1))
+                    .collect(),
             },
             Ty::Union(members) => {
                 if ty.is_nullable_union() {
@@ -750,6 +759,40 @@ mod tests {
     }
 
     #[test]
+    fn tuple_lists_its_slot_schemas_in_order() {
+        let (db, package) = db_with(&[(
+            "main.baml",
+            r#"
+            class Point { x int }
+            function t(a: (int, string), b: (Point,), c: (int, (bool, float?))[]) -> int { 1 }
+            "#,
+        )]);
+        let listing = list_functions_with_metadata(&db, package);
+        let params = params_json(&listing, "t");
+        assert_eq!(
+            params[0]["schema"],
+            json!({ "type": "tuple",
+                    "elements": [ { "type": "int" }, { "type": "string" } ] })
+        );
+        assert_eq!(
+            params[1]["schema"],
+            json!({ "type": "tuple",
+                    "elements": [ { "type": "ref", "name": "user.Point" } ] })
+        );
+        assert_eq!(
+            params[2]["schema"],
+            json!({ "type": "list", "item": { "type": "tuple", "elements": [
+                { "type": "int" },
+                { "type": "tuple", "elements": [
+                    { "type": "bool" },
+                    { "type": "optional", "inner": { "type": "float" } },
+                ] },
+            ] } })
+        );
+        assert!(types_json(&listing)["user.Point"].is_object());
+    }
+
+    #[test]
     fn unresolved_param_type_degrades_to_unsupported() {
         let (db, package) = db_with(&[("main.baml", "function bad(x: Nope) -> int { 1 }")]);
         let listing = list_functions_with_metadata(&db, package);
@@ -864,7 +907,7 @@ function plain(x: int) -> int { x }
             }
             type JSON = string | JSON[]
             enum Status { Active Inactive }
-            function golden(p: Person, c: Color, j: JSON, s: Status.Active, l: string[], m: map<string, float>, u: int | string, i: image, x: int = 3) -> int { 1 }
+            function golden(p: Person, c: Color, j: JSON, s: Status.Active, l: string[], m: map<string, float>, u: int | string, i: image, t: (int, (Color,)?), x: int = 3) -> int { 1 }
             "#,
         )]);
         let listing = list_functions_with_metadata(&db, package);

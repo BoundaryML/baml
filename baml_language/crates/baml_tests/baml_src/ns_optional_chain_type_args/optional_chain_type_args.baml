@@ -354,7 +354,7 @@ test "sys_op_method_through_optional_chain_matches_plain_call" {
 
 function callable_field_eval_count_fn() -> string {
     let c = EvalCounter { n: 0 }
-    let out = counted(c)?.describe(1)
+    let out = (counted(c)?.describe)?.(1)
     `${out ?? "null"}/${c.n}`
 }
 
@@ -368,7 +368,7 @@ function method_eval_count_fn() -> string {
 /// receiver starts returning, aborting with `expected instance, got any`.
 function callable_field_null_after_two_fn() -> string {
     let c = EvalCounter { n: 0 }
-    let out = counted_null_after_two(c)?.describe(1)
+    let out = (counted_null_after_two(c)?.describe)?.(1)
     `${out ?? "null"}/${c.n}`
 }
 

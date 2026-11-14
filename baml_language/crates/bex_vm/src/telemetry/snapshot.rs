@@ -164,6 +164,19 @@ impl Scratch {
                         self.add(leaves, *value, depth + 1)
                     })
                 }
+                Object::Tuple(tuple) => {
+                    let element_types: SmallVec<[(OwnedType, bool); 4]> = {
+                        let mut leaves = b.leaves();
+                        tuple
+                            .element_tys
+                            .iter()
+                            .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
+                            .collect()
+                    };
+                    b.described_tuple(element_types, tuple.slot_values(), |leaves, value| {
+                        self.add(leaves, value, depth + 1)
+                    })
+                }
                 Object::Map(data) => {
                     let key_type = described(&mut b.leaves(), &mut self.carried, &data.key_ty);
                     let value_type = described(&mut b.leaves(), &mut self.carried, &data.value_ty);

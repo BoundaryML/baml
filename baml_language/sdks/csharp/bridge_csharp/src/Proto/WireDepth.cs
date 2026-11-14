@@ -167,6 +167,8 @@ internal static class WireDepth
                 return level + 1 <= Limit && Nested(type.Optional.Inner);
             case BamlTy.TyOneofCase.Union:
                 return level + 1 <= Limit && AllNested(type.Union.Options);
+            case BamlTy.TyOneofCase.Tuple:
+                return level + 1 <= Limit && AllNested(type.Tuple.Items);
             case BamlTy.TyOneofCase.Interface:
                 // A binding is its own message, one level above its type.
                 return level + 1 <= Limit

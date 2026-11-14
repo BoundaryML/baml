@@ -545,6 +545,11 @@ pub(crate) fn discard_host_call_args(args: &[u8]) {
                     discard(value);
                 }
             }
+            Some(OutboundValue::TupleValue(tuple)) => {
+                for value in tuple.items {
+                    discard(value);
+                }
+            }
             Some(OutboundValue::MapValue(map)) => {
                 for entry in map.entries {
                     if let Some(value) = entry.value {

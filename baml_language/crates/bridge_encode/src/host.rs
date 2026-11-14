@@ -88,6 +88,10 @@ pub enum HostShape<'a, V: HostValue> {
         variant: String,
     },
     List(Children<'a, V>),
+    Tuple {
+        slots: Option<Vec<StatedTy>>,
+        items: Children<'a, V>,
+    },
     /// Entries in the host's order; keys are host values too.
     Map(Entries<'a, V>),
     /// An instance of a named class; see [`Shape::Instance`].
@@ -118,6 +122,10 @@ pub enum Shape<C> {
         variant: String,
     },
     List(Vec<C>),
+    Tuple {
+        slots: Option<Vec<StatedTy>>,
+        items: Vec<C>,
+    },
     /// Entries in the host's order; keys are host values too.
     Map(Vec<(C, C)>),
     /// An instance of a named class. `type_args` are the arguments the value

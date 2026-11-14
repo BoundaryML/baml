@@ -16,8 +16,8 @@ use crate::{
     packages::GoPackages,
     rendering::is_protected_go_identifier,
     types::{
-        GoCallbackReturn, GoCallbackThrows, GoFunctionKey, GoFunctionParamMode, GoLiteral, GoTy,
-        GoTypeProjection, GoUnionKey,
+        GoCallbackReturn, GoCallbackThrows, GoFunctionKey, GoFunctionParamMode, GoLiteral,
+        GoTupleKey, GoTy, GoTypeProjection, GoUnionKey,
     },
 };
 
@@ -90,6 +90,7 @@ pub(crate) enum BamlWireName {
     Key(baml_base::Name),
     /// Synthesized Go-only declarations have no independent BAML wire name.
     StructuralUnion,
+    StructuralTuple,
     StructuralCallback,
 }
 
@@ -100,6 +101,7 @@ impl fmt::Display for BamlWireName {
             Self::Method { owner, method } => write!(f, "{owner}.{method}"),
             Self::Key(name) => write!(f, "{name}"),
             Self::StructuralUnion => f.write_str("<structural union>"),
+            Self::StructuralTuple => f.write_str("<structural tuple>"),
             Self::StructuralCallback => f.write_str("<structural callback>"),
         }
     }
@@ -322,6 +324,7 @@ impl GoScope {
 pub(crate) struct GoNames {
     allocations: HashMap<NameRequest, GoName>,
     unions: BTreeMap<(baml_base::Name, GoUnionKey), GoUnionNames>,
+    tuples: BTreeMap<(baml_base::Name, GoTupleKey), GoName>,
     callback_options: BTreeMap<(baml_base::Name, GoFunctionKey), GoCallbackOptionNames>,
 }
 
@@ -609,6 +612,7 @@ impl GoNames {
             &canonical_classes,
         );
         names.allocate_unions(packages, projection);
+        names.allocate_tuples(packages, projection);
         names.allocate_callback_options(packages, projection);
         names
     }
@@ -640,6 +644,12 @@ impl GoNames {
         self.unions
             .get(&(package.clone(), key.clone()))
             .expect("typed union name was not registered during allocation")
+    }
+
+    pub(crate) fn tuple(&self, package: &baml_base::Name, key: &GoTupleKey) -> &GoName {
+        self.tuples
+            .get(&(package.clone(), key.clone()))
+            .expect("tuple name was not registered during allocation")
     }
 
     pub(crate) fn callback_options(
@@ -731,6 +741,7 @@ impl GoNames {
         Self {
             allocations,
             unions: BTreeMap::new(),
+            tuples: BTreeMap::new(),
             callback_options: BTreeMap::new(),
         }
     }
@@ -859,6 +870,47 @@ impl GoNames {
         }
     }
 
+    fn allocate_tuples(&mut self, packages: &GoPackages, projection: &GoTypeProjection<'_>) {
+        let mut used = BTreeMap::<GoPackageName, BTreeSet<Box<str>>>::new();
+        for name in self.allocations.values() {
+            used.entry(name.canonical.package.clone())
+                .or_default()
+                .insert(name.canonical.name.clone());
+        }
+        for names in self.unions.values() {
+            let package_used = used
+                .entry(names.type_name.canonical.package.clone())
+                .or_default();
+            package_used.insert(names.type_name.canonical.name.clone());
+            package_used.insert(names.variant_name.canonical.name.clone());
+            package_used.insert(names.kind_name.canonical.name.clone());
+            for arm in names.arms.values() {
+                package_used.insert(arm.wrapper.canonical.name.clone());
+                package_used.insert(arm.constructor.canonical.name.clone());
+                package_used.insert(arm.kind_constant.canonical.name.clone());
+            }
+        }
+
+        for package in packages.iter() {
+            let package_name = package.go_name().clone();
+            for key in projection.typed_tuples_in(package.baml_name()) {
+                let mut base = tuple_type_component(key, self);
+                let package_used = used.entry(package_name.clone()).or_default();
+                while is_protected_go_identifier(&base) || package_used.contains(base.as_str()) {
+                    base.push('_');
+                }
+                package_used.insert(base.clone().into());
+                self.tuples.insert(
+                    (package.baml_name().clone(), key.clone()),
+                    GoName {
+                        canonical: GoIdent::new(package_name.clone(), base),
+                        wire: BamlWireName::StructuralTuple,
+                    },
+                );
+            }
+        }
+    }
+
     fn allocate_callback_options(
         &mut self,
         packages: &GoPackages,
@@ -881,6 +933,11 @@ impl GoNames {
                 package_used.insert(arm.constructor.canonical.name.clone());
                 package_used.insert(arm.kind_constant.canonical.name.clone());
             }
+        }
+        for name in self.tuples.values() {
+            used.entry(name.canonical.package.clone())
+                .or_default()
+                .insert(name.canonical.name.clone());
         }
 
         for package in packages.iter() {
@@ -953,6 +1010,14 @@ fn callback_options_component(key: &GoFunctionKey, names: &GoNames) -> String {
     }
     base.push_str("Options");
     base
+}
+
+fn tuple_type_component(key: &GoTupleKey, names: &GoNames) -> String {
+    let mut component = format!("Tuple{}_", key.slots().len());
+    for slot in key.slots() {
+        component.push_str(&union_type_component(slot, names));
+    }
+    component
 }
 
 fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
@@ -1034,6 +1099,7 @@ fn union_type_component(ty: &GoTy, names: &GoNames) -> String {
             .map(|member| union_type_component(member, names))
             .collect::<Vec<_>>()
             .join("Or"),
+        GoTy::Tuple(key) => tuple_type_component(key, names),
         GoTy::Function(_) => "Function".into(),
         GoTy::Unsupported => "Unsupported".into(),
     }
@@ -1152,6 +1218,13 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
             hash.byte(u8::from(*nullable));
             for member in key.members() {
                 hash_go_ty(hash, member);
+            }
+        }
+        GoTy::Tuple(key) => {
+            hash.byte(25);
+            hash.usize(key.slots().len());
+            for slot in key.slots() {
+                hash_go_ty(hash, slot);
             }
         }
         GoTy::Unsupported => hash.byte(16),

@@ -451,3 +451,39 @@ class Function {
         $rust_function
     }
 }
+
+class Tuple {
+    _ty: root.Type,
+
+    function new(element_types: root.TypeView[]) -> root.Tuple throws never {
+        Tuple._new(root._as_types(element_types))
+    }
+
+    //baml:mut_vm
+    function _new(element_types: root.Type[]) -> root.Tuple throws never {
+        $rust_function
+    }
+
+    //baml:mut_vm
+    function instantiate<T>(values: unknown[]) -> T throws root.errors.InvalidArgument {
+        $rust_function
+    }
+
+    //baml:mut_vm
+    function get_element(value: unknown, index: int) -> unknown throws root.errors.InvalidArgument {
+        $rust_function
+    }
+
+    implements root.TypeView {
+        //baml:vm
+        //baml:fallible
+        function as_type(self) -> root.Type throws never {
+            $rust_function
+        }
+    }
+    //baml:mut_vm
+    //baml:fallible
+    function element_types(self) -> root.Type[] throws never {
+        $rust_function
+    }
+}

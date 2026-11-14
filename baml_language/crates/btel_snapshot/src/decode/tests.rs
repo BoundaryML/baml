@@ -889,3 +889,143 @@ fn format_6_reads_format_5_content_under_its_own_ids() {
     assert_eq!(v5.root, v6.root);
     assert_ne!(v5.id, v6.id);
 }
+
+fn tuple_snapshot(
+    limits: Limits,
+    element_types: Vec<OwnedType>,
+    items: Vec<V>,
+) -> (Snapshot, DecodedSnapshot) {
+    let pool = SnapshotPool::new(1, limits);
+    let mut b = pool.try_acquire().unwrap();
+    let tuple = b.tuple(element_types, items.into_iter(), |_, item| item);
+    let tuple = b.leaves().object(tuple).unwrap();
+    let snapshot = b.finish(V::Object(tuple), &mut Shaper::default());
+    let decoded = decode(&encode(&snapshot)).unwrap();
+    assert_eq!(decoded.id, snapshot.root_id(), "identity verifies");
+    (snapshot, decoded)
+}
+fn decoded_tuple(decoded: &DecodedSnapshot) -> (Vec<OwnedType>, &[DecodedValue], u64) {
+    let DecodedRoot::Value(DecodedValue::Object(id)) = &decoded.root else {
+        panic!("object root")
+    };
+    let DecodedObject::Tuple {
+        element_types,
+        items,
+        original_len,
+    } = decoded.object(*id)
+    else {
+        panic!("tuple")
+    };
+    let element_types = element_types
+        .iter()
+        .map(|ty| *ty.decoded.clone().expect("a shallow type"))
+        .collect();
+    (element_types, items, *original_len)
+}
+
+#[test]
+fn a_tuple_round_trips_its_carried_slot_types() {
+    let inner = RealizedTy::Tuple(Box::new([
+        RealizedTy::optional(int_type()),
+        RealizedTy::String,
+    ]));
+    let types = vec![inner, RealizedTy::optional(RealizedTy::Bool)];
+    let (_, decoded) = tuple_snapshot(Limits::default(), types.clone(), vec![V::Int(1), V::Null]);
+    let (element_types, items, original_len) = decoded_tuple(&decoded);
+    assert_eq!(element_types, types);
+    assert_eq!(items, [DecodedValue::Int(1), DecodedValue::Null]);
+    assert_eq!(original_len, 2);
+}
+
+#[test]
+fn a_truncated_tuple_keeps_its_arity_and_every_slot_type() {
+    let types = vec![
+        int_type(),
+        RealizedTy::String,
+        RealizedTy::optional(RealizedTy::Bool),
+    ];
+    let (_, decoded) = tuple_snapshot(
+        Limits {
+            max_values: Some(2),
+            ..Limits::default()
+        },
+        types.clone(),
+        vec![V::Int(1), V::Bool(true), V::Null],
+    );
+    let (element_types, items, original_len) = decoded_tuple(&decoded);
+    assert_eq!(items.len(), 2, "the value limit cuts the elements");
+    assert_eq!(original_len, 3);
+    assert_eq!(element_types, types, "not just the captured prefix's types");
+}
+
+#[test]
+fn equal_contents_carrying_different_slot_types_have_different_ids() {
+    let (exact, _) = tuple_snapshot(Limits::default(), vec![int_type()], vec![V::Int(1)]);
+    let (optional, _) = tuple_snapshot(
+        Limits::default(),
+        vec![RealizedTy::optional(int_type())],
+        vec![V::Int(1)],
+    );
+    let (again, _) = tuple_snapshot(Limits::default(), vec![int_type()], vec![V::Int(1)]);
+    assert_ne!(exact.root_id(), optional.root_id(), "(int,) vs (int?,)");
+    assert_eq!(exact.root_id(), again.root_id());
+}
+
+#[test]
+fn a_tuple_whose_slot_types_miss_its_arity_is_invalid() {
+    let (snapshot, _) = tuple_snapshot(Limits::default(), vec![int_type()], vec![V::Int(1)]);
+    let mut bytes = encode(&snapshot);
+    let int = borsh::to_vec(&int_type()).unwrap();
+    let mut pattern = vec![crate::tags::ObjectTag::Tuple as u8];
+    pattern.extend_from_slice(&1u32.to_le_bytes());
+    pattern.extend_from_slice(&int);
+    pattern.extend_from_slice(&1u64.to_le_bytes());
+    let at = bytes
+        .windows(pattern.len())
+        .position(|window| window == pattern)
+        .expect("the tuple's encoding")
+        + pattern.len()
+        - 8;
+    bytes[at..at + 8].copy_from_slice(&2u64.to_le_bytes());
+    assert!(matches!(
+        decode(&bytes),
+        Err(BlobError::Invalid(message)) if message.contains("carrying 1 types")
+    ));
+}
+
+#[test]
+fn a_tuple_object_round_trips() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut b = pool.try_acquire().unwrap();
+    let tuple = b.tuple(
+        [int_type(), RealizedTy::Bool],
+        [V::Int(1), V::Bool(true)].into_iter(),
+        |_, item| item,
+    );
+    let tuple = b.leaves().object(tuple).unwrap();
+    let root = b.arguments([V::Object(tuple)].into_iter(), |_, slot| slot);
+    let snapshot = b.finish(root, &mut Shaper::default());
+
+    let decoded = decode(&encode(&snapshot)).unwrap();
+    assert_eq!(
+        decoded.id,
+        snapshot.root_id(),
+        "identity verifies over a tuple"
+    );
+    let DecodedRoot::FunctionArgs { slots, .. } = &decoded.root else {
+        panic!("argument root")
+    };
+    let DecodedValue::Object(id) = &slots[0] else {
+        panic!("object slot")
+    };
+    let DecodedObject::Tuple {
+        items,
+        original_len,
+        ..
+    } = decoded.object(*id)
+    else {
+        panic!("tuple")
+    };
+    assert_eq!(*original_len, 2);
+    assert_eq!(items, &vec![DecodedValue::Int(1), DecodedValue::Bool(true)]);
+}

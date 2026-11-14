@@ -202,6 +202,9 @@ fn statement(ctx: &mut LoweringContext, v: View<'_>, stmt: AnyStmt) -> Option<St
             let node = *v.node(id);
             let span = v.range_of(id);
             warn_const_introducer(ctx, v, node.introducer);
+            if let Ok(pattern) = node.pattern {
+                check_const_pattern(ctx, v, pattern, node.introducer);
+            }
             let pattern = match node.pattern {
                 Ok(pattern) => self::pattern(ctx, v, pattern),
                 Err(_) => ctx.alloc_pattern(Pattern::Wildcard, span),
@@ -372,6 +375,9 @@ pub(super) fn let_stmt(ctx: &mut LoweringContext, v: View<'_>, id: Id<LetStmt>) 
         .and_then(|else_branch| else_branch.block.ok())
         .map(|block| block_expr(ctx, v, block));
     warn_const_introducer(ctx, v, node.introducer);
+    if let Ok(pattern) = node.pattern {
+        check_const_pattern(ctx, v, pattern, node.introducer);
+    }
     let pattern = pattern.unwrap_or_else(|| ctx.alloc_pattern(Pattern::Wildcard, span));
     ctx.alloc_stmt(
         Stmt::Let {
@@ -459,6 +465,9 @@ fn for_stmt(ctx: &mut LoweringContext, v: View<'_>, id: Id<baml_syntax::nodes::F
     };
     let binding = header.and_then(|header| {
         warn_const_introducer(ctx, v, header.introducer);
+        if let Ok(pattern) = header.pattern {
+            check_const_pattern(ctx, v, pattern, header.introducer);
+        }
         header
             .pattern
             .ok()
@@ -597,6 +606,46 @@ fn expression_in_chain(ctx: &mut LoweringContext, v: View<'_>, expr: AnyExpr) ->
             let token = v.node(id).token;
             let expr = literal_token(ctx, v, token.idx);
             ctx.alloc_expr(expr, span)
+        }
+        AnyExpr::Tuple(id) => {
+            let elements = v
+                .tree
+                .list(v.node(id).elements)
+                .iter()
+                .map(|element| expression(ctx, v, element.item))
+                .collect();
+            ctx.alloc_expr(Expr::Tuple { elements }, span)
+        }
+        AnyExpr::TupleField(id) => {
+            let node = *v.node(id);
+            let mut base = expression_in_chain(ctx, v, node.base);
+            let range = v.token_range(node.slot.idx);
+            let mut start = range.start();
+            let optional = v.tree.tokens().kind(node.dot.idx) == TokenKind::QuestionDot;
+            for (index, part) in v.text(node.slot.idx).split('.').enumerate() {
+                let end = start + text_size::TextSize::of(part);
+                let expr = if optional && index == 0 {
+                    Expr::OptionalMemberAccess {
+                        base,
+                        member: Name::new(part),
+                    }
+                } else {
+                    Expr::MemberAccess {
+                        base,
+                        member: Name::new(part),
+                    }
+                };
+                let next = ctx.alloc_expr(expr, TextRange::new(span.start(), end));
+                ctx.source_map
+                    .member_access_member_spans
+                    .insert(next, TextRange::new(start, end));
+                if ctx.needs_chain_wrap.remove(&base) || (optional && index == 0) {
+                    ctx.needs_chain_wrap.insert(next);
+                }
+                base = next;
+                start = end + text_size::TextSize::from(1);
+            }
+            base
         }
         AnyExpr::String(id) => string_literal(ctx, v, id),
         AnyExpr::FieldAccess(id) => {
@@ -968,6 +1017,17 @@ fn call_expr(
         // The call owns the type args; the callee is the path alone.
         AnyExpr::GenericApply(_) => expression_in_chain(ctx, v, callee_node),
         callee => callee_without_receiver_args(ctx, v, callee),
+    };
+    let callee = if matches!(node.callee, AnyExpr::Paren(_)) {
+        ctx.alloc_expr(
+            Expr::Block {
+                stmts: Vec::new(),
+                tail_expr: Some(callee),
+            },
+            v.range_any(&node.callee),
+        )
+    } else {
+        callee
     };
     let (args, label_spans) = call_args(ctx, v, node.args);
     let args = ctx.complete_client_resolve_call(callee, args, span);
@@ -1620,6 +1680,9 @@ fn if_let_expr(ctx: &mut LoweringContext, v: View<'_>, id: Id<IfLetExpr>) -> Exp
     let node = *v.node(id);
     let span = v.range_of(id);
     warn_const_introducer(ctx, v, node.introducer);
+    if let Ok(pattern) = node.pattern {
+        check_const_pattern(ctx, v, pattern, node.introducer);
+    }
     let pattern = match node.pattern {
         Ok(pattern) => self::pattern(ctx, v, pattern),
         Err(_) => ctx.alloc_pattern(Pattern::Wildcard, span),
@@ -1715,6 +1778,25 @@ pub(super) fn pattern(ctx: &mut LoweringContext, v: View<'_>, pattern: AnyPatter
             ctx.alloc_pattern(Pattern::Wildcard, span)
         }
         AnyPattern::Destructure(id) => destructure_pattern(ctx, v, id),
+        AnyPattern::Tuple(id) => {
+            let elements: Vec<_> = v
+                .tree
+                .list(v.node(id).elements)
+                .iter()
+                .map(|element| self::pattern(ctx, v, element.item))
+                .collect();
+            let types: Option<Vec<_>> = elements
+                .iter()
+                .map(|id| pattern_type_expr(ctx, *id))
+                .collect();
+            match types {
+                Some(elements) => ctx.alloc_pattern(
+                    Pattern::Type(TypeExprKind::Tuple { elements }.at(span)),
+                    span,
+                ),
+                None => ctx.alloc_pattern(Pattern::Tuple(elements), span),
+            }
+        }
         AnyPattern::Array(id) => array_pattern(ctx, v, id),
         AnyPattern::Type(id) => {
             let ty = types::lower_type(v, &mut ctx.diags, v.node(id).ty);
@@ -1755,6 +1837,13 @@ fn binding_pattern(ctx: &mut LoweringContext, v: View<'_>, id: Id<BindingPattern
         ctx.diags
             .push(LoweringDiagnostic::ReservedConstBindingName { span: name_span });
     }
+    if let Some(introducer) = node.introducer
+        && let Some(sub) = node
+            .ascription
+            .and_then(|ascription| ascription.pattern.ok())
+    {
+        check_const_pattern(ctx, v, sub, introducer);
+    }
     let subpat = node
         .ascription
         .and_then(|ascription| ascription.pattern.ok())
@@ -1773,6 +1862,9 @@ fn destructure_pattern(
     let span = v.range_of(id);
     if let Some(introducer) = node.introducer {
         warn_const_introducer(ctx, v, introducer);
+    }
+    if let Some(introducer) = node.introducer {
+        check_const_pattern(ctx, v, AnyPattern::Destructure(id), introducer);
     }
     let path = *v.node(node.path);
     let mut class = vec![v.name(path.head)];
@@ -1899,5 +1991,40 @@ impl LoweringContext {
             },
             span,
         )
+    }
+}
+
+fn check_const_pattern(
+    ctx: &mut LoweringContext,
+    v: View<'_>,
+    pattern: AnyPattern,
+    introducer: baml_syntax::Token![LetIntroducer],
+) {
+    if v.tree.tokens().kind(introducer.idx) != TokenKind::Const {
+        return;
+    }
+    let range = v.range_any(&pattern);
+    for token in v.tree.tokens().iter() {
+        let span = v.token_range(token);
+        if range.contains_range(span) && v.tree.tokens().kind(token) == TokenKind::Let {
+            ctx.diags.push(LoweringDiagnostic::LetInConstDestructure {
+                span,
+                const_span: v.token_range(introducer.idx),
+            });
+        }
+    }
+}
+
+fn pattern_type_expr(ctx: &LoweringContext, pattern: PatId) -> Option<TypeExpr> {
+    match &ctx.patterns[pattern] {
+        Pattern::Type(ty) => Some(ty.clone()),
+        Pattern::Or(alternatives) => {
+            let variants = alternatives
+                .iter()
+                .map(|id| pattern_type_expr(ctx, *id))
+                .collect::<Option<Vec<_>>>()?;
+            Some(TypeExprKind::Union { variants }.at(ctx.source_map.pattern_span(pattern)))
+        }
+        _ => None,
     }
 }

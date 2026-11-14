@@ -47,7 +47,7 @@ describe('host argument decoding ownership', () => {
         }
     });
 
-    test.each(['arguments', 'list', 'map', 'class', 'union'])(
+    test.each(['arguments', 'list', 'map', 'class', 'union', 'tuple', 'carried tuple'])(
         'decode failure preserves transferred owner and releases remaining: %s', (container) => {
             const slab = nextSlab++;
             const original = _seedHeapHandle(slab);
@@ -63,6 +63,10 @@ describe('host argument decoding ownership', () => {
             else if (container === 'map') args = [{ mapValue: { entries: values.map((value, index) => ({ key: String(index), value })) } }];
             else if (container === 'class') args = [{ classValue: { name: 'Capture', fields: values.map((value, index) => ({ key: String(index), value })) } }];
             else if (container === 'union') args = [{ unionVariantValue: { value: { listValue: { items: values } } } }];
+            else if (container === 'tuple') args = [{ tupleValue: { items: values } }];
+            else if (container === 'carried tuple') {
+                args = [{ tupleValue: { items: values, tupleType: { tuple: { items: values.map(() => ({ unknown: {} })) } } } }];
+            }
             else args = [{ listValue: { items: values } }];
             try {
                 expect(() => decodeHostCall(encode(args))).toThrow('deliberate argument');

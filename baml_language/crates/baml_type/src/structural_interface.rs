@@ -10,9 +10,14 @@ pub enum StructuralInterface {
     FromJson,
     Equals,
     Hash,
+    Compare,
 }
 
 impl StructuralInterface {
+    pub const fn is_conditional(self) -> bool {
+        matches!(self, Self::Hash | Self::Compare)
+    }
+
     pub const fn primary_method(self) -> &'static str {
         match self {
             Self::ToString => "to_string",
@@ -20,6 +25,7 @@ impl StructuralInterface {
             Self::FromJson => "from_json",
             Self::Equals => "eq",
             Self::Hash => "hash",
+            Self::Compare => "cmp",
         }
     }
 
@@ -30,12 +36,13 @@ impl StructuralInterface {
             Self::FromJson => "_from_json_structural_default",
             Self::Equals => "_equals_structural_default",
             Self::Hash => "_hash_structural_default",
+            Self::Compare => "_compare_structural_default",
         }
     }
 
     pub const fn native_type_arg_count(self) -> usize {
         match self {
-            Self::Equals | Self::Hash => 0,
+            Self::Equals | Self::Hash | Self::Compare => 0,
             Self::ToString | Self::ToJson | Self::FromJson => 1,
         }
     }

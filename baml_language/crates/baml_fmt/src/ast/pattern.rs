@@ -93,6 +93,7 @@ union_printable!(AnyPattern {
     Array,
     Type,
     Paren,
+    Tuple,
     Union,
 });
 

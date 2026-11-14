@@ -6,12 +6,70 @@
 // `indirect` so union-typed fields break struct-recursion cycles.
 // Cases are positional (`t0`, `t1`, …) in canonical BAML arm order; the
 // tag is never the wire name. Decode selects the arm from wire
-// metadata first, class FQN second, structural try-order last.
 //
-// Regenerate by editing the emitter script in git history for this
-// file; arities 2–8 (bumping the cap is additive).
 
 import Foundation
+
+struct BamlUnionArm {
+    let node: BamlSlotNode
+    let identity: String?
+    let encode: (Any) throws -> BamlInboundValue
+    let decode: (BamlOutboundValue) throws -> Any
+    let equal: (Any, Any) -> Bool
+
+    init<Arm>(_ slot: BamlSlot<Arm>) {
+        node = slot.node
+        identity = (Arm.self as? any BamlDecodable.Type)?._bamlArmIdentity
+        encode = { try slot._bamlEncode($0 as! Arm) }
+        decode = { try slot._bamlDecode($0) }
+        equal = { slot._bamlEqual($0 as! Arm, $1 as! Arm) }
+    }
+}
+
+func unionCodec<Value>(
+    _ arms: [BamlUnionArm],
+    split: @escaping (Value) -> (Int, Any),
+    join: @escaping (Int, Any) -> Value
+) -> BamlSlotCodec {
+    func decode(_ v: BamlOutboundValue) throws -> Value {
+        func arm(_ index: Int) throws -> Value { join(index, try arms[index].decode(v)) }
+        if let selected = try v.unionSelectedType() {
+            guard let index = arms.firstIndex(where: { $0.node.selects(selected) }) else {
+                throw BamlDecodeError.typeMismatch(
+                    expected: "\(Value.self)", got: "selected type not present in host union"
+                )
+            }
+            return try arm(index)
+        }
+        if let name = v.unionSelectedArm(), let index = arms.firstIndex(where: { $0.identity == name }) {
+            return try arm(index)
+        }
+        if let fqn = v.wireClassFQN(), let index = arms.firstIndex(where: { $0.identity == fqn }) {
+            return try arm(index)
+        }
+        if let carried = v.carriedTupleType(),
+            let index = arms.firstIndex(where: { $0.node.selects(carried) })
+        {
+            return try arm(index)
+        }
+        for index in arms.indices {
+            if let value = try? arm(index) { return value }
+        }
+        throw BamlDecodeError.typeMismatch(expected: "\(Value.self)", got: "unmatched union value")
+    }
+    return BamlSlotCodec(
+        encode: { value in
+            let (index, payload) = split(value as! Value)
+            return try arms[index].encode(payload)
+        },
+        decode: { try decode($0) },
+        equal: { lhs, rhs in
+            let (left, lhs) = split(lhs as! Value)
+            let (right, rhs) = split(rhs as! Value)
+            return left == right && arms[left].equal(lhs, rhs)
+        }
+    )
+}
 
 public indirect enum BamlUnion2<T0, T1> {
     case t0(T0)
@@ -79,7 +137,22 @@ extension BamlUnion2: BamlTyped where T0: BamlTyped, T1: BamlTyped {
 extension BamlSlots {
     /// The slot of a `BamlUnion2`: one slot per arm, in case order.
     public static func union<T0, T1>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>) -> BamlSlot<BamlUnion2<T0, T1>> {
-        union([t0.node, t1.node])
+        union(
+            [t0.node, t1.node],
+            arms: { [BamlUnionArm(t0), BamlUnionArm(t1)] },
+            split: {
+                switch $0 {
+                case .t0(let v): return (0, v)
+                case .t1(let v): return (1, v)
+                }
+            },
+            join: { index, payload in
+                switch index {
+                case 0: return .t0(payload as! T0)
+                default: return .t1(payload as! T1)
+                }
+            }
+        )
     }
 }
 
@@ -101,7 +174,10 @@ extension BamlUnion2: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+        }
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         throw BamlDecodeError.typeMismatch(expected: "BamlUnion2", got: "unmatched union value")
@@ -130,7 +206,10 @@ extension BamlUnion2: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable {
             if let identity = T0._bamlArmIdentity, identity == fqn { return .t0(try T0._bamlDecode(v, as: t0)) }
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v, as: t1)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+        }
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         throw BamlDecodeError.typeMismatch(expected: "BamlUnion2", got: "unmatched union value")
@@ -210,7 +289,24 @@ extension BamlUnion3: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlType
 extension BamlSlots {
     /// The slot of a `BamlUnion3`: one slot per arm, in case order.
     public static func union<T0, T1, T2>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>) -> BamlSlot<BamlUnion3<T0, T1, T2>> {
-        union([t0.node, t1.node, t2.node])
+        union(
+            [t0.node, t1.node, t2.node],
+            arms: { [BamlUnionArm(t0), BamlUnionArm(t1), BamlUnionArm(t2)] },
+            split: {
+                switch $0 {
+                case .t0(let v): return (0, v)
+                case .t1(let v): return (1, v)
+                case .t2(let v): return (2, v)
+                }
+            },
+            join: { index, payload in
+                switch index {
+                case 0: return .t0(payload as! T0)
+                case 1: return .t1(payload as! T1)
+                default: return .t2(payload as! T2)
+                }
+            }
+        )
     }
 }
 
@@ -235,7 +331,11 @@ extension BamlUnion3: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v)) }
             if let identity = T2._bamlArmIdentity, identity == fqn { return .t2(try T2._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+        }
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -269,7 +369,11 @@ extension BamlUnion3: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T1._bamlArmIdentity, identity == fqn { return .t1(try T1._bamlDecode(v, as: t1)) }
             if let identity = T2._bamlArmIdentity, identity == fqn { return .t2(try T2._bamlDecode(v, as: t2)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+        }
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }
@@ -357,7 +461,26 @@ extension BamlUnion4: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlType
 extension BamlSlots {
     /// The slot of a `BamlUnion4`: one slot per arm, in case order.
     public static func union<T0, T1, T2, T3>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>, _ t3: BamlSlot<T3>) -> BamlSlot<BamlUnion4<T0, T1, T2, T3>> {
-        union([t0.node, t1.node, t2.node, t3.node])
+        union(
+            [t0.node, t1.node, t2.node, t3.node],
+            arms: { [BamlUnionArm(t0), BamlUnionArm(t1), BamlUnionArm(t2), BamlUnionArm(t3)] },
+            split: {
+                switch $0 {
+                case .t0(let v): return (0, v)
+                case .t1(let v): return (1, v)
+                case .t2(let v): return (2, v)
+                case .t3(let v): return (3, v)
+                }
+            },
+            join: { index, payload in
+                switch index {
+                case 0: return .t0(payload as! T0)
+                case 1: return .t1(payload as! T1)
+                case 2: return .t2(payload as! T2)
+                default: return .t3(payload as! T3)
+                }
+            }
+        )
     }
 }
 
@@ -385,7 +508,12 @@ extension BamlUnion4: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T2._bamlArmIdentity, identity == fqn { return .t2(try T2._bamlDecode(v)) }
             if let identity = T3._bamlArmIdentity, identity == fqn { return .t3(try T3._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(carried) { return .t3(try T3._bamlDecode(v)) }
+        }
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -424,7 +552,12 @@ extension BamlUnion4: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T2._bamlArmIdentity, identity == fqn { return .t2(try T2._bamlDecode(v, as: t2)) }
             if let identity = T3._bamlArmIdentity, identity == fqn { return .t3(try T3._bamlDecode(v, as: t3)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+            if t3._bamlSelects(carried) { return .t3(try T3._bamlDecode(v, as: t3)) }
+        }
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }
@@ -520,7 +653,28 @@ extension BamlUnion5: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlType
 extension BamlSlots {
     /// The slot of a `BamlUnion5`: one slot per arm, in case order.
     public static func union<T0, T1, T2, T3, T4>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>, _ t3: BamlSlot<T3>, _ t4: BamlSlot<T4>) -> BamlSlot<BamlUnion5<T0, T1, T2, T3, T4>> {
-        union([t0.node, t1.node, t2.node, t3.node, t4.node])
+        union(
+            [t0.node, t1.node, t2.node, t3.node, t4.node],
+            arms: { [BamlUnionArm(t0), BamlUnionArm(t1), BamlUnionArm(t2), BamlUnionArm(t3), BamlUnionArm(t4)] },
+            split: {
+                switch $0 {
+                case .t0(let v): return (0, v)
+                case .t1(let v): return (1, v)
+                case .t2(let v): return (2, v)
+                case .t3(let v): return (3, v)
+                case .t4(let v): return (4, v)
+                }
+            },
+            join: { index, payload in
+                switch index {
+                case 0: return .t0(payload as! T0)
+                case 1: return .t1(payload as! T1)
+                case 2: return .t2(payload as! T2)
+                case 3: return .t3(payload as! T3)
+                default: return .t4(payload as! T4)
+                }
+            }
+        )
     }
 }
 
@@ -551,7 +705,13 @@ extension BamlUnion5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T3._bamlArmIdentity, identity == fqn { return .t3(try T3._bamlDecode(v)) }
             if let identity = T4._bamlArmIdentity, identity == fqn { return .t4(try T4._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(carried) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(carried) { return .t4(try T4._bamlDecode(v)) }
+        }
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -595,7 +755,13 @@ extension BamlUnion5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T3._bamlArmIdentity, identity == fqn { return .t3(try T3._bamlDecode(v, as: t3)) }
             if let identity = T4._bamlArmIdentity, identity == fqn { return .t4(try T4._bamlDecode(v, as: t4)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+            if t3._bamlSelects(carried) { return .t3(try T3._bamlDecode(v, as: t3)) }
+            if t4._bamlSelects(carried) { return .t4(try T4._bamlDecode(v, as: t4)) }
+        }
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }
@@ -699,7 +865,30 @@ extension BamlUnion6: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlType
 extension BamlSlots {
     /// The slot of a `BamlUnion6`: one slot per arm, in case order.
     public static func union<T0, T1, T2, T3, T4, T5>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>, _ t3: BamlSlot<T3>, _ t4: BamlSlot<T4>, _ t5: BamlSlot<T5>) -> BamlSlot<BamlUnion6<T0, T1, T2, T3, T4, T5>> {
-        union([t0.node, t1.node, t2.node, t3.node, t4.node, t5.node])
+        union(
+            [t0.node, t1.node, t2.node, t3.node, t4.node, t5.node],
+            arms: { [BamlUnionArm(t0), BamlUnionArm(t1), BamlUnionArm(t2), BamlUnionArm(t3), BamlUnionArm(t4), BamlUnionArm(t5)] },
+            split: {
+                switch $0 {
+                case .t0(let v): return (0, v)
+                case .t1(let v): return (1, v)
+                case .t2(let v): return (2, v)
+                case .t3(let v): return (3, v)
+                case .t4(let v): return (4, v)
+                case .t5(let v): return (5, v)
+                }
+            },
+            join: { index, payload in
+                switch index {
+                case 0: return .t0(payload as! T0)
+                case 1: return .t1(payload as! T1)
+                case 2: return .t2(payload as! T2)
+                case 3: return .t3(payload as! T3)
+                case 4: return .t4(payload as! T4)
+                default: return .t5(payload as! T5)
+                }
+            }
+        )
     }
 }
 
@@ -733,7 +922,14 @@ extension BamlUnion6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T4._bamlArmIdentity, identity == fqn { return .t4(try T4._bamlDecode(v)) }
             if let identity = T5._bamlArmIdentity, identity == fqn { return .t5(try T5._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(carried) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(carried) { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeSelects(carried) { return .t5(try T5._bamlDecode(v)) }
+        }
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -782,7 +978,14 @@ extension BamlUnion6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T4._bamlArmIdentity, identity == fqn { return .t4(try T4._bamlDecode(v, as: t4)) }
             if let identity = T5._bamlArmIdentity, identity == fqn { return .t5(try T5._bamlDecode(v, as: t5)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+            if t3._bamlSelects(carried) { return .t3(try T3._bamlDecode(v, as: t3)) }
+            if t4._bamlSelects(carried) { return .t4(try T4._bamlDecode(v, as: t4)) }
+            if t5._bamlSelects(carried) { return .t5(try T5._bamlDecode(v, as: t5)) }
+        }
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }
@@ -894,7 +1097,32 @@ extension BamlUnion7: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlType
 extension BamlSlots {
     /// The slot of a `BamlUnion7`: one slot per arm, in case order.
     public static func union<T0, T1, T2, T3, T4, T5, T6>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>, _ t3: BamlSlot<T3>, _ t4: BamlSlot<T4>, _ t5: BamlSlot<T5>, _ t6: BamlSlot<T6>) -> BamlSlot<BamlUnion7<T0, T1, T2, T3, T4, T5, T6>> {
-        union([t0.node, t1.node, t2.node, t3.node, t4.node, t5.node, t6.node])
+        union(
+            [t0.node, t1.node, t2.node, t3.node, t4.node, t5.node, t6.node],
+            arms: { [BamlUnionArm(t0), BamlUnionArm(t1), BamlUnionArm(t2), BamlUnionArm(t3), BamlUnionArm(t4), BamlUnionArm(t5), BamlUnionArm(t6)] },
+            split: {
+                switch $0 {
+                case .t0(let v): return (0, v)
+                case .t1(let v): return (1, v)
+                case .t2(let v): return (2, v)
+                case .t3(let v): return (3, v)
+                case .t4(let v): return (4, v)
+                case .t5(let v): return (5, v)
+                case .t6(let v): return (6, v)
+                }
+            },
+            join: { index, payload in
+                switch index {
+                case 0: return .t0(payload as! T0)
+                case 1: return .t1(payload as! T1)
+                case 2: return .t2(payload as! T2)
+                case 3: return .t3(payload as! T3)
+                case 4: return .t4(payload as! T4)
+                case 5: return .t5(payload as! T5)
+                default: return .t6(payload as! T6)
+                }
+            }
+        )
     }
 }
 
@@ -931,7 +1159,15 @@ extension BamlUnion7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T5._bamlArmIdentity, identity == fqn { return .t5(try T5._bamlDecode(v)) }
             if let identity = T6._bamlArmIdentity, identity == fqn { return .t6(try T6._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(carried) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(carried) { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeSelects(carried) { return .t5(try T5._bamlDecode(v)) }
+            if T6._bamlDecodeSelects(carried) { return .t6(try T6._bamlDecode(v)) }
+        }
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -985,7 +1221,15 @@ extension BamlUnion7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T5._bamlArmIdentity, identity == fqn { return .t5(try T5._bamlDecode(v, as: t5)) }
             if let identity = T6._bamlArmIdentity, identity == fqn { return .t6(try T6._bamlDecode(v, as: t6)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+            if t3._bamlSelects(carried) { return .t3(try T3._bamlDecode(v, as: t3)) }
+            if t4._bamlSelects(carried) { return .t4(try T4._bamlDecode(v, as: t4)) }
+            if t5._bamlSelects(carried) { return .t5(try T5._bamlDecode(v, as: t5)) }
+            if t6._bamlSelects(carried) { return .t6(try T6._bamlDecode(v, as: t6)) }
+        }
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }
@@ -1105,7 +1349,34 @@ extension BamlUnion8: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlType
 extension BamlSlots {
     /// The slot of a `BamlUnion8`: one slot per arm, in case order.
     public static func union<T0, T1, T2, T3, T4, T5, T6, T7>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>, _ t3: BamlSlot<T3>, _ t4: BamlSlot<T4>, _ t5: BamlSlot<T5>, _ t6: BamlSlot<T6>, _ t7: BamlSlot<T7>) -> BamlSlot<BamlUnion8<T0, T1, T2, T3, T4, T5, T6, T7>> {
-        union([t0.node, t1.node, t2.node, t3.node, t4.node, t5.node, t6.node, t7.node])
+        union(
+            [t0.node, t1.node, t2.node, t3.node, t4.node, t5.node, t6.node, t7.node],
+            arms: { [BamlUnionArm(t0), BamlUnionArm(t1), BamlUnionArm(t2), BamlUnionArm(t3), BamlUnionArm(t4), BamlUnionArm(t5), BamlUnionArm(t6), BamlUnionArm(t7)] },
+            split: {
+                switch $0 {
+                case .t0(let v): return (0, v)
+                case .t1(let v): return (1, v)
+                case .t2(let v): return (2, v)
+                case .t3(let v): return (3, v)
+                case .t4(let v): return (4, v)
+                case .t5(let v): return (5, v)
+                case .t6(let v): return (6, v)
+                case .t7(let v): return (7, v)
+                }
+            },
+            join: { index, payload in
+                switch index {
+                case 0: return .t0(payload as! T0)
+                case 1: return .t1(payload as! T1)
+                case 2: return .t2(payload as! T2)
+                case 3: return .t3(payload as! T3)
+                case 4: return .t4(payload as! T4)
+                case 5: return .t5(payload as! T5)
+                case 6: return .t6(payload as! T6)
+                default: return .t7(payload as! T7)
+                }
+            }
+        )
     }
 }
 
@@ -1145,7 +1416,16 @@ extension BamlUnion8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T6._bamlArmIdentity, identity == fqn { return .t6(try T6._bamlDecode(v)) }
             if let identity = T7._bamlArmIdentity, identity == fqn { return .t7(try T7._bamlDecode(v)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if T0._bamlDecodeSelects(carried) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(carried) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(carried) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(carried) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(carried) { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeSelects(carried) { return .t5(try T5._bamlDecode(v)) }
+            if T6._bamlDecodeSelects(carried) { return .t6(try T6._bamlDecode(v)) }
+            if T7._bamlDecodeSelects(carried) { return .t7(try T7._bamlDecode(v)) }
+        }
         if let value = try? T0._bamlDecode(v) { return .t0(value) }
         if let value = try? T1._bamlDecode(v) { return .t1(value) }
         if let value = try? T2._bamlDecode(v) { return .t2(value) }
@@ -1204,7 +1484,16 @@ extension BamlUnion8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
             if let identity = T6._bamlArmIdentity, identity == fqn { return .t6(try T6._bamlDecode(v, as: t6)) }
             if let identity = T7._bamlArmIdentity, identity == fqn { return .t7(try T7._bamlDecode(v, as: t7)) }
         }
-        // 4. Structural fallback, declared order.
+        if let carried = v.carriedTupleType() {
+            if t0._bamlSelects(carried) { return .t0(try T0._bamlDecode(v, as: t0)) }
+            if t1._bamlSelects(carried) { return .t1(try T1._bamlDecode(v, as: t1)) }
+            if t2._bamlSelects(carried) { return .t2(try T2._bamlDecode(v, as: t2)) }
+            if t3._bamlSelects(carried) { return .t3(try T3._bamlDecode(v, as: t3)) }
+            if t4._bamlSelects(carried) { return .t4(try T4._bamlDecode(v, as: t4)) }
+            if t5._bamlSelects(carried) { return .t5(try T5._bamlDecode(v, as: t5)) }
+            if t6._bamlSelects(carried) { return .t6(try T6._bamlDecode(v, as: t6)) }
+            if t7._bamlSelects(carried) { return .t7(try T7._bamlDecode(v, as: t7)) }
+        }
         if let value = try? T0._bamlDecode(v, as: t0) { return .t0(value) }
         if let value = try? T1._bamlDecode(v, as: t1) { return .t1(value) }
         if let value = try? T2._bamlDecode(v, as: t2) { return .t2(value) }

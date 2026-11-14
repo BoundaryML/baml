@@ -582,6 +582,21 @@ impl Walk<'_> {
                 return 0;
             }
             TokenKind::Integer | TokenKind::Float | TokenKind::Bigint => {
+                if self.index.token_owner(idx).is_some_and(|owner| {
+                    owner.cast::<baml_syntax::nodes::TupleFieldExpr>().is_some()
+                }) {
+                    let mut start = range.start();
+                    for part in self.text(idx).split('.') {
+                        let end = start + TextSize::of(part);
+                        emit(
+                            TextRange::new(start, end),
+                            plain(SemanticTokenType::Property),
+                            out,
+                        );
+                        start = end + TextSize::from(1);
+                    }
+                    return 0;
+                }
                 emit(range, plain(SemanticTokenType::Number), out);
                 return 0;
             }

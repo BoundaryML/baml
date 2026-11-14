@@ -6,7 +6,7 @@
 
 use ::bex_heap::{BexValue, PermitProof};
 use ::bex_vm_types::{HeapPtr, Object, Value, ValueKind, float_order};
-use baml_type::{ClassCrossing, Literal};
+use baml_type::{ClassCrossing, Literal, normalize::TypeContext};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, UnionMetadata, WireHead, WireTy,
     is_canonical_json_alias, runtime_ty_structurally_equal, selected_arm_equal,
@@ -227,6 +227,7 @@ fn heads_match_their_kind(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Result<(
         | Anchored::Media(_)
         | Anchored::Literal(..)
         | Anchored::List(_)
+        | Anchored::Tuple(_)
         | Anchored::Map { .. }
         | Anchored::Union(_)
         | Anchored::Function { .. }
@@ -365,17 +366,30 @@ impl BexEngine {
         vm: &BexVm,
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
+        self.convert_vm_value_on_path(value, declared_type, vm, permit, &mut Vec::new())
+    }
+
+    fn convert_vm_value_on_path(
+        &self,
+        value: Value,
+        declared_type: &bex_vm_types::RealizedTy,
+        vm: &BexVm,
+        permit: PermitProof<'_>,
+        path: &mut Vec<*mut Object>,
+    ) -> Result<BexExternalValue, EngineError> {
         let selected_interface = find_implemented_interface_union_member(value, declared_type, vm)?;
         // Select union arms while the value is still a live VM value. Some
         // values intentionally become opaque tagged handles at the host
         // boundary; re-selecting from that host carrier would discard the
         // heap-owned nominal identity that made the arm unambiguous.
         let selected_runtime = selected_interface.or_else(|| match declared_type {
-            bex_vm_types::RealizedTy::Union(members) => find_matching_union_member(value, members),
+            bex_vm_types::RealizedTy::Union(members) => {
+                find_matching_union_member(value, members, vm)
+            }
             _ => None,
         });
         let effective_type =
-            selected_runtime.unwrap_or_else(|| resolve_effective_type(value, declared_type));
+            selected_runtime.unwrap_or_else(|| resolve_effective_type(value, declared_type, vm));
 
         let external = match value.kind() {
             ValueKind::OmittedArg => {
@@ -387,7 +401,7 @@ impl BexEngine {
             ValueKind::Int(i) => BexExternalValue::Int(i),
             ValueKind::Bool(b) => BexExternalValue::Bool(b),
             ValueKind::Object(idx) => {
-                self.convert_heap_ptr_to_external_with_type(idx, effective_type, vm, permit)?
+                self.convert_heap_ptr_to_external_with_type(idx, effective_type, vm, permit, path)?
             }
         };
 
@@ -411,30 +425,47 @@ impl BexEngine {
     /// This method uses unsafe calls to dereference `HeapPtr`. It is safe because:
     /// - We only read objects, never write
     /// - The caller ensures the pointer is valid (from a handle which is a GC root)
-    //
-    // BUG: this walk has no cycle detection (no visited set, no depth
-    // budget). BAML permits self-referencing values; one reaching the host
-    // boundary makes this recursion diverge. Reproduced via the python
-    // bridge with `class Node { value int  next Node? }` and a body doing
-    // `n.next = n`: the call never returns — a process sample shows every
-    // frame pinned in this function's recursion for minutes at full CPU
-    // (no catchable failure ever surfaces, so `call_and_encode` cannot
-    // fold it into the result envelope). Every language bridge is exposed
-    // identically (`BexExternalValue` and the outbound protobuf are both
-    // trees, so no bridge can see — let alone handle — a cycle). The fix
-    // belongs here: track visited `HeapPtr`s (identity, not equality) and
-    // return an `EngineError` so a cyclic value surfaces on the
-    // envelope's error arm in every SDK.
     fn convert_heap_ptr_to_external_with_type(
         &self,
         ptr: HeapPtr,
         effective_type: &bex_vm_types::RealizedTy,
         vm: &BexVm,
         permit: PermitProof<'_>,
+        path: &mut Vec<*mut Object>,
     ) -> Result<BexExternalValue, EngineError> {
         // SAFETY: We only read objects, and the pointer comes from a valid handle.
         let obj = unsafe { ptr.get() };
+        let container = match obj {
+            Object::Array(_) => "list",
+            Object::Tuple(_) => "tuple",
+            Object::Map(_) => "map",
+            Object::Instance(_) => "class instance",
+            _ => {
+                return self.convert_object_to_external(ptr, obj, effective_type, vm, permit, path);
+            }
+        };
+        if path.contains(&ptr.as_ptr()) {
+            return Err(EngineError::CannotConvert {
+                type_name: format!(
+                    "cyclic {container} (a value that contains itself cannot cross to the host)"
+                ),
+            });
+        }
+        path.push(ptr.as_ptr());
+        let result = self.convert_object_to_external(ptr, obj, effective_type, vm, permit, path);
+        path.pop();
+        result
+    }
 
+    fn convert_object_to_external(
+        &self,
+        ptr: HeapPtr,
+        obj: &Object,
+        effective_type: &bex_vm_types::RealizedTy,
+        vm: &BexVm,
+        permit: PermitProof<'_>,
+        path: &mut Vec<*mut Object>,
+    ) -> Result<BexExternalValue, EngineError> {
         match obj {
             Object::Float(f) => Ok(BexExternalValue::Float(*f)),
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
@@ -457,13 +488,27 @@ impl BexEngine {
                 let snapshot = arr.to_vec();
                 let items: Result<Vec<_>, _> = snapshot
                     .iter()
-                    .map(|v| {
-                        self.convert_vm_value_to_external_with_type(*v, element_type, vm, permit)
-                    })
+                    .map(|v| self.convert_vm_value_on_path(*v, element_type, vm, permit, path))
                     .collect();
                 Ok(BexExternalValue::Array {
                     element_type: to_annotation(element_type)?,
                     items: items?,
+                })
+            }
+
+            Object::Tuple(tuple) => {
+                let slots: &[bex_vm_types::RealizedTy] = match effective_type {
+                    bex_vm_types::RealizedTy::Tuple(slots) if slots.len() == tuple.len() => slots,
+                    _ => &tuple.element_tys,
+                };
+                let items = tuple
+                    .slot_values()
+                    .zip(slots.iter())
+                    .map(|(v, slot)| self.convert_vm_value_on_path(v, slot, vm, permit, path))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(BexExternalValue::Tuple {
+                    element_types: slots.iter().map(to_annotation).collect::<Result<_, _>>()?,
+                    items,
                 })
             }
 
@@ -504,8 +549,8 @@ impl BexEngine {
                             };
                             Ok((
                                 key,
-                                self.convert_vm_value_to_external_with_type(
-                                    *v, value_type, vm, permit,
+                                self.convert_vm_value_on_path(
+                                    *v, value_type, vm, permit, path,
                                 )?,
                             ))
                         })
@@ -543,7 +588,7 @@ impl BexEngine {
                             .iter()
                             .map(to_annotation)
                             .collect::<Result<Vec<_>, _>>()?,
-                        fields: self.instance_fields(instance, class, vm, permit)?,
+                        fields: self.instance_fields(instance, class, vm, permit, path)?,
                     }),
                     // An instance no host reads into stays on the heap and
                     // crosses as a rooted reference: a standard-library
@@ -732,6 +777,7 @@ impl BexEngine {
         class: &bex_vm_types::Class,
         vm: &BexVm,
         permit: PermitProof<'_>,
+        path: &mut Vec<*mut Object>,
     ) -> Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> {
         class
             .fields
@@ -754,12 +800,7 @@ impl BexEngine {
                     })?;
                 Ok((
                     field.name.clone(),
-                    self.convert_vm_value_to_external_with_type(
-                        slot.load(),
-                        &field_type,
-                        vm,
-                        permit,
-                    )?,
+                    self.convert_vm_value_on_path(slot.load(), &field_type, vm, permit, path)?,
                 ))
             })
             .collect()
@@ -1076,6 +1117,13 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
         (RuntimeTy::List(declared), RuntimeTy::List(concrete)) => {
             collect_live_type_var_bindings(declared, concrete, out);
         }
+        (RuntimeTy::Tuple(declared), RuntimeTy::Tuple(concrete))
+            if declared.len() == concrete.len() =>
+        {
+            for (declared, concrete) in declared.iter().zip(concrete.iter()) {
+                collect_live_type_var_bindings(declared, concrete, out);
+            }
+        }
         (
             RuntimeTy::Map {
                 key: declared_key,
@@ -1121,6 +1169,7 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
             RuntimeTy::Class(..)
             | RuntimeTy::Interface(..)
             | RuntimeTy::List(_)
+            | RuntimeTy::Tuple(_)
             | RuntimeTy::Map { .. }
             | RuntimeTy::Union(_)
             | RuntimeTy::Future(..)
@@ -1364,6 +1413,13 @@ fn find_matching_member(
                 runtime_ty_structurally_equal(key_type, key)
                     && runtime_ty_structurally_equal(value_type, value)
             }
+            (BexExternalValue::Tuple { element_types, .. }, WireTy::Tuple(slots)) => {
+                element_types.len() == slots.len()
+                    && element_types
+                        .iter()
+                        .zip(slots.iter())
+                        .all(|(own, slot)| runtime_ty_structurally_equal(own, slot))
+            }
             _ => false,
         };
         if exact_container {
@@ -1495,6 +1551,24 @@ fn value_matches_type(value: &BexExternalValue, ty: &WireTy) -> bool {
         ) => entries
             .values()
             .all(|value| value_matches_type(value, expected_value)),
+        (
+            BexExternalValue::Tuple {
+                element_types,
+                items,
+            },
+            WireTy::Tuple(slots),
+        ) => {
+            element_types.len() == slots.len()
+                && element_types
+                    .iter()
+                    .zip(slots)
+                    .all(|(own, slot)| runtime_ty_structurally_equal(own, slot))
+                && items.len() == slots.len()
+                && items
+                    .iter()
+                    .zip(slots.iter())
+                    .all(|(item, slot)| value_matches_type(item, slot))
+        }
         // `BexExternalValue::Instance` now carries its wire-supplied class
         // type args, so we can disambiguate `Foo<int>` from `Foo<string>` at
         // the FFI boundary instead of name-only. The comparison is name-only
@@ -1633,6 +1707,12 @@ fn runtime_ty_compatible(wire: &WireTy, expected: &WireTy) -> bool {
             T::Int | T::String | T::Bool | T::Float | T::Null | T::Bigint | T::Uint8Array,
         ) => false,
         (T::List(w), T::List(e)) => runtime_ty_compatible(w, e),
+        (T::Tuple(w), T::Tuple(e)) => {
+            w.len() == e.len()
+                && w.iter()
+                    .zip(e.iter())
+                    .all(|(w, e)| runtime_ty_compatible(w, e))
+        }
         (
             T::Map {
                 key: wk, value: wv, ..
@@ -1679,12 +1759,13 @@ fn callable_frame_is_complete(vm: &BexVm, callable: &Object) -> bool {
 /// For union types, find which member matches the actual runtime value.
 ///
 /// If the declared type is not a union, returns it unchanged.
-fn resolve_effective_type(
+fn resolve_effective_type<'a>(
     value: Value,
-    declared_type: &bex_vm_types::RealizedTy,
-) -> &bex_vm_types::RealizedTy {
+    declared_type: &'a bex_vm_types::RealizedTy,
+    vm: &BexVm,
+) -> &'a bex_vm_types::RealizedTy {
     match declared_type {
-        bex_vm_types::RealizedTy::Union(members) => find_matching_union_member(value, members)
+        bex_vm_types::RealizedTy::Union(members) => find_matching_union_member(value, members, vm)
             .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
         _ => declared_type,
     }
@@ -1706,7 +1787,7 @@ fn find_implemented_interface_union_member<'a>(
     {
         return Ok(None);
     }
-    if find_matching_union_member(value, members).is_some() {
+    if find_matching_union_member(value, members, vm).is_some() {
         return Ok(None);
     }
 
@@ -1738,10 +1819,11 @@ fn find_implemented_interface_union_member<'a>(
 }
 
 /// Find the union member that matches the runtime value's type.
-fn find_matching_union_member(
+fn find_matching_union_member<'a>(
     value: Value,
-    members: &[bex_vm_types::RealizedTy],
-) -> Option<&bex_vm_types::RealizedTy> {
+    members: &'a [bex_vm_types::RealizedTy],
+    ctx: &impl TypeContext<bex_vm_types::TypeHead>,
+) -> Option<&'a bex_vm_types::RealizedTy> {
     let direct = match value.kind() {
         ValueKind::OmittedArg => None,
         ValueKind::Null => members.iter().find(|m| matches!(m, bex_vm_types::RealizedTy::Null)),
@@ -1860,6 +1942,13 @@ fn find_matching_union_member(
                                 && runtime_ty_structurally_equal(actual_value, value))
                     })
                 }
+                Object::Tuple(tuple) => members.iter().find(|member| {
+                    matches!(member, bex_vm_types::RealizedTy::Tuple(slots)
+                        if slots.len() == tuple.len()
+                            && slots.iter().zip(tuple.element_tys.iter()).all(
+                                |(slot, own)| ctx.equivalent(own.as_ty(), slot.as_ty()),
+                            ))
+                }),
                 Object::Uint8Array(_) => members
                     .iter()
                     .find(|m| matches!(m, bex_vm_types::RealizedTy::Uint8Array)),
@@ -1899,7 +1988,7 @@ fn find_matching_union_member(
     direct.or_else(|| {
         members.iter().find(|member| {
             matches!(member, bex_vm_types::RealizedTy::Union(nested)
-                if find_matching_union_member(value, nested).is_some())
+                if find_matching_union_member(value, nested, ctx).is_some())
         })
     })
 }
@@ -1933,6 +2022,62 @@ mod outbound_selection_tests {
     };
 
     use super::*;
+
+    struct NoHeapFacts;
+
+    impl TypeContext<bex_vm_types::TypeHead> for NoHeapFacts {
+        fn well_known(
+            &self,
+            _: baml_type::normalize::WellKnownHead,
+        ) -> Option<bex_vm_types::TypeHead> {
+            None
+        }
+        fn alias_def(
+            &self,
+            _: &bex_vm_types::TypeHead,
+        ) -> Option<baml_type::Ty<bex_vm_types::TypeHead>> {
+            None
+        }
+        fn implements_interface(
+            &self,
+            _: &baml_type::Ty<bex_vm_types::TypeHead>,
+            _: &baml_type::Interface<bex_vm_types::TypeHead>,
+        ) -> bool {
+            false
+        }
+        fn type_var_bound(
+            &self,
+            _: &baml_type::ParamTy,
+        ) -> Vec<baml_type::Interface<bex_vm_types::TypeHead>> {
+            Vec::new()
+        }
+        fn interface_requires(
+            &self,
+            _: &baml_type::Interface<bex_vm_types::TypeHead>,
+            _: &baml_type::Interface<bex_vm_types::TypeHead>,
+        ) -> bool {
+            false
+        }
+        fn enum_variants(&self, _: &bex_vm_types::TypeHead) -> Option<Vec<Name>> {
+            None
+        }
+        fn associated_type_bound(
+            &self,
+            _: &baml_type::Interface<bex_vm_types::TypeHead>,
+            _: Name,
+        ) -> Vec<baml_type::Interface<bex_vm_types::TypeHead>> {
+            Vec::new()
+        }
+        fn project(
+            &self,
+            _: &baml_type::Ty<bex_vm_types::TypeHead>,
+            _: &baml_type::Interface<bex_vm_types::TypeHead>,
+            _: &Name,
+            _: u32,
+        ) -> baml_type::normalize::ProjectionStep<bex_vm_types::TypeHead> {
+            baml_type::normalize::ProjectionStep::Opaque
+        }
+    }
 
     fn list(inner: WireTy) -> WireTy {
         WireTy::List(Box::new(inner))
@@ -2024,14 +2169,52 @@ mod outbound_selection_tests {
 
         let happy_value = Value::object(tlab.alloc_variant(enum_ptr, 0));
         assert_eq!(
-            find_matching_union_member(happy_value, &members),
+            find_matching_union_member(happy_value, &members, &NoHeapFacts),
             Some(&happy)
         );
 
         let sad_value = Value::object(tlab.alloc_variant(enum_ptr, 1));
         assert_eq!(
-            find_matching_union_member(sad_value, &members),
+            find_matching_union_member(sad_value, &members, &NoHeapFacts),
             Some(&broad)
+        );
+    }
+
+    #[test]
+    fn vm_tuple_selects_the_arm_its_carried_types_are_equivalent_to() {
+        use bex_vm_types::RealizedTy as Ty;
+        let mut tlab = Tlab::new(BexHeap::new(Vec::new()));
+        let tuple = |tlab: &mut Tlab, slots: Vec<Ty>| {
+            let values = vec![Value::int(1); slots.len()];
+            Value::object(tlab.alloc_tuple(bex_vm_types::Tuple::new(slots, values).unwrap()))
+        };
+        let optional = Ty::Tuple(Box::new([Ty::Union(Box::new([Ty::Int, Ty::Null]))]));
+        let spelled = Ty::Tuple(Box::new([Ty::Union(Box::new([
+            Ty::Literal(Literal::Int(5), Freshness::Regular),
+            Ty::Int,
+        ]))]));
+        let pair = Ty::Tuple(Box::new([Ty::Int, Ty::Int]));
+        let members = [optional.clone(), pair.clone(), spelled.clone()];
+
+        let exact = tuple(&mut tlab, vec![Ty::Int]);
+        assert_eq!(
+            find_matching_union_member(exact, &members, &NoHeapFacts),
+            Some(&spelled),
+            "`(int,)` is equivalent to `(5 | int,)` and not to `(int?,)`"
+        );
+        let wide = tuple(&mut tlab, vec![Ty::Union(Box::new([Ty::Int, Ty::Null]))]);
+        assert_eq!(
+            find_matching_union_member(wide, &members, &NoHeapFacts),
+            Some(&optional)
+        );
+        assert_eq!(
+            find_matching_union_member(exact, std::slice::from_ref(&optional), &NoHeapFacts),
+            None
+        );
+        let two = tuple(&mut tlab, vec![Ty::Int, Ty::Int]);
+        assert_eq!(
+            find_matching_union_member(two, &members, &NoHeapFacts),
+            Some(&pair)
         );
     }
 
@@ -2103,11 +2286,11 @@ mod outbound_selection_tests {
         let members = [partial_arm.clone(), done_arm.clone()];
 
         assert_eq!(
-            find_matching_union_member(dynamic_value, &members),
+            find_matching_union_member(dynamic_value, &members, &NoHeapFacts),
             Some(&partial_arm),
         );
         assert_eq!(
-            find_matching_union_member(done_value, &members),
+            find_matching_union_member(done_value, &members, &NoHeapFacts),
             Some(&done_arm),
         );
     }
@@ -2194,6 +2377,48 @@ mod outbound_selection_tests {
             panic!("expected union wrapper")
         };
         assert_eq!(metadata.selected_option, string_map);
+    }
+
+    #[test]
+    fn tuple_uses_its_slot_types_to_select_union_arm() {
+        let exact = WireTy::Tuple(Box::new([WireTy::int(), WireTy::optional(WireTy::int())]));
+        let broader = WireTy::Tuple(Box::new([
+            WireTy::int(),
+            WireTy::optional(WireTy::string()),
+        ]));
+        let value = BexExternalValue::Tuple {
+            element_types: vec![WireTy::int(), WireTy::optional(WireTy::int())],
+            items: vec![BexExternalValue::Int(1), BexExternalValue::Null],
+        };
+        let wrapped = maybe_wrap_union(
+            value,
+            &WireTy::Union(Box::new([broader, exact.clone(), WireTy::string()])),
+        )
+        .unwrap();
+        let BexExternalValue::Union { metadata, .. } = wrapped else {
+            panic!("expected union wrapper")
+        };
+        assert_eq!(metadata.selected_option, exact);
+    }
+
+    #[test]
+    fn tuple_rejects_union_arms_with_different_carried_slots() {
+        let pair = WireTy::Tuple(Box::new([WireTy::int(), WireTy::string()]));
+        let triple = WireTy::Tuple(Box::new([WireTy::int(), WireTy::string(), WireTy::Bool]));
+        let swapped = WireTy::Tuple(Box::new([WireTy::string(), WireTy::int()]));
+        let value = BexExternalValue::Tuple {
+            element_types: vec![string_literal("x"), WireTy::int()],
+            items: vec![
+                BexExternalValue::String("x".into()),
+                BexExternalValue::Int(2),
+            ],
+        };
+        assert!(!value_matches_type(&value, &swapped));
+        assert!(!value_matches_type(&value, &pair));
+        assert!(!value_matches_type(&value, &triple));
+        assert!(
+            maybe_wrap_union(value, &WireTy::Union(Box::new([pair, triple, swapped]))).is_err()
+        );
     }
 
     #[test]

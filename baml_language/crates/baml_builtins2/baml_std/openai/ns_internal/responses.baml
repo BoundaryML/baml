@@ -849,7 +849,7 @@ function _request(
     stream: bool,
     preview: bool = false,
 ) -> baml.http.Request {
-    let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
+    let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
     let breakpoints: OaCacheBreakpoint[] = [];
     let items = lower_prompt(prompt, breakpoints, default_cache_args = c.default_cache_args(), preview = preview);
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned

@@ -307,7 +307,7 @@ class TestRegistry {
             null => {
                 let start = baml.time.Instant.now();
                 let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] };
-                ts.collector(sub_collector);
+                (ts.collector)(sub_collector);
                 // `loading_time_ms` is an `int`, so narrowing the bigint millisecond
                 // count is declared fallible. An expansion would have to run for
                 // ~146 million years to leave `int`'s range; there is no honest
@@ -552,13 +552,13 @@ function _run_children_parallel(
             // Containers only spawn and await; admitting them freely cannot
             // oversubscribe the machine, and gating them could deadlock the
             // slots their own leaves need.
-            futures.push(spawn { _NamedChildReport { name: child.name, report: child.run() } })
+            futures.push(spawn { _NamedChildReport { name: child.name, report: (child.run)() } })
         } else {
             // Acquire on the dispatcher, before the spawn exists: the whole
             // point is that an inadmissible leaf has no thread yet.
             pool.acquire();
             futures.push(spawn {
-                let named = _NamedChildReport { name: child.name, report: child.run() };
+                let named = _NamedChildReport { name: child.name, report: (child.run)() };
                 // `run` is total: a leaf is `run_test`, whose runner arm
                 // catches middleware panics precisely so this release is
                 // reached on every outcome.

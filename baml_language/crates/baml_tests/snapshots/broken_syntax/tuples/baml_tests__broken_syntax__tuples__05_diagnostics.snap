@@ -1,0 +1,190 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × unexpected token
+   ╭─[tuples.baml:2:14]
+ 2 │     let e = ();
+   ·              ┬
+   ·              ╰── expected `expression`, found `')'`
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[tuples.baml:6:32]
+ 6 │ function empty_tuple_type(x: ()) -> int {
+   ·                                ┬
+   ·                                ╰── a parenthesized type holds one type; a parameter list needs `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:12:10]
+ 12 │         () => 1,
+    ·          ┬
+    ·          ╰── expected `pattern`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[tuples.baml:17:49]
+ 17 │ function labeled_elements(p: (x: int, y: string)) -> int {
+    ·                                                 ┬
+    ·                                                 ╰── Named parameters in type expression require `->` to form a function type
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: x
+    ╭─[tuples.baml:22:13]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·             ─
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:22:14]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·              ┬
+    ·              ╰── expected `')'`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:22:19]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·                   ┬
+    ·                   ╰── expected `expression`, found `','`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:22:22]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·                      ┬
+    ·                      ╰── expected `expression`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:22:30]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·                              ┬
+    ·                              ╰── expected `expression`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:22:32]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·                                ┬
+    ·                                ╰── expected `expression`, found `'='`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:32:17]
+ 32 │         (let a, ..) => a,
+    ·                 ─┬
+    ·                  ╰── expected `pattern`, found `'..'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:32:19]
+ 32 │         (let a, ..) => a,
+    ·                   ┬
+    ·                   ╰── expected `pattern`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:32:21]
+ 32 │         (let a, ..) => a,
+    ·                     ─┬
+    ·                      ╰── expected `pattern`, found `'=>'`
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: a
+    ╭─[tuples.baml:32:24]
+ 32 │         (let a, ..) => a,
+    ·                        ─
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:32:25]
+ 32 │         (let a, ..) => a,
+    ·                         ┬
+    ·                         ╰── expected `'=>' after pattern`, found `','`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:37:23]
+ 37 │     let (let a, let b): (int, int) = t;
+    ·                       ┬
+    ·                       ╰── expected `initializer (=)`, found `':'`
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to
+    ╭─[tuples.baml:37:25]
+ 37 │     let (let a, let b): (int, int) = t;
+    ·                         ─────┬────
+    ·                              ╰── cannot assign to this expression
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:41:33]
+ 41 │ function destructured_parameter((let a, let b): (int, int)) -> int {
+    ·                                 ┬
+    ·                                 ╰── expected `parameter name`, found `'('`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[tuples.baml:41:34]
+ 41 │ function destructured_parameter((let a, let b): (int, int)) -> int {
+    ·                                  ─┬─
+    ·                                   ╰── Unexpected 'let' in type expression
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:41:34]
+ 41 │ function destructured_parameter((let a, let b): (int, int)) -> int {
+    ·                                  ─┬─
+    ·                                   ╰── expected `type`, found `let`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:41:47]
+ 41 │ function destructured_parameter((let a, let b): (int, int)) -> int {
+    ·                                               ┬
+    ·                                               ╰── expected `')'`, found `':'`
+    ╰────

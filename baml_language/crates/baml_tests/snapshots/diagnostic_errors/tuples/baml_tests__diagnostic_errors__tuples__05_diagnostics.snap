@@ -1,0 +1,431 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+   ╭─[immutable.baml:1:46]
+ 1 │ function replace(t: (int, string)) -> null { t.0 = 2; }
+   ·                                              ───
+   ╰────
+
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+   ╭─[immutable.baml:2:47]
+ 2 │ function compound(t: (int, string)) -> null { t.0 += 2; }
+   ·                                               ───
+   ╰────
+
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+   ╭─[immutable.baml:3:48]
+ 3 │ function nested(t: ((int,), string)) -> null { t.0.0 = 2; }
+   ·                                                ─────
+   ╰────
+
+  [type] E0001
+
+  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+   ╭─[immutable.baml:4:48]
+ 4 │ function optional(t: (int, string)?) -> null { t?.0 = 2; }
+   ·                                                ────
+   ╰────
+
+  [type] E0008
+
+  × cannot index into type `(int, string)`
+   ╭─[immutable.baml:5:45]
+ 5 │ function bracket(t: (int, string)) -> int { t[0] }
+   ·                                             ────
+   ╰────
+
+  [type] E0007
+
+  × type `(int, string) | (float, string)` has no member `0`: its members implement no common interface that declares `0`
+   ╭─[immutable.baml:6:71]
+ 6 │ function union_first(t: (int, string) | (float, string)) -> unknown { t.0 }
+   ·                                                                       ───
+   ╰────
+
+  [type] E0007
+
+  × type `(int, string) | (float, string)` has no member `1`: its members implement no common interface that declares `1`
+   ╭─[immutable.baml:7:71]
+ 7 │ function union_common(t: (int, string) | (float, string)) -> string { t.1 }
+   ·                                                                       ───
+   ╰────
+
+  [type] E0007
+
+  × type `(int, string) | (float, string)` has no member `1`: its members implement no common interface that declares `1`
+   ╭─[immutable.baml:8:81]
+ 8 │ function optional_union(t: (int, string) | (float, string) | null) -> string? { t?.1 }
+   ·                                                                                 ────
+   ╰────
+
+  [type] E0151
+
+  × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
+    ╭─[immutable.baml:10:21]
+ 10 │ class Callable { f: (int) -> int }
+    ·                     ────────────
+    ╰────
+
+  [type] E0001
+
+  × calling a function-valued member requires parentheses: use `(value.member)(...)`
+    ╭─[immutable.baml:11:49]
+ 11 │ function direct_field(value: Callable) -> int { value.f(1) }
+    ·                                                 ───────
+    ╰────
+
+  [type] E0151
+
+  × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
+    ╭─[immutable.baml:12:26]
+ 12 │ function direct_slot(t: ((int) -> int,)) -> int { t.0(1) }
+    ·                          ────────────
+    ╰────
+
+  [type] E0001
+
+  × calling a function-valued member requires parentheses: use `(value.member)(...)`
+    ╭─[immutable.baml:12:51]
+ 12 │ function direct_slot(t: ((int) -> int,)) -> int { t.0(1) }
+    ·                                                   ───
+    ╰────
+
+  [type] E0001
+
+  × tuple index 2 is out of range for `(int, string)`
+   ╭─[tuples.baml:1:55]
+ 1 │ function slot_out_of_range(t: (int, string)) -> int { t.2 }
+   ·                                                       ───
+   ╰────
+
+  [type] E0007
+
+  × type `int` has no member `0`
+   ╭─[tuples.baml:2:42]
+ 2 │ function slot_non_tuple(x: int) -> int { x.0 }
+   ·                                          ───
+   ╰────
+
+  [type] E0007
+
+  × type `(int, int) | null` has no member `0`: its members implement no common interface that declares `0`
+   ╭─[tuples.baml:3:49]
+ 3 │ function nullable_slot(t: (int, int)?) -> int { t.0 }
+   ·                                                 ───
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+   ╭─[tuples.baml:5:38]
+ 5 │ ╭─▶ function wrong_arity() -> (int, int) {
+ 6 │ │       (1, 2, 3)
+ 7 │ ├─▶ }
+   · ╰──── expected `(int, int)`, found `(int, int, int)`
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:9:71]
+  9 │ ╭─▶ function wrong_arity_binding(t: (int, string, bool)) -> (int, string) {
+ 10 │ │       t
+ 11 │ ├─▶ }
+    · ╰──── expected `(int, string)`, found `(int, string, bool)`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:14:9]
+ 14 │     (1, 2)
+    ·         ┬
+    ·         ╰── expected `string`, found `2`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:17:39]
+ 17 │ ╭─▶ function tuple_is_not_list() -> int[] {
+ 18 │ │       (1, 2)
+ 19 │ ├─▶ }
+    · ╰──── expected `int[]`, found `(int, int)`
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type (bool, bool); missing: (true, false)
+    ╭─[tuples.baml:22:5]
+ 22 │ ╭─▶     match (a, b) {
+ 23 │ │           (true, let _b: true) => 1,
+ 24 │ │           (false, _) => 2,
+ 25 │ ╰─▶     }
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:30:9]
+ 30 │         (let a, let b, let c) => a,
+    ·         ──────────┬──────────
+    ·                   ╰── expected `(int, int)`, found `(unknown, unknown, unknown)`
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type (bool, (bool, int | null)); missing: (false, (false, int))
+    ╭─[tuples.baml:36:5]
+ 36 │ ╭─▶     match (t) {
+ 37 │ │           (true, _) => 1,
+ 38 │ │           (false, (true, _)) => 2,
+ 39 │ │           (false, (false, let _n: null)) => 3,
+ 40 │ ╰─▶     }
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:43:57]
+ 43 │ ╭─▶ function existing_tuple_not_widened() -> (int?, string) {
+ 44 │ │       let t: (int, string) = (1, "a");
+ 45 │ │       let fresh: (int?, string) = (1, "a");
+ 46 │ │       t
+ 47 │ ├─▶ }
+    · ╰──── expected `(int | null, string)`, found `(int, string)`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:49:85]
+ 49 │ ╭─▶ function product_not_union(t: (int | string, bool)) -> (int, bool) | (string, bool) {
+ 50 │ │       t
+ 51 │ ├─▶ }
+    · ╰──── expected `(int, bool) | (string, bool)`, found `(int | string, bool)`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:53:85]
+ 53 │ ╭─▶ function union_not_product(t: (int, bool) | (string, bool)) -> (int | string, bool) {
+ 54 │ │       t
+ 55 │ ├─▶ }
+    · ╰──── expected `(int | string, bool)`, found `(int, bool) | (string, bool)`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:57:101]
+ 57 │ ╭─▶ function nested_product_not_union(t: ((int | string,), bool)) -> ((int,), bool) | ((string,), bool) {
+ 58 │ │       t
+ 59 │ ├─▶ }
+    · ╰──── expected `((int,), bool) | ((string,), bool)`, found `((int | string,), bool)`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:67:43]
+ 67 │ ╭─▶ ) -> TpCell<(int, bool) | (string, bool)> {
+ 68 │ │       c
+ 69 │ ├─▶ }
+    · ╰──── expected `TpCell<(int, bool) | (string, bool)>`, found `TpCell<(int | string, bool)>`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[tuples.baml:73:45]
+ 73 │     let b: (int?, string) | (string, int) = (1, "a");
+    ·                                             ────┬───
+    ·                                                 ╰── expected `(string, int) | (int | null, string)`, found `(int, string)`
+    ╰────
+
+  [type] E0001
+
+  × this pattern tests whether the tuple's type is `(0, 0)`, which can never match a `(int, int)`; to compare values use `==`, or add a binding or `_` to destructure the tuple
+    ╭─[tuples.baml:84:10]
+ 84 │         ((0, 0), _) => true,
+    ·          ──────
+    ╰────
+
+  [type] E0001
+
+  × this pattern tests whether the tuple's type is `(0, 0)`, which can never match a `(int, int)`; to compare values use `==`, or add a binding or `_` to destructure the tuple
+    ╭─[tuples.baml:89:9]
+ 89 │         (0, 0) => true,
+    ·         ──────
+    ╰────
+
+  [type] E0001
+
+  × this pattern tests whether the tuple's type is `(0, 0)`, which can never match a `(int, int)`; to compare values use `==`, or add a binding or `_` to destructure the tuple
+    ╭─[tuples.baml:90:16]
+ 90 │         let z: (0, 0) => true,
+    ·                ──────
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[tuples.baml:90:26]
+ 90 │         let z: (0, 0) => true,
+    ·                          ────
+    ╰────
+
+  [type] E0001
+
+  × this pattern tests whether the tuple's type is `TpZeroPair`, which can never match a `(int, int)`; to compare values use `==`, or add a binding or `_` to destructure the tuple
+    ╭─[tuples.baml:91:16]
+ 91 │         let a: TpZeroPair => true,
+    ·                ──────────
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[tuples.baml:91:30]
+ 91 │         let a: TpZeroPair => true,
+    ·                              ────
+    ╰────
+
+  [type] E0001
+
+  × this pattern tests whether the tuple's type is `(0, 0)`, which can never match a `(int, int)`; to compare values use `==`, or add a binding or `_` to destructure the tuple
+    ╭─[tuples.baml:92:34]
+ 92 │         _ => nested || held.0 is (0, 0) || u is (int?, int),
+    ·                                  ──────
+    ╰────
+
+  [type] E0001
+
+  × this pattern tests whether the tuple's type is `(int | null, int)`, which can never match a `(int, int)`; to compare values use `==`, or add a binding or `_` to destructure the tuple
+    ╭─[tuples.baml:92:49]
+ 92 │         _ => nested || held.0 is (0, 0) || u is (int?, int),
+    ·                                                 ───────────
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type (int | string, bool); missing: (int, true), (int, false), (string, true), (string, false)
+     ╭─[tuples.baml:97:5]
+  97 │ ╭─▶     match (t) {
+  98 │ │           (int, bool) => 1,
+  99 │ │           (string, bool) => 2,
+ 100 │ ╰─▶     }
+     ╰────
+
+  [type] E0001
+
+  × this pattern tests whether the tuple's type is `(int, bool)`, which can never match a `(int | string, bool)`; to compare values use `==`, or add a binding or `_` to destructure the tuple
+    ╭─[tuples.baml:98:9]
+ 98 │         (int, bool) => 1,
+    ·         ───────────
+    ╰────
+
+  [type] E0001
+
+  × this pattern tests whether the tuple's type is `(string, bool)`, which can never match a `(int | string, bool)`; to compare values use `==`, or add a binding or `_` to destructure the tuple
+    ╭─[tuples.baml:99:9]
+ 99 │         (string, bool) => 2,
+    ·         ──────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[tuples.baml:129:44]
+ 129 │         (let n: int, _) => tp_takes_narrow(t),
+     ·                                            ┬
+     ·                                            ╰── expected `(int, bool)`, found `(int, bool) | (int | null, bool)`
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[tuples.baml:136:44]
+ 136 │         (let n: int, _) => tp_takes_narrow(t),
+     ·                                            ┬
+     ·                                            ╰── expected `(int, bool)`, found `(int, bool) | (T, bool)`
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[tuples.baml:143:44]
+ 143 │         (let n: int, _) => tp_takes_narrow(t),
+     ·                                            ┬
+     ·                                            ╰── expected `(int, bool)`, found `(int | string, bool)`
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[tuples.baml:152:45]
+ 152 │         (let a, let b) => tp_takes_unknowns(v),
+     ·                                             ┬
+     ·                                             ╰── expected `(unknown, unknown)`, found `unknown`
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type TpBits | null; missing: (false, (_, _))
+     ╭─[tuples.baml:160:5]
+ 160 │ ╭─▶     match (bits) {
+ 161 │ │           null => 0,
+ 162 │ │           (true, _) => 1,
+ 163 │ │           (false, let _rest: null) => 2,
+ 164 │ ╰─▶     }
+     ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to
+     ╭─[tuples.baml:174:5]
+ 174 │     (a, b) = pair;
+     ·     ───┬──
+     ·        ╰── cannot assign to this expression
+     ╰────
+
+  [type] E0002
+
+  × unresolved type: a
+     ╭─[tuples.baml:179:10]
+ 179 │     let (a, b) = pair;
+     ·          ─
+     ╰────
+
+  [type] E0002
+
+  × unresolved type: a
+     ╭─[tuples.baml:179:10]
+ 179 │     let (a, b) = pair;
+     ·          ─
+     ╰────
+
+  [type] E0002
+
+  × unresolved type: b
+     ╭─[tuples.baml:179:13]
+ 179 │     let (a, b) = pair;
+     ·             ─
+     ╰────
+
+  [type] E0002
+
+  × unresolved type: b
+     ╭─[tuples.baml:179:13]
+ 179 │     let (a, b) = pair;
+     ·             ─
+     ╰────

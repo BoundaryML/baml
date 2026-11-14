@@ -393,6 +393,12 @@ public sealed class BamlGeneratedRegistry
     private readonly IReadOnlyDictionary<Type, TypeDeclaration> genericBindings;
     private readonly IReadOnlyDictionary<Type, GenericTypeFactoryDeclaration> genericTypeFactories;
     private readonly ConcurrentDictionary<Type, IResolvedGeneratedType> dynamicTypes = [];
+    // Slot-built tuple types, keyed by CLR type and declared tuple type:
+    // tuples whose slots erase in C# share a CLR type (`(T, "a")` and
+    // `(T, string)` are both `(T, string)`), so these never enter
+    // `dynamicTypes`.
+    private readonly ConcurrentDictionary<(Type, string), IResolvedGeneratedType> slotTupleTypes = [];
+    private readonly ConcurrentDictionary<int, IResolvedGeneratedType> slotTupleTypesById = [];
     private BamlGeneratedProgram? program;
     private int nextDynamicTypeId;
 
@@ -463,6 +469,60 @@ public sealed class BamlGeneratedRegistry
         }
 
         BamlDynamicCodecRegistry.Register(this, typed, GetCodec(typed));
+        return new BamlGeneratedType<T>(owner, typed);
+    }
+
+    /// <summary>
+    /// The type of a tuple in a generic signature, stated as the tuple of
+    /// <paramref name="slots"/> (each bound by the call): a native
+    /// <c>ValueTuple</c> over the slots. It crosses as the declared tuple
+    /// type, so the engine checks each slot, including one whose BAML type
+    /// erases in C# (a literal is a <c>string</c>, yet its slot token states
+    /// the literal). <paramref name="encode"/> and
+    /// <paramref name="decode"/> convert between <typeparamref name="T"/> and
+    /// one carrier per slot, in slot order.
+    /// </summary>
+    public BamlGeneratedType<T> ResolveTupleType<T>(
+        string position,
+        BamlGeneratedTypeArgument[] slots,
+        Func<BamlGeneratedCodecContext, T, IReadOnlyList<BamlGeneratedValue>> encode,
+        Func<BamlGeneratedCodecContext, IReadOnlyList<BamlGeneratedValue>, T> decode)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(position);
+        ArgumentNullException.ThrowIfNull(slots);
+        ArgumentNullException.ThrowIfNull(encode);
+        ArgumentNullException.ThrowIfNull(decode);
+        var slotMetadata = new byte[slots.Length][];
+        for (int index = 0; index < slots.Length; index++)
+        {
+            slotMetadata[index] = RequireTypeArgumentMetadata(slots[index]);
+        }
+
+        byte[] metadata = BamlGeneratedTypeMetadata.Tuple(slotMetadata);
+        IResolvedGeneratedType resolved = slotTupleTypes.GetOrAdd(
+            (typeof(T), Convert.ToHexString(metadata)),
+            _ =>
+            {
+                var declaration = new TypeDeclaration<T>(
+                    Interlocked.Decrement(ref nextDynamicTypeId),
+                    BamlGeneratedTypeMetadata.Describe(metadata, position),
+                    metadata);
+                var created = new ResolvedGeneratedType<T>(
+                    declaration,
+                    new CodecBox<T>(new BamlGeneratedSlotTupleCodec<T>(
+                        metadata,
+                        slots.Length,
+                        encode,
+                        decode)));
+                slotTupleTypesById[declaration.Id] = created;
+                return created;
+            });
+        if (resolved.Declaration is not TypeDeclaration<T> typed)
+        {
+            throw new InvalidOperationException(
+                $"Generated tuple type resolution for {typeof(T)} is contradictory.");
+        }
+
         return new BamlGeneratedType<T>(owner, typed);
     }
 
@@ -579,7 +639,11 @@ public sealed class BamlGeneratedRegistry
             || (!types.TryGetValue(type.Declaration.Id, out TypeDeclaration? stored)
                 || !ReferenceEquals(stored, type.Declaration))
             && (!dynamicTypes.TryGetValue(typeof(T), out IResolvedGeneratedType? dynamic)
-                || !ReferenceEquals(dynamic.Declaration, type.Declaration)))
+                || !ReferenceEquals(dynamic.Declaration, type.Declaration))
+            && (!slotTupleTypesById.TryGetValue(
+                    type.Declaration.Id,
+                    out IResolvedGeneratedType? slotTuple)
+                || !ReferenceEquals(slotTuple.Declaration, type.Declaration)))
         {
             throw new InvalidOperationException(
                 "The generated type token does not belong to this registry.");
@@ -714,6 +778,13 @@ public sealed class BamlGeneratedRegistry
             && dynamic.Codec is CodecBox<T> dynamicCodec)
         {
             return dynamicCodec;
+        }
+
+        if (slotTupleTypesById.TryGetValue(declaration.Id, out IResolvedGeneratedType? slotTuple)
+            && ReferenceEquals(slotTuple.Declaration, declaration)
+            && slotTuple.Codec is CodecBox<T> slotTupleCodec)
+        {
+            return slotTupleCodec;
         }
 
         throw new InvalidOperationException(

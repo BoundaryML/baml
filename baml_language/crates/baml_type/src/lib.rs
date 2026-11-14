@@ -265,7 +265,8 @@ impl<N: Clone + PartialEq> Ty<N> {
             | Ty::Never
             | Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. } => true,
-            Ty::Literal(..)
+            Ty::Tuple(..)
+            | Ty::Literal(..)
             | Ty::EnumVariant(..)
             | Ty::Interface(..)
             | Ty::Union(..)
@@ -281,7 +282,6 @@ impl<N: Clone + PartialEq> Ty<N> {
     /// Whether this is a **concrete** type per the TYPE_SYSTEM.md taxonomy: a type
     /// every value of which has exactly one run-time representation that method
     /// dispatch can key on. The concrete category is the primitives, `Media`, classes,
-    /// enums, the containers `T[]` / `map<K, V>`, function types, `Future`, the
     /// builtin handles `Type` / `Resource` /
     /// `PromptAst`, and the native `RustType`.
     ///
@@ -321,6 +321,7 @@ impl<N: Clone + PartialEq> Ty<N> {
             | Ty::Enum(..)
             | Ty::List(..)
             | Ty::Map { .. }
+            | Ty::Tuple(..)
             | Ty::Function { .. }
             | Ty::Future(..)
             | Ty::Type
@@ -491,6 +492,7 @@ impl<N: Clone + PartialEq> Ty<N> {
                 let widened: Box<[Ty<N>]> = type_args.into_iter().map(Ty::widen_fresh).collect();
                 Ty::Class(name, widened)
             }
+            Ty::Tuple(elements) => Ty::Tuple(elements.into_iter().map(Ty::widen_fresh).collect()),
             other => other,
         }
     }
@@ -498,6 +500,10 @@ impl<N: Clone + PartialEq> Ty<N> {
     /// `T[]` (list) with default attributes.
     pub fn list(inner: Ty<N>) -> Self {
         Ty::List(Box::new(inner))
+    }
+
+    pub fn tuple(elements: impl IntoIterator<Item = Ty<N>>) -> Self {
+        Ty::Tuple(elements.into_iter().collect())
     }
 
     /// `A | B | ...` (union) with default attributes.
@@ -646,7 +652,9 @@ impl<N: Clone> LoweringTy<N> {
         match self {
             LoweringTy::List(inner) => inner.any_node(pred),
             LoweringTy::Map { key, value, .. } => key.any_node(pred) || value.any_node(pred),
-            LoweringTy::Union(members) => members.iter().any(|member| member.any_node(pred)),
+            LoweringTy::Union(members) | LoweringTy::Tuple(members) => {
+                members.iter().any(|member| member.any_node(pred))
+            }
             LoweringTy::Class(_, args) => args.iter().any(|arg| arg.any_node(pred)),
             LoweringTy::Interface(_, args, pins) => {
                 args.iter().any(|arg| arg.any_node(pred))
@@ -733,6 +741,14 @@ impl<N: Clone + HeadDisplay> LoweringTy<N> {
         } else {
             write!(f, "{self}")
         }
+    }
+}
+
+pub fn render_tuple(elements: &[String]) -> String {
+    if elements.len() == 1 {
+        format!("({},)", elements[0])
+    } else {
+        format!("({})", elements.join(", "))
     }
 }
 
@@ -922,6 +938,10 @@ impl<N: Clone> LoweringTy<N> {
                     })
                     .collect::<Vec<_>>()
                     .join(" | ")
+            }
+            LoweringTy::Tuple(elements) => {
+                let parts: Vec<_> = elements.iter().map(|e| e.render_with(s)).collect();
+                render_tuple(&parts)
             }
             LoweringTy::Literal(lit, _freshness) => lit.to_string(),
             LoweringTy::Function {
@@ -1136,6 +1156,10 @@ impl<N: Clone + HeadDisplay> fmt::Display for LoweringTy<N> {
                 write!(f, "[]")
             }
             LoweringTy::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
+            LoweringTy::Tuple(elements) => {
+                let parts: Vec<_> = elements.iter().map(ToString::to_string).collect();
+                write!(f, "{}", render_tuple(&parts))
+            }
             LoweringTy::Union(types) => {
                 // `?` is sugar that exists only in source/lowering; after that a
                 // nullable type is a plain union and renders as `T | null`.
@@ -1315,6 +1339,11 @@ mod tests {
                 key: boxed(ty_string()),
                 value: boxed(ty_int()),
             },
+            Ty::Tuple(Box::new([ty_int(), ty_string()])),
+            Ty::Tuple(Box::new([
+                Ty::union([ty_int(), ty_string()]),
+                Ty::<TypeName>::Literal(Literal::Int(1), Freshness::Regular),
+            ])),
             Ty::Function {
                 params: Box::new([]),
                 ret: boxed(Ty::<TypeName>::null()),

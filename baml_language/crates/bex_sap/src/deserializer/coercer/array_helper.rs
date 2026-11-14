@@ -5,6 +5,29 @@ use crate::{
     sap_model::{TyResolvedRef, TypeIdent},
 };
 
+fn is_sequence<N: TypeIdent>(value: &BamlValueWithFlags<'_, '_, '_, N>) -> bool {
+    matches!(&value.value, BamlValue::Array(..) | BamlValue::Tuple(..))
+}
+
+fn is_single_to_array<N: TypeIdent>(value: &BamlValueWithFlags<'_, '_, '_, N>) -> bool {
+    is_sequence(value)
+        && value
+            .conditions()
+            .flags
+            .iter()
+            .any(|f| matches!(f, Flag::SingleToArray))
+}
+
+pub(super) fn defers_to_perfect_tuple<N: TypeIdent>(
+    value: &BamlValueWithFlags<'_, '_, '_, N>,
+) -> bool {
+    matches!(&value.value, BamlValue::Array(..)) && !is_single_to_array(value)
+}
+
+pub(super) fn is_array_tuple<N: TypeIdent>(value: &BamlValueWithFlags<'_, '_, '_, N>) -> bool {
+    matches!(&value.value, BamlValue::Tuple(..)) && !is_single_to_array(value)
+}
+
 /// Tries to pick one of the items in the array and returns it.
 ///
 /// Returns `Ok(None)` when every candidate returned `Ok(None)` (all were
@@ -106,19 +129,9 @@ pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
             // relation (`baml_type::normalize::is_subtype`) here
             // to ensure that we're accepting the "best" type.
             // E.g. if a is a subtype of b, we should prefer a over b. (empty list is a subtype of any list)
-            if matches!(&a_val.value, BamlValue::Array(..))
-                && matches!(&b_val.value, BamlValue::Array(..))
-            {
-                let a_is_single = a_val
-                    .conditions()
-                    .flags
-                    .iter()
-                    .any(|f| matches!(f, Flag::SingleToArray));
-                let b_is_single = b_val
-                    .conditions()
-                    .flags
-                    .iter()
-                    .any(|f| matches!(f, Flag::SingleToArray));
+            if is_sequence(a_val) && is_sequence(b_val) {
+                let a_is_single = is_single_to_array(a_val);
+                let b_is_single = is_single_to_array(b_val);
 
                 match (a_is_single, b_is_single) {
                     // Return B
@@ -171,27 +184,12 @@ pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
                 }
             }
 
-            // When one candidate is a non-array and the other is an array
             // created via SingleToArray, prefer the non-array (the array was
             // artificially constructed by wrapping a single value).
-            if !matches!(&a_val.value, BamlValue::Array(..))
-                && matches!(&b_val.value, BamlValue::Array(..))
-                && b_val
-                    .conditions()
-                    .flags
-                    .iter()
-                    .any(|f| matches!(f, Flag::SingleToArray))
-            {
+            if !is_sequence(a_val) && is_single_to_array(b_val) {
                 return std::cmp::Ordering::Less;
             }
-            if matches!(&a_val.value, BamlValue::Array(..))
-                && !matches!(&b_val.value, BamlValue::Array(..))
-                && a_val
-                    .conditions()
-                    .flags
-                    .iter()
-                    .any(|f| matches!(f, Flag::SingleToArray))
-            {
+            if is_single_to_array(a_val) && !is_sequence(b_val) {
                 return std::cmp::Ordering::Greater;
             }
 

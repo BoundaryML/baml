@@ -31,6 +31,11 @@ pub(crate) fn complete(
             if kind == PathKind::Type {
                 return;
             }
+            if let Some(elements) = crate::resolve::tuple_slots(db, receiver) {
+                for (slot, ty) in elements.iter().enumerate() {
+                    out.add_tuple_slot(slot, ty);
+                }
+            }
             for candidate in baml_compiler2_hir_ty::ide::members_for_receiver(db, *owner, receiver)
             {
                 // A static is reached through the TYPE. Offering it here

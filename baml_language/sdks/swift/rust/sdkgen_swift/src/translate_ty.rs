@@ -165,6 +165,9 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
                 if args.is_empty() {
                     return Some(path);
                 }
+                if args.iter().any(|arg| holds_native_tuple(arg, ctx)) {
+                    return None;
+                }
                 // Parameterized generic reference: `Wrapper<int>` →
                 // `Baml.ns.Wrapper<Swift.Int>`.
                 let translated: Vec<String> = args
@@ -190,9 +193,38 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         // Opaque engine-owned state (`$rust_type` fields on stdlib
         // resource classes: File._handle, Response._body, media _data).
         Ty::RustType => Some("BamlHandle?".to_string()),
+        Ty::Tuple(items) => translate_tuple(items, ctx),
         // Unit is only meaningful in return position; the emitter
         // special-cases it. Everything else lands in later phases.
         _ => None,
+    }
+}
+
+fn translate_tuple(items: &[Ty], ctx: &TranslateCtx) -> Option<String> {
+    let slots = items
+        .iter()
+        .map(|item| translate_ty(item, ctx))
+        .collect::<Option<Vec<_>>>()?;
+    match slots.as_slice() {
+        [] => None,
+        [item] => Some(format!("BamlBridge.Tuple1<{item}>")),
+        _ => Some(format!("({})", slots.join(", "))),
+    }
+}
+
+pub(crate) fn holds_native_tuple(ty: &Ty, ctx: &TranslateCtx) -> bool {
+    match ty {
+        Ty::Tuple(items) => {
+            items.len() >= 2 || items.iter().any(|item| holds_native_tuple(item, ctx))
+        }
+        Ty::List(inner) => holds_native_tuple(inner, ctx),
+        Ty::Map { value, .. } => holds_native_tuple(value, ctx),
+        Ty::Union(members) => members.iter().any(|member| holds_native_tuple(member, ctx)),
+        Ty::TypeAlias(name) => ctx
+            .alias_bodies
+            .get(&name.to_string())
+            .is_some_and(|body| holds_native_tuple(body, ctx)),
+        _ => false,
     }
 }
 
@@ -394,18 +426,18 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
             let fqn = name.to_string();
             let swift = translate_ty(ty, ctx)?;
             // Runtime-owned handle wrappers: a handle states nothing, so the
-            // slot carries only the type an enclosing statement spells.
-            if matches!(
-                ctx.crossing(name),
-                Some(ClassCrossing::FunctionSpec | ClassCrossing::Stream)
-            ) {
-                let arguments = args
-                    .iter()
-                    .map(|arg| Some(format!("({}).type", slot_expr(arg, ctx, vars)?)))
-                    .collect::<Option<Vec<_>>>()?;
+            let constructor = match ctx.crossing(name) {
+                Some(ClassCrossing::FunctionSpec) => Some("functionSpec"),
+                Some(ClassCrossing::Stream) => Some("stream"),
+                _ => None,
+            };
+            if let Some(constructor) = constructor {
+                let [argument] = &**args else {
+                    return None;
+                };
                 return Some(format!(
-                    "BamlSlot<{swift}>._leaf(.classType(\"{fqn}\", typeArguments: [{}]))",
-                    arguments.join(", ")
+                    "BamlSlots.{constructor}(\"{fqn}\", {})",
+                    slot_expr(argument, ctx, vars)?
                 ));
             }
             if args.is_empty() {
@@ -435,6 +467,13 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
         }
         Ty::RustType => {
             Some("BamlSlots.optional(BamlSlot<BamlHandle>._leaf(.rustType))".to_string())
+        }
+        Ty::Tuple(items) if !items.is_empty() => {
+            let slots = items
+                .iter()
+                .map(|item| slot_expr(item, ctx, vars))
+                .collect::<Option<Vec<_>>>()?;
+            Some(format!("BamlSlots.tuple({})", slots.join(", ")))
         }
         _ => None,
     }

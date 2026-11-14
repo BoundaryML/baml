@@ -26,6 +26,25 @@ pub(crate) struct Unsupported {
     pub(crate) reason: String,
 }
 
+pub(crate) const MAX_BRIDGE_TUPLE_ARITY: usize = 32;
+
+pub(crate) fn tuple_arity_is_supported(arity: usize) -> bool {
+    (1..=MAX_BRIDGE_TUPLE_ARITY).contains(&arity)
+}
+
+pub(crate) fn unsupported_tuple_arity(arity: usize) -> Option<String> {
+    (!tuple_arity_is_supported(arity)).then(|| {
+        if arity == 0 {
+            "unsupported type: empty tuple".to_string()
+        } else {
+            format!(
+                "unsupported type: tuple of {arity} slots (the Rust SDK converts tuples of at most \
+                 {MAX_BRIDGE_TUPLE_ARITY})"
+            )
+        }
+    })
+}
+
 fn unsupported(what: &str) -> Unsupported {
     Unsupported {
         reason: format!("unsupported type: {what}"),
@@ -118,6 +137,16 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             let inner = translate_inner(inner, ctx, true)?;
             Ok(quote! { ::std::vec::Vec<#inner> })
         }
+        Ty::Tuple(items) => {
+            if let Some(reason) = unsupported_tuple_arity(items.len()) {
+                return Err(Unsupported { reason });
+            }
+            let translated = items
+                .iter()
+                .map(|item| translate_inner(item, ctx, under_heap))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(quote! { (#(#translated,)*) })
+        }
         Ty::Map { key, value, .. } => {
             // The language restricts map keys to strings (E0067); the
             // codegen-facing Ty is more permissive, so fail closed on
@@ -178,12 +207,8 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                     // containment cycle — box the enum reference.
                     let boxed = !under_heap
                         && ctx.boxing_for.is_some_and(|owner| {
-                            arms.iter().any(|arm| match arm {
-                                Ty::Class(name, _) | Ty::TypeAlias(name) => {
-                                    ctx.analysis.needs_box(owner, name)
-                                }
-                                _ => false,
-                            })
+                            arms.iter()
+                                .any(|arm| arm_holds_inline(arm, owner, ctx.analysis))
                         });
                     if boxed {
                         quote! { ::std::boxed::Box<#path> }
@@ -350,6 +375,16 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
         // (throws-nothing is `throws: None`, handled before translation).
         Ty::Never => Err(unsupported("never")),
         Ty::RustType => Ok(quote! { ::baml_bridge::RustType }),
+    }
+}
+
+fn arm_holds_inline(arm: &Ty, owner: &Name, analysis: &Analysis) -> bool {
+    match arm {
+        Ty::Class(name, _) | Ty::TypeAlias(name) => analysis.needs_box(owner, name),
+        Ty::Tuple(items) | Ty::Union(items) => items
+            .iter()
+            .any(|item| arm_holds_inline(item, owner, analysis)),
+        _ => false,
     }
 }
 

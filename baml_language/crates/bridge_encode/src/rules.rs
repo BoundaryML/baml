@@ -51,6 +51,13 @@ impl Rules {
             Rules::JavaScript => javascript(scalar, slot),
         }
     }
+
+    pub(crate) fn lists_are_not_tuples(self) -> bool {
+        match self {
+            Rules::Python => true,
+            Rules::JavaScript => false,
+        }
+    }
 }
 
 /// A value that is exactly one BAML scalar fits that slot or an open one.

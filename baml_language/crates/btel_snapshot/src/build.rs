@@ -457,6 +457,42 @@ impl Builder {
             original_len,
         }
     }
+    pub fn tuple<T>(
+        &mut self,
+        element_types: impl IntoIterator<Item = OwnedType>,
+        source: impl ExactSizeIterator<Item = T>,
+        convert: impl FnMut(&mut Leaves<'_>, T) -> SnapshotValue,
+    ) -> SnapshotObject {
+        let element_types = element_types.into_iter().map(|ty| {
+            let defined = names_definition(&ty);
+            (ty, defined)
+        });
+        self.described_tuple(element_types, source, convert)
+    }
+    pub fn described_tuple<T>(
+        &mut self,
+        element_types: impl IntoIterator<Item = (OwnedType, bool)>,
+        source: impl ExactSizeIterator<Item = T>,
+        convert: impl FnMut(&mut Leaves<'_>, T) -> SnapshotValue,
+    ) -> SnapshotObject {
+        let mut leaves = self.leaves();
+        let start = leaves.types.len();
+        for (ty, defined) in element_types {
+            leaves.described(ty, defined);
+        }
+        let element_types = Range::new(start, leaves.types.len() - start);
+        let original_len = source.len();
+        debug_assert_eq!(
+            element_types.len(),
+            original_len,
+            "one carried type per tuple slot"
+        );
+        SnapshotObject::Tuple {
+            element_types,
+            items: self.values(source, convert),
+            original_len,
+        }
+    }
     /// A map of the keys and values `convert` makes of each item of `source`.
     pub fn map<T>(
         &mut self,

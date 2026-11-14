@@ -143,11 +143,10 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                     }
                 });
                 trial_decodes.push(quote! {
-                    if let ::std::result::Result::Ok(value) =
-                        <#payload as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::from_baml(
-                            v.clone(),
-                        )
+                    if let ::std::option::Option::Some(value) =
+                        ::baml_bridge::decode::trial::<#payload>(&v)
                     {
+                        ::baml_bridge::decode::release(v);
                         return ::std::result::Result::Ok(Self::#variant(value));
                     }
                 });
@@ -218,12 +217,11 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                     }
                 });
                 trial_decodes.push(quote! {
-                    if let ::std::result::Result::Ok(value) =
-                        <::std::string::String as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::from_baml(
-                            v.clone(),
-                        )
+                    if let ::std::option::Option::Some(value) =
+                        ::baml_bridge::decode::trial::<::std::string::String>(&v)
                         && value == #value
                     {
+                        ::baml_bridge::decode::release(v);
                         return ::std::result::Result::Ok(Self::#variant);
                     }
                 });
@@ -352,8 +350,16 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
         TokenStream::new()
     };
 
+    let derives =
+        super::class::std_trait_derives(union_enum.arms.iter().find_map(|arm| match &arm.kind {
+            UnionArmKind::Payload(ty) if !ctx.analysis.has_std_traits(ty) => {
+                Some(format!("arm `{}`", arm.variant))
+            }
+            _ => None,
+        }));
+
     Ok(quote! {
-        #[derive(Debug, Clone, PartialEq)]
+        #derives
         pub enum #ident #bounded_generics {
             #(#variant_defs,)*
         }
@@ -387,12 +393,12 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                 if let ::std::option::Option::Some(selected_type) = selected_type {
                     #(#indexed_decodes)*
                     return ::std::result::Result::Err(
-                        ::baml_bridge::decode::no_union_arm(#name_str, &v),
+                        ::baml_bridge::decode::refuse_union(#name_str, v),
                     );
                 }
                 let v = ::baml_bridge::decode::unwrap(v);
                 #(#trial_decodes)*
-                ::std::result::Result::Err(::baml_bridge::decode::no_union_arm(#name_str, &v))
+                ::std::result::Result::Err(::baml_bridge::decode::refuse_union(#name_str, v))
             }
 
             fn baml_ty() -> ::baml_bridge::wire::BamlTy {

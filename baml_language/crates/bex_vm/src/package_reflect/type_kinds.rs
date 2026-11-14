@@ -20,8 +20,9 @@ use super::{
     BamlClassReflectTypeView_for_Enum, BamlClassReflectTypeView_for_Function,
     BamlClassReflectTypeView_for_Interface, BamlClassReflectTypeView_for_Literal,
     BamlClassReflectTypeView_for_Map, BamlClassReflectTypeView_for_Primitive,
-    BamlClassReflectTypeView_for_Union, BamlClassUnion, BamlNamespaceClass, BamlNamespaceInterface,
-    BamlNamespaceReflect, PackageReflectImpl, copy,
+    BamlClassReflectTypeView_for_Tuple, BamlClassReflectTypeView_for_Union, BamlClassTuple,
+    BamlClassUnion, BamlNamespaceClass, BamlNamespaceInterface, BamlNamespaceReflect,
+    PackageReflectImpl, copy,
 };
 use crate::{BexVm, package_load::StdlibClass};
 
@@ -1445,6 +1446,12 @@ fn substitute_witness_field_type(
                 .map(|member| substitute_witness_field_type(member, interface, args, assoc))
                 .collect::<Result<Box<[_]>, _>>()?,
         )),
+        RuntimeTy::Tuple(elements) => Ok(RuntimeTy::Tuple(
+            elements
+                .iter()
+                .map(|element| substitute_witness_field_type(element, interface, args, assoc))
+                .collect::<Result<Box<[_]>, _>>()?,
+        )),
         RuntimeTy::Class(name, type_args) => Ok(RuntimeTy::Class(
             *name,
             type_args
@@ -2101,28 +2108,28 @@ fn field_value_fits(vm: &BexVm, value: Value, expected: &bex_vm_types::RealizedT
     })
 }
 
-/// The fix `reflect.Class.instantiate` names when a list or map misses its
-/// field's type: the field takes a container of the same kind, so only the
-/// element, key or value types differ. A container keeps the types it was
-/// built with, so a literal written inside `fields` is typed by its own
-/// elements and `[]` is `unknown[]`. Empty when the mismatch is anything else.
 fn container_hint(
     vm: &BexVm,
     got: &bex_vm_types::RealizedTy,
     expected: &bex_vm_types::RealizedTy,
 ) -> String {
-    let (list, rule) = match got {
-        bex_vm_types::RealizedTy::List(_) => {
-            (true, "a list keeps the element type it was built with")
-        }
+    let (kind, rule) = match got {
+        bex_vm_types::RealizedTy::List(_) => (
+            ContainerKind::List,
+            "a list keeps the element type it was built with",
+        ),
         bex_vm_types::RealizedTy::Map { .. } => (
-            false,
+            ContainerKind::Map,
             "a map keeps the key and value types it was built with",
+        ),
+        bex_vm_types::RealizedTy::Tuple(slots) => (
+            ContainerKind::Tuple(slots.len()),
+            "a tuple keeps the slot types it was built with",
         ),
         _ => return String::new(),
     };
     let mut wanted = Vec::new();
-    same_kind_containers(vm, expected.as_ty(), list, &mut Vec::new(), &mut wanted);
+    same_kind_containers(vm, expected.as_ty(), kind, &mut Vec::new(), &mut wanted);
     if wanted.is_empty() {
         return String::new();
     }
@@ -2134,27 +2141,36 @@ fn container_hint(
     format!(": {rule}; build it as {wanted} first")
 }
 
-/// The lists (`list`) or maps of `ty` and of its union members, through the
+#[derive(Clone, Copy)]
+enum ContainerKind {
+    List,
+    Map,
+    Tuple(usize),
+}
+
 /// type aliases not in `within`.
 fn same_kind_containers(
     vm: &BexVm,
     ty: &bex_vm_types::Ty,
-    list: bool,
+    kind: ContainerKind,
     within: &mut Vec<bex_vm_types::TypeHead>,
     out: &mut Vec<bex_vm_types::Ty>,
 ) {
-    match ty {
-        bex_vm_types::Ty::List(_) if list => out.push(ty.clone()),
-        bex_vm_types::Ty::Map { .. } if !list => out.push(ty.clone()),
-        bex_vm_types::Ty::Union(members) => {
+    match (ty, kind) {
+        (bex_vm_types::Ty::List(_), ContainerKind::List)
+        | (bex_vm_types::Ty::Map { .. }, ContainerKind::Map) => out.push(ty.clone()),
+        (bex_vm_types::Ty::Tuple(slots), ContainerKind::Tuple(arity)) if slots.len() == arity => {
+            out.push(ty.clone());
+        }
+        (bex_vm_types::Ty::Union(members), _) => {
             for member in members {
-                same_kind_containers(vm, member, list, within, out);
+                same_kind_containers(vm, member, kind, within, out);
             }
         }
-        bex_vm_types::Ty::TypeAlias(head) if !within.contains(head) => {
+        (bex_vm_types::Ty::TypeAlias(head), _) if !within.contains(head) => {
             within.push(*head);
             if let Some(definition) = baml_type::normalize::TypeContext::alias_def(vm, head) {
-                same_kind_containers(vm, &definition, list, within, out);
+                same_kind_containers(vm, &definition, kind, within, out);
             }
         }
         _ => {}
@@ -2228,6 +2244,116 @@ impl BamlClassArray for PackageReflectImpl {
     }
 }
 
+impl BamlClassTuple for PackageReflectImpl {
+    fn _new(vm: &mut BexVm, element_types: &[Value]) -> Value {
+        let elements = element_types
+            .iter()
+            .map(|value| reflected_type_value(vm, *value).ty)
+            .collect();
+        alloc_runtime_composite(
+            vm,
+            baml_type::type_kind::TypeKind::Tuple,
+            bex_vm_types::RealizedTy::Tuple(elements),
+        )
+    }
+
+    fn instantiate(
+        vm: &mut BexVm,
+        values: &[Value],
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let Some(tuple_ty) = vm.current_call_type_args().first().cloned() else {
+            return Err(crate::errors::VmRustFnError::InternalError(
+                bex_vm_types::errors::VmInternalError::MissingNativeFunction {
+                    name: "reflect.Tuple.instantiate: missing type argument".to_string(),
+                },
+            ));
+        };
+        let bex_vm_types::RealizedTy::Tuple(element_tys) = &tuple_ty else {
+            return Err(invalid_argument(
+                vm,
+                format!("reflect.Tuple.instantiate expects a tuple type, got `{tuple_ty}`"),
+            ));
+        };
+        if element_tys.len() != values.len() {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Tuple.instantiate: `{tuple_ty}` has {} slots, got {} values",
+                    element_tys.len(),
+                    values.len()
+                ),
+            ));
+        }
+        for (index, (value, ty)) in values.iter().zip(element_tys.iter()).enumerate() {
+            if field_value_fits(vm, *value, ty) {
+                continue;
+            }
+            let got = match vm.value_concrete_ty(*value) {
+                Some(got) => {
+                    let got = bex_vm_types::RealizedTy::from(got);
+                    let hint = container_hint(vm, &got, ty);
+                    format!("`{got}`{hint}")
+                }
+                None => "a value with no BAML type".to_string(),
+            };
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Tuple.instantiate: slot {index} of `{tuple_ty}` expects `{ty}`, got {got}"
+                ),
+            ));
+        }
+        let tuple = bex_vm_types::Tuple::new(element_tys.clone(), values.to_vec())
+            .unwrap_or_else(|err| unreachable!("arity checked above: {err}"));
+        Ok(Value::object(vm.tlab.alloc_tuple(tuple)))
+    }
+
+    fn get_element(
+        vm: &mut BexVm,
+        value: &Value,
+        index: i64,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let result = value
+            .as_object_ptr()
+            .and_then(|ptr| match vm.get_object(ptr) {
+                bex_vm_types::Object::Tuple(tuple) => Some((
+                    usize::try_from(index)
+                        .ok()
+                        .and_then(|slot| tuple.try_load_slot(slot)),
+                    tuple.len(),
+                )),
+                _ => None,
+            });
+        match result {
+            Some((Some(value), _)) => Ok(value),
+            Some((None, arity)) => Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Tuple.get_element: slot {index} is out of range for a tuple of {arity} slots"
+                ),
+            )),
+            None => Err(invalid_argument(
+                vm,
+                "reflect.Tuple.get_element expects a tuple value".to_string(),
+            )),
+        }
+    }
+
+    fn element_types(
+        vm: &mut BexVm,
+        r#type: &Value,
+    ) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Tuple)?;
+        let bex_vm_types::RealizedTy::Tuple(elements) = ty else {
+            unreachable!("a Tuple-classified type is RealizedTy::Tuple")
+        };
+        Ok(elements
+            .into_iter()
+            .map(|ty| Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(ty))))
+            .collect())
+    }
+}
+
 impl BamlClassFunction for PackageReflectImpl {
     fn params(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Function)?;
@@ -2270,6 +2396,10 @@ impl BamlClassFunction for PackageReflectImpl {
 
 impl BamlClassReflectTypeView_for_Array for PackageReflectImpl {
     impl_as_type!(Array);
+}
+
+impl BamlClassReflectTypeView_for_Tuple for PackageReflectImpl {
+    impl_as_type!(Tuple);
 }
 
 impl BamlClassReflectTypeView_for_Class for PackageReflectImpl {

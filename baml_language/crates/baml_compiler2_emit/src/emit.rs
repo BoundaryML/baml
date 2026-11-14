@@ -513,6 +513,14 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     _ => None,
                 }
             }
+            Place::Index {
+                base,
+                index,
+                kind: IndexKind::Tuple,
+            } => {
+                let base_ty = self.resolve_place_type(base)?.strip_null();
+                tuple_slot_type(&base_ty, self.constant_index(*index))
+            }
             Place::Index { base, .. } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match base_ty {
@@ -521,6 +529,23 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     _ => None,
                 }
             }
+        }
+    }
+
+    fn constant_index(&self, index: Local) -> Option<i64> {
+        let index = self.analysis.resolve_copy_source(index);
+        if let Some(RuntimeTy::Literal(baml_type::Literal::Int(value), _)) =
+            self.local_types.get(&index)
+        {
+            return Some(*value);
+        }
+        let du = self.analysis.def_use.get(&index)?;
+        if du.all_defs.len() != 1 {
+            return None;
+        }
+        match &du.def.as_ref()?.rvalue {
+            Rvalue::Use(Operand::Constant(Constant::Int(value))) => Some(*value),
+            _ => None,
         }
     }
 
@@ -2275,7 +2300,8 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             | TyTemplate::TypeArgRef(_)
             | TyTemplate::Interface(..)
             | TyTemplate::AssociatedTypeProjection { .. }
-            | TyTemplate::Union(..) => emit_structural(self, ty_template),
+            | TyTemplate::Union(..)
+            | TyTemplate::Tuple(..) => emit_structural(self, ty_template),
 
             // ── Function signatures ──────────────────────────────────────────
             // Signature-precise, via the same value matcher every other
@@ -3457,8 +3483,20 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         Ok(())
     }
 
-    fn load_index(&mut self, kind: IndexKind, base: &Place) -> Result<(), Self::Error> {
+    fn load_index(
+        &mut self,
+        kind: IndexKind,
+        base: &Place,
+        index: Local,
+    ) -> Result<(), Self::Error> {
         match kind {
+            IndexKind::Tuple => {
+                let slot = self
+                    .constant_index(index)
+                    .and_then(|index| usize::try_from(index).ok())
+                    .expect("tuple projection has a constant slot");
+                self.emit(Instruction::LoadTupleField(slot));
+            }
             IndexKind::Array if self.thread_local(base) => {
                 self.emit(Instruction::LoadArrayElementLocal);
             }
@@ -3502,6 +3540,12 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         // `AllocInstance` consumes its leading type args.
         self.load_type(element_ty)?;
         self.emit(Instruction::AllocArray(len));
+        Ok(())
+    }
+
+    fn alloc_tuple(&mut self, tuple_ty: &TyTemplate, len: usize) -> Result<(), Self::Error> {
+        self.load_type(tuple_ty)?;
+        self.emit(Instruction::AllocTuple(len));
         Ok(())
     }
 
@@ -3802,6 +3846,9 @@ impl<'db: 'ctx, 'ctx> StackEffectSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '
             }
             IndexKind::Array => self.emit(Instruction::StoreArrayElement),
             IndexKind::Map => self.emit(Instruction::StoreMapElement),
+            IndexKind::Tuple => {
+                unreachable!("tuple slots are immutable: the checker rejects a store to one")
+            }
         };
         Ok(())
     }
@@ -3809,6 +3856,33 @@ impl<'db: 'ctx, 'ctx> StackEffectSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error> {
         self.emit(Instruction::Pop(n));
         Ok(())
+    }
+}
+
+fn tuple_slot_type(base: &RuntimeTy, index: Option<i64>) -> Option<RuntimeTy> {
+    match base {
+        RuntimeTy::Tuple(elements) => match index {
+            Some(index) => elements.get(usize::try_from(index).ok()?).cloned(),
+            None => {
+                let (first, rest) = elements.split_first()?;
+                rest.iter().all(|e| e == first).then(|| first.clone())
+            }
+        },
+        RuntimeTy::Union(members) => {
+            let mut slots: Vec<RuntimeTy> = Vec::new();
+            for member in members {
+                let slot = tuple_slot_type(member, index)?;
+                if !slots.contains(&slot) {
+                    slots.push(slot);
+                }
+            }
+            match slots.len() {
+                0 => None,
+                1 => slots.pop(),
+                _ => Some(RuntimeTy::Union(slots.into())),
+            }
+        }
+        _ => None,
     }
 }
 
@@ -3835,6 +3909,7 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         // reaches here; returning `None` keeps that the only answer rather than
         // leaving a wrong one for the next caller to find.
         RealizedTy::Literal(..) => None,
+        RealizedTy::Tuple(..) => None,
         RealizedTy::Media(..)
         | RealizedTy::Class(..)
         | RealizedTy::Interface(..)
@@ -4014,5 +4089,47 @@ mod tests {
             switch_discriminant_pulls(&arms(&[10, 2000, 300_000, 40_000_000]), false),
             1
         );
+    }
+
+    #[test]
+    fn tuple_slot_type_selects_and_joins_slots() {
+        use baml_compiler2_mir::RuntimeTy;
+
+        use super::tuple_slot_type;
+        let pair = |a: RuntimeTy, b: RuntimeTy| RuntimeTy::Tuple(vec![a, b].into());
+
+        let direct = pair(RuntimeTy::int(), RuntimeTy::string());
+        assert_eq!(tuple_slot_type(&direct, Some(0)), Some(RuntimeTy::int()));
+        assert_eq!(tuple_slot_type(&direct, Some(1)), Some(RuntimeTy::string()));
+        assert_eq!(tuple_slot_type(&direct, Some(2)), None);
+        assert_eq!(tuple_slot_type(&direct, Some(-1)), None);
+        assert_eq!(tuple_slot_type(&direct, None), None);
+        assert_eq!(
+            tuple_slot_type(&pair(RuntimeTy::int(), RuntimeTy::int()), None),
+            Some(RuntimeTy::int())
+        );
+
+        let agreeing = RuntimeTy::union([
+            direct.clone(),
+            RuntimeTy::Tuple(vec![RuntimeTy::int()].into()),
+        ]);
+        assert_eq!(tuple_slot_type(&agreeing, Some(0)), Some(RuntimeTy::int()));
+        assert_eq!(tuple_slot_type(&agreeing, Some(1)), None);
+
+        let differing = RuntimeTy::union([direct, pair(RuntimeTy::float(), RuntimeTy::string())]);
+        assert_eq!(
+            tuple_slot_type(&differing, Some(0)),
+            Some(RuntimeTy::union([RuntimeTy::int(), RuntimeTy::float()]))
+        );
+        assert_eq!(
+            tuple_slot_type(&differing, Some(1)),
+            Some(RuntimeTy::string())
+        );
+
+        let mixed = RuntimeTy::union([
+            pair(RuntimeTy::int(), RuntimeTy::int()),
+            RuntimeTy::string(),
+        ]);
+        assert_eq!(tuple_slot_type(&mixed, Some(0)), None);
     }
 }

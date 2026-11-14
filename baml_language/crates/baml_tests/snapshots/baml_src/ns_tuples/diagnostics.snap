@@ -1,0 +1,246 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+   ╭─[const_destructure.baml:8:5]
+ 8 │     const (const a, const b) = (1, 2);
+   ·     ──┬──
+   ·       ╰── `const` behaves like `let` for now
+   ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+   ╭─[const_destructure.baml:8:12]
+ 8 │     const (const a, const b) = (1, 2);
+   ·            ──┬──
+   ·              ╰── `const` behaves like `let` for now
+   ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+   ╭─[const_destructure.baml:8:21]
+ 8 │     const (const a, const b) = (1, 2);
+   ·                     ──┬──
+   ·                       ╰── `const` behaves like `let` for now
+   ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:13:5]
+ 13 │     const (const a, (const b, const c)) = (1, (2, 3));
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:13:12]
+ 13 │     const (const a, (const b, const c)) = (1, (2, 3));
+    ·            ──┬──
+    ·              ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:13:22]
+ 13 │     const (const a, (const b, const c)) = (1, (2, 3));
+    ·                      ──┬──
+    ·                        ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:13:31]
+ 13 │     const (const a, (const b, const c)) = (1, (2, 3));
+    ·                               ──┬──
+    ·                                 ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:18:5]
+ 18 │     const (const only,) = (7,);
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:18:12]
+ 18 │     const (const only,) = (7,);
+    ·            ──┬──
+    ·              ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:23:17]
+ 23 │     let (let a, const b) = (4, 5);
+    ·                 ──┬──
+    ·                   ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:28:5]
+ 28 │     const (0, const b) = pair else { return -1; };
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:28:15]
+ 28 │     const (0, const b) = pair else { return -1; };
+    ·               ──┬──
+    ·                 ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:33:11]
+ 33 │     while const (const a, _) = pair {
+    ·           ──┬──
+    ·             ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:33:18]
+ 33 │     while const (const a, _) = pair {
+    ·                  ──┬──
+    ·                    ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:41:10]
+ 41 │     for (const (const a, const b) in [(1, 2), (3, 4)]) {
+    ·          ──┬──
+    ·            ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:41:17]
+ 41 │     for (const (const a, const b) in [(1, 2), (3, 4)]) {
+    ·                 ──┬──
+    ·                   ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:41:26]
+ 41 │     for (const (const a, const b) in [(1, 2), (3, 4)]) {
+    ·                          ──┬──
+    ·                            ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:48:5]
+ 48 │     const TpcPoint { x: const px, y: (const a, const b) } = TpcPoint { x: 1, y: (2, 3) };
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:48:25]
+ 48 │     const TpcPoint { x: const px, y: (const a, const b) } = TpcPoint { x: 1, y: (2, 3) };
+    ·                         ──┬──
+    ·                           ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:48:39]
+ 48 │     const TpcPoint { x: const px, y: (const a, const b) } = TpcPoint { x: 1, y: (2, 3) };
+    ·                                       ──┬──
+    ·                                         ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:48:48]
+ 48 │     const TpcPoint { x: const px, y: (const a, const b) } = TpcPoint { x: 1, y: (2, 3) };
+    ·                                                ──┬──
+    ·                                                  ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:53:5]
+ 53 │     const [const first, const second] = [8, 9] else { return 0; };
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:53:12]
+ 53 │     const [const first, const second] = [8, 9] else { return 0; };
+    ·            ──┬──
+    ·              ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:53:25]
+ 53 │     const [const first, const second] = [8, 9] else { return 0; };
+    ·                         ──┬──
+    ·                           ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[patterns.baml:33:8]
+ 33 │     if const (const a, const b) = pair {
+    ·        ──┬──
+    ·          ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[patterns.baml:33:15]
+ 33 │     if const (const a, const b) = pair {
+    ·               ──┬──
+    ·                 ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[patterns.baml:33:24]
+ 33 │     if const (const a, const b) = pair {
+    ·                        ──┬──
+    ·                          ╰── `const` behaves like `let` for now
+    ╰────

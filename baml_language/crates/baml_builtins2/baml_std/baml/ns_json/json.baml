@@ -433,8 +433,6 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 ///
 /// A field whose type admits `null` (`T?`, `json`) is omitted from
 /// `required`, as the decoder lets it be missing. Maps use schema-valued
-/// `additionalProperties`, and unions use `anyOf`. Enums lower to a string
-/// `enum` of their variant names. A nullable type becomes a `["T", "null"]`
 /// type list where it can, and `anyOf` otherwise. A nullable enum also lists
 /// `null` in its `enum`, and a nullable literal uses `anyOf`, because `enum`
 /// and `const` restrict the value whatever `type` says.

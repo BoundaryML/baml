@@ -220,7 +220,8 @@ fn fields_struct(
         {
             Some(prop) => format!(
                 " Not serializable with the `serde` feature: field `{}` holds a `bigint`, \
-                 `uint8array`, function, handle or BAML standard-library class.",
+                 `uint8array`, function, handle, BAML standard-library class, or tuple of \
+                 more than 16 slots.",
                 prop.name
             ),
             None => " Not serializable with the `serde` feature: BAML standard-library \
@@ -233,6 +234,13 @@ fn fields_struct(
     // Field attributes are for serde's derive, which a `@json.fallback` class
     // does without.
     let derived_fields = derives_serde && fallback.is_none();
+    let derives = std_trait_derives(
+        properties
+            .iter()
+            .find(|prop| !field_ctx.analysis.has_std_traits(&prop.ty))
+            .map(|prop| format!("field `{}`", prop.name)),
+    );
+
     let mut field_defs = Vec::new();
     let mut literal_checks = Vec::new();
     let mut serialize_entries = Vec::new();
@@ -591,7 +599,7 @@ fn fields_struct(
 
     Ok(quote! {
         #(#docs)*
-        #[derive(Debug, Clone, PartialEq)]
+        #derives
         #serde_attrs
         pub struct #ident #bounded_generics {
             #(#field_defs,)*
@@ -818,6 +826,29 @@ fn constructor(
             Self {
                 #(#required,)*
                 #(#optional: ::std::option::Option::None,)*
+            }
+        }
+    }
+}
+
+/// The derives of a generated class or union enum: `Debug`, `Clone` and
+/// `PartialEq`, or only `Clone` when `lacking` names the field or arm that
+/// holds a tuple wider than Rust's standard library implements `Debug` and
+/// `PartialEq` for (12 slots), directly or through another such type. A
+/// note on the type's docs says which.
+pub(crate) fn std_trait_derives(lacking: Option<String>) -> TokenStream {
+    match lacking {
+        None => quote! { #[derive(Debug, Clone, PartialEq)] },
+        Some(holder) => {
+            let note = format!(
+                " Implements neither `Debug` nor `PartialEq`: {holder} holds a tuple of more \
+                 than 12 slots, which Rust's standard library implements those traits for only \
+                 up to 12."
+            );
+            quote! {
+                #[doc = ""]
+                #[doc = #note]
+                #[derive(Clone)]
             }
         }
     }

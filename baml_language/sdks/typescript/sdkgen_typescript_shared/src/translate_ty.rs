@@ -113,6 +113,21 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             };
             TranslatedType { expr, imports }
         }
+        Ty::Tuple(items) => {
+            let mut imports = BTreeSet::new();
+            let parts: Vec<String> = items
+                .iter()
+                .map(|item| {
+                    let t = translate_ty(item, ctx);
+                    imports.extend(t.imports);
+                    t.expr
+                })
+                .collect();
+            TranslatedType {
+                expr: format!("[{}]", parts.join(", ")),
+                imports,
+            }
+        }
         Ty::Union(items) => {
             let mut imports = BTreeSet::new();
             let parts: Vec<String> = items
@@ -254,6 +269,7 @@ fn is_reflect_kind_type(name: &Name) -> bool {
         "Literal",
         "Map",
         "Primitive",
+        "Tuple",
         "Union",
     ];
     name.package().as_str() == "reflect"
@@ -389,6 +405,21 @@ pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType
                 format!("{{ [key in {}]?: {} }}", key.expr, value.expr)
             };
             TranslatedType { expr, imports }
+        }
+        Ty::Tuple(items) => {
+            let mut imports = BTreeSet::new();
+            let parts: Vec<_> = items
+                .iter()
+                .map(|item| {
+                    let result = translate_return_ty(item, ctx);
+                    imports.extend(result.imports);
+                    result.expr
+                })
+                .collect();
+            TranslatedType {
+                expr: format!("[{}]", parts.join(", ")),
+                imports,
+            }
         }
         Ty::Union(items) => {
             let mut imports = BTreeSet::new();
@@ -602,6 +633,15 @@ mod tests {
         assert!(translated.expr.contains("callSync("));
     }
 
+    #[test]
+    fn returned_callable_tuple_slots_keep_invocation_controls() {
+        let ty = Ty::Tuple(vec![callable(Vec::new(), boxed(Ty::Int)), Ty::String].into());
+        let translated = translate_return_ty(&ty, &ctx(&[]));
+        assert!(translated.expr.starts_with("[{ ("));
+        assert!(translated.expr.contains("): Promise<number>; callSync("));
+        assert!(translated.expr.ends_with(", string]"));
+    }
+
     /// Forces this test file to be updated whenever a `Ty` variant is added.
     fn check_exhaustive(ty: &Ty) {
         match ty {
@@ -623,6 +663,7 @@ mod tests {
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Union(..)
+            | Ty::Tuple(..)
             | Ty::Unknown
             | Ty::Function { .. }
             | Ty::Future(..)
@@ -855,6 +896,36 @@ mod tests {
                 ty: list(boxed(callable(Vec::new(), boxed(Ty::Bool)))),
                 ctx: ctx(&[]),
                 expected_expr: "(() => boolean | Promise<boolean>)[]",
+                expected_imports: &[],
+            },
+            Case {
+                label: "tuple_int_string",
+                ty: Ty::Tuple(vec![Ty::Int, Ty::String].into()),
+                ctx: ctx(&[]),
+                expected_expr: "[number, string]",
+                expected_imports: &[],
+            },
+            Case {
+                label: "one_tuple",
+                ty: Ty::Tuple(vec![Ty::Bool].into()),
+                ctx: ctx(&[]),
+                expected_expr: "[boolean]",
+                expected_imports: &[],
+            },
+            Case {
+                label: "list_of_tuple",
+                ty: list(boxed(Ty::Tuple(
+                    vec![union(vec![Ty::String, Ty::Null]), media(MediaKind::Image)].into(),
+                ))),
+                ctx: ctx(&["lorem"]),
+                expected_expr: "[string | null, baml.media.Image][]",
+                expected_imports: &[&["baml", "media"]],
+            },
+            Case {
+                label: "optional_tuple",
+                ty: union(vec![Ty::Tuple(vec![Ty::Int].into()), Ty::Null]),
+                ctx: ctx(&[]),
+                expected_expr: "[number] | null",
                 expected_imports: &[],
             },
             Case {

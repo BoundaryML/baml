@@ -178,6 +178,11 @@ pub enum SnapshotObject {
         items: Range<SnapshotValue>,
         original_len: usize,
     },
+    Tuple {
+        element_types: Range<OwnedType>,
+        items: Range<SnapshotValue>,
+        original_len: usize,
+    },
     Map {
         key_type: TypeId,
         value_type: TypeId,
@@ -218,6 +223,11 @@ impl SnapshotObject {
         match self {
             Self::Uint8ArrayTruncated { .. } | Self::Truncated(_) => true,
             Self::List {
+                items,
+                original_len,
+                ..
+            }
+            | Self::Tuple {
                 items,
                 original_len,
                 ..

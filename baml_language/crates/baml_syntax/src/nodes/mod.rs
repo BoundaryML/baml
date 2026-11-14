@@ -43,13 +43,13 @@ crate::define_tree! {
         ParamList, Param, TypeAscription, DefaultValue,
         Attribute, BlockAttr, DottedName, AttrArgs, JinjaArg,
         // types
-        PathType, LiteralType, ParenType, FunctionType, FunctionTypeParam, OptionalType, ArrayType,
+        PathType, LiteralType, ParenType, TupleType, FunctionType, FunctionTypeParam, OptionalType, ArrayType,
         UnionType, QualifiedPath,
         // patterns
         BindingPattern, WildcardPattern, DestructurePattern, FieldPattern, ArrayPattern, RestPattern,
-        TypePattern, ParenPattern, UnionPattern,
+        TypePattern, ParenPattern, TuplePattern, UnionPattern,
         // expressions
-        Name, PathExpr, GenericApplyExpr, LiteralExpr, StringLit, FieldAccessExpr, OptionalFieldAccessExpr,
+        TupleExpr, TupleFieldExpr, Name, PathExpr, GenericApplyExpr, LiteralExpr, StringLit, FieldAccessExpr, OptionalFieldAccessExpr,
         UpcastExpr, SpecExpr, EnvAccessExpr, CallExpr, ArgList, Arg, OptionalCallExpr, IndexExpr,
         OptionalIndexExpr, TaggedTemplateExpr, BinaryExpr, IsExpr, UnaryExpr, AwaitExpr, SpawnExpr,
         CatchExpr, CatchClause, CatchArm, ThrowExpr, ReturnExpr, BreakExpr, ContinueExpr, ParenExpr,
@@ -82,5 +82,6 @@ crate::define_tree! {
         SepItem<AnyArrayPatternElement, punct::Comma>,
         SepItem<Id<Arg>, punct::Comma>,
         SepItem<AnyExpr, punct::Comma>,
+        SepItem<AnyPattern, punct::Comma>,
     },
 }

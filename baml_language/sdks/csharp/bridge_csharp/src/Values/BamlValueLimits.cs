@@ -7,6 +7,8 @@ internal static class BamlValueLimits
     internal const int MaxBytes = 64 * 1024 * 1024;
     internal const int MaxNodes = 2_000_000;
 
+    internal const int MaxNativeTupleArity = 7;
+
     internal static void RequireBytes(long length, string path, Type clrType)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -57,6 +59,14 @@ internal static class BamlValueLimits
         if (value.Kind == BamlValueKind.List)
         {
             IReadOnlyList<BamlValue> values = value.ReadListValues();
+            for (int index = 0; index < values.Count; index++)
+            {
+                Visit(values[index], $"{path}[{index}]", depth + 1, ref nodes);
+            }
+        }
+        else if (value.Kind == BamlValueKind.Tuple)
+        {
+            IReadOnlyList<BamlValue> values = value.ReadTupleValues();
             for (int index = 0; index < values.Count; index++)
             {
                 Visit(values[index], $"{path}[{index}]", depth + 1, ref nodes);

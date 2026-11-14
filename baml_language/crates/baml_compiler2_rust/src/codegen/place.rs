@@ -55,8 +55,19 @@ impl<'db> Generator<'_, 'db> {
                 Ok(Expr::new(code, Repr::Value))
             }
             Place::Index { base, index, kind } => {
-                if !matches!(kind, baml_compiler2_mir::IndexKind::Array) {
+                if matches!(kind, baml_compiler2_mir::IndexKind::Map) {
                     return unsupported("map index");
+                }
+                if matches!(kind, baml_compiler2_mir::IndexKind::Tuple) {
+                    let base = self.load(block, base)?;
+                    let base = self.value_arg(&base);
+                    let index =
+                        super::coerce(&format!("l{}", index.0), self.repr(*index), Repr::Int);
+                    let code = self.fallible(
+                        block,
+                        &format!("vm.load_tuple_field({base}, ({index}) as usize)"),
+                    )?;
+                    return Ok(Expr::new(code, Repr::Value));
                 }
                 let needs = self.analysis.escape.object_needs(base);
                 let base = self.load(block, base)?;
@@ -121,8 +132,12 @@ impl<'db> Generator<'_, 'db> {
                 Ok(format!("{code};"))
             }
             Place::Index { base, index, kind } => {
-                if !matches!(kind, baml_compiler2_mir::IndexKind::Array) {
-                    return unsupported("map index");
+                match kind {
+                    baml_compiler2_mir::IndexKind::Array => {}
+                    baml_compiler2_mir::IndexKind::Map => return unsupported("map index"),
+                    baml_compiler2_mir::IndexKind::Tuple => {
+                        return Err(Rejection::Invalid("a store to a tuple slot".into()));
+                    }
                 }
                 let needs = self.analysis.escape.object_needs(base);
                 let value = self.value_arg(value);

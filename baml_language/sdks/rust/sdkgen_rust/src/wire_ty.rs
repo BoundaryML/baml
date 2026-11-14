@@ -117,6 +117,10 @@ pub(crate) fn wire_ty(
             let item = wire_ty(item, ctx, type_var)?;
             quote! { #internal::list_ty(#item) }
         }
+        Ty::Tuple(items) => {
+            let items = each(items)?;
+            quote! { #internal::tuple_ty(::std::vec![#(#items),*]) }
+        }
         Ty::Map { key, value } => {
             let key = wire_ty(key, ctx, type_var)?;
             let value = wire_ty(value, ctx, type_var)?;

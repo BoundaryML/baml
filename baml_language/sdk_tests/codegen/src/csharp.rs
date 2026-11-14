@@ -28,6 +28,7 @@ const FIXTURES: &[&str] = &[
     "stdlib_resources",
     "stdlib_structurals",
     "streaming",
+    "tuples",
     "type_roundtrips",
 ];
 

@@ -1,0 +1,181 @@
+function slot_out_of_range(t: (int, string)) -> int { t.2 }
+function slot_non_tuple(x: int) -> int { x.0 }
+function nullable_slot(t: (int, int)?) -> int { t.0 }
+
+function wrong_arity() -> (int, int) {
+    (1, 2, 3)
+}
+
+function wrong_arity_binding(t: (int, string, bool)) -> (int, string) {
+    t
+}
+
+function wrong_element() -> (int, string) {
+    (1, 2)
+}
+
+function tuple_is_not_list() -> int[] {
+    (1, 2)
+}
+
+function non_exhaustive(a: bool, b: bool) -> int {
+    match (a, b) {
+        (true, let _b: true) => 1,
+        (false, _) => 2,
+    }
+}
+
+function wrong_arity_pattern(t: (int, int)) -> int {
+    match (t) {
+        (let a, let b, let c) => a,
+        _ => 0,
+    }
+}
+
+function non_exhaustive_nested(t: (bool, (bool, int?))) -> int {
+    match (t) {
+        (true, _) => 1,
+        (false, (true, _)) => 2,
+        (false, (false, let _n: null)) => 3,
+    }
+}
+
+function existing_tuple_not_widened() -> (int?, string) {
+    let t: (int, string) = (1, "a");
+    let fresh: (int?, string) = (1, "a");
+    t
+}
+
+function product_not_union(t: (int | string, bool)) -> (int, bool) | (string, bool) {
+    t
+}
+
+function union_not_product(t: (int, bool) | (string, bool)) -> (int | string, bool) {
+    t
+}
+
+function nested_product_not_union(t: ((int | string,), bool)) -> ((int,), bool) | ((string,), bool) {
+    t
+}
+
+class TpCell<T> {
+    value: T,
+}
+
+function product_union_invariant(
+    c: TpCell<(int | string, bool)>,
+) -> TpCell<(int, bool) | (string, bool)> {
+    c
+}
+
+function ambiguous_same_arity_literal() -> int {
+    let a: (int?, string) | int = (1, "a");
+    let b: (int?, string) | (string, int) = (1, "a");
+    let c: (int?, string) | (int, string) = (1, "a");
+    let first: (int?, string) = (1, "a");
+    let d: (int?, string) | (string, int) = first;
+    0
+}
+
+type TpZeroPair = (0, 0);
+
+function type_test_never_matches(t: (int, int), u: (int, int)) -> bool {
+    let nested = match ((t, 1)) {
+        ((0, 0), _) => true,
+        _ => false,
+    };
+    let held = (t, 1);
+    match (t) {
+        (0, 0) => true,
+        let z: (0, 0) => true,
+        let a: TpZeroPair => true,
+        _ => nested || held.0 is (0, 0) || u is (int?, int),
+    }
+}
+
+function type_test_arms_do_not_cover(t: (int | string, bool)) -> int {
+    match (t) {
+        (int, bool) => 1,
+        (string, bool) => 2,
+    }
+}
+
+function element_test_arms_cover(t: (int | string, bool)) -> int {
+    match (t) {
+        (int, _) => 1,
+        (string, _) => 2,
+    }
+}
+
+function tp_takes_wide(t: (int?, bool)) -> int { 0 }
+function tp_takes_narrow(t: (int, bool)) -> int { 0 }
+
+function type_test_narrows(t: (int?, bool) | (int, bool)) -> int {
+    match (t) {
+        let r: (int?, bool) => tp_takes_wide(r),
+        let r: (int, bool) => tp_takes_narrow(r),
+    }
+}
+
+function arm_eliminated(t: (int, bool) | (string, bool)) -> int {
+    match (t) {
+        (let n: int, _) => tp_takes_narrow(t),
+        _ => 0,
+    }
+}
+
+function arm_overlaps(t: (int?, bool) | (int, bool)) -> int {
+    match (t) {
+        (let n: int, _) => tp_takes_narrow(t),
+        _ => 0,
+    }
+}
+
+function arm_open<T>(t: (T, bool) | (int, bool)) -> int {
+    match (t) {
+        (let n: int, _) => tp_takes_narrow(t),
+        _ => 0,
+    }
+}
+
+function single_tuple_not_refined(t: (int | string, bool)) -> int {
+    match (t) {
+        (let n: int, _) => tp_takes_narrow(t),
+        _ => 0,
+    }
+}
+
+function tp_takes_unknowns(pair: (unknown, unknown)) -> int { 0 }
+
+function unknown_not_narrowed(v: unknown) -> int {
+    match (v) {
+        (let a, let b) => tp_takes_unknowns(v),
+        _ => 1,
+    }
+}
+
+type TpBits = (bool, TpBits?);
+
+function non_exhaustive_recursive_alias(bits: TpBits?) -> int {
+    match (bits) {
+        null => 0,
+        (true, _) => 1,
+        (false, let _rest: null) => 2,
+    }
+}
+
+class TpHolder {
+    pair: (int, int),
+}
+
+function destructuring_assignment(pair: (int, int)) -> int {
+    let a = 0;
+    let b = 0;
+    (a, b) = pair;
+    a + b
+}
+
+function bare_name_elements(pair: (int, int)) -> int {
+    let (a, b) = pair;
+    0
+}

@@ -803,6 +803,7 @@ pub enum IndexKind {
     Array,
     /// Map indexing: `map[key]`
     Map,
+    Tuple,
 }
 
 /// A place in memory (lvalue).
@@ -922,7 +923,9 @@ pub enum BoundFrame {
 #[derive(Debug, Clone)]
 pub enum Rvalue<'db> {
     /// Detached settings, or null when hook selection is suppressed.
-    TraceHookSettings { with_settings: bool },
+    TraceHookSettings {
+        with_settings: bool,
+    },
     /// Use an operand directly.
     Use(Operand<'db>),
 
@@ -934,7 +937,10 @@ pub enum Rvalue<'db> {
     },
 
     /// Unary operation: `!_1`, `-_1`
-    UnaryOp { op: UnaryOp, operand: Operand<'db> },
+    UnaryOp {
+        op: UnaryOp,
+        operand: Operand<'db>,
+    },
 
     /// Strings joined left to right, in one step: `concat(_1, _2, _3)`. What
     /// a chain of string `+` (and so a template) lowers to; always three or
@@ -974,7 +980,6 @@ pub enum Rvalue<'db> {
     /// - Classes: assigned unique IDs starting at 100
     TypeTag(Place),
 
-    /// Get length of array: `len(_1)`
     Len(Place),
 
     /// Type check for pattern matching: `is_type(_1, Type)`
@@ -1005,7 +1010,10 @@ pub enum Rvalue<'db> {
     /// emitter to sniff out. `tag` is a `baml_type::typetag` constant; the
     /// emitter lowers this to the same `IsType`-against-`Int` bytecode as the
     /// other coarse tag checks.
-    IsTypeTag { operand: Operand<'db>, tag: i64 },
+    IsTypeTag {
+        operand: Operand<'db>,
+        tag: i64,
+    },
 
     /// Whether the type value `ty` satisfies the interface bound `bound`, the
     /// check a `let type T extends I = …` statement makes: the question a
@@ -1259,6 +1267,9 @@ pub enum AggregateKind<'db> {
     Class {
         class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
         type_arg_templates: Vec<TyTemplate>,
+    },
+    Tuple {
+        element_templates: Vec<TyTemplate>,
     },
 }
 

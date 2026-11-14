@@ -220,6 +220,7 @@ enum Node<'t, H: Head> {
     Union(Vec<&'t RuntimeTy<H>>),
     /// A list's element or a map's value.
     Container(&'t RuntimeTy<H>),
+    Product(&'t [RuntimeTy<H>]),
     Def(DefId<H>),
 }
 
@@ -324,6 +325,16 @@ impl<H: Head> JsonInhabitance<H> {
                 JsonStatus::Json | JsonStatus::Empty => JsonStatus::Json,
                 JsonStatus::NoJson => JsonStatus::NoJson,
             },
+            Node::Product(elements) => {
+                if elements
+                    .iter()
+                    .all(|element| self.status(element) == JsonStatus::Json)
+                {
+                    JsonStatus::Json
+                } else {
+                    JsonStatus::NoJson
+                }
+            }
             Node::Def(id) => self.def_status(&id),
         }
     }
@@ -356,6 +367,19 @@ impl<H: Head> JsonInhabitance<H> {
                 }
             }
             Node::Container(inner) => self.witness_walk(inner, path, seen),
+            Node::Product(elements) => {
+                let culprit = elements.iter().find(|element| {
+                    if status == JsonStatus::Empty {
+                        !self.inhabited(element)
+                    } else {
+                        self.status(element) == JsonStatus::NoJson
+                    }
+                });
+                match culprit {
+                    Some(element) => self.witness_walk(element, path, seen),
+                    None => WitnessCause::Leaf(ty),
+                }
+            }
             Node::Def(id) => {
                 let Some(&at) = self.index.get(&id) else {
                     return WitnessCause::Leaf(ty);
@@ -455,6 +479,9 @@ impl<H: Head> JsonInhabitance<H> {
             RuntimeTy::List(inner) | RuntimeTy::Map { value: inner, .. } => {
                 self.discover(inner, defs, path)
             }
+            RuntimeTy::Tuple(elements) => elements
+                .iter()
+                .try_for_each(|element| self.discover(element, defs, path)),
             RuntimeTy::Class(head, args) => {
                 let id = DefId::class(head, args);
                 if self.index.contains_key(&id) {
@@ -657,6 +684,7 @@ impl<H: Head> JsonInhabitance<H> {
                 Node::Union(flat)
             }
             RuntimeTy::List(inner) | RuntimeTy::Map { value: inner, .. } => Node::Container(inner),
+            RuntimeTy::Tuple(elements) => Node::Product(elements),
             RuntimeTy::Class(head, args) => Node::Def(DefId::class(head, args)),
             RuntimeTy::TypeAlias(head) => Node::Def(DefId::Alias(head.clone())),
         }
@@ -674,6 +702,7 @@ impl<H: Head> JsonInhabitance<H> {
             Node::Leaf | Node::NoJson | Node::Container(_) => true,
             Node::Never => false,
             Node::Union(members) => members.into_iter().any(|member| self.inhabited(member)),
+            Node::Product(elements) => elements.iter().all(|element| self.inhabited(element)),
             Node::Def(id) => self.index.get(&id).is_none_or(|&at| self.inhabited[at]),
         }
     }
@@ -719,6 +748,7 @@ impl<H: Head> JsonInhabitance<H> {
             Node::Union(members) => members.into_iter().any(|member| {
                 self.status(member) == JsonStatus::Json && self.finite(member, finite)
             }),
+            Node::Product(elements) => elements.iter().all(|element| self.finite(element, finite)),
             Node::Def(id) => self.index.get(&id).is_none_or(|&at| finite[at]),
         }
     }
@@ -861,6 +891,14 @@ fn has_empty_value_within<H: Head, D: JsonDefs<H>>(
             }
             within.pop();
             all
+        }
+        RuntimeTy::Tuple(elements) => {
+            for element in elements {
+                if !has_empty_value_within(defs, element, within)? {
+                    return Ok(false);
+                }
+            }
+            true
         }
         RuntimeTy::TypeAlias(head) => {
             let id = DefId::Alias(head.clone());

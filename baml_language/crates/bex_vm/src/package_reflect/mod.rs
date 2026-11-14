@@ -12,7 +12,8 @@ pub(crate) mod type_kinds;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArrayReadGuard, MapReadGuard,
-    types::{Instance, Value},
+    errors::VmInternalError,
+    types::{Instance, Type, Value},
 };
 use indexmap::IndexMap;
 

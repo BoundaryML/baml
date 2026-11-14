@@ -238,7 +238,7 @@ function row13_shim_to_string() -> string throws never {
 interface Formatting {
     formatter: (int) -> string throws never
     function present(self) -> string throws never {
-        "presented " + self.formatter(1)
+        "presented " + (self.formatter)(1)
     }
 }
 
@@ -246,13 +246,13 @@ class Card {
     formatter: (int) -> string throws never
     implements Formatting {
         function present(self) -> string throws never {
-            "card " + default.formatter(7)
+            "card " + (default.formatter)(7)
         }
     }
 }
 
 // Adopts `present`, so calling it EXECUTES the interface's default body and
-// with it the `self.formatter(1)` field call.
+// with it the `(self.formatter)(1)` field call.
 class Plain {
     formatter: (int) -> string throws never
     implements Formatting {}
@@ -277,7 +277,7 @@ function row14b_adopted_default_field_call() -> string throws never {
 // must decline dispatch for a field; the shapes they emit differ only in how
 // the receiver is produced.
 function row14c_member_access_field_call() -> string throws never {
-    make_formatting().formatter(9)
+    (make_formatting().formatter)(9)
 }
 
 // Row 15: an impl whose generics come only from the INTERFACE arguments —

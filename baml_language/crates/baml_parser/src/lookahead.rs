@@ -67,7 +67,9 @@ pub(crate) fn at_binding_intro(cur: Cursor<'_>) -> bool {
 pub(crate) fn binding_intro_at(cur: Cursor<'_>, n: usize) -> bool {
     cur.nth_is(n, TokenKind::Let)
         || (cur.nth_is(n, TokenKind::Const)
-            && (cur.nth_is_ident(n + 1) || cur.nth_is(n + 1, TokenKind::LBracket)))
+            && (cur.nth_is_ident(n + 1)
+                || cur.nth_is(n + 1, TokenKind::LBracket)
+                || cur.nth_is(n + 1, TokenKind::LParen)))
 }
 
 pub(crate) fn at_catch_clause_start(cur: Cursor<'_>) -> bool {

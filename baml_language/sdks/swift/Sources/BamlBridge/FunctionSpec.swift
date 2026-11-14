@@ -9,46 +9,48 @@ import Foundation
 /// `Fn_stream(...)` projection because it carries the partial type.
 public final class BamlFunctionSpec<Final>: @unchecked Sendable {
     private let handle: BamlHandle
+    private let decodeFinal: (BamlOutboundValue) throws -> Final
 
-    init(handle: BamlHandle) {
+    init(handle: BamlHandle, decodeFinal: @escaping (BamlOutboundValue) throws -> Final) {
         self.handle = handle
+        self.decodeFinal = decodeFinal
     }
 
     /// Execute the bound recipe and decode its final output.
     public func callSync(
         client: (any BamlTyped)? = nil,
         onEvent: BamlHostCallable? = nil
-    ) throws -> Final where Final: BamlDecodable {
-        try BamlRuntime.shared.callSync(
+    ) throws -> Final {
+        try decodeFinal(BamlRuntime.shared.callRawSync(
             "ai.FunctionSpec.call",
             args: [BamlArgument("self", handle: handle), BamlArgument("client", client), BamlArgument("on_event", onEvent)]
-        )
+        ))
     }
 
     /// Execute the bound recipe asynchronously and decode its final output.
     public func call(
         client: (any BamlTyped)? = nil,
         onEvent: BamlHostCallable? = nil
-    ) async throws -> Final where Final: BamlDecodable {
-        try await BamlRuntime.shared.call(
+    ) async throws -> Final {
+        try decodeFinal(await BamlRuntime.shared.callRaw(
             "ai.FunctionSpec.call",
             args: [BamlArgument("self", handle: handle), BamlArgument("client", client), BamlArgument("on_event", onEvent)]
-        )
+        ))
     }
 
     /// Parse an existing model response with this spec's realized output type.
-    public func parseSync(json: String) throws -> Final where Final: BamlDecodable {
-        try BamlRuntime.shared.callSync(
+    public func parseSync(json: String) throws -> Final {
+        try decodeFinal(BamlRuntime.shared.callRawSync(
             "ai.FunctionSpec.parse",
             args: [BamlArgument("self", handle: handle), BamlArgument("json", json, as: String._bamlSlot)]
-        )
+        ))
     }
 
-    public func parse(json: String) async throws -> Final where Final: BamlDecodable {
-        try await BamlRuntime.shared.call(
+    public func parse(json: String) async throws -> Final {
+        try decodeFinal(await BamlRuntime.shared.callRaw(
             "ai.FunctionSpec.parse",
             args: [BamlArgument("self", handle: handle), BamlArgument("json", json, as: String._bamlSlot)]
-        )
+        ))
     }
 
     /// Render the portable, provider-neutral prompt for this recipe.
@@ -109,13 +111,35 @@ extension BamlFunctionSpec: BamlLeafEncodable {
 
 extension BamlFunctionSpec: BamlTyped where Final: BamlTyped {
     public static var _bamlSlot: BamlSlot<BamlFunctionSpec<Final>> {
-        ._leaf(.classType("ai.FunctionSpec", typeArguments: [Final._bamlStatedType]))
+        BamlSlots.functionSpec("ai.FunctionSpec", Final._bamlSlot)
+    }
+}
+
+extension BamlSlots {
+    public static func functionSpec<Final>(
+        _ fqn: String,
+        _ final: BamlSlot<Final>
+    ) -> BamlSlot<BamlFunctionSpec<Final>> {
+        let type = BamlTypeDescriptor.classType(fqn, typeArguments: [final.type])
+        let codec = BamlSlotCodec(
+            encode: { try ($0 as! BamlFunctionSpec<Final>)._bamlEncode(as: ._leaf(type)) },
+            decode: { try BamlFunctionSpec<Final>.decode($0, decodeFinal: final._bamlDecode) },
+            equal: { ($0 as! BamlFunctionSpec<Final>) == ($1 as! BamlFunctionSpec<Final>) }
+        )
+        return BamlSlot(BamlSlotNode(type: type, shape: .leaf, codec: codec))
     }
 }
 
 extension BamlFunctionSpec: BamlDecodable {
     public static func _bamlDecode(
         _ value: BamlOutboundValue
+    ) throws -> BamlFunctionSpec<Final> {
+        try decode(value) { try decodeOwn($0, as: Final.self) }
+    }
+
+    static func decode(
+        _ value: BamlOutboundValue,
+        decodeFinal: @escaping (BamlOutboundValue) throws -> Final
     ) throws -> BamlFunctionSpec<Final> {
         let handle = try BamlHandle._bamlDecode(value)
         guard handle.handleType == .adtFunctionSpec else {
@@ -124,6 +148,6 @@ extension BamlFunctionSpec: BamlDecodable {
                 got: "handle type \(handle.handleType)"
             )
         }
-        return BamlFunctionSpec(handle: handle)
+        return BamlFunctionSpec(handle: handle, decodeFinal: decodeFinal)
     }
 }

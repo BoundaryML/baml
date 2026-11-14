@@ -472,7 +472,7 @@ impl<'a> BexValue<'a> {
         // `_permit` is a zero-sized witness that GC exclusion is held; we don't
         // need to thread it through the recursion since the proof only has to
         // exist at the API boundary.
-        owned_inner(self, heap, /* lossy */ false)
+        owned_inner(self, heap, /* lossy */ false, &mut Vec::new())
     }
 
     /// Like `as_owned_but_very_slow`, but substitutes non-convertible leaves
@@ -488,7 +488,7 @@ impl<'a> BexValue<'a> {
         heap: &BexHeap,
         _permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, AccessError> {
-        owned_inner(self, heap, /* lossy */ true)
+        owned_inner(self, heap, /* lossy */ true, &mut Vec::new())
     }
 }
 
@@ -496,6 +496,7 @@ fn owned_inner(
     value: BexValue<'_>,
     heap: &BexHeap,
     lossy: bool,
+    path: &mut Vec<*mut Object>,
 ) -> Result<BexExternalValue, AccessError> {
     let unconvertible = |reason: &str| -> Result<BexExternalValue, AccessError> {
         if lossy {
@@ -515,7 +516,7 @@ fn owned_inner(
                 let heap_ptr = heap
                     .resolve_handle_ptr(handle.slab_key())
                     .ok_or(AccessError::InvalidHandle { expected: "handle" })?;
-                owned_inner(BexValue::HeapPtr(&heap_ptr), heap, lossy)
+                owned_inner(BexValue::HeapPtr(&heap_ptr), heap, lossy, path)
             }
             BexExternalValue::Null => Ok(BexExternalValue::Null),
             BexExternalValue::Int(i) => Ok(BexExternalValue::Int(*i)),
@@ -530,7 +531,17 @@ fn owned_inner(
                 element_type: element_type.clone(),
                 items: items
                     .iter()
-                    .map(|item| owned_inner(BexValue::ExternalValue(item), heap, lossy))
+                    .map(|item| owned_inner(BexValue::ExternalValue(item), heap, lossy, path))
+                    .collect::<Result<_, _>>()?,
+            }),
+            BexExternalValue::Tuple {
+                element_types,
+                items,
+            } => Ok(BexExternalValue::Tuple {
+                element_types: element_types.clone(),
+                items: items
+                    .iter()
+                    .map(|item| owned_inner(BexValue::ExternalValue(item), heap, lossy, path))
                     .collect::<Result<_, _>>()?,
             }),
             BexExternalValue::Map {
@@ -545,7 +556,7 @@ fn owned_inner(
                     .map(|(k, v)| {
                         Ok((
                             k.clone(),
-                            owned_inner(BexValue::ExternalValue(v), heap, lossy)?,
+                            owned_inner(BexValue::ExternalValue(v), heap, lossy, path)?,
                         ))
                     })
                     .collect::<Result<_, _>>()?,
@@ -562,7 +573,7 @@ fn owned_inner(
                     .map(|(k, v)| {
                         Ok((
                             k.clone(),
-                            owned_inner(BexValue::ExternalValue(v), heap, lossy)?,
+                            owned_inner(BexValue::ExternalValue(v), heap, lossy, path)?,
                         ))
                     })
                     .collect::<Result<_, _>>()?,
@@ -575,7 +586,12 @@ fn owned_inner(
                 variant_name: variant_name.clone(),
             }),
             BexExternalValue::Union { value, metadata } => Ok(BexExternalValue::Union {
-                value: Box::new(owned_inner(BexValue::ExternalValue(value), heap, lossy)?),
+                value: Box::new(owned_inner(
+                    BexValue::ExternalValue(value),
+                    heap,
+                    lossy,
+                    path,
+                )?),
                 metadata: metadata.clone(),
             }),
             BexExternalValue::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
@@ -602,10 +618,10 @@ fn owned_inner(
         // is an object pointer. The two cases share a single object deep-
         // copy via `convert_object`; scalar-typed `Value`s fall through to
         // a separate `ValueKind` match.
-        BexValue::HeapPtr(ptr) => convert_object(*ptr, heap, lossy),
+        BexValue::HeapPtr(ptr) => convert_object(*ptr, heap, lossy, path),
         BexValue::Value(v) => {
             if let Some(ptr) = v.as_object_ptr() {
-                convert_object(ptr, heap, lossy)
+                convert_object(ptr, heap, lossy, path)
             } else {
                 match v.kind() {
                     bex_vm_types::ValueKind::OmittedArg => unconvertible("omitted argument"),
@@ -618,7 +634,7 @@ fn owned_inner(
                 }
             }
         }
-        BexValue::OwnedValue(v) => owned_inner(BexValue::Value(&v), heap, lossy),
+        BexValue::OwnedValue(v) => owned_inner(BexValue::Value(&v), heap, lossy, path),
     }
 }
 
@@ -626,6 +642,36 @@ fn convert_object(
     heap_ptr: HeapPtr,
     heap: &BexHeap,
     lossy: bool,
+    path: &mut Vec<*mut Object>,
+) -> Result<BexExternalValue, AccessError> {
+    let obj = unsafe { heap_ptr.get() };
+    if !matches!(
+        obj,
+        Object::Array(_) | Object::Tuple(_) | Object::Map(_) | Object::Instance(_)
+    ) {
+        return convert_object_body(heap_ptr, heap, lossy, path);
+    }
+    if path.contains(&heap_ptr.as_ptr()) {
+        return if lossy {
+            Ok(BexExternalValue::String(bex_str::BexStr::from("<cycle>")))
+        } else {
+            Err(AccessError::CannotConvertToOwned {
+                reason: "cannot convert a cyclic value (it contains itself) to BexExternalValue"
+                    .to_string(),
+            })
+        };
+    }
+    path.push(heap_ptr.as_ptr());
+    let result = convert_object_body(heap_ptr, heap, lossy, path);
+    path.pop();
+    result
+}
+
+fn convert_object_body(
+    heap_ptr: HeapPtr,
+    heap: &BexHeap,
+    lossy: bool,
+    path: &mut Vec<*mut Object>,
 ) -> Result<BexExternalValue, AccessError> {
     let unconvertible = |type_name: &str| -> Result<BexExternalValue, AccessError> {
         if lossy {
@@ -657,7 +703,21 @@ fn convert_object(
             items: array
                 .to_vec()
                 .into_iter()
-                .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy))
+                .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy, path))
+                .collect::<Result<_, _>>()?,
+        }),
+        Object::Tuple(tuple) => Ok(BexExternalValue::Tuple {
+            element_types: tuple
+                .element_tys
+                .iter()
+                .map(|ty| {
+                    ty.try_map_heads(&mut bex_vm_types::TypeHead::to_annotation_head)
+                        .unwrap_or(bex_external_types::WireTy::Unknown)
+                })
+                .collect(),
+            items: tuple
+                .slot_values()
+                .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy, path))
                 .collect::<Result<_, _>>()?,
         }),
         Object::Map(map) => {
@@ -688,7 +748,10 @@ fn convert_object(
                                 });
                             }
                         };
-                        Ok((key, owned_inner(BexValue::OwnedValue(v), heap, lossy)?))
+                        Ok((
+                            key,
+                            owned_inner(BexValue::OwnedValue(v), heap, lossy, path)?,
+                        ))
                     })
                     .collect::<Result<_, _>>()?,
             })
@@ -708,7 +771,7 @@ fn convert_object(
                 .map(|(field, slot)| {
                     Ok((
                         field.name.clone(),
-                        owned_inner(BexValue::OwnedValue(slot.load()), heap, lossy)?,
+                        owned_inner(BexValue::OwnedValue(slot.load()), heap, lossy, path)?,
                     ))
                 })
                 .collect::<Result<_, _>>()?;
@@ -857,7 +920,7 @@ mod tests {
                 data,
             )));
             for lossy in [false, true] {
-                let error = super::convert_object(ptr, &heap, lossy).unwrap_err();
+                let error = super::convert_object(ptr, &heap, lossy, &mut Vec::new()).unwrap_err();
                 assert!(error.to_string().contains("string keys"), "{error}");
             }
         }
@@ -898,12 +961,80 @@ mod tests {
                         .holder_mut()
                         .tlab
                         .alloc_map(key_ty.clone(), RealizedTy::Int, entries);
-                let owned = super::convert_object(ptr, &heap, false).unwrap();
+                let owned = super::convert_object(ptr, &heap, false, &mut Vec::new()).unwrap();
                 let BexExternalValue::Map { key_type, .. } = owned else {
                     panic!("expected map");
                 };
                 assert_eq!(key_type, expected);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn cyclic_values_through_tuples_fail_finitely() {
+        use bex_vm_types::{
+            RealizedTy,
+            types::{Array, Object, Tuple, Value},
+        };
+
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let tlab = &mut permit.holder_mut().tlab;
+        let list = tlab.alloc(Object::Array(Array::new(RealizedTy::Unknown, Vec::new())));
+        let tuple = tlab.alloc(Object::Tuple(
+            Tuple::new(
+                vec![RealizedTy::List(Box::new(RealizedTy::Unknown))],
+                vec![Value::object(list)],
+            )
+            .unwrap(),
+        ));
+        let shared = tlab.alloc(Object::Tuple(
+            Tuple::new(
+                vec![RealizedTy::Unknown, RealizedTy::Unknown],
+                vec![Value::object(tuple), Value::object(tuple)],
+            )
+            .unwrap(),
+        ));
+        // SAFETY: nothing else holds the array; this test is its only reader.
+        let Object::Array(array) = (unsafe { list.get() }) else {
+            unreachable!()
+        };
+        unsafe { array.data_unchecked_mut() }.push(Value::object(tuple));
+
+        let error = super::convert_object(tuple, &heap, false, &mut Vec::new()).unwrap_err();
+        assert!(error.to_string().contains("cyclic"), "{error}");
+        let error = super::convert_object(shared, &heap, false, &mut Vec::new()).unwrap_err();
+        assert!(error.to_string().contains("cyclic"), "{error}");
+
+        let traced = super::convert_object(tuple, &heap, true, &mut Vec::new()).unwrap();
+        let BexExternalValue::Tuple { items, .. } = traced else {
+            panic!("expected tuple: {traced:?}");
+        };
+        let [BexExternalValue::Array { items: inner, .. }] = items.as_slice() else {
+            panic!("expected one list slot: {items:?}");
+        };
+        assert!(
+            matches!(inner.as_slice(), [BexExternalValue::String(s)] if s.as_str() == "<cycle>"),
+            "{inner:?}"
+        );
+
+        unsafe { array.data_unchecked_mut() }.clear();
+        let owned = super::convert_object(shared, &heap, false, &mut Vec::new()).unwrap();
+        let BexExternalValue::Tuple { items, .. } = owned else {
+            panic!("expected tuple: {owned:?}");
+        };
+        assert_eq!(items.len(), 2);
+        assert!(
+            items
+                .iter()
+                .all(|item| matches!(item, BexExternalValue::Tuple { .. }))
+        );
     }
 }

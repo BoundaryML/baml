@@ -3,7 +3,7 @@ import Foundation
 /// One `next()` poll result: a partial value, or the engine's
 /// end-of-stream sentinel (`ai.stream.Done`). Distinct from
 /// `Value?` because a legitimate partial can itself be null.
-public enum BamlStreamNext<Value: BamlDecodable> {
+public enum BamlStreamNext<Value> {
     case value(Value)
     case finished
 }
@@ -22,49 +22,55 @@ extension BamlStreamNext: Equatable where Value: Equatable {}
 /// (no dedicated native stream API). A reference type on purpose:
 /// consuming `next()` advances shared engine-side state, like `File`'s
 /// cursor.
-public final class BamlStream<Value: BamlDecodable>: @unchecked Sendable {
+public final class BamlStream<Value>: @unchecked Sendable {
     private static var doneFQN: String { "ai.stream.Done" }
 
     public let handle: BamlHandle
     /// Exact root class identity carried by the outbound tagged handle.
     public let bamlClassFQN: String
+    private let decodeValue: (BamlOutboundValue) throws -> Value
 
-    public init(handle: BamlHandle) {
+    public convenience init(handle: BamlHandle) where Value: BamlDecodable {
+        self.init(handle: handle, decodeValue: Value._bamlDecode)
+    }
+
+    init(handle: BamlHandle, decodeValue: @escaping (BamlOutboundValue) throws -> Value) {
         guard let classFQN = handle.classFQN, !classFQN.isEmpty else {
             preconditionFailure("tagged stream handle is missing its carried BAML class identity")
         }
         self.handle = handle
         self.bamlClassFQN = classFQN
+        self.decodeValue = decodeValue
     }
 
     var nextFQN: String { "\(bamlClassFQN).next" }
     var finalFQN: String { "\(bamlClassFQN).final" }
 
     public func nextSync() throws -> BamlStreamNext<Value> {
-        try Self.interpretNext(
+        try interpretNext(
             BamlRuntime.shared.callRawSync(nextFQN, args: [BamlArgument("self", handle: handle)])
         )
     }
 
     public func next() async throws -> BamlStreamNext<Value> {
-        try Self.interpretNext(
+        try interpretNext(
             await BamlRuntime.shared.callRaw(nextFQN, args: [BamlArgument("self", handle: handle)])
         )
     }
 
     public func finalSync() throws -> Value {
-        try BamlRuntime.shared.callSync(finalFQN, args: [BamlArgument("self", handle: handle)])
+        try decodeValue(BamlRuntime.shared.callRawSync(finalFQN, args: [BamlArgument("self", handle: handle)]))
     }
 
     public func final() async throws -> Value {
-        try await BamlRuntime.shared.call(finalFQN, args: [BamlArgument("self", handle: handle)])
+        try decodeValue(await BamlRuntime.shared.callRaw(finalFQN, args: [BamlArgument("self", handle: handle)]))
     }
 
-    private static func interpretNext(_ raw: BamlOutboundValue) throws -> BamlStreamNext<Value> {
-        if raw.wireClassFQN() == doneFQN {
+    private func interpretNext(_ raw: BamlOutboundValue) throws -> BamlStreamNext<Value> {
+        if raw.wireClassFQN() == Self.doneFQN {
             return .finished
         }
-        return .value(try Value._bamlDecode(raw))
+        return .value(try decodeValue(raw))
     }
 }
 
@@ -86,12 +92,34 @@ extension BamlStream: BamlLeafEncodable {
 
 extension BamlStream: BamlTyped where Value: BamlTyped {
     public static var _bamlSlot: BamlSlot<BamlStream<Value>> {
-        ._leaf(.classType("ai.stream.Stream", typeArguments: [Value._bamlStatedType]))
+        BamlSlots.stream("ai.stream.Stream", Value._bamlSlot)
+    }
+}
+
+extension BamlSlots {
+    public static func stream<Value>(
+        _ fqn: String,
+        _ value: BamlSlot<Value>
+    ) -> BamlSlot<BamlStream<Value>> {
+        let type = BamlTypeDescriptor.classType(fqn, typeArguments: [value.type])
+        let codec = BamlSlotCodec(
+            encode: { try ($0 as! BamlStream<Value>)._bamlEncode(as: ._leaf(type)) },
+            decode: { try BamlStream<Value>.decode($0, decodeValue: value._bamlDecode) },
+            equal: { ($0 as! BamlStream<Value>) == ($1 as! BamlStream<Value>) }
+        )
+        return BamlSlot(BamlSlotNode(type: type, shape: .leaf, codec: codec))
     }
 }
 
 extension BamlStream: BamlDecodable {
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlStream<Value> {
+        try decode(value) { try decodeOwn($0, as: Value.self) }
+    }
+
+    static func decode(
+        _ value: BamlOutboundValue,
+        decodeValue: @escaping (BamlOutboundValue) throws -> Value
+    ) throws -> BamlStream<Value> {
         let handle = try BamlHandle._bamlDecode(value)
         guard handle.handleType == .adtTaggedHeapHandle else {
             throw BamlDecodeError.typeMismatch(
@@ -105,6 +133,6 @@ extension BamlStream: BamlDecodable {
                 got: "tagged handle without a class type"
             )
         }
-        return BamlStream(handle: handle)
+        return BamlStream(handle: handle, decodeValue: decodeValue)
     }
 }

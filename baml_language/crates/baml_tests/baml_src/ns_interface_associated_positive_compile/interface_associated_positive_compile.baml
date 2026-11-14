@@ -98,7 +98,7 @@ test "default_interface_method_can_thread_associated_error_through_callback" {
                         function next(self) -> R | Done throws E | E2 {
                             match (self.inner.next()) {
                                 Done => Done {},
-                                let value: T => self.f(value),
+                                let value: T => (self.f)(value),
                             }
                         }
                     }

@@ -156,6 +156,21 @@ pub mod internal {
         )
     }
 
+    pub fn tuple_element_slot<Tuple: __BamlValuePrivate, T: __BamlValuePrivate>(
+        slot: &wire::BamlTy,
+        index: usize,
+    ) -> Cow<'_, wire::BamlTy> {
+        use wire::baml_ty::Ty;
+        let element = match slot.ty.as_ref() {
+            Some(Ty::Tuple(tuple)) => tuple.items.get(index),
+            _ => None,
+        };
+        element.map_or_else(
+            || mismatched_slot::<Tuple>(slot, T::baml_ty()),
+            Cow::Borrowed,
+        )
+    }
+
     /// The slot of a map's values, from the map's own slot.
     pub fn map_value_slot<V: __BamlValuePrivate>(slot: &wire::BamlTy) -> Cow<'_, wire::BamlTy> {
         use wire::baml_ty::Ty;
@@ -295,6 +310,10 @@ pub mod internal {
         })))
     }
 
+    pub fn tuple_ty(items: Vec<wire::BamlTy>) -> wire::BamlTy {
+        super::wire_ty(wire::baml_ty::Ty::Tuple(wire::BamlTyTuple { items }))
+    }
+
     /// Wire `BamlTy` for `map<key, value>`.
     pub fn map_ty(key: wire::BamlTy, value: wire::BamlTy) -> wire::BamlTy {
         super::wire_ty(wire::baml_ty::Ty::Map(Box::new(wire::BamlTyMap {
@@ -429,6 +448,7 @@ pub(crate) fn wire_variant_kind(v: &wire::BamlOutboundValue) -> &'static str {
         Some(Out::EnumValue(_)) => "enum",
         Some(Out::LiteralValue(_)) => "literal",
         Some(Out::ListValue(_)) => "list",
+        Some(Out::TupleValue(_)) => "tuple",
         Some(Out::MapValue(_)) => "map",
         Some(Out::UnionVariantValue(_)) => "union variant",
         Some(Out::HandleValue(_)) => "handle",
@@ -440,10 +460,61 @@ pub(crate) fn wire_variant_kind(v: &wire::BamlOutboundValue) -> &'static str {
     }
 }
 
-fn wrong_type(expected: &'static str, v: &wire::BamlOutboundValue) -> DecodeError {
-    DecodeError::WrongType {
+fn wrong_type(expected: &'static str, v: wire::BamlOutboundValue) -> DecodeError {
+    let error = DecodeError::WrongType {
         expected,
-        got: wire_variant_kind(v),
+        got: wire_variant_kind(&v),
+    };
+    crate::outbound::release(v);
+    error
+}
+
+fn decode_entries<K: BamlMapKey, V: __BamlValuePrivate, M: FromIterator<(K, V)>>(
+    entries: Vec<wire::BamlOutboundMapEntry>,
+) -> Result<M, DecodeError> {
+    let mut entries = entries.into_iter();
+    let decoded = entries
+        .by_ref()
+        .map(|entry| {
+            let key = match K::from_baml_key(&entry.key) {
+                Ok(key) => key,
+                Err(error) => {
+                    entry.value.into_iter().for_each(crate::outbound::release);
+                    return Err(error);
+                }
+            };
+            Ok((key, V::from_baml(entry.value.unwrap_or_default())?))
+        })
+        .collect();
+    entries
+        .filter_map(|entry| entry.value)
+        .for_each(crate::outbound::release);
+    decoded
+}
+
+pub struct OutboundItems(std::vec::IntoIter<wire::BamlOutboundValue>);
+
+impl OutboundItems {
+    pub(crate) fn new(items: Vec<wire::BamlOutboundValue>) -> Self {
+        Self(items.into_iter())
+    }
+}
+
+impl Iterator for OutboundItems {
+    type Item = wire::BamlOutboundValue;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl Drop for OutboundItems {
+    fn drop(&mut self) {
+        self.0.by_ref().for_each(crate::outbound::release);
     }
 }
 
@@ -456,7 +527,7 @@ impl __BamlValuePrivate for i64 {
         let v = unwrap(v);
         match v.value {
             Some(Out::IntValue(i)) => Ok(i),
-            _ => Err(wrong_type("int", &v)),
+            _ => Err(wrong_type("int", v)),
         }
     }
 
@@ -474,7 +545,7 @@ impl __BamlValuePrivate for f64 {
         let v = unwrap(v);
         match v.value {
             Some(Out::FloatValue(f)) => Ok(f),
-            _ => Err(wrong_type("float", &v)),
+            _ => Err(wrong_type("float", v)),
         }
     }
 
@@ -492,7 +563,7 @@ impl __BamlValuePrivate for bool {
         let v = unwrap(v);
         match v.value {
             Some(Out::BoolValue(b)) => Ok(b),
-            _ => Err(wrong_type("bool", &v)),
+            _ => Err(wrong_type("bool", v)),
         }
     }
 
@@ -510,7 +581,7 @@ impl __BamlValuePrivate for String {
         let v = unwrap(v);
         match v.value {
             Some(Out::StringValue(s)) => Ok(s),
-            _ => Err(wrong_type("string", &v)),
+            _ => Err(wrong_type("string", v)),
         }
     }
 
@@ -530,7 +601,7 @@ impl __BamlValuePrivate for () {
         let v = unwrap(v);
         match v.value {
             None | Some(Out::NullValue(_)) => Ok(()),
-            _ => Err(wrong_type("null", &v)),
+            _ => Err(wrong_type("null", v)),
         }
     }
 
@@ -550,7 +621,7 @@ impl __BamlValuePrivate for Vec<u8> {
         let v = unwrap(v);
         match v.value {
             Some(Out::Uint8arrayValue(bytes)) => Ok(bytes),
-            _ => Err(wrong_type("uint8array", &v)),
+            _ => Err(wrong_type("uint8array", v)),
         }
     }
 
@@ -572,7 +643,7 @@ impl __BamlValuePrivate for BigInt {
         match v.value {
             Some(Out::BigintValue(s)) => BigInt::parse_bytes(s.as_bytes(), 16)
                 .ok_or(DecodeError::InvalidBigint { len: s.len() }),
-            _ => Err(wrong_type("bigint", &v)),
+            _ => Err(wrong_type("bigint", v)),
         }
     }
 
@@ -644,8 +715,10 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let v = unwrap(v);
         match v.value {
-            Some(Out::ListValue(list)) => list.items.into_iter().map(T::from_baml).collect(),
-            _ => Err(wrong_type("list", &v)),
+            Some(Out::ListValue(list)) => {
+                OutboundItems::new(list.items).map(T::from_baml).collect()
+            }
+            _ => Err(wrong_type("list", v)),
         }
     }
 
@@ -655,6 +728,72 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
         })))
     }
 }
+
+pub const MAX_TUPLE_ARITY: usize = 32;
+
+macro_rules! impl_baml_tuple {
+    ($len:literal; $($name:ident : $idx:tt),+) => {
+        impl<$($name: __BamlValuePrivate),+> __BamlValuePrivate for ($($name,)+) {
+            fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+                self.to_baml_in(&Self::baml_ty(), encoder)
+            }
+
+            fn to_baml_in(
+                &self,
+                slot: &wire::BamlTy,
+                encoder: &mut Encoder,
+            ) -> Result<wire::InboundValue, EncodeError> {
+                let values = encoder.nested(|encoder| {
+                    Ok(vec![$(
+                        self.$idx.to_baml_in(
+                            &internal::tuple_element_slot::<Self, $name>(slot, $idx),
+                            encoder,
+                        )?
+                    ),+])
+                })?;
+                Ok(wire::InboundValue {
+                    value_type: Some(slot.clone()),
+                    value: Some(In::ListValue(wire::InboundListValue { values })),
+                })
+            }
+
+            fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+                let v = unwrap(v);
+                match v.value {
+                    Some(Out::TupleValue(tuple)) if tuple.items.len() == $len => {
+                        let mut items = OutboundItems::new(tuple.items);
+                        Ok(($(
+                            $name::from_baml(items.next().expect("length checked"))?,
+                        )+))
+                    }
+                    _ => Err(wrong_type(concat!($len, "-tuple"), v)),
+                }
+            }
+
+            fn baml_ty() -> wire::BamlTy {
+                wire_ty(wire::baml_ty::Ty::Tuple(wire::BamlTyTuple {
+                    items: vec![$($name::baml_ty()),+],
+                }))
+            }
+        }
+    };
+}
+
+macro_rules! impl_baml_tuples {
+    ([$($done:ident : $done_idx:tt),*]) => {};
+    ([$($done:ident : $done_idx:tt),*] ($name:ident $idx:tt $len:literal) $($rest:tt)*) => {
+        impl_baml_tuple!($len; $($done: $done_idx,)* $name: $idx);
+        impl_baml_tuples!([$($done: $done_idx,)* $name: $idx] $($rest)*);
+    };
+}
+
+impl_baml_tuples!([]
+    (A0 0 1) (A1 1 2) (A2 2 3) (A3 3 4) (A4 4 5) (A5 5 6) (A6 6 7) (A7 7 8) (A8 8 9)
+    (A9 9 10) (A10 10 11) (A11 11 12) (A12 12 13) (A13 13 14) (A14 14 15) (A15 15 16)
+    (A16 16 17) (A17 17 18) (A18 18 19) (A19 19 20) (A20 20 21) (A21 21 22) (A22 22 23)
+    (A23 23 24) (A24 24 25) (A25 25 26) (A26 26 27) (A27 27 28) (A28 28 29) (A29 29 30)
+    (A30 30 31) (A31 31 32)
+);
 
 /// A key of a BAML `map`. The language currently restricts map keys to
 /// strings (E0067), so [`String`] is the only impl; the trait is the
@@ -727,17 +866,8 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for indexmap::Inde
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let v = unwrap(v);
         match v.value {
-            Some(Out::MapValue(map)) => map
-                .entries
-                .into_iter()
-                .map(|entry| {
-                    Ok((
-                        K::from_baml_key(&entry.key)?,
-                        V::from_baml(entry.value.unwrap_or_default())?,
-                    ))
-                })
-                .collect(),
-            _ => Err(wrong_type("map", &v)),
+            Some(Out::MapValue(map)) => decode_entries(map.entries),
+            _ => Err(wrong_type("map", v)),
         }
     }
 
@@ -768,17 +898,8 @@ impl<K: BamlMapKey, V: __BamlValuePrivate> __BamlValuePrivate for std::collectio
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
         let v = unwrap(v);
         match v.value {
-            Some(Out::MapValue(map)) => map
-                .entries
-                .into_iter()
-                .map(|entry| {
-                    Ok((
-                        K::from_baml_key(&entry.key)?,
-                        V::from_baml(entry.value.unwrap_or_default())?,
-                    ))
-                })
-                .collect(),
-            _ => Err(wrong_type("map", &v)),
+            Some(Out::MapValue(map)) => decode_entries(map.entries),
+            _ => Err(wrong_type("map", v)),
         }
     }
 
@@ -832,7 +953,7 @@ impl __BamlValuePrivate for Infallible {
     }
 
     fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
-        Err(wrong_type("never", &v))
+        Err(wrong_type("never", v))
     }
 
     fn baml_ty() -> wire::BamlTy {

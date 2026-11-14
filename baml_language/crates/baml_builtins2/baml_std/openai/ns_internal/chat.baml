@@ -1230,7 +1230,7 @@ function chat_build_request(
     stream: bool,
     preview: bool = false,
 ) -> ChatRequest {
-    let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
+    let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
     let messages = chat_lower_prompt(prompt, compat, preview = preview);
     let journal = ai.wire.degrade_tool_media(
         ai.wire.sanitize_for_client(input.journal, compat.provider, params.model),

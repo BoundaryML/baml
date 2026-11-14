@@ -100,7 +100,9 @@ export function CompilerSays({ reported }: { reported: Reported }) {
       <p>The compiler says:</p>
       <ul>
         {reported.messages.map((message, at) => (
-          <li key={`${reported.codes[at] ?? at}`}>
+          // A code can repeat (one E0068 per alias in a cycle), so the
+          // position keys the row; the list is never reordered.
+          <li key={`${at}:${reported.codes[at] ?? ''}`}>
             <code className="code">{reported.codes[at] ?? ''}</code>{' '}
             <Prose text={message} />
           </li>

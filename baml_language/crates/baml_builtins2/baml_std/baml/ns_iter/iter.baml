@@ -753,7 +753,7 @@ class Map<T, R, E, E2> {
         function next(self) -> R | Done throws E | E2 {
             match (self.source.next()) {
                 Done => Done {},
-                let x: T => self.func(x),
+                let x: T => (self.func)(x),
             }
         }
     }
@@ -791,7 +791,7 @@ class Filter<T, E, E2> {
                         return Done {};
                     },
                     let x: T => {
-                        if (self.predicate(x)) {
+                        if ((self.predicate)(x)) {
                             return x;
                         }
                     },
@@ -833,7 +833,7 @@ class FilterMap<T, R, E, E2> {
                         return Done {};
                     },
                     let x: T => {
-                        match (self.func(x)) {
+                        match ((self.func)(x)) {
                             null => {},
                             let y: R => {
                                 return y;
@@ -895,7 +895,7 @@ class FlatMap<T, R, E, E2, E3> {
                                 return Done {};
                             },
                             let x: T => {
-                                let it = self.func(x).iter();
+                                let it = (self.func)(x).iter();
                                 self.inner = it;
                             },
                         }
@@ -1250,7 +1250,7 @@ class TakeWhile<T, E, E2> {
                     self.done = true;
                 },
                 let x: T => {
-                    if (self.predicate(x)) {
+                    if ((self.predicate)(x)) {
                         return x;
                     }
                     self.done = true;
@@ -1296,7 +1296,7 @@ class SkipWhile<T, E, E2> {
                         return Done {};
                     },
                     let x: T => {
-                        if (!self.predicate(x)) {
+                        if (!(self.predicate)(x)) {
                             self.skipping = false;
                             return x;
                         }

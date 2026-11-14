@@ -1,0 +1,93 @@
+import { describe, it, expect } from "vitest";
+
+import "./baml_sdk/index.js";
+import * as tuple_streams from "./baml_sdk/tuple_streams/index.js";
+import { Done } from "./baml_sdk/ai/stream/index.js";
+import { isTestRuntime } from "./test_runtime.js";
+
+const hasSyncCalls = isTestRuntime("node");
+
+type Pull<T> = () => T | Done;
+type PullAsync<T> = () => Promise<T | Done>;
+
+function drain<T>(next: Pull<T>): T[] {
+  const partials: T[] = [];
+  for (;;) {
+    const v = next();
+    if (v instanceof Done) return partials;
+    partials.push(v);
+    expect(partials.length).toBeLessThan(10_000);
+  }
+}
+
+async function drainAsync<T>(next: PullAsync<T>): Promise<T[]> {
+  const partials: T[] = [];
+  for (;;) {
+    const v = await next();
+    if (v instanceof Done) return partials;
+    partials.push(v);
+    expect(partials.length).toBeLessThan(10_000);
+  }
+}
+
+const ITEMS = [["a", 1], ["b", 2]];
+
+function expectItemsPartials(partials: [string, number][][]) {
+  expect(partials.length).toBeGreaterThan(0);
+  expect(partials[0]).toEqual([["a", 1]]);
+  for (const partial of partials) {
+    expect(Array.isArray(partial)).toBe(true);
+    for (const item of partial) {
+      expect(Array.isArray(item)).toBe(true);
+      expect(item).toHaveLength(2);
+      expect(typeof item[0]).toBe("string");
+      expect(typeof item[1]).toBe("number");
+    }
+    expect(partial).toEqual(ITEMS.slice(0, partial.length));
+  }
+}
+
+function expectFinalPartials(partials: ([number, string])[]) {
+  expect(partials.length).toBeGreaterThan(0);
+  for (const partial of partials) {
+    expect(Array.isArray(partial)).toBe(true);
+    expect(partial).toHaveLength(2);
+    expect(partial[0]).toBe(1);
+    expect("a".startsWith(partial[1])).toBe(true);
+  }
+  expect(partials[partials.length - 1]).toEqual([1, "a"]);
+}
+
+describe("tuple streams", () => {
+  // SDK_PARITY_LINT(skip): C# streams tuples from its own tuples fixture
+  it("tuples_stream_items", async () => {
+    if (hasSyncCalls) {
+      const stream = tuple_streams.stream_tuple_items$stream_sync("x");
+      expectItemsPartials(drain(() => stream.nextSync()));
+      const final = stream.finalSync();
+      expect(final).toEqual(ITEMS);
+      expect(tuple_streams.stream_tuple_items_sync("x")).toEqual(final);
+    }
+
+    const asyncStream = await tuple_streams.stream_tuple_items$stream("x");
+    expectItemsPartials(await drainAsync(() => asyncStream.next()));
+    expect(await asyncStream.final()).toEqual(ITEMS);
+    expect(await tuple_streams.stream_tuple_items("x")).toEqual(ITEMS);
+  });
+
+  // SDK_PARITY_LINT(skip): C# streams tuples from its own tuples fixture
+  it("tuples_stream_final", async () => {
+    if (hasSyncCalls) {
+      const stream = tuple_streams.stream_tuple_final$stream_sync("x");
+      expectFinalPartials(drain(() => stream.nextSync()));
+      const final = stream.finalSync();
+      expect(final).toEqual([1, "a"]);
+      expect(tuple_streams.stream_tuple_final_sync("x")).toEqual(final);
+    }
+
+    const asyncStream = await tuple_streams.stream_tuple_final$stream("x");
+    expectFinalPartials(await drainAsync(() => asyncStream.next()));
+    expect(await asyncStream.final()).toEqual([1, "a"]);
+    expect(await tuple_streams.stream_tuple_final("x")).toEqual([1, "a"]);
+  });
+});
