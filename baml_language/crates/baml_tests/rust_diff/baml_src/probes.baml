@@ -33,19 +33,21 @@ function Tuples() -> void {
     let pair = (1, "two");
     let nested = (pair, [3, 4]);
     let (let n, let s) = pair;
-    nested[1].push(5);
+    nested.1.push(5);
     baml.io.println(
-        `${pair[0]}:${pair[1]}:${nested[0][1]}:${nested[1].length()}:${n}:${s}:${pair == (1, "two")}:${TupleArity((7,))}:${TupleArity((1, "abc"))}`,
+        `${pair.0}:${pair.1}:${nested.0.1}:${nested.1.length()}:${n}:${s}:${pair == (1, "two")}:${TupleArity((7,))}:${TupleArity((1, "abc"))}`,
     );
 }
 
 function TupleFirst(value: (int, string)?) -> int? {
-    value?.[0]
+    value?.0
 }
 
 function TupleHead(value: (int, bool) | (string, bool, int)) -> string {
-    let head = value[0];
-    `${head}:${value[1]}`
+    match (value) {
+        (let head, let flag) => `${head}:${flag}`,
+        (let head, let flag, _) => `${head}:${flag}`,
+    }
 }
 
 function TupleProject(value: ((int, string), bool)) -> string {
@@ -58,7 +60,7 @@ function TupleProject(value: ((int, string), bool)) -> string {
 function TupleAccess() -> void {
     let whole: (let a, (let b, let c)) = (1, ("two", 3));
     baml.io.println(
-        `${TupleFirst((4, "x")) ?? -1}:${TupleFirst(null) ?? -1}:${TupleHead((5, true))}:${TupleHead(("six", false, 7))}:${TupleProject(((8, "y"), true))}:${TupleProject(((9, "z"), false))}:${a}:${b}:${c}:${whole[1][0]}`,
+        `${TupleFirst((4, "x")) ?? -1}:${TupleFirst(null) ?? -1}:${TupleHead((5, true))}:${TupleHead(("six", false, 7))}:${TupleProject(((8, "y"), true))}:${TupleProject(((9, "z"), false))}:${a}:${b}:${c}:${whole.1.0}`,
     );
 }
 
