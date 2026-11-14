@@ -359,7 +359,7 @@ fn .<lambda(QuotedPrompt@spec, 1)>(prefix: string, model: string) -> null | ai.C
     }
 
     bb19: {
-        _0 = call const fn typesafeai.Client.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn typesafeai.Client.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
     }
 
     bb20: {
@@ -859,7 +859,7 @@ fn .<lambda(BacktickPrompt@spec, 1)>(prefix: string, model: string) -> null | ai
     }
 
     bb19: {
-        _0 = call const fn typesafeai.Client.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn typesafeai.Client.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
     }
 
     bb20: {
