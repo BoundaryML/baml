@@ -49,6 +49,17 @@ export const userRole = v.union(
 // SCHEMA
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** How a BCS page is written: Markdown (raw HTML allowed) or a whole HTML page. */
+export const bcsPageFormat = v.union(v.literal("markdown"), v.literal("html"));
+
+/** A BCS page in a version's outline: where it sits and how it is written, without its content. */
+export const bcsPageOutline = v.object({
+  slug: v.string(),
+  title: v.string(),
+  parentSlug: v.optional(v.string()),
+  format: bcsPageFormat,
+});
+
 export default defineSchema({
   // ─────────────────────────────────────────────────────────────────────────
   // USERS (GitHub OAuth or passkey auth)
@@ -63,7 +74,8 @@ export default defineSchema({
     isSpecialAccount: v.optional(v.boolean()),
     boundaryEmail: v.optional(v.string()),
     slackUserId: v.optional(v.string()),
-    // API token for agent access
+    // No longer read: API tokens live in `apiTokens`, since user documents reach the browser through
+    // many queries. users.clearLegacyApiTokens removes the old values.
     apiToken: v.optional(v.string()),
   })
     .index("by_name", ["name"])
@@ -391,4 +403,153 @@ export default defineSchema({
   })
     .index("by_bep", ["bepId"])
     .index("by_bep_status", ["bepId", "status"]),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // API TOKENS
+  // ─────────────────────────────────────────────────────────────────────────
+  // A member's token for the agent API and the `bep` script. Kept out of `users`, whose documents
+  // many public queries return: only functions that take the server secret read this table.
+  apiTokens: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_token", ["token"])
+    .index("by_user", ["userId"]),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // BCS DESIGN PROPOSALS (team only)
+  // ─────────────────────────────────────────────────────────────────────────
+  // System design proposals for Boundary Cloud: a main page and optional sub-pages, each written in
+  // Markdown (raw HTML allowed, for illustrations) or as a whole HTML page, shown in a sandboxed
+  // frame. Team only: every public function in bcs.ts takes the server secret, which only this
+  // app's server holds after checking the viewer, so the browser never reads these tables. Kept
+  // apart from `beps` so that nothing that reads every BEP (Slack, export, AI analysis, the agent
+  // pull API) can reach them.
+  bcsDocs: defineTable({
+    number: v.number(),
+    title: v.string(),
+    status: bepStatus,
+    // GitHub logins of who wrote it and who saved each version.
+    authors: v.array(v.string()),
+    currentVersion: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    // The proposal's thread in BCS_SLACK_CHANNEL, once its first message was posted.
+    slackThreadTs: v.optional(v.string()),
+    // GitHub logins of who shepherds it through review, and of who implemented it.
+    shepherds: v.optional(v.array(v.string())),
+    implementedBy: v.optional(v.array(v.string())),
+    // Kept by the comment mutations, so the board never reads comment histories: how many threads
+    // are open, and who has commented. Absent on proposals from before they were kept.
+    openComments: v.optional(v.number()),
+    commenters: v.optional(v.array(v.string())),
+    // Kept by the issue mutations, for the board.
+    openIssues: v.optional(v.number()),
+  }).index("by_number", ["number"]),
+
+  // A version's metadata and its pages' outline, listed without their content so that reading a
+  // proposal never loads every version's pages. Versions saved before sub-pages existed have no
+  // `pages`: they are one HTML main page.
+  bcsDocVersions: defineTable({
+    docId: v.id("bcsDocs"),
+    version: v.number(),
+    note: v.optional(v.string()),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    pages: v.optional(v.array(bcsPageOutline)),
+    // Titles of the pages this version changed from the one before it.
+    changed: v.optional(v.array(v.string())),
+  }).index("by_doc_version", ["docId", "version"]),
+
+  // A page of a version, read one at a time. `slug` is "" for the main page. Rows saved before
+  // sub-pages existed have only `html`, the main page.
+  bcsVersionPages: defineTable({
+    docId: v.id("bcsDocs"),
+    version: v.number(),
+    slug: v.optional(v.string()),
+    format: v.optional(bcsPageFormat),
+    content: v.optional(v.string()),
+    html: v.optional(v.string()),
+  })
+    .index("by_doc_version", ["docId", "version"])
+    .index("by_doc_version_slug", ["docId", "version", "slug"]),
+
+  // Comments on a proposal's page: on the whole page, or on one block of a Markdown page
+  // (`anchor`: the block's id from its text, and the text quoted). Replies point to their thread's
+  // first comment, which alone can be resolved. `version` is the version the comment was written
+  // on, so a comment whose block a later version rewrote can say so.
+  bcsComments: defineTable({
+    docId: v.id("bcsDocs"),
+    page: v.string(),
+    version: v.number(),
+    anchor: v.optional(v.object({ block: v.string(), text: v.string() })),
+    parentId: v.optional(v.id("bcsComments")),
+    author: v.string(),
+    body: v.string(),
+    // A thread's kind, as on BEPs: discussion (the default), a blocking concern, or a question.
+    type: v.optional(commentType),
+    // GitHub logins per reaction.
+    reactions: v.optional(
+      v.object({
+        thumbsUp: v.optional(v.array(v.string())),
+        thumbsDown: v.optional(v.array(v.string())),
+        heart: v.optional(v.array(v.string())),
+        thinking: v.optional(v.array(v.string())),
+      })
+    ),
+    editedAt: v.optional(v.number()),
+    // A thread's first comment deleted by its author while it had replies: the replies stay.
+    deleted: v.optional(v.boolean()),
+    resolved: v.boolean(),
+    resolvedBy: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_doc", ["docId"])
+    .index("by_parent", ["parentId"]),
+
+  // Decisions made on a proposal, as on BEPs: what was decided and why, and the comment threads it
+  // came from, whose authors are its participants.
+  bcsDecisions: defineTable({
+    docId: v.id("bcsDocs"),
+    title: v.string(),
+    description: v.string(),
+    rationale: v.optional(v.string()),
+    sourceCommentIds: v.array(v.id("bcsComments")),
+    participants: v.array(v.string()),
+    decidedBy: v.string(),
+    decidedAt: v.number(),
+    createdAt: v.number(),
+  }).index("by_doc", ["docId"]),
+
+  // Open issues on a proposal, as on BEPs: something to settle before it moves on, raised by a
+  // member, possibly from a comment thread, assigned to one, and resolved with a resolution.
+  bcsIssues: defineTable({
+    docId: v.id("bcsDocs"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    raisedBy: v.string(),
+    assignedTo: v.optional(v.string()),
+    sourceCommentId: v.optional(v.id("bcsComments")),
+    resolved: v.boolean(),
+    resolution: v.optional(v.string()),
+    resolvedBy: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_doc", ["docId"]),
+
+  // Where each member stands on a version of a proposal, as BEP stances do: support, neutral or
+  // oppose, with an optional reason. One per member per version.
+  bcsStances: defineTable({
+    docId: v.id("bcsDocs"),
+    version: v.number(),
+    author: v.string(),
+    stance: userStance,
+    comment: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_doc_version", ["docId", "version"])
+    .index("by_doc_version_author", ["docId", "version", "author"]),
 });

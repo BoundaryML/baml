@@ -1,0 +1,457 @@
+// Adversarial probes for escape analysis: each shares an array between two
+// tasks a different way, and both mutate it at once. Every access to it must
+// keep its lock; debug builds panic on a lock-free access that finds the lock
+// held. Results are order-independent, so every mode prints the same line.
+
+class Holder {
+    items: int[]
+}
+
+function PushN(xs: int[], n: int) -> int {
+    let i = 0;
+    while (i < n) {
+        xs.push(i);
+        i += 1;
+    }
+    xs.length()
+}
+
+function Total(xs: int[]) -> int {
+    let total = 0;
+    for (let x in xs) {
+        total += x;
+    }
+    total
+}
+
+function Report(name: string, xs: int[]) -> void {
+    baml.io.println(`${name}:${xs.length()}:${Total(xs)}`);
+}
+
+// Shared by capture in the spawned body.
+function EscapeSpawn() -> void {
+    let xs: int[] = [];
+    let child = spawn { PushN(xs, 2000) };
+    let i = 0;
+    while (i < 2000) {
+        xs.push(i);
+        xs[0] = xs[0];
+        i += 1;
+    }
+    await child;
+    Report("spawn", xs);
+}
+
+function Launch(xs: int[], n: int) -> baml.future.Future<int, never> {
+    spawn { PushN(xs, n) }
+}
+
+// Shared by a callee that spawns with its argument.
+function EscapeSpawnInCallee() -> void {
+    let xs: int[] = [];
+    let child = Launch(xs, 2000);
+    PushN(xs, 2000);
+    await child;
+    Report("callee", xs);
+}
+
+// Shared through a closure that a spawned body calls.
+function EscapeClosure() -> void {
+    let xs: int[] = [];
+    let push = (n: int) -> int { PushN(xs, n) };
+    let child = spawn { push(2000) };
+    PushN(xs, 2000);
+    await child;
+    Report("closure", xs);
+}
+
+// Shared through a field of an object the spawned body reads.
+function EscapeField() -> void {
+    let xs: int[] = [];
+    let holder = Holder { items: xs };
+    let child = spawn { PushN(holder.items, 2000) };
+    PushN(xs, 2000);
+    await child;
+    Report("field", xs);
+}
+
+function Stash(holder: Holder, xs: int[]) -> int {
+    StashDeeper(holder, xs)
+}
+
+function StashDeeper(holder: Holder, xs: int[]) -> int {
+    holder.items = xs;
+    0
+}
+
+// Shared after a store two calls deep into an object the spawned body reads.
+function EscapeStoredDeep() -> void {
+    let xs: int[] = [];
+    let holder = Holder { items: [] };
+    Stash(holder, xs);
+    let child = spawn { PushN(holder.items, 2000) };
+    PushN(xs, 2000);
+    await child;
+    Report("deep", xs);
+}
+
+// Shared through a map value.
+function EscapeMapValue() -> void {
+    let xs: int[] = [];
+    let m = {"a": xs};
+    let child = spawn { PushN(m["a"], 2000) };
+    PushN(xs, 2000);
+    await child;
+    Report("map", xs);
+}
+
+function CountInto(m: map<string, int>, n: int) -> int {
+    let i = 0;
+    while (i < n) {
+        m.set(`k${i % 7}`, m.get_or_insert(`k${i % 7}`, 0) + 1);
+        i += 1;
+    }
+    m.length()
+}
+
+// Shared by capture in the spawned body: both tasks update the map itself.
+function EscapeMap() -> void {
+    let m: map<string, int> = {};
+    let child = spawn { CountInto(m, 2000) };
+    CountInto(m, 2000);
+    await child;
+    let total = 0;
+    for (let k in m.keys()) {
+        total += m[k];
+    }
+    // Updates race at the BAML level, so only the key count is fixed.
+    baml.io.println(`map-shared:${m.length()}:${total > 0}`);
+}
+
+// Shared through `insert` into an array the spawned body reads.
+function EscapeInsert() -> void {
+    let xs: int[] = [];
+    let holder: int[][] = [];
+    holder.insert(xs, 0);
+    let child = spawn { PushN(holder[0], 2000) };
+    PushN(xs, 2000);
+    await child;
+    Report("insert", xs);
+}
+
+function GrowAndTotal(xs: int[], n: int) -> int {
+    PushN(xs, n);
+    Total(xs)
+}
+
+// One function called with an array only this task can reach, and with one
+// a spawned body mutates: the locality mask lets the first call, and the
+// calls it makes with its parameter, skip the locks the second must take.
+function EscapeMaskMixed() -> void {
+    let mine: int[] = [];
+    GrowAndTotal(mine, 1000);
+    let xs: int[] = [];
+    let child = spawn { PushN(xs, 2000) };
+    GrowAndTotal(xs, 2000);
+    await child;
+    Report("mixed", xs);
+}
+
+// A closure's parameter arrives through an indirect call, whose locality
+// mask is always 0, however local the argument looks at the call.
+function EscapeMaskClosure() -> void {
+    let xs: int[] = [];
+    let grow = (ys: int[]) -> int { GrowAndTotal(ys, 2000) };
+    let child = spawn { PushN(xs, 2000) };
+    grow(xs);
+    await child;
+    Report("mask-closure", xs);
+}
+
+function Same(xs: int[]) -> int[] {
+    xs
+}
+
+// Shared through an alias a callee returns.
+function EscapeReturnedAlias() -> void {
+    let xs: int[] = [];
+    let alias = Same(xs);
+    let child = spawn { PushN(alias, 2000) };
+    PushN(xs, 2000);
+    await child;
+    Report("alias", xs);
+}
+
+function SpawnAtBottom(xs: int[], depth: int) -> baml.future.Future<int, never> {
+    if (depth == 0) {
+        spawn { PushN(xs, 2000) }
+    } else {
+        SpawnAtBottom(xs, depth - 1)
+    }
+}
+
+// Shared by a recursive callee that spawns at its base case.
+function EscapeRecursive() -> void {
+    let xs: int[] = [];
+    let child = SpawnAtBottom(xs, 5);
+    PushN(xs, 2000);
+    await child;
+    Report("recursive", xs);
+}
+
+function Drain(it: baml.iter.Iterator<Item = int, Error = never>) -> int {
+    let total = 0;
+    for (let x in it) {
+        total += x;
+    }
+    total
+}
+
+// Shared through an iterator: the spawned body walks the array while the
+// parent reads it.
+function EscapeIterator() -> void {
+    let xs: int[] = [];
+    PushN(xs, 4000);
+    let it = xs.iter();
+    let child = spawn { Drain(it) };
+    let reads = 0;
+    let i = 0;
+    while (i < 4000) {
+        reads += xs[i] - xs[i] + xs.length();
+        i += 1;
+    }
+    let drained = await child;
+    baml.io.println(`iterator:${drained}:${reads}`);
+}
+
+function BuildAndSum(n: int) -> int {
+    let xs: int[] = [];
+    let i = 0;
+    while (i < n) {
+        xs.push(i * 2);
+        i += 1;
+    }
+    let j = 0;
+    while (j < n) {
+        xs[j] = xs[j] + 1;
+        j += 1;
+    }
+    let m: map<string, int> = {};
+    let k = 0;
+    while (k < n) {
+        m[`k${k % 64}`] = m.get_or_insert(`k${k % 64}`, 0) + xs[k];
+        if (m.has("k0") && k % 5 == 0) {
+            m.delete("k1");
+        }
+        k += 1;
+    }
+    Total(xs) + xs.length() + m.length() + (m.get("k0") ?? 0)
+}
+
+// Control: two tasks, each with arrays and maps only it can reach, which
+// take the lock-free paths at the same time.
+function ThreadLocalParallel() -> void {
+    let a = spawn { BuildAndSum(5000) };
+    let b = spawn { BuildAndSum(5000) };
+    let mine = BuildAndSum(5000);
+    let theirs = (await a) + (await b);
+    baml.io.println(`parallel:${mine}:${theirs}`);
+}
+
+// Re-read the length on every step, including after mutation in the body.
+function ArrayWalk() -> void {
+    let growing = [1, 2];
+    for (let x in growing) {
+        baml.io.println(`push:${x}`);
+        if (x == 1) { growing.push(3); }
+    }
+    let shrinking = [1, 2, 3, 4];
+    for (let x in shrinking) {
+        baml.io.println(`pop:${x}`);
+        shrinking.pop();
+    }
+    let clearing = [1, 2, 3];
+    for (let x in clearing) {
+        baml.io.println(`clear:${x}`);
+        clearing.clear();
+    }
+}
+
+// Ordered accesses: no overlapping lock holders are needed to expose a bad
+// locality proof. Also checks publication of fields initialized before spawn.
+class OracleFields {
+    left: int
+    right: int
+}
+function EscapePublishedField() -> void {
+    let value = OracleFields { left: 41, right: 0 };
+    value.left = 42;
+    let child = spawn { value.left };
+    let observed = await child;
+    value.right = observed;
+    baml.io.println(`published:${value.left}:${value.right}`);
+}
+
+// Stored into a container another task reads: each builtin that keeps its
+// argument must share it. The parent mutates the stored array directly while
+// the child mutates it through the container.
+function EscapePushContents() -> void {
+    let xs: int[] = [];
+    let outer: int[][] = [];
+    outer.push(xs);
+    let child = spawn { PushN(outer[0], 2000) };
+    let i = 0;
+    while (i < 2000) {
+        xs.push(i);
+        i += 1;
+    }
+    await child;
+    Report("push-contents", xs);
+}
+
+function EscapeMapSetContents() -> void {
+    let xs: int[] = [];
+    let outer: map<string, int[]> = {};
+    outer.set("x", xs);
+    let child = spawn { PushN(outer["x"], 2000) };
+    let i = 0;
+    while (i < 2000) {
+        xs.push(i);
+        i += 1;
+    }
+    await child;
+    Report("set-contents", xs);
+}
+
+function EscapeUnshiftContents() -> void {
+    let xs: int[] = [];
+    let outer: int[][] = [];
+    outer.unshift(xs);
+    let child = spawn { PushN(outer[0], 2000) };
+    let i = 0;
+    while (i < 2000) {
+        xs.push(i);
+        i += 1;
+    }
+    await child;
+    Report("unshift-contents", xs);
+}
+
+function EscapeInsertContents() -> void {
+    let xs: int[] = [];
+    let outer: int[][] = [];
+    outer.insert(xs, 0);
+    let child = spawn { PushN(outer[0], 2000) };
+    let i = 0;
+    while (i < 2000) {
+        xs.push(i);
+        i += 1;
+    }
+    await child;
+    Report("insert-contents", xs);
+}
+
+function EscapeAwaitResult() -> void {
+    let child = spawn { [42] };
+    let xs = await child;
+    baml.io.println(`await-result:${xs[0]}`);
+}
+
+const ORACLE_GLOBAL = [42];
+function EscapeGlobal() -> void {
+    let child = spawn { ORACLE_GLOBAL[0] };
+    let mine = ORACLE_GLOBAL[0];
+    let theirs = await child;
+    baml.io.println(`global:${mine}:${theirs}`);
+}
+
+// The original binding is not captured; only its alias becomes a cell.
+function EscapeCaptureAlias() -> void {
+    let original: int[] = [];
+    let captured = original;
+    let child = spawn { PushN(captured, 2000) };
+    PushN(original, 2000);
+    await child;
+    Report("capture-alias", original);
+}
+
+// Ordered handoffs must not be reported by the escape oracle.
+function EscapeOrderedReturn() -> void {
+    let child = spawn { MakeForEscapeHandoff() };
+    let xs = await child;
+    baml.io.println(`returned:${xs.length()}`);
+}
+function MakeForEscapeHandoff() -> int[] {
+    let xs = [1];
+    xs.push(2);
+    xs
+}
+function EscapeSessionHandoff() -> void {
+    let session = reflect.Session.new();
+    session.eval(`let xs = [1]; xs.push(2);`);
+    let n = session.eval<int>(`xs.length()`);
+    baml.io.println(`session:${n}`);
+}
+function EscapeOrderedSpawn() -> void {
+    let xs = MakeForEscapeHandoff();
+    let child = spawn { xs[0] };
+    baml.io.println(`spawned:${await child}`);
+}
+
+// One future, two awaiters: the parent and a later child both receive the
+// same array. An awaited value comes from another task, so neither may treat
+// it as its own; the parent touches it before the child starts mutating it.
+function EscapeAwaitShared() -> void {
+    let made = spawn { MakeForEscapeHandoff() };
+    let xs = await made;
+    xs.push(3);
+    let other = spawn { PushN(await made, 2000) };
+    PushN(xs, 2000);
+    await other;
+    Report("await-shared", xs);
+}
+
+// A thrown value comes back to the caller's caller as a caught value, which
+// is spawned with. The thrower's argument is the same array, so throwing it
+// must share it.
+function EscapeThrowCaught() -> void {
+    let xs: int[] = [];
+    let back = ThrowBack(xs);
+    let child = spawn { PushN(back, 2000) };
+    PushN(xs, 2000);
+    await child;
+    Report("throw-caught", xs);
+}
+
+function ThrowBack(xs: int[]) -> int[] {
+    (Rethrown(xs)) catch (e) { _ => e }
+}
+
+function Rethrown(xs: int[]) -> int[] throws int[] {
+    throw xs
+}
+
+// A garbage instance's finalizer runs in a VM of its own, here during a
+// collection another task starts, while `main` still pushes to the array the
+// instance held.
+class FinalizedLog {
+    log: int[],
+
+    function cleanup(self) -> void throws never {
+        PushN(self.log, 2000);
+    }
+}
+
+function AbandonLog(log: int[]) -> void throws never {
+    let resource = FinalizedLog { log };
+    resource.log.push(-1);
+}
+
+function EscapeFinalizer() -> void {
+    let log: int[] = [];
+    AbandonLog(log);
+    let child = spawn { baml.sys.collect_garbage() };
+    PushN(log, 20000);
+    await child;
+    baml.io.println(`finalizer:${log.length() >= 20001}`);
+}

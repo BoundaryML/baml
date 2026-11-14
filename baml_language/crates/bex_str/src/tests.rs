@@ -939,3 +939,89 @@ fn char_slice_clamps_extreme_ranges_without_panicking() {
         assert_eq!(bex.char_find_from("a", max), None);
     }
 }
+
+// ── concat_many ────────────────────────────────────────────────────────────
+
+/// Folding `concat` over `parts`: what `concat_many` must equal.
+fn fold_concat(parts: &[&BexStr]) -> BexStr {
+    parts.iter().fold(BexStr::empty(), |acc, part| {
+        BexStr::concat(acc, (*part).clone())
+    })
+}
+
+#[test]
+fn concat_many_matches_folded_concat() {
+    let long_ascii = BexStr::from("a".repeat(2000));
+    let long_unicode = BexStr::from("é".repeat(700));
+    let rope = BexStr::concat(BexStr::from("x".repeat(600)), BexStr::from("y".repeat(600)));
+    let pieces = [
+        BexStr::empty(),
+        BexStr::from("/v1/items/"),
+        BexStr::from("😀 ok"),
+        BexStr::from("z".repeat(60)),
+        BexStr::from("ü".repeat(40)),
+        BexStr::from("w".repeat(1024)),
+        BexStr::from("v".repeat(1025)),
+        BexStr::from("x".repeat(100_000)).byte_slice(10..900),
+        long_ascii,
+        long_unicode,
+        rope,
+    ];
+    // Every ordered pair and triple, so each kind of part lands at the start,
+    // the middle and the end of a run.
+    let mut cases: Vec<Vec<&BexStr>> = Vec::new();
+    for a in &pieces {
+        for b in &pieces {
+            cases.push(vec![a, b]);
+            for c in &pieces {
+                cases.push(vec![a, b, c]);
+            }
+        }
+    }
+    cases.push(pieces.iter().collect());
+    for parts in cases {
+        let joined = BexStr::concat_many(&parts);
+        let folded = fold_concat(&parts);
+        assert_eq!(joined.as_str(), folded.as_str());
+        assert_eq!(joined.byte_len(), folded.byte_len());
+        assert_eq!(joined.char_len(), folded.char_len());
+        assert_eq!(joined.ascii_prefix_len(), folded.ascii_prefix_len());
+        assert_eq!(joined.content_hash(), folded.content_hash());
+    }
+}
+
+#[test]
+fn concat_many_of_nothing_is_empty() {
+    assert!(BexStr::concat_many(&[]).is_empty());
+    assert!(BexStr::concat_many(&[&BexStr::empty(), &BexStr::empty()]).is_empty());
+}
+
+#[test]
+fn concat_many_copies_short_parts_into_one_string() {
+    let parts = ["GET ", "/v1/items/", &"i".repeat(80), "?page=", "2"].map(BexStr::from);
+    let joined = BexStr::concat_many(&parts.iter().collect::<Vec<_>>());
+    assert!(matches!(joined, BexStr::Flat(_)), "{joined:?}");
+    let short = ["a", "b", "c"].map(BexStr::from);
+    let joined = BexStr::concat_many(&short.iter().collect::<Vec<_>>());
+    assert!(matches!(joined, BexStr::Inline { .. }), "{joined:?}");
+}
+
+/// Appending a few pieces to a long string must not copy it, or an append
+/// loop (`s = s + a + b`) would be quadratic.
+#[test]
+fn concat_many_shares_a_long_part() {
+    let long = BexStr::from("x".repeat(super::bex_str::CONCAT_MANY_COPY_LIMIT + 1));
+    let BexStr::Flat(long_data) = &long else {
+        panic!("a long string is flat");
+    };
+    let joined = BexStr::concat_many(&[&long, &BexStr::from(","), &BexStr::from("item")]);
+    let BexStr::Concat(node) = &joined else {
+        panic!("expected a rope node, got {joined:?}");
+    };
+    let guard = node.state.lock().unwrap();
+    let super::bex_str::ConcatState::Deferred { left, right } = &*guard else {
+        panic!("a fresh rope is deferred");
+    };
+    assert!(matches!(left, BexStr::Flat(data) if Arc::ptr_eq(data, long_data)));
+    assert_eq!(right.as_str(), ",item");
+}

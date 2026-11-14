@@ -1,10 +1,13 @@
 mod builder;
+pub mod escape;
 mod inference_provider;
 mod ir;
+pub mod iteration;
 mod lower;
 pub mod memory;
 mod optimize;
 pub mod pretty;
+mod reducible;
 
 pub use baml_type::ResolvedAliases;
 pub use ir::*;

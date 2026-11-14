@@ -373,6 +373,20 @@ impl AtomicValueSlot {
     pub fn store(&self, value: Value) {
         self.0.store(value.bits(), Ordering::Release);
     }
+
+    /// [`Self::load`] for a slot no other thread can reach, which needs no
+    /// ordering. The slot stays atomic, but a wrong caller can read a pointer
+    /// before the object it points to is published: a race on that object.
+    #[inline]
+    pub fn load_relaxed(&self) -> Value {
+        Value(self.0.load(Ordering::Relaxed))
+    }
+
+    /// [`Self::store`] for a slot no other thread can reach.
+    #[inline]
+    pub fn store_relaxed(&self, value: Value) {
+        self.0.store(value.bits(), Ordering::Relaxed);
+    }
 }
 
 impl From<Value> for AtomicValueSlot {

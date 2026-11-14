@@ -6,7 +6,7 @@
 //
 //   cd /Users/aaron/projects/baml
 //   infisical run -- baml_language/target/debug/baml-cli test \
-//       --from baml_language/crates/baml_tests/baml_src --profile live
+//       --project-dir baml_language/crates/baml_tests/baml_src --profile live
 //
 // Two independent gates, both deliberate:
 //   1. the profile — `-x "::live::"` prunes this testset subtree *before* its
@@ -23,7 +23,7 @@
 // and trips rate limits.
 //
 // The always-registered `preconditions` leaf keeps a keyless `--profile live`
-// from selecting nothing, which exits 5 (crates/baml_cli/src/lib.rs:93-94).
+// from selecting nothing.
 //
 // Model ids are live-verified as of 2026-08-12; `claude-3-5-haiku-latest` and
 // `gemini-2.0-flash` both 404 now. Keep them current when this file is touched.
@@ -96,7 +96,7 @@ function live_claude_code_sees_image() -> bool {
 // The Claude Code client authenticates through the local `claude` CLI, not an
 // API key, so its gate is whether that CLI runs.
 function claude_cli_available() -> bool {
-    let out = baml.sys.exec("claude", ["--version"], null) catch_all (e) {
+    let out = baml.sys.run("claude", args = ["--version"], capture_output = true) catch_all (e) {
         _ => {
             return false;
         },

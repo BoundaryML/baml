@@ -1,13 +1,15 @@
 //! Pool-wide analysis the emitters consume: which nominal types can be
-//! emitted, where recursive class fields need `Box`, which module path
-//! segments must be renamed away from type-name collisions, and which
-//! types get serde impls under the generated crate's `serde` feature.
+//! emitted, where recursive class fields need `Box`, the Rust name of every
+//! binding, and which types get serde impls under the generated crate's
+//! `serde` feature.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use baml_sdkgen_types::{Class, ClassCrossing, ClassProperty, Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{
+    Class, ClassCrossing, ClassProperty, Name, NamingConvention, Symbol, SymbolPool, Ty,
+};
 
-use crate::{SkipWarning, routing};
+use crate::{SkipWarning, names::RustNames};
 
 /// Results of [`analyze`]. Emitters treat this as read-only context.
 pub(crate) struct Analysis {
@@ -20,12 +22,10 @@ pub(crate) struct Analysis {
     /// fields; class and alias references between them are boxed at the
     /// field site.
     scc: HashMap<Name, usize>,
-    /// Module-path renames: a namespace segment that collides with a type
-    /// name emitted in its parent module gets a trailing underscore
-    /// (Rust puts `mod` and type names in one namespace). Keyed by the
-    /// original routed path; values are the fully renamed path.
-    renames: HashMap<Vec<String>, Vec<String>>,
-    /// Emitted type names per (renamed) leaf — the namespace synthesized
+    /// The Rust spelling of every module, type, callable, field, variant
+    /// and parameter.
+    pub(crate) names: RustNames,
+    /// Emitted type names per module path — the namespace synthesized
     /// union enums must not collide with.
     type_names_by_leaf: HashMap<Vec<String>, HashSet<String>>,
     /// The right-hand side of every emitted type alias that a statement
@@ -37,6 +37,9 @@ pub(crate) struct Analysis {
     /// serde can match to BAML's own (`baml.json`), so their Rust types
     /// get serde impls under the generated crate's `serde` feature.
     serde: HashSet<Name>,
+    /// What each class's literal fields say about a JSON object, for unions
+    /// to choose a member by.
+    json_tags: HashMap<Name, JsonTag>,
     /// How each class in the pool crosses the boundary, decided by the
     /// compiler once per declaration.
     crossings: HashMap<Name, ClassCrossing>,
@@ -65,22 +68,13 @@ impl Analysis {
         }
     }
 
-    /// The on-disk / in-crate module path for a routed path, with
-    /// collision renames applied.
-    pub(crate) fn renamed<'a>(&'a self, path: &'a [String]) -> &'a [String] {
-        match self.renames.get(path) {
-            Some(renamed) => renamed,
-            None => path,
-        }
-    }
-
     /// The right-hand side of an emitted type alias a statement spells by
     /// its body.
     pub(crate) fn alias_body(&self, name: &Name) -> Option<&Ty> {
         self.alias_bodies.get(name)
     }
 
-    /// Emitted type names in a (renamed) leaf.
+    /// Emitted type names in a module.
     pub(crate) fn type_names_in(&self, leaf: &[String]) -> HashSet<String> {
         self.type_names_by_leaf
             .get(leaf)
@@ -96,6 +90,40 @@ impl Analysis {
     /// Whether the emitted class `name` derives serde's traits.
     pub(crate) fn derives_serde(&self, name: &Name) -> bool {
         self.serde.contains(name)
+    }
+
+    /// The classes a value of `ty` can be, through aliases and unions, each
+    /// with what its literal fields say about a JSON object.
+    pub(crate) fn json_tags_in<'a>(&'a self, ty: &'a Ty) -> Vec<&'a JsonTag> {
+        fn walk<'a>(
+            analysis: &'a Analysis,
+            ty: &'a Ty,
+            seen: &mut HashSet<&'a Name>,
+            out: &mut Vec<&'a JsonTag>,
+        ) {
+            match ty {
+                Ty::Class(name, _) => out.extend(analysis.json_tags.get(name)),
+                Ty::Union(items) => {
+                    for item in items {
+                        walk(analysis, item, seen, out);
+                    }
+                }
+                Ty::TypeAlias(alias) if seen.insert(alias) => {
+                    if let Some(body) = analysis.alias_body(alias) {
+                        walk(analysis, body, seen, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut out = Vec::new();
+        walk(self, ty, &mut HashSet::new(), &mut out);
+        out
+    }
+
+    /// The literal `ty` is, through any chain of aliases.
+    pub(crate) fn literal_of<'a>(&'a self, ty: &'a Ty) -> Option<&'a baml_base::Literal> {
+        literal_through_aliases(ty, &self.alias_bodies)
     }
 
     /// Whether the Rust type for `ty` implements serde's traits under the
@@ -145,7 +173,10 @@ impl<'a> ClassShape<'a> {
 
 /// Analyze the pool. Returns the analysis plus one warning per skipped
 /// class or type alias (functions warn separately at emission time).
-pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
+pub(crate) fn analyze(
+    pool: &SymbolPool,
+    convention: NamingConvention,
+) -> (Analysis, Vec<SkipWarning>) {
     let mut warnings = Vec::new();
 
     // Deterministic iteration everywhere: sort by Name.
@@ -392,10 +423,9 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         .collect();
     let scc = compute_sccs(&class_edges);
 
-    let renames = compute_renames(pool, &emitted);
+    let names = RustNames::build(pool, &emitted, convention);
 
-    // Emitted type names per renamed leaf, for synthesized-name
-    // de-collision.
+    // Emitted type names per module, for synthesized-name de-collision.
     let mut type_names_by_leaf: HashMap<Vec<String>, HashSet<String>> = HashMap::new();
     for (name, symbol) in pool {
         if matches!(
@@ -403,12 +433,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_)
         ) && emitted.contains(name)
         {
-            let routed = routing::route(name).segments;
-            let leaf = renames.get(&routed).cloned().unwrap_or(routed);
             type_names_by_leaf
-                .entry(leaf)
+                .entry(names.module_path(name).to_vec())
                 .or_default()
-                .insert(name.name().to_string());
+                .insert(names.type_name(name).to_string());
         }
     }
 
@@ -437,14 +465,19 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         }
     }
 
+    let json_tags = classes
+        .iter()
+        .map(|(name, class)| ((*name).clone(), JsonTag::of(class, &alias_bodies)))
+        .collect();
     (
         Analysis {
             emitted,
             scc,
-            renames,
+            names,
             type_names_by_leaf,
             alias_bodies,
             serde,
+            json_tags,
             crossings: classes
                 .iter()
                 .map(|(name, class)| ((*name).clone(), class.crossing))
@@ -546,6 +579,53 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
         Ty::Never => Err("unsupported type: never".to_string()),
         Ty::RustType => Ok(()),
     }
+}
+
+/// What a class's literal fields say about a JSON object: the union member
+/// a value is, as the engine picks it in `baml.json`.
+#[derive(Clone)]
+pub(crate) struct JsonTag {
+    /// Each literal field's JSON key and value.
+    pub(crate) literals: Vec<(String, baml_base::Literal)>,
+    /// A `@json.fallback` class is the member no other member's tag matches.
+    pub(crate) fallback: bool,
+}
+
+impl JsonTag {
+    fn of(class: &baml_sdkgen_types::Class, aliases: &HashMap<Name, Ty>) -> Self {
+        Self {
+            literals: class
+                .properties
+                .iter()
+                .filter_map(|prop| {
+                    let literal = literal_through_aliases(&prop.ty, aliases)?;
+                    Some((json_key(prop).to_string(), literal.clone()))
+                })
+                .collect(),
+            fallback: class.properties.iter().any(|prop| prop.json_fallback),
+        }
+    }
+}
+
+/// The literal `ty` is, through any chain of aliases.
+fn literal_through_aliases<'a>(
+    ty: &'a Ty,
+    aliases: &'a HashMap<Name, Ty>,
+) -> Option<&'a baml_base::Literal> {
+    let mut seen = HashSet::new();
+    let mut current = ty;
+    loop {
+        match current {
+            Ty::Literal(literal, ..) => return Some(literal),
+            Ty::TypeAlias(alias) if seen.insert(alias) => current = aliases.get(alias)?,
+            _ => return None,
+        }
+    }
+}
+
+/// The key a class field goes by in JSON.
+pub(crate) fn json_key(prop: &ClassProperty) -> &str {
+    prop.json_rename.as_deref().unwrap_or(prop.name.as_str())
 }
 
 /// Whether the Rust type `translate_ty` produces for `ty` implements
@@ -743,61 +823,4 @@ fn compute_sccs(edges: &BTreeMap<&Name, Vec<&Name>>) -> HashMap<Name, usize> {
         }
     }
     sccs
-}
-
-/// Rust puts modules and types in one namespace: a namespace segment
-/// whose name equals a type emitted in its parent module is renamed with
-/// a trailing underscore (deterministic, and cascading to descendants).
-fn compute_renames(
-    pool: &SymbolPool,
-    emitted: &HashSet<Name>,
-) -> HashMap<Vec<String>, Vec<String>> {
-    // Types per module path (original routed segments).
-    let mut types_in: HashMap<Vec<String>, HashSet<String>> = HashMap::new();
-    let mut all_paths: HashSet<Vec<String>> = HashSet::new();
-    for (name, symbol) in pool {
-        let path = routing::route(name).segments;
-        for depth in 0..=path.len() {
-            all_paths.insert(path[..depth].to_vec());
-        }
-        if matches!(
-            symbol,
-            Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_)
-        ) && emitted.contains(name)
-        {
-            types_in
-                .entry(path.clone())
-                .or_default()
-                .insert(name.name().to_string());
-        }
-    }
-
-    // Rename each colliding segment, deepest paths inheriting their
-    // ancestors' renames.
-    let mut renames: HashMap<Vec<String>, Vec<String>> = HashMap::new();
-    let mut sorted_paths: Vec<Vec<String>> = all_paths.into_iter().collect();
-    sorted_paths.sort();
-    for path in sorted_paths {
-        let Some((child, parent)) = path.split_last() else {
-            continue;
-        };
-        let renamed_parent = renames
-            .get(parent)
-            .cloned()
-            .unwrap_or_else(|| parent.to_vec());
-        let collides = types_in
-            .get(parent)
-            .is_some_and(|types| types.contains(child));
-        let renamed_child = if collides {
-            format!("{child}_")
-        } else {
-            child.clone()
-        };
-        if collides || renames.contains_key(parent) {
-            let mut renamed = renamed_parent;
-            renamed.push(renamed_child);
-            renames.insert(path, renamed);
-        }
-    }
-    renames
 }

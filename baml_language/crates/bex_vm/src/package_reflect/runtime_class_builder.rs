@@ -79,6 +79,19 @@ struct BuilderField {
     /// `@skip`. A `WithMeta` row has no slot for it, so only `fields_from`,
     /// which copies another class's fields, sets it.
     skip: bool,
+    /// The `@json` attributes, which only `fields_from` sets too.
+    json: JsonAttrs,
+    /// `@trace.redact`, set the same way: a copied field stays redacted.
+    redact: bool,
+}
+
+/// A field's `@json` attributes, as a class declares them.
+#[derive(Clone, Default)]
+struct JsonAttrs {
+    rename: Option<String>,
+    flatten: bool,
+    fallback: bool,
+    omit_null: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -149,6 +162,8 @@ struct PreparedField {
     docstring: Option<String>,
     other: IndexMap<String, String>,
     skip: bool,
+    json: JsonAttrs,
+    redact: bool,
 }
 
 type PreparedGroup = IndexMap<u64, Vec<PreparedField>>;
@@ -427,6 +442,8 @@ impl BamlClassClassBuilder for PackageReflectImpl {
             name: name.to_string(),
             root_index,
             skip: false,
+            json: JsonAttrs::default(),
+            redact: false,
         });
 
         for target in pending_builders {
@@ -491,6 +508,13 @@ impl BamlClassClassBuilder for PackageReflectImpl {
                 name: field.name,
                 root_index: roots.len(),
                 skip: field.skip,
+                json: JsonAttrs {
+                    rename: field.json_rename.clone(),
+                    flatten: field.json_flatten,
+                    fallback: field.json_fallback,
+                    omit_null: field.json_omit_null,
+                },
+                redact: field.redact,
             });
             roots.push(root);
         }
@@ -695,6 +719,8 @@ fn prepare_group(
                             docstring: meta.docstring,
                             other: meta.other,
                             skip: field.skip,
+                            json: field.json.clone(),
+                            redact: field.redact,
                         }
                     }
                     Err(message) => {
@@ -718,6 +744,8 @@ fn prepare_group(
                         docstring,
                         other,
                         skip: field.skip,
+                        json: field.json.clone(),
+                        redact: field.redact,
                     },
                     Err(message) => {
                         diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
@@ -733,6 +761,21 @@ fn prepare_group(
                 ));
             }
             fields.push(row);
+        }
+        // Each attribute claims every key left over, so only one field may.
+        if fields
+            .iter()
+            .filter(|field| field.json.flatten || field.json.fallback)
+            .count()
+            > 1
+        {
+            diagnostics.push(compiler_diagnostic(
+                DiagnosticId::TypeMismatch,
+                format!(
+                    "class `{}` has more than one `@json.flatten` or `@json.fallback` field",
+                    node.name
+                ),
+            ));
         }
         prepared.insert(node.id, fields);
     }
@@ -960,6 +1003,7 @@ fn build_group(
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(ptr, type_tag),
@@ -1026,7 +1070,12 @@ fn build_group(
                 skip: field.skip,
                 stream_done: false,
                 must_exist: false,
+                json_rename: field.json.rename.clone(),
+                json_flatten: field.json.flatten,
+                json_fallback: field.json.fallback,
+                json_omit_null: field.json.omit_null,
                 runtime_type: Some(type_value),
+                redact: field.redact,
             });
         }
         let plan = &plans[&node.id];

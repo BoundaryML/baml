@@ -1,0 +1,120 @@
+The `@json` attributes describe how a class looks as JSON, so you don't have to write a `baml.ToJson` or `baml.FromJson` override. `baml.json` follows them with no extra arguments, and so do the `serde` impls of a generated Rust SDK.
+
+`@alias` is different: it's the name a model is shown. Use `@json.rename` for the key your API uses.
+
+## `@json.rename`
+
+Sets the JSON key of a field, or the JSON string of an enum variant.
+
+```baml BAML
+class Network {
+  vpcId string @json.rename("vpc_id")
+}
+
+enum Mode {
+  Fast @json.rename("fast-mode")
+  Slow
+}
+```
+
+The field reads from `vpc_id` and writes to `vpc_id`. The name `vpcId` is no longer a JSON key. If a field has both `@alias` and `@json.rename`, its JSON key is the `@json.rename`, and a model's answer may use either.
+
+## `@json.flatten`
+
+Goes on a `map<string, json>` field. The field holds every key no other field took, and writes them next to the other fields.
+
+```baml BAML
+class Config {
+  id string
+  extra map<string, json> @json.flatten
+}
+```
+
+`{"id": "a", "region": "us"}` reads as `Config { id: "a", extra: {"region": "us"} }` and writes back the same way. If the map holds a key a declared field also writes, the declared field wins and the map entry is skipped.
+
+## `@json.fallback`
+
+Goes on a `map<string, json>` field, and keeps a union open to members you don't know yet. An object whose tag no member has becomes this class, with the whole object in the field. It writes that object back and nothing else.
+
+The class's other fields must be literals, and they name the tag: `type` below. Every other member has to have that literal field too.
+
+```baml BAML
+class UseDefault {
+  type "use-default"
+}
+
+class ByoVpc {
+  type "byo-vpc"
+  vpcId string @json.rename("vpc_id")
+}
+
+class NetworkOther {
+  type "UNKNOWN"
+  raw map<string, json> @json.fallback
+}
+
+type Network = UseDefault | ByoVpc | NetworkOther
+```
+
+| JSON | Reads as |
+| --- | --- |
+| `{"type": "byo-vpc", "vpc_id": "v"}` | `ByoVpc` |
+| `{"type": "future-mode"}` | `NetworkOther` with `raw` holding the object |
+| `{"type": "byo-vpc"}` | An error: the tag is `ByoVpc`'s, but `vpc_id` is missing |
+| `{"kind": "other"}` | An error: there's no `type` |
+
+Only the tag decides. Once a tag picks a member, anything else wrong with the object is an error, including another literal field holding the wrong value. If several members share a tag value, the next literal field that tells them apart is read the same way:
+
+```baml BAML
+class S3 {
+  type "storage"
+  service "s3"
+}
+
+class Gcs {
+  type "storage"
+  service "gcs"
+}
+
+class BindingOther {
+  type "UNKNOWN"
+  raw map<string, json> @json.fallback
+}
+```
+
+Here `{"type": "storage", "service": "minio"}` is a `BindingOther`, and `{"type": "storage"}` is an error.
+
+`@json.flatten` and `@json.fallback` shape JSON in `baml.json` and generated `serde`. `baml.sap`, which parses a model's answer, doesn't read them yet, so don't use them on a class a model fills in.
+
+## `@@json.omit_nulls`
+
+Leaves out the class's optional fields that hold `null` when it's written. A field is optional when its declared type has a `null` arm, directly or through an alias. A `json` field keeps its `null`, because there `null` is a value, and so does a field of a generic type `T` set to `string?`. Reading doesn't change: a missing optional field reads as `null`. It applies only to the class's own fields, not to nested classes.
+
+```baml BAML
+class Request {
+  name string
+  note string?
+
+  @@json.omit_nulls
+}
+```
+
+`Request { name: "a", note: null }` writes `{"name": "a"}`.
+
+## What the compiler rejects
+
+| Mistake | Why |
+| --- | --- |
+| `@json` attributes on a class or enum with its own `to_json` or `from_json`, for any instantiation | The attributes would be ignored |
+| `@json.flatten` or `@json.fallback` on anything but `map<string, json>` | The field holds JSON keys and values |
+| More than one `@json.flatten` or `@json.fallback` in a class, or both on a field | Only one field can hold the remaining keys |
+| `@json.rename` on a `@json.flatten` or `@json.fallback` field | The field has no key of its own |
+| `@skip` on a `@json.flatten` or `@json.fallback` field, or on a fallback class's tag | JSON has to read them |
+| A `@json.fallback` class with a field that isn't a literal, or with no literal field | Its literals name the tag |
+| A union with a fallback and a member with no tag: a class without the literal field, a map, `json`, `unknown`, an interface, media or a type parameter | The union couldn't tell when an object is that member |
+| A union with a fallback and two members no literal field tells apart | The union couldn't pick between them |
+| Two fields or variants with the same JSON key | One key can't fill both |
+
+The compiler checks unions in class fields, type aliases, and function parameters and return types. A union spelled only in an expression, such as `baml.json.decode<A | B>(text)`, is checked when it runs, and fails with a `DecodeError`.
+
+`reflect` classes copied with `fields_from` keep these attributes. An enum rebuilt with `reflect.Enum.new` doesn't keep `@json.rename`.

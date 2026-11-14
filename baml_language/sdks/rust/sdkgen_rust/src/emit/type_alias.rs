@@ -23,7 +23,7 @@ pub(crate) fn emit(
     alias: &TypeAlias,
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, SkipWarning> {
-    let ident = idents::ident(name.name().as_str());
+    let ident = idents::ident(ctx.analysis.names.type_name(name));
     // The recursive stdlib `json` alias has no Rust `type` of its own
     // expansion; its item names the bridge's JSON value instead.
     if translate_ty::is_canonical_json(name) {

@@ -144,10 +144,10 @@ class Bench:
 
     def query(self, project, sql, *flags):
         # As the CLI's own end-to-end tests do: no agent-skill gate for the harness.
-        child = run_child([self.args.baml, "--agent-skill-check", "off", "query", "--from", project, "--format", "json",
+        child = run_child([self.args.baml, "--agent-skill-check", "off", "local", "recordings", "query", "--project-dir", project, "--output-format", "json",
                            *flags, sql])
-        # 0 complete, 1 incomplete evidence (live or unavailable values).
-        if child.code not in (0, 1):
+        # A query that returns a result exits 0, incomplete or not; `status` tells them apart.
+        if child.code:
             raise RuntimeError(f"query {sql!r} exited {child.code}:\n{child.err}")
         result = json.loads(child.out)
         return {

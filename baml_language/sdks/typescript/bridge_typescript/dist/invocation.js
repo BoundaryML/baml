@@ -8,11 +8,11 @@
 // Private implementation. Generated SDK facades provide concrete stdlib types.
 import { cancelFunctionCall } from './native.js';
 import { invokeTarget } from './proto.js';
-export function invoke(target, args, options) {
-    return invokeTarget(target, args, options, false);
-}
-export async function invokeAsync(target, args, options) {
+export async function invoke(target, args, options) {
     return await invokeTarget(target, args, options, true);
+}
+export function invokeSync(target, args, options) {
+    return invokeTarget(target, args, options, false);
 }
 /** Link a native source to one call; retiring the waiter removes the listener. */
 export function attachSignal(signal, callId) {

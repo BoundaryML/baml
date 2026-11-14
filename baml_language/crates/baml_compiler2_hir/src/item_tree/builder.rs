@@ -19,9 +19,8 @@ use crate::{
     },
     item_tree::{
         Class, ClassAttrs, ClassField, ClassFieldAttrs, DefaultExprRef, Enum, EnumAttrs,
-        EnumVariant, EnumVariantAttrs, Function, FunctionParam, ImplBlock, ImplSubject,
-        ImplementsBlock, Interface, InterfaceField, InterfaceFieldLink, ItemTree,
-        ItemTreeSourceMap, Let, MethodOwner, TypeAlias,
+        EnumVariant, EnumVariantAttrs, Function, FunctionParam, ImplBlock, Interface,
+        InterfaceField, ItemTree, ItemTreeSourceMap, Let, MethodOwner, TypeAlias,
     },
 };
 
@@ -82,6 +81,7 @@ impl ItemTreeBuilder {
                 declarative_meta: f.declarative_meta.clone(),
                 metadata: f.metadata,
                 docstring: f.docstring.clone(),
+                header_title: f.header_title.clone(),
                 is_tagged_template_tag: f.is_tagged_template_tag,
                 trace_hook: f.trace_hook.clone(),
                 span: f.span,
@@ -122,21 +122,6 @@ impl ItemTreeBuilder {
                 docstring: f.docstring.clone(),
             })
             .collect();
-        let implements = c
-            .implements
-            .iter()
-            .map(|b| ImplementsBlock {
-                target: b.target.clone(),
-                field_links: b
-                    .field_links
-                    .iter()
-                    .map(InterfaceFieldLink::from_ast)
-                    .collect(),
-                associated_type_bindings: b.associated_type_bindings.clone(),
-                is_out_of_body: b.is_out_of_body,
-                span: b.span,
-            })
-            .collect();
         self.tree.classes.insert(
             id,
             Class {
@@ -144,7 +129,6 @@ impl ItemTreeBuilder {
                 generic_params: c.generic_params.clone(),
                 fields,
                 methods: Vec::new(),
-                implements,
                 attrs,
                 docstring: c.docstring.clone(),
                 span: c.span,
@@ -197,7 +181,7 @@ impl ItemTreeBuilder {
     /// Allocate a stable id for an `implements` block and store it in the
     /// unified `impls` map. `iface_head`/`for_head` seed the position-independent
     /// id (impls have no declared name); the collision index disambiguates impls
-    /// that share both heads. Records the `class_to_impls` edge for `InClass`.
+    /// that share both heads.
     pub fn alloc_impl(
         &mut self,
         iface_head: &Name,
@@ -208,14 +192,7 @@ impl ItemTreeBuilder {
         let index = self.next_index.entry((ItemKind::Impl, h)).or_insert(0);
         let id = LocalItemId::new(h, *index);
         *index += 1;
-        match &block.subject {
-            ImplSubject::InClass { class, .. } => {
-                self.tree.class_to_impls.entry(*class).or_default().push(id);
-            }
-            ImplSubject::Free { .. } => {
-                self.tree.free_impls.push(id);
-            }
-        }
+        self.tree.impl_order.push(id);
         // A method belongs to its impl block regardless of where the block
         // is written — the in-class spelling is pure syntax (TYPE_SYSTEM.md:
         // "the implementation should use a unified path for both forms").
@@ -309,6 +286,8 @@ impl ItemTreeBuilder {
                     explicit_trace_passthrough: false,
                 },
                 docstring: m.docstring.clone(),
+                // An interface's method signature has no `//#` title.
+                header_title: None,
                 is_tagged_template_tag: false,
                 trace_hook: None,
                 span: m.span,

@@ -16,6 +16,180 @@ use std::{
     path::{Path, PathBuf},
 };
 
+// Inline because the published Rust bridge compiles this file through a symlink.
+pub mod agent {
+    //! Coding-agent signals shared by CLI output policy and runtime telemetry.
+    //!
+    //! Reuses the Vercel-derived detector from BAML PR #4726, including its
+    //! review fixes for non-Unicode named markers:
+    //! <https://github.com/BoundaryML/baml/blob/3c89421458a11134544a6d7f1a4e5ee9d2b0b1e3/baml_language/crates/baml_cli/src/output.rs>
+
+    use std::ffi::OsString;
+
+    use super::EnvError;
+
+    /// Dev escape hatch used by hooks and task runners launched inside an agent.
+    pub const DISABLE_AGENT_DETECTION_ENV: &str = "DEV_BAML_CLI_DISABLE_AGENT_DETECTION";
+
+    // Named markers can contain session IDs, paths or credentials: only their
+    // presence is used. AI_AGENT is handled separately as an explicit name.
+    const AGENT_ENV_VARS: &[(&str, &str)] = &[
+        ("CLAUDECODE", "claude"),
+        ("CODEX_SANDBOX", "codex"),
+        ("PI_CODING_AGENT", "pi"),
+        ("OPENCODE_CLIENT", "opencode"),
+        ("CURSOR_TRACE_ID", "cursor"),
+        ("REPL_ID", "replit"),
+    ];
+
+    /// The explicit `AI_AGENT` name, a known harness label, or `unknown` for
+    /// the boolean-ish `AGENT` compatibility marker. Named marker values are
+    /// never reported; they need only be nonempty and different from `0`.
+    pub fn detect() -> Result<Option<String>, EnvError> {
+        detect_with(super::os_var)
+    }
+
+    /// Injectable form of [`detect`], without changing process environment.
+    pub fn detect_with(
+        mut read: impl FnMut(&str) -> Option<OsString>,
+    ) -> Result<Option<String>, EnvError> {
+        if super::bool_from(
+            DISABLE_AGENT_DETECTION_ENV,
+            read(DISABLE_AGENT_DETECTION_ENV),
+        )? == Some(true)
+        {
+            return Ok(None);
+        }
+        // AI_AGENT follows @vercel/detect-agent: its value names the harness
+        // and takes precedence over inherited markers from a parent harness.
+        if let Some(name) = read("AI_AGENT")
+            .and_then(|value| value.into_string().ok())
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty() && value != "0")
+        {
+            return Ok(Some(name));
+        }
+
+        // Named markers do not need Unicode decoding: their contents never
+        // become a reported name. Preserve the reviewed PR #4726 behavior.
+        for &(variable, harness) in AGENT_ENV_VARS {
+            if read(variable).is_some_and(|value| !value.is_empty() && value != "0") {
+                return Ok(Some(harness.to_owned()));
+            }
+        }
+
+        Ok(read("AGENT")
+            .filter(|value| !value.is_empty() && value != "0")
+            .map(|_| "unknown".to_owned()))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        /// Each named marker yields only its fixed label, with empty/zero
+        /// handling and no disclosure of the marker's value.
+        fn every_existing_marker_has_a_bounded_label() {
+            for &(marker, label) in AGENT_ENV_VARS {
+                assert_eq!(
+                    detect_with(|name| (name == marker).then(|| "private-session-value".into()))
+                        .unwrap()
+                        .as_deref(),
+                    Some(label)
+                );
+                for value in ["", "0"] {
+                    assert_eq!(
+                        detect_with(|name| (name == marker).then(|| value.into())),
+                        Ok(None)
+                    );
+                }
+            }
+            assert_eq!(detect_with(|_| None), Ok(None));
+            assert_eq!(
+                detect_with(|name| (name == "AGENT").then(|| "false".into()))
+                    .unwrap()
+                    .as_deref(),
+                Some("unknown")
+            );
+        }
+
+        #[test]
+        /// The explicit `AI_AGENT` name outranks inherited named markers, while
+        /// overlapping named markers retain the reviewed deterministic order.
+        fn explicit_harness_wins_over_named_markers() {
+            assert_eq!(
+                detect_with(|name| match name {
+                    "AI_AGENT" => Some(" custom-harness ".into()),
+                    "CURSOR_TRACE_ID" => Some("private-session-value".into()),
+                    _ => None,
+                })
+                .unwrap()
+                .as_deref(),
+                Some("custom-harness")
+            );
+            assert_eq!(
+                detect_with(
+                    |name| matches!(name, "CLAUDECODE" | "CODEX_SANDBOX").then(|| "1".into())
+                )
+                .unwrap()
+                .as_deref(),
+                Some("claude")
+            );
+        }
+
+        #[test]
+        /// Empty, whitespace-only or zero explicit names fall through to named
+        /// markers; AGENT provides a final unknown-harness fallback.
+        fn empty_explicit_names_fall_back_to_markers() {
+            for value in ["", "  ", "0", " 0 "] {
+                assert_eq!(
+                    detect_with(|name| match name {
+                        "AI_AGENT" => Some(value.into()),
+                        "CODEX_SANDBOX" | "AGENT" => Some("1".into()),
+                        _ => None,
+                    })
+                    .unwrap()
+                    .as_deref(),
+                    Some("codex")
+                );
+            }
+        }
+
+        #[test]
+        /// The dev override accepts shared boolean spellings while retaining
+        /// the CLI's error for an invalid setting.
+        fn escape_hatch_retains_strict_cli_validation() {
+            for value in ["true", "1", "on", "YES"] {
+                assert_eq!(
+                    detect_with(|name| Some(if name == DISABLE_AGENT_DETECTION_ENV {
+                        value.into()
+                    } else {
+                        "1".into()
+                    })),
+                    Ok(None)
+                );
+            }
+            assert!(detect_with(|_| Some("invalid".into())).is_err());
+        }
+
+        #[cfg(unix)]
+        #[test]
+        /// Named markers still classify a harness without decoding their values;
+        /// a non-Unicode explicit name falls through to those markers.
+        fn non_unicode_named_markers_still_detect_harness() {
+            use std::os::unix::ffi::OsStringExt as _;
+            assert_eq!(
+                detect_with(|name| matches!(name, "AI_AGENT" | "CODEX_SANDBOX")
+                    .then(|| OsString::from_vec(vec![0xff])))
+                .unwrap()
+                .as_deref(),
+                Some("codex")
+            );
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum EnvError {
     #[error("{name} is not valid unicode")]

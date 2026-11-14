@@ -30,7 +30,7 @@ const nextConfig = {
   // every serverless function with MODULE_NOT_FOUND on next/dist/compiled/
   // source-map. Force-include it in every function bundle.
   outputFileTracingIncludes: {
-    // /api/og reads brand fonts + the lamb mark from components/og via fs.
+    // /api/og reads brand fonts + images from components/og via fs.
     '/api/og': ['./components/og/**'],
     // /api/markdown-page serves the checked-in alternate representations.
     '/api/markdown-page': ['./content/*.md'],
@@ -50,19 +50,20 @@ const nextConfig = {
     return [
       {
         source: '/changelog',
-        destination: '/blog?tags=release',
+        destination: '/blog?tags=release#blog-all',
         permanent: true,
       },
       {
         source: '/changelog.md',
-        destination: '/blog?tags=release',
+        destination: '/blog?tags=release#blog-all',
         permanent: true,
       },
       {
-        source: '/what-is-baml',
-        destination: '/',
-        permanent: false,
+        source: '/blog/teaching-agents-to-write-beautiful-baml',
+        destination: '/blog/teaching-agents-to-write-maintainable-code',
+        permanent: true,
       },
+      // `/` is the Boundary homepage, and the old BAML landing links fold into it.
       {
         source: '/explore',
         destination: '/',
@@ -114,7 +115,12 @@ const nextConfig = {
       // Retired pages fold into their live successors.
       {
         source: '/thesis',
-        destination: '/explore',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/what-is-baml',
+        destination: '/',
         permanent: true,
       },
       {
@@ -129,6 +135,16 @@ const nextConfig = {
       },
       {
         source: '/solutions',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/atb',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/explore-legacy',
         destination: '/',
         permanent: true,
       },
@@ -181,6 +197,7 @@ const nextConfig = {
     ],
   },
   experimental: {
+    webpackMemoryOptimizations: true,
     optimizeCss: false,
     mdxRs: false,
     // Forward browser logs to the terminal for easier debugging

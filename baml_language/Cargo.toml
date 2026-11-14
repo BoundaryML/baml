@@ -40,9 +40,6 @@ members = [
 ]
 exclude = [
   "vendor/quanta",
-  # Retired profiling pipeline; source retained outside the active build.
-  "crates/bex_prof_store",
-  "crates/baml_query_profiles",
   # Live system-test harnesses are intentionally outside the workspace. They
   # enable native-only tokio/reqwest features such as `fs` and `rt-multi-thread`;
   # keeping them out prevents workspace wasm builds from inheriting those
@@ -84,6 +81,9 @@ baml_linker_types = { path = "crates/baml_linker_types" }
 baml_type = { path = "crates/baml_type" }
 baml_type_runtime = { path = "crates/baml_type_runtime" }
 baml_type_macros = { path = "crates/baml_type_macros" }
+baml_parser = { path = "crates/baml_parser" }
+baml_syntax = { path = "crates/baml_syntax" }
+baml_syntax_macros = { path = "crates/baml_syntax_macros" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 sdkgen_cpp = { path = "sdks/cpp/sdkgen_cpp" }
@@ -106,9 +106,6 @@ baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_rust = { path = "crates/baml_compiler2_rust" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
-baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
-baml_compiler_parser = { path = "crates/baml_compiler_parser" }
-baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
 bex_project = { path = "crates/bex_project", default-features = false }
 bex_engine = { path = "crates/bex_engine", default-features = false }
@@ -119,6 +116,7 @@ sys_ops = { path = "crates/sys_ops", default-features = false }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native", default-features = false }
 baml_env = { path = "crates/baml_env" }
+baml_project_root = { path = "crates/baml_project_root" }
 baml_path = { path = "crates/baml_path" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
@@ -151,7 +149,6 @@ sys_wasm = { path = "crates/sys_wasm" }
 baml_cli = { path = "crates/baml_cli" }
 baml_exec = { path = "crates/baml_exec" }
 bex_events = { path = "crates/bex_events" }
-baml_query = { path = "crates/baml_query" }
 baml_query_btel = { path = "crates/baml_query_btel" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 darwin-kperf = "0.1.0"
@@ -193,11 +190,10 @@ console_error_panic_hook = "0.1"
 miette = { version = "7.6", default-features = false, features = [ "fancy-no-syscall" ] }
 owo-colors = "4"
 crossbeam-channel = { version = "0.5" }
-ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 dirs = "7.0.0"
 dunce = "1.0.5"
-divan = { package = "codspeed-divan-compat", version = "*" }
+divan = "0.1.21"
 # Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
 # crate rustc and rust-analyzer build their inference tables on.
 ena = "0.14"
@@ -221,6 +217,7 @@ libc = "0.2.169"
 libloading = "0.8"
 libsui = { version = "0.16.4" }
 log = "0.4.20"
+os_info = { version = "3.15.0", default-features = false }
 logos = { version = "0.15" }
 # Reserved concurrency model checker; inactive in normal builds.
 loom = { version = "0.7" }
@@ -253,13 +250,11 @@ base64 = "0.22"
 crc32fast = "1.5"
 # LZ4 frames compress the bytecode that generated SDKs embed.
 lz4_flex = { version = "0.13" }
-mime_guess = "2"
 bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
 ] }
 mimalloc = { version = "0.1.52" }
-rowan = { version = "0.16" }
 rustls = { version = "0.23.37", default-features = false }
 rustls-pemfile = "2"
 rusqlite = "0.37.0"
@@ -273,7 +268,11 @@ salsa = { version = "0.28.5", default-features = false, features = [
 ] }
 serde = { version = "1.0.197", features = [ "derive" ] }
 serde-wasm-bindgen = "0.6"
-serde_json = { version = "1.0.113", features = [ "arbitrary_precision", "preserve_order" ] }
+# No features here: a feature in this spec reaches every crate that inherits
+# it, including `baml_bridge`, which publishes to crates.io, and cargo would
+# turn it on for every crate in a consumer's build (#4377). Engine crates ask
+# for `arbitrary_precision` and `preserve_order` themselves.
+serde_json = { version = "1.0.113" }
 # Number formatting for the baml.json writer: the crates serde_json uses.
 itoa = { version = "1" }
 zmij = { version = "1" }
@@ -295,15 +294,6 @@ tempfile = { version = "3" }
 time = { version = "0.3", features = [ "formatting", "macros", "parsing" ] }
 text-size = { version = "1.1", features = [ "serde" ] }
 thiserror = { version = "2.0.0" }
-# Pinned exactly: DataFusion minor bumps change planner behaviour
-# (TASK/baml-query-scope.md §3.1); the conformance corpus re-runs on bumps.
-datafusion = { version = "=54.1.0", default-features = false, features = [
-  "sql",
-  "nested_expressions",
-  "unicode_expressions",
-  "regex_expressions",
-  "datetime_expressions",
-] }
 toml = { version = "0.8" }
 toml_edit = { version = "0.22" }
 tokio = { version = "1.36" }
@@ -385,7 +375,6 @@ unsafe_code = "warn"
 unreachable_pub = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
   "cfg(fuzzing)",
-  "cfg(codspeed)",
   # Reserved for concurrency model-checked builds.
   "cfg(baml_loom)",
 ] }
@@ -479,10 +468,14 @@ opt-level = 3
 [profile.dev.package.similar]
 opt-level = 3
 
-# Syntax trees and type interning are hot in every compiler check. Neither
-# package depends on the embedded stdlib, so stdlib-only edits reuse these
-# optimized artifacts. Keep the dev profile's assertions and overflow checks.
-[profile.dev.package.rowan]
+# Syntax trees and type interning are hot in every compiler check. None of
+# these packages depends on the embedded stdlib, so stdlib-only edits reuse
+# their optimized artifacts. Keep the dev profile's assertions and overflow
+# checks.
+[profile.dev.package.baml_syntax]
+opt-level = 3
+
+[profile.dev.package.baml_parser]
 opt-level = 3
 
 [profile.dev.package.baml_type]

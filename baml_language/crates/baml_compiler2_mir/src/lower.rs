@@ -1350,8 +1350,8 @@ pub fn native_key_for<'db>(
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
 ) -> String {
     use baml_compiler2_hir::item_data::{
-        ImplSubjectData, MethodOwner, class_data, function_data, impl_block_data, interface_data,
-        method_owner,
+        MethodOwner, class_data, function_data, impl_block_data, impl_enclosing_class,
+        interface_data, method_owner,
     };
     let pkg_info = file_package(db, func_loc.file(db));
     // A native body is the standard library's own: its package is a language
@@ -1376,12 +1376,17 @@ pub fn native_key_for<'db>(
         Some(MethodOwner::Interface(iface_loc)) => interface_data(db, iface_loc).name.clone(),
         Some(MethodOwner::Impl(impl_loc)) => {
             let block = impl_block_data(db, impl_loc);
-            let for_display = match &block.subject {
-                ImplSubjectData::Free { for_target, .. } => baml_base::native_key_spelling(
+            // An in-body block's natives are keyed by its class's name (the
+            // codegen extractor keys them with the class); a free block's by
+            // its written for-target.
+            let for_display = match impl_enclosing_class(db, impl_loc) {
+                Some(class) if block.origin == baml_compiler2_ast::ImplOrigin::InBody => {
+                    class_data(db, class).name.to_string()
+                }
+                _ => baml_base::native_key_spelling(
                     package.as_str(),
-                    &block.type_refs.display(*for_target).to_string(),
+                    &block.type_refs.display(block.for_target).to_string(),
                 ),
-                ImplSubjectData::InClass { class, .. } => class_data(db, *class).name.to_string(),
             };
             let iface_display = baml_base::native_key_spelling(
                 package.as_str(),
@@ -2174,12 +2179,13 @@ impl<'db> LoweringContext<'db> {
         let DeclRef::Source(class_loc) = layout::class_ref_of(self.db, class_qtn)? else {
             return None;
         };
-        let class_data = baml_compiler2_hir::item_data::class_data(self.db, class_loc);
         let class_params = baml_compiler2_hir_ty::lower::class_generic_frame(self.db, class_loc);
 
-        for impl_block in &class_data.implements {
+        for &impl_loc in baml_compiler2_hir::item_data::class_impls(self.db, class_loc) {
+            let impl_block = baml_compiler2_hir::item_data::impl_block_data(self.db, impl_loc);
             let view = self.resolve_implements_target_view(
-                impl_block.target,
+                &impl_block.type_refs,
+                impl_block.interface_target,
                 &impl_block.associated_type_bindings,
                 class_loc,
             )?;
@@ -3024,6 +3030,29 @@ impl<'db> LoweringContext<'db> {
         Some(((tn.clone(), args.clone(), assoc.clone()), *field_index))
     }
 
+    /// The interface view a recorded member resolution dispatches a method
+    /// through, when it is a virtual slot bound to its receiver; every other
+    /// resolution kind is `None`. The method twin of
+    /// [`Self::virtual_field_view_of`]: the view the type checker resolved
+    /// the access through, read rather than derived again from the
+    /// receiver's type.
+    fn virtual_method_view_of(
+        resolution: &crate::inference_provider::MemberResolution<'_>,
+    ) -> Option<InterfaceTypeView> {
+        use crate::inference_provider::MemberResolution;
+        let MemberResolution::Method {
+            callee: MethodCallee::Virtual { view, .. },
+            receiver: Receiver::Bound,
+        } = resolution
+        else {
+            return None;
+        };
+        let Tir2Ty::Interface(tn, args, assoc) = view else {
+            return None;
+        };
+        Some((tn.clone(), args.clone(), assoc.clone()))
+    }
+
     fn tir_virtual_field_view(&self, expr: AstExprId) -> Option<(InterfaceTypeView, u32)> {
         Self::virtual_field_view_of(self.tir_resolution(expr)?)
     }
@@ -3255,7 +3284,6 @@ impl<'db> LoweringContext<'db> {
                 .aliases
                 .get(qtn)
                 .and_then(|target| self.interface_dispatch_target_for_member(target, member)),
-            Tir2Ty::Union(members) => self.union_virtual_dispatch_view(members, member),
             Tir2Ty::Interface(..)
             | Tir2Ty::TypeVar(..)
             | Tir2Ty::AssociatedTypeProjection { .. } => self.canonical_dispatch_view(ty, member),
@@ -3330,6 +3358,12 @@ impl<'db> LoweringContext<'db> {
         if !self.allows_interface_method_dispatch(access) {
             return None;
         }
+        if let Some(view) = self
+            .tir_resolution(access)
+            .and_then(Self::virtual_method_view_of)
+        {
+            return Some(view);
+        }
         let narrowed = if matches!(
             &self.body.exprs[access],
             AstExpr::OptionalMemberAccess { .. }
@@ -3350,23 +3384,6 @@ impl<'db> LoweringContext<'db> {
                 self.tir_expr_type(base)
                     .and_then(|ty| self.dispatch_target_for_concrete(ty, member))
             })
-    }
-
-    /// The receiver type a *method call* dispatches on. `x?.m(...)` reaches the
-    /// method only on the non-null path, so the `T | null` TIR recorded for `x`
-    /// narrows to `T` — the same narrowing
-    /// [`Self::dispatch_target_for_member_access`] applies to `x?.field`.
-    /// `access` is the callee expression (`x.m` or `x?.m`).
-    fn call_receiver_tir_ty(&self, access: AstExprId, base: AstExprId) -> Option<Tir2Ty> {
-        let ty = self.tir_expr_type(base)?;
-        if matches!(
-            &self.body.exprs[access],
-            AstExpr::OptionalMemberAccess { .. }
-        ) {
-            Some(ty.strip_null())
-        } else {
-            Some(ty.clone())
-        }
     }
 
     fn source_param_interface_view_for_expr(
@@ -3504,7 +3521,9 @@ impl<'db> LoweringContext<'db> {
             // call, and a default body would run in place of the
             // implementor's own method. A frame the checker's plan and the
             // interface's shape disagree about is an internal inconsistency.
-            MethodCallee::Virtual { interface, method } => {
+            MethodCallee::Virtual {
+                interface, method, ..
+            } => {
                 let Some(shape) = self.interface_method_shape(interface, &method) else {
                     return Err(self.internal_error(
                         &format!(
@@ -3719,7 +3738,9 @@ impl<'db> LoweringContext<'db> {
         dest: Place,
     ) -> Lowered<()> {
         let rvalue = match callee {
-            MethodCallee::Virtual { interface, method } => {
+            MethodCallee::Virtual {
+                interface, method, ..
+            } => {
                 let (interface, method) = (*interface, method.clone());
                 self.virtual_function_rvalue(expr_id, interface, &method)
             }
@@ -3801,7 +3822,9 @@ impl<'db> LoweringContext<'db> {
             MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. } => {
                 Ok(callable_takes_self(self.db, *func))
             }
-            MethodCallee::Virtual { interface, method } => self
+            MethodCallee::Virtual {
+                interface, method, ..
+            } => self
                 .virtual_slot_takes_self(*interface, method)
                 .ok_or_else(|| {
                     self.internal_error_here(&format!(
@@ -3829,7 +3852,9 @@ impl<'db> LoweringContext<'db> {
                         callable_takes_self(self.db, DeclRef::External(*function))
                     }
                 },
-                MethodCallee::Virtual { interface, method } => match interface {
+                MethodCallee::Virtual {
+                    interface, method, ..
+                } => match interface {
                     DeclRef::Source(_) => true,
                     DeclRef::External(interface) => {
                         self.virtual_slot_takes_self(DeclRef::External(*interface), method)
@@ -4161,70 +4186,6 @@ impl<'db> LoweringContext<'db> {
             return None;
         }
         self.canonical_dispatch_view(recv_ty, method)
-    }
-
-    /// The interface views a union arm's member access can resolve `member`
-    /// through: every impl view of the receiver plus its interface-typed
-    /// dispatch target, deduplicated. Shared root set of the field/method
-    /// candidate helpers below.
-    fn member_root_views(&self, recv_ty: &Tir2Ty, member: &Name) -> Vec<InterfaceTypeView> {
-        let mut roots = self.l1_impl_views_for_recv(recv_ty);
-        if let Some(view) = self.interface_dispatch_target_for_member(recv_ty, member)
-            && !roots.contains(&view)
-        {
-            roots.push(view);
-        }
-        roots
-    }
-
-    /// The DECLARING views under which `recv_ty` reaches `field` as an
-    /// interface field — one [`Self::resolve_interface_member`] per root view,
-    /// keeping the `Field` arm. A union member access is only admitted when
-    /// every arm shares exactly one such view.
-    fn interface_field_views_for_member(
-        &self,
-        recv_ty: &Tir2Ty,
-        field: &Name,
-    ) -> Vec<InterfaceTypeView> {
-        let mut declarers = Vec::new();
-        for view in self.member_root_views(recv_ty, field) {
-            let InterfaceMember::Field { declaring, .. } =
-                self.resolve_interface_member(&view, field)
-            else {
-                continue;
-            };
-            if !declarers.contains(&declaring) {
-                declarers.push(declaring);
-            }
-        }
-        declarers
-    }
-
-    /// The field twin's `Method` arm: the DECLARING views under which
-    /// `recv_ty` reaches `method` as an interface method.
-    fn interface_method_views_for_member(
-        &self,
-        recv_ty: &Tir2Ty,
-        method: &Name,
-    ) -> Vec<InterfaceTypeView> {
-        let lang = baml_compiler2_hir::package::lang_roots(self.db);
-        let mut declarers = Vec::new();
-        for view in self.member_root_views(recv_ty, method) {
-            let InterfaceMember::Method { declaring } =
-                self.resolve_interface_member(&view, method)
-            else {
-                continue;
-            };
-            // `baml.Concrete`'s `type` is a static: never a value receiver's
-            // member (TIR's `is_concrete_type_member` carve-out).
-            if baml_compiler2_hir_ty::impls::is_concrete_type_member(lang, &declaring.0, method) {
-                continue;
-            }
-            if !declarers.contains(&declaring) {
-                declarers.push(declaring);
-            }
-        }
-        declarers
     }
 
     /// Whether `iface_qtn` or any interface in its `requires` closure declares a
@@ -4633,17 +4594,13 @@ impl<'db> LoweringContext<'db> {
             let param_ty = if param.name.as_str() == "self"
                 && matches!(param.ty.kind, baml_compiler2_ast::TypeExprKind::Missing)
             {
-                if let Some(imp) = enclosing_impl
-                    && let baml_compiler2_hir::item_data::ImplSubjectData::Free {
-                        for_target, ..
-                    } = &imp.subject
-                {
+                if let Some(imp) = enclosing_impl {
                     let generic_params = self.enclosing_generic_params();
                     let generic_param_bounds = self.enclosing_generic_param_bounds();
                     let tir_ty = lower_ref_in_scope(
                         self.db,
                         &imp.type_refs,
-                        *for_target,
+                        imp.for_target,
                         pkg_items,
                         &pkg_info.namespace_path,
                         &generic_params,
@@ -6701,9 +6658,14 @@ impl<'db> LoweringContext<'db> {
                     segments.len() - 2
                 };
                 let recv_tir_ty = self.tir_path_segment_type(expr_id, recv_seg_idx).cloned();
-                if let Some(view) = recv_tir_ty
-                    .as_ref()
-                    .and_then(|ty| self.interface_dispatch_target_for_member(ty, &method_name))
+                if let Some(view) = self
+                    .tir_path_final_resolution(expr_id)
+                    .and_then(Self::virtual_method_view_of)
+                    .or_else(|| {
+                        recv_tir_ty.as_ref().and_then(|ty| {
+                            self.interface_dispatch_target_for_member(ty, &method_name)
+                        })
+                    })
                     .or_else(|| {
                         recv_tir_ty
                             .as_ref()
@@ -7118,6 +7080,19 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
+        // A chain of string `+` (`a + "/" + b`, and every template) joins its
+        // parts in one step rather than one `+` at a time.
+        if matches!(op, AstBinaryOp::Add)
+            && let Some(parts) = self.string_concat_parts(expr_id)?
+        {
+            let operands = parts
+                .into_iter()
+                .map(|part| self.lower_to_operand(part))
+                .collect::<Lowered<Vec<_>>>()?;
+            self.builder.assign(dest, Rvalue::ConcatStrings(operands));
+            return Ok(());
+        }
+
         // `==`/`!=`: the `baml.ops.equals_equals` driver is the always-correct
         // general case — it compares the operands' concrete runtime types and
         // dispatches a custom `Equals` when present. The specialized comparison
@@ -7384,6 +7359,76 @@ impl<'db> LoweringContext<'db> {
                     && first.is_some()
             }
             _ => kind(lang, ty, include_string).is_some(),
+        }
+    }
+
+    /// The parts of the chain of string `+` that `expr_id` ends, left to
+    /// right, or `None` when it joins fewer than three. The chain follows the
+    /// left operand, which is how `a + b + c` and a template nest. A link that
+    /// TIR folded to a constant is one part.
+    ///
+    /// Joining all parts at once is the same as one `+` at a time: every part
+    /// is still evaluated left to right, and joining strings cannot fail.
+    fn string_concat_parts(&self, expr_id: AstExprId) -> Lowered<Option<Vec<AstExprId>>> {
+        let mut parts = Vec::new();
+        let mut node = expr_id;
+        loop {
+            match self.body.exprs[node] {
+                AstExpr::Binary {
+                    op: AstBinaryOp::Add,
+                    lhs,
+                    rhs,
+                } if self.is_string_add(node, lhs, rhs, node == expr_id)? => {
+                    parts.push(rhs);
+                    node = lhs;
+                }
+                _ => {
+                    parts.push(node);
+                    break;
+                }
+            }
+        }
+        if parts.len() < 3 {
+            return Ok(None);
+        }
+        parts.reverse();
+        Ok(Some(parts))
+    }
+
+    /// Whether `lhs + rhs` at `expr_id` concatenates two strings at run time.
+    /// Below the root of a chain, a link TIR folded to a constant does not.
+    fn is_string_add(
+        &self,
+        expr_id: AstExprId,
+        lhs: AstExprId,
+        rhs: AstExprId,
+        is_root: bool,
+    ) -> Lowered<bool> {
+        if !is_root
+            && self.opt >= crate::OptLevel::Two
+            && matches!(self.expr_ty(expr_id)?, RuntimeTy::Literal(..))
+        {
+            return Ok(false);
+        }
+        Ok(Self::is_string_ty(self.lang(), &self.expr_ty(lhs)?)
+            && Self::is_string_ty(self.lang(), &self.expr_ty(rhs)?))
+    }
+
+    /// Whether every value of `ty` is a string: a string, a string literal, the
+    /// builtin `baml.String` class (`self` in its methods), or a union of them.
+    fn is_string_ty(lang: baml_base::LangRoots, ty: &RuntimeTy) -> bool {
+        match ty {
+            RuntimeTy::String | RuntimeTy::Literal(baml_base::Literal::String(_), _) => true,
+            RuntimeTy::Class(name, args) if args.is_empty() => {
+                name.builtin_primitive(lang) == Some(PrimitiveType::String)
+            }
+            RuntimeTy::Union(members) => {
+                !members.is_empty()
+                    && members
+                        .iter()
+                        .all(|member| Self::is_string_ty(lang, member))
+            }
+            _ => false,
         }
     }
 
@@ -8311,19 +8356,6 @@ impl<'db> LoweringContext<'db> {
             )? {
                 return Ok(());
             }
-            // Receiver may be a union containing an interface member
-            // (e.g. `Animal | Vehicle`), where every member declares the
-            // method. Dispatch on the runtime class across all implementors.
-            if self.try_lower_union_iface_dispatch(
-                expr_id,
-                callee,
-                base_id,
-                &member_name,
-                args,
-                &dest,
-            )? {
-                return Ok(());
-            }
         }
         // BEP-044: `default.<method>(...)` inside an `implements I { ... }`
         // block emits a static call to `I`'s default function, with the
@@ -8431,7 +8463,12 @@ impl<'db> LoweringContext<'db> {
                             None
                         }
                     });
-                let iface_dispatch_opt: Option<InterfaceTypeView> = if segments.len() == 2 {
+                let iface_dispatch_opt: Option<InterfaceTypeView> = if let Some(view) = self
+                    .tir_path_final_resolution(callee)
+                    .and_then(Self::virtual_method_view_of)
+                {
+                    Some(view)
+                } else if segments.len() == 2 {
                     self.source_param_interface_view_for_name_at(callee, &segments[0], &method_name)
                         .or_else(|| {
                             recv_tir_ty.as_ref().and_then(|ty| {
@@ -8495,31 +8532,6 @@ impl<'db> LoweringContext<'db> {
                         return Ok(());
                     }
                 }
-                // A union receiver is callable only through an interface shared by
-                // every arm.
-                else if let Some(members) = self
-                    .tir_path_segment_type(callee, prefix_idx)
-                    .and_then(Self::tir_union_members)
-                {
-                    let receiver_segments = &segments[..segments.len() - 1];
-                    let recv_local =
-                        self.lower_path_receiver_to_local(callee, receiver_segments, recv_root)?;
-                    if let Some((decl_tn, decl_args, decl_assoc)) =
-                        self.union_virtual_dispatch_view(&members, &method_name)
-                        && self.emit_virtual_call(
-                            recv_local,
-                            &decl_tn,
-                            &decl_args,
-                            &decl_assoc,
-                            &method_name,
-                            expr_id,
-                            args,
-                            &dest,
-                        )?
-                    {
-                        return Ok(());
-                    }
-                }
             }
         }
 
@@ -8563,7 +8575,10 @@ impl<'db> LoweringContext<'db> {
                         // interface is always on a receiver, so it takes
                         // `self`; a served interface's row says.
                         MemberResolution::Method {
-                            callee: MethodCallee::Virtual { interface, method },
+                            callee:
+                                MethodCallee::Virtual {
+                                    interface, method, ..
+                                },
                             ..
                         } => match interface {
                             DeclRef::Source(_) => true,
@@ -8663,7 +8678,10 @@ impl<'db> LoweringContext<'db> {
                         ..
                     } => callable_takes_self(self.db, *func),
                     MemberResolution::Method {
-                        callee: MethodCallee::Virtual { interface, method },
+                        callee:
+                            MethodCallee::Virtual {
+                                interface, method, ..
+                            },
                         ..
                     } => match interface {
                         DeclRef::Source(_) => true,
@@ -11340,87 +11358,6 @@ impl<'db> LoweringContext<'db> {
         Ok(local)
     }
 
-    /// A method call whose receiver is a union that contains at least one
-    /// *interface* member (e.g. `Animal | Vehicle`, where every member declares
-    /// `method`). BEP-044: a method every union member provides through a shared
-    /// interface dispatches open-world — the runtime value is one concrete member,
-    /// so a virtual call keyed on the shared interface resolves its impl. Falls
-    /// through (returns false) when the members share no providing interface, so
-    /// the caller can report the real error.
-    fn try_lower_union_iface_dispatch(
-        &mut self,
-        expr_id: AstExprId,
-        callee: AstExprId,
-        base: AstExprId,
-        method: &Name,
-        args: &[AstExprId],
-        dest: &Place,
-    ) -> Lowered<bool> {
-        let Some(members) = self
-            .call_receiver_tir_ty(callee, base)
-            .as_ref()
-            .and_then(Self::tir_union_members)
-        else {
-            return Ok(false);
-        };
-        let Some((decl_tn, decl_args, decl_assoc)) =
-            self.union_virtual_dispatch_view(&members, method)
-        else {
-            return Ok(false);
-        };
-        let receiver_op = self.lower_to_operand(base)?;
-        let receiver_ty = self.expr_ty(base)?;
-        let recv_local = self.operand_to_local(receiver_op, receiver_ty);
-        self.emit_virtual_call(
-            recv_local,
-            &decl_tn,
-            &decl_args,
-            &decl_assoc,
-            method,
-            expr_id,
-            args,
-            dest,
-        )
-    }
-
-    /// The declaring-interface view for a member access on a union receiver.
-    /// Every member must provide the same realized interface. Fields take
-    /// precedence over methods, matching type checking.
-    fn union_virtual_dispatch_view(
-        &self,
-        members: &[Tir2Ty],
-        member_name: &Name,
-    ) -> Option<InterfaceTypeView> {
-        let shared_view = |candidate_views: &dyn Fn(&Tir2Ty) -> Vec<InterfaceTypeView>| {
-            let mut shared = candidate_views(members.first()?);
-            for member in &members[1..] {
-                let candidates = candidate_views(member);
-                shared.retain(|view| candidates.contains(view));
-            }
-            let facts = baml_compiler2_hir_ty::facts::Facts::with_bounds(
-                self.db,
-                self.enclosing_generic_param_bounds(),
-            );
-            baml_compiler2_hir_ty::method_resolution::prefer_explicit_members(
-                self.db,
-                baml_compiler2_hir::file_package::file_package(self.db, self.file).root,
-                &facts,
-                &baml_type::interned::Ty::from_plain(&Tir2Ty::Union(members.into())),
-                &mut shared,
-                |(name, args, pins)| {
-                    baml_type::interned::InferInterface::from_constraint(
-                        &baml_type::Interface::new(name.clone(), args.clone(), pins.clone()),
-                    )
-                },
-            );
-            (shared.len() == 1).then(|| shared.remove(0))
-        };
-
-        shared_view(&|member| self.interface_field_views_for_member(member, member_name)).or_else(
-            || shared_view(&|member| self.interface_method_views_for_member(member, member_name)),
-        )
-    }
-
     /// The frame shape of an interface's method, wherever the interface is
     /// declared: whether it takes a `self` receiver, and how its generic
     /// frame `[Self] ++ interface generics ++ own generics` divides
@@ -11814,6 +11751,7 @@ impl<'db> LoweringContext<'db> {
 
     fn resolve_implements_target_view(
         &self,
+        target_store: &baml_compiler2_hir::type_ref::TypeRefStore,
         target: baml_compiler2_hir::type_ref::TypeRefId,
         associated_type_bindings: &[baml_compiler2_hir::item_data::AssociatedTypeBindingData],
         class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
@@ -11821,10 +11759,9 @@ impl<'db> LoweringContext<'db> {
         let class_file = class_loc.file(self.db);
         let class_pkg = baml_compiler2_hir::file_package::file_package(self.db, class_file);
         let class_pkg_items = package_items(self.db, class_pkg.root);
-        let class_data = baml_compiler2_hir::item_data::class_data(self.db, class_loc);
-        // `target` and the class-side `associated_type_bindings` index the class's
-        // own arena; the interface's associated-type defaults index the interface's.
-        let target_store = &class_data.type_refs;
+        // `target` and the block's `associated_type_bindings` index the impl
+        // block's own arena (`target_store`); the interface's associated-type
+        // defaults index the interface's.
         let target_loc = resolve_ref_to_interface_loc(
             self.db,
             target_store,
@@ -13556,17 +13493,6 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), success, failure);
         }
         Ok(())
-    }
-
-    /// The members of a union receiver, transparently unwrapping `Optional`
-    /// layers — `(Dog | Named)?` after a null check still dispatches the
-    /// field/method on the underlying union. Returns `None` when `ty` isn't a
-    /// (optionally-wrapped) union.
-    fn tir_union_members(ty: &Tir2Ty) -> Option<Vec<Tir2Ty>> {
-        match ty {
-            Tir2Ty::Union(members) => Some(members.to_vec()),
-            _ => None,
-        }
     }
 
     /// Whether `ty` is (or contains, inside a union/optional) an interface view

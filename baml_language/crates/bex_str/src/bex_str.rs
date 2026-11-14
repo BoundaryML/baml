@@ -517,6 +517,31 @@ impl BexStr {
         }))
     }
 
+    /// `parts` joined left to right: the string that folding [`Self::concat`]
+    /// over them returns, built without a rope node per step.
+    ///
+    /// A part of at most 1 KiB (`CONCAT_MANY_COPY_LIMIT`) is copied into one
+    /// flat buffer. A longer part is kept by reference, as `concat` keeps it,
+    /// so appending a few pieces to a long string (`s = s + a + b` in a loop)
+    /// still costs nothing in the length of `s`.
+    pub fn concat_many(parts: &[&BexStr]) -> BexStr {
+        let mut result = BexStr::empty();
+        let mut rest = parts;
+        loop {
+            let short = rest
+                .iter()
+                .take_while(|part| part.byte_len() <= CONCAT_MANY_COPY_LIMIT)
+                .count();
+            let (copied, after) = rest.split_at(short);
+            result = BexStr::concat(result, copy_parts(copied));
+            let Some((long, after)) = after.split_first() else {
+                return result;
+            };
+            result = BexStr::concat(result, (*long).clone());
+            rest = after;
+        }
+    }
+
     /// Pointer equality check — true if both point to the same Arc.
     fn ptr_eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -556,6 +581,43 @@ impl BexStr {
             }
         }
     }
+}
+
+/// Longest part [`BexStr::concat_many`] copies; a longer one stays shared.
+pub(crate) const CONCAT_MANY_COPY_LIMIT: usize = 1024;
+
+/// Consecutive short parts of a [`BexStr::concat_many`], copied into one string.
+fn copy_parts(parts: &[&BexStr]) -> BexStr {
+    let byte_len: usize = parts.iter().map(|part| part.byte_len()).sum();
+    if byte_len <= INLINE_CAPACITY {
+        let mut data = [0u8; INLINE_CAPACITY];
+        let mut at = 0;
+        for part in parts {
+            let bytes = part.as_bytes();
+            data[at..at + bytes.len()].copy_from_slice(bytes);
+            at += bytes.len();
+        }
+        return BexStr::Inline {
+            byte_len: byte_len as u8,
+            data,
+        };
+    }
+    let mut bytes = Vec::with_capacity(byte_len);
+    let mut char_len = 0;
+    let mut ascii_prefix_len = 0;
+    for part in parts {
+        let (prefix, chars) = part.ascii_prefix_and_char_len();
+        if ascii_prefix_len == bytes.len() {
+            ascii_prefix_len += prefix;
+        }
+        char_len += chars;
+        bytes.extend_from_slice(part.as_bytes());
+    }
+    BexStr::Flat(Arc::new(FlatStr::from_parts(
+        bytes.into_boxed_slice(),
+        char_len as u64,
+        ascii_prefix_len as u64,
+    )))
 }
 
 // ── FlatStr ────────────────────────────────────────────────────────

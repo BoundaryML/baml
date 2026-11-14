@@ -281,6 +281,19 @@ fn format_float(value: f64) -> Option<String> {
     }
 }
 
+/// A union of members that may still contain inference variables: canonical
+/// when every member is closed, structural until then.
+pub(crate) fn union_of_tys(facts: &crate::facts::Facts<'_>, members: &[Ty]) -> Ty {
+    let closed: Result<Vec<_>, _> = members
+        .iter()
+        .map(baml_type::interned::ClosedTy::try_from)
+        .collect();
+    match closed {
+        Ok(closed) => canonical_union_interned(&closed, facts).into_ty(),
+        Err(baml_type::interned::OpenTy) => syntactic_union(members),
+    }
+}
+
 /// The STRUCTURAL third of union canonicalization, safe on
 /// var-carrying members: flatten nested unions, drop `never`, dedup
 /// identical members, collapse the empty union to `never` and the
@@ -325,7 +338,11 @@ fn syntactic_union(members: &[Ty]) -> Ty {
 /// discipline as the canonical walk's fuel. Any real chain is far
 /// shorter; a cyclic binding is a declaration-level error caught
 /// elsewhere.
-const PROJECTION_FINALIZE_FUEL: u32 = 32;
+pub(crate) const PROJECTION_FINALIZE_FUEL: u32 = 32;
+
+/// Depth budget for the role-marker walk over an interpolated type; a
+/// recursive alias (`baml.json.json`) would otherwise never bottom out.
+const ROLE_MARKER_FUEL: u8 = 16;
 
 /// One member access's resolution: which declaration the member refers
 /// to, through which dispatch mode - TIR's `MemberResolution` shape,
@@ -378,9 +395,11 @@ pub enum MethodCallee<'db, T = baml_type::Ty> {
     /// (`callable_owner_type`), never carried alongside it.
     Inherent(FunctionRef<'db>),
     /// A virtual interface slot: dispatch resolves to the receiver's
-    /// runtime impl.
+    /// runtime impl, keyed on the realized declaring-interface view
+    /// (`view`) the access was checked through.
     Virtual {
         interface: InterfaceRef<'db>,
+        view: T,
         method: baml_type::Name,
     },
     /// A statically-matched impl's method: the method the impl provides,
@@ -420,7 +439,9 @@ impl<'db, T> MethodCallee<'db, T> {
     pub fn callable(&self, db: &'db dyn baml_compiler2_hir::Db) -> Option<FunctionRef<'db>> {
         match self {
             MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. } => Some(*func),
-            MethodCallee::Virtual { interface, method } => match interface {
+            MethodCallee::Virtual {
+                interface, method, ..
+            } => match interface {
                 DeclRef::Source(interface) => {
                     baml_compiler2_hir::item_data::interface_data(db, *interface)
                         .methods
@@ -911,6 +932,15 @@ enum PendingDiag<'db> {
         base: Ty,
         member: baml_type::Name,
     },
+    /// A member on a union receiver whose type needs one answer where the
+    /// arms bind an associated type differently.
+    UnionAssociatedTypeConflict {
+        expr: ExprId,
+        base: Ty,
+        member: baml_type::Name,
+        is_method: bool,
+        types: Vec<Ty>,
+    },
     /// An abstract type (union or interface existential) instantiating an
     /// interface-bounded generic parameter - no single runtime type to
     /// dispatch on (E0001).
@@ -1251,6 +1281,10 @@ enum PendingDiag<'db> {
         expr: ExprId,
         ty: Ty,
     },
+    InterpolatedRoleMarker {
+        expr: ExprId,
+        ty: Ty,
+    },
     BareOutputFormatReference {
         expr: ExprId,
     },
@@ -1431,7 +1465,11 @@ impl<'db, T> InferenceResult<'db, T> {
         }
         fn resolution_types<'a, T>(resolution: &'a MemberResolution<'_, T>, out: &mut Vec<&'a T>) {
             match resolution {
-                MemberResolution::InterfaceVirtualField { view, .. } => out.push(view),
+                MemberResolution::InterfaceVirtualField { view, .. }
+                | MemberResolution::Method {
+                    callee: MethodCallee::Virtual { view, .. },
+                    ..
+                } => out.push(view),
                 MemberResolution::Method {
                     callee:
                         MethodCallee::Concrete {
@@ -1440,7 +1478,7 @@ impl<'db, T> InferenceResult<'db, T> {
                     ..
                 } => out.extend(frame_type_args.iter()),
                 MemberResolution::Method {
-                    callee: MethodCallee::Inherent(_) | MethodCallee::Virtual { .. },
+                    callee: MethodCallee::Inherent(_),
                     ..
                 }
                 | MemberResolution::Field { .. }
@@ -5113,14 +5151,7 @@ impl<'db> InferenceContext<'db> {
     /// join stays syntactic until resolution - the S13 finalize pass
     /// re-canonicalizes once every variable is solved or ruled an error.
     fn union_of(&mut self, members: &[Ty]) -> Ty {
-        let closed: Result<Vec<_>, _> = members
-            .iter()
-            .map(baml_type::interned::ClosedTy::try_from)
-            .collect();
-        match closed {
-            Ok(closed) => canonical_union_interned(&closed, &self.facts).into_ty(),
-            Err(baml_type::interned::OpenTy) => syntactic_union(members),
-        }
+        union_of_tys(&self.facts, members)
     }
 
     /// The control-flow join: a canonical union that PRESERVES literal
@@ -6959,6 +6990,22 @@ impl<'db> InferenceContext<'db> {
                     let (ty, bound) = self.interface_member_callee(interface_member, call, true);
                     return (ty, bound, resolution);
                 }
+                crate::method_resolution::UnionMemberLookup::AssociatedTypeConflict {
+                    is_method,
+                    types,
+                } => {
+                    if self.member_probe_depth == 0 {
+                        self.pending_diags
+                            .push(PendingDiag::UnionAssociatedTypeConflict {
+                                expr: member_expr,
+                                base: resolved.clone(),
+                                member: member.clone(),
+                                is_method,
+                                types,
+                            });
+                    }
+                    return (Ty::error(), false, None);
+                }
                 crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
                     if self.member_probe_depth == 0 {
                         self.pending_diags.push(PendingDiag::AmbiguousMember {
@@ -7259,8 +7306,11 @@ impl<'db> InferenceContext<'db> {
         let bound = interface_member.is_method
             && bind_self
             && self.interface_member_takes_self(&interface_member);
-        if let Some(crate::method_resolution::PendingOwnGenerics { callable, prefix }) =
-            interface_member.pending_own
+        if let Some(crate::method_resolution::PendingOwnGenerics {
+            callable,
+            prefix,
+            arms,
+        }) = interface_member.pending_own
         {
             let own_params = callable_signature(self.db, callable).generic_params.clone();
             let method_name = callable_display_name(self.db, callable).clone();
@@ -7275,7 +7325,13 @@ impl<'db> InferenceContext<'db> {
             let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
             self.register_callable_instantiation(callable, &instantiation, call);
             return (
-                instantiate_callable_signature(self.db, callable, &instantiation),
+                crate::method_resolution::instantiate_member_signature(
+                    self.db,
+                    &self.facts,
+                    callable,
+                    &instantiation,
+                    arms.as_deref(),
+                ),
                 bound,
             );
         }
@@ -7912,7 +7968,7 @@ impl<'db> InferenceContext<'db> {
         // E0790, whose fix is the fully-qualified spelling.
         let dispatch = crate::callable::callable_self_dispatch(self.db, method);
         let iface_ref = InferInterface::new(
-            iface_qtn,
+            iface_qtn.clone(),
             // The WRITTEN arguments: `Conv<int>` and `Conv<string>` are
             // different interfaces, so a message naming a bare `Conv` would
             // not say which one the reference meant. Empty for the inferred
@@ -7949,6 +8005,9 @@ impl<'db> InferenceContext<'db> {
                 None => self.fresh_required_arg(param, anchor),
             });
         }
+        // The slot's interface at the frame's generics group (`Self` is slot 0).
+        let view =
+            InferInterface::new(iface_qtn, instantiation[1..].into(), Box::new([])).existential();
         let own_args = self.own_instantiation_with_bounds(
             own,
             own_params,
@@ -7986,6 +8045,7 @@ impl<'db> InferenceContext<'db> {
                 MemberResolution::Method {
                     callee: MethodCallee::Virtual {
                         interface,
+                        view,
                         method: member.clone(),
                     },
                     receiver: Receiver::Unbound,
@@ -10206,6 +10266,22 @@ impl<'db> InferenceContext<'db> {
                     resolution,
                 )
             }
+            crate::method_resolution::UnionMemberLookup::AssociatedTypeConflict {
+                is_method,
+                types,
+            } => {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags
+                        .push(PendingDiag::UnionAssociatedTypeConflict {
+                            expr: at,
+                            base: union_ty.clone(),
+                            member: member.clone(),
+                            is_method,
+                            types,
+                        });
+                }
+                (Ty::error(), None)
+            }
             crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
                 if self.member_probe_depth == 0 {
                     self.pending_diags.push(PendingDiag::AmbiguousMember {
@@ -10279,9 +10355,14 @@ impl<'db> InferenceContext<'db> {
                 field_index: *field_index,
                 field: member.clone(),
             }),
-            MemberDeclarer::VirtualMethod { interface, .. } => Some(MemberResolution::Method {
+            MemberDeclarer::VirtualMethod {
+                interface,
+                realized,
+                ..
+            } => Some(MemberResolution::Method {
                 callee: MethodCallee::Virtual {
                     interface: *interface,
+                    view: realized.existential(),
                     method: member.clone(),
                 },
                 receiver,
@@ -10305,21 +10386,31 @@ impl<'db> InferenceContext<'db> {
     /// If `name` is a FIELD declared by an interface this class
     /// implements, the class field backing it (`field as class_field`
     /// link, else the same name). `None` when no implemented interface
-    /// declares it.
+    /// declares it. The class's impls are enumerated like every other
+    /// receiver's, through the impl registry.
     fn constructor_interface_field_link(
         &self,
         class: baml_compiler2_hir::loc::ClassLoc<'db>,
         name: &baml_type::Name,
     ) -> Option<baml_type::Name> {
         let db = self.db;
-        let data = baml_compiler2_hir::item_data::class_data(db, class);
         let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
         let pkg_items = baml_compiler2_hir::package::package_items(db, pkg.root);
-        for block in &data.implements {
+        let self_ty = crate::lower::class_self_ty(db, class);
+        for resolved in crate::impls::impls_for_type(db, pkg.root, &self_ty) {
+            // Field links are source data (an interface with fields is
+            // implemented in-body, so the block is in this compilation).
+            let crate::impls::ResolvedImplFacts::Source {
+                block: impl_loc, ..
+            } = resolved.facts
+            else {
+                continue;
+            };
+            let block = baml_compiler2_hir::item_data::impl_block_data(db, impl_loc);
             let Some(interface) = crate::interfaces::resolve_ref_to_interface(
                 db,
-                &data.type_refs,
-                block.target,
+                &block.type_refs,
+                block.interface_target,
                 pkg_items,
                 &pkg.namespace_path,
             ) else {
@@ -10609,8 +10700,11 @@ impl<'db> InferenceContext<'db> {
         interface_member: crate::method_resolution::InterfaceMember<'db>,
         at: ExprId,
     ) -> Ty {
-        if let Some(crate::method_resolution::PendingOwnGenerics { callable, prefix }) =
-            interface_member.pending_own
+        if let Some(crate::method_resolution::PendingOwnGenerics {
+            callable,
+            prefix,
+            arms,
+        }) = interface_member.pending_own
         {
             // A VALUE reference, reported as the unspecialized value (see
             // the inherent method value road), not as an uninferred slot;
@@ -10631,10 +10725,12 @@ impl<'db> InferenceContext<'db> {
                 // `default`'s adopted frame) supplies the owner prefix.
                 self.write_call_type_args(at, &instantiation, owner_count);
             }
-            return bind_receiver(instantiate_callable_signature(
+            return bind_receiver(crate::method_resolution::instantiate_member_signature(
                 self.db,
+                &self.facts,
                 callable,
                 &instantiation,
+                arms.as_deref(),
             ));
         }
         // Same rule as the call road: a `self`-less method binds nothing.
@@ -11844,6 +11940,12 @@ impl<'db> InferenceContext<'db> {
                             expr: *expr,
                             ty: resolved,
                         });
+                    } else if self.holds_role_marker(&resolved, ROLE_MARKER_FUEL) {
+                        self.pending_diags
+                            .push(PendingDiag::InterpolatedRoleMarker {
+                                expr: *expr,
+                                ty: resolved,
+                            });
                     }
                 }
                 TemplateSegment::For { body, .. } | TemplateSegment::CStyleFor { body, .. } => {
@@ -11863,6 +11965,27 @@ impl<'db> InferenceContext<'db> {
                 // Text, and an interpolation with no value to refuse.
                 TemplateSegment::Text(_) | TemplateSegment::Effect { .. } => {}
             }
+        }
+    }
+
+    /// Whether stringifying `ty` would render an `ai.Role` as text: the
+    /// type is `ai.Role` or holds it through a union, list, map value, or
+    /// type alias. Fuel bounds recursive aliases such as `baml.json.json`.
+    fn holds_role_marker(&self, ty: &Ty, fuel: u8) -> bool {
+        if fuel == 0 {
+            return false;
+        }
+        let expanded = self.expand_alias_ty(ty);
+        match expanded.kind() {
+            InferTy::Class(name, _) => {
+                name.is_lang_root_type(self.lang(), baml_base::LangPackage::Ai, "Role")
+            }
+            InferTy::Union(members) => members
+                .iter()
+                .any(|member| self.holds_role_marker(member, fuel - 1)),
+            InferTy::List(element) => self.holds_role_marker(element, fuel - 1),
+            InferTy::Map { value, .. } => self.holds_role_marker(value, fuel - 1),
+            _ => false,
         }
     }
 
@@ -13135,6 +13258,21 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::UnionAssociatedTypeConflict {
+                        expr,
+                        base,
+                        member,
+                        is_method,
+                        types,
+                    } => (
+                        TirTypeError::UnionMemberAssociatedTypeConflict {
+                            union: self.plain_finalized(&base),
+                            member,
+                            is_method,
+                            types: types.iter().map(|ty| self.plain_finalized(ty)).collect(),
+                        },
+                        expr,
+                    ),
                     PendingDiag::BoundedArgNotConcrete {
                         expr,
                         arg,
@@ -13443,6 +13581,12 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::InterpolatedMaybeNull { expr, ty } => (
                         TirTypeError::InterpolatedValueMaybeNull {
+                            ty: self.plain_finalized(&ty),
+                        },
+                        expr,
+                    ),
+                    PendingDiag::InterpolatedRoleMarker { expr, ty } => (
+                        TirTypeError::RoleMarkerInUntaggedTemplate {
                             ty: self.plain_finalized(&ty),
                         },
                         expr,
@@ -15714,9 +15858,15 @@ impl<'db> InferenceContext<'db> {
             MemberResolution::Method { callee, receiver } => MemberResolution::Method {
                 callee: match callee {
                     MethodCallee::Inherent(func) => MethodCallee::Inherent(func),
-                    MethodCallee::Virtual { interface, method } => {
-                        MethodCallee::Virtual { interface, method }
-                    }
+                    MethodCallee::Virtual {
+                        interface,
+                        view,
+                        method,
+                    } => MethodCallee::Virtual {
+                        interface,
+                        view: self.materialize_ty(&view),
+                        method,
+                    },
                     MethodCallee::Concrete {
                         impl_block,
                         func,
@@ -15914,7 +16064,11 @@ fn finalize_member_resolution(
     resolution: &mut MemberResolution<'_, Ty>,
 ) {
     match resolution {
-        MemberResolution::InterfaceVirtualField { view, .. } => {
+        MemberResolution::InterfaceVirtualField { view, .. }
+        | MemberResolution::Method {
+            callee: MethodCallee::Virtual { view, .. },
+            ..
+        } => {
             *view = ctx.finalize_ty(view).into_ty();
         }
         MemberResolution::Method {
@@ -15928,7 +16082,7 @@ fn finalize_member_resolution(
             }
         }
         MemberResolution::Method {
-            callee: MethodCallee::Inherent(_) | MethodCallee::Virtual { .. },
+            callee: MethodCallee::Inherent(_),
             ..
         }
         | MemberResolution::Field { .. }

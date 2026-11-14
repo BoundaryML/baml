@@ -58,12 +58,13 @@ function verify_prefixes() -> string {
 fn inlined_binary_prefixes_do_not_spill_call_results() {
     let program = compile_source_with_opt(&format!("{BACKTICKS}\n{SOURCE}"), OptLevel::Two);
     // A string hole needs no call, so the backtick cases fold to constants;
-    // `prefix_template`'s class hole keeps a call result in a `+` prefix.
+    // `prefix_template`'s class hole keeps a call result in the prefix of the
+    // one `ConcatStrings` its template joins with.
     for (name, count) in [
         ("bt_case_h", 2),
         ("bt_case_i", 2),
         ("bt_case_n", 3),
-        ("prefix_template", 8),
+        ("prefix_template", 7),
         ("prefix_subtract", 5),
         ("prefix_divide", 5),
         ("prefix_nested", 7),

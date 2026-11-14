@@ -1,0 +1,613 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== nested_quotes.baml ===
+SourceFile@41..547
+  items: ClassDef@41..345
+    kw: Class "class" @41..46
+    name: Name@47..59
+      token: Word "NestedQuotes" @47..59
+    l: LBrace "{" @60..61
+    members: Field@64..113
+      name: Name@64..80
+        token: Word "single_in_double" @64..80
+      ty: PathType@81..87
+        head: Name@81..87
+          token: Word "string" @81..87
+      attrs: Attribute@88..113
+        at: At "@" @88..89
+        path: DottedName@89..94
+          head: Name@89..94
+            token: Word "alias" @89..94
+        args: AttrArgs@94..113
+          l: LParen "(" @94..95
+          args: StringLit@95..112
+            token: String "\"He said 'hello'\"" @95..112
+          r: RParen ")" @112..113
+    members: Field@116..166
+      name: Name@116..132
+        token: Word "double_in_single" @116..132
+      ty: PathType@133..139
+        head: Name@133..139
+          token: Word "string" @133..139
+      attrs: Attribute@140..166
+        at: At "@" @140..141
+        path: DottedName@141..146
+          head: Name@141..146
+            token: Word "alias" @141..146
+        args: AttrArgs@146..166
+          l: LParen "(" @146..147
+          r: RParen ")" @165..166
+    members: Field@169..226
+      name: Name@169..187
+        token: Word "escaped_in_escaped" @169..187
+      ty: PathType@188..194
+        head: Name@188..194
+          token: Word "string" @188..194
+      attrs: Attribute@195..226
+        at: At "@" @195..196
+        path: DottedName@196..201
+          head: Name@196..201
+            token: Word "alias" @196..201
+        args: AttrArgs@201..226
+          l: LParen "(" @201..202
+          args: StringLit@202..225
+            token: String "\"The \\\"quote\\\" is here\"" @202..225
+          r: RParen ")" @225..226
+    members: Field@229..293
+      name: Name@229..244
+        token: Word "complex_nesting" @229..244
+      ty: PathType@245..251
+        head: Name@245..251
+          token: Word "string" @245..251
+      attrs: Attribute@252..293
+        at: At "@" @252..253
+        path: DottedName@253..264
+          head: Name@253..264
+            token: Word "description" @253..264
+        args: AttrArgs@264..293
+          l: LParen "(" @264..265
+          args: StringLit@265..292
+            token: String "\"It's \\\"really\\\" 'complex'\"" @265..292
+          r: RParen ")" @292..293
+    members: Field@296..343
+      name: Name@296..305
+        token: Word "json_like" @296..305
+      ty: PathType@306..312
+        head: Name@306..312
+          token: Word "string" @306..312
+      attrs: Attribute@313..343
+        at: At "@" @313..314
+        path: DottedName@314..319
+          head: Name@314..319
+            token: Word "alias" @314..319
+        args: AttrArgs@319..343
+          l: LParen "(" @319..320
+          args: StringLit@320..342
+            token: String "\"{\\\"key\\\": \\\"value\\\"}\"" @320..342
+          r: RParen ")" @342..343
+    r: RBrace "}" @344..345
+  items: FunctionDef@382..547
+    kw: Function "function" @382..390
+    name: Name@391..404
+      token: Word "FormatMessage" @391..404
+    params: ParamList@404..418
+      l: LParen "(" @404..405
+      params: Param@405..417
+        name: Name@405..409
+          token: Word "name" @405..409
+        ascription: TypeAscription@409..417
+          colon: Colon ":" @409..410
+          ty: PathType@411..417
+            head: Name@411..417
+              token: Word "string" @411..417
+      r: RParen ")" @417..418
+    ret: ReturnType@419..428
+      arrow: Arrow "->" @419..421
+      ty: PathType@422..428
+        head: Name@422..428
+          token: Word "string" @422..428
+    body: LlmBody@429..547
+      l: LBrace "{" @429..430
+      fields: ClientField@433..445
+        kw: Client "client" @433..439
+        colon: Colon ":" @439..440
+        value: PathExpr@441..445
+          head: Name@441..445
+            token: Word "GPT4" @441..445
+      fields: PromptField@448..545
+        kw: Prompt "prompt" @448..454
+        colon: Colon ":" @454..455
+        value: BacktickString@456..545
+          open: BacktickStart "`" @456..457
+          parts: TemplateChunk "\n    Generate a message for \"" @457..486
+          parts: TemplateInterp@486..493
+            open: DollarLBrace "${" @486..488
+            tail: PathExpr@488..492
+              head: Name@488..492
+                token: Word "name" @488..492
+            close: RBrace "}" @492..493
+          parts: TemplateChunk "\"\n    Include quotes like: \"Welcome, '" @493..531
+          parts: TemplateInterp@531..538
+            open: DollarLBrace "${" @531..533
+            tail: PathExpr@533..537
+              head: Name@533..537
+                token: Word "name" @533..537
+            close: RBrace "}" @537..538
+          parts: TemplateChunk "'!\"\n  " @538..544
+          close: BacktickEnd "`" @544..545
+      r: RBrace "}" @546..547
+error @147..148: expected attribute argument, found error
+=== raw_strings.baml ===
+SourceFile@55..529
+  items: ClassDef@55..364
+    kw: Class "class" @55..60
+    name: Name@61..71
+      token: Word "RawStrings" @61..71
+    l: LBrace "{" @72..73
+    members: Field@76..118
+      name: Name@76..82
+        token: Word "simple" @76..82
+      ty: PathType@83..89
+        head: Name@83..89
+          token: Word "string" @83..89
+      attrs: Attribute@90..118
+        at: At "@" @90..91
+        path: DottedName@91..102
+          head: Name@91..102
+            token: Word "description" @91..102
+        args: AttrArgs@102..118
+          l: LParen "(" @102..103
+          args: StringLit@103..117
+            token: LegacyHashString "#\"raw string\"#" @103..117
+          r: RParen ")" @117..118
+    members: Field@121..182
+      name: Name@121..132
+        token: Word "with_quotes" @121..132
+      ty: PathType@133..139
+        head: Name@133..139
+          token: Word "string" @133..139
+      attrs: Attribute@140..182
+        at: At "@" @140..141
+        path: DottedName@141..152
+          head: Name@141..152
+            token: Word "description" @141..152
+        args: AttrArgs@152..182
+          l: LParen "(" @152..153
+          args: StringLit@153..181
+            token: LegacyHashString "#\"contains \"quotes\" easily\"#" @153..181
+          r: RParen ")" @181..182
+    members: Field@185..247
+      name: Name@185..195
+        token: Word "multi_hash" @185..195
+      ty: PathType@196..202
+        head: Name@196..202
+          token: Word "string" @196..202
+      attrs: Attribute@203..247
+        at: At "@" @203..204
+        path: DottedName@204..215
+          head: Name@204..215
+            token: Word "description" @204..215
+        args: AttrArgs@215..247
+          l: LParen "(" @215..216
+          args: StringLit@216..246
+            token: LegacyHashString "##\"contains #\"hash\"# inside\"##" @216..246
+          r: RParen ")" @246..247
+    members: Field@250..362
+      name: Name@250..259
+        token: Word "multiline" @250..259
+      ty: PathType@260..266
+        head: Name@260..266
+          token: Word "string" @260..266
+      attrs: Attribute@267..362
+        at: At "@" @267..268
+        path: DottedName@268..279
+          head: Name@268..279
+            token: Word "description" @268..279
+        args: AttrArgs@279..362
+          l: LParen "(" @279..280
+          args: StringLit@280..361
+            token: LegacyHashString "###\"\n    This is a multiline\n    raw string with \"quotes\"\n    and #hashes#\n  \"###" @280..361
+          r: RParen ")" @361..362
+    r: RBrace "}" @363..364
+  items: FunctionDef@366..529
+    kw: Function "function" @366..374
+    name: Name@375..386
+      token: Word "ProcessText" @375..386
+    params: ParamList@386..401
+      l: LParen "(" @386..387
+      params: Param@387..400
+        name: Name@387..392
+          token: Word "input" @387..392
+        ascription: TypeAscription@392..400
+          colon: Colon ":" @392..393
+          ty: PathType@394..400
+            head: Name@394..400
+              token: Word "string" @394..400
+      r: RParen ")" @400..401
+    ret: ReturnType@402..411
+      arrow: Arrow "->" @402..404
+      ty: PathType@405..411
+        head: Name@405..411
+          token: Word "string" @405..411
+    body: LlmBody@412..529
+      l: LBrace "{" @412..413
+      fields: ClientField@416..428
+        kw: Client "client" @416..422
+        colon: Colon ":" @422..423
+        value: PathExpr@424..428
+          head: Name@424..428
+            token: Word "GPT4" @424..428
+      fields: PromptField@431..527
+        kw: Prompt "prompt" @431..437
+        colon: Colon ":" @437..438
+        value: BacktickString@439..527
+          open: BacktickStart "`" @439..440
+          parts: TemplateChunk "\n    Process the following text:\n    " @440..477
+          parts: TemplateInterp@477..485
+            open: DollarLBrace "${" @477..479
+            tail: PathExpr@479..484
+              head: Name@479..484
+                token: Word "input" @479..484
+            close: RBrace "}" @484..485
+          parts: TemplateChunk "\n    \n    Return the processed result.\n  " @485..526
+          close: BacktickEnd "`" @526..527
+      r: RBrace "}" @528..529
+error @103..117: Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+error @153..181: Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+error @216..246: Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+error @280..361: Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+=== simple_strings.baml ===
+SourceFile@53..387
+  items: ClassDef@53..286
+    kw: Class "class" @53..58
+    name: Name@59..67
+      token: Word "Messages" @59..67
+    l: LBrace "{" @68..69
+    members: Field@72..103
+      name: Name@72..80
+        token: Word "greeting" @72..80
+      ty: PathType@81..87
+        head: Name@81..87
+          token: Word "string" @81..87
+      attrs: Attribute@88..103
+        at: At "@" @88..89
+        path: DottedName@89..94
+          head: Name@89..94
+            token: Word "alias" @89..94
+        args: AttrArgs@94..103
+          l: LParen "(" @94..95
+          args: StringLit@95..102
+            token: String "\"hello\"" @95..102
+          r: RParen ")" @102..103
+    members: Field@106..135
+      name: Name@106..111
+        token: Word "empty" @106..111
+      ty: PathType@112..118
+        head: Name@112..118
+          token: Word "string" @112..118
+      attrs: Attribute@119..135
+        at: At "@" @119..120
+        path: DottedName@120..131
+          head: Name@120..131
+            token: Word "description" @120..131
+        args: AttrArgs@131..135
+          l: LParen "(" @131..132
+          args: StringLit@132..134
+            token: String "\"\"" @132..134
+          r: RParen ")" @134..135
+    members: Field@138..178
+      name: Name@138..149
+        token: Word "with_spaces" @138..149
+      ty: PathType@150..156
+        head: Name@150..156
+          token: Word "string" @150..156
+      attrs: Attribute@157..178
+        at: At "@" @157..158
+        path: DottedName@158..163
+          head: Name@158..163
+            token: Word "alias" @158..163
+        args: AttrArgs@163..178
+          l: LParen "(" @163..164
+          args: StringLit@164..177
+            token: String "\"hello world\"" @164..177
+          r: RParen ")" @177..178
+    members: Field@181..234
+      name: Name@181..193
+        token: Word "with_escapes" @181..193
+      ty: PathType@194..200
+        head: Name@194..200
+          token: Word "string" @194..200
+      attrs: Attribute@201..234
+        at: At "@" @201..202
+        path: DottedName@202..213
+          head: Name@202..213
+            token: Word "description" @202..213
+        args: AttrArgs@213..234
+          l: LParen "(" @213..214
+          args: StringLit@214..233
+            token: String "\"line1\\nline2\\ttab\"" @214..233
+          r: RParen ")" @233..234
+    members: Field@237..284
+      name: Name@237..248
+        token: Word "with_quotes" @237..248
+      ty: PathType@249..255
+        head: Name@249..255
+          token: Word "string" @249..255
+      attrs: Attribute@256..284
+        at: At "@" @256..257
+        path: DottedName@257..262
+          head: Name@257..262
+            token: Word "alias" @257..262
+        args: AttrArgs@262..284
+          l: LParen "(" @262..263
+          args: StringLit@263..283
+            token: String "\"She said \\\"hello\\\"\"" @263..283
+          r: RParen ")" @283..284
+    r: RBrace "}" @285..286
+  items: FunctionDef@318..387
+    kw: Function "function" @318..326
+    name: Name@327..334
+      token: Word "GetRole" @327..334
+    params: ParamList@334..336
+      l: LParen "(" @334..335
+      r: RParen ")" @335..336
+    ret: ReturnType@337..366
+      arrow: Arrow "->" @337..339
+      ty: UnionType@340..366
+        first: LiteralType@340..347
+          value: String "\"admin\"" @340..347
+        pipe: Pipe "|" @348..349
+        ty: LiteralType@350..356
+          value: String "\"user\"" @350..356
+        pipe: Pipe "|" @357..358
+        ty: LiteralType@359..366
+          value: String "\"guest\"" @359..366
+    body: Block@367..387
+      l: LBrace "{" @367..368
+      stmts: ExprStmt@371..385
+        expr: ReturnExpr@371..384
+          kw: Return "return" @371..377
+          value: StringLit@378..384
+            token: String "\"user\"" @378..384
+        semi: Semicolon ";" @384..385
+      r: RBrace "}" @386..387
+=== unicode_strings.baml ===
+SourceFile@47..1038
+  items: ClassDef@47..834
+    kw: Class "class" @47..52
+    name: Name@53..67
+      token: Word "UnicodeStrings" @53..67
+    l: LBrace "{" @68..69
+    members: Field@91..124
+      name: Name@91..102
+        token: Word "emoji_basic" @91..102
+      ty: PathType@103..109
+        head: Name@103..109
+          token: Word "string" @103..109
+      attrs: Attribute@110..124
+        at: At "@" @110..111
+        path: DottedName@111..116
+          head: Name@111..116
+            token: Word "alias" @111..116
+        args: AttrArgs@116..124
+          l: LParen "(" @116..117
+          args: StringLit@117..123
+            token: String "\"🎉\"" @117..123
+          r: RParen ")" @123..124
+    members: Field@127..171
+      name: Name@127..141
+        token: Word "emoji_multiple" @127..141
+      ty: PathType@142..148
+        head: Name@142..148
+          token: Word "string" @142..148
+      attrs: Attribute@149..171
+        at: At "@" @149..150
+        path: DottedName@150..155
+          head: Name@150..155
+            token: Word "alias" @150..155
+        args: AttrArgs@155..171
+          l: LParen "(" @155..156
+          args: StringLit@156..170
+            token: String "\"🎉🎊🎈\"" @156..170
+          r: RParen ")" @170..171
+    members: Field@174..232
+      name: Name@174..187
+        token: Word "emoji_in_text" @174..187
+      ty: PathType@188..194
+        head: Name@188..194
+          token: Word "string" @188..194
+      attrs: Attribute@195..232
+        at: At "@" @195..196
+        path: DottedName@196..207
+          head: Name@196..207
+            token: Word "description" @196..207
+        args: AttrArgs@207..232
+          l: LParen "(" @207..208
+          args: StringLit@208..231
+            token: String "\"Hello 👋 World 🌍\"" @208..231
+          r: RParen ")" @231..232
+    members: Field@263..300
+      name: Name@263..270
+        token: Word "chinese" @263..270
+      ty: PathType@271..277
+        head: Name@271..277
+          token: Word "string" @271..277
+      attrs: Attribute@278..300
+        at: At "@" @278..279
+        path: DottedName@279..284
+          head: Name@279..284
+            token: Word "alias" @279..284
+        args: AttrArgs@284..300
+          l: LParen "(" @284..285
+          args: StringLit@285..299
+            token: String "\"你好世界\"" @285..299
+          r: RParen ")" @299..300
+    members: Field@303..352
+      name: Name@303..309
+        token: Word "arabic" @303..309
+      ty: PathType@310..316
+        head: Name@310..316
+          token: Word "string" @310..316
+      attrs: Attribute@317..352
+        at: At "@" @317..318
+        path: DottedName@318..323
+          head: Name@318..323
+            token: Word "alias" @318..323
+        args: AttrArgs@323..352
+          l: LParen "(" @323..324
+          args: StringLit@324..351
+            token: String "\"مرحبا بالعالم\"" @324..351
+          r: RParen ")" @351..352
+    members: Field@355..402
+      name: Name@355..363
+        token: Word "japanese" @355..363
+      ty: PathType@364..370
+        head: Name@364..370
+          token: Word "string" @364..370
+      attrs: Attribute@371..402
+        at: At "@" @371..372
+        path: DottedName@372..377
+          head: Name@372..377
+            token: Word "alias" @372..377
+        args: AttrArgs@377..402
+          l: LParen "(" @377..378
+          args: StringLit@378..401
+            token: String "\"こんにちは世界\"" @378..401
+          r: RParen ")" @401..402
+    members: Field@405..449
+      name: Name@405..412
+        token: Word "russian" @405..412
+      ty: PathType@413..419
+        head: Name@413..419
+          token: Word "string" @413..419
+      attrs: Attribute@420..449
+        at: At "@" @420..421
+        path: DottedName@421..426
+          head: Name@421..426
+            token: Word "alias" @421..426
+        args: AttrArgs@426..449
+          l: LParen "(" @426..427
+          args: StringLit@427..448
+            token: String "\"Привет мир\"" @427..448
+          r: RParen ")" @448..449
+    members: Field@479..527
+      name: Name@479..491
+        token: Word "math_symbols" @479..491
+      ty: PathType@492..498
+        head: Name@492..498
+          token: Word "string" @492..498
+      attrs: Attribute@499..527
+        at: At "@" @499..500
+        path: DottedName@500..511
+          head: Name@500..511
+            token: Word "description" @500..511
+        args: AttrArgs@511..527
+          l: LParen "(" @511..512
+          args: StringLit@512..526
+            token: String "\"α + β = γ\"" @512..526
+          r: RParen ")" @526..527
+    members: Field@530..587
+      name: Name@530..538
+        token: Word "currency" @530..538
+      ty: PathType@539..545
+        head: Name@539..545
+          token: Word "string" @539..545
+      attrs: Attribute@546..587
+        at: At "@" @546..547
+        path: DottedName@547..552
+          head: Name@547..552
+            token: Word "alias" @547..552
+        args: AttrArgs@552..587
+          l: LParen "(" @552..553
+          args: StringLit@553..586
+            token: String "\"Price: €100 or $120 or ¥1000\"" @553..586
+          r: RParen ")" @586..587
+    members: Field@590..643
+      name: Name@590..596
+        token: Word "arrows" @590..596
+      ty: PathType@597..603
+        head: Name@597..603
+          token: Word "string" @597..603
+      attrs: Attribute@604..643
+        at: At "@" @604..605
+        path: DottedName@605..616
+          head: Name@605..616
+            token: Word "description" @605..616
+        args: AttrArgs@616..643
+          l: LParen "(" @616..617
+          args: StringLit@617..642
+            token: String "\"→ ← ↑ ↓ ⇒ ⇐\"" @617..642
+          r: RParen ")" @642..643
+    members: Field@685..726
+      name: Name@685..695
+        token: Word "zero_width" @685..695
+      ty: PathType@696..702
+        head: Name@696..702
+          token: Word "string" @696..702
+      attrs: Attribute@703..726
+        at: At "@" @703..704
+        path: DottedName@704..709
+          head: Name@704..709
+            token: Word "alias" @704..709
+        args: AttrArgs@709..726
+          l: LParen "(" @709..710
+          args: StringLit@710..725
+            token: String "\"Hello\u{200b}World\"" @710..725
+          r: RParen ")" @725..726
+    members: Field@758..805
+      name: Name@758..770
+        token: Word "rtl_override" @758..770
+      ty: PathType@771..777
+        head: Name@771..777
+          token: Word "string" @771..777
+      attrs: Attribute@778..805
+        at: At "@" @778..779
+        path: DottedName@779..784
+          head: Name@779..784
+            token: Word "alias" @779..784
+        args: AttrArgs@784..805
+          l: LParen "(" @784..785
+          args: StringLit@785..804
+            token: String "\"\u{200f}Hello World\u{200f}\"" @785..804
+          r: RParen ")" @804..805
+    r: RBrace "}" @833..834
+  items: FunctionDef@882..1038
+    kw: Function "function" @882..890
+    name: <missing @891>
+    params: ParamList@903..919
+      l: LParen "(" @903..904
+      r: RParen ")" @918..919
+    ret: ReturnType@920..929
+      arrow: Arrow "->" @920..922
+      ty: PathType@923..929
+        head: Name@923..929
+          token: Word "string" @923..929
+    body: LlmBody@930..1038
+      l: LBrace "{" @930..931
+      fields: ClientField@934..946
+        kw: Client "client" @934..940
+        colon: Colon ":" @940..941
+        value: PathExpr@942..946
+          head: Name@942..946
+            token: Word "GPT4" @942..946
+      fields: PromptField@949..1036
+        kw: Prompt "prompt" @949..955
+        colon: Colon ":" @955..956
+        value: BacktickString@957..1036
+          open: BacktickStart "`" @957..958
+          parts: TemplateChunk "\n    Process the text: " @958..981
+          parts: TemplateInterp@981..990
+            open: DollarLBrace "${" @981..983
+            stmts: Bogus@983..986
+              tokens: Error "输" @983..986
+            stmts: Bogus@986..989
+              tokens: Error "入" @986..989
+            close: RBrace "}" @989..990
+          parts: TemplateChunk "\n    Return result with emojis: ✅ or ❌\n  " @990..1035
+          close: BacktickEnd "`" @1035..1036
+      r: RBrace "}" @1037..1038
+error @891..894: expected function name, found error
+error @904..907: expected parameter name, found error
+error @983..986: expected expression, found error
+error @986..989: expected expression, found error

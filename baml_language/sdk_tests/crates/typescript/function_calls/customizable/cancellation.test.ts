@@ -9,8 +9,8 @@ import {
 } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import { Greeter } from "./baml_sdk/methods_on_classes/index.js";
-import { SleepMs } from "./baml_sdk/throws_test/index.js";
-import { call_with_callback_async } from "./baml_sdk/host_callable_tests/index.js";
+import { SleepMs_sync } from "./baml_sdk/throws_test/index.js";
+import { call_with_callback } from "./baml_sdk/host_callable_tests/index.js";
 
 const SLEEP_FQN = "user.throws_test.SleepMs";
 const HOST_CALLBACK_FQN = "user.host_callable_tests.call_with_callback";
@@ -74,8 +74,8 @@ describe(
       // bridge blocks the Node main thread, so setTimeout/setImmediate and
       // ThreadsafeFunction deliveries cannot run until callFunctionSync returns.
       // A pre-aborted context still exercises the sync cancellation path.
-      const ctx = CancelToken.new();
-      ctx.cancel();
+      const ctx = CancelToken.new_sync();
+      ctx.cancel_sync();
 
       try {
         callFunctionSync(
@@ -94,7 +94,7 @@ describe(
 
     it("cancellation_surfaces_async_cancellation_as_abort_error_with_baml_reason", async () => {
       const start = performance.now();
-      const ctx = CancelToken.new();
+      const ctx = CancelToken.new_sync();
       const host = pendingIntCallback();
       const pending = callFunction(
         getRuntime(),
@@ -104,7 +104,7 @@ describe(
       );
 
       await host.dispatched;
-      ctx.cancel();
+      ctx.cancel_sync();
 
       try {
         await pending;
@@ -118,8 +118,8 @@ describe(
 
     it("cancellation_can_pre_abort_async_baml_cancellation", async () => {
       const start = performance.now();
-      const ctx = CancelToken.new();
-      ctx.cancel();
+      const ctx = CancelToken.new_sync();
+      ctx.cancel_sync();
 
       try {
         await callFunction(
@@ -138,7 +138,7 @@ describe(
 
     it("cancellation_surfaces_cancellation_through_promise_all", async () => {
       const start = performance.now();
-      const ctx = CancelToken.new();
+      const ctx = CancelToken.new_sync();
       const first = pendingIntCallback();
       const second = pendingIntCallback();
       const pending = Promise.all([
@@ -157,7 +157,7 @@ describe(
       ]);
 
       await Promise.all([first.dispatched, second.dispatched]);
-      ctx.cancel();
+      ctx.cancel_sync();
 
       try {
         await pending;
@@ -170,7 +170,7 @@ describe(
     });
 
     it("cancellation_surfaces_a_reused_call_context_as_abort_error_with_baml_reason", async () => {
-      const ctx = CancelToken.new();
+      const ctx = CancelToken.new_sync();
       const host = pendingIntCallback();
       const pending = callFunction(
         getRuntime(),
@@ -180,7 +180,7 @@ describe(
       );
 
       await host.dispatched;
-      ctx.cancel();
+      ctx.cancel_sync();
 
       try {
         await pending;
@@ -194,47 +194,47 @@ describe(
 
 describe("function_calls — generated call cancellation", () => {
   it("cancellation_cancels_an_async_generated_free_function", async () => {
-    const ctx = CancelToken.new();
+    const ctx = CancelToken.new_sync();
     const host = pendingIntCallback();
-    const pending = call_with_callback_async(host.callback, 1, { $baml: { cancel: ctx } });
+    const pending = call_with_callback(host.callback, 1, { $baml: { cancel: ctx } });
     await host.dispatched;
-    ctx.cancel();
+    ctx.cancel_sync();
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
   });
 
   it("cancellation_cancels_an_async_generated_instance_method", async () => {
-    const ctx = CancelToken.new();
+    const ctx = CancelToken.new_sync();
     const greeter = new Greeter({ name: "cancel-me" });
     const host = pendingNoArgCallback();
-    const pending = greeter.wait_async(host.callback, { $baml: { cancel: ctx } });
+    const pending = greeter.wait(host.callback, { $baml: { cancel: ctx } });
     await host.dispatched;
-    ctx.cancel();
+    ctx.cancel_sync();
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
   });
 
   it("cancellation_pre_aborts_a_generated_synchronous_call", () => {
-    const ctx = CancelToken.new();
-    ctx.cancel();
-    expect(() => SleepMs(2000, { $baml: { cancel: ctx } })).toThrow(BamlAbortError);
+    const ctx = CancelToken.new_sync();
+    ctx.cancel_sync();
+    expect(() => SleepMs_sync(2000, { $baml: { cancel: ctx } })).toThrow(BamlAbortError);
   });
 
   it("cancellation_detaches_a_completed_call_before_aborting_the_remaining_call", async () => {
-    const ctx = CancelToken.new();
-    await expect(call_with_callback_async((value) => `${value}`, 1, { $baml: { cancel: ctx } })).resolves.toBe("1");
+    const ctx = CancelToken.new_sync();
+    await expect(call_with_callback((value) => `${value}`, 1, { $baml: { cancel: ctx } })).resolves.toBe("1");
     const host = pendingIntCallback();
-    const pending = call_with_callback_async(host.callback, 2, { $baml: { cancel: ctx } });
+    const pending = call_with_callback(host.callback, 2, { $baml: { cancel: ctx } });
     await host.dispatched;
-    ctx.cancel();
+    ctx.cancel_sync();
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
   });
 
   it("cancellation_immediately_cancels_every_call_attached_after_abort", async () => {
-    const ctx = CancelToken.new();
-    ctx.cancel();
+    const ctx = CancelToken.new_sync();
+    ctx.cancel_sync();
     await expect(Promise.all([
-      call_with_callback_async((value) => `${value}`, 1, { $baml: { cancel: ctx } }),
-      call_with_callback_async((value) => `${value}`, 2, { $baml: { cancel: ctx } }),
+      call_with_callback((value) => `${value}`, 1, { $baml: { cancel: ctx } }),
+      call_with_callback((value) => `${value}`, 2, { $baml: { cancel: ctx } }),
     ])).rejects.toBeInstanceOf(BamlAbortError);
-    ctx.cancel();
+    ctx.cancel_sync();
   });
 });

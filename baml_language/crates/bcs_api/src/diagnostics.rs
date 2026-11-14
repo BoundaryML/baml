@@ -16,7 +16,6 @@ pub enum Operation {
     Ingest,
     Query,
     Authentication,
-    MintBuildToken,
 }
 impl Operation {
     fn description(self) -> &'static str {
@@ -24,7 +23,6 @@ impl Operation {
             Self::Ingest => "cloud telemetry ingestion",
             Self::Query => "the cloud query",
             Self::Authentication => "the authentication request",
-            Self::MintBuildToken => "telemetry credential minting",
         }
     }
 }
@@ -34,7 +32,6 @@ pub enum Outcome {
     ExecutionCancelled,
     QueryFailed,
     AuthenticationFailed,
-    ArtifactBuildFailed,
     TelemetryDisabled,
 }
 impl fmt::Display for Outcome {
@@ -43,7 +40,6 @@ impl fmt::Display for Outcome {
             Self::ExecutionCancelled => "Execution cancelled.",
             Self::QueryFailed => "Query failed.",
             Self::AuthenticationFailed => "Authentication command failed.",
-            Self::ArtifactBuildFailed => "Artifact build failed.",
             Self::TelemetryDisabled => "Cloud telemetry disabled. Program execution continues.",
         })
     }
@@ -248,7 +244,7 @@ impl Diagnostic {
         if self.context.source == CredentialSource::Embedded {
             writeln!(
                 f,
-                "    • Ask the publisher to rebuild with `--embed-telemetry` and an active ingestion credential."
+                "    • Ask the publisher to set an active key in the environment variable named in baml.toml and rebuild with `--embed-telemetry`."
             )?;
             if let RecordingOverride::Artifact {
                 project: Some(project),
@@ -258,7 +254,7 @@ impl Diagnostic {
             {
                 writeln!(
                     f,
-                    "    • Set {key} to your own Boundary API key, or run `baml auth login` and set {project}=org_handle/project_name."
+                    "    • Set {key} to your own Boundary API key, or run `baml cloud auth login` and set {project}=org_handle/project_name."
                 )?;
             }
             return Ok(());
@@ -273,16 +269,16 @@ impl Diagnostic {
                         writeln!(f, "    • Unset {key} to use your saved Boundary login.")
                     }
                     SavedLogin::Missing => {
-                        writeln!(f, "    • Unset {key}, then run `baml auth login`.")
+                        writeln!(f, "    • Unset {key}, then run `baml cloud auth login`.")
                     }
                     SavedLogin::Unreadable => writeln!(
                         f,
-                        "    • Your saved login could not be read. Unset {key}, then run `baml auth login` to restore user authentication."
+                        "    • Your saved login could not be read. Unset {key}, then run `baml cloud auth login` to restore user authentication."
                     ),
                 }
             }
             CredentialSource::SavedLogin => {
-                writeln!(f, "    • Run `baml auth login` again.")?;
+                writeln!(f, "    • Run `baml cloud auth login` again.")?;
                 if let Some(key) = key {
                     writeln!(f, "    • Set {key} to a valid API key.")?;
                 }
@@ -398,7 +394,7 @@ impl fmt::Display for Diagnostic {
                 match operation {
                     Operation::Query => writeln!(
                         f,
-                        "    • Select an environment with --environment <name> and, when needed, --project <org/project>."
+                        "    • Select an environment with --env <name> and, when needed, --project <org/project>."
                     ),
                     Operation::Ingest => {
                         if let RecordingOverride::Artifact {
@@ -422,7 +418,7 @@ impl fmt::Display for Diagnostic {
                             )
                         }
                     }
-                    Operation::Authentication | Operation::MintBuildToken => {
+                    Operation::Authentication => {
                         writeln!(f, "    • Check the requested project and environment.")
                     }
                 }?;
@@ -437,7 +433,7 @@ impl fmt::Display for Diagnostic {
             | FailureKind::LoginExpired
             | FailureKind::LoginDenied => writeln!(
                 f,
-                "    • Run `baml auth login` again and approve the new code in your browser."
+                "    • Run `baml cloud auth login` again and approve the new code in your browser."
             )?,
             FailureKind::PermissionDenied => {
                 if self.context.source == CredentialSource::Embedded {
@@ -450,7 +446,6 @@ impl fmt::Display for Diagnostic {
                 } else {
                     let permission = match operation {
                         Operation::Ingest => "ingestion",
-                        Operation::MintBuildToken => "minting (or project administrator access)",
                         _ => "query",
                     };
                     writeln!(
@@ -460,7 +455,7 @@ impl fmt::Display for Diagnostic {
                 }
             }
             FailureKind::MissingCredentials => {
-                writeln!(f, "    • Run `baml auth login`.")?;
+                writeln!(f, "    • Run `baml cloud auth login`.")?;
                 if let Some(key) = self.api_key_name() {
                     writeln!(f, "    • Set {key} to a valid API key.")?;
                 }
@@ -493,7 +488,7 @@ impl fmt::Display for Diagnostic {
             FailureKind::InvalidStoredLogin => {
                 writeln!(
                     f,
-                    "    • Remove the invalid saved login: run `baml auth logout`, then `baml auth login`."
+                    "    • Remove the invalid saved login: run `baml cloud auth logout`, then `baml cloud auth login`."
                 )?;
                 if let Some(key) = self.api_key_name() {
                     writeln!(f, "    • Set {key} to a valid API key.")?;
@@ -537,9 +532,9 @@ impl fmt::Display for Diagnostic {
             }
             Operation::Query => writeln!(
                 f,
-                "    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local."
+                "    • Query local recordings: run `baml local recordings query`."
             )?,
-            Operation::Authentication | Operation::MintBuildToken => {}
+            Operation::Authentication => {}
         }
         write!(f, "\n  {}", self.outcome)
     }
@@ -572,9 +567,9 @@ mod tests {
                 r#"Boundary rejected your saved login (401).
 
   To continue, choose one:
-    • Run `baml auth login` again.
+    • Run `baml cloud auth login` again.
     • Set BOUNDARY_API_KEY to a valid API key.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
             );
@@ -592,9 +587,9 @@ mod tests {
   Endpoint: https://proxy.example.test/boundary
 
   To continue, choose one:
-    • Run `baml auth login` again.
+    • Run `baml cloud auth login` again.
     • Set BOUNDARY_API_KEY to a valid API key.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         );
@@ -608,7 +603,7 @@ mod tests {
                 r#"Boundary rejected your saved login (401).
 
   To continue, choose one:
-    • Run `baml auth login` again.
+    • Run `baml cloud auth login` again.
     • Set BOUNDARY_API_KEY to a valid API key.
     • Record locally: rerun with BOUNDARY_API_KEY=local.
 
@@ -619,7 +614,7 @@ mod tests {
                 r#"Boundary rejected your saved login (401).
 
   To continue, choose one:
-    • Run `baml auth login` again.
+    • Run `baml cloud auth login` again.
     • Set BOUNDARY_API_KEY to a valid API key.
     • Record locally: rerun with BOUNDARY_API_KEY=local.
     • Disable recording: rerun with ACME_TELEMETRY=off.
@@ -658,7 +653,7 @@ mod tests {
 
   To continue, choose one:
     • Replace BOUNDARY_API_KEY with a valid API key.
-    • Unset BOUNDARY_API_KEY, then run `baml auth login`.
+    • Unset BOUNDARY_API_KEY, then run `baml cloud auth login`.
     • Record locally: rerun with BOUNDARY_API_KEY=local.
     • Disable recording: rerun with BAML_TELEMETRY=off.
 
@@ -670,7 +665,7 @@ mod tests {
 
   To continue, choose one:
     • Replace BOUNDARY_API_KEY with a valid API key.
-    • Your saved login could not be read. Unset BOUNDARY_API_KEY, then run `baml auth login` to restore user authentication.
+    • Your saved login could not be read. Unset BOUNDARY_API_KEY, then run `baml cloud auth login` to restore user authentication.
     • Record locally: rerun with BOUNDARY_API_KEY=local.
     • Disable recording: rerun with BAML_TELEMETRY=off.
 
@@ -701,7 +696,7 @@ mod tests {
             r#"Boundary rejected your saved login (401).
 
   To continue, choose one:
-    • Run `baml auth login` again.
+    • Run `baml cloud auth login` again.
     • Set BOUNDARY_API_KEY to a valid API key.
     • Record locally: rerun with BOUNDARY_API_KEY=local.
     • Disable recording: rerun with BAML_TELEMETRY=off.
@@ -720,8 +715,8 @@ mod tests {
   Select an environment: this credential can query multiple environments.
 
   To continue, choose one:
-    • Select an environment with --environment <name> and, when needed, --project <org/project>.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Select an environment with --env <name> and, when needed, --project <org/project>.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -731,8 +726,8 @@ mod tests {
   Code: ENVIRONMENT_REQUIRED
 
   To continue, choose one:
-    • Select an environment with --environment <name> and, when needed, --project <org/project>.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Select an environment with --env <name> and, when needed, --project <org/project>.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -803,9 +798,9 @@ mod tests {
             r#"Boundary rejected your saved login (401).
 
   To continue, choose one:
-    • Run `baml auth login` again.
+    • Run `baml cloud auth login` again.
     • Set BOUNDARY_API_KEY to a valid API key.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         );
@@ -818,7 +813,7 @@ mod tests {
 
   To continue, choose one:
     • Use a credential with query permission for the selected project and environment.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         );
@@ -834,7 +829,7 @@ mod tests {
 
   To continue, choose one:
     • Check the command inputs and requested project/environment.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -844,7 +839,7 @@ mod tests {
 
   To continue, choose one:
     • Use a credential with query permission for the selected project and environment.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -854,7 +849,7 @@ mod tests {
 
   To continue, choose one:
     • Check the endpoint and requested project/environment, then retry.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -864,7 +859,7 @@ mod tests {
 
   To continue, choose one:
     • Retry the command after Boundary becomes available.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -874,7 +869,7 @@ mod tests {
 
   To continue, choose one:
     • Retry the command after Boundary becomes available.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#,
             ),
@@ -905,7 +900,7 @@ mod tests {
 
   To continue, choose one:
     • Check the endpoint and network connection, then retry the command.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         );
@@ -920,7 +915,7 @@ mod tests {
 
   To continue, choose one:
     • Check that the endpoint is a Boundary API compatible with this BAML client.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         );
@@ -935,7 +930,7 @@ mod tests {
                 r#"Login was denied in the browser.
 
   To continue, choose one:
-    • Run `baml auth login` again and approve the new code in your browser.
+    • Run `baml cloud auth login` again and approve the new code in your browser.
 
   Authentication command failed."#,
             ),
@@ -944,7 +939,7 @@ mod tests {
                 r#"Login code expired.
 
   To continue, choose one:
-    • Run `baml auth login` again and approve the new code in your browser.
+    • Run `baml cloud auth login` again and approve the new code in your browser.
 
   Authentication command failed."#,
             ),
@@ -972,7 +967,7 @@ mod tests {
                 r#"The saved Boundary login in the local credential file at test-home/login/cache/endpoint.json is invalid.
 
   To continue, choose one:
-    • Remove the invalid saved login: run `baml auth logout`, then `baml auth login`.
+    • Remove the invalid saved login: run `baml cloud auth logout`, then `baml cloud auth login`.
     • Set BOUNDARY_API_KEY to a valid API key.
 
   Authentication command failed."#,
@@ -1007,7 +1002,7 @@ mod artifact_diagnostics_tests {
             r#"Boundary rejected the embedded telemetry credential (401).
 
   To continue, choose one:
-    • Ask the publisher to rebuild with `--embed-telemetry` and an active ingestion credential.
+    • Ask the publisher to set an active key in the environment variable named in baml.toml and rebuild with `--embed-telemetry`.
 
   Execution cancelled."#
         );
@@ -1031,8 +1026,8 @@ mod artifact_diagnostics_tests {
             r#"Boundary denied cloud telemetry ingestion (HTTP 403).
 
   To continue, choose one:
-    • Ask the publisher to rebuild with `--embed-telemetry` and an active ingestion credential.
-    • Set ACME_KEY to your own Boundary API key, or run `baml auth login` and set ACME_PROJECT=org_handle/project_name.
+    • Ask the publisher to set an active key in the environment variable named in baml.toml and rebuild with `--embed-telemetry`.
+    • Set ACME_KEY to your own Boundary API key, or run `baml cloud auth login` and set ACME_PROJECT=org_handle/project_name.
     • Record locally: rerun with ACME_KEY=local.
     • Disable recording: rerun with ACME_TELEMETRY=off.
 

@@ -1,0 +1,598 @@
+//! Native filesystem, path, archive and configuration primitives for BAML applications.
+use std::{
+    collections::HashSet,
+    io::{Cursor, Read, Write},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
+
+use bex_heap::{BexExternalValue, BexHeap};
+use sys_ops::io::{self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError, owned};
+
+use crate::{NativeSysOps, WorkingDir};
+
+fn error(e: impl std::fmt::Display) -> VmBamlError {
+    VmBamlError::Io {
+        message: e.to_string(),
+    }
+}
+fn blocking<T: Send + 'static>(
+    f: impl FnOnce() -> Result<T, VmRustFnError> + Send + 'static,
+) -> SysOpOutput<T> {
+    SysOpOutput::async_op(async move { tokio::task::spawn_blocking(f).await.map_err(error)? })
+}
+fn path_string(path: impl AsRef<Path>) -> Result<String, VmRustFnError> {
+    path.as_ref()
+        .to_str()
+        .map(str::to_owned)
+        .ok_or_else(|| error("Path is not valid UTF-8").into())
+}
+pub(crate) fn sys_current_dir(native: &NativeSysOps) -> SysOpOutput<String> {
+    let result = match &native.working_dir {
+        WorkingDir::Fixed(path) => path_string(path),
+        WorkingDir::Process => std::env::current_dir()
+            .map_err(error)
+            .map_err(Into::into)
+            .and_then(path_string),
+    };
+    SysOpOutput::Ready(result)
+}
+pub(crate) fn sys_current_exe(_: &NativeSysOps) -> SysOpOutput<String> {
+    SysOpOutput::Ready(
+        std::env::current_exe()
+            .map_err(error)
+            .map_err(Into::into)
+            .and_then(path_string),
+    )
+}
+pub(crate) fn sys_home_dir(_: &NativeSysOps) -> SysOpOutput<Option<String>> {
+    SysOpOutput::Ready(
+        baml_env::os_var("HOME")
+            .or_else(|| baml_env::os_var("USERPROFILE"))
+            .map(|p| path_string(PathBuf::from(p)))
+            .transpose(),
+    )
+}
+pub(crate) fn sys_platform(_: &NativeSysOps) -> SysOpOutput<String> {
+    SysOpOutput::ok(std::env::consts::OS.to_string())
+}
+pub(crate) fn sys_host_target(_: &NativeSysOps) -> SysOpOutput<String> {
+    SysOpOutput::ok(env!("BAML_HOST_TARGET").to_string())
+}
+
+impl io::IoNamespacePath for NativeSysOps {
+    fn join(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        parts: Vec<String>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let path: PathBuf = parts.iter().collect();
+        SysOpOutput::Ready(path_string(path))
+    }
+    fn parent(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::Ready(Path::new(&path).parent().map(path_string).transpose())
+    }
+    fn is_absolute(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        path: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::ok(Path::new(&path).is_absolute())
+    }
+    fn _absolute(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        path: String,
+        base: Option<String>,
+        _: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let result = (|| {
+            let base = match base {
+                Some(base) => self.working_dir.resolve(&base),
+                None => match self.working_dir.for_child(None) {
+                    Some(base) => base,
+                    None => std::env::current_dir().map_err(error)?,
+                },
+            };
+            let mut path = PathBuf::from(&path);
+            if path == Path::new("~") || path.starts_with("~/") {
+                if let Some(home) =
+                    baml_env::os_var("HOME").or_else(|| baml_env::os_var("USERPROFILE"))
+                {
+                    path =
+                        PathBuf::from(home).join(path.strip_prefix("~").unwrap_or(Path::new("")));
+                }
+            }
+            // Keep `..` on Unix: resolving it lexically changes the meaning
+            // of symlink paths, including paths to files that do not yet exist.
+            // Also make an explicitly relative base absolute in process mode.
+            path_string(std::path::absolute(base.join(path)).map_err(error)?)
+        })();
+        SysOpOutput::Ready(result)
+    }
+}
+
+fn archive_suffix(format: BexExternalValue) -> Result<&'static str, VmRustFnError> {
+    match format {
+        BexExternalValue::String(s) if s.as_str() == "zip" => Ok("zip"),
+        BexExternalValue::String(s) if s.as_str() == "tar.gz" => Ok("tar.gz"),
+        BexExternalValue::Union { value, .. } => archive_suffix(*value),
+        _ => Err(error("Unsupported archive format").into()),
+    }
+}
+
+fn archive_path(path: &Path) -> Result<PathBuf, VmRustFnError> {
+    let text = path.to_string_lossy();
+    if text.contains('\\') || text.as_bytes().get(1) == Some(&b':') {
+        return Err(error(format!("Unsafe archive path: {}", path.display())).into());
+    }
+    let mut result = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::Normal(part) => result.push(part),
+            std::path::Component::CurDir => {}
+            _ => return Err(error(format!("Unsafe archive path: {}", path.display())).into()),
+        }
+    }
+    Ok(result)
+}
+fn zip_is_regular(mode: Option<u32>) -> bool {
+    matches!(mode.unwrap_or(0) & 0o170_000, 0 | 0o100_000)
+}
+#[derive(Default)]
+struct ArchivePaths {
+    entries: HashSet<PathBuf>,
+    files: HashSet<PathBuf>,
+    directories: HashSet<PathBuf>,
+}
+
+/// Reject duplicate names and file/directory conflicts, including implicit parents.
+fn unique_archive_path(
+    path: &Path,
+    is_directory: bool,
+    seen: &mut ArchivePaths,
+) -> Result<PathBuf, VmRustFnError> {
+    let normalized = archive_path(path)?;
+    if seen.entries.contains(&normalized) {
+        return Err(error(format!("Duplicate archive path: {}", path.display())).into());
+    }
+    if (!is_directory && seen.directories.contains(&normalized))
+        || normalized
+            .ancestors()
+            .skip(1)
+            .any(|parent| seen.files.contains(parent))
+    {
+        return Err(error(format!("Conflicting archive path: {}", path.display())).into());
+    }
+    seen.entries.insert(normalized.clone());
+    if is_directory {
+        seen.directories.insert(normalized.clone());
+    } else {
+        seen.files.insert(normalized.clone());
+    }
+    seen.directories
+        .extend(normalized.ancestors().skip(1).map(Path::to_path_buf));
+    Ok(normalized)
+}
+fn extract_archive(data: &[u8], format: &str, dest: &Path) -> Result<(), VmRustFnError> {
+    let mut seen = ArchivePaths::default();
+    if format == "zip" {
+        let mut archive = zip::ZipArchive::new(Cursor::new(data)).map_err(error)?;
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i).map_err(error)?;
+            let path = unique_archive_path(Path::new(file.name()), file.is_dir(), &mut seen)?;
+            let out = dest.join(path);
+            if file.is_dir() {
+                std::fs::create_dir_all(out).map_err(error)?;
+            } else if zip_is_regular(file.unix_mode()) {
+                if let Some(parent) = out.parent() {
+                    std::fs::create_dir_all(parent).map_err(error)?;
+                }
+                let mut output = std::fs::File::create(&out).map_err(error)?;
+                std::io::copy(&mut file, &mut output).map_err(error)?;
+                #[cfg(unix)]
+                if let Some(mode) = file.unix_mode() {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(&out, std::fs::Permissions::from_mode(mode & 0o777))
+                        .map_err(error)?;
+                }
+            }
+        }
+    } else {
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(data)));
+        for entry in archive.entries().map_err(error)? {
+            let mut entry = entry.map_err(error)?;
+            let path = unique_archive_path(
+                &entry.path().map_err(error)?,
+                entry.header().entry_type().is_dir(),
+                &mut seen,
+            )?;
+            let out = dest.join(path);
+            if entry.header().entry_type().is_dir() {
+                std::fs::create_dir_all(out).map_err(error)?;
+            } else if entry.header().entry_type().is_file() {
+                if let Some(parent) = out.parent() {
+                    std::fs::create_dir_all(parent).map_err(error)?;
+                }
+                entry.unpack(out).map_err(error)?;
+            }
+        }
+    }
+    Ok(())
+}
+fn read_archive_file(data: &[u8], format: &str, name: &str) -> Result<Vec<u8>, VmRustFnError> {
+    let wanted = archive_path(Path::new(name))?;
+    let mut bytes = Vec::new();
+    let mut seen = ArchivePaths::default();
+    let mut found = false;
+    if format == "zip" {
+        let mut archive = zip::ZipArchive::new(Cursor::new(data)).map_err(error)?;
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i).map_err(error)?;
+            if unique_archive_path(Path::new(file.name()), file.is_dir(), &mut seen)? == wanted
+                && !file.is_dir()
+                && zip_is_regular(file.unix_mode())
+            {
+                file.read_to_end(&mut bytes).map_err(error)?;
+                found = true;
+            }
+        }
+    } else {
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(data)));
+        for entry in archive.entries().map_err(error)? {
+            let mut entry = entry.map_err(error)?;
+            if unique_archive_path(
+                &entry.path().map_err(error)?,
+                entry.header().entry_type().is_dir(),
+                &mut seen,
+            )? == wanted
+                && entry.header().entry_type().is_file()
+            {
+                entry.read_to_end(&mut bytes).map_err(error)?;
+                found = true;
+            }
+        }
+    }
+    if found {
+        Ok(bytes)
+    } else {
+        Err(error(format!("Archive does not contain file {name}")).into())
+    }
+}
+
+fn archive_entries(data: &[u8], format: &str) -> Result<Vec<String>, VmRustFnError> {
+    let mut seen = ArchivePaths::default();
+    let mut paths = Vec::new();
+    if format == "zip" {
+        let mut archive = zip::ZipArchive::new(Cursor::new(data)).map_err(error)?;
+        for i in 0..archive.len() {
+            let entry = archive.by_index(i).map_err(error)?;
+            let path = unique_archive_path(Path::new(entry.name()), entry.is_dir(), &mut seen)?;
+            if !entry.is_dir() {
+                if !zip_is_regular(entry.unix_mode()) {
+                    return Err(error("Unsafe archive link").into());
+                }
+                paths.push(path_string(path)?.replace('\\', "/"));
+            }
+        }
+    } else {
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(Cursor::new(data)));
+        for entry in archive.entries().map_err(error)? {
+            let entry = entry.map_err(error)?;
+            let path = unique_archive_path(
+                &entry.path().map_err(error)?,
+                entry.header().entry_type().is_dir(),
+                &mut seen,
+            )?;
+            let kind = entry.header().entry_type();
+            if kind.is_symlink() || kind.is_hard_link() {
+                return Err(error("Unsafe archive link").into());
+            }
+            if kind.is_file() {
+                paths.push(path_string(path)?.replace('\\', "/"));
+            }
+        }
+    }
+    Ok(paths)
+}
+
+impl io::IoNamespaceArchive for NativeSysOps {
+    fn entries(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        data: Vec<u8>,
+        format: BexExternalValue,
+        _: &SysOpContext,
+    ) -> SysOpOutput<Vec<String>> {
+        blocking(move || archive_entries(&data, archive_suffix(format)?))
+    }
+
+    fn extract(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        data: Vec<u8>,
+        format: BexExternalValue,
+        destination: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let dest = self.working_dir.resolve(&destination);
+        blocking(move || {
+            let suffix = archive_suffix(format)?;
+            std::fs::create_dir_all(&dest).map_err(error)?;
+            if std::fs::symlink_metadata(&dest)
+                .map_err(error)?
+                .file_type()
+                .is_symlink()
+                || std::fs::read_dir(&dest).map_err(error)?.next().is_some()
+            {
+                return Err(
+                    error("Archive destination must be an empty directory, not a symlink").into(),
+                );
+            }
+            extract_archive(&data, suffix, &dest)
+        })
+    }
+    fn read_file(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        data: Vec<u8>,
+        format: BexExternalValue,
+        name: String,
+        _: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        blocking(move || read_archive_file(&data, archive_suffix(format)?, &name))
+    }
+}
+
+pub(crate) fn fs_metadata(native: &NativeSysOps, path: &str) -> SysOpOutput<owned::fs::Metadata> {
+    let path = native.working_dir.resolve(path);
+    blocking(move || {
+        let metadata = std::fs::metadata(path).map_err(error)?;
+        #[cfg(unix)]
+        let executable = {
+            use std::os::unix::fs::PermissionsExt;
+            metadata.permissions().mode() & 0o111 != 0
+        };
+        #[cfg(not(unix))]
+        let executable = metadata.is_file();
+        Ok(owned::fs::Metadata {
+            is_file: metadata.is_file(),
+            is_dir: metadata.is_dir(),
+            is_executable: executable,
+            modified_ms: metadata
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .and_then(|d| i64::try_from(d.as_millis()).ok()),
+        })
+    })
+}
+pub(crate) fn fs_rename(native: &NativeSysOps, source: &str, destination: &str) -> SysOpOutput<()> {
+    let source = native.working_dir.resolve(source);
+    let destination = native.working_dir.resolve(destination);
+    blocking(move || std::fs::rename(source, destination).map_err(|e| error(e).into()))
+}
+pub(crate) fn fs_canonicalize(native: &NativeSysOps, path: &str) -> SysOpOutput<String> {
+    let path = native.working_dir.resolve(path);
+    blocking(move || path_string(std::fs::canonicalize(path).map_err(error)?))
+}
+/// Durably replace a file, tolerating transient Windows sharing conflicts.
+pub(crate) fn fs_write_atomic(
+    native: &NativeSysOps,
+    path: &str,
+    content: Vec<u8>,
+) -> SysOpOutput<()> {
+    let path = native.working_dir.resolve(path);
+    blocking(move || {
+        let parent = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        std::fs::create_dir_all(parent).map_err(error)?;
+        #[cfg(windows)]
+        if std::fs::symlink_metadata(&path)
+            .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().readonly())
+        {
+            return Err(error("destination is read-only").into());
+        }
+        let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(error)?;
+        tmp.write_all(&content).map_err(error)?;
+        if let Ok(metadata) = std::fs::metadata(&path) {
+            tmp.as_file()
+                .set_permissions(metadata.permissions())
+                .map_err(error)?;
+        }
+        tmp.as_file().sync_all().map_err(error)?;
+        // Close the synchronized file before publication so a following writer
+        // does not inherit a destination held open by this writer.
+        let temporary = tmp.into_temp_path();
+        #[cfg(windows)]
+        {
+            let mut temporary = temporary;
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                match temporary.persist(&path) {
+                    Ok(()) => break,
+                    Err(err)
+                        if matches!(err.error.raw_os_error(), Some(5 | 32 | 33))
+                            && Instant::now() < deadline =>
+                    {
+                        temporary = err.path;
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(err) => return Err(error(err).into()),
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        temporary.persist(&path).map_err(error)?;
+        // Persist the renamed directory entry as well as the file contents.
+        #[cfg(unix)]
+        std::fs::File::open(parent)
+            .and_then(|directory| directory.sync_all())
+            .map_err(error)?;
+        Ok(())
+    })
+}
+struct LockHandle(Mutex<Option<std::fs::File>>);
+
+impl sys_types::BexRustData for LockHandle {
+    // The OS handle and Mutex store no owned heap buffers.
+    fn measure(&self, _: &mut sys_types::Meter) {}
+}
+pub(crate) fn fs_lock(
+    native: &NativeSysOps,
+    path: &str,
+    timeout_ms: i64,
+) -> SysOpOutput<owned::fs::Lock> {
+    let path = native.working_dir.resolve(path);
+    blocking(move || {
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent).map_err(error)?;
+        }
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)
+            .map_err(error)?;
+        let started = Instant::now();
+        loop {
+            match fs2::FileExt::try_lock_exclusive(&file) {
+                Ok(()) => {
+                    return Ok(owned::fs::Lock {
+                        _handle: Arc::new(LockHandle(Mutex::new(Some(file)))),
+                    });
+                }
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.raw_os_error() == fs2::lock_contended_error().raw_os_error() =>
+                {
+                    if started.elapsed() >= Duration::from_millis(timeout_ms.max(0).cast_unsigned())
+                    {
+                        return Err(error("Timed out waiting for filesystem lock").into());
+                    }
+                    std::thread::sleep(Duration::from_millis(25));
+                }
+                Err(e) => return Err(error(e).into()),
+            }
+        }
+    })
+}
+impl io::IoClassFsLock for NativeSysOps {
+    fn close(
+        &self,
+        _: &Arc<BexHeap>,
+        _: CallId,
+        lock: owned::fs::Lock,
+        _: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        if let Some(handle) = lock._handle.downcast_ref::<LockHandle>() {
+            if let Ok(mut file) = handle.0.lock() {
+                file.take();
+            }
+        }
+        SysOpOutput::ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build both supported formats with the same ordered filesystem entries.
+    fn fixture(format: &str, entries: &[(&str, bool)]) -> Vec<u8> {
+        if format == "zip" {
+            let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            for &(name, directory) in entries {
+                let options = zip::write::SimpleFileOptions::default();
+                if directory {
+                    archive.add_directory(name, options).unwrap();
+                } else {
+                    archive.start_file(name, options).unwrap();
+                    archive.write_all(b"data").unwrap();
+                }
+            }
+            archive.finish().unwrap().into_inner()
+        } else {
+            let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            let mut archive = tar::Builder::new(encoder);
+            for &(name, directory) in entries {
+                let data: &[u8] = if directory { b"" } else { b"data" };
+                let mut header = tar::Header::new_gnu();
+                header.set_mode(0o755);
+                header.set_size(data.len() as u64);
+                header.set_entry_type(if directory {
+                    tar::EntryType::Directory
+                } else {
+                    tar::EntryType::Regular
+                });
+                archive.append_data(&mut header, name, data).unwrap();
+            }
+            archive.into_inner().unwrap().finish().unwrap()
+        }
+    }
+
+    /// Preflight, reads, and extraction reject file ancestors in either entry order.
+    #[test]
+    fn archive_file_directory_conflicts_are_rejected() {
+        for format in ["zip", "tar.gz"] {
+            for entries in [
+                vec![("bin", false), ("bin/cli", false)],
+                vec![("bin/cli", false), ("bin", false)],
+                vec![("./bin", false), ("bin/cli", false)],
+                vec![("bin/cli", false), ("bin/", true), ("bin", false)],
+            ] {
+                let data = fixture(format, &entries);
+                assert!(
+                    archive_entries(&data, format).is_err(),
+                    "{format}: {entries:?}"
+                );
+                assert!(read_archive_file(&data, format, "bin/cli").is_err());
+                let destination = tempfile::tempdir().unwrap();
+                assert!(extract_archive(&data, format, destination.path()).is_err());
+            }
+        }
+    }
+
+    /// A directory introduced implicitly by a child can also appear explicitly.
+    #[test]
+    fn explicit_archive_directories_can_follow_their_children() {
+        for format in ["zip", "tar.gz"] {
+            let data = fixture(
+                format,
+                &[("bin/cli", false), ("bin/", true), ("bin/helper", false)],
+            );
+            assert_eq!(
+                archive_entries(&data, format).unwrap(),
+                ["bin/cli", "bin/helper"]
+            );
+            assert_eq!(
+                read_archive_file(&data, format, "bin/cli").unwrap(),
+                b"data"
+            );
+            let destination = tempfile::tempdir().unwrap();
+            extract_archive(&data, format, destination.path()).unwrap();
+            assert_eq!(
+                std::fs::read(destination.path().join("bin/cli")).unwrap(),
+                b"data"
+            );
+        }
+    }
+}

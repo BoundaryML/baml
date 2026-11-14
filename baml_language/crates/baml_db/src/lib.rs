@@ -10,7 +10,7 @@
 //! import point:
 //!
 //! ```ignore
-//! use baml_db::{FileId, ProjectDatabase, SourceFile, baml_compiler2_hir, baml_compiler_parser};
+//! use baml_db::{FileId, ProjectDatabase, SourceFile, baml_compiler2_hir};
 //! ```
 
 pub mod check;
@@ -20,16 +20,13 @@ pub mod manifest;
 #[cfg(feature = "rust_backend")]
 pub use baml_compiler2_rust as rust_backend;
 pub mod program;
-pub mod project_resolution;
+pub use baml_project_root as project_resolution;
 pub mod stdlib_prefix;
 pub mod testing;
 
 // Re-export all public APIs
 pub use baml_base::*;
 pub use baml_compiler_diagnostics;
-pub use baml_compiler_lexer;
-pub use baml_compiler_parser;
-pub use baml_compiler_syntax;
 pub use baml_compiler2_emit;
 pub use baml_compiler2_hir;
 pub use baml_compiler2_hir_ty;

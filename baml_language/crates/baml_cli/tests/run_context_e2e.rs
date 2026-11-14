@@ -226,7 +226,7 @@ fn context_stdin_reaches_target_and_spawn_on_cold_and_cached_runs() {
         project.path(),
         &[
             "query",
-            "--format",
+            "--output-format",
             "json",
             "SELECT context_distinct_id, context_metadata['phase'] FROM processes",
         ],

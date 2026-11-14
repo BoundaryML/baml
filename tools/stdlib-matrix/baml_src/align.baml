@@ -219,7 +219,7 @@ function session_rules() -> string {
         that matters here, because it is indistinguishable from an answer.
 
         Tools, one JSON object each:
-          describe  a BAML symbol or namespace by name — \`baml.sys.exec\`, \`baml.time\`
+          describe  a BAML symbol or namespace by name — \`baml.sys.run\`, \`baml.time\`
           search    what something does, in words — "run a subprocess", "parse a date"
           examples  real call sites for a symbol, from the BAML repository
           docs      one section of the BAML type system reference

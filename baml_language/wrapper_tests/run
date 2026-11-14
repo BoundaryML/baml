@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Build adapters and run the identical BAML suite against each candidate."""
+
+import argparse
+import json
+import os
+import re
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import tomllib
+from release_artifacts import candidates_from_archives
+from environment import test_environment
+
+repo = Path(__file__).resolve().parents[2]
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--candidate",
+    action="append",
+    help="JSON {label,command:[...],self_update:bool}; repeatable",
+)
+parser.add_argument(
+    "--filter",
+    default="",
+    help="select tests by descriptive name or baml test selector",
+)
+parser.add_argument(
+    "--profile", help="named baml test profile, e.g. ci for high-value coverage"
+)
+parser.add_argument("--no-build", action="store_true")
+parser.add_argument(
+    "--target", help="also build and exercise wrapper/pack-host for this target"
+)
+parser.add_argument(
+    "--release-artifacts",
+    type=Path,
+    help="test the uploaded Rust and BAML release archives instead of rebuilding candidates",
+)
+parser.add_argument(
+    "--wrapper-version", help="required archive version with --release-artifacts"
+)
+args = parser.parse_args()
+if args.release_artifacts and (
+    not args.target or not args.wrapper_version or args.candidate
+):
+    parser.error(
+        "--release-artifacts requires --target and --wrapper-version and cannot be combined with --candidate"
+    )
+workspace = repo / "baml_language"
+target = workspace / "target/debug"
+suffix = ".exe" if os.name == "nt" else ""
+target_suffix = (".exe" if "windows" in args.target else "") if args.target else suffix
+cross_target = args.target
+if args.target:
+    # rustc -vV reports a line such as "host: aarch64-apple-darwin".
+    host = re.search(
+        r"^host: (.+)$",
+        subprocess.check_output(["rustc", "-vV"], cwd=workspace, text=True),
+        re.M,
+    )[1]
+    if args.target == host:
+        cross_target = None
+wrapper_target = (
+    workspace / "target" / cross_target / "debug" if cross_target else target
+)
+environment = dict(test_environment(os.environ), BAML_CLI_ALLOW_DIRECT="1")
+wrapper_version = tomllib.loads((workspace / "wrapper/release.toml").read_text())[
+    "package"
+]["version"]
+
+
+def run(command, **kwargs):
+    subprocess.run(
+        [str(arg) for arg in command],
+        check=True,
+        cwd=workspace if str(command[0]) == "cargo" else repo,
+        env=environment,
+        **kwargs,
+    )
+
+
+if not args.no_build:
+    run(
+        [
+            "cargo",
+            "build",
+            "--manifest-path",
+            workspace / "Cargo.toml",
+            "-p",
+            "baml_cli",
+            "--bin",
+            "baml-cli",
+            "--example",
+            "wrapper-stub",
+            "-p",
+            "baml_pack_host",
+            "--bin",
+            "baml-pack-host",
+        ]
+    )
+    if cross_target and not args.release_artifacts:
+        run(
+            [
+                "cargo",
+                "build",
+                "-p",
+                "baml_pack_host",
+                "--bin",
+                "baml-pack-host",
+                "--target",
+                cross_target,
+            ]
+        )
+with tempfile.TemporaryDirectory(prefix="wrapper-suite-") as directory:
+    environment["WRAPPER_E2E_ARCHIVES"] = str(Path(directory) / "archives")
+    candidates = (
+        [json.loads(value) for value in args.candidate] if args.candidate else []
+    )
+    if args.release_artifacts:
+        platforms = json.loads((repo / "release/platforms.json").read_text())["targets"]
+        platform = next(
+            entry
+            for entry in platforms
+            if entry["triple"] == args.target and entry["artifacts"].get("wrapper")
+        )
+        candidates = candidates_from_archives(
+            args.release_artifacts, directory, platform, args.wrapper_version
+        )
+    if not candidates:
+        for enabled in [True, False]:
+            label = "baml" if enabled else "baml-no-self-update"
+            packed = Path(directory) / (label + target_suffix)
+            command = [
+                sys.executable,
+                repo / "baml_language/wrapper/build",
+                "--cli",
+                target / ("baml-cli" + suffix),
+                "--output",
+                packed,
+            ]
+            if args.target:
+                command.extend(
+                    [
+                        "--target",
+                        args.target,
+                        "--pack-host",
+                        wrapper_target / ("baml-pack-host" + target_suffix),
+                    ]
+                )
+            if not enabled:
+                command.append("--no-self-update")
+            run(command)
+            candidates.append(
+                {
+                    "label": label,
+                    "command": [str(packed)],
+                    "self_update": enabled,
+                    "version": wrapper_version,
+                    "posthog": True,
+                }
+            )
+    environment.update(
+        WRAPPER_E2E_PYTHON=sys.executable,
+        WRAPPER_E2E_HELPER=str(repo / "baml_language/wrapper_tests/fixture.py"),
+        WRAPPER_STUB=str(target / "examples" / ("wrapper-stub" + suffix)),
+    )
+    failed = False
+    if not args.release_artifacts and not args.filter:
+        # The wrapper's own unit tests, such as its command-line parser, run
+        # from source and need no candidate.
+        print("Running wrapper unit tests", flush=True)
+        result = subprocess.run(
+            [
+                str(target / ("baml-cli" + suffix)),
+                "test",
+                "--project-dir",
+                str(repo / "baml_language/wrapper"),
+            ],
+            cwd=repo,
+            env=environment,
+        )
+        failed = result.returncode != 0
+    for candidate in candidates:
+        print(f"Running wrapper tests: {candidate['label']}", flush=True)
+        candidate_environment = dict(
+            environment, WRAPPER_CANDIDATE=json.dumps(candidate)
+        )
+        command = [
+            str(target / ("baml-cli" + suffix)),
+            "test",
+            "--project-dir",
+            str(repo / "baml_language/wrapper_tests"),
+            "--max-concurrency",
+            "1",
+        ]
+        if args.profile:
+            command.extend(["--profile", args.profile])
+        if args.filter:
+            command.extend(["--include", args.filter])
+        result = subprocess.run(command, cwd=repo, env=candidate_environment)
+        failed = failed or result.returncode != 0
+    sys.exit(1 if failed else 0)

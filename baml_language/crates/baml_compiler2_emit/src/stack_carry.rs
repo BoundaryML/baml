@@ -1080,7 +1080,7 @@ fn simulate_operand_prefix_pull_stack(
                 def_use,
             ))
         }
-        Rvalue::Array(_, elements) => {
+        Rvalue::Array(_, elements) | Rvalue::ConcatStrings(elements) => {
             let values = elements.iter().collect::<Vec<_>>();
             Some(simulate_stack_consuming_aggregate(
                 AggregateStackShape {
@@ -1232,7 +1232,7 @@ fn simulate_stack_consuming_aggregate(
 #[cfg(test)]
 fn aggregate_value_operand_index<'db>(rvalue: &Rvalue<'db>, local: Local) -> Option<usize> {
     let operands: Vec<&Operand<'db>> = match rvalue {
-        Rvalue::Array(_, elements) => elements.iter().collect(),
+        Rvalue::Array(_, elements) | Rvalue::ConcatStrings(elements) => elements.iter().collect(),
         // See `simulate_operand_prefix_pull_stack`: only map values are
         // valid stack-carry prefix operands for the current VM stack layout.
         Rvalue::Map(_, _, entries) => entries.iter().map(|(_key, value)| value).collect(),
@@ -1433,7 +1433,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         }
     }
 
-    fn load_field(&mut self, _field: usize, _name: &str) -> Result<(), Self::Error> {
+    fn load_field(&mut self, _field: usize, _name: &str, _base: &Place) -> Result<(), Self::Error> {
         if !self.sim.pop_n(1) {
             return Err(());
         }
@@ -1441,7 +1441,11 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn load_index(&mut self, _kind: baml_compiler2_mir::IndexKind) -> Result<(), Self::Error> {
+    fn load_index(
+        &mut self,
+        _kind: baml_compiler2_mir::IndexKind,
+        _base: &Place,
+    ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }
@@ -1464,6 +1468,14 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 
     fn unary_op(&mut self, _op: baml_compiler2_mir::UnaryOp) -> Result<(), Self::Error> {
         if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn concat_strings(&mut self, len: usize) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(len) {
             return Err(());
         }
         self.sim.push();
@@ -1673,7 +1685,12 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 }
 
 impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
-    fn store_field_value(&mut self, _field: usize, _name: &str) -> Result<(), Self::Error> {
+    fn store_field_value(
+        &mut self,
+        _field: usize,
+        _name: &str,
+        _base: &Place,
+    ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }
@@ -1683,6 +1700,7 @@ impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
     fn store_index_value(
         &mut self,
         _kind: baml_compiler2_mir::IndexKind,
+        _base: &Place,
     ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(3) {
             return Err(());

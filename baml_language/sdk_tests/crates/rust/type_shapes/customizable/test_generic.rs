@@ -44,11 +44,11 @@ fn test_generic_generic() {
     // synthesizes the arm-named generic enum `TOrWrapperMarker<T>`; with
     // `T = String` the returned string decodes into the `T` variant (decode
     // trial order is declaration order).
-    use baml_sdk::generics::{TOrWrapperMarker, make_wrapper_methods};
+    use baml_sdk::generics::{TOrWrapperMarker, make_wrapper_methods_sync};
 
-    let w = make_wrapper_methods("hello".to_string()).unwrap();
+    let w = make_wrapper_methods_sync("hello".to_string()).unwrap();
     assert_eq!(
-        w.get_value_or_marker().unwrap(),
+        w.get_value_or_marker_sync().unwrap(),
         TOrWrapperMarker::T("hello".to_string())
     );
 }
@@ -73,8 +73,8 @@ fn test_generic_generic() {
 /// class args and the call is rejected at the inbound boundary.
 #[test]
 fn test_generic_generic_wrapper_get_value() {
-    use baml_sdk::generics::make_wrapper_methods;
+    use baml_sdk::generics::make_wrapper_methods_sync;
 
-    let w = make_wrapper_methods("hello".to_string()).unwrap();
-    assert_eq!(w.get_value().unwrap(), "hello");
+    let w = make_wrapper_methods_sync("hello".to_string()).unwrap();
+    assert_eq!(w.get_value_sync().unwrap(), "hello");
 }

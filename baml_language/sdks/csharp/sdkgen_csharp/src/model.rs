@@ -189,6 +189,7 @@ fn reclassify_companion_methods(class: &Class) -> Class {
         static_methods,
         instance_methods,
         origin: class.origin.clone(),
+        json_omit_nulls: false,
     }
 }
 
@@ -250,6 +251,7 @@ mod tests {
                 source_file_path: "fixture.baml".to_string(),
                 span_start: 0,
             },
+            json_omit_nulls: false,
         }
     }
 

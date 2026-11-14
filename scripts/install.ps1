@@ -7,6 +7,28 @@ param(
   [switch]$Help
 )
 
+function Invoke-BamlToolchainUse {
+  param([string]$WrapperPath, [string]$Selector)
+
+  # The oldest published wrappers (through 0.2.5) have no `use --help` and
+  # treat it as a version to fetch, so a failed probe means plain use. The
+  # caller's session may make native failures or stderr terminating.
+  try {
+    $PSNativeCommandUseErrorActionPreference = $false
+    $UseHelp = & $WrapperPath toolchain use --help 2>$null | Out-String
+    if ($LASTEXITCODE -ne 0) { $UseHelp = "" }
+  } catch {
+    $UseHelp = ""
+  }
+  # Negotiate before installing; a network/install failure must not retry with
+  # a different scope. Older published wrappers used --local or plain use.
+  $ScopeArgs = @(
+    if ($UseHelp.Contains("--global")) { "--global" }
+    elseif ($UseHelp.Contains("--local")) { "--local" }
+  )
+  & $WrapperPath toolchain use $Selector @ScopeArgs
+}
+
 if ($Help) {
   Write-Host "Usage: install.ps1 [-Channel canary|nightly] [-Version VERSION] [-WrapperOnly] [-NoModifyPath] [-Yes]"
   exit 0
@@ -91,9 +113,9 @@ try {
 
   if (-not $WrapperOnly) {
     $Selector = if ($Version) { $Version } else { $Channel }
-    & $WrapperPath toolchain use $Selector
+    Invoke-BamlToolchainUse -WrapperPath $WrapperPath -Selector $Selector
     if ($LASTEXITCODE -ne 0) {
-      Write-Error "Wrapper installed, but toolchain bootstrap failed. Retry: $WrapperPath toolchain use $Selector"
+      Write-Error "Wrapper installed, but toolchain bootstrap failed. Check supported options: $WrapperPath toolchain use --help"
       exit 7
     }
   }

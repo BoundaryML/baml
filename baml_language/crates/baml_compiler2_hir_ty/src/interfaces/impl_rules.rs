@@ -209,7 +209,7 @@ pub fn impl_data<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
 ) -> Result<ImplData<'db>, ImplDataError> {
-    use baml_compiler2_hir::item_data::{ImplSubjectData, function_data, impl_block_data};
+    use baml_compiler2_hir::item_data::{function_data, impl_block_data};
 
     let file = impl_loc.file(db);
     let block = impl_block_data(db, impl_loc);
@@ -218,116 +218,63 @@ pub fn impl_data<'db>(
     let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
     let ns = &pkg_info.namespace_path;
 
-    // Normalize in-body → free: an in-body impl's generics are the class's and
-    // its for-type is the class applied to its own params as type vars.
-    let (
-        generic_param_names,
-        for_ty_pattern,
-        generic_params,
-        for_target_diags,
-        bound_diags,
-        origin,
-    ) = match &block.subject {
-        ImplSubjectData::InClass { class, out_of_body } => {
-            let class_data = baml_compiler2_hir::item_data::class_data(db, *class);
-            let generic_param_names = crate::lower::class_generic_frame(db, *class);
-            let class_qtn = qualify_def(db, Definition::Class(*class), &class_data.name);
-            let for_ty = Ty::Class(
-                class_qtn.clone(),
-                generic_param_names
-                    .iter()
-                    .map(|p| Ty::TypeVar(p.clone()))
-                    .collect(),
-            );
-            // An in-body impl's generics ARE the class's; the class declaration
-            // owns its bounds' diagnostics, so they are lowered into a
-            // discarded sink here.
-            let mut class_bound_diags = Vec::new();
-            let generic_params: Vec<(ParamTy, Vec<baml_type::Interface>)> = generic_param_names
-                .iter()
-                .zip(class_data.generic_params.iter())
-                .map(|(name, declared)| {
-                    let ifaces = lower_generic_param_interface_bounds(
-                        db,
-                        &class_data.type_refs,
-                        &declared.bounds,
-                        pkg_items,
-                        ns,
-                        &generic_param_names,
-                        &mut class_bound_diags,
-                    );
-                    (name.clone(), ifaces)
-                })
-                .collect();
-            (
-                generic_param_names,
-                for_ty,
-                generic_params,
-                Vec::new(),
-                Vec::new(),
-                // A simple `implement I for C` is merged onto `C` (`InClass`
-                // subject) but written out-of-body — its origin stays `OutOfBody`.
-                if *out_of_body {
-                    InterfaceImplOrigin::OutOfBody
-                } else {
-                    InterfaceImplOrigin::InBodyClass { class_qtn }
-                },
-            )
+    // Both spellings arrive in one shape: an in-body block carries its class's
+    // generics and the class as its for-target. Provenance decides only the
+    // origin, which the out-of-body-only gates read.
+    let (for_target, generics) = (&block.for_target, &block.generics);
+    let names: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
+    let generic_param_names = crate::lower::impl_frame(db, impl_loc);
+    let mut bound_diags = Vec::new();
+    // `implements<T, T> …` — a duplicate impl generic is a declaration error.
+    for (idx, name) in names.iter().enumerate() {
+        if names[..idx].contains(name) {
+            bound_diags.push(TirTypeError::DuplicateGenericParam { name: name.clone() });
         }
-        ImplSubjectData::Free {
-            for_target,
-            generics,
-        } => {
-            let names: Vec<Name> = generics.iter().map(|g| g.name.clone()).collect();
-            let generic_param_names = crate::lower::impl_frame(db, impl_loc);
-            let mut bound_diags = Vec::new();
-            // `implements<T, T> …` — a duplicate impl generic is a declaration error.
-            for (idx, name) in names.iter().enumerate() {
-                if names[..idx].contains(name) {
-                    bound_diags.push(TirTypeError::DuplicateGenericParam { name: name.clone() });
-                }
-            }
-            let generic_params: Vec<_> = generics
-                .iter()
-                .zip(generic_param_names.iter())
-                .map(|(g, param)| {
-                    let ifaces = lower_generic_param_interface_bounds(
-                        db,
-                        &block.type_refs,
-                        &g.bounds,
-                        pkg_items,
-                        ns,
-                        &generic_param_names,
-                        &mut bound_diags,
-                    );
-                    (param.clone(), ifaces)
-                })
-                .collect();
-            let bounds = generic_params.iter().cloned().collect();
-            let mut for_target_diags = Vec::new();
-            let for_ty = lower_ref_in(
-                &LowerScope {
-                    db,
-                    package_items: pkg_items,
-                    ns_context: ns,
-                    generic_params: &generic_param_names,
-                    bounds: &bounds,
-                    self_ty: None,
-                },
+    }
+    let generic_params: Vec<_> = generics
+        .iter()
+        .zip(generic_param_names.iter())
+        .map(|(g, param)| {
+            let ifaces = lower_generic_param_interface_bounds(
+                db,
                 &block.type_refs,
-                *for_target,
-                &mut for_target_diags,
+                &g.bounds,
+                pkg_items,
+                ns,
+                &generic_param_names,
+                &mut bound_diags,
             );
-            (
-                generic_param_names,
-                for_ty,
-                generic_params,
-                for_target_diags,
-                bound_diags,
-                InterfaceImplOrigin::OutOfBody,
-            )
-        }
+            (param.clone(), ifaces)
+        })
+        .collect();
+    let bounds = generic_params.iter().cloned().collect();
+    let mut for_target_diags = Vec::new();
+    let for_ty = lower_ref_in(
+        &LowerScope {
+            db,
+            package_items: pkg_items,
+            ns_context: ns,
+            generic_params: &generic_param_names,
+            bounds: &bounds,
+            self_ty: None,
+        },
+        &block.type_refs,
+        *for_target,
+        &mut for_target_diags,
+    );
+    let origin = match block.origin {
+        baml_compiler2_ast::ImplOrigin::OutOfBody => InterfaceImplOrigin::OutOfBody,
+        baml_compiler2_ast::ImplOrigin::InBody => match &for_ty {
+            Ty::Class(class_qtn, _) => InterfaceImplOrigin::InBodyClass {
+                class_qtn: class_qtn.clone(),
+            },
+            // The class the block is written in did not resolve to a class
+            // type (its name is shadowed or malformed); nothing in-body
+            // applies.
+            _ => InterfaceImplOrigin::OutOfBody,
+        },
     };
+    let for_ty_pattern = for_ty;
 
     let mut interface_target_diags = Vec::new();
     let bounds = generic_params.iter().cloned().collect();
@@ -475,10 +422,10 @@ pub fn impl_data<'db>(
         }
         // Field-side conformance, in-body class impls only.
         if let InterfaceImplOrigin::InBodyClass { class_qtn } = &origin
-            && let ImplSubjectData::InClass { class, .. } = &block.subject
+            && let Some(class) = baml_compiler2_hir::item_data::impl_enclosing_class(db, impl_loc)
             && (!block.field_links.is_empty() || !iface_data.fields.is_empty())
         {
-            let class_fields = crate::lower::resolve_class_fields(db, *class);
+            let class_fields = crate::lower::resolve_class_fields(db, class);
             let is_iface_field =
                 |name: &Name| iface_data.fields.iter().any(|fld| fld.name == *name);
             let is_class_field = |name: &Name| class_fields.iter().any(|(n, _, _)| n == name);
@@ -674,7 +621,7 @@ pub fn impl_data_source_map<'db>(
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
 ) -> ImplDataSourceMap {
     use baml_compiler2_hir::item_data::{
-        ImplSubjectData, function_data, function_source_map, impl_block_data, impl_block_source_map,
+        function_data, function_source_map, impl_block_data, impl_block_source_map,
     };
 
     let file_id = impl_loc.file(db).file_id(db);
@@ -682,12 +629,13 @@ pub fn impl_data_source_map<'db>(
     let spans = impl_block_source_map(db, impl_loc);
     let interface_target_range = spans.type_refs.span(block.interface_target);
     // In-body impls attribute to the interface-target span; out-of-body to the
-    // whole block span.
-    let (impl_range, for_target_span) = match &block.subject {
-        ImplSubjectData::InClass { .. } => (interface_target_range, None),
-        ImplSubjectData::Free { for_target, .. } => (
+    // whole block span (an in-body block's for-target is the class, written
+    // nowhere in the block).
+    let (impl_range, for_target_span) = match block.origin {
+        baml_compiler2_ast::ImplOrigin::InBody => (interface_target_range, None),
+        baml_compiler2_ast::ImplOrigin::OutOfBody => (
             spans.span,
-            Some(Span::new(file_id, spans.type_refs.span(*for_target))),
+            Some(Span::new(file_id, spans.type_refs.span(block.for_target))),
         ),
     };
     // Group all override spans by name so a same-named duplicate marks every occurrence.
@@ -1036,9 +984,7 @@ pub fn validate_impl_signatures<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
 ) -> Vec<(TirTypeError, ImplDiagnosticLocation)> {
-    use baml_compiler2_hir::item_data::{
-        ImplSubjectData, function_data, impl_block_data, interface_data,
-    };
+    use baml_compiler2_hir::item_data::{function_data, impl_block_data, interface_data};
 
     let mut diags = Vec::new();
     let file = impl_loc.file(db);
@@ -1068,10 +1014,7 @@ pub fn validate_impl_signatures<'db>(
         Err(ImplDataError::InterfaceUnresolved { .. }) => {
             use crate::impls::ImplHeaderResolution;
 
-            let out_of_body = match &block.subject {
-                ImplSubjectData::InClass { out_of_body, .. } => *out_of_body,
-                ImplSubjectData::Free { .. } => true,
-            };
+            let out_of_body = block.origin == baml_compiler2_ast::ImplOrigin::OutOfBody;
 
             let (facts, for_ty, validate_requires) = match crate::impls::impl_facts(db, impl_loc) {
                 ImplHeaderResolution::Unresolved => return diags,
@@ -1243,9 +1186,9 @@ pub fn validate_impl_signatures<'db>(
     // ── E0116: field-type conformance (in-body impls). ──
     if !iface_data.fields.is_empty()
         && matches!(data.origin, InterfaceImplOrigin::InBodyClass { .. })
-        && let ImplSubjectData::InClass { class, .. } = &block.subject
+        && let Some(class) = baml_compiler2_hir::item_data::impl_enclosing_class(db, impl_loc)
     {
-        let class_fields = crate::lower::resolve_class_fields(db, *class);
+        let class_fields = crate::lower::resolve_class_fields(db, class);
         let iface_field_bounds = interface_declared_param_bounds(db, data.interface);
         // Realize the interface's declared field types at the impl's interface args.
         let iface_bindings =

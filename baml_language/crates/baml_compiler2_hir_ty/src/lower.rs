@@ -1661,6 +1661,31 @@ pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::intern
     )
 }
 
+/// [`substitute_params`] for one arm of a union `Self`. `args` binds `Self`
+/// (slot 0) to the union and `arm_args` binds it to the arm. A bare `Self`
+/// is the union, but an associated-type projection is taken over the arm:
+/// the value's own impl binds it, and the arms of one union can bind it
+/// differently.
+pub(crate) fn substitute_params_through_arm(
+    ty: &baml_type::interned::Ty,
+    args: &[baml_type::interned::Ty],
+    arm_args: &[baml_type::interned::Ty],
+) -> Ty {
+    use baml_type::interned::TypeFlags;
+    if !ty.flags().contains(TypeFlags::HAS_TYPEVAR) {
+        return ty.clone();
+    }
+    match ty.kind() {
+        InferTy::AssociatedTypeProjection { .. } => substitute_params(ty, arm_args),
+        InferTy::TypeVar(param) if args.get(param.index() as usize).is_some() => {
+            args[param.index() as usize].clone()
+        }
+        kind => Ty::intern(
+            kind.map_children(|child| substitute_params_through_arm(child, args, arm_args)),
+        ),
+    }
+}
+
 /// Generic-arity recovery: extras truncated, missing padded with
 /// `Error`. The arity report is `record_arity`'s, made before this runs;
 /// a sink-less re-lowering (MIR, emit) only sees signatures the checked
@@ -1886,92 +1911,72 @@ pub fn interface_declared_params<'db>(
     interface_frame(db, interface)[1..=data.generic_params.len()].to_vec()
 }
 
-/// The root generic frame for an impl block: the enclosing class's frame
-/// for an in-class `implements`, the block's own declared generics for a
-/// free `implements ... for T`.
+/// The root generic frame for an impl block: its declared generics (an
+/// in-body block carries its class's).
 pub fn impl_frame<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     block: baml_compiler2_hir::loc::ImplLoc<'db>,
 ) -> Vec<ParamTy> {
     let data = baml_compiler2_hir::item_data::impl_block_data(db, block);
-    match &data.subject {
-        baml_compiler2_hir::item_data::ImplSubjectData::InClass { class, .. } => {
-            class_generic_frame(db, *class)
-        }
-        baml_compiler2_hir::item_data::ImplSubjectData::Free { generics, .. } => {
-            let mut frame = Vec::new();
-            ParamTy::extend_frame(
-                &mut frame,
-                &generics
-                    .iter()
-                    .map(|param| param.name.clone())
-                    .collect::<Vec<_>>(),
-            );
-            frame
-        }
-    }
+    let mut frame = Vec::new();
+    ParamTy::extend_frame(
+        &mut frame,
+        &data
+            .generics
+            .iter()
+            .map(|param| param.name.clone())
+            .collect::<Vec<_>>(),
+    );
+    frame
 }
 
-/// The type an impl block is FOR — what `Self` denotes inside it: the
-/// enclosing class's self type for an in-body block, the lowered for-target
-/// for a free one. Together with [`impl_frame`] and [`impl_generic_bounds`]
-/// this is the UNIFORM impl surface: the in-body-vs-free distinction is
-/// HIR's business, and downstream consumers (emit's rule baking, MIR's
-/// display names) see only the type.
+/// The type an impl block is FOR — what `Self` denotes inside it: the lowered
+/// for-target (an in-body block's is its class applied to the class's
+/// generics). Together with [`impl_frame`] and [`impl_generic_bounds`] this
+/// is the UNIFORM impl surface downstream consumers (emit's rule baking,
+/// MIR's display names) see.
 pub fn impl_self_ty<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     block: baml_compiler2_hir::loc::ImplLoc<'db>,
 ) -> baml_type::Ty {
     let data = baml_compiler2_hir::item_data::impl_block_data(db, block);
-    match &data.subject {
-        baml_compiler2_hir::item_data::ImplSubjectData::InClass { class, .. } => {
-            class_self_ty(db, *class)
-        }
-        baml_compiler2_hir::item_data::ImplSubjectData::Free { for_target, .. } => reject_holes(
-            &lower_ctx_for_file(db, block.file(db))
-                .with_frame(impl_frame(db, block))
-                .with_bounds(impl_generic_bounds(db, block))
-                .lower_type_ref(&data.type_refs, *for_target),
-        ),
-    }
+    reject_holes(
+        &lower_ctx_for_file(db, block.file(db))
+            .with_frame(impl_frame(db, block))
+            .with_bounds(impl_generic_bounds(db, block))
+            .lower_type_ref(&data.type_refs, data.for_target),
+    )
 }
 
-/// A free impl block's declared generic bounds (`implements<T extends I>
-/// ... for T`), conjunctive per param - the impl-scope param env. In-class
-/// impls carry the CLASS's bounds instead (`class_generic_bounds`).
+/// An impl block's declared generic bounds (`implements<T extends I> ... for
+/// T`), conjunctive per param — the impl-scope param env.
 pub fn impl_generic_bounds<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     block: baml_compiler2_hir::loc::ImplLoc<'db>,
 ) -> FxHashMap<ParamTy, Vec<baml_type::Interface>> {
     let data = baml_compiler2_hir::item_data::impl_block_data(db, block);
-    match &data.subject {
-        baml_compiler2_hir::item_data::ImplSubjectData::InClass { class, .. } => {
-            class_generic_bounds(db, *class)
-        }
-        baml_compiler2_hir::item_data::ImplSubjectData::Free { generics, .. } => {
-            let frame = impl_frame(db, block);
-            let ctx = lower_ctx_for_file(db, block.file(db)).with_frame(frame.clone());
-            let mut out = FxHashMap::default();
-            for (param, param_data) in frame.iter().zip(generics.iter()) {
-                let bounds: Vec<_> = param_data
-                    .bounds
-                    .iter()
-                    .filter_map(|&type_ref| {
-                        reject_holes(&ctx.lower_type_ref_at(
-                            &data.type_refs,
-                            type_ref,
-                            TypePosition::ConstraintHead,
-                        ))
-                        .as_interface()
-                    })
-                    .collect();
-                if !bounds.is_empty() {
-                    out.insert(param.clone(), bounds);
-                }
-            }
-            out
+    let generics = &data.generics;
+    let frame = impl_frame(db, block);
+    let ctx = lower_ctx_for_file(db, block.file(db)).with_frame(frame.clone());
+    let mut out = FxHashMap::default();
+    for (param, param_data) in frame.iter().zip(generics.iter()) {
+        let bounds: Vec<_> = param_data
+            .bounds
+            .iter()
+            .filter_map(|&type_ref| {
+                reject_holes(&ctx.lower_type_ref_at(
+                    &data.type_refs,
+                    type_ref,
+                    TypePosition::ConstraintHead,
+                ))
+                .as_interface()
+            })
+            .collect();
+        if !bounds.is_empty() {
+            out.insert(param.clone(), bounds);
         }
     }
+    out
 }
 
 /// The qualified name of a definition as its own file's package and
@@ -2210,39 +2215,26 @@ pub fn function_generic_bounds<'db>(
         Some(MethodOwner::Impl(impl_loc)) => {
             // The owner prefix's declared bounds, conjunctive per param,
             // keyed by the frame-prefix identities this function's frame
-            // starts with: the block's own generics for a free impl
-            // (`implements<T extends I> ...`), the enclosing CLASS's
-            // generics for an in-class block (`impl_frame` is the class
-            // frame there, so the identities coincide).
+            // starts with: the block's declared generics (an in-body block
+            // carries its class's).
             let impl_data = baml_compiler2_hir::item_data::impl_block_data(db, impl_loc);
-            match &impl_data.subject {
-                baml_compiler2_hir::item_data::ImplSubjectData::InClass { class, .. } => {
-                    let class_data = baml_compiler2_hir::item_data::class_data(db, *class);
-                    out.extend(class_generic_bounds(db, *class));
-                    for _ in 0..class_data.generic_params.len() {
-                        frame_iter.next();
-                    }
-                }
-                baml_compiler2_hir::item_data::ImplSubjectData::Free { generics, .. } => {
-                    for param_data in generics {
-                        let Some(param) = frame_iter.next() else {
-                            break;
-                        };
-                        let bounds: Vec<_> = param_data
-                            .bounds
-                            .iter()
-                            .filter_map(|&type_ref| {
-                                as_ref(&ctx.lower_type_ref_at(
-                                    &impl_data.type_refs,
-                                    type_ref,
-                                    TypePosition::ConstraintHead,
-                                ))
-                            })
-                            .collect();
-                        if !bounds.is_empty() {
-                            out.insert(param.clone(), bounds);
-                        }
-                    }
+            for param_data in &impl_data.generics {
+                let Some(param) = frame_iter.next() else {
+                    break;
+                };
+                let bounds: Vec<_> = param_data
+                    .bounds
+                    .iter()
+                    .filter_map(|&type_ref| {
+                        as_ref(&ctx.lower_type_ref_at(
+                            &impl_data.type_refs,
+                            type_ref,
+                            TypePosition::ConstraintHead,
+                        ))
+                    })
+                    .collect();
+                if !bounds.is_empty() {
+                    out.insert(param.clone(), bounds);
                 }
             }
         }

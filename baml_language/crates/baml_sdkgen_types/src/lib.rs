@@ -3,9 +3,11 @@
 //! Union / Optional / Null invariance guaranteed
 
 mod descriptor;
+pub use baml_type::json_tags;
 mod embedded_bytecode;
 mod errors;
 mod generator_fields;
+mod naming;
 mod output_writer;
 mod routing;
 mod skip_warning;
@@ -18,6 +20,7 @@ pub use descriptor::*;
 pub use embedded_bytecode::embedded_bytecode_base64;
 pub use errors::*;
 pub use generator_fields::*;
+pub use naming::{Candidate, Case, allocate_distinct, allocate_one};
 pub use output_writer::*;
 pub use routing::namespace_segments;
 pub use skip_warning::SkipWarning;

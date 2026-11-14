@@ -8,6 +8,7 @@ license.workspace = true
 
 [dependencies]
 baml_env = { workspace = true }
+baml_project_root = { workspace = true }
 baml_type = { workspace = true }
 baml_type_runtime = { workspace = true }
 bex_events = { workspace = true }
@@ -28,7 +29,7 @@ indexmap = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
 rustc-hash = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "macros" ] }
 tokio-util = { workspace = true }
@@ -44,6 +45,7 @@ btel_recorder = { workspace = true }
 btel_file = { workspace = true }
 btel_snapshot = { workspace = true }
 baml_version = { workspace = true }
+os_info = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt", "macros", "time" ] }
 
 # WASM-only: wasm-bindgen-futures for spawning async tasks
@@ -67,7 +69,7 @@ borsh = { workspace = true }
 clap = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "test-util" ] }
 wiremock = { workspace = true }

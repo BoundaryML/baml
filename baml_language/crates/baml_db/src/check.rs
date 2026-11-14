@@ -14,7 +14,7 @@
 //!
 //! ## Per-file pipeline
 //!
-//! 1. **Parse errors** — via `baml_compiler_parser::parse_errors`. Always fast
+//! 1. **Parse errors** — via `baml_parser::typed_parse_errors`. Always fast
 //!    because parsing is Salsa-cached per file.
 //! 2. **HIR2 diagnostics** — stored in `file_semantic_index(...).extra`. These
 //!    cover duplicate field/variant/binding names found during scope tree
@@ -40,7 +40,7 @@ use std::collections::{HashMap, HashSet};
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_diagnostics::{
     Diagnostic, DiagnosticId, DiagnosticIdentifierKind, DiagnosticPhase, DiagnosticText,
-    ParseError, ToDiagnostic, runtime_type,
+    runtime_type, typed_parse_error_diagnostic,
 };
 use baml_compiler2_hir::{file_semantic_index, scope::ScopeKind};
 use baml_compiler2_hir_ty::diagnostics::{ScopedTypeEscapeKind, TirTypeError};
@@ -438,11 +438,11 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
 
     // ── 1. Parse errors ───────────────────────────────────────────────────────
     //
-    // `parse_errors` is Salsa-cached per file. Calling it here is cheap after
-    // the first call for a given file revision.
-    let parse_errors = baml_compiler_parser::parse_errors(db, file);
-    for err in &parse_errors {
-        diagnostics.push(err.to_diagnostic());
+    // The parse is Salsa-cached per file. Reading its errors here is cheap
+    // after the first call for a given file revision.
+    let parse_errors = baml_parser::typed_parse_errors(db, file);
+    for err in parse_errors.iter() {
+        diagnostics.push(typed_parse_error_diagnostic(err, file_id));
     }
 
     // ── 2. HIR2 diagnostics ───────────────────────────────────────────────────
@@ -709,6 +709,77 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
             }
         }
+        // `@json` ATTRIBUTE errors: a declaration's own, and each union its
+        // types spell that can't pick a member by tag.
+        let package = baml_compiler2_hir::file_package::file_package(db, file).root;
+        let overrides = baml_compiler2_hir_ty::json_attrs::json_overrides(db, package);
+        let mut errors = Vec::new();
+        for &class_loc in baml_compiler2_hir::item_data::file_classes(db, file) {
+            let data = baml_compiler2_hir::item_data::class_data(db, class_loc);
+            let head = baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                baml_compiler2_hir::contributions::Definition::Class(class_loc),
+                &data.name,
+            );
+            errors.extend(baml_compiler2_hir_ty::json_attrs::class_errors(
+                db, class_loc, &head, overrides,
+            ));
+            let source_map = baml_compiler2_hir::item_data::class_source_map(db, class_loc);
+            let fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
+            for (field, (_, ty, _)) in data.fields.iter().zip(fields.iter()) {
+                if let Some(error) = baml_compiler2_hir_ty::json_attrs::union_error(db, ty) {
+                    errors.push((source_map.type_refs.span(field.type_ref), error));
+                }
+            }
+        }
+        for &enum_loc in baml_compiler2_hir::item_data::file_enums(db, file) {
+            let data = baml_compiler2_hir::item_data::enum_data(db, enum_loc);
+            let head = baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                baml_compiler2_hir::contributions::Definition::Enum(enum_loc),
+                &data.name,
+            );
+            let renames = data
+                .variants
+                .iter()
+                .any(|variant| variant.attrs.json_rename.is_some());
+            if renames
+                && let Some(interface) =
+                    baml_compiler2_hir_ty::json_attrs::override_of(overrides, &head)
+            {
+                errors.push((
+                    baml_compiler2_hir::item_data::enum_source_map(db, enum_loc).name_span,
+                    TirTypeError::JsonAttributesWithOverride {
+                        name: data.name.clone(),
+                        interface: interface.to_string(),
+                    },
+                ));
+            }
+        }
+        for &func_loc in baml_compiler2_hir::item_data::file_functions(db, file) {
+            let signature = baml_compiler2_hir_ty::lower::function_signature(db, func_loc);
+            let error = signature
+                .params
+                .iter()
+                .map(|param| &param.ty)
+                .chain([&signature.ret])
+                .find_map(|ty| baml_compiler2_hir_ty::json_attrs::union_error(db, ty));
+            if let Some(error) = error {
+                let name_span =
+                    baml_compiler2_hir::item_data::function_source_map(db, func_loc).name_span;
+                errors.push((name_span, error));
+            }
+        }
+        for (range, error) in errors {
+            let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                message: error.render(&vp),
+                error,
+                range,
+                severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                related: Vec::new(),
+            };
+            diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+        }
         // LLM OUTPUT field warnings: an optional field an LLM function's
         // output reaches, which a model can never fill (E0185), at the
         // field's written type.
@@ -772,8 +843,15 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
         let Definition::TypeAlias(alias_loc) = contrib.definition else {
             continue;
         };
+        let value = baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc);
+        let untagged = baml_compiler2_hir_ty::json_attrs::union_error(db, &value);
+        let declaration_span =
+            baml_compiler2_hir::item_data::type_alias_source_map(db, alias_loc).name_span;
         for (range, error) in
             baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(db, alias_loc)
+                .iter()
+                .cloned()
+                .chain(untagged.map(|error| (declaration_span, error)))
         {
             let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
                 message: error.render(&vp),
@@ -832,18 +910,11 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
 /// are ignored here, leaving genuine type errors elsewhere in the file intact.
 fn parse_error_tainted_scopes(
     index: &baml_compiler2_hir::semantic_index::FileSemanticIndex<'_>,
-    parse_errors: &[ParseError],
+    parse_errors: &[baml_parser::ParseError],
 ) -> HashSet<usize> {
     let mut tainted = HashSet::new();
     for err in parse_errors {
-        let span = match err {
-            ParseError::UnexpectedToken { span, .. }
-            | ParseError::UnexpectedEof { span, .. }
-            | ParseError::InvalidSyntax { span, .. }
-            | ParseError::AmbiguousUnion { span, .. }
-            | ParseError::RemovedFeature { span, .. } => span,
-        };
-        let fsid = index.scope_at_offset(span.range.start(), None);
+        let fsid = index.scope_at_offset(err.range().start(), None);
         let scope = &index.scopes[fsid.index() as usize];
         if !matches!(
             scope.kind,
@@ -1053,12 +1124,7 @@ dependency's `{partner}`)"
                     ));
                 }
             }
-            let out_of_body = match &block.subject {
-                baml_compiler2_hir::item_data::ImplSubjectData::InClass { out_of_body, .. } => {
-                    *out_of_body
-                }
-                baml_compiler2_hir::item_data::ImplSubjectData::Free { .. } => true,
-            };
+            let out_of_body = block.origin == baml_compiler2_ast::ImplOrigin::OutOfBody;
             if out_of_body && !fields.is_empty() {
                 mounted_structural.push((
                     TirTypeError::OutOfBodyImplementsFieldInterface {
@@ -1194,19 +1260,6 @@ fn validate_associated_type_bindings_in_items(
                         namespace_path,
                         &mut diagnostics,
                     );
-                }
-                for block in &class.implements {
-                    for method in &block.methods {
-                        validate_associated_type_bindings_in_function(
-                            db,
-                            file_id,
-                            method,
-                            &outer_bounds,
-                            pkg_items,
-                            namespace_path,
-                            &mut diagnostics,
-                        );
-                    }
                 }
             }
             baml_compiler2_ast::Item::Interface(iface) => {
@@ -2128,6 +2181,7 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::UnionMemberAssociatedTypeConflict { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnknownClassField { .. } | TirTypeError::UnknownClassPatternField { .. } => {
             DiagnosticId::NoSuchField
         }
@@ -2229,7 +2283,7 @@ fn tir_type_error_to_diagnostic_id(
             DiagnosticId::TypeMismatch
         }
         TirTypeError::InterpolatedValueMaybeNull { .. }
-        | TirTypeError::TypeNotInterpolatable { .. }
+        | TirTypeError::RoleMarkerInUntaggedTemplate { .. }
         | TirTypeError::OutputFormatNotCalled => DiagnosticId::TypeMismatch,
         TirTypeError::AmbiguousInterfaceMethod { .. } => DiagnosticId::AmbiguousInterfaceMethod,
         TirTypeError::AmbiguousInterfaceField { .. } => DiagnosticId::AmbiguousInterfaceField,
@@ -2280,6 +2334,15 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InitThrowNotHandled { .. } => DiagnosticId::InitThrowNotHandled,
         TirTypeError::LlmOutputMemberDropped { .. } => DiagnosticId::LlmOutputMemberDropped,
         TirTypeError::LlmOutputFieldAlwaysNull { .. } => DiagnosticId::LlmOutputFieldAlwaysNull,
+        TirTypeError::JsonAttributesWithOverride { .. }
+        | TirTypeError::JsonRestFieldType { .. }
+        | TirTypeError::JsonRestRenamed { .. }
+        | TirTypeError::JsonRestRepeated { .. }
+        | TirTypeError::JsonAttributeSkipped { .. }
+        | TirTypeError::JsonFallbackFieldNotLiteral { .. }
+        | TirTypeError::JsonFallbackNoTag { .. }
+        | TirTypeError::JsonFallbackUntaggedMember { .. }
+        | TirTypeError::JsonFallbackOverlap { .. } => DiagnosticId::InvalidJsonAttribute,
         // Global variables.
         TirTypeError::AssignmentToGlobal { .. } => DiagnosticId::AssignmentToGlobal,
         TirTypeError::ReturnInGlobalInitializer { .. } => DiagnosticId::ReturnInGlobalInitializer,
@@ -2386,7 +2449,7 @@ mod tests {
     fn b_1681_if_let_function_return_and_throws_unions_compile_without_parse_errors() {
         let source = "function Demo(x: unknown) -> int { if let callback: (int, image) -> string | int throws unknown = x { 1 } else { 0 } }";
         let (db, file) = single_file(source);
-        let parse_errors = baml_compiler_parser::parse_errors(&db, file);
+        let parse_errors = baml_parser::typed_parse_errors(&db, file);
         assert!(
             parse_errors.is_empty(),
             "unparenthesized bare return and throws unions must parse: {parse_errors:#?}"
@@ -2855,7 +2918,7 @@ interface Pair<A, B> {
         );
 
         let index = file_semantic_index(&db, file);
-        let parse_errors = baml_compiler_parser::parse_errors(&db, file);
+        let parse_errors = baml_parser::typed_parse_errors(&db, file);
         assert!(
             !parse_errors.is_empty(),
             "missing right-hand operand should produce a parse error"
@@ -2901,7 +2964,7 @@ interface Pair<A, B> {
             single_file("class 123Bad {\n  field string\n}\n\nfunction Good() -> int {\n  42\n}\n");
 
         let index = file_semantic_index(&db, file);
-        let parse_errors = baml_compiler_parser::parse_errors(&db, file);
+        let parse_errors = baml_parser::typed_parse_errors(&db, file);
         assert!(
             !parse_errors.is_empty(),
             "invalid class name should produce a parse error"

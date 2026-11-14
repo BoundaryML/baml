@@ -384,7 +384,7 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
             }
             crate::Rvalue::UnaryOp { operand, .. } => scan_operand(operand, set),
             crate::Rvalue::Uint8Array(_) => {}
-            crate::Rvalue::Array(_, elems) => {
+            crate::Rvalue::Array(_, elems) | crate::Rvalue::ConcatStrings(elems) => {
                 for e in elems {
                     scan_operand(e, set);
                 }
@@ -678,7 +678,7 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         }
         crate::Rvalue::UnaryOp { operand, .. } => count_in_operand(operand, uses),
         crate::Rvalue::Uint8Array(_) => {}
-        crate::Rvalue::Array(_, elems) => {
+        crate::Rvalue::Array(_, elems) | crate::Rvalue::ConcatStrings(elems) => {
             for e in elems {
                 count_in_operand(e, uses);
             }
@@ -1086,7 +1086,7 @@ fn apply_subst_to_rvalue<'db>(rv: &mut crate::Rvalue<'db>, subst: &HashMap<Local
         }
         crate::Rvalue::UnaryOp { operand, .. } => apply_subst_to_operand(operand, subst),
         crate::Rvalue::Uint8Array(_) => {}
-        crate::Rvalue::Array(_, elems) => {
+        crate::Rvalue::Array(_, elems) | crate::Rvalue::ConcatStrings(elems) => {
             for e in elems {
                 apply_subst_to_operand(e, subst);
             }
@@ -1413,7 +1413,7 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         }
         crate::Rvalue::UnaryOp { operand, .. } => remap_operand(operand, map),
         crate::Rvalue::Uint8Array(_) => {}
-        crate::Rvalue::Array(_, elems) => {
+        crate::Rvalue::Array(_, elems) | crate::Rvalue::ConcatStrings(elems) => {
             for e in elems {
                 remap_operand(e, map);
             }
@@ -1689,7 +1689,7 @@ fn verify_mir(
                         }
                         crate::Rvalue::UnaryOp { operand, .. } => check_operand(operand, &blk),
                         crate::Rvalue::Uint8Array(_) => {}
-                        crate::Rvalue::Array(_, elems) => {
+                        crate::Rvalue::Array(_, elems) | crate::Rvalue::ConcatStrings(elems) => {
                             for e in elems {
                                 check_operand(e, &blk);
                             }
@@ -1911,6 +1911,15 @@ fn verify_mir(
 
     // 10. Every read is definitely assigned; every captured access has its cell.
     verify_definite_assignment(db, body, arity, name);
+
+    // 11. The CFG is reducible: every loop is entered only at its header.
+    //     Lowering only builds such loops; this checks the passes kept it so.
+    if let Err(blocks) = crate::reducible::check(body) {
+        panic!(
+            "irreducible control flow in MIR function {name}: a cycle with more than one entry \
+             among {blocks:?}",
+        );
+    }
 }
 
 /// Every read of a local is dominated by a write to it, and every read, write,

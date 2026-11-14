@@ -8,11 +8,14 @@
 use std::{collections::HashMap, process::ExitCode, sync::Arc};
 
 use baml_exec::{
-    CONTEXT_ENV, DispatchResult, PACK_SECTION_NAME, PackEnvelope, PackMode, clamp_exit_code,
-    context_source_from_env, dispatch_target, ensure_single_stdin_consumer, load_json_source,
-    load_launch_context, parse_multi_target_argv, parse_target_argv, print_error,
+    CONTEXT_ENV, DispatchResult, Interrupts, PACK_SECTION_NAME, PackEnvelope, PackMode,
+    clamp_exit_code, context_source_from_env, dispatch_target_with_context,
+    ensure_single_stdin_consumer, load_json_source, load_launch_context, parse_multi_target_argv,
+    parse_target_argv, print_error,
 };
-use bex_engine::{BexEngine, UserFunctionCatalog, UserFunctionInfo};
+use bex_engine::{
+    BexEngine, CallId, FunctionCallContextBuilder, UserFunctionCatalog, UserFunctionInfo,
+};
 use sys_native::SysOpsExt;
 
 fn extract_artifact() -> Result<&'static [u8], String> {
@@ -40,13 +43,7 @@ pub fn run_embedded(
 ) -> ExitCode {
     let envelope: Result<(PackEnvelope, [u8; 32]), String> =
         baml_artifact::decode_with_digest(baml_artifact::ArtifactKind::PackedProgram, artifact)
-            .map_err(|e| format!("Failed to deserialize pack envelope: {e}"))
-            .and_then(|(envelope, digest): (PackEnvelope, [u8; 32])| {
-                envelope
-                    .verify_telemetry()
-                    .map_err(|error| error.to_string())?;
-                Ok((envelope, digest))
-            });
+            .map_err(|e| format!("Failed to deserialize pack envelope: {e}"));
     match envelope {
         Ok((envelope, artifact_fingerprint)) => {
             let compiled_bodies = compiled_bodies
@@ -303,7 +300,7 @@ fn launch(
         target_name,
         parsed.cli_values,
         json_args,
-        envelope.output_format,
+        parsed.output_format.unwrap_or_default(),
         has_compiled_bodies,
     )
 }
@@ -329,13 +326,25 @@ fn finalize_dispatch(
         }
     };
 
-    let result = rt.block_on(dispatch_target(
+    let interrupts = match rt.block_on(async { Interrupts::install() }) {
+        Ok(interrupts) => interrupts,
+        Err(e) => {
+            print_error(format_args!("failed to install signal handlers: {e}"));
+            return ExitCode::FAILURE;
+        }
+    };
+    let result = rt.block_on(dispatch_target_with_context(
         Arc::clone(engine),
         target_name,
         cli_values,
         json_args,
         output_format,
+        FunctionCallContextBuilder::new(CallId::next())
+            .with_cancel_token(interrupts.token())
+            .build(),
+        || {},
     ));
+    interrupts.root_finished();
     engine.record_process_exit(match &result {
         Ok(DispatchResult::Ok | DispatchResult::Exit(0)) => bex_engine::ProcessStatus::Success,
         _ if engine.root_panicked() => bex_engine::ProcessStatus::Panicked,
@@ -368,6 +377,10 @@ fn finalize_dispatch(
         Ok(DispatchResult::Ok) => ExitCode::FAILURE,
         Ok(DispatchResult::TargetError) => ExitCode::FAILURE,
         Ok(DispatchResult::Exit(code)) => std::process::exit(clamp_exit_code(code)),
+        Ok(DispatchResult::Interrupted) => match interrupts.received() {
+            Some(interrupt) => interrupt.terminate(),
+            None => ExitCode::FAILURE,
+        },
         Err(e) => {
             print_error(e);
             ExitCode::FAILURE

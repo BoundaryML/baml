@@ -110,24 +110,10 @@ impl ToolchainManifest {
     }
 }
 
-#[cfg(all(feature = "self-update", not(feature = "no-self-update")))]
-impl WrapperManifest {
-    pub fn validate(&self) -> anyhow::Result<()> {
-        validate_schema(self.schema)?;
-        validate_artifacts(&self.version, &self.artifacts)
-    }
-
-    pub fn artifact_for_target(&self, target: &str) -> anyhow::Result<&Artifact> {
-        self.artifacts.get(target).ok_or_else(|| {
-            anyhow::anyhow!("target {target} not built for wrapper {}", self.version)
-        })
-    }
-}
-
 fn validate_schema(schema: u32) -> anyhow::Result<()> {
     if schema > MANIFEST_SCHEMA {
         anyhow::bail!(
-            "manifest schema {schema} is newer than this wrapper; run `baml self-update`"
+            "manifest schema {schema} is newer than this wrapper; run `baml self update`"
         );
     }
     if schema != MANIFEST_SCHEMA {
@@ -150,9 +136,8 @@ fn validate_artifacts(version: &str, artifacts: &BTreeMap<String, Artifact>) -> 
 }
 
 fn validate_artifact(name: &str, artifact: &Artifact) -> anyhow::Result<()> {
-    if !artifact.url.starts_with("https://") {
-        anyhow::bail!("artifact {name} URL must use HTTPS");
-    }
+    crate::validate_download_url(&artifact.url)
+        .map_err(|error| anyhow::anyhow!("artifact {name}: {error}"))?;
     validate_sha256(&artifact.sha256)?;
     Ok(())
 }

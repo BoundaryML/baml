@@ -90,11 +90,18 @@ impl Drop for BexWorkGuard {
         let mut s = self.bex_work.lock();
         s.work -= 1;
         s.revision = s.revision.wrapping_add(1);
+        let mut wake = false;
         if s.work == 0 && s.scheduling.is_running() {
+            // A coordinator asleep until an earlier deadline finds this later
+            // one when it wakes. Only one waiting with no deadline must be
+            // woken; waking it on every call cost two thread wake-ups a call.
+            wake = s.scheduling.deadline().is_none();
             s.scheduling = Scheduling::Waiting(Instant::now() + IDLE_DELAY);
         }
         drop(s);
-        self.bex_work.wake.notify_one();
+        if wake {
+            self.bex_work.wake.notify_one();
+        }
     }
 }
 
@@ -156,13 +163,20 @@ impl BexWork {
     pub(crate) fn register_work(self: &Arc<Self>) -> BexWorkGuard {
         let mut s = self.lock();
         self.refresh(&mut s);
-        let idle_due_on_entry = s.work == 0
-            && s.scheduling.deadline().is_some_and(|d| d <= Instant::now())
-            && self.version(&s) != s.collected;
+        let now = Instant::now();
+        let deadline_passed = s.scheduling.deadline().is_some_and(|d| d <= now);
+        let idle_due_on_entry = s.work == 0 && deadline_passed && self.version(&s) != s.collected;
         s.work += 1;
-        s.scheduling.disarm();
+        // A deadline still ahead stays armed: the coordinator wakes at it,
+        // finds this work and disarms. A passed one may have an idle
+        // collection waiting to park, which this wake tells to give way.
+        if deadline_passed {
+            s.scheduling.disarm();
+        }
         drop(s);
-        self.wake.notify_one();
+        if deadline_passed {
+            self.wake.notify_one();
+        }
         BexWorkGuard {
             bex_work: Arc::clone(self),
             idle_due_on_entry,
@@ -277,9 +291,15 @@ impl BexWork {
             drop(engine); // No strong engine reference across a timer/event wait.
             let mut s = self.lock();
             if s.scheduling.deadline().is_some_and(|d| d <= Instant::now()) {
-                // Keep cleanup pending after timeout/contention; one bounded
-                // retry per idle delay, not a busy loop at an expired deadline.
-                s.scheduling = Scheduling::Waiting(Instant::now() + IDLE_DELAY);
+                if s.work == 0 {
+                    // Keep cleanup pending after timeout/contention; one bounded
+                    // retry per idle delay, not a busy loop at an expired deadline.
+                    s.scheduling = Scheduling::Waiting(Instant::now() + IDLE_DELAY);
+                } else {
+                    // Work started while the deadline was armed. Its guard
+                    // arms a new one when the last work ends.
+                    s.scheduling.disarm();
+                }
             }
         }
     }
@@ -546,6 +566,41 @@ mod tests {
             .await;
         drop(another);
         drop(held);
+        advance(IDLE_DELAY).await;
+        assert_eq!(engine.heap.gc_budget().full_collections, 1);
+        engine.shutdown().await;
+    }
+
+    /// Only arming a deadline from nothing is news to the coordinator. Calls
+    /// that start and end while a quiet interval counts down move the
+    /// deadline without waking it.
+    #[tokio::test(start_paused = true)]
+    async fn calls_inside_a_quiet_interval_do_not_wake_the_coordinator() {
+        use futures::FutureExt;
+        let heap = BexHeap::new(vec![]);
+        let bex_work = BexWork::new(&heap);
+        let woken = || bex_work.wake.notified().now_or_never().is_some();
+        drop(bex_work.register_work());
+        assert!(woken(), "the first deadline must reach the coordinator");
+        for _ in 0..3 {
+            drop(bex_work.register_work());
+            assert!(!woken(), "a call inside the quiet interval woke it");
+        }
+        assert!(bex_work.lock().scheduling.deadline().is_some());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn work_running_past_the_deadline_collects_after_it_ends() {
+        let engine = engine();
+        drop(tiny(&engine).await);
+        let work = engine.bex_work.register_work();
+        advance(IDLE_DELAY * 3).await;
+        assert_eq!(engine.heap.gc_budget().full_collections, 0);
+        assert!(
+            engine.bex_work.lock().scheduling.deadline().is_none(),
+            "the coordinator must disarm, not re-arm, while work runs"
+        );
+        drop(work);
         advance(IDLE_DELAY).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
         engine.shutdown().await;

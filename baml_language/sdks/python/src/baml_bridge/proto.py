@@ -23,6 +23,8 @@ import typing
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
+from pydantic import BaseModel
+
 from .cffi.v1 import baml_handle_pb2, baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
 from .baml_py import (
     BamlAudio,
@@ -41,22 +43,6 @@ from ._function_spec import BamlFunctionSpec
 from ._runtime_value import BamlOpaque, BamlRuntimeValue
 from .errors import BamlCancelledError, BamlError, BamlPanic, attach_baml_traceback
 from .typemap import BamlClassInstance, TypeLookup, get_type_map
-
-
-def _is_pydantic_model(value: Any) -> bool:
-    try:
-        from pydantic import BaseModel  # type: ignore[import-untyped]
-    except ImportError:
-        return False
-    return isinstance(value, BaseModel)
-
-
-def _is_pydantic_model_class(cls: type) -> bool:
-    try:
-        from pydantic import BaseModel  # type: ignore[import-untyped]
-    except ImportError:
-        return False
-    return issubclass(cls, BaseModel)
 
 
 # Media PyO3 types — kept as a tuple for `isinstance` dispatch in the
@@ -617,7 +603,7 @@ def _decode_prompt_ast(prompt_ast, type_map: TypeLookup) -> Any:
     portable = _PortablePromptAst(prompt_ast)
     if cls is None:
         return BamlClassInstance("ai.Prompt", {"_data": portable})
-    if not _is_pydantic_model_class(cls):
+    if not issubclass(cls, BaseModel):
         raise BamlError("The generated ai.Prompt host type is not a Pydantic model")
 
     if any(
@@ -672,7 +658,7 @@ def _decode_class(
         return field_dict["_data"]
 
     parameterized = _parameterize_tys(cls, class_value.type_args, type_map)
-    if not _is_pydantic_model_class(cls):
+    if not issubclass(cls, BaseModel):
         # Not a BaseModel — shouldn't happen for a well-formed SDK; fall
         # back to a plain dict so callers aren't silently lied to.
         return field_dict
@@ -831,7 +817,7 @@ def _returned_param_aliases(names: List[str]) -> Dict[str, str]:
 
 
 class BamlClosure:
-    """A reusable BAML callable with synchronous and asynchronous entry paths."""
+    """A reusable BAML callable: `await closure(...)` and the blocking `closure.call_sync(...)`."""
 
     __slots__ = ("_handle", "_required_names", "_optional_names", "_aliases")
 
@@ -888,12 +874,7 @@ class BamlClosure:
         )
         return call_id, args_proto
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        _, args_proto = self._encode_args(args, kwargs)
-        result_bytes = _get_runtime().call_function_sync(args_proto, args_proto.kwargs, args_proto.cancel)
-        return decode_call_result(result_bytes)
-
-    async def call_async(self, *args: Any, **kwargs: Any) -> Any:
+    async def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Invoke on the current application loop, with its current context."""
         from . import _decode_call_result_async
 
@@ -904,6 +885,12 @@ class BamlClosure:
             cancel_function_call(call_id)
             raise
         return _decode_call_result_async(result_bytes)
+
+    def call_sync(self, *args: Any, **kwargs: Any) -> Any:
+        """Blocking twin of `await closure(...)`."""
+        _, args_proto = self._encode_args(args, kwargs)
+        result_bytes = _get_runtime().call_function_sync(args_proto, args_proto.kwargs, args_proto.cancel)
+        return decode_call_result(result_bytes)
 
     def __repr__(self) -> str:
         return "<BamlClosure>"
@@ -1086,7 +1073,7 @@ def _try_rehydrate_host_value(decoded: Any) -> Optional[BaseException]:
     else:
         private = getattr(decoded, "__pydantic_private__", None)
         handle = private.get("_handle") if isinstance(private, dict) else None
-        if handle is None and _is_pydantic_model_class(type(decoded)):
+        if handle is None and isinstance(decoded, BaseModel):
             values = vars(decoded)
             for name, field in type(decoded).model_fields.items():
                 aliases = (

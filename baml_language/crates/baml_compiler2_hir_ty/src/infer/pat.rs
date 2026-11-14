@@ -1184,7 +1184,7 @@ impl<'db> InferenceContext<'db> {
             }
             // Nothing provably claimed: possible-but-not-covering.
             return PatternOutcome {
-                dpat: DPat::single(dpat_ty(pat_ty), dpat_ty(scrut)),
+                dpat: DPat::type_test(dpat_ty(pat_ty), dpat_ty(scrut)),
                 matched_ty: pat_ty.clone(),
                 recorded_ty: None,
                 covers_type: false,
@@ -1232,13 +1232,13 @@ impl<'db> InferenceContext<'db> {
         }
         match pat_ty.kind() {
             InferTy::Literal(..) | InferTy::EnumVariant(..) | InferTy::Null => {
-                DPat::single(pat_plain, col_plain)
+                DPat::type_test(pat_plain, col_plain)
             }
             InferTy::Bool => DPat::or(
                 [true, false]
                     .into_iter()
                     .map(|value| {
-                        DPat::single(
+                        DPat::type_test(
                             baml_type::Ty::Literal(
                                 baml_base::Literal::Bool(value),
                                 Freshness::Regular,
@@ -1255,7 +1255,7 @@ impl<'db> InferenceContext<'db> {
                     variants
                         .into_iter()
                         .map(|variant| {
-                            DPat::single(
+                            DPat::type_test(
                                 baml_type::Ty::EnumVariant(qtn.clone(), variant),
                                 col_plain.clone(),
                             )
@@ -1290,14 +1290,14 @@ impl<'db> InferenceContext<'db> {
                 if pat_ty == col {
                     DPat::wildcard(col_plain)
                 } else {
-                    DPat::single(pat_plain, col_plain)
+                    DPat::type_test(pat_plain, col_plain)
                 }
             }
             _ => {
                 if self.provable_subtype(col, pat_ty) {
                     DPat::wildcard(col_plain)
                 } else {
-                    DPat::single(pat_plain, col_plain)
+                    DPat::type_test(pat_plain, col_plain)
                 }
             }
         }
@@ -2073,10 +2073,10 @@ impl PatCtx for HirPatCtx<'_, '_> {
         &self,
         iface_ty: &baml_type::Ty,
         class_qtn: &baml_type::DeclName,
-        _class_type_args: &[baml_type::Ty],
+        class_type_args: &[baml_type::Ty],
     ) -> Option<Vec<usize>> {
         use baml_compiler2_hir::contributions::Definition;
-        let baml_type::Ty::Interface(iface_qtn, ..) = iface_ty else {
+        let baml_type::Ty::Interface(iface_qtn, iface_args, iface_assoc) = iface_ty else {
             return None;
         };
         let db = self.infer.db;
@@ -2102,23 +2102,26 @@ impl PatCtx for HirPatCtx<'_, '_> {
                     .collect()
             }
         };
+        // The impl by which THIS realized class type implements THIS realized
+        // interface — selected like every other impl goal, so a class that
+        // implements one interface at several argument lists (`Foo<int>` and
+        // `Foo<string>`) gets the links of the matching block, not the first
+        // block of that name.
+        let concrete = crate::impls::try_interned_ty(&baml_type::Ty::Class(
+            class_qtn.clone(),
+            class_type_args.into(),
+        ))?;
+        let goal = baml_type::interned::InferInterface::from_constraint(
+            &baml_type::Interface::new(iface_qtn.clone(), iface_args.clone(), iface_assoc.clone()),
+        );
+        let resolved = crate::impls::resolve_impl(db, &concrete, &goal)?;
+        // Field links are source data (an interface with fields is implemented
+        // in-body, so the block is in this compilation).
+        let crate::impls::ResolvedImplFacts::Source { block, .. } = resolved.facts else {
+            return None;
+        };
+        let block = baml_compiler2_hir::item_data::impl_block_data(db, block);
         let class_data = baml_compiler2_hir::item_data::class_data(db, class);
-        let pkg = baml_compiler2_hir::file_package::file_package(db, class.file(db));
-        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg.root);
-        // The class's block for that interface, matched by HEAD: the block's
-        // written target lowers to a name, which is the same whether the
-        // interface is declared in source or served from its rows.
-        let block = class_data.implements.iter().find(|block| {
-            crate::interfaces::resolve_ref_to_interface_name(
-                db,
-                &class_data.type_refs,
-                block.target,
-                pkg_items,
-                &pkg.namespace_path,
-            )
-            .as_ref()
-                == Some(iface_qtn)
-        })?;
         iface_fields
             .iter()
             .map(|field| {
@@ -2141,16 +2144,16 @@ impl PatCtx for HirPatCtx<'_, '_> {
         let ty = self.peel_aliases(ty.clone(), 8);
         match &ty {
             P::Bool => vec![
-                Ctor::Single(P::Literal(
+                Ctor::Type(P::Literal(
                     baml_base::Literal::Bool(true),
                     Freshness::Regular,
                 )),
-                Ctor::Single(P::Literal(
+                Ctor::Type(P::Literal(
                     baml_base::Literal::Bool(false),
                     Freshness::Regular,
                 )),
             ],
-            P::Null | P::Literal(..) | P::EnumVariant(..) => vec![Ctor::Single(ty.clone())],
+            P::Null | P::Literal(..) | P::EnumVariant(..) => vec![Ctor::Type(ty.clone())],
             P::Never => vec![],
             P::Union(members) => members
                 .iter()
@@ -2162,7 +2165,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
                 .enum_variants(qtn)
                 .unwrap_or_default()
                 .into_iter()
-                .map(|variant| Ctor::Single(P::EnumVariant(qtn.clone(), variant)))
+                .map(|variant| Ctor::Type(P::EnumVariant(qtn.clone(), variant)))
                 .collect(),
             P::Class(qtn, args) => vec![Ctor::Class(qtn.clone(), args.clone())],
             // An existential column is a single-constructor STRUCT VIEW
@@ -2261,6 +2264,14 @@ impl PatCtx for HirPatCtx<'_, '_> {
                     .unwrap_or_else(|_| baml_type::Ty::Error)
             })
             .collect()
+    }
+
+    fn is_subtype(&self, sub: &baml_type::Ty, sup: &baml_type::Ty) -> bool {
+        // Error is compatible with everything in the subtype relation; here
+        // it must prove nothing (the `dpat_ty` suppression discipline).
+        !baml_type::contains_error(sub)
+            && !baml_type::contains_error(sup)
+            && baml_type::normalize::is_subtype(sub, sup, &self.infer.facts)
     }
 
     fn list_element_type(&self, ty: &baml_type::Ty) -> baml_type::Ty {

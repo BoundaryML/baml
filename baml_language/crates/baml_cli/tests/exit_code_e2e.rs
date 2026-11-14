@@ -104,7 +104,7 @@ fn create_project_with_go_generator(dir: &Path, source: &str) {
 // Tests for `baml check` exit codes
 // ============================================================================
 
-/// `baml check` with no `--from` is sugar for `baml check --from .`.
+/// `baml check` with no `--project-dir` is sugar for `baml check --project-dir .`.
 #[test]
 fn check_defaults_from_to_current_directory() {
     let built = &common::baml_cli();
@@ -137,7 +137,7 @@ fn check_compilation_error_returns_nonzero_exit_code() {
         "function broken() -> MissingType {\n  \"never\"\n}\n",
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["check", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["check", "--project-dir", "."]);
 
     assert!(
         !output.status.success(),
@@ -145,8 +145,8 @@ fn check_compilation_error_returns_nonzero_exit_code() {
     );
     assert_eq!(
         output.status.code(),
-        Some(4),
-        "Expected exit code 4 for compilation error",
+        Some(1),
+        "Expected exit code 1 for compilation error",
     );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -173,7 +173,7 @@ fn generate_compilation_error_returns_nonzero_exit_code() {
         "function test_func() -> UndefinedType {\n  \"never called\"\n}\n",
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--project-dir", "."]);
 
     assert!(
         !output.status.success(),
@@ -183,11 +183,10 @@ fn generate_compilation_error_returns_nonzero_exit_code() {
         String::from_utf8_lossy(&output.stderr),
     );
 
-    // Verify the exit code is specifically 4 (ExitCode::Other)
     assert_eq!(
         output.status.code(),
-        Some(4),
-        "Expected exit code 4 for compilation error, got: {:?}",
+        Some(1),
+        "Expected exit code 1 for compilation error, got: {:?}",
         output.status.code(),
     );
 
@@ -200,7 +199,7 @@ fn generate_compilation_error_returns_nonzero_exit_code() {
 }
 
 #[test]
-fn generate_reports_identifier_renames_in_normal_verbose_and_quiet_modes() {
+fn generate_reports_identifier_renames_on_stderr() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project(
@@ -217,7 +216,7 @@ fn generate_reports_identifier_renames_in_normal_verbose_and_quiet_modes() {
     )
     .unwrap();
 
-    let verbose = run_baml_cli(built, tmp.path(), &["generate", "--from", ".", "--verbose"]);
+    let verbose = run_baml_cli(built, tmp.path(), &["generate", "--project-dir", "."]);
     assert!(
         verbose.status.success(),
         "stderr: {}",
@@ -247,7 +246,7 @@ fn generate_reports_identifier_renames_in_normal_verbose_and_quiet_modes() {
 }
 
 #[test]
-fn generate_rust_language_naming_convention_returns_diagnostic() {
+fn generate_typescript_language_naming_convention_returns_diagnostic() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     create_project(
@@ -257,19 +256,19 @@ fn generate_rust_language_naming_convention_returns_diagnostic() {
     std::fs::write(
         tmp.path().join("baml.toml"),
         "[package]\nname = \"test-project\"\n\n\
-         [generator.rust_client]\n\
-         output_type = \"rust\"\n\
+         [generator.ts_client]\n\
+         output_type = \"typescript/node\"\n\
          output_dir = \".\"\n\
          naming_convention = \"language\"\n",
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--project-dir", "."]);
 
     assert_eq!(
         output.status.code(),
-        Some(4),
-        "Expected exit code 4, got: {:?}\nstdout: {}\nstderr: {}",
+        Some(1),
+        "Expected exit code 1, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
@@ -281,11 +280,80 @@ fn generate_rust_language_naming_convention_returns_diagnostic() {
     );
     assert!(
         stderr.contains(
-            "generator `rust_client` with `output_type = \"rust\"` requires `naming_convention = \"preserve-case\"`"
+            "generator `ts_client` with `output_type = \"typescript/node\"` requires `naming_convention = \"preserve-case\"`"
         ),
         "stderr: {stderr}"
     );
     assert!(!stderr.contains("panicked at"), "stderr: {stderr}");
+}
+
+/// `naming_convention = "language"` respells the Rust and Python SDKs'
+/// bindings in each language's casing; the runtime keeps the BAML names.
+#[test]
+fn generate_language_naming_convention_respells_rust_and_python_bindings() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), "");
+    let namespace = tmp.path().join("baml_src/ns_deploymentGroups");
+    std::fs::create_dir_all(&namespace).unwrap();
+    std::fs::write(
+        namespace.join("tokens.baml"),
+        "class Page {\n  nextCursor: string?,\n}\n\n\
+         function createToken(groupId: string) -> Page {\n  Page { nextCursor: groupId }\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n\
+         [generator.rust]\n\
+         output_type = \"rust\"\n\
+         output_dir = \"rust\"\n\
+         naming_convention = \"language\"\n\n\
+         [generator.py]\n\
+         output_type = \"python/pydantic\"\n\
+         output_dir = \"python\"\n\
+         naming_convention = \"language\"\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--project-dir", "."]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let rust = std::fs::read_to_string(
+        tmp.path()
+            .join("rust/baml_sdk/src/deployment_groups/mod.rs"),
+    )
+    .unwrap();
+    assert!(rust.contains("pub async fn create_token("), "{rust}");
+    assert!(rust.contains("pub fn create_token_sync("), "{rust}");
+    assert!(!rust.contains("pub fn create_token("), "{rust}");
+    assert!(
+        rust.contains("\"user.deploymentGroups.createToken\""),
+        "{rust}"
+    );
+    assert!(rust.contains("pub next_cursor:"), "{rust}");
+    assert!(rust.contains("fields.take(\"nextCursor\")"), "{rust}");
+
+    let python = std::fs::read_to_string(
+        tmp.path()
+            .join("python/baml_sdk/deployment_groups/__init__.py"),
+    )
+    .unwrap();
+    assert!(python.contains("create_token "), "{python}");
+    assert!(
+        python.contains("param_aliases={\"group_id\": \"groupId\"}"),
+        "{python}"
+    );
+    assert!(
+        python.contains(
+            "next_cursor: typing.Optional[str] = pydantic.Field(default=None, alias=\"nextCursor\")"
+        ),
+        "{python}"
+    );
 }
 
 #[test]
@@ -303,7 +371,7 @@ fn generate_go_writes_sdk_through_cli() {
     std::fs::create_dir(&sdk).unwrap();
     std::fs::write(sdk.join("user-notes.txt"), "keep me").unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--project-dir", "."]);
     assert!(
         output.status.success(),
         "Go generation failed: {:?}\nstdout: {}\nstderr: {}",
@@ -336,7 +404,7 @@ fn generate_go_writes_sdk_through_cli() {
         "function echo(value: string) -> string { value }\n",
     )
     .unwrap();
-    let second = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let second = run_baml_cli(built, tmp.path(), &["generate", "--project-dir", "."]);
     assert!(
         second.status.success(),
         "second Go generation failed:\n{}",
@@ -375,7 +443,7 @@ fn generate_go_warns_for_each_skipped_project_symbol() {
          function optional_callback<T>(x: T, f: (a: T, b?: T) -> T) -> T { f(x) }\n",
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--project-dir", "."]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "stderr: {stderr}");
     assert!(
@@ -404,7 +472,7 @@ fn generate_go_warns_for_each_skipped_project_symbol() {
     let all = run_baml_cli(
         built,
         tmp.path(),
-        &["generate", "--from", ".", "--show-all-skips"],
+        &["generate", "--project-dir", ".", "--show-all-skips"],
     );
     let all_stderr = String::from_utf8_lossy(&all.stderr);
     assert!(all.status.success(), "stderr: {all_stderr}");
@@ -441,7 +509,7 @@ fn generate_rust_summarizes_standard_library_skips() {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--project-dir", "."]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "stderr: {stderr}");
     assert_eq!(
@@ -472,7 +540,7 @@ fn run_list_compilation_error_returns_nonzero_exit_code() {
         "function broken() -> MissingType {\n  \"never\"\n}\n",
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["run", "--list", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["run", "--list", "--project-dir", "."]);
 
     assert!(
         !output.status.success(),
@@ -480,8 +548,157 @@ fn run_list_compilation_error_returns_nonzero_exit_code() {
     );
     assert_eq!(
         output.status.code(),
-        Some(4),
-        "Expected exit code 4 for compilation error",
+        Some(1),
+        "Expected exit code 1 for compilation error",
+    );
+}
+
+const MAIN_AND_OTHER: &str = "function main() -> string {\n    \"from main\"\n}\n\nfunction other_main() -> string {\n    \"from other_main\"\n}\n";
+
+/// With no target, a project runs its `main`.
+#[test]
+fn run_without_target_runs_project_main() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), MAIN_AND_OTHER);
+
+    let output = run_baml_cli(built, tmp.path(), &["run"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "\"from main\""
+    );
+}
+
+/// A named target wins over the default entry point.
+#[test]
+fn run_with_target_ignores_project_main() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), MAIN_AND_OTHER);
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "other_main"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "\"from other_main\""
+    );
+}
+
+/// A `main` script without `--function` passes its arguments to the `main`
+/// function, as script validation promises.
+#[test]
+fn run_without_target_runs_main_script_without_function() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function main(name: string) -> string {\n    \"hello \" + name\n}\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"test-project\"\n\n[scripts]\nmain = [\"--\", \"--name\", \"Ada\"]\n",
+    )
+    .unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["run"]);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        "\"hello Ada\""
+    );
+}
+
+/// Telemetry flags belong to `baml generate`, so passing one to
+/// `generate add` is a usage error.
+#[test]
+fn generate_add_with_embed_telemetry_is_a_usage_error() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), MAIN_AND_OTHER);
+
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["generate", "--embed-telemetry", "add", "python/pydantic2"],
+    );
+
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+}
+
+/// An opt-out that cannot be saved is a failure, even when `DO_NOT_TRACK`
+/// already disables telemetry for this process.
+#[test]
+fn telemetry_disable_fails_when_the_preference_cannot_be_saved() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    // A directory where the preference file belongs makes the write fail.
+    std::fs::create_dir_all(tmp.path().join(".baml-home/telemetry.toml")).unwrap();
+
+    let output = run_baml_cli_with_env(
+        built,
+        tmp.path(),
+        &["telemetry", "disable"],
+        &[("DO_NOT_TRACK", "1")],
+    );
+
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(output.stdout.is_empty(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("could not save the telemetry preference"),
+        "{output:?}"
+    );
+}
+
+/// A project with no `main` has nothing to default to, so a bare `baml run`
+/// shows what can be run instead.
+#[test]
+fn run_without_target_or_main_prints_help() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), "function answer() -> int {\n    42\n}\n");
+
+    let output = run_baml_cli(built, tmp.path(), &["run"]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Usage: baml run"),
+        "{output:?}"
+    );
+}
+
+/// Outside any project a bare `baml run` still prints the help.
+#[test]
+fn run_without_target_outside_a_project_prints_help() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    let output = run_baml_cli(built, tmp.path(), &["run"]);
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("Usage: baml run"),
+        "{output:?}"
     );
 }
 
@@ -503,7 +720,7 @@ fn run_valid_project_outputs_only_program_output() {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--project-dir", "."]);
 
     assert!(
         output.status.success(),
@@ -581,7 +798,7 @@ log.error("expression-error-detail");
         (Some("DEBUG"), [true, true, true, true]),
         (Some("TRACE"), [true, true, true, true]),
     ] {
-        let mut args = vec!["run", "--from", "."];
+        let mut args = vec!["run", "--project-dir", "."];
         if let Some(threshold) = threshold {
             args.extend(["--log", threshold]);
         }
@@ -625,7 +842,7 @@ log.error("expression-error-detail");
         &[
             "run",
             "logged_conversion",
-            "--from",
+            "--project-dir",
             ".",
             "--log",
             "INFO",
@@ -643,29 +860,31 @@ log.error("expression-error-detail");
         String::from_utf8_lossy(&conversion.stdout),
         String::from_utf8_lossy(&conversion.stderr),
     );
-    let stdout = String::from_utf8_lossy(&conversion.stdout);
+    // A structured stdout holds only the result, so the logs are on stderr.
+    let stderr = String::from_utf8_lossy(&conversion.stderr);
     for expected in [
         "[WARN] from-json-detail",
         "[INFO] conversion-target-detail",
         "[ERROR] to-json-detail",
     ] {
-        assert!(stdout.contains(expected), "stdout: {stdout}");
+        assert!(stderr.contains(expected), "stderr: {stderr}");
     }
     assert!(
-        !stdout.contains("conversion-debug-detail"),
-        "`--log INFO` must override BAML_LOG=ERROR while still filtering debug: {stdout}"
+        !stderr.contains("conversion-debug-detail"),
+        "`--log INFO` must override BAML_LOG=ERROR while still filtering debug: {stderr}"
     );
-    let from_json_pos = stdout.find("[WARN] from-json-detail").unwrap();
-    let target_pos = stdout.find("[INFO] conversion-target-detail").unwrap();
-    let to_json_pos = stdout.find("[ERROR] to-json-detail").unwrap();
+    let from_json_pos = stderr.find("[WARN] from-json-detail").unwrap();
+    let target_pos = stderr.find("[INFO] conversion-target-detail").unwrap();
+    let to_json_pos = stderr.find("[ERROR] to-json-detail").unwrap();
     assert!(
         from_json_pos < target_pos && target_pos < to_json_pos,
-        "conversion-hook logs must retain FromJson/target/ToJson order: {stdout}"
+        "conversion-hook logs must retain FromJson/target/ToJson order: {stderr}"
     );
-    let result_pos = stdout.find(r#""hook-result""#).expect("serialized result");
+    let result: serde_json::Value = serde_json::from_slice(&conversion.stdout)
+        .unwrap_or_else(|error| panic!("{error}: {conversion:?}"));
     assert!(
-        stdout.find("[ERROR] to-json-detail") < Some(result_pos),
-        "conversion logs must be flushed before the serialized result: {stdout}"
+        result.to_string().contains("hook-result"),
+        "serialized result: {result}"
     );
 }
 
@@ -698,7 +917,7 @@ class BrokenConversion {
         tmp.path(),
         &[
             "run",
-            "--from",
+            "--project-dir",
             ".",
             "--output-format",
             "json",
@@ -721,7 +940,7 @@ fn run_unformatted_project_keeps_format_warning() {
 
     create_project(tmp.path(), "function answer()->int {\n42\n}\n");
 
-    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--project-dir", "."]);
 
     assert!(
         output.status.success(),
@@ -747,7 +966,7 @@ fn run_formatted_crlf_project_has_no_format_warning() {
 
     create_project(tmp.path(), "function answer() -> int {\r\n    42\r\n}\r\n");
 
-    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--project-dir", "."]);
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "stderr: {stderr}");
@@ -769,7 +988,7 @@ fn test_no_project_error_recommends_project() {
 
     assert!(!output.status.success(), "unexpected success: {stderr}");
     assert!(
-        stderr.contains("--project <DIR>"),
+        stderr.contains("--project-dir <DIR>"),
         "unexpected error: {stderr}"
     );
     assert!(
@@ -789,7 +1008,7 @@ fn test_compilation_error_returns_nonzero_exit_code() {
         "function broken() -> MissingType {\n  \"never\"\n}\n",
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
 
     assert!(
         !output.status.success(),
@@ -797,14 +1016,14 @@ fn test_compilation_error_returns_nonzero_exit_code() {
     );
     assert_eq!(
         output.status.code(),
-        Some(4),
-        "Expected exit code 4 for compilation error",
+        Some(1),
+        "Expected exit code 1 for compilation error",
     );
 }
 
-/// `baml test` with no tests should return exit code 5 (`NoTestsRun`), not 0.
+/// `baml test` with no tests has nothing to fail, so it succeeds.
 #[test]
-fn test_no_tests_returns_specific_exit_code() {
+fn test_no_tests_succeeds() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
@@ -814,16 +1033,24 @@ fn test_no_tests_returns_specific_exit_code() {
         "function greet(name: string) -> string {\n  \"Hello, \" + name\n}\n",
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
 
-    // NoTestsRun maps to exit code 5
     assert_eq!(
         output.status.code(),
-        Some(5),
-        "Expected exit code 5 for no tests found, got: {:?}\nstderr: {}",
+        Some(0),
+        "Expected exit code 0 for no tests found, got: {:?}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stderr),
     );
+    // Nothing ran, so the aggregate verdict is a pass.
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--project-dir", ".", "--output-format", "json"],
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| panic!("{error}: {output:?}"));
+    assert_eq!(report["summary"]["outcome"], "pass", "{report}");
 }
 
 /// A malformed build-cache variable is an error, never a silently different
@@ -844,7 +1071,7 @@ fn build_cache_env_is_validated() {
         let output = run_baml_cli_with_env(
             built,
             tmp.path(),
-            &["check", "--from", "."],
+            &["check", "--project-dir", "."],
             &[(name, value)],
         );
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -859,7 +1086,7 @@ fn build_cache_env_is_validated() {
         let output = run_baml_cli_with_env(
             built,
             tmp.path(),
-            &["check", "--from", "."],
+            &["check", "--project-dir", "."],
             &[(name, value)],
         );
         assert!(
@@ -888,7 +1115,7 @@ test "slow" {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "--test-timeout", "100ms"],
+        &["test", "--project-dir", ".", "--test-timeout", "100ms"],
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "stderr: {stderr}");
@@ -897,7 +1124,7 @@ test "slow" {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "--test-timeout", "none"],
+        &["test", "--project-dir", ".", "--test-timeout", "none"],
     );
     assert!(
         output.status.success(),
@@ -908,13 +1135,13 @@ test "slow" {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "--test-timeout", "soon"],
+        &["test", "--project-dir", ".", "--test-timeout", "soon"],
     );
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid duration"));
 }
 
-/// The `--project <DIR>` invocation recommended by project discovery accepts
+/// The `--project-dir <DIR>` invocation recommended by project discovery accepts
 /// an explicit source directory outside a marked project.
 #[test]
 fn test_accepts_explicit_source_directory_as_project() {
@@ -934,7 +1161,7 @@ test "adds" {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--project", "sources"]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "sources"]);
 
     assert!(
         output.status.success(),
@@ -968,12 +1195,12 @@ test "passes" {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
 
     assert_eq!(
         output.status.code(),
-        Some(2),
-        "Expected TestFailure (2), got: {:?}\nstdout: {}\nstderr: {}",
+        Some(1),
+        "Expected exit code 1 for failing tests, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
@@ -987,7 +1214,7 @@ test "passes" {
 
 /// A selector that matches no test must NOT print a green aggregate pass
 /// line: the aggregate of zero tests is a vacuous pass, but stdout that says
-/// PASS while the command exits 5 (`NoTestsRun`) misleads anything parsing it.
+/// PASS when nothing ran misleads anything parsing it.
 /// Regression for B-628.
 #[test]
 fn test_no_match_selector_does_not_print_pass() {
@@ -1009,14 +1236,19 @@ testset "suite" {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "-i", "totally-bogus-selector-xyz"],
+        &[
+            "test",
+            "--project-dir",
+            ".",
+            "-i",
+            "totally-bogus-selector-xyz",
+        ],
     );
 
-    // Exit-code semantics are preserved: no tests selected is exit 5.
     assert_eq!(
         output.status.code(),
-        Some(5),
-        "Expected NoTestsRun (5) for a no-match selector, got: {:?}\nstdout: {}\nstderr: {}",
+        Some(0),
+        "Expected exit code 0 for a no-match selector, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
@@ -1050,7 +1282,7 @@ test "passes" {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
 
     assert!(
         output.status.success(),
@@ -1070,7 +1302,7 @@ test "passes" {
 /// BAML test log events default to INFO and remain configurable through
 /// `--log` or `BAML_LOG` without changing test exit codes.
 #[test]
-fn test_log_sources_route_filtered_baml_logs_to_stdout_without_changing_exit_codes() {
+fn test_log_sources_route_filtered_baml_logs_to_stderr_without_changing_exit_codes() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
@@ -1093,7 +1325,11 @@ test "fails" {
 "#,
     );
 
-    let info = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "-i", "::logs"]);
+    let info = run_baml_cli(
+        built,
+        tmp.path(),
+        &["test", "--project-dir", ".", "-i", "::logs"],
+    );
     assert!(
         info.status.success(),
         "expected default INFO log mode to pass; stdout: {}\nstderr: {}",
@@ -1107,29 +1343,27 @@ test "fails" {
         format!("{stdout}{stderr}").contains("1 passed, 0 failed, 1 total"),
         "stdout: {stdout}\nstderr: {stderr}"
     );
-    assert!(stdout.contains("[INFO] info-detail"), "stdout: {stdout}");
-    assert!(stdout.contains("[WARN] warn-detail"), "stdout: {stdout}");
+    // Logs are status, so they go to stderr: stdout carries only the result.
+    assert!(!stdout.contains("detail"), "stdout: {stdout}");
+    assert!(stderr.contains("[INFO] info-detail"), "stderr: {stderr}");
+    assert!(stderr.contains("[WARN] warn-detail"), "stderr: {stderr}");
     assert!(
-        stdout.contains(r#"[WARN] {"user": "ada", "attempts": [1, 2]}"#),
-        "stdout: {stdout}"
+        stderr.contains(r#"[WARN] {"user": "ada", "attempts": [1, 2]}"#),
+        "stderr: {stderr}"
     );
     for implementation_detail in ["BamlOutboundValue", "MapValue", "ListValue", "Some("] {
         assert!(
-            !stdout.contains(implementation_detail),
-            "stdout leaked `{implementation_detail}`: {stdout}"
+            !stderr.contains(implementation_detail),
+            "stderr leaked `{implementation_detail}`: {stderr}"
         );
     }
-    assert!(stdout.contains("[ERROR] error-detail"), "stdout: {stdout}");
-    assert!(!stdout.contains("debug-detail"), "stdout: {stdout}");
-    assert!(
-        stdout.find("[ERROR] error-detail") < stdout.find("PASS"),
-        "the final captured log must be printed before the test report: {stdout}"
-    );
+    assert!(stderr.contains("[ERROR] error-detail"), "stderr: {stderr}");
+    assert!(!stderr.contains("debug-detail"), "stderr: {stderr}");
 
     let quiet = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "-i", "::logs", "--log", "OFF"],
+        &["test", "--project-dir", ".", "-i", "::logs", "--log", "OFF"],
     );
     assert!(
         quiet.status.success(),
@@ -1139,52 +1373,61 @@ test "fails" {
     );
     let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
     assert!(quiet_stdout.contains("PASS"), "stdout: {quiet_stdout}");
-    assert!(!quiet_stdout.contains("detail"), "stdout: {quiet_stdout}");
+    let quiet_stderr = String::from_utf8_lossy(&quiet.stderr);
+    assert!(!quiet_stderr.contains("detail"), "stderr: {quiet_stderr}");
 
     // Uppercase is intentional: this is the documented shell spelling and
     // guards clap's case-insensitive environment value parsing.
     let error = run_baml_cli_with_env(
         built,
         tmp.path(),
-        &["test", "--from", ".", "-i", "::logs"],
+        &["test", "--project-dir", ".", "-i", "::logs"],
         &[("BAML_LOG", "ERROR")],
     );
     assert!(error.status.success(), "BAML_LOG=ERROR must pass");
-    let error_stdout = String::from_utf8_lossy(&error.stdout);
+    let error_stderr = String::from_utf8_lossy(&error.stderr);
     assert!(
-        error_stdout.contains("[ERROR] error-detail"),
-        "stdout: {error_stdout}"
+        error_stderr.contains("[ERROR] error-detail"),
+        "stderr: {error_stderr}"
     );
     for filtered in ["debug-detail", "info-detail", "warn-detail"] {
         assert!(
-            !error_stdout.contains(filtered),
-            "BAML_LOG=ERROR leaked `{filtered}`: {error_stdout}"
+            !error_stderr.contains(filtered),
+            "BAML_LOG=ERROR leaked `{filtered}`: {error_stderr}"
         );
     }
 
     let failure = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "-i", "::fails", "--log", "ERROR"],
+        &[
+            "test",
+            "--project-dir",
+            ".",
+            "-i",
+            "::fails",
+            "--log",
+            "ERROR",
+        ],
     );
     assert_eq!(
         failure.status.code(),
-        Some(2),
+        Some(1),
         "--log must preserve the test-failure exit code; stdout: {}\nstderr: {}",
         String::from_utf8_lossy(&failure.stdout),
         String::from_utf8_lossy(&failure.stderr),
     );
     assert!(
-        String::from_utf8_lossy(&failure.stdout).contains("[ERROR] failure-detail"),
-        "stdout: {}",
-        String::from_utf8_lossy(&failure.stdout),
+        String::from_utf8_lossy(&failure.stderr).contains("[ERROR] failure-detail"),
+        "stderr: {}",
+        String::from_utf8_lossy(&failure.stderr),
     );
 }
 
-/// A redirected stdout stream is explicitly flushed while a test is still
-/// running, rather than releasing its logs only with the final report.
+/// A redirected stderr stream carries a test's logs while it is still
+/// running, rather than releasing them only with the final report.
 #[test]
-fn test_logs_flag_flushes_stdout_during_long_running_test() {
+fn test_logs_flag_streams_logs_during_long_running_test() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
 
@@ -1201,7 +1444,7 @@ test "streams" {
     );
 
     // Warm the compile/discovery cache without executing the sleeping test.
-    let listed = run_baml_cli(built, tmp.path(), &["test", "--from", ".", "--list"]);
+    let listed = run_baml_cli(built, tmp.path(), &["test", "--project-dir", ".", "--list"]);
     assert!(
         listed.status.success(),
         "failed to prepare streaming test: {}",
@@ -1211,24 +1454,24 @@ test "streams" {
     let home = tmp.path().join(".baml-home");
     common::share_build_cache(&home);
     let mut child = Command::new(built)
-        .args(["test", "--from", ".", "--log", "INFO"])
+        .args(["test", "--project-dir", ".", "--log", "INFO"])
         .current_dir(tmp.path())
         .env("BAML_CLI_ALLOW_DIRECT", "1")
-        // Ignore inherited agent env (CLAUDECODE/AI_AGENT/…): it would flip
+        // Ignore inherited agent env (CLAUDECODE/AI_AGENT/...): it would flip
         // `--output-preset auto` to `agent` and hide progress lines.
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_HOME", &home)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("spawn baml-cli with piped stdout");
+        .expect("spawn baml-cli with piped streams");
 
-    let mut stdout = BufReader::new(child.stdout.take().expect("child stdout is piped"));
+    let mut stderr = BufReader::new(child.stderr.take().expect("child stderr is piped"));
     let mut captured = String::new();
     loop {
         let mut line = String::new();
-        let read = stdout.read_line(&mut line).expect("read streamed log line");
-        assert_ne!(read, 0, "stdout ended before the first log: {captured}");
+        let read = stderr.read_line(&mut line).expect("read streamed log line");
+        assert_ne!(read, 0, "stderr ended before the first log: {captured}");
         captured.push_str(&line);
         if line.contains("[INFO] stream-start") {
             break;
@@ -1239,19 +1482,19 @@ test "streams" {
         "the first log was buffered until the test process exited: {captured}"
     );
 
-    stdout
+    stderr
         .read_to_string(&mut captured)
-        .expect("read remaining stdout");
+        .expect("read remaining stderr");
     let output = child.wait_with_output().expect("wait for baml-cli");
     assert!(
         output.status.success(),
-        "streaming test failed; stdout: {captured}\nstderr: {}",
-        String::from_utf8_lossy(&output.stderr),
+        "streaming test failed; stderr: {captured}\nstdout: {}",
+        String::from_utf8_lossy(&output.stdout),
     );
-    assert!(captured.contains("[INFO] stream-end"), "stdout: {captured}");
+    assert!(captured.contains("[INFO] stream-end"), "stderr: {captured}");
     assert!(
-        captured.find("[INFO] stream-end") < captured.find("PASS"),
-        "the final log must be flushed before the test report: {captured}"
+        String::from_utf8_lossy(&output.stdout).contains("PASS"),
+        "{output:?}"
     );
 }
 
@@ -1271,10 +1514,10 @@ test "assert-equal-failure" {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
     assert_eq!(
         output.status.code(),
-        Some(2),
+        Some(1),
         "Expected test failure exit code for failing assert.equal, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
@@ -1325,10 +1568,10 @@ test "provider-failure" {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
     assert_eq!(
         output.status.code(),
-        Some(2),
+        Some(1),
         "Expected test failure exit code for thrown error, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
@@ -1374,7 +1617,7 @@ testset "suite" with testing.PassRate(0.6) {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined = format!("{stdout}{stderr}");
@@ -1418,7 +1661,13 @@ testset "suite" with testing.PassRate(0.0) {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["test", "--from", ".", "-i", "root::suite::failing leaf"],
+        &[
+            "test",
+            "--project-dir",
+            ".",
+            "-i",
+            "root::suite::failing leaf",
+        ],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1464,14 +1713,14 @@ testset "hard" {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined = format!("{stdout}{stderr}");
 
     assert_eq!(
         output.status.code(),
-        Some(2),
+        Some(1),
         "Expected hard failing sibling testset to fail the command, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         stdout,
@@ -1498,13 +1747,13 @@ testset "suite" {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert_eq!(
         output.status.code(),
-        Some(2),
+        Some(1),
         "Expected unfiltered failing testset to fail, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         stdout,
@@ -1542,11 +1791,11 @@ testset "suite" with AlwaysFail {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
 
     assert_eq!(
         output.status.code(),
-        Some(2),
+        Some(1),
         "Expected failing aggregate outcome to fail even with zero failed children, got: {:?}\nstdout: {}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stdout),
@@ -1569,13 +1818,13 @@ testset "suite" with testing.FailFast() {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
     let combined = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(output.status.code(), Some(2), "{combined}");
+    assert_eq!(output.status.code(), Some(1), "{combined}");
     assert!(
         combined.contains("FAIL root::suite::first fails"),
         "{combined}"
@@ -1617,7 +1866,7 @@ testset "suite" with FirstOnlyWithoutNames {
 "#,
     );
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
     let combined = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
@@ -1646,7 +1895,7 @@ testset "suite" with FirstOnlyWithoutNames {
 // ============================================================================
 
 /// `baml fmt` with no explicit source and no discoverable project is a no-op
-/// success. An explicit `--from` is different: it opts into that source tree.
+/// success. An explicit `--project-dir` is different: it opts into that source tree.
 #[test]
 fn fmt_without_from_or_project_is_noop_success() {
     let built = &common::baml_cli();
@@ -1706,7 +1955,7 @@ fn fmt_check_lists_unformatted_files_without_writing() {
 
     assert_eq!(
         output.status.code(),
-        Some(baml_cli::ExitCode::Unformatted.into()),
+        Some(baml_cli::ExitCode::Failure.into()),
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
@@ -1756,7 +2005,7 @@ fn fmt_check_parse_error_is_error_not_unformatted() {
 
     assert_eq!(
         output.status.code(),
-        Some(baml_cli::ExitCode::Other.into()),
+        Some(baml_cli::ExitCode::Failure.into()),
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
@@ -1837,7 +2086,7 @@ fn run_list_without_baml_toml_using_baml_src_succeeds() {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["run", "--list", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["run", "--list", "--project-dir", "."]);
 
     assert!(
         output.status.success(),
@@ -1868,7 +2117,7 @@ fn run_execute_function_without_baml_toml_succeeds() {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["run", "answer", "--project-dir", "."]);
 
     assert!(
         output.status.success(),
@@ -1933,26 +2182,36 @@ function via_union() -> null | null {
         String::from_utf8_lossy(&output.stdout).trim().to_owned()
     };
 
-    assert_eq!(stdout_of(&["run", "as_void", "--from", "."]), "");
-    assert_eq!(stdout_of(&["run", "as_null", "--from", "."]), "");
-    assert_eq!(stdout_of(&["run", "via_alias", "--from", "."]), "");
-    assert_eq!(stdout_of(&["run", "via_union", "--from", "."]), "");
-    assert_eq!(stdout_of(&["run", "optional_null", "--from", "."]), "null");
+    assert_eq!(stdout_of(&["run", "as_void", "--project-dir", "."]), "");
+    assert_eq!(stdout_of(&["run", "as_null", "--project-dir", "."]), "");
+    assert_eq!(stdout_of(&["run", "via_alias", "--project-dir", "."]), "");
+    assert_eq!(stdout_of(&["run", "via_union", "--project-dir", "."]), "");
     assert_eq!(
-        stdout_of(&["run", "-e", "as_void()", "--from", "."]),
+        stdout_of(&["run", "optional_null", "--project-dir", "."]),
+        "null"
+    );
+    assert_eq!(
+        stdout_of(&["run", "-e", "as_void()", "--project-dir", "."]),
         "null"
     );
     // A statement-only expression has no value of its own: it evaluates to
     // the unit value, like any block with no final expression.
     assert_eq!(
-        stdout_of(&["run", "-e", "as_void();", "--from", "."]),
+        stdout_of(&["run", "-e", "as_void();", "--project-dir", "."]),
         "null"
     );
     // JSON output is a document a consumer parses, so it prints one even for
     // a unit return.
     for target in ["as_void", "as_null", "via_union"] {
         assert_eq!(
-            stdout_of(&["run", target, "--from", ".", "--output-format", "json"]),
+            stdout_of(&[
+                "run",
+                target,
+                "--project-dir",
+                ".",
+                "--output-format",
+                "json"
+            ]),
             "null",
             "{target}"
         );
@@ -1995,7 +2254,14 @@ function get_public_key() -> (AccountRecord as PublicIdentity).Key {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["run", "get_public_key", "--from", ".", "--features", "beta"],
+        &[
+            "run",
+            "get_public_key",
+            "--project-dir",
+            ".",
+            "--features",
+            "beta",
+        ],
     );
 
     assert!(
@@ -2083,7 +2349,7 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["run", "--list", "--from", ".", "--features", "beta"],
+        &["run", "--list", "--project-dir", ".", "--features", "beta"],
     );
 
     assert!(
@@ -2133,7 +2399,7 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
             "--list",
             "--output-format",
             "json",
-            "--from",
+            "--project-dir",
             ".",
             "--features",
             "beta",
@@ -2200,7 +2466,11 @@ fn run_expr_without_baml_toml_picks_up_baml_src_context() {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["run", "-e", "answer()", "--from", "."]);
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "-e", "answer()", "--project-dir", "."],
+    );
 
     assert!(
         output.status.success(),
@@ -2319,7 +2589,11 @@ fn run_expr_preserves_project_file_named_expr() {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["run", "-e", "foo()", "--from", "."]);
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "-e", "foo()", "--project-dir", "."],
+    );
 
     assert!(
         output.status.success(),
@@ -2347,7 +2621,11 @@ fn run_expr_checks_project_file_named_expr() {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["run", "-e", "broken()", "--from", "."]);
+    let output = run_baml_cli(
+        built,
+        tmp.path(),
+        &["run", "-e", "broken()", "--project-dir", "."],
+    );
 
     assert!(
         !output.status.success(),
@@ -2377,7 +2655,7 @@ fn run_expr_ignores_unrelated_project_compile_errors() {
     let output = run_baml_cli(
         built,
         tmp.path(),
-        &["run", "-e", "int.parse(\"42\")", "--from", "."],
+        &["run", "-e", "int.parse(\"42\")", "--project-dir", "."],
     );
 
     assert!(
@@ -2413,7 +2691,11 @@ fn run_expr_is_a_block_whatever_it_starts_with() {
         ("", "null"),
         ("// nothing", "null"),
     ] {
-        let output = run_baml_cli(built, tmp.path(), &["run", "-e", expression, "--from", "."]);
+        let output = run_baml_cli(
+            built,
+            tmp.path(),
+            &["run", "-e", expression, "--project-dir", "."],
+        );
         assert!(
             output.status.success(),
             "Expected `-e {expression:?}` to evaluate, got: {:?}\nstdout: {}\nstderr: {}",
@@ -2450,7 +2732,11 @@ fn run_expr_takes_its_value_from_a_final_expression_or_its_returns() {
         ("return 5;", "5"),
         ("if (true) { return; } note();", "null"),
     ] {
-        let output = run_baml_cli(built, tmp.path(), &["run", "-e", expression, "--from", "."]);
+        let output = run_baml_cli(
+            built,
+            tmp.path(),
+            &["run", "-e", expression, "--project-dir", "."],
+        );
         assert!(
             output.status.success(),
             "Expected `-e {expression:?}` to evaluate, got: {:?}\nstdout: {}\nstderr: {}",
@@ -2467,10 +2753,10 @@ fn run_expr_takes_its_value_from_a_final_expression_or_its_returns() {
 }
 
 /// `baml test` reaches test discovery on a manifest-less `baml_src/`
-/// project — a project with no test blocks returns the `NoTestsRun` code (5),
+/// project: a project with no test blocks reports that no tests were selected,
 /// proving the loader accepted it rather than bailing on the missing manifest.
 #[test]
-fn test_without_baml_toml_using_baml_src_returns_no_tests_code() {
+fn test_without_baml_toml_using_baml_src_reaches_discovery() {
     let built = &common::baml_cli();
     let tmp = tempfile::tempdir().unwrap();
     let src = tmp.path().join("baml_src");
@@ -2481,13 +2767,18 @@ fn test_without_baml_toml_using_baml_src_returns_no_tests_code() {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["test", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
 
     assert_eq!(
         output.status.code(),
-        Some(5),
-        "Expected NoTestsRun (5) on a manifest-less project, got: {:?}\nstderr: {}",
+        Some(0),
+        "Expected exit code 0 on a manifest-less project, got: {:?}\nstderr: {}",
         output.status.code(),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("no tests selected"),
+        "stderr: {}",
         String::from_utf8_lossy(&output.stderr),
     );
 }
@@ -2620,12 +2911,12 @@ fn generate_without_baml_toml_reports_no_generators() {
     )
     .unwrap();
 
-    let output = run_baml_cli(built, tmp.path(), &["generate", "--from", "."]);
+    let output = run_baml_cli(built, tmp.path(), &["generate", "--project-dir", "."]);
 
     assert_eq!(
         output.status.code(),
-        Some(4),
-        "Expected exit 4 for a manifest-less project with no generators, got: {:?}\nstderr: {}",
+        Some(1),
+        "Expected exit 1 for a manifest-less project with no generators, got: {:?}\nstderr: {}",
         output.status.code(),
         String::from_utf8_lossy(&output.stderr),
     );

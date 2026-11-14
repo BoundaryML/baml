@@ -121,16 +121,28 @@ impl fmt::Debug for Credentials {
 // Errors
 // ---------------------------------------------------------------------------
 
+/// Why a request could not be signed. It never holds the request URL, whose
+/// query can carry credentials (`?api_key=…`) and whose text reaches logs.
 #[derive(Debug)]
 pub enum SigningError {
-    /// The request URL could not be parsed into scheme/authority/path.
-    InvalidUri(String),
+    /// The request URL has no `scheme://`.
+    UriWithoutScheme,
+    /// The request URL has no host after its `scheme://`.
+    UriWithoutHost,
 }
 
 impl fmt::Display for SigningError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SigningError::InvalidUri(u) => write!(f, "invalid request URI for signing: {u}"),
+            SigningError::UriWithoutScheme => {
+                write!(
+                    f,
+                    "invalid request URL for signing: it has no scheme (`https://…`)"
+                )
+            }
+            SigningError::UriWithoutHost => {
+                write!(f, "invalid request URL for signing: it has no host")
+            }
         }
     }
 }
@@ -380,7 +392,7 @@ impl UrlParts {
     fn parse(url: &str) -> Result<Self, SigningError> {
         let (scheme, rest) = url
             .split_once("://")
-            .ok_or_else(|| SigningError::InvalidUri(url.to_string()))?;
+            .ok_or(SigningError::UriWithoutScheme)?;
 
         // Authority ends at the first '/', '?', or '#'.
         let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
@@ -397,7 +409,7 @@ impl UrlParts {
         };
 
         if authority.is_empty() {
-            return Err(SigningError::InvalidUri(url.to_string()));
+            return Err(SigningError::UriWithoutHost);
         }
 
         Ok(Self {
@@ -497,6 +509,32 @@ mod tests {
 
     // 2015-08-30T12:36:00Z
     const T_20150830: u64 = 1_440_938_160;
+
+    /// A URL that cannot be signed is described, never quoted: its query can
+    /// carry a credential.
+    #[test]
+    fn unsignable_urls_are_not_quoted() {
+        let credentials = Credentials::new("AKID".to_string(), "secret".to_string(), None);
+        for (url, reason) in [
+            ("bedrock.example/model?api_key=SEKRIT", "no scheme"),
+            ("https:///model?api_key=SEKRIT", "no host"),
+        ] {
+            let err = sign_request(
+                "POST",
+                url,
+                &[],
+                b"{}",
+                &credentials,
+                "us-east-1",
+                "bedrock",
+                at(T_20150830),
+            )
+            .unwrap_err();
+            let text = err.to_string();
+            assert!(text.contains(reason), "{text}");
+            assert!(!text.contains("SEKRIT"), "{text}");
+        }
+    }
 
     #[test]
     fn date_formatting() {

@@ -25,7 +25,7 @@ enum ReplayHarness {
 
     /// Run `body` with a live replay server; always shuts it down.
     static func with<T>(recording: String, _ body: () throws -> T) throws -> T {
-        let addr = try Baml.replay.replay_serve_detached(
+        let addr = try Baml.replay.replay_serve_detached_sync(
             recording_path: recordingPath(recording)
         )
         setenv("BAML_REPLAY_BASE_URL", "http://\(addr)", 1)
@@ -42,7 +42,7 @@ enum ReplayHarness {
         recording: String,
         _ body: () async throws -> T
     ) async throws -> T {
-        let addr = try await Baml.replay.replay_serve_detached_async(
+        let addr = try await Baml.replay.replay_serve_detached(
             recording_path: recordingPath(recording)
         )
         setenv("BAML_REPLAY_BASE_URL", "http://\(addr)", 1)

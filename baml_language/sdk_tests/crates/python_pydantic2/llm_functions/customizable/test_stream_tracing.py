@@ -10,80 +10,80 @@ from replay_harness import replay_server
 @replay_server(recording_path="replay_extract_string")
 async def test_stream_async_for_keeps_context_after_creator_returns():
     from baml_sdk import trace
-    from baml_sdk.lorem import trace_stream_string_stream_async
+    from baml_sdk.lorem import trace_stream_string_stream
 
     contexts = []
 
     def on_event(_event):
-        contexts.append(trace.current_context())
+        contexts.append(trace.current_context_sync())
 
     @trace.instrument(
-        trace.span(error=True).context(
+        trace.span_sync(error=True).context_sync(
             metadata={"feature": "creator"}, distinct_id="u1"
         )
     )
     async def create():
-        return await trace_stream_string_stream_async("Ada", on_event=on_event)
+        return await trace_stream_string_stream("Ada", on_event=on_event)
 
     stream = await create()
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
     partials = [value async for value in stream]
     assert len(partials) >= 10
-    assert isinstance(await stream.final_async(), str)
+    assert isinstance(await stream.final(), str)
     assert len(contexts) >= 3
     assert all(context.metadata == {"feature": "creator"} for context in contexts)
     assert all(context.distinct_id == "u1" for context in contexts)
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
 
 
 # SDK_PARITY_LINT(skip): Python concurrent stream context isolation
 @replay_server(recording_path="replay_extract_string")
 async def test_stream_contexts_are_isolated_during_concurrent_iteration():
     from baml_sdk import trace
-    from baml_sdk.lorem import trace_stream_string_stream_async
+    from baml_sdk.lorem import trace_stream_string_stream
 
     async def consume(feature):
         seen = []
 
         def on_event(_event):
-            seen.append(trace.current_context().metadata)
+            seen.append(trace.current_context_sync().metadata)
 
-        stream = await trace_stream_string_stream_async(
+        stream = await trace_stream_string_stream(
             "Ada",
             on_event=on_event,
-            _baml={"trace": trace.context(metadata={"feature": feature})},
+            _baml={"trace": trace.context_sync(metadata={"feature": feature})},
         )
         async for _ in stream:
             await asyncio.sleep(0)
-        assert isinstance(await stream.final_async(), str)
+        assert isinstance(await stream.final(), str)
         assert len(seen) >= 3
         assert all(metadata == {"feature": feature} for metadata in seen)
 
     await asyncio.gather(consume("first"), consume("second"))
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
 
 
 # SDK_PARITY_LINT(skip): Python sync stream defaults and explicit step patches
 @replay_server(recording_path="replay_extract_string")
 def test_stream_final_keeps_context_and_allows_a_step_patch():
     from baml_sdk import trace
-    from baml_sdk.lorem import trace_stream_string_stream
+    from baml_sdk.lorem import trace_stream_string_stream_sync
 
     seen = []
 
     def on_event(_event):
-        seen.append(trace.current_context().metadata)
+        seen.append(trace.current_context_sync().metadata)
 
-    stream = trace_stream_string_stream(
+    stream = trace_stream_string_stream_sync(
         "Ada",
         on_event=on_event,
-        _baml={"trace": trace.context(metadata={"feature": "origin", "user": "u1"})},
+        _baml={"trace": trace.context_sync(metadata={"feature": "origin", "user": "u1"})},
     )
-    final = stream.final(_baml={"trace": trace.context(metadata={"feature": "step"})})
+    final = stream.final_sync(_baml={"trace": trace.context_sync(metadata={"feature": "step"})})
     assert isinstance(final, str)
     assert seen[0] == {"feature": "origin", "user": "u1"}
     assert all(metadata == {"feature": "step", "user": "u1"} for metadata in seen[1:])
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
 
 
 # SDK_PARITY_LINT(skip): Python EOF settlement retains final parse errors
@@ -92,14 +92,14 @@ async def test_stream_final_parse_failure_is_preserved_after_eof():
     from baml_bridge import BamlError
     from baml_sdk.ai.errors import ParseFailed
     from baml_sdk.ai.stream import Done
-    from baml_sdk.lorem import trace_stream_doc_stream_async
+    from baml_sdk.lorem import trace_stream_doc_stream
 
-    stream = await trace_stream_doc_stream_async("Ada")
-    while not isinstance(await stream.next_async(), Done):
+    stream = await trace_stream_doc_stream("Ada")
+    while not isinstance(await stream.next(), Done):
         pass
     for _ in range(2):
         with pytest.raises(BamlError) as raised:
-            await stream.final_async()
+            await stream.final()
         assert isinstance(raised.value.value, ParseFailed)
         assert raised.value.value.raw_output
 
@@ -147,17 +147,17 @@ def test_stream_final_caches_only_settled_errors(monkeypatch, kind, cache):
 
     monkeypatch.setattr(BamlStream, "_call_sync", call)
     with pytest.raises(type(error)) as raised:
-        stream.final()
+        stream.final_sync()
     assert raised.value is error
     assert len(finishes) == 1
     assert stream._settled is cache
     if cache:
         with pytest.raises(type(error)) as raised:
-            stream.final()
+            stream.final_sync()
         assert raised.value is error
         assert len(calls) == 1
     else:
-        assert stream.final() == "finished"
+        assert stream.final_sync() == "finished"
         assert len(calls) == 2
 
 
@@ -183,11 +183,11 @@ async def test_stream_final_timeout_is_not_cached(monkeypatch):
 
     monkeypatch.setattr(BamlStream, "_call_async", call)
     with pytest.raises(TimeoutError):
-        await asyncio.wait_for(stream.final_async(), timeout=0.01)
+        await asyncio.wait_for(stream.final(), timeout=0.01)
     assert finishes == ["cancelled"]
     assert not stream._settled
     assert stream._final_error is None
-    assert await stream.final_async() == "finished"
+    assert await stream.final() == "finished"
     assert len(calls) == 2
 
 
@@ -195,13 +195,13 @@ async def test_stream_final_timeout_is_not_cached(monkeypatch):
 @replay_server(recording_path="replay_extract_string")
 async def test_stream_keeps_creation_cancel_token():
     from baml_sdk.baml.spawn import CancelToken
-    from baml_sdk.lorem import trace_stream_string_stream_async
+    from baml_sdk.lorem import trace_stream_string_stream
 
-    token = CancelToken.new()
-    stream = await trace_stream_string_stream_async("Ada", _baml={"cancel": token})
-    token.cancel()
+    token = CancelToken.new_sync()
+    stream = await trace_stream_string_stream("Ada", _baml={"cancel": token})
+    token.cancel_sync()
     with pytest.raises(asyncio.CancelledError):
-        await stream.next_async()
+        await stream.next()
 
 
 # SDK_PARITY_LINT(skip): Python stream reservations must survive rejected admission
@@ -209,29 +209,24 @@ async def test_stream_keeps_creation_cancel_token():
 async def test_stream_precancelled_admission_preserves_reservation():
     from baml_sdk import trace
     from baml_sdk.baml.spawn import CancelToken
-    from baml_sdk.lorem import trace_stream_string_stream_async
+    from baml_sdk.lorem import trace_stream_string_stream
 
-    reserved = trace.span(error=True).reserve()
-    token = CancelToken.new()
-    token.cancel()
+    reserved = trace.span_sync(error=True).reserve_sync()
+    token = CancelToken.new_sync()
+    token.cancel_sync()
     with pytest.raises(asyncio.CancelledError):
-        await trace_stream_string_stream_async(
+        await trace_stream_string_stream(
             "Ada", _baml={"trace": reserved, "cancel": token}
         )
-    stream = await trace_stream_string_stream_async("Ada", _baml={"trace": reserved})
-    assert isinstance(await stream.final_async(), str)
+    stream = await trace_stream_string_stream("Ada", _baml={"trace": reserved})
+    assert isinstance(await stream.final(), str)
 
 
-# The ordinary SDK CI does not build the query CLI. Run this audit wherever
+# The ordinary SDK CI does not build the query CLI. Run these audits wherever
 # baml-cli is built, or set BAML_AUDIT_CLI to a CLI from the same checkout.
-# SDK_PARITY_LINT(skip): native Python recording ancestry, duration, values and step-count audit
-def test_stream_recording_parent_chain(tmp_path):
-    import json
+def _audit_cli():
     import os
     from pathlib import Path
-    import subprocess
-    import sys
-    import uuid
 
     sdk_root = Path(__file__).resolve().parent
     workspace = next(
@@ -251,6 +246,86 @@ def test_stream_recording_parent_chain(tmp_path):
             "target/debug/baml-cli predates this checkout's blob format; "
             "rebuild baml_cli or set BAML_AUDIT_CLI"
         )
+    return cli
+
+
+# SDK_PARITY_LINT(skip): native Python recording lands where `baml query --local` reads
+def test_recording_lands_in_cwd_project(tmp_path):
+    import json
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+    import uuid
+
+    cli = _audit_cli()
+    import baml_sdk
+
+    sdk_root = Path(__file__).resolve().parent
+    marker = "cwd-project-" + uuid.uuid4().hex
+    project = tmp_path / "app"
+    (project / "baml_src").mkdir(parents=True)
+    (project / "baml.toml").write_text("")
+    home = tmp_path / "home"
+    home.mkdir()
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("BOUNDARY_") and key != "BAML_HOME"
+    }
+    env.update(
+        BOUNDARY_API_KEY="local",
+        BAML_TELEMETRY="medium",
+        HOME=str(home),
+        USERPROFILE=str(home),
+        DO_NOT_TRACK="1",
+    )
+    env["PYTHONPATH"] = str(Path(baml_sdk.__file__).resolve().parent.parent)
+    child = subprocess.run(
+        [sys.executable, str(sdk_root / "stream_recording_cases.py"), marker],
+        cwd=project / "baml_src",
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert child.returncode == 0, child.stderr
+    assert not (home / ".baml/btel/recordings").exists()
+
+    result = subprocess.run(
+        [
+            str(cli),
+            "--agent-skill-check",
+            "off",
+            "local",
+            "recordings",
+            "query",
+            "--output-format",
+            "json",
+            "SELECT count(*) AS n FROM spans "
+            f"WHERE CAST(context_metadata AS TEXT) LIKE '%{marker}%'",
+        ],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert json.loads(result.stdout)["rows"][0][0] > 0
+
+
+# SDK_PARITY_LINT(skip): native Python recording ancestry, duration, values and step-count audit
+def test_stream_recording_parent_chain(tmp_path):
+    import json
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+    import uuid
+
+    cli = _audit_cli()
+    sdk_root = Path(__file__).resolve().parent
     import baml_sdk
 
     marker = "stream-audit-" + uuid.uuid4().hex
@@ -298,11 +373,12 @@ def test_stream_recording_parent_chain(tmp_path):
             str(cli),
             "--agent-skill-check",
             "off",
+            "local",
+            "recordings",
             "query",
-            "--local",
-            "--from",
+            "--project-dir",
             str(query_root),
-            "--format",
+            "--output-format",
             "json",
             sql,
         ],

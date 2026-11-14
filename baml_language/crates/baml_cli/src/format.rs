@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
     fs,
+    io::{self, Write},
     path::{Path, PathBuf},
 };
 
@@ -8,8 +9,14 @@ use anyhow::Result;
 use baml_db::discover_baml_files;
 use baml_fmt::FormatOptions;
 use clap::Args;
+use serde::Serialize;
 
-use crate::{project_load::resolve_project_layout, reporter::Reporter};
+use crate::{
+    ExitCode,
+    output::{Command, CommandContext, Outcome, Report, Style},
+    project_load::resolve_project_layout,
+    reporter::Reporter,
+};
 
 /// Format BAML source files.
 ///
@@ -36,10 +43,6 @@ pub struct FormatArgs {
     )]
     pub paths: Vec<PathBuf>,
 
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub from: Option<PathBuf>,
-
     #[arg(
         short = 'n',
         long = "dry-run",
@@ -58,23 +61,98 @@ pub struct FormatArgs {
     pub check: bool,
 }
 
-impl FormatArgs {
-    pub fn run(&self) -> Result<crate::ExitCode> {
+/// What `baml fmt` did to each file.
+#[derive(Debug, Default, Serialize)]
+pub(crate) struct FormatReport {
+    pub files: Vec<FormattedFile>,
+    #[serde(skip)]
+    mode: Mode,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct FormattedFile {
+    pub path: PathBuf,
+    pub status: FileStatus,
+    /// The formatted source, for `--dry-run`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub formatted: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum FileStatus {
+    /// Already formatted.
+    Unchanged,
+    /// Rewritten on disk.
+    Formatted,
+    /// Formatting would change it (`--check`, `--dry-run`).
+    Unformatted,
+    /// Could not be read, parsed or written.
+    Failed,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    #[default]
+    Write,
+    Check,
+    DryRun,
+}
+
+impl Report for FormatReport {
+    /// Writing files in place has no result beyond the files.
+    fn is_silent(&self) -> bool {
+        self.mode == Mode::Write
+    }
+
+    fn text(&self, out: &mut dyn Write, _style: &Style) -> io::Result<()> {
+        for file in &self.files {
+            match self.mode {
+                Mode::Write => {}
+                Mode::Check if file.status == FileStatus::Unformatted => {
+                    writeln!(out, "{}", file.path.display())?;
+                }
+                Mode::Check => {}
+                Mode::DryRun => {
+                    if let Some(formatted) = &file.formatted {
+                        writeln!(out, "{formatted}")?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Command for FormatArgs {
+    type Output = FormatReport;
+
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<FormatReport>> {
+        let mode = if self.check {
+            Mode::Check
+        } else if self.dry_run {
+            Mode::DryRun
+        } else {
+            Mode::Write
+        };
+        let mut report = FormatReport {
+            files: Vec::new(),
+            mode,
+        };
         // Cargo-style default: with no positional paths, discover every
         // `.baml` file under the project root and format the lot. The
         // project-marker rule keeps `baml fmt` from silently rewriting
         // every `.baml` under cwd from an unrelated directory; with no
         // marker there's simply nothing to format (a no-op success).
         let paths = if self.paths.is_empty() {
-            match discover_project_files(self.from.as_deref())? {
+            match discover_project_files(cx.project_dir.as_deref())? {
                 Some(files) => files,
                 None => {
-                    // No `baml.toml` / `baml_src/` here — there's nothing to
-                    // format, so don't fail. A no-op success beats a hard
-                    // error for a command agents run reflexively; pass
-                    // explicit file paths to format loose `.baml` files.
+                    // A no-op success beats a hard error for a command agents
+                    // run reflexively; pass explicit file paths to format
+                    // loose `.baml` files.
                     Reporter::new().finish("Finished", "no BAML project found; nothing to format");
-                    return Ok(crate::ExitCode::Success);
+                    return Ok(Outcome::ok(report));
                 }
             }
         } else {
@@ -83,7 +161,7 @@ impl FormatArgs {
 
         if paths.is_empty() {
             let search_root = if self.paths.is_empty() {
-                self.from
+                cx.project_dir
                     .as_deref()
                     .unwrap_or_else(|| Path::new("."))
                     .display()
@@ -95,98 +173,90 @@ impl FormatArgs {
                     .collect::<Vec<_>>()
                     .join(", ")
             };
-            crate::reporter::print_error(format_args!("no .baml files found in {}", search_root));
-            return Ok(crate::ExitCode::Other);
+            crate::reporter::print_error(format_args!("no .baml files found in {search_root}"));
+            return Ok(Outcome::new(report, ExitCode::Failure));
         }
 
         let reporter = Reporter::new();
-        // In dry-run and check mode stdout carries the result (formatted
-        // source, or the unformatted paths), so skip the per-file
-        // `Formatting <path>` lines.
-        let show_progress = !self.dry_run && !self.check;
-
-        let mut num_failures: usize = 0;
-        let mut num_unformatted: usize = 0;
         for path in &paths {
-            if show_progress {
+            if mode == Mode::Write {
                 reporter.spin("Formatting", path.display().to_string());
             }
-            let source = match fs::read_to_string(path) {
-                Ok(source) => source,
-                Err(err) => {
-                    crate::reporter::print_error(format_args!(
-                        "failed to read {}: {err}",
-                        path.display()
-                    ));
-                    num_failures += 1;
-                    continue;
-                }
-            };
-            let options = FormatOptions::default();
-            match baml_fmt::format(&source, &options) {
-                Ok(formatted) => {
-                    if self.check {
-                        if formatted != source {
-                            num_unformatted += 1;
-                            #[allow(clippy::print_stdout)]
-                            {
-                                println!("{}", path.display());
-                            }
-                        }
-                    } else if self.dry_run {
-                        #[allow(clippy::print_stdout)]
-                        {
-                            println!("{formatted}");
-                        }
-                    } else if let Err(err) = fs::write(path, formatted) {
-                        crate::reporter::print_error(format_args!(
-                            "failed to write formatted source to {}: {err}",
-                            path.display()
-                        ));
-                        num_failures += 1;
-                    }
-                }
-                Err(err) => {
-                    match err {
-                        baml_fmt::FormatterError::ParseErrors(err) => {
-                            crate::reporter::print_error(format_args!(
-                                "formatting {}: {err:?}",
-                                path.display()
-                            ));
-                        }
-                        baml_fmt::FormatterError::StrongAstError(err) => {
-                            let err = err.print_with_file_context(path, &source);
-                            crate::reporter::print_error(format_args!("while formatting: {err}"));
-                        }
-                    }
-                    num_failures += 1;
-                }
-            }
+            let (status, formatted) = format_file(path, mode);
+            report.files.push(FormattedFile {
+                path: path.clone(),
+                status,
+                formatted,
+            });
         }
 
+        let count = |status| report.files.iter().filter(|f| f.status == status).count();
         let total = paths.len();
-        let ok = total - num_failures;
+        let failed = count(FileStatus::Failed);
+        let unformatted = count(FileStatus::Unformatted);
         let verb = if self.check { "checked" } else { "formatted" };
-        if num_failures > 0 {
-            reporter.abandon();
+        let status = if failed > 0 {
             crate::reporter::print_error(format_args!(
-                "{verb} {ok} of {total} file(s); {num_failures} failed"
+                "{verb} {} of {total} file(s); {failed} failed",
+                total - failed
             ));
-            Ok(crate::ExitCode::Other)
-        } else if num_unformatted > 0 {
+            ExitCode::Failure
+        } else if mode == Mode::Check && unformatted > 0 {
             crate::reporter::print_error(format_args!(
-                "{num_unformatted} of {total} file(s) would be reformatted; run `baml fmt` without `--check` to fix"
+                "{unformatted} of {total} file(s) would be reformatted; run `baml fmt` without `--check` to fix"
             ));
-            Ok(crate::ExitCode::Unformatted)
-        } else if self.check {
-            reporter.finish("Finished", format!("{total} file(s) already formatted"));
-            Ok(crate::ExitCode::Success)
+            ExitCode::Failure
         } else {
-            if !self.dry_run {
-                reporter.finish("Finished", format!("formatted {ok} file(s)"));
+            match mode {
+                Mode::Check => {
+                    reporter.finish("Finished", format!("{total} file(s) already formatted"));
+                }
+                Mode::Write => reporter.finish("Finished", format!("formatted {total} file(s)")),
+                Mode::DryRun => {}
             }
-            Ok(crate::ExitCode::Success)
+            ExitCode::Success
+        };
+        Ok(Outcome::new(report, status))
+    }
+}
+
+fn format_file(path: &Path, mode: Mode) -> (FileStatus, Option<String>) {
+    let source = match fs::read_to_string(path) {
+        Ok(source) => source,
+        Err(err) => {
+            crate::reporter::print_error(format_args!("failed to read {}: {err}", path.display()));
+            return (FileStatus::Failed, None);
         }
+    };
+    let formatted = match baml_fmt::format(&source, &FormatOptions::default()) {
+        Ok(formatted) => formatted,
+        Err(baml_fmt::FormatterError::ParseErrors(err)) => {
+            crate::reporter::print_error(format_args!("formatting {}: {err:?}", path.display()));
+            return (FileStatus::Failed, None);
+        }
+    };
+    let changed = formatted != source;
+    match mode {
+        Mode::DryRun => {
+            let status = if changed {
+                FileStatus::Unformatted
+            } else {
+                FileStatus::Unchanged
+            };
+            (status, Some(formatted))
+        }
+        Mode::Check if changed => (FileStatus::Unformatted, None),
+        Mode::Write if changed => match fs::write(path, formatted) {
+            Ok(()) => (FileStatus::Formatted, None),
+            Err(err) => {
+                crate::reporter::print_error(format_args!(
+                    "failed to write formatted source to {}: {err}",
+                    path.display()
+                ));
+                (FileStatus::Failed, None)
+            }
+        },
+        Mode::Check | Mode::Write => (FileStatus::Unchanged, None),
     }
 }
 
@@ -207,9 +277,9 @@ fn expand_explicit_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 /// Walk a resolved source root and return every `.baml` file inside it.
-/// Omitted `--from` requires a `baml.toml` or `baml_src/` marker so `baml fmt`
+/// Omitted `--project-dir` requires a `baml.toml` or `baml_src/` marker so `baml fmt`
 /// doesn't accidentally rewrite every `.baml` below an unrelated cwd.
-/// An explicit `--from` is itself a safe opt-in to format that source tree.
+/// An explicit `--project-dir` is itself a safe opt-in to format that source tree.
 ///
 /// Returns `Ok(None)` when neither marker is present. The caller turns `None`
 /// into a no-op success rather than a hard error.
@@ -246,13 +316,14 @@ mod tests {
 
         let args = FormatArgs {
             paths: vec![baml_src],
-            from: Some(tmp.path().to_path_buf()),
             dry_run: false,
             check: false,
         };
-        let exit_code = args.run().unwrap();
+        let outcome = args
+            .run(&CommandContext::for_test(Some(tmp.path())))
+            .unwrap();
 
-        assert!(matches!(exit_code, crate::ExitCode::Success));
+        assert_eq!(outcome.status, crate::ExitCode::Success);
         assert_eq!(
             fs::read_to_string(&main).unwrap(),
             baml_fmt::format(main_source, &FormatOptions::default()).unwrap()

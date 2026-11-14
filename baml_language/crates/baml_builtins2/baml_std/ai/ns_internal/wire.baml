@@ -1,4 +1,4 @@
-// Internal helpers behind `ai.wire`: credential normalization, URL redaction,
+// Internal helpers behind `ai.wire`: credential normalization, credential sanitizing,
 // request-body merging, and journal sanitization. Nothing here is part of the
 // public ai surface.
 
@@ -11,36 +11,18 @@ function _configured(value: string) -> string? {
     }
 }
 
-/// (internal) Replace the value that follows each `marker` with `REDACTED`, up to the first
-/// delimiter that can end a query value inside a rendered error string.
-function _redact_after(text: string, marker: string) -> string {
-    let out = "";
-    let rest = text;
-    while (true) {
-        let found = rest.index_of(marker);
-        if let start: int = found {
-            let head = start + marker.length();
-            out += rest.slice(0, head);
-            out += "REDACTED";
-            let tail = rest.slice(head, rest.length());
-            rest = tail.slice(_redact_value_end(tail), tail.length());
-        } else {
-            return out + rest;
-        }
-    }
-    out
+/// (internal) `text` with the credentials it may quote replaced by `REDACTED`:
+/// in every URL its userinfo, fragment and credential-named query values, and
+/// outside a URL the value of every credential-named assignment (`api_key=`,
+/// `"api_key": "…"`, `Authorization: Bearer …`).
+function _sanitize_text(text: string) -> string throws never {
+    $rust_function
 }
 
-function _redact_value_end(tail: string) -> int {
-    let cut = tail.length();
-    for (let delimiter in ["&", " ", "\"", "'", ")", ",", "\n", "\t"]) {
-        if let at: int = tail.index_of(delimiter) {
-            if (at < cut) {
-                cut = at;
-            }
-        }
-    }
-    cut
+/// (internal) A request header's value as it may appear in a captured request:
+/// `REDACTED` for a credential-named header, else as itself.
+function _sanitize_request_header(name: string, value: string) -> string throws never {
+    $rust_function
 }
 
 /// (internal) Recursive merge of one patch value into one base value. Public entry point

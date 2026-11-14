@@ -13,13 +13,13 @@ describe("callable_reentry", () => {
     };
     const callback = async (value: number) => {
       calls.push(["outer", value]);
-      return await baml.call_int_callback_async(
+      return await baml.call_int_callback(
         leaf as unknown as (value: number) => number,
         value,
       );
     };
     expect(
-      await baml.call_int_callback_async(
+      await baml.call_int_callback(
         callback as unknown as (value: number) => number,
         6,
       ),
@@ -37,13 +37,13 @@ describe("callable_reentry", () => {
       await Promise.resolve();
       return value === 0
         ? 7
-        : await baml.call_int_callback_async(
+        : await baml.call_int_callback(
             callback as unknown as (value: number) => number,
             value - 1,
           );
     };
     expect(
-      await baml.call_int_callback_async(
+      await baml.call_int_callback(
         callback as unknown as (value: number) => number,
         3,
       ),

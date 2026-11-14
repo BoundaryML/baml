@@ -1,0 +1,13 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function top() -> /* result */ int {
+    1
+}
+
+function apply() -> int {
+    let identity = (x: int) -> /* body */ {
+        x
+    };
+    identity(1)
+}

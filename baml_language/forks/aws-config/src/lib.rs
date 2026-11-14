@@ -29,17 +29,41 @@ pub use ini::IniFile;
 // ---------------------------------------------------------------------------
 
 /// Result of an HTTP request made during credential resolution.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HttpResponse {
     pub status: u16,
     pub body: String,
 }
 
+/// An IMDS, ECS or SSO body holds credentials, so `Debug` shows its length.
+impl std::fmt::Debug for HttpResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Destructured so a new field has to be placed here deliberately.
+        let Self { status, body } = self;
+        f.debug_struct("HttpResponse")
+            .field("status", status)
+            .field("body_len", &body.len())
+            .finish()
+    }
+}
+
 /// Output of a subprocess run for `credential_process`.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CommandOutput {
     pub status: i32,
     pub stdout: String,
+}
+
+/// `credential_process` prints credentials, so `Debug` shows the length.
+impl std::fmt::Debug for CommandOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Destructured so a new field has to be placed here deliberately.
+        let Self { status, stdout } = self;
+        f.debug_struct("CommandOutput")
+            .field("status", status)
+            .field("stdout_len", &stdout.len())
+            .finish()
+    }
 }
 
 /// Errors surfaced by the resolver.

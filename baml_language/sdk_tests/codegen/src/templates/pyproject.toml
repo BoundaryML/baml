@@ -4,7 +4,6 @@ version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
     "baml_bridge",
-    "pydantic>=2",
     # `UNSET` is a `typing_extensions.Sentinel` (PEP 661); recognizing a
     # sentinel in a type expression needs pyright >= 1.1.410.
     "typing-extensions>=4.14.0",

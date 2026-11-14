@@ -12,12 +12,12 @@ final class TestStdlibEntrypoints: XCTestCase {
     // the contents are not worth asserting on — that the call lands and is
     // stable across invocations is.
     func test_stdlib_entrypoints_native_argv_callable_as_entry_point() throws {
-        let args = try Baml.baml.sys.argv()
-        XCTAssertEqual(args, try Baml.baml.sys.argv())
+        let args = try Baml.baml.sys.argv_sync()
+        XCTAssertEqual(args, try Baml.baml.sys.argv_sync())
     }
 
     func test_stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point() throws {
-        XCTAssertTrue(try Baml.baml.fs.exists(path: "."))
+        XCTAssertTrue(try Baml.baml.fs.exists_sync(path: "."))
     }
 
     func test_stdlib_entrypoints_compiler_intrinsics_are_not_emitted_as_entry_points() throws {

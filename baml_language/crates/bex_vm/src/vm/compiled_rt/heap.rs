@@ -1,7 +1,10 @@
 //! Heap access and allocation for compiled code.
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{HeapPtr, Object, ObjectType, RealizedTy, Value, types::Closure};
+use bex_vm_types::{
+    HeapPtr, Object, ObjectType, RealizedTy, Value,
+    types::{Closure, Type},
+};
 
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
@@ -10,116 +13,184 @@ use crate::{
 
 impl BexVm {
     /// Return the length of a container, measuring strings in bytes.
+    #[inline]
     pub fn container_len(&self, container: Value) -> Result<Value, Box<VmError>> {
-        let ptr = self.as_object_ptr(container, ObjectType::Array)?;
-        #[allow(clippy::cast_possible_wrap)]
+        self.container_len_in::<false>(container)
+    }
+
+    /// [`Self::container_len`] on a container escape analysis proved
+    /// thread-local, without its lock.
+    #[inline]
+    pub fn container_len_local(&self, container: Value) -> Result<Value, Box<VmError>> {
+        self.container_len_in::<true>(container)
+    }
+
+    #[inline]
+    fn container_len_in<const THREAD_LOCAL: bool>(
+        &self,
+        container: Value,
+    ) -> Result<Value, Box<VmError>> {
+        let Some(ptr) = container.as_object_ptr() else {
+            return Err(self.type_error(ObjectType::Array, container));
+        };
+        // SAFETY (`THREAD_LOCAL`): codegen calls the `_local` entry points
+        // only where escape analysis proved no other thread can reach the
+        // container.
+        #[allow(clippy::cast_possible_wrap, unsafe_code)]
         let len = match self.get_object(ptr) {
+            Object::Array(arr) if THREAD_LOCAL => unsafe { arr.lock_thread_local() }.len() as i64,
+            Object::Uint8Array(bytes) if THREAD_LOCAL => {
+                unsafe { bytes.lock_thread_local() }.len() as i64
+            }
+            Object::Map(map) if THREAD_LOCAL => unsafe { map.lock_thread_local() }.len() as i64,
             Object::Array(arr) => arr.len() as i64,
             Object::Uint8Array(bytes) => bytes.len() as i64,
             Object::Map(map) => map.len() as i64,
             Object::String(s) => s.byte_len() as i64,
-            other => {
-                return Err(VmInternalError::TypeError {
-                    expected: ObjectType::Array.into(),
-                    got: ObjectType::of(other).into(),
-                }
-                .into());
-            }
+            other => return Err(object_type_error(ObjectType::Array, other)),
         };
         Ok(Value::int(len))
     }
 
     /// Load an array or byte array element, counting negative indices from the end.
+    #[inline]
     pub fn load_array_element(
         &mut self,
         array: Value,
         index: Value,
     ) -> Result<Value, Box<VmError>> {
-        let array_ptr = self.as_object_ptr(array, ObjectType::Array)?;
+        self.load_array_element_in::<false>(array, index)
+    }
+
+    /// [`Self::load_array_element`] on a thread-local array, without its lock.
+    #[inline]
+    pub fn load_array_element_local(
+        &mut self,
+        array: Value,
+        index: Value,
+    ) -> Result<Value, Box<VmError>> {
+        self.load_array_element_in::<true>(array, index)
+    }
+
+    #[inline]
+    fn load_array_element_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        array: Value,
+        index: Value,
+    ) -> Result<Value, Box<VmError>> {
+        let Some(array_ptr) = array.as_object_ptr() else {
+            return Err(self.type_error(ObjectType::Array, array));
+        };
         let Some(i) = index.as_int() else {
-            return Err(VmInternalError::TypeError {
-                expected: bex_vm_types::types::Type::Int,
-                got: self.type_of(&index),
-            }
-            .into());
+            return Err(self.type_error(Type::Int, index));
         };
         // Hold the lock across bounds checking and loading to prevent races with growth.
         let load_result: Result<Value, (i64, usize)> = {
             match self.get_object(array_ptr) {
                 Object::Array(arr) => {
-                    let guard = arr.lock();
-                    crate::array_index::resolve_index(i, guard.len())
+                    // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
+                    #[allow(unsafe_code)]
+                    let guard = if THREAD_LOCAL {
+                        unsafe { arr.lock_thread_local() }
+                    } else {
+                        arr.lock()
+                    };
+                    crate::array_index::resolve_index_inline(i, guard.len())
                         .map(|idx| guard[idx])
                         .ok_or((i, guard.len()))
                 }
                 Object::Uint8Array(bytes) => {
-                    let guard = bytes.lock();
-                    crate::array_index::resolve_index(i, guard.len())
+                    // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
+                    #[allow(unsafe_code)]
+                    let guard = if THREAD_LOCAL {
+                        unsafe { bytes.lock_thread_local() }
+                    } else {
+                        bytes.lock()
+                    };
+                    crate::array_index::resolve_index_inline(i, guard.len())
                         .map(|idx| Value::int(i64::from(guard[idx])))
                         .ok_or((i, guard.len()))
                 }
-                other => {
-                    return Err(VmInternalError::TypeError {
-                        expected: ObjectType::Array.into(),
-                        got: ObjectType::of(other).into(),
-                    }
-                    .into());
-                }
+                other => return Err(object_type_error(ObjectType::Array, other)),
             }
         };
         match load_result {
             Ok(v) => Ok(v),
-            Err((index, length)) => Err(Box::new(self.index_out_of_bounds(index, length))),
+            Err((index, length)) => Err(self.index_out_of_bounds_boxed(index, length)),
         }
     }
 
+    #[inline]
     pub fn store_array_element(
         &mut self,
         array: Value,
         index: Value,
         new_value: Value,
     ) -> Result<(), Box<VmError>> {
-        let array_ptr = self.as_object_ptr(array, ObjectType::Array)?;
+        self.store_array_element_in::<false>(array, index, new_value)
+    }
+
+    /// [`Self::store_array_element`] on a thread-local array, without its lock.
+    #[inline]
+    pub fn store_array_element_local(
+        &mut self,
+        array: Value,
+        index: Value,
+        new_value: Value,
+    ) -> Result<(), Box<VmError>> {
+        self.store_array_element_in::<true>(array, index, new_value)
+    }
+
+    #[inline]
+    fn store_array_element_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        array: Value,
+        index: Value,
+        new_value: Value,
+    ) -> Result<(), Box<VmError>> {
+        let Some(array_ptr) = array.as_object_ptr() else {
+            return Err(self.type_error(ObjectType::Array, array));
+        };
         let Some(i) = index.as_int() else {
-            return Err(VmInternalError::TypeError {
-                expected: bex_vm_types::types::Type::Int,
-                got: self.type_of(&index),
-            }
-            .into());
+            return Err(self.type_error(Type::Int, index));
         };
         let new_value_u8: Option<u8> = new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
         let store_result: Result<(), (i64, usize)> = {
             match self.get_object(array_ptr) {
                 Object::Array(arr) => {
-                    let mut guard = arr.lock_mut(self.tlab.alloc_debt());
-                    crate::array_index::resolve_index(i, guard.len())
+                    let debt = self.tlab.alloc_debt();
+                    // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
+                    #[allow(unsafe_code)]
+                    let mut guard = if THREAD_LOCAL {
+                        unsafe { arr.lock_mut_thread_local(debt) }
+                    } else {
+                        arr.lock_mut(debt)
+                    };
+                    crate::array_index::resolve_index_inline(i, guard.len())
                         .ok_or((i, guard.len()))
                         .map(|idx| guard[idx] = new_value)
                 }
                 Object::Uint8Array(bytes) => {
                     let Some(byte_v) = new_value_u8 else {
-                        return Err(VmInternalError::TypeError {
-                            expected: bex_vm_types::types::Type::Int,
-                            got: self.type_of(&new_value),
-                        }
-                        .into());
+                        return Err(self.type_error(Type::Int, new_value));
                     };
-                    let mut guard = bytes.lock_mut(self.tlab.alloc_debt());
-                    crate::array_index::resolve_index(i, guard.len())
+                    let debt = self.tlab.alloc_debt();
+                    // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
+                    #[allow(unsafe_code)]
+                    let mut guard = if THREAD_LOCAL {
+                        unsafe { bytes.lock_mut_thread_local(debt) }
+                    } else {
+                        bytes.lock_mut(debt)
+                    };
+                    crate::array_index::resolve_index_inline(i, guard.len())
                         .ok_or((i, guard.len()))
                         .map(|idx| guard[idx] = byte_v)
                 }
-                other => {
-                    return Err(VmInternalError::TypeError {
-                        expected: ObjectType::Array.into(),
-                        got: ObjectType::of(other).into(),
-                    }
-                    .into());
-                }
+                other => return Err(object_type_error(ObjectType::Array, other)),
             }
         };
         if let Err((index, length)) = store_result {
-            return Err(Box::new(self.index_out_of_bounds(index, length)));
+            return Err(self.index_out_of_bounds_boxed(index, length));
         }
         Ok(())
     }
@@ -132,31 +203,122 @@ impl BexVm {
         )
     }
 
+    #[cold]
+    #[inline(never)]
+    fn index_out_of_bounds_boxed(&mut self, index: i64, length: usize) -> Box<VmError> {
+        Box::new(self.index_out_of_bounds(index, length))
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn invalid_field_access_boxed(&mut self, idx: usize, length: usize) -> Box<VmError> {
+        Box::new(self.invalid_field_access_error(idx, length))
+    }
+
+    /// `expected`, got `value`: the `TypeError` an accessor raises for an
+    /// operand of the wrong type. Out of line, so the accessors' fast paths
+    /// stay small enough to inline into compiled bodies.
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "boxing out of line keeps the allocation off the inlined fast path"
+    )]
+    #[cold]
+    #[inline(never)]
+    fn type_error(&self, expected: impl Into<Type>, value: Value) -> Box<VmError> {
+        VmInternalError::TypeError {
+            expected: expected.into(),
+            got: self.type_of(&value),
+        }
+        .into()
+    }
+
+    #[inline]
     pub fn load_field(&mut self, instance: Value, idx: usize) -> Result<Value, Box<VmError>> {
-        let load_result = {
-            let instance = self.as_instance(&instance)?;
-            instance
-                .try_load_field(idx)
-                .ok_or_else(|| instance.field_len())
+        self.load_field_in::<false>(instance, idx)
+    }
+
+    /// [`Self::load_field`] on an instance escape analysis proved
+    /// thread-local, with no ordering on the load.
+    #[inline]
+    pub fn load_field_local(&mut self, instance: Value, idx: usize) -> Result<Value, Box<VmError>> {
+        self.load_field_in::<true>(instance, idx)
+    }
+
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn load_field_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        instance: Value,
+        idx: usize,
+    ) -> Result<Value, Box<VmError>> {
+        // The fast path: a tag check, the object's kind, a bounds check and
+        // the field load. Every failure leaves through a cold helper.
+        let Some(ptr) = instance.as_object_ptr() else {
+            return Err(self.type_error(ObjectType::Instance, instance));
         };
-        match load_result {
-            Ok(value) => Ok(value),
-            Err(length) => Err(Box::new(self.invalid_field_access_error(idx, length))),
+        let Object::Instance(object) = self.get_object(ptr) else {
+            return Err(self.type_error(ObjectType::Instance, instance));
+        };
+        let loaded = if THREAD_LOCAL {
+            object.try_load_field_relaxed(idx)
+        } else {
+            object.try_load_field(idx)
+        };
+        match loaded {
+            Some(value) => Ok(value),
+            None => {
+                let length = object.field_len();
+                Err(self.invalid_field_access_boxed(idx, length))
+            }
         }
     }
 
+    #[inline]
     pub fn store_field(
         &mut self,
         instance: Value,
         idx: usize,
         new_value: Value,
     ) -> Result<(), Box<VmError>> {
-        let instance_ref = self.as_instance(&instance)?;
-        let store_error = (idx >= instance_ref.field_len()).then_some(instance_ref.field_len());
-        if let Some(length) = store_error {
-            return Err(Box::new(self.invalid_field_access_error(idx, length)));
+        self.store_field_in::<false>(instance, idx, new_value)
+    }
+
+    /// [`Self::store_field`] on a thread-local instance, with no ordering on
+    /// the store.
+    #[inline]
+    pub fn store_field_local(
+        &mut self,
+        instance: Value,
+        idx: usize,
+        new_value: Value,
+    ) -> Result<(), Box<VmError>> {
+        self.store_field_in::<true>(instance, idx, new_value)
+    }
+
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn store_field_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        instance: Value,
+        idx: usize,
+        new_value: Value,
+    ) -> Result<(), Box<VmError>> {
+        let Some(obj_ptr) = instance.as_object_ptr() else {
+            return Err(self.type_error(ObjectType::Instance, instance));
+        };
+        let Object::Instance(object) = self.get_object(obj_ptr) else {
+            return Err(self.type_error(ObjectType::Instance, instance));
+        };
+        let length = object.field_len();
+        if idx >= length {
+            return Err(self.invalid_field_access_boxed(idx, length));
         }
-        self.as_instance(&instance)?.store_field(idx, new_value);
+
+        if THREAD_LOCAL {
+            object.store_field_relaxed(idx, new_value);
+        } else {
+            object.store_field(idx, new_value);
+        }
         Ok(())
     }
 
@@ -190,16 +352,15 @@ impl BexVm {
         Ok(Value::object(self.tlab.alloc(bound)))
     }
 
+    #[inline]
     pub fn discriminant(&self, value: Value) -> Result<i64, Box<VmError>> {
-        let ptr = self.as_object_ptr(value, ObjectType::Variant)?;
+        let Some(ptr) = value.as_object_ptr() else {
+            return Err(self.type_error(ObjectType::Variant, value));
+        };
         match self.get_object(ptr) {
             #[allow(clippy::cast_possible_wrap)]
             Object::Variant(variant) => Ok(variant.index as i64),
-            other => Err(VmInternalError::TypeError {
-                expected: ObjectType::Variant.into(),
-                got: ObjectType::of(other).into(),
-            }
-            .into()),
+            other => Err(object_type_error(ObjectType::Variant, other)),
         }
     }
 
@@ -255,6 +416,22 @@ impl BexVm {
     }
 }
 
+/// `expected`, got an object of another kind. Cold for the reason
+/// [`BexVm::type_error`] is.
+#[allow(
+    clippy::unnecessary_box_returns,
+    reason = "boxing out of line keeps the allocation off the inlined fast path"
+)]
+#[cold]
+#[inline(never)]
+fn object_type_error(expected: ObjectType, got: &Object) -> Box<VmError> {
+    VmInternalError::TypeError {
+        expected: expected.into(),
+        got: ObjectType::of(got).into(),
+    }
+    .into()
+}
+
 #[cfg(test)]
 mod tests {
     use bex_vm_types::{
@@ -273,6 +450,7 @@ mod tests {
             docstring: None,
             other: IndexMap::default(),
             skip: false,
+            json_rename: None,
         };
         Object::Enum(Box::new(Enum {
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Color")),

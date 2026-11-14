@@ -29,7 +29,7 @@ test "adds two ints" {
 }
 ```
 
-Run it with `target/debug/baml-cli test --from crates/baml_tests/baml_src`
+Run it with `target/debug/baml-cli test --project-dir crates/baml_tests/baml_src`
 (add `-i "<name>"` to select one). See `crates/baml_tests/README.md` for the
 corpus layout and the "END-TO-END TESTING" section below for the CLI workflow
 and the language traps worth knowing.
@@ -149,7 +149,7 @@ Failing-to-compile projects snapshot under
 
 ### 5. Fix the issue
 
-Edit the relevant crate (`baml_compiler_parser`, `baml_compiler_syntax`, `baml_compiler2_hir`, etc.).
+Edit the relevant crate (`baml_parser`, `baml_syntax`, `baml_compiler2_ast`, `baml_compiler2_hir`, etc.).
 
 ### 6. Re-run and update snapshots
 
@@ -185,7 +185,7 @@ cargo nextest run -p baml_tests
 cargo nextest run -p baml_tests --lib -E 'test(/corpus_/)'
 
 # Execute the BAML corpus the way CI does
-target/debug/baml-cli test --from crates/baml_tests/baml_src
+target/debug/baml-cli test --project-dir crates/baml_tests/baml_src
 
 # Run the editor-surface tests
 cargo nextest run -p baml_ide -p baml_lsp -p baml_lsp_server
@@ -199,10 +199,10 @@ cargo insta review
 
 ## Key Files
 
-- **Lexer**: `crates/baml_compiler_lexer/src/tokens.rs`
-- **Parser**: `crates/baml_compiler_parser/src/parser.rs`
-- **Syntax kinds**: `crates/baml_compiler_syntax/src/syntax_kind.rs`
-- **AST helpers**: `crates/baml_compiler_syntax/src/ast.rs`
+- **Token table and lexer**: `crates/baml_syntax/src/token.rs`, `crates/baml_syntax/src/lexer.rs`
+- **Syntax nodes**: `crates/baml_syntax/src/nodes/`
+- **Parser**: `crates/baml_parser/src/` (`items.rs`, `types.rs`, `expr.rs`, `stmts.rs`, `patterns.rs`, `templates.rs`)
+- **AST lowering**: `crates/baml_compiler2_ast/src/lower_tree/`
 - **HIR lowering**: `crates/baml_compiler2_hir/src/body.rs`
 - **Type checking**: `crates/baml_compiler2_tir/src/builder.rs`
 
@@ -251,13 +251,13 @@ $BAML describe baml                 # ← THE FULL PICTURE: every namespace, typ
                                     #   http, json, math, net, time, toml, yaml, iter, …)
 $BAML describe baml.json            # drill into a namespace → its types + function signatures
 $BAML describe Array                # drill into a type → full method list + docs
-$BAML describe String --budget 200  # output is line-budgeted; raise --budget to see all methods
+$BAML describe String --limit 200  # output is line-limited; raise --limit to see all methods
 $BAML describe <YourSymbol>         # also works on symbols in the loaded project
 ```
 
 `describe` resolves symbols against a project. From inside a project dir it just works; from
-elsewhere pass `--from <project-dir>`. Output is capped by `--budget` (default 30) and tells
-you "… N more lines (re-run with a higher --budget)" — raise it to see everything. Anything
+elsewhere pass `--project-dir <project-dir>`. Output is capped by `--limit` (default 30) and tells
+you "… N more lines (re-run with a higher --limit)" — raise it to see everything. Anything
 you can't see, `describe` it; do not guess stdlib names or signatures.
 
 ## Setting up a project

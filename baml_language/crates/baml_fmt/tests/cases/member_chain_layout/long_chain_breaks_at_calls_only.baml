@@ -1,0 +1,4 @@
+function f() -> int {
+    let result = root.ai.Agent<Itinerary>.new().with_client(root.anthropic.Client.new()).with_options(the_default_options).run(the_spec_value);
+    result
+}

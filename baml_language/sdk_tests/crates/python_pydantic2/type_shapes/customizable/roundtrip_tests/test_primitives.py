@@ -9,55 +9,55 @@ the full encode/decode pair.
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk.primitives import (
     Primitives,
-    return_int,
-    return_float,
-    return_string,
-    return_bool,
-    return_bigint,
-    return_null,
-    round_trip_uint8_array,
-    round_trip_int,
-    round_trip_float,
-    round_trip_string,
-    round_trip_bool,
-    round_trip_bigint,
-    round_trip_null,
-    round_trip_primitives,
+    return_int_sync,
+    return_float_sync,
+    return_string_sync,
+    return_bool_sync,
+    return_bigint_sync,
+    return_null_sync,
+    round_trip_uint8_array_sync,
+    round_trip_int_sync,
+    round_trip_float_sync,
+    round_trip_string_sync,
+    round_trip_bool_sync,
+    round_trip_bigint_sync,
+    round_trip_null_sync,
+    round_trip_primitives_sync,
 )
 
 
 def test_primitives_return_int():
-    assert return_int() == 42
+    assert return_int_sync() == 42
 
 
 def test_primitives_return_float():
-    assert return_float() == 3.14
+    assert return_float_sync() == 3.14
 
 
 def test_primitives_return_string():
-    assert return_string() == "hello"
+    assert return_string_sync() == "hello"
 
 
 def test_primitives_return_bool():
-    assert return_bool() is True
+    assert return_bool_sync() is True
 
 
 def test_primitives_return_bigint():
     # 12345678901234567890 > i64 max (9223372036854775807), so it decodes
     # through the hex bigint wire channel rather than int_value.
-    assert return_bigint() == 12345678901234567890
+    assert return_bigint_sync() == 12345678901234567890
 
 
 def test_primitives_return_null():
-    assert return_null() is None
+    assert return_null_sync() is None
 
 
 def test_primitives_round_trip_int():
-    assert round_trip_int(x=7) == 7
+    assert round_trip_int_sync(x=7) == 7
 
 
 def test_primitives_round_trip_float():
-    assert round_trip_float(x=2.5) == 2.5
+    assert round_trip_float_sync(x=2.5) == 2.5
 
 
 def test_primitives_round_trip_float_accepts_int():
@@ -65,17 +65,17 @@ def test_primitives_round_trip_float_accepts_int():
     # encoder is value-shaped, so `7` arrives Rust-side as an int). The
     # declared `-> float` must hand back a genuine float, not the int riding
     # through unconverted.
-    result = round_trip_float(x=7)
+    result = round_trip_float_sync(x=7)
     assert isinstance(result, float)
     assert result == 7.0
 
 
 def test_primitives_round_trip_string():
-    assert round_trip_string(x="hi") == "hi"
+    assert round_trip_string_sync(x="hi") == "hi"
 
 
 def test_primitives_round_trip_bool():
-    assert round_trip_bool(x=False) is False
+    assert round_trip_bool_sync(x=False) is False
 
 
 def test_primitives_round_trip_bigint():
@@ -84,18 +84,18 @@ def test_primitives_round_trip_bigint():
     # positive, its negation, and a power-of-two hex boundary (2**64 — the
     # first magnitude needing a 17th hex digit).
     big = 2**80
-    assert round_trip_bigint(x=big) == big
-    assert round_trip_bigint(x=-big) == -big
+    assert round_trip_bigint_sync(x=big) == big
+    assert round_trip_bigint_sync(x=-big) == -big
     hex_boundary = 2**64
-    assert round_trip_bigint(x=hex_boundary) == hex_boundary
+    assert round_trip_bigint_sync(x=hex_boundary) == hex_boundary
 
 
 def test_primitives_round_trip_null():
-    assert round_trip_null(x=None) is None
+    assert round_trip_null_sync(x=None) is None
 
 
 def test_primitives_round_trip_uint8_array():
-    assert round_trip_uint8_array(b=b"\x00\x01\x02") == b"\x00\x01\x02"
+    assert round_trip_uint8_array_sync(b=b"\x00\x01\x02") == b"\x00\x01\x02"
 
 
 def test_primitives_round_trip_primitives():
@@ -107,7 +107,7 @@ def test_primitives_round_trip_primitives():
         null_field=None,
         uint8array_field=b"ab",
     )
-    assert round_trip_primitives(p=p) == p
+    assert round_trip_primitives_sync(p=p) == p
 
 
 def test_primitives_round_trip_primitives_float_field_accepts_int():
@@ -123,5 +123,5 @@ def test_primitives_round_trip_primitives_float_field_accepts_int():
         uint8array_field=b"ab",
     )
     assert isinstance(p.float_field, float)
-    result = round_trip_primitives(p=p)
+    result = round_trip_primitives_sync(p=p)
     assert result.float_field == 2.0

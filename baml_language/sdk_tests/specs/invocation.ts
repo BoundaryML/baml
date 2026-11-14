@@ -13,7 +13,7 @@ import {
   type BamlOptions, OptBox, hello_world, hello_world_async,
   optional_args_probe, optional_args_probe_async, trace,
 } from "./baml_sdk/index.js";
-import { invoke } from "./baml_sdk/experimental.js";
+import { invokeSync } from "./baml_sdk/experimental.js";
 // Private carrier access is for execution-context conformance only.
 import { _currentExecutionContext as currentExecutionContext, _withExecutionContext as withExecutionContext } from "@boundaryml/baml-bridge";
 import * as baml from "./baml_sdk/host_callable_tests/index.js";
@@ -81,13 +81,13 @@ export async function methods_accept_controls_async() {
 
 export async function returned_callable_accepts_controls() {
   const add = baml.make_adder(3);
-  assert.equal(add(4, { $baml: {} }), 7);
-  assert.equal(await add.callAsync(4, { $baml: {} }), 7);
+  assert.equal(add.callSync(4, { $baml: {} }), 7);
+  assert.equal(await add(4, { $baml: {} }), 7);
 }
 
 export function dynamic_call_accepts_controls() {
-  assert.deepEqual(invoke("user.optional_args_probe", { arg0: 1 }, { $baml: {} }), [1, 5, 99]);
-  assert.deepEqual(invoke("user.optional_args_probe", { arg0: 1, opt1: null }, { $baml: {} }), [1, null, 99]);
+  assert.deepEqual(invokeSync("user.optional_args_probe", { arg0: 1 }, { $baml: {} }), [1, 5, 99]);
+  assert.deepEqual(invokeSync("user.optional_args_probe", { arg0: 1, opt1: null }, { $baml: {} }), [1, null, 99]);
   // Dynamic application maps never strip $baml as a control.
   // Generic $types is separate; specialized handles reject new type bindings.
 }

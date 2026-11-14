@@ -32,6 +32,9 @@ inputs:
       Skipping them when they aren't needed is the cheapest win.
     required: false
     default: ""
+  cache:
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
@@ -59,6 +62,7 @@ runs:
         MISE_FETCH_REMOTE_VERSIONS_TIMEOUT: 60
       with:
         fetch_from_github: false
+        cache: ${{ inputs.cache }}
         # Our own prefix (not the upstream default), shared across every
         # baml_language workflow. Bump the trailing number to invalidate
         # every consumer's cache at once.

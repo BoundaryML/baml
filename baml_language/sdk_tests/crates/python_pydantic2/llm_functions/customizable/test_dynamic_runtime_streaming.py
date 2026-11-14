@@ -29,20 +29,20 @@ def _assert_repeated_pass_back(value: Any, echo: Callable[[Any], Any], expected:
     second = echo(first)
     assert isinstance(first, BamlRuntimeValue)
     assert isinstance(second, BamlRuntimeValue)
-    assert first.to_data() == expected
-    assert second.to_data() == expected
+    assert first.to_data_sync() == expected
+    assert second.to_data_sync() == expected
 
 
 def _drain_runtime_stream(label: str, stream: Any) -> dict[str, Any]:
     from baml_bridge import BamlRuntimeValue
     from baml_sdk.ai.stream import Done
-    from baml_sdk.lorem import Hs7Collision, hs7_echo_runtime_value
+    from baml_sdk.lorem import Hs7Collision, hs7_echo_runtime_value_sync
 
     non_null_partials = 0
     checked_pass_back = False
     next_calls = 0
     while True:
-        partial = stream.next()
+        partial = stream.next_sync()
         if isinstance(partial, Done):
             break
         next_calls += 1
@@ -53,22 +53,22 @@ def _drain_runtime_stream(label: str, stream: Any) -> dict[str, Any]:
 
         assert isinstance(partial, BamlRuntimeValue)
         assert not isinstance(partial, Hs7Collision)
-        data = partial.to_data()
+        data = partial.to_data_sync()
         print(f"{label} partial[{next_calls}]={partial!r} data={data!r}")
         assert isinstance(data, dict)
         non_null_partials += 1
         if not checked_pass_back:
-            _assert_repeated_pass_back(partial, hs7_echo_runtime_value, data)
+            _assert_repeated_pass_back(partial, hs7_echo_runtime_value_sync, data)
             checked_pass_back = True
 
     assert non_null_partials > 0
-    final = stream.final()
+    final = stream.final_sync()
     assert isinstance(final, BamlRuntimeValue)
     assert not isinstance(final, Hs7Collision)
-    final_data = final.to_data()
+    final_data = final.to_data_sync()
     print(f"{label} final={final!r} data={final_data!r}")
     assert final_data == _EXPECTED_FINAL
-    _assert_repeated_pass_back(final, hs7_echo_runtime_value, final_data)
+    _assert_repeated_pass_back(final, hs7_echo_runtime_value_sync, final_data)
     return final_data
 
 
@@ -76,7 +76,7 @@ async def _drain_runtime_stream_async_iterable(
     label: str, stream: Any
 ) -> dict[str, Any]:
     from baml_bridge import BamlRuntimeValue
-    from baml_sdk.lorem import Hs7Collision, hs7_echo_runtime_value_async
+    from baml_sdk.lorem import Hs7Collision, hs7_echo_runtime_value
 
     partial_count = 0
     checked_pass_back = False
@@ -84,26 +84,26 @@ async def _drain_runtime_stream_async_iterable(
         partial_count += 1
         assert isinstance(partial, BamlRuntimeValue)
         assert not isinstance(partial, Hs7Collision)
-        data = partial.to_data()
+        data = partial.to_data_sync()
         print(f"{label} async partial[{partial_count}]={partial!r} data={data!r}")
         assert isinstance(data, dict)
 
         if not checked_pass_back:
-            first = await hs7_echo_runtime_value_async(partial)
-            second = await hs7_echo_runtime_value_async(first)
+            first = await hs7_echo_runtime_value(partial)
+            second = await hs7_echo_runtime_value(first)
             assert isinstance(first, BamlRuntimeValue)
             assert isinstance(second, BamlRuntimeValue)
-            assert first.to_data() == data
-            assert second.to_data() == data
+            assert first.to_data_sync() == data
+            assert second.to_data_sync() == data
             checked_pass_back = True
 
         assert partial_count < 10_000, "dynamic async stream failed to terminate"
 
     assert partial_count > 0
-    final = await stream.final_async()
+    final = await stream.final()
     assert isinstance(final, BamlRuntimeValue)
     assert not isinstance(final, Hs7Collision)
-    final_data = final.to_data()
+    final_data = final.to_data_sync()
     print(f"{label} async final={final!r} data={final_data!r}")
     assert final_data == _EXPECTED_FINAL
     return final_data
@@ -116,24 +116,24 @@ def test_dynamic_runtime_stream_identity_and_flat_projection_parity():
     from baml_sdk.lorem import (
         Hs7Collision,
         StreamingDoc,
-        hs7_dynamic_extract_stream,
-        hs7_echo_runtime_value,
-        hs7_open_collision_spec,
-        hs7_open_collision_stream,
-        hs7_open_collision_value,
+        hs7_dynamic_extract_stream_sync,
+        hs7_echo_runtime_value_sync,
+        hs7_open_collision_spec_sync,
+        hs7_open_collision_stream_sync,
+        hs7_open_collision_value_sync,
     )
 
     # First mirror the original VetRec wrapper: the runtime type is constructed
     # inside BAML and the stream is handed back as `unknown`; the handle's tag
     # still selects the `BamlStream` wrapper.
     wrapped_final = _drain_runtime_stream(
-        "wrapped", hs7_open_collision_stream("ignored-by-replay-server")
+        "wrapped", hs7_open_collision_stream_sync("ignored-by-replay-server")
     )
 
     # Receive the same BAML-created spec as a handle through an `unknown`
     # declaration. Its realized type argument, not its display name, must
     # drive parse and direct-result decoding.
-    dynamic_spec = hs7_open_collision_spec("ignored-by-replay-server")
+    dynamic_spec = hs7_open_collision_spec_sync("ignored-by-replay-server")
     assert isinstance(dynamic_spec, BamlFunctionSpec)
 
     # Direct results and bound-spec parsing must make the same
@@ -142,24 +142,24 @@ def test_dynamic_runtime_stream_identity_and_flat_projection_parity():
     # independent of the fixture's intentionally SSE-only replay transport.
     raw_final = json.dumps(_EXPECTED_FINAL)
     dynamic_results = {
-        "direct": hs7_open_collision_value(raw_final),
-        "spec-parse": dynamic_spec.parse(raw_final),
+        "direct": hs7_open_collision_value_sync(raw_final),
+        "spec-parse": dynamic_spec.parse_sync(raw_final),
     }
     for label, value in dynamic_results.items():
         assert isinstance(value, BamlRuntimeValue)
         assert not isinstance(value, Hs7Collision)
-        data = value.to_data()
+        data = value.to_data_sync()
         print(f"{label}={value!r} data={data!r}")
         assert data == _EXPECTED_FINAL
-        _assert_repeated_pass_back(value, hs7_echo_runtime_value, data)
+        _assert_repeated_pass_back(value, hs7_echo_runtime_value_sync, data)
 
     # The flat generated shortcut selects the compiler-private `Fn@stream`
     # entry. A compiled token keeps this parity pin independent of Python
     # reflection while the BAML wrapper above covers live dynamic identity.
-    flat_stream = hs7_dynamic_extract_stream(
+    flat_stream = hs7_dynamic_extract_stream_sync(
         "ignored-by-replay-server", _types={"T": StreamingDoc}
     )
-    flat_final = flat_stream.final()
+    flat_final = flat_stream.final_sync()
     assert isinstance(flat_final, StreamingDoc)
     flat_data = flat_final.model_dump()
     print(f"flat final={flat_final!r} data={flat_data!r}")
@@ -170,10 +170,10 @@ def test_dynamic_runtime_stream_identity_and_flat_projection_parity():
 # SDK_PARITY_LINT(skip): validates Python's generated async-iterable stream surface
 @replay_server(recording_path="replay_extract_doc")
 async def test_dynamic_runtime_stream_is_an_elegant_async_iterable():
-    from baml_sdk.lorem import hs7_open_collision_stream_async
+    from baml_sdk.lorem import hs7_open_collision_stream
 
     # The runtime output type is built and bound entirely inside BAML. Python
     # receives an ordinary async iterable of opaque, identity-preserving values.
-    stream = await hs7_open_collision_stream_async("ignored-by-replay-server")
+    stream = await hs7_open_collision_stream("ignored-by-replay-server")
     final_data = await _drain_runtime_stream_async_iterable("async-for", stream)
     assert final_data == _EXPECTED_FINAL

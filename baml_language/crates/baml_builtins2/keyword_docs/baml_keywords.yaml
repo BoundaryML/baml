@@ -141,6 +141,74 @@ stream.must_exist:
   details: |
     A class field normally has a default the partial parse uses before the field arrives, `""` for a string. `@stream.must_exist` makes that default `never`, and a class with any `never` field has no partial parse, so nothing is produced for `Invoice` until `currency` is present. Reach for it when a partial object missing that field would mislead. Applies to class fields only. Takes no arguments, at most once per declaration.
 
+json:
+  summary: "An untyped JSON value, and the `@json` attributes that set a class's JSON shape."
+  syntax: |
+    class Network {
+      vpcId string @json.rename("vpc_id")
+      extra map<string, json> @json.flatten
+
+      @@json.omit_nulls
+    }
+  details: |
+    `json` is `baml.json.json`: `null`, a bool, a number, a string, a list or a map. Reach an arm with `match`, or decode it with `baml.json.to<T>`. To shape a class's JSON, use `@json.rename`, `@json.flatten`, `@json.fallback` and `@@json.omit_nulls`. Prefer them to a `baml.ToJson` or `baml.FromJson` override: they need no code, and generated `serde` impls follow them. A class can't have both.
+
+json.rename:
+  summary: "Sets a field's JSON key, or an enum variant's JSON string. Takes the key."
+  syntax: |
+    class Network {
+      vpcId string @json.rename("vpc_id")
+    }
+  details: |
+    The field reads from and writes to this key under every naming, in `baml.json` and in the Rust SDK's `serde` impls. `@alias` stays the name a model is shown. A field with both uses `@json.rename` as its JSON key, and a model's answer may use either. A class with a `baml.ToJson` or `baml.FromJson` override can't use `@json` attributes.
+
+json.flatten:
+  summary: "Makes a `map<string, json>` field hold every key no other field took. Takes no arguments."
+  syntax: |
+    class Config {
+      id string
+      extra map<string, json> @json.flatten
+    }
+  details: |
+    The field writes its keys next to the class's other fields. If the map holds a key a declared field also writes, the declared field wins and the map entry is skipped. A class has one `@json.flatten` or `@json.fallback` field.
+
+json.fallback:
+  summary: "Makes a class the union member for objects with a tag no other member has. Takes no arguments."
+  syntax: |
+    class NetworkOther {
+      type "UNKNOWN"
+      raw map<string, json> @json.fallback
+    }
+  details: |
+    The field holds the whole object, and writes it back and nothing else. The class's other fields must be literals: they name the union's tag, which every other member has too. An object with no tag is an error. Only the tag decides: once it picks a member, anything else wrong is an error rather than a fall through to the fallback. Members sharing a tag value are told apart by the next literal field. The compiler rejects a union with a member that has no tag, such as a map, or with two members no literal field tells apart.
+
+json.omit_nulls:
+  summary: "Leaves a class's optional fields out of its JSON while they hold `null`. Takes no arguments."
+  syntax: |
+    class Request {
+      name string
+      note string?
+
+      @@json.omit_nulls
+    }
+  details: |
+    Reading doesn't change: a missing optional field reads as `null`. It applies to the class's own fields, not to nested classes. A field is optional when its declared type has a `null` arm. A `json` field keeps its `null`, because there `null` is a value.
+
+trace.redact:
+  summary: "Keeps a class field's value, or every instance of a class, out of telemetry recordings. Takes no arguments."
+  syntax: |
+    class Account {
+        name: string,
+        api_key: string @trace.redact,
+    }
+
+    class Credentials {
+        token: string,
+        @@trace.redact
+    }
+  details: |
+    A recording keeps a marker saying the value was redacted in its place, wherever the value is captured: a function's inputs or output, a thrown error, or `log.*` data. `@trace.redact` applies to a class field, and `@@trace.redact` to a class, whose every instance is withheld whole, fields and all. Only recordings change: the program reads, prints and serializes the value as before. A value copied out of a redacted field into a plain string or another field is recorded as that copy. Takes no arguments, at most once per declaration.
+
 function:
   summary: "Declares a named callable with typed parameters and a return type."
   syntax: |
@@ -290,9 +358,9 @@ generator:
     [generator.python_client]
     output_type = "python/pydantic"
     output_dir = "."
-    naming_convention = "preserve-case"
+    naming_convention = "language"
   details: |
-    Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `.`; BAML creates a `baml_sdk` directory inside it for every generator.
+    Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `.`; the generated SDK is placed in a directory inside it, `baml_sdk` unless `package_name` says otherwise.
 
     Accepted `output_type` values:
 
@@ -307,7 +375,9 @@ generator:
     - `"cpp"` — C++17
     - `"csharp"` — C#
 
-    `naming_convention` accepts `"preserve-case"` or `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.
+    `naming_convention` accepts `"preserve-case"`, which spells generated functions, modules, fields, parameters and types exactly as in BAML, or `"language"`, which respells them in the target language's casing (`nextCursor` becomes `next_cursor` in Python and Rust). Names that already follow that casing keep their spelling, and the runtime always sees the BAML names. Python and Rust accept either; `baml generate add` writes `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.
+
+    `package_name` is optional and names the generated SDK; it defaults to `baml_sdk`. For Python it is a dotted import path such as `"my_app._generated"`: the SDK is written to `<output_dir>/my_app/_generated` and imported as `my_app._generated`, so `output_dir` is the import root. BAML creates missing parent directories but never writes or edits their `__init__.py`. For Go it is the root package's name (`[a-z][a-z0-9_]*`), and the last segment of `sdk_import_path` must be `<package_name>` (a bare `<package_name>` is the root of a module with that name). For Rust it is the crate name, used for both the Cargo package and the library you `use`. For TypeScript it is only the directory name. Swift, Java, C++ and C# do not accept `package_name` yet. With `package_name` set, `baml generate` refuses to write into an existing, non-empty directory that it did not create. `baml generate --output <PATH>` writes the SDK to exactly `<PATH>`, overriding both `output_dir` and the directory `package_name` selects; the check against writing into a directory BAML did not create still applies.
 
 test:
   summary: "Defines a named executable test using ordinary BAML expressions."
@@ -592,7 +662,7 @@ catch_all:
       _ => fallback_value,
     }
   details: |
-    `expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` (E0062) if a throw type is left unhandled, so a callee that gains a new error type breaks the build here instead of silently propagating it. In a chain, a `catch_all` protects the whole preceding expression, including earlier handler bodies, and must cover their residual errors and new arm-body errors. Its own arm-body errors can still propagate; a later catch can handle them. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
+    `expr catch_all (e) { ErrorType => handler, ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The block holds `pattern => handler` arms, not statements, so it needs at least one arm. The compiler reports a non-exhaustive `catch_all` (E0062) if a throw type is left unhandled, so a callee that gains a new error type breaks the build here instead of silently propagating it. In a chain, a `catch_all` protects the whole preceding expression, including earlier handler bodies, and must cover their residual errors and new arm-body errors. Its own arm-body errors can still propagate; a later catch can handle them. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
 
 catch_all_panics:
   summary: "Handles every error and every panic raised by a preceding expression."
@@ -624,11 +694,13 @@ cleanup:
       path: string
 
       function cleanup(self) -> void {
-        // release the underlying resource here
+        baml.fs.remove(self.path) catch_all (e) {
+          _ => null,
+        };
       }
     }
   details: |
-    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return (or `-> null`, the same type), and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch_all (e) { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
+    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return (or `-> null`, the same type), and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with a `catch_all` arm, as in `baml.fs.remove(self.path) catch_all (e) { _ => null };`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
 
 match:
   summary: "Pattern matching — branches based on the shape or type of a value."
@@ -963,8 +1035,8 @@ default:
 check:
   summary: "Explains how to ask the CLI to validate a project."
   syntax: |
-    baml check --project .
-    baml run --list --project .
+    baml check --project-dir .
+    baml run --list --project-dir .
   details: |
     `baml check` compiles the project and reports compiler errors without running anything — the most direct way to validate. Other commands (`baml run`, `baml run --list`, `baml fmt`, `baml test`) also load and check the project before their main work. Use `baml run --list` when you additionally want the compiled function signatures.
 
@@ -972,7 +1044,7 @@ playground:
   summary: "Serves the BAML playground web UI for a project and opens it in a browser."
   syntax: |
     baml playground                      # current project, first free port from 4265
-    baml playground --project ./my-app   # explicit project directory
+    baml playground --project-dir ./my-app   # explicit project directory
     baml playground --file ./one.baml    # standalone single file
     baml playground --port 4265          # pin the port (errors if taken)
     baml playground --no-open            # don't launch a browser (automatic in SSH/headless sessions)
@@ -1029,7 +1101,7 @@ baml_sdk:
     [generator.app]
     output_type = "python/pydantic"   # python/pydantic | python/pydantic/v1 | typescript/node
     output_dir  = "../app"
-    naming_convention = "preserve-case"   # preserve-case | language
+    naming_convention = "language"   # language | preserve-case
 
     # 2. generate the typed client
     baml generate
@@ -1051,17 +1123,21 @@ python:
     [generator.app]
     output_type = "python/pydantic"        # or "python/pydantic/v1"
     output_dir  = "../app"
-    naming_convention = "preserve-case"
+    naming_convention = "language"         # snake_case functions and fields
 
     baml generate                          # emits the `baml_sdk` package into output_dir
   details: |
     You install `baml_bridge` (the runtime); you import `baml_sdk` (the generated
     code). Functions become top-level Python functions; classes/enums become
-    Pydantic models:
+    Pydantic models. Each function is async; its blocking twin ends in `_sync`:
 
       import baml_sdk                       # initializes the BAML runtime
-      from baml_sdk import ClassifyTicket
-      ticket = ClassifyTicket("login is broken")   # typed in, typed Pydantic out
+      from baml_sdk import classify_ticket, classify_ticket_sync
+
+      async def main():
+          ticket = await classify_ticket("login is broken")   # typed in, typed Pydantic out
+
+      ticket = classify_ticket_sync("login is broken")        # same call, blocking
 
     See also: `baml describe baml_sdk`, `baml describe typescript`.
 
@@ -1130,19 +1206,19 @@ pattern:
     Full guide: `baml describe patterns`. Match-arm reference: `baml describe match`.
 
 query:
-  summary: "SQL over the project's local recordings: `baml query \"SELECT …\"`."
+  summary: "SQL over recordings: `baml local recordings query \"SELECT …\"`, or `baml cloud recordings query` for Boundary Cloud."
   syntax: |
-    baml query "SELECT process_id, status, command, last_updated FROM processes"
-    baml query "SELECT span_name, status, duration FROM spans
-                WHERE span_type = 'future' AND parent_span_id IS NULL
-                ORDER BY start_time DESC LIMIT 20"
-    baml query "SELECT function_name, sum(invocation_count) calls, sum(self_time) self_ns
-                FROM profiler GROUP BY function_name ORDER BY self_ns DESC LIMIT 10"
-    baml query "SELECT span_id, input_args['customer']['age'] AS age, output_value
-                FROM spans WHERE input_args['customer']['age'] >= 30" --format jsonl
-    baml query "SELECT span_name, total_usage[0]['model'], total_usage[0]['input_tokens']
-                FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL"
-    baml query --schema --table spans
+    baml local recordings query "SELECT process_id, status, command, last_updated FROM processes"
+    baml local recordings query "SELECT span_name, status, duration FROM spans
+                                 WHERE span_type = 'future' AND parent_span_id IS NULL
+                                 ORDER BY start_time DESC LIMIT 20"
+    baml local recordings query "SELECT function_name, sum(invocation_count) calls, sum(self_time) self_ns
+                                 FROM profiler GROUP BY function_name ORDER BY self_ns DESC LIMIT 10"
+    baml local recordings query "SELECT span_id, input_args['customer']['age'] AS age, output_value
+                                 FROM spans WHERE input_args['customer']['age'] >= 30" --output-format jsonl
+    baml local recordings query "SELECT span_name, total_usage[0]['model'], total_usage[0]['input_tokens']
+                                 FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL"
+    baml local recordings schema spans
   details: |
     Every `baml run`/`baml test` records to `.baml/btel`; the first query
     builds `.baml/btel/query.sqlite` and later queries apply only new files.
@@ -1158,6 +1234,7 @@ query:
     `input_args['customer']['age'] >= 30`,
     `input_args = baml_value_json('{"x":1}')` — decoded on demand. `WITH
     RECURSIVE` walks span trees through `parent_span_id`. Discovery:
-    `--schema`, `--explain`. Output: `--format table|json|jsonl` (jsonl ends
-    with an outcome frame). Exit codes: 0 complete, 1 evidence-incomplete,
-    2 invalid SQL, 3 budget, 4 cancelled, 5 index/internal.
+    `baml local recordings schema [TABLE]`. Output: `--output-format
+    text|json|jsonl` (jsonl ends with an outcome frame). `baml cloud
+    recordings query` takes the same arguments against Boundary Cloud. Exit codes: 0 rows returned (the outcome's
+    `status` says whether they are complete), 1 failure, 2 usage.

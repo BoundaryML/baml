@@ -1,0 +1,7 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    let g = foo<int>;
+    g(5)
+}

@@ -1,9 +1,13 @@
-use std::{fmt::Write as _, io::Write as _};
+use std::{fmt::Write as _, io};
 
 use anyhow::{Result, anyhow};
 use clap::Args;
+use serde::Serialize;
 
-use crate::{ExitCode, commands::RuntimeCli};
+use crate::{
+    commands::RuntimeCli,
+    output::{Command, CommandContext, Outcome, Report, Style},
+};
 
 const DETAILED_HELP_TEMPLATE: &str = "\
 {about-with-newline}
@@ -25,21 +29,43 @@ pub(crate) struct HelpArgs {
     command: Vec<String>,
 }
 
-impl HelpArgs {
-    pub(crate) fn run(&self, color: bool) -> Result<ExitCode> {
-        let rendered = render(&self.command)?;
-        let plain = rendered.help.to_string();
-        let ansi = rendered.help.ansi().to_string();
-        let output = if color { ansi } else { plain };
+/// Rendered help. JSON is the plain text as one string.
+#[derive(Debug, Serialize)]
+#[serde(transparent)]
+pub(crate) struct HelpText {
+    plain: String,
+    #[serde(skip)]
+    ansi: String,
+}
 
-        // Always write help directly. Interactive pagers can trap coding agents
-        // that run commands through a pseudo-terminal and wait for completion.
-        let mut stdout = std::io::stdout().lock();
-        stdout.write_all(output.as_bytes())?;
-        if !output.ends_with('\n') {
-            stdout.write_all(b"\n")?;
+impl Report for HelpText {
+    // Always written directly. Interactive pagers can trap coding agents that
+    // run commands through a pseudo-terminal and wait for completion.
+    fn text(&self, out: &mut dyn io::Write, style: &Style) -> io::Result<()> {
+        let help = if style.enabled() {
+            &self.ansi
+        } else {
+            &self.plain
+        };
+        out.write_all(help.as_bytes())?;
+        if !help.ends_with('\n') {
+            out.write_all(b"\n")?;
         }
-        Ok(ExitCode::Success)
+        Ok(())
+    }
+}
+
+impl Command for HelpArgs {
+    type Output = HelpText;
+
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<HelpText>> {
+        // A path that names no command is a mistake in the invocation.
+        let rendered =
+            render(&self.command).map_err(|error| crate::UsageError::new(error.to_string()))?;
+        Ok(Outcome::ok(HelpText {
+            plain: rendered.help.to_string(),
+            ansi: rendered.help.ansi().to_string(),
+        }))
     }
 }
 
@@ -229,9 +255,9 @@ mod tests {
 
     #[test]
     fn unknown_nested_command_reports_nearest_choices() {
-        let error = render(&["auth".to_string(), "missing".to_string()]).unwrap_err();
-        let message = error.to_string();
-        assert!(message.contains("no command `missing` for `baml auth`"));
+        let query = ["cloud", "auth", "missing"].map(str::to_string);
+        let message = render(&query).unwrap_err().to_string();
+        assert!(message.contains("no command `missing` for `baml cloud auth`"));
         assert!(message.contains("status"));
         assert!(message.contains("logout"));
     }

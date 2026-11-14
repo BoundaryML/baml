@@ -38,11 +38,12 @@ def common_python(tmp_path_factory):
         output = run(
             [
                 str(CLI),
+                "local",
+                "recordings",
                 "query",
-                "--local",
-                "--from",
+                "--project-dir",
                 str(home / "config"),
-                "--format",
+                "--output-format",
                 "json",
                 sql,
             ],
@@ -50,7 +51,6 @@ def common_python(tmp_path_factory):
             env,
             home,
             label,
-            success_codes=(1,) if truncated else (0,),
         )
         result = json.loads(output)
         assert result["outcome"]["status"] == (
@@ -207,11 +207,12 @@ def common_typescript(tmp_path_factory):
         output = run(
             [
                 str(CLI),
+                "local",
+                "recordings",
                 "query",
-                "--local",
-                "--from",
+                "--project-dir",
                 str(home / "config"),
-                "--format",
+                "--output-format",
                 "json",
                 sql,
             ],
@@ -219,7 +220,6 @@ def common_typescript(tmp_path_factory):
             env,
             home,
             label,
-            success_codes=(1,) if truncated else (0,),
         )
         result = json.loads(output)
         assert result["outcome"]["status"] == (

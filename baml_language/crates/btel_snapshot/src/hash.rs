@@ -1,4 +1,6 @@
-//! Snapshot hash format 5: XXH3-128, seed zero, little-endian digest bytes.
+//! Snapshot hash formats 5 and 6: XXH3-128, seed zero, little-endian digest
+//! bytes. Format 6 differs only in its blob prefix and its redacted values,
+//! which hash as their tag, body length and raw body.
 //!
 //! Leaf digests depend only on their content and are computed once, at
 //! capture: a string's is its content hash, which the string caches; bigints,
@@ -81,13 +83,14 @@ pub(crate) trait Absorb {
 }
 
 /// What a hash's input starts with, before its domain byte. Leaf encodings
-/// are unchanged since v3; only blob identities change in v4 and v5. A
+/// are unchanged since v3; only blob identities change in v4, v5 and v6. A
 /// definition group's identity follows the definition encoding instead, so
 /// a blob format version that leaves definitions alone keeps their IDs.
 fn prefix(domain: HashDomain, version: u32) -> &'static [u8] {
     match domain {
         HashDomain::Definitions => DEFINITION_PREFIX,
-        HashDomain::Blob if version >= 5 => b"baml.snapshot.xxh3-128.v5\0",
+        HashDomain::Blob if version >= 6 => b"baml.snapshot.xxh3-128.v6\0",
+        HashDomain::Blob if version == 5 => b"baml.snapshot.xxh3-128.v5\0",
         HashDomain::Blob if version == 4 => b"baml.snapshot.xxh3-128.v4\0",
         _ => LEAF_PREFIX,
     }

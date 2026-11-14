@@ -1,0 +1,6 @@
+function f() -> string[] {
+  let out: string[] = [];
+  defer { out.push("x") }   // THIS comment on a defer line
+  out.push("body");         // this one on a normal line
+  out
+}

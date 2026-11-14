@@ -734,7 +734,7 @@ impl ProjectDatabase {
         let reserved = if kind == SourceRootKind::Stdlib {
             matches!(name, "root" | "env")
         } else {
-            baml_builtins2::reserved_edge_names().contains(&name)
+            baml_builtins2::RESERVED_EDGE_NAMES.contains(&name)
         };
         if reserved {
             return Err(SourceRootError::ReservedDependencyName {
@@ -1428,7 +1428,7 @@ mod tests {
                 .all(|root| root.kind(&db) == SourceRootKind::Stdlib && *root < workspace)
         );
         // One stdlib root per builtin package, holding all of its files.
-        for name in baml_builtins2::stdlib_package_names() {
+        for name in baml_builtins2::STDLIB_PACKAGE_NAMES {
             let root = db
                 .source_root_for_path(Path::new(&format!("<builtin>/{name}")))
                 .expect("stdlib root");
@@ -1503,16 +1503,19 @@ mod tests {
     /// own manifests declare: a stdlib package that reaches a sibling it does
     /// not list, or lists a sibling that does not exist, fails here with the
     /// offending file and message rather than deep inside runtime lowering.
+    /// Warnings count too: stdlib diagnostics surface in every user's
+    /// `baml check`, so one stray warning here is noise for everyone (#5075).
     #[test]
     fn stdlib_compiles_cleanly_under_its_declared_graph() {
         let mut db = ProjectDatabase::new();
         db.ensure_stdlib_sources();
-        let errors: Vec<String> = crate::check::collect_diagnostics(&db)
+        let problems: Vec<String> = crate::check::collect_diagnostics(&db)
             .into_iter()
             .filter(|diagnostic| {
                 matches!(
                     diagnostic.severity,
                     baml_compiler_diagnostics::Severity::Error
+                        | baml_compiler_diagnostics::Severity::Warning
                 )
             })
             .map(|diagnostic| {
@@ -1525,9 +1528,9 @@ mod tests {
             })
             .collect();
         assert!(
-            errors.is_empty(),
-            "the embedded stdlib has errors under its declared graph:\n{}",
-            errors.join("\n")
+            problems.is_empty(),
+            "the embedded stdlib has errors or warnings under its declared graph:\n{}",
+            problems.join("\n")
         );
     }
 
@@ -1563,7 +1566,7 @@ mod tests {
             .into_iter()
             .map(baml_base::LangPackage::manifest_name)
             .collect();
-        let mut shipped = baml_builtins2::stdlib_package_names().to_vec();
+        let mut shipped = baml_builtins2::STDLIB_PACKAGE_NAMES.to_vec();
         known.sort_unstable();
         shipped.sort_unstable();
         assert_eq!(known, shipped);

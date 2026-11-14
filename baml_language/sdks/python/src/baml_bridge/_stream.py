@@ -2,7 +2,7 @@
 
 Holds a `BamlPyHandle` whose `HANDLE_TABLE` row is a
 `CffiHandleTableEntry::Adt(BexExternalAdt::TaggedHeapHandle { ty, heap_handle })`.
-`next` / `final` (sync + async) round-trip through `BamlRuntime.call_function`
+`next` / `final` (async, plus blocking `next_sync` / `final_sync`) round-trip through `BamlRuntime.call_function`
 exactly like any codegen-emitted instance method — `encode_call_args`
 emits `handle_value(ADT_TAGGED_HEAP_HANDLE)` for `{"self": self}`, the
 engine substitutes `T` / `S`, and `decode_call_result` produces the
@@ -75,13 +75,13 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
     async def __anext__(self) -> TYield:
         """Async-iteration sugar over the sentinel protocol: yields each
         non-null partial, translating the `ai.stream.Done` terminal marker
-        into `StopAsyncIteration`. `final()` / `final_async()` remain the
+        into `StopAsyncIteration`. `final()` / `final_sync()` remain the
         way to obtain the settled value after the loop."""
         from .typemap import get_type_map
 
         done_cls = get_type_map().get_class(_DONE_FQN)
         while True:
-            item = await self.next_async()
+            item = await self.next()
             if isinstance(item, done_cls):
                 raise StopAsyncIteration
             if item is not None:
@@ -129,7 +129,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
 
         return isinstance(value, get_type_map().get_class(_DONE_FQN))
 
-    def next(self, *, _baml: Any = None) -> TNext:
+    def next_sync(self, *, _baml: Any = None) -> TNext:
         with self._scope():
             try:
                 result = self._call_sync("ai.stream.Stream.next", _baml=_baml)
@@ -138,7 +138,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
                     # the final result/error for final(), without changing the
                     # sentinel protocol or raising a final parse error at EOF.
                     try:
-                        self.final(_baml=_baml)
+                        self.final_sync(_baml=_baml)
                     except Exception:
                         if self._final_error is None:
                             raise
@@ -147,13 +147,13 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
                 self._failed(error)
                 raise
 
-    async def next_async(self, *, _baml: Any = None) -> TNext:
+    async def next(self, *, _baml: Any = None) -> TNext:
         with self._scope():
             try:
                 result = await self._call_async("ai.stream.Stream.next", _baml=_baml)
                 if self._execution is not None and self._done(result):
                     try:
-                        await self.final_async(_baml=_baml)
+                        await self.final(_baml=_baml)
                     except Exception:
                         if self._final_error is None:
                             raise
@@ -178,7 +178,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
         ):
             self._final_error, self._settled = error, True
 
-    def final(self, *, _baml: Any = None) -> TFinal:
+    def final_sync(self, *, _baml: Any = None) -> TFinal:
         if self._settled:
             return self._cached_final()
         with self._scope():
@@ -192,7 +192,7 @@ class BamlStream(Generic[TNext, TYield, TFinal]):
                 self._failed(error)
                 raise
 
-    async def final_async(self, *, _baml: Any = None) -> TFinal:
+    async def final(self, *, _baml: Any = None) -> TFinal:
         if self._settled:
             return self._cached_final()
         with self._scope():

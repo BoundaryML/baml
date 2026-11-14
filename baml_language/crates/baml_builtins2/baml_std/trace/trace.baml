@@ -8,6 +8,14 @@ enum Mode {
 /// Per-invocation capture requests: true requests capture; false and null add
 /// no request. Applicable function-policy requests still capture; false is not
 /// a privacy veto. Requests do not propagate to descendant invocations.
+/// By default, the innermost span a thrown error or a panic escapes records
+/// that error, unless it passes `error = false`; the spans the error then
+/// unwinds through record only that they failed. `error = true` records it at
+/// that span too. An LLM function's default policy requests its error, so
+/// `error = false` does not leave it out. A cancelled span records only that
+/// it was cancelled.
+/// `http_bodies = false` in `baml.toml` overrides every option here: no error
+/// value is recorded, since an error can quote a response body.
 class Capture {
     inputs: bool?,
     output: bool?,

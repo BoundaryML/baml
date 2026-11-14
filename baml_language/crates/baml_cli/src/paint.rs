@@ -137,9 +137,7 @@ fn highlight_str(text: &str) -> String {
     styled_from_tokens(text, 0, &toks)
 }
 
-fn classify_fragment(
-    text: &str,
-) -> Result<Vec<SemanticToken>, Vec<baml_db::baml_compiler_diagnostics::ParseError>> {
+fn classify_fragment(text: &str) -> Result<Vec<SemanticToken>, Vec<baml_parser::ParseError>> {
     thread_local! {
         static SCRATCH_DB: RefCell<(ProjectDatabase, baml_db::SourceRoot)> = RefCell::new({
             let mut db = ProjectDatabase::new();
@@ -157,9 +155,9 @@ fn classify_fragment(
             Path::new("/baml-fragment-scratch/fragment.baml"),
             text,
         );
-        let errors = baml_db::baml_compiler_parser::parse_errors(db, file);
+        let errors = baml_parser::typed_parse_errors(db, file);
         if !errors.is_empty() {
-            return Err(errors);
+            return Err(errors.to_vec());
         }
         let mut toks = semantic_tokens(db, file).clone();
         toks.sort_by_key(|t| t.range.start());
@@ -327,7 +325,7 @@ fn file_uri(path: &Path) -> String {
 /// Owns the color decision for one output stream and produces colored-or-plain
 /// text accordingly.
 ///
-/// Construct [`Painter::stdout`] / [`Painter::stderr`] so the decision matches
+/// Construct stdout painters through the output context and [`Painter::stderr`] so the decision matches
 /// where the text is written; call sites then never branch on color and the
 /// helpers never have to guess which stream they're feeding (which previously
 /// risked leaking codes into a redirected sibling stream).
@@ -337,22 +335,49 @@ pub struct Painter {
 }
 
 impl Painter {
-    /// Painter for stdout-bound output.
-    pub fn stdout() -> Self {
-        let policy = crate::output::policy().stdout;
-        Self {
-            color: policy.color,
-            hyperlinks: policy.hyperlinks,
-        }
+    /// Built by the output module only: stdout painters come from
+    /// [`crate::output::Context`], stderr ones from
+    /// [`crate::output::stderr_painter`].
+    pub(crate) fn new(color: bool, hyperlinks: bool) -> Self {
+        Self { color, hyperlinks }
     }
 
     /// Painter for stderr-bound output.
     pub fn stderr() -> Self {
-        let policy = crate::output::policy().stderr;
-        Self {
-            color: policy.color,
-            hyperlinks: policy.hyperlinks,
-        }
+        crate::output::stderr_painter()
+    }
+
+    fn apply(&self, style: Style, text: impl std::fmt::Display) -> String {
+        style.force_styling(self.color).apply_to(text).to_string()
+    }
+
+    /// A section header, in the brand accent.
+    pub fn accent(&self, text: impl std::fmt::Display) -> String {
+        self.apply(crate::reporter::accent_style(), text)
+    }
+
+    /// Secondary text: hints, locations, column headers.
+    pub fn dim(&self, text: impl std::fmt::Display) -> String {
+        self.apply(crate::reporter::secondary_style(), text)
+    }
+
+    pub fn bold(&self, text: impl std::fmt::Display) -> String {
+        self.apply(Style::new().bold(), text)
+    }
+
+    /// A state that is on or healthy.
+    pub fn good(&self, text: impl std::fmt::Display) -> String {
+        self.apply(Style::new().green().bold(), text)
+    }
+
+    /// A state that is off or failing.
+    pub fn bad(&self, text: impl std::fmt::Display) -> String {
+        self.apply(Style::new().red().bold(), text)
+    }
+
+    /// A URL the reader may want to open.
+    pub fn url(&self, text: impl std::fmt::Display) -> String {
+        self.apply(Style::new().cyan(), text)
     }
 
     /// Whether this stream renders color. Also gates the verbatim-vs-cleaned body

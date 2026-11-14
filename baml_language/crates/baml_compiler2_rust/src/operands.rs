@@ -35,6 +35,7 @@ fn walk_rvalue_operands<'a, 'db>(value: &'a Rvalue<'db>, f: &mut impl FnMut(&'a 
             f(right);
         }
         Rvalue::Array(_, elements)
+        | Rvalue::ConcatStrings(elements)
         | Rvalue::Aggregate {
             fields: elements, ..
         }

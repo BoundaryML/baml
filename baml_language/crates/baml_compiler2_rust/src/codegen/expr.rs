@@ -28,9 +28,15 @@ impl<'db> Generator<'_, 'db> {
                 return self.unary(block, *op, &operand);
             }
             Rvalue::Len(place) => {
+                let needs = self.analysis.escape.object_needs(place);
                 let container = self.load(block, place)?;
                 let container = self.value_arg(&container);
-                self.fallible(block, &format!("vm.container_len({container})"))?
+                let len = self.by_locality(
+                    needs,
+                    &format!("vm.container_len_local({container})"),
+                    &format!("vm.container_len({container})"),
+                );
+                self.fallible(block, &len)?
             }
             Rvalue::Discriminant(place) => {
                 let value = self.load(block, place)?;
@@ -62,6 +68,13 @@ impl<'db> Generator<'_, 'db> {
                 let value = self.value_operand(block, operand)?;
                 let code = self.type_test(&format!("({value})"), test)?;
                 return Ok(Expr::new(code, Repr::Bool));
+            }
+            Rvalue::ConcatStrings(parts) => {
+                let values = self.arg_values(block, parts)?;
+                self.fallible(
+                    block,
+                    &format!("vm.concat_strings(&[{}])", values.join(", ")),
+                )?
             }
             Rvalue::Array(template, elements) => {
                 let element_ty = self.realized_type(template)?;

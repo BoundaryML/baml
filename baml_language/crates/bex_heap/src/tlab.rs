@@ -764,6 +764,11 @@ mod tests {
                     stream_done: false,
                     must_exist: false,
                     runtime_type: None,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
+                    json_omit_null: false,
+                    redact: false,
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
@@ -777,6 +782,11 @@ mod tests {
                     stream_done: false,
                     must_exist: false,
                     runtime_type: None,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
+                    json_omit_null: false,
+                    redact: false,
                 },
             ],
             description: None,
@@ -791,6 +801,7 @@ mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
 
         // Allocate an instance of that class
@@ -828,6 +839,7 @@ mod tests {
                     docstring: None,
                     other: Default::default(),
                     skip: false,
+                    json_rename: None,
                 },
                 bex_vm_types::EnumVariant {
                     name: "Green".to_string(),
@@ -836,6 +848,7 @@ mod tests {
                     docstring: None,
                     other: Default::default(),
                     skip: false,
+                    json_rename: None,
                 },
                 bex_vm_types::EnumVariant {
                     name: "Blue".to_string(),
@@ -844,6 +857,7 @@ mod tests {
                     docstring: None,
                     other: Default::default(),
                     skip: false,
+                    json_rename: None,
                 },
             ],
             description: None,

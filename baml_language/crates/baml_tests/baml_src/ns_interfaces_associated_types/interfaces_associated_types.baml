@@ -942,3 +942,197 @@ function ncp_probe(h: NcpHolder) -> string throws never {
 test "self_projection_survives_name_colliding_own_generic" {
     assert.equal(ncp_probe(NcpHolder {}), "assoc|other")
 }
+
+// A union whose arms bind an associated type differently still dispatches.
+// Associated types are outputs of the impl each arm selects, so they take no
+// part in finding the interface the arms share. Regression (#5626): MIR
+// derived the shared interface again, keyed on each arm's realized view,
+// found none when `Out` differed, and emitted a direct call to the bodyless
+// interface method.
+
+interface UadNamed {
+    type Out;
+    function name(self) -> string throws never;
+}
+
+class UadText {
+    implements UadNamed {
+        type Out = string;
+        function name(self) -> string {
+            "text"
+        }
+    }
+}
+
+class UadCount {
+    implements UadNamed {
+        type Out = int;
+        function name(self) -> string {
+            "count"
+        }
+    }
+}
+
+class UadHolder {
+    item: UadText | UadCount,
+}
+
+function uad_pick(count: bool) -> UadText | UadCount throws never {
+    if (count) {
+        UadCount {}
+    } else {
+        UadText {}
+    }
+}
+
+test "union_arms_with_different_associated_types_dispatch" {
+    let x = uad_pick(true);
+    assert.equal(x.name(), "count");
+    assert.equal(uad_pick(false).name(), "text");
+    let holder = UadHolder { item: UadCount {} };
+    assert.equal(holder.item.name(), "count");
+    let bound = x.name;
+    assert.equal(bound(), "count")
+}
+
+// A union member is typed per arm. `Self.Out` is whatever the arm holding the
+// value binds, so a method's return is the union of what the arms return, and
+// a parameter needs one type every arm agrees on. Regression (#5627): the
+// call was typed with the opaque `(A | B as I).Out`, one type for every value
+// of the union, so no result was usable and one arm's `Out` passed as
+// another's.
+
+interface UpaSlot {
+    type Out;
+    function get(self) -> Self.Out throws never;
+    function show(self, p: Self.Out) -> string throws never;
+}
+
+class UpaText {
+    implements UpaSlot {
+        type Out = string;
+        function get(self) -> string {
+            "text"
+        }
+        function show(self, p: string) -> string {
+            `text:${p}`
+        }
+    }
+}
+
+class UpaCount {
+    implements UpaSlot {
+        type Out = int;
+        function get(self) -> int {
+            7
+        }
+        function show(self, p: int) -> string {
+            `count:${p}`
+        }
+    }
+}
+
+class UpaLabel {
+    implements UpaSlot {
+        type Out = string;
+        function get(self) -> string {
+            "label"
+        }
+        function show(self, p: string) -> string {
+            `label:${p}`
+        }
+    }
+}
+
+function upa_get(x: UpaText | UpaCount) -> string | int throws never {
+    x.get()
+}
+
+function upa_show(x: UpaText | UpaLabel, y: UpaText | UpaLabel) -> string throws never {
+    x.show(y.get())
+}
+
+test "union_member_is_typed_per_arm" {
+    assert.equal(upa_get(UpaText {}), "text");
+    assert.equal(upa_get(UpaCount {}), 7);
+    assert.equal(upa_show(UpaText {}, UpaLabel {}), "text:label");
+    assert.equal(upa_show(UpaLabel {}, UpaText {}), "label:text")
+}
+
+// Per-arm typing holds where the signature is finished at the call site (a
+// method with its own generics), for a bound method value, and when the arms
+// agree only by equivalence (an alias of `string` and `string`).
+
+type UgaStr = string;
+
+interface UgaSlot {
+    type Out;
+    function get(self) -> Self.Out throws never;
+    function show(self, p: Self.Out) -> string throws never;
+    function wrap<T>(self, t: T) -> Self.Out throws never {
+        self.get()
+    }
+}
+
+class UgaText {
+    implements UgaSlot {
+        type Out = string;
+        function get(self) -> string {
+            "text"
+        }
+        function show(self, p: string) -> string {
+            `text:${p}`
+        }
+    }
+}
+
+class UgaLabel {
+    implements UgaSlot {
+        type Out = UgaStr;
+        function get(self) -> UgaStr {
+            "label"
+        }
+        function show(self, p: UgaStr) -> string {
+            `label:${p}`
+        }
+    }
+}
+
+class UgaCount {
+    implements UgaSlot {
+        type Out = int;
+        function get(self) -> int {
+            7
+        }
+        function show(self, p: int) -> string {
+            `count:${p}`
+        }
+    }
+}
+
+function uga_text_or_label(label: bool) -> UgaText | UgaLabel throws never {
+    if (label) {
+        UgaLabel {}
+    } else {
+        UgaText {}
+    }
+}
+
+function uga_text_or_count(count: bool) -> UgaText | UgaCount throws never {
+    if (count) {
+        UgaCount {}
+    } else {
+        UgaText {}
+    }
+}
+
+test "union_member_per_arm_generic_method_value_and_alias" {
+    let x = uga_text_or_label(true);
+    assert.equal(x.show("s"), "label:s");
+    assert.equal(x.wrap<int>(2), "label");
+    let y = uga_text_or_count(true);
+    let wrapped: string | int = y.wrap(true);
+    assert.equal(wrapped, 7);
+    let get = y.get;
+    assert.equal(get(), 7)
+}

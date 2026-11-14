@@ -2065,7 +2065,9 @@ fn aggregate_stack_prefix_operands<'a, 'db>(
 ) -> Option<Vec<&'a Operand<'db>>> {
     match rvalue {
         Rvalue::BinaryOp { left, right, .. } => Some(vec![left, right]),
-        Rvalue::Array(_, elements) => Some(elements.iter().collect()),
+        Rvalue::Array(_, elements) | Rvalue::ConcatStrings(elements) => {
+            Some(elements.iter().collect())
+        }
         // Map lowering emits all values first, then all keys, because the VM
         // consumes maps as `[v1, v2, ..., k1, k2, ...]`. A carried key would sit
         // below the emitted values, so only value positions are stack-carryable.

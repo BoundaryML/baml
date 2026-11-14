@@ -36,66 +36,41 @@ Arguments:
   [NAME]
           Symbol, namespace, package, or keyword. Omit to list project symbols
 
-Options:
-      --symbols
-          Deprecated alias for invoking `baml describe` without a name
-
 Compiler options:
   -F, --features <FEATURES>
           Enable compiler features; repeatable or comma-separated [possible values: beta,
           display_all_warnings]
 
 Output options:
-      --budget <BUDGET>
-          Soft maximum number of output lines
-
-          [default: 30]
-
-      --json
-          Output results as JSON
-
       --search
           Search names *and* docstrings for NAME, instead of resolving it.
 
           `describe` answers "what is this called"; `--search` answers "what does this", which is
           the question you have when you know the job and not the name: `baml describe --search
-          'read a file'`. Matching is on whole words — of names and of docstrings — best first, so
-          it finds a symbol whose documentation uses your words even when its name does not.
+          'read a file'`. Matching is on whole words of names and of docstrings, best first, so it
+          finds a symbol whose documentation uses your words even when its name does not.
 
       --limit <N>
-          Most results to return from `--search`. At least 1.
+          How much text to show: search results, listing rows, or lines of one description. Defaults
+          to 30, except listings, which are complete. `--output-format json` is never cut.
 
-          Bounded below because `--limit 0` truncated a full result set to nothing and then reported
-          "no symbol matches", which is a different answer.
-
-          [default: 30]
-
-      --export
-          Export a whole package's surface as one versioned JSON document (NAME must be a package:
-          `root`, `baml`, …). Cross-package references are self-describing ids like
-          `T:baml.time.Duration` — the prefix is the kind (`T:` type, `V:` value, `M:` method, `F:`
-          field, `E:` variant, `A:` associated type; BAML's type and value namespaces are distinct,
-          so bare paths would be ambiguous). Export the referenced package for a foreign id's full
-          record. Filter with jq, e.g. `… --export | jq '.items[] | select(.namespace == ["json"])'`
+          With `--output-format json`, a package name (`root`, `baml`) exports the whole package
+          surface as one versioned document. Cross-package references are self-describing ids like
+          `T:baml.time.Duration`: the prefix is the kind (`T:` type, `V:` value, `M:` method, `F:`
+          field, `E:` variant, `A:` associated type).
 
 Global options:
-  -q, --quiet...
-          Suppress nonessential output
+      --project-dir <PATH>
+          Discover the BAML project from this path
 
-  -v, --verbose...
-          Increase diagnostic verbosity. Repeatable
+  -q, --quiet
+          Print no status or progress on stderr
+
+      --output-format <FORMAT>
+          What goes to stdout [default: text] [possible values: text, json, jsonl]
 
       --color <WHEN>
           Control ANSI colors [possible values: auto, always, never]
-
-      --no-progress
-          Disable progress output
-
-      --directory <PATH>
-          Change to this directory before running the command
-
-      --project <PATH>
-          Discover the BAML project from this path
 
       --output-preset <PRESET>
           Select output defaults [default: auto] [possible values: auto, human, agent]
@@ -105,10 +80,6 @@ Global options:
 
       --diagnostic-format <FORMAT>
           Select the diagnostic format [possible values: human, agent, concise]
-
-      --agent-skill-check <MODE>
-          Control BAML agent skill validation [default: auto] [possible values: auto, require, warn,
-          off]
 
   -h, --help
           Display concise help for this command

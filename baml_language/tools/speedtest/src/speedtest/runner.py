@@ -60,12 +60,17 @@ def build_baml(cli, workload, stage):
     project = stage / workload["id"].replace("/", "__")
     src = project / "baml_src"
     src.mkdir(parents=True)
-    (project / "baml.toml").write_text('[package]\nname = "speedtest_workload"\n')
+    # A packed executable records at the level baked in at pack time unless
+    # baml.toml lets it read BAML_TELEMETRY, which is what each BAML row sets.
+    (project / "baml.toml").write_text(
+        '[package]\nname = "speedtest_workload"\n\n'
+        '[pack.env_var_names]\nBAML_TELEMETRY = "BAML_TELEMETRY"\n'
+    )
     shutil.copy(workload["files"]["baml"], src / "main.baml")
     shutil.copy(SETUP_DRIVER if _has_setup(workload["baml"]) else DRIVER, src / "speedtest_driver.baml")
     out = project / "workload"
     start = time.perf_counter()
-    r = subprocess.run([str(cli), "--no-progress", "--color", "never", "pack", "speedtest_driver", "-o", str(out)],
+    r = subprocess.run([str(cli), "--color", "never", "pack", "speedtest_driver", "-o", str(out)],
                        cwd=project, capture_output=True, text=True, env=_cli_env(), stdin=subprocess.DEVNULL)
     seconds = time.perf_counter() - start
     if r.returncode != 0 or not out.exists():

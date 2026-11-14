@@ -9,7 +9,7 @@ Syntax:
   [generator.app]
   output_type = "python/pydantic"   # python/pydantic | python/pydantic/v1 | typescript/node
   output_dir  = "../app"
-  naming_convention = "preserve-case"   # preserve-case | language
+  naming_convention = "language"   # language | preserve-case
   
   # 2. generate the typed client
   baml generate

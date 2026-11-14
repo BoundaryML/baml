@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn object_final_methods_are_escaped_in_method_position() {
-        // `baml.sys.Process.wait` — `wait()` cannot override the final
+        // `baml.sys.Subprocess.wait` — `wait()` cannot override the final
         // `java.lang.Object.wait()`, and a static `wait()` cannot hide it.
         assert_eq!(java_method_identifier("wait"), "wait$");
         assert_eq!(java_method_identifier("notify"), "notify$");

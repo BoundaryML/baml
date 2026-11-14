@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × invalid syntax
+   ╭─[main.baml:4:3]
+ 4 │ ╭─▶   test "inside function" {
+ 5 │ │       assert.is_true(true)
+ 6 │ ├─▶   }
+   · ╰──── test blocks are only allowed at the top level or inside a testset
+   ╰────
+
+  [hir] E0010
+
+  × invalid syntax
+    ╭─[main.baml:10:3]
+ 10 │ ╭─▶   testset "inside function set" {
+ 11 │ │       test "nested" {
+ 12 │ │         assert.is_true(true)
+ 13 │ │       }
+ 14 │ ├─▶   }
+    · ╰──── testset blocks are only allowed at the top level or inside a testset
+    ╰────

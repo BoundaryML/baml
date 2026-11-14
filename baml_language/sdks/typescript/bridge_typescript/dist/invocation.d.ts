@@ -16,8 +16,8 @@ export interface InvokeOptions {
     $baml?: InvocationOptions | null;
     $types?: Record<string, BamlType | BamlTypeToken> | null;
 }
-export declare function invoke(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options?: InvokeOptions): unknown;
-export declare function invokeAsync(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options?: InvokeOptions): Promise<unknown>;
+export declare function invoke(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options?: InvokeOptions): Promise<unknown>;
+export declare function invokeSync(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options?: InvokeOptions): unknown;
 /** Link a native source to one call; retiring the waiter removes the listener. */
 export declare function attachSignal(signal: AbortSignal | null | undefined, callId: bigint): () => void;
 //# sourceMappingURL=invocation.d.ts.map

@@ -1,0 +1,116 @@
+# Sync the public GitHub Actions to their read-only mirror repos.
+#
+# Actions are edited in packaging/github-actions and consumed from the mirrors,
+# because a runner downloads the entire repository of every action it uses and
+# GitHub Marketplace only lists an action at the root of its own repository.
+# The mirrors must never be edited by hand:
+#
+#   packaging/github-actions/setup-baml  -> BoundaryML/setup-baml
+#   packaging/github-actions/baml-action -> BoundaryML/baml-action
+#
+# Each mirror also gets a copy of this repository's root LICENSE.
+#
+# Every content change moves the mirror's major tag, so a merge to canary
+# reaches `@v1` consumers as soon as its tests pass. A breaking change needs a
+# new `MAJOR` below.
+#
+# baml-action uses setup-baml. Here it uses the setup-baml next to it, so a PR
+# tests both together. The published baml-action pins setup-baml by commit
+# SHA, so mirror/sync.sh rewrites that `uses:` to the setup-baml mirror commit
+# this run published (or found already matching). baml-action's tests also
+# exercise setup-baml, so neither mirror moves unless every test passes, and
+# baml-action syncs only after setup-baml has.
+#
+# Only canary publishes: a manual run from another branch tests but skips both
+# syncs. sync.sh also refuses to publish a source commit older than the one a
+# mirror was last synced from, so rerunning an old run can't roll `v1` back.
+#
+# Auth: uses the shared GitHub token synced from Infisical's
+# gh-baml-language-release environment. The token needs Contents write access
+# to both mirrors, and Workflows write access for any change under a mirror's
+# .github/workflows.
+
+name: Sync GitHub Actions mirror
+
+on:
+  push:
+    branches: [canary]
+    paths:
+      - "LICENSE"
+      - "packaging/github-actions/**"
+      - ".github/workflows/github-actions-ci.yml"
+      - ".github/workflows/sync-github-actions-mirror.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-github-actions-mirror
+  cancel-in-progress: false
+
+env:
+  MAJOR: v1
+
+jobs:
+  test:
+    name: Test actions
+    uses: ./.github/workflows/github-actions-ci.yml
+    permissions:
+      contents: read
+      pull-requests: write
+
+  sync-setup-baml:
+    name: Sync to BoundaryML/setup-baml
+    needs: test
+    if: github.ref == 'refs/heads/canary'
+    runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
+    outputs:
+      sha: ${{ steps.sync.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: packaging/github-actions
+          filter: blob:none
+
+      - name: Sync mirror
+        id: sync
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          sha="$(packaging/github-actions/mirror/sync.sh setup-baml \
+            https://github.com/BoundaryML/setup-baml.git "$MAJOR" "$SOURCE_SHA")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "BoundaryML/setup-baml@$MAJOR is $sha" >> "$GITHUB_STEP_SUMMARY"
+
+  sync-baml-action:
+    name: Sync to BoundaryML/baml-action
+    needs: [test, sync-setup-baml]
+    if: github.ref == 'refs/heads/canary'
+    runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: packaging/github-actions
+          filter: blob:none
+
+      - name: Sync mirror
+        env:
+          GH_TOKEN: ${{ secrets.SAM_GITHUB_BOUNDARYML_READWRITE2 }}
+          SOURCE_SHA: ${{ github.sha }}
+          SETUP_BAML_SHA: ${{ needs.sync-setup-baml.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$GH_TOKEN"
+          gh auth setup-git
+          sha="$(packaging/github-actions/mirror/sync.sh baml-action \
+            https://github.com/BoundaryML/baml-action.git "$MAJOR" "$SOURCE_SHA" "$SETUP_BAML_SHA")"
+          echo "BoundaryML/baml-action@$MAJOR is $sha, using BoundaryML/setup-baml@$SETUP_BAML_SHA" >> "$GITHUB_STEP_SUMMARY"

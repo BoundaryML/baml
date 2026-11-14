@@ -277,7 +277,7 @@ test "credential_sources_names_every_variable" {
 // express mode signs with `?key=…` — and the native HTTP layer renders
 // `reqwest::Error`, whose text can embed the request URL. So the transport
 // failure a caller sees must not carry the key. `ai.wire.redact_url_secrets` is
-// what every such message goes through (`ai.wire.send_as`, `_gm_sse_failure`).
+// what every such message goes through (`ai.wire.transport_failure`).
 function redact_url_secrets_scrubs_credentials() -> string {
     [
         ai.wire.redact_url_secrets(
@@ -505,7 +505,7 @@ test "explicit_resolve_selector_runs_against_the_mock" {
 //
 //      cd /Users/aaron/projects/baml
 //      infisical run -- baml_language/target/debug/baml-cli test \
-//          --from baml_language/crates/baml_tests/baml_src --profile live \
+//          --project-dir baml_language/crates/baml_tests/baml_src --profile live \
 //          -i "::live::env_ref"
 
 // A client whose credential is a late-bound `env.OPENAI_API_KEY` ref — the
@@ -545,8 +545,7 @@ function live_env_ref_fallback_selection_answers() -> bool {
 }
 
 testset "live" with testing.Sequential() {
-    // Always registered: keeps `--profile live` from selecting nothing here,
-    // which exits 5 (crates/baml_cli/src/lib.rs:93-94).
+    // Always registered: keeps `--profile live` from selecting nothing here.
     test "env_ref_preconditions" {
         assert.is_true(true)
     }

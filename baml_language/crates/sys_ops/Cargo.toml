@@ -29,7 +29,7 @@ bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 thiserror = { workspace = true }
 
 [dev-dependencies]

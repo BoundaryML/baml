@@ -936,6 +936,11 @@ pub enum Rvalue<'db> {
     /// Unary operation: `!_1`, `-_1`
     UnaryOp { op: UnaryOp, operand: Operand<'db> },
 
+    /// Strings joined left to right, in one step: `concat(_1, _2, _3)`. What
+    /// a chain of string `+` (and so a template) lowers to; always three or
+    /// more parts, since two are a plain [`Rvalue::BinaryOp`].
+    ConcatStrings(Vec<Operand<'db>>),
+
     /// Create an array: `[_1, _2, _3]`. The first field is the static element
     /// type (a [`TyTemplate`] so a generic `T[]` resolves against the frame's
     /// type args at runtime), carried so the heap array records its declared
@@ -1212,7 +1217,9 @@ impl Rvalue<'_> {
             | Self::CurrentPackage
             | Self::Uint8Array(_)
             | Self::MakeGenericFunction { .. } => true,
+            // Joining strings cannot fail.
             Self::Array(_, elements)
+            | Self::ConcatStrings(elements)
             | Self::Aggregate {
                 fields: elements, ..
             } => elements.iter().all(operand),

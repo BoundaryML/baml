@@ -159,7 +159,7 @@ fn dispatch<E>(
         baml,
     )
 }
-pub fn invoke(
+pub fn invoke_sync(
     target: Target,
     arguments: Arguments,
     types: TypeBindings,
@@ -173,7 +173,7 @@ pub fn invoke(
     drop(target);
     result
 }
-pub async fn invoke_async(
+pub async fn invoke(
     target: Target,
     arguments: Arguments,
     types: TypeBindings,

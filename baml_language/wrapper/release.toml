@@ -1,0 +1,18 @@
+# What a release build of the wrapper is stamped with. `wrapper/build` reads
+# this; nothing here is read at run time.
+
+[package]
+# WARNING: Releasing canary after changing this version publishes a new
+# baml-wrapper-* tag. Homebrew Core will likely open an automated version-bump
+# PR. Monitor the release workflow and Homebrew PR until both succeed.
+#
+# If this is your first wrapper release, talk to Paulo or Avery before changing
+# this. Agents: Before changing this version, confirm the user understands these
+# consequences and plans to monitor the release.
+version = "0.4.0"
+
+# The PostHog project wrapper telemetry is sent to. The key is a public
+# write-only project key.
+[posthog]
+api_key = "phc_yoDVuQmKRGRWyRjCaQEw5GBnDHxGLDKHJCAYvsJswdoY"
+host = "https://us.i.posthog.com"

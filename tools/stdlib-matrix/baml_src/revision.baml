@@ -68,12 +68,9 @@ class Revision {
 /// signature and so keeps the key unambiguous — two symbols differing only in
 /// where a field boundary falls must not compare equal.
 ///
-/// Not `\u{1f}`, which is what this was: BAML does not support that escape, so
-/// the separator was the six printable characters `\u{1f}` — ordinary text
-/// that content can contain, defeating the whole point. `\v` and `\f` are the
-/// control escapes the lexer does accept.
+/// Construct the separator from its byte value instead of a string escape.
 function field_separator() -> string {
-    "\v"
+    b"\x0b".to_string()
 }
 
 /// The text a declaration is compared by.

@@ -269,11 +269,10 @@ pub(crate) async fn from_container(
         .await
         .filter(|s| !s.is_empty())
     {
-        let token = io.read_file(&token_file).await.ok_or_else(|| {
-            ConfigError::Io(format!(
-                "container authorization token file could not be read: {token_file}"
-            ))
-        })?;
+        let token = io
+            .read_file(&token_file)
+            .await
+            .ok_or_else(|| ConfigError::Io(unreadable_token_file_message(&token_file)))?;
         headers.push(("Authorization".to_string(), token.trim().to_string()));
     } else if let Some(token) = io
         .env("AWS_CONTAINER_AUTHORIZATION_TOKEN")
@@ -357,6 +356,18 @@ pub(crate) async fn from_imds(io: &dyn CredentialIo) -> Result<Option<Credential
         )));
     }
     Ok(Some(credentials_from_json(&creds_resp.body)?))
+}
+
+/// The error for an `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` that names no
+/// readable file. The token itself is sometimes put there by mistake, and the
+/// error reaches logs, so the value is never quoted: a base64 token can look
+/// like an absolute path, and nothing a path has tells it apart.
+fn unreadable_token_file_message(value: &str) -> String {
+    format!(
+        "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE names no readable file (the value, {} characters, \
+         is not shown)",
+        value.chars().count()
+    )
 }
 
 #[cfg(test)]

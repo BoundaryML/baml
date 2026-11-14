@@ -11,7 +11,7 @@
 1. [Pipeline Overview](#pipeline-overview)
 2. [The Cardinal Rule: Upstream Over Downstream](#the-cardinal-rule-upstream-over-downstream)
 3. [Layer-by-Layer Reference](#layer-by-layer-reference)
-   - [Parser (Lexer + CST)](#parser-lexer--cst)
+   - [Parser (Lexer + Syntax Tree)](#parser-lexer--syntax-tree)
 not   - [AST (Abstract Syntax Tree)](#ast-abstract-syntax-tree)
    - [HIR (High-level Intermediate Representation)](#hir-high-level-intermediate-representation)
    - [TIR (Typed Intermediate Representation)](#tir-typed-intermediate-representation)
@@ -20,7 +20,7 @@ not   - [AST (Abstract Syntax Tree)](#ast-abstract-syntax-tree)
 4. [Query-Based Architecture (Salsa)](#query-based-architecture-salsa)
 5. [Packages and Name Resolution](#packages-and-name-resolution)
 6. [Scopes](#scopes)
-7. [CST-to-AST Desugaring: Detailed Examples](#cst-to-ast-desugaring-detailed-examples)
+7. [Syntax-to-AST Desugaring: Detailed Examples](#syntax-to-ast-desugaring-detailed-examples)
    - [Companion Functions](#companion-functions)
    - [Client Desugaring](#client-desugaring)
    - [Lambda Expression Bodies](#lambda-expression-bodies)
@@ -55,9 +55,9 @@ Source Text
  [Lexer] ──> Tokens
     |
     v
- [Parser] ──> CST (Concrete Syntax Tree)
+ [Parser] ──> Syntax tree (typed, lossless)
     |
-    |  ← transformation: CST → AST
+    |  ← transformation: syntax tree → AST
     v
   AST (Abstract Syntax Tree)
     |
@@ -78,7 +78,7 @@ Source Text
   Emit (bytecode for BexVM)
 ```
 
-**Critical distinction:** The stages above the AST (Parser, CST→AST lowering) are about *producing* the AST. The stages below it (HIR, TIR) are about *answering questions* about the AST. They do not produce new syntax trees. The MIR is the second transformation — it converts human-friendly BAML into a machine-friendly control flow graph. The Emit stage is the third transformation — it compiles MIR to bytecode.
+**Critical distinction:** The stages above the AST (Parser, syntax-tree→AST lowering) are about *producing* the AST. The stages below it (HIR, TIR) are about *answering questions* about the AST. They do not produce new syntax trees. The MIR is the second transformation — it converts human-friendly BAML into a machine-friendly control flow graph. The Emit stage is the third transformation — it compiles MIR to bytecode.
 
 This is fundamentally different from the compiler1 architecture, which was a strict linear pipeline where each layer copied and enriched the previous layer's data. In compiler2, each layer is a **query on top of the AST** (at least until MIR), which gives us Salsa-powered incremental compilation for free.
 
@@ -103,26 +103,27 @@ When deciding where to implement a feature, always ask: **what is the earliest l
 
 ## Layer-by-Layer Reference
 
-### Parser (Lexer + CST)
+### Parser (Lexer + Syntax Tree)
 
-**Crate:** `baml_compiler_lexer`, `baml_compiler_parser`, `baml_compiler_syntax`
+**Crate:** `baml_syntax` (token table, lexer, node definitions, tree storage), `baml_syntax_macros` (the derives behind them), `baml_parser` (the hand-written parser and its Salsa queries)
 
 **Responsibility:** Grammar only. The parser answers the question *"is this syntactically valid BAML?"* It knows about keywords, punctuation, delimiters, and the structural grammar of the language. It makes no semantic decisions.
 
 **What lives here:**
-- Token definitions (keywords, operators, punctuation)
-- Grammar rules for all syntactic constructs
-- Error-tolerant parsing (the parser produces a tree even for malformed input)
-- The distinction between LLM function bodies, regular function bodies, and config blocks
+- The token table: one `TokenKind` enum that is both the Logos lexer and the vocabulary every other layer names tokens by
+- Node definitions: one Rust struct per construct (`FunctionDef`, `BinaryExpr`, …) and one `Any*` enum per choice point (`AnyExpr`, `AnyItem`, …); a node's fields are its children, in source order
+- Grammar rules for all syntactic constructs, including the structure of backtick templates and the distinction between LLM function bodies and expression bodies
+- Error-tolerant parsing: a required child that is absent is `Err(Missing)`, text the grammar cannot place is a `Bogus` variant of the enclosing `Any*` union, and both always come with a diagnostic
+- Late syntax checks that need no names or types (string escapes, directive placement, `test` outside a `testset`)
 
 **What does NOT live here:**
 - Any understanding of what names mean
 - Any understanding of types
 - Any semantic validation
 
-The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error-tolerant representation of the source text. It uses a green/red tree architecture (similar to rust-analyzer's `rowan`).
+The parser produces a **typed syntax tree** (`baml_syntax::FileTree`): the canonical token array (trivia included, so the text is recoverable byte for byte) plus one arena per node type, indexed by `Id<T>`. Nodes hold token indices and child ids, never text; comments and whitespace are never node fields. `///` doc lines and `//baml:` directives *are* syntax, owned by the declaration they precede. In an error-free parse every token is owned by exactly one node and no `Missing`/`Bogus` exists. The formatter prints this tree directly.
 
-**Key Salsa query:** `syntax_tree(db, file) -> CST`
+**Key Salsa queries:** `typed_tree(db, file) -> Arc<FileTree>`, `typed_parse_errors(db, file) -> Arc<[ParseError]>`; `tree_index(db, file)` adds parent and token-owner links for IDE navigation.
 
 ---
 
@@ -130,7 +131,7 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 
 **Crate:** `baml_compiler2_ast`
 
-**Responsibility:** Desugaring. The AST takes the CST and produces a well-formed, semantically-oriented syntax tree. This is where most features live.
+**Responsibility:** Desugaring. The AST takes the syntax tree and produces a well-formed, semantically-oriented tree. This is where most features live.
 
 **What lives here:**
 - **Companion function expansion** — LLM functions are expanded into the base function plus generated companions (`@spec`, `@render_prompt`, `@build_request`, `@parse`, `@stream`).
@@ -145,9 +146,9 @@ The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error
 - Anything that requires knowing the *type* of something (that's TIR).
 - Anything that requires knowing whether something is a class, enum, or alias (that's TIR).
 
-**Key design principle:** One CST node can produce *multiple* AST nodes. For example, a single `client<llm> MyClient { ... }` definition produces two AST items: a `Let` and a `Function`. Conversely, some CST constructs collapse or transform substantially. The AST is the **final syntactic form** of the program.
+**Key design principle:** One syntax node can produce *multiple* AST nodes. For example, a single `client<llm> MyClient { ... }` definition produces two AST items: a `Let` and a `Function`. Conversely, some syntax constructs collapse or transform substantially. The AST is the **final syntactic form** of the program.
 
-**The AST is a pure structural lowering.** It uses no Salsa queries. It does not validate names or detect duplicates. It simply converts CST shapes into AST shapes.
+**The AST is a pure structural lowering.** It uses no Salsa queries. It does not validate names or detect duplicates. It simply converts syntax-tree shapes into AST shapes, matching exhaustively over the `Any*` unions so a new node kind is a compile error until it is lowered.
 
 ---
 
@@ -268,7 +269,7 @@ The compiler2 uses the [Salsa](https://salsa-rs.github.io/salsa/) incremental co
 ```
 salsa::Database
   └─ baml_base                 (source roots: path, package, kind, files)
-      └─ baml_compiler_parser::Db  (syntax_tree query)
+      └─ baml_parser::Db            (typed_tree, typed_parse_errors)
           └─ baml_compiler2_hir::Db  (file_semantic_index, namespace_items, package_items, item_data)
               └─ baml_compiler2_tir::Db  (infer_scope_types, resolve_name_at)
                   └─ baml_compiler2_mir::Db
@@ -276,8 +277,8 @@ salsa::Database
 ```
 
 The design goal: **before the AST, produce the AST. After the AST, answer questions about the AST.** The only layers that do production (create new data structures) are:
-1. Parser → CST
-2. CST → AST (including companion synthesis)
+1. Parser → syntax tree
+2. Syntax tree → AST (including companion synthesis)
 3. AST → MIR
 4. MIR → bytecode
 
@@ -358,7 +359,7 @@ Shadowing rules are scope-kind-dependent. For example, a match arm can shadow a 
 
 ---
 
-## CST-to-AST Desugaring: Detailed Examples
+## Syntax-to-AST Desugaring: Detailed Examples
 
 ### Companion Functions
 
@@ -546,7 +547,7 @@ By keeping three distinct AST forms, each loop variant can produce type errors t
 
 ## Span Preservation
 
-When performing CST→AST desugaring, **you must preserve span information** on every generated node. Every synthesized AST node must carry the source span of the CST construct it was derived from.
+When performing syntax-to-AST desugaring, **you must preserve span information** on every generated node. Every synthesized AST node must carry the source span of the syntax construct it was derived from. Node spans in the syntax tree cover significant tokens only, so they are already trimmed of surrounding comments and whitespace.
 
 If you fail to do this:
 - Error messages will point to the wrong location (or no location).
@@ -830,7 +831,7 @@ The test infrastructure generates one snapshot per pipeline phase per test proje
 | Phase | Name | What it snapshots |
 |---|---|---|
 | `01` | lexer | Token stream |
-| `02` | parser | CST + parse errors |
+| `02` | parser | Syntax tree dump + parse errors |
 | `03` | hir | Scope tree, item tree, symbol contributions |
 | `04` | tir | Typed expressions, resolved names |
 | `04_5` | mir | Control flow graphs |
@@ -862,7 +863,7 @@ Separate from snapshot tests, there are targeted incremental tests that verify S
 
 When implementing a new feature, walk through these questions in order:
 
-1. **Does it change the grammar?** → Parser (lexer/CST).
+1. **Does it change the grammar?** → Parser (token table, node definitions, grammar).
 2. **Does it introduce a new syntactic form that desugars to existing constructs?** → AST layer.
 3. **Does it need to know the name of something?** → It needs HIR, but the *implementation* might still live in the AST with the HIR providing the answer via queries.
 4. **Does it need to know the type of something?** → TIR.
@@ -879,8 +880,8 @@ When implementing a new feature, walk through these questions in order:
 
 | Layer | Crate | Transforms? | Salsa Queries? | Can construct new nodes? |
 |---|---|---|---|---|
-| Parser/CST | `baml_compiler_parser` | Yes (text → CST) | `syntax_tree` | Yes |
-| AST | `baml_compiler2_ast` | Yes (CST → AST) | No (pure function) | Yes |
+| Parser | `baml_syntax`, `baml_parser` | Yes (text → syntax tree) | `typed_tree`, `typed_parse_errors` | Yes |
+| AST | `baml_compiler2_ast` | Yes (syntax tree → AST) | No (pure function) | Yes |
 | HIR | `baml_compiler2_hir` | No | `file_semantic_index`, `namespace_items`, `package_items` | No |
 | TIR | `baml_compiler2_tir` | No | `infer_scope_types`, `resolve_name_at` | No |
 | MIR | `baml_compiler2_mir` | Yes (AST → CFG) | `lower_function`, `lower_let_body` | Yes |

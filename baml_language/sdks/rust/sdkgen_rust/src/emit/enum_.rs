@@ -1,8 +1,10 @@
 //! Enum emission: a fieldless Rust enum plus the value conversions.
-//! Variant identifiers come from the BAML variant names; the wire carries
+//! Variant identifiers come from the BAML variant names (respelled under
+//! `naming_convention = "language"`); the wire carries
 //! each variant's declared *value*, so both conversion directions match
 //! on the value string, never the Rust identifier. Under the `serde`
-//! feature a variant is its name string, as in BAML's own JSON.
+//! feature a variant is its JSON string, its `@json.rename` or its name, as
+//! in BAML's own JSON.
 //!
 //! The impl shape is pinned by the hand-written executable spec in
 //! `bridge_rust/tests/conversions.rs`.
@@ -12,23 +14,26 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use super::function::doc_attrs;
-use crate::idents;
+use crate::{idents, names::RustNames};
 
-pub(crate) fn emit(name: &Name, enum_: &Enum) -> TokenStream {
+pub(crate) fn emit(name: &Name, enum_: &Enum, names: &RustNames) -> TokenStream {
     let fqn = name.to_string();
-    let ident = idents::ident(name.name().as_str());
+    let ident = idents::ident(names.type_name(name));
     let docs = doc_attrs(enum_.docstring.as_deref());
 
     let mut variant_defs = Vec::new();
     let mut encode_arms = Vec::new();
     let mut decode_arms = Vec::new();
     for variant in &enum_.variants {
-        let variant_ident = idents::ident(variant.name.as_str());
+        let variant_ident = idents::ident(names.variant(name, &variant.name));
         let value = variant.value.as_str();
         let variant_docs = doc_attrs(variant.docstring.as_deref());
-        let variant_name = variant.name.as_str();
-        let serde_rename = (variant_ident != variant_name)
-            .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #variant_name))] });
+        let json_string = variant
+            .json_rename
+            .as_deref()
+            .unwrap_or(variant.name.as_str());
+        let serde_rename = (variant_ident != json_string || json_string.starts_with("r#"))
+            .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #json_string))] });
         variant_defs.push(quote! {
             #(#variant_docs)*
             #serde_rename

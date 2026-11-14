@@ -18,7 +18,13 @@ workspace = true
 
 [dependencies]
 baml_db = { workspace = true }
+baml_parser = { workspace = true }
+baml_syntax = { workspace = true }
 ouroboros = { workspace = true }
-rowan = { workspace = true }
 salsa = { workspace = true }
+text-size = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+walkdir = { workspace = true }

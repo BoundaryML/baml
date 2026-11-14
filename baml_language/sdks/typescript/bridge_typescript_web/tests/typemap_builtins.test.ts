@@ -122,7 +122,7 @@ describe("builtin typemap decoding", () => {
     expect(raw._testHandleTableEntryCount()).toBe(initialCount);
   });
 
-  // Real stateful nextAsync/finalAsync success requires the deliberately
+  // Real stateful next/final success requires the deliberately
   // unsupported Web HTTP-streaming SysOp. The Node replay fixture covers that
   // provider path, and web_sysops.test.ts proves async stream creation rejects.
   // This synthetic handle specifically guards the sync wrapper from entering
@@ -140,8 +140,8 @@ describe("builtin typemap decoding", () => {
       },
     }) as BamlStream<unknown>;
 
-    expect(() => stream.next()).toThrow(/nextAsync|finalAsync/);
-    expect(() => stream.final()).toThrow(/nextAsync|finalAsync/);
+    expect(() => stream.nextSync()).toThrow(/use next\(\) or final\(\)/);
+    expect(() => stream.finalSync()).toThrow(/use next\(\) or final\(\)/);
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 1);
     expect(stream._toHandle()._releaseForTest()).toBe(true);
     expect(raw._testHandleTableEntryCount()).toBe(initialCount);

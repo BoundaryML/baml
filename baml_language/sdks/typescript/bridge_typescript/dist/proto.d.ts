@@ -49,14 +49,14 @@ export declare class BamlPrompt {
     _wireCopy(): baml_bridge.cffi.v1.IBamlValuePromptAst;
     /** A detached JSON-compatible view of the canonical prompt tree. */
     toJSON(): unknown;
-    text(options?: BamlPromptCallOptions): string;
-    textAsync(options?: BamlPromptCallOptions): Promise<string>;
-    /** Compatibility with the generated SDK's existing async-method spelling. */
-    text_async(options?: BamlPromptCallOptions): Promise<string>;
-    messages(options?: BamlPromptCallOptions): BamlPromptMessage[];
-    messagesAsync(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]>;
-    /** Compatibility with the generated SDK's existing async-method spelling. */
-    messages_async(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]>;
+    text(options?: BamlPromptCallOptions): Promise<string>;
+    textSync(options?: BamlPromptCallOptions): string;
+    /** Compatibility with the generated SDK's blocking-method spelling. */
+    text_sync(options?: BamlPromptCallOptions): string;
+    messages(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]>;
+    messagesSync(options?: BamlPromptCallOptions): BamlPromptMessage[];
+    /** Compatibility with the generated SDK's blocking-method spelling. */
+    messages_sync(options?: BamlPromptCallOptions): BamlPromptMessage[];
     private _callSync;
     private _callAsync;
     private static cloneWire;

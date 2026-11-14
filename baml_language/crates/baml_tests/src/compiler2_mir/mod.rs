@@ -3,6 +3,8 @@
 //! Each test creates a minimal DB, adds a `.baml` file, lowers all functions
 //! to MIR, and snapshots the pretty-printed output.
 
+mod escape;
+
 use std::fmt::Write;
 
 use baml_compiler2_hir::item_data::{file_functions, function_data, function_source_map};
@@ -174,6 +176,60 @@ function mixed(v: int | string) -> string { `${v}` }
         assert!(mir.contains("String.from"), "{mir}");
         assert!(!mir.contains("_to_string_primitive"), "{mir}");
     }
+}
+
+#[test]
+fn string_plus_chains_join_in_one_step() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Point { x int }
+function template(a: string, b: string, k: int) -> string {
+  `/v1/items/${a}/tags/${b}?n=${k}`
+}
+function plus(a: string, b: string, tag: "x" | "y") -> string { a + "/" + b + tag }
+function pair(a: string, b: string) -> string { a + b }
+function grouped(a: string, b: string, c: string, d: string) -> string { (a + b) + (c + d) }
+function folded(a: string) -> string { "x" + "y" + a }
+function structural(p: Point) -> string { `<${p}>` }
+function ints(a: int, b: int, c: int) -> int { a + b + c }
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    let joins = |name: &str| function_mir(&output, name).matches("concat(").count();
+    for (name, count) in [
+        ("template", 1),
+        ("plus", 1),
+        ("grouped", 1),
+        ("structural", 1),
+        ("pair", 0),
+        ("folded", 0),
+        ("ints", 0),
+    ] {
+        assert_eq!(
+            joins(name),
+            count,
+            "{name}:\n{}",
+            function_mir(&output, name)
+        );
+    }
+    // Every `+` of the chain is gone; the right operand of `grouped` is not
+    // on the chain and stays a `+`.
+    for name in ["template", "plus", "structural"] {
+        assert!(!function_mir(&output, name).contains(" + "), "{output}");
+    }
+    assert_eq!(
+        function_mir(&output, "grouped").matches(" + ").count(),
+        1,
+        "{output}"
+    );
+    // `"x" + "y"` folds to one constant, so `folded` joins two parts.
+    assert!(
+        function_mir(&output, "folded").contains("\"xy\" + "),
+        "{output}"
+    );
 }
 
 #[test]

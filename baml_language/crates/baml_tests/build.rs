@@ -31,7 +31,7 @@ fn main() {
     // Generate tests
     generate_tests(&manifest_dir);
 
-    // Generate CodSpeed benches from the tools/speedtest workloads.
+    // Generate divan benches from the tools/speedtest workloads.
     generate_speedtest_benches(&manifest_dir);
 }
 
@@ -50,9 +50,8 @@ fn main() {
 // exact same `speedtest.loader` logic the harness itself uses — so there is a
 // single source of truth for what a workload is. We shell out to `python3` once and read back JSON.
 //
-// The generated functions are named `vm_speedtest_<slug>` so they are picked up
-// by the same `vm_` CodSpeed filter as the hand-written VM benches, and are
-// `include!`d into runtime_benchmark.rs after `bench_vm_main` is in scope.
+// The generated functions are named `vm_speedtest_<slug>` and are `include!`d
+// into runtime_benchmark.rs after `bench_vm_main` is in scope.
 //
 // This step degrades gracefully: if `python3` or the workloads are unavailable
 // (e.g. a minimal build environment), it emits an empty file and a warning
@@ -547,24 +546,17 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
         }
     };
 
+    // The typed syntax tree: for every broken-syntax project (the shape of
+    // recovery is the contract) and every parser_ project.
+    let cst_test = if project.tier == Tier::BrokenSyntax || project.name.starts_with("parser_") {
+        generate_cst_test(project)
+    } else {
+        quote! {}
+    };
+
     // parser_-prefixed tests: only for parser_ projects regardless of tier
     let parser_specific_tests = if project.name.starts_with("parser_") {
-        let incremental_tests: TokenStream = project
-            .files
-            .iter()
-            .map(generate_incremental_parsing_test)
-            .collect();
-
-        let node_reuse_tests: TokenStream =
-            project.files.iter().map(generate_node_reuse_test).collect();
-
-        let tree_lossless_test = generate_tree_lossless_test(project);
-
-        quote! {
-            #incremental_tests
-            #node_reuse_tests
-            #tree_lossless_test
-        }
+        generate_tree_lossless_test(project)
     } else {
         quote! {}
     };
@@ -579,10 +571,51 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use crate::utils::*;
             const SNAPSHOT_PATH: &str = #snapshot_path;
 
+            #cst_test
             #hir_test
             #diagnostics_test
             #formatter_tests
             #parser_specific_tests
+        }
+    }
+}
+
+/// The typed tree and the parse errors of every file in the project, as the
+/// indented tree dump: what the parser makes of the text, recovery included.
+fn generate_cst_test(project: &TestProject) -> TokenStream {
+    let file_dumps: TokenStream = project
+        .files
+        .iter()
+        .map(|baml_file| {
+            let full_path = baml_file.full_path.display().to_string();
+            let header = format!("=== {} ===\n", baml_file.relative_path.display());
+            let include_content = make_include_str(&full_path);
+
+            quote! {
+                {
+                    let content = #include_content;
+                    let content = content.replace("\r\n", "\n");
+                    let parsed = baml_parser::parse(&content);
+                    output.push_str(#header);
+                    output.push_str(&parsed.tree.debug_tree());
+                    for error in &parsed.errors {
+                        writeln!(output, "error @{:?}: {error}", error.range()).unwrap();
+                    }
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[test]
+        fn test_02_cst() {
+            let mut output = String::new();
+
+            #file_dumps
+
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+                assert_snapshot!("02_cst", output);
+            });
         }
     }
 }
@@ -819,67 +852,6 @@ fn generate_diagnostics_test(project: &TestProject, tier: Tier) -> TokenStream {
 }
 
 // Parser-specific test generation functions
-fn generate_incremental_parsing_test(baml_file: &BamlFile) -> TokenStream {
-    let test_name = format_ident!("test_07_incremental_{}", baml_file.name);
-    let full_path = baml_file.full_path.display().to_string();
-    let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
-
-    quote! {
-        #[test]
-        fn #test_name() {
-            let content = #include_content;
-            let content = content.replace("\r\n", "\n");
-
-            // Test single character edits maintain correctness
-            let mut db = ProjectDatabase::new();
-            db.workspace(std::path::Path::new("."));
-            let source_file = db.file(#relative_path, &content);
-            let original_tree = baml_compiler_parser::syntax_tree(&db, source_file);
-
-            // Test adding a character
-            let modified = insert_char(&content, content.len() / 2, 'x');
-            let modified_file = db.file("modified.baml", &modified);
-            let modified_tree = baml_compiler_parser::syntax_tree(&db, modified_file);
-
-            // Verify the trees are valid
-            assert_no_panics(&original_tree);
-            assert_no_panics(&modified_tree);
-        }
-    }
-}
-
-fn generate_node_reuse_test(baml_file: &BamlFile) -> TokenStream {
-    let test_name = format_ident!("test_08_node_reuse_{}", baml_file.name);
-    let full_path = baml_file.full_path.display().to_string();
-    let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
-
-    quote! {
-        #[test]
-        fn #test_name() {
-            let content = #include_content;
-            let content = content.replace("\r\n", "\n");
-
-            // Measure node reuse for single character edit
-            let mut db = ProjectDatabase::new();
-            db.workspace(std::path::Path::new("."));
-            let source_file = db.file(#relative_path, &content);
-            let original_tree = baml_compiler_parser::syntax_tree(&db, source_file);
-
-            // Make a small edit
-            let modified = insert_char(&content, content.len() / 2, 'a');
-            let modified_file = db.file("modified.baml", &modified);
-            let modified_tree = baml_compiler_parser::syntax_tree(&db, modified_file);
-
-            // Measure reuse (this is a simplified check)
-            // In a real implementation, you'd check actual node reuse
-            assert_no_panics(&original_tree);
-            assert_no_panics(&modified_tree);
-        }
-    }
-}
-
 fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
     let file_checks: TokenStream = project
         .files
@@ -896,7 +868,7 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
                     let mut db = ProjectDatabase::new();
                     db.workspace(std::path::Path::new("."));
                     let source_file = db.file(#relative_path, &content);
-                    let tree = baml_compiler_parser::syntax_tree(&db, source_file);
+                    let tree = baml_parser::typed_tree(&db, source_file);
                     assert_tree_is_lossless(&tree, &content);
                 }
             }
@@ -906,7 +878,7 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
     quote! {
         #[test]
         fn test_09_tree_lossless() {
-            // Verify parse trees can reconstruct original source
+            // The token array reconstructs the source exactly
             #file_checks
         }
     }
@@ -938,10 +910,6 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                     let output = match e {
                         baml_fmt::FormatterError::ParseErrors(e) => {
                             format!("=== PARSER ERROR ===\n{:?}", e)
-                        }
-                        baml_fmt::FormatterError::StrongAstError(e) => {
-                            let e = e.print_with_file_context(#relative_path, &content);
-                            format!("=== STRONG AST ERROR ===\n{}", e)
                         }
                     };
                     panic!(

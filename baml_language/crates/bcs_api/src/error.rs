@@ -7,7 +7,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     #[error("No Boundary credential is available")]
     MissingCredentials,
-    #[error("Login code expired; run `baml auth login` again")]
+    #[error("Login code expired; run `baml cloud auth login` again")]
     LoginExpired,
     #[error("Login was denied in the browser")]
     LoginDenied,

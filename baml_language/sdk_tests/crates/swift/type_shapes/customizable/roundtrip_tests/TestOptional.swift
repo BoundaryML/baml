@@ -7,9 +7,9 @@ import BamlBridge
 
 final class TestOptional: XCTestCase {
     func test_optional_round_trip_optional_union() throws {
-        XCTAssertEqual(try Baml.optional.round_trip_optional_union(u: .t0(3)), .t0(3))
-        XCTAssertEqual(try Baml.optional.round_trip_optional_union(u: .t1("s")), .t1("s"))
-        XCTAssertNil(try Baml.optional.round_trip_optional_union(u: nil))
+        XCTAssertEqual(try Baml.optional.round_trip_optional_union_sync(u: .t0(3)), .t0(3))
+        XCTAssertEqual(try Baml.optional.round_trip_optional_union_sync(u: .t1("s")), .t1("s"))
+        XCTAssertNil(try Baml.optional.round_trip_optional_union_sync(u: nil))
     }
 
     func test_optional_round_trip_optional_container() throws {
@@ -18,22 +18,22 @@ final class TestOptional: XCTestCase {
             optional_class: Baml.optional.Resume(name: "x"),
             optional_union: .t1("y")
         )
-        XCTAssertEqual(try Baml.optional.round_trip_optional_container(c: c), c)
+        XCTAssertEqual(try Baml.optional.round_trip_optional_container_sync(c: c), c)
     }
 
     func test_optional_round_trip_optional_int() throws {
-        XCTAssertEqual(try Baml.optional.round_trip_optional_int(x: 5), 5)
-        XCTAssertNil(try Baml.optional.round_trip_optional_int(x: nil))
+        XCTAssertEqual(try Baml.optional.round_trip_optional_int_sync(x: 5), 5)
+        XCTAssertNil(try Baml.optional.round_trip_optional_int_sync(x: nil))
     }
 
     func test_optional_round_trip_optional_resume() throws {
         let r = Baml.optional.Resume(name: "ada")
-        XCTAssertEqual(try Baml.optional.round_trip_optional_resume(r: r), r)
-        XCTAssertNil(try Baml.optional.round_trip_optional_resume(r: nil))
+        XCTAssertEqual(try Baml.optional.round_trip_optional_resume_sync(r: r), r)
+        XCTAssertNil(try Baml.optional.round_trip_optional_resume_sync(r: nil))
     }
 
     func test_optional_round_trip_resume() throws {
         let r = Baml.optional.Resume(name: "grace")
-        XCTAssertEqual(try Baml.optional.round_trip_resume(r: r), r)
+        XCTAssertEqual(try Baml.optional.round_trip_resume_sync(r: r), r)
     }
 }

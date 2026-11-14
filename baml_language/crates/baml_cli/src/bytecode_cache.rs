@@ -2023,7 +2023,7 @@ mod tests {
             "stdlib interface blobs must be byte-identical across fresh databases"
         );
         // Sanity: every stdlib package is present and non-trivially populated.
-        for name in baml_builtins2::stdlib_package_names().iter().copied() {
+        for name in baml_builtins2::STDLIB_PACKAGE_NAMES.iter().copied() {
             let bytes = blob1.get(name).unwrap_or_else(|| panic!("{name} present"));
             assert!(!bytes.is_empty(), "{name} interface is non-empty");
         }

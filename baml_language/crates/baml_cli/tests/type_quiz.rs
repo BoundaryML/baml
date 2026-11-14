@@ -167,7 +167,7 @@ fn type_quiz_conformance() {
         // default five-minute cap per test is met by the slowest of them with
         // nothing wrong. Fifteen minutes is the ceiling for a stall, not a
         // budget the suite uses: the whole of it runs in five on an idle core.
-        .args(["test", "--test-timeout", "15m", "--from"])
+        .args(["test", "--test-timeout", "15m", "--project-dir"])
         .arg(workspace_root.join("tools/type_quiz"))
         .current_dir(&workspace_root)
         .env("BAML_CLI_ALLOW_DIRECT", "1")

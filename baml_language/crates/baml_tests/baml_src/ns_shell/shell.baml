@@ -10,7 +10,7 @@
 
 // `echo hello_from_shell` works in bash, zsh, sh, PowerShell, and cmd.
 function shell_echo_fn() -> bool {
-    baml.sys.shell("echo hello_from_shell", null).stdout.to_string().includes("hello_from_shell")
+    baml.sys.shell("echo hello_from_shell", capture_output = true).stdout.to_string().includes("hello_from_shell")
 }
 
 test "shell_echo" {
@@ -20,7 +20,7 @@ test "shell_echo" {
 // `exit 1` is a built-in understood by bash/zsh/sh, PowerShell, and cmd — all
 // report exit code 1.
 function shell_failing_command_fn() -> int {
-    baml.sys.shell("exit 1", null).exit_code
+    baml.sys.shell("exit 1", capture_output = true).exit_code
 }
 
 test "shell_failing_command" {
@@ -31,16 +31,16 @@ test "shell_failing_command" {
 // the shell sees the expanded string.
 function shell_with_variable_fn() -> bool {
     let cmd = "echo dynamic_value";
-    baml.sys.shell(cmd, null).stdout.to_string().includes("dynamic_value")
+    baml.sys.shell(cmd, capture_output = true).stdout.to_string().includes("dynamic_value")
 }
 
 test "shell_with_variable" {
     assert.is_true(shell_with_variable_fn())
 }
 
-// ShellOutput.ok() returns true for exit code 0 …
+// ProcessOutput.ok() returns true for exit code 0 …
 function shell_ok_success_fn() -> bool {
-    baml.sys.shell("echo hi", null).ok()
+    baml.sys.shell("echo hi", capture_output = true).ok()
 }
 
 test "shell_ok_method_success" {
@@ -49,7 +49,7 @@ test "shell_ok_method_success" {
 
 // … and false for a non-zero exit code.
 function shell_ok_failure_fn() -> bool {
-    baml.sys.shell("exit 1", null).ok()
+    baml.sys.shell("exit 1", capture_output = true).ok()
 }
 
 test "shell_ok_method_failure" {
@@ -58,7 +58,7 @@ test "shell_ok_method_failure" {
 
 // stdout field is a uint8array; to_string() decodes it.
 function shell_stdout_bytes_fn() -> bool {
-    baml.sys.shell("echo hello", null).stdout.to_string().includes("hello")
+    baml.sys.shell("echo hello", capture_output = true).stdout.to_string().includes("hello")
 }
 
 test "shell_stdout_bytes" {
@@ -70,7 +70,7 @@ test "shell_stdout_bytes" {
 // 9009 on cmd, 1 on PowerShell), so — exactly like the original Rust test —
 // only `!= 0` is asserted.
 function shell_nonexistent_command_fn() -> bool {
-    baml.sys.shell("nonexistent_command_12345", null).exit_code != 0
+    baml.sys.shell("nonexistent_command_12345", capture_output = true).exit_code != 0
 }
 
 test "shell_nonexistent_command" {
@@ -116,7 +116,7 @@ function b251_payload() -> string {
 function b251_concat_println_shell_fn() -> bool {
     let cmd = "echo " + b251_payload();
     baml.io.println("-> " + cmd);
-    let out = baml.sys.shell(cmd, null).stdout.to_string();
+    let out = baml.sys.shell(cmd, capture_output = true).stdout.to_string();
     out.length() > 0 && out.includes("hello_world")
 }
 
@@ -129,7 +129,7 @@ function b251_println_twice_fn() -> bool {
     let cmd = "echo " + b251_payload();
     baml.io.println("-> " + cmd);
     baml.io.println("-> still " + cmd);
-    let out = baml.sys.shell(cmd, null).stdout.to_string();
+    let out = baml.sys.shell(cmd, capture_output = true).stdout.to_string();
     out.length() > 0 && out.includes("hello_world")
 }
 
@@ -143,7 +143,7 @@ function b251_multi_let_fn() -> bool {
     let payload = b251_payload();
     let cmd = prefix + payload;
     baml.io.println("-> " + cmd);
-    let out = baml.sys.shell(cmd, null).stdout.to_string();
+    let out = baml.sys.shell(cmd, capture_output = true).stdout.to_string();
     out.length() > 0 && out.includes("hello_world")
 }
 
@@ -155,7 +155,7 @@ test "b251_multi_let_then_shell" {
 function b251_println_discarded_fn() -> bool {
     let cmd = "echo " + b251_payload();
     let _ = baml.io.println("-> " + cmd);
-    let out = baml.sys.shell(cmd, null).stdout.to_string();
+    let out = baml.sys.shell(cmd, capture_output = true).stdout.to_string();
     out.length() > 0 && out.includes("hello_world")
 }
 
@@ -170,7 +170,7 @@ test "b251_println_discarded_then_shell" {
 // exec() with no platform guard in the original Rust test — `echo` resolves as
 // a PATH binary on Unix and is available cross-platform enough for CI.
 function exec_echo_fn() -> bool {
-    baml.sys.exec("echo", ["Hello From Exec!"], null).stdout.to_string().includes("Hello From Exec!")
+    baml.sys.run("echo", args = ["Hello From Exec!"], capture_output = true).stdout.to_string().includes("Hello From Exec!")
 }
 
 test "exec_echo" {

@@ -15,7 +15,6 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 pub mod catalog;
-pub mod format;
 pub mod functions;
 pub mod ingest;
 mod outcomes;

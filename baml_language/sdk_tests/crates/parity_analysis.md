@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 979. IDs with complete required parity: 230. Required gaps: 5143.
+Distinct exact test IDs: 989. IDs with complete required parity: 240. Required gaps: 5140.
 
-Baseline ratchet: BETTER. Required gaps: 5143 (baseline: 5143). Present declarations: 2608 (baseline: 2606). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5140). Present declarations: 2621 (baseline: 2620). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 456 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 459 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 456 / 456 | 100.0% |
-| typescript_node | 192 / 456 | 42.1% |
-| typescript_web_chromium | 168 / 456 | 36.8% |
-| typescript_web_cloudflare_workers | 168 / 456 | 36.8% |
-| cpp | 138 / 456 | 30.3% |
-| csharp | 0 / 456 | 0.0% |
-| rust | 235 / 456 | 51.5% |
-| go | 21 / 456 | 4.6% |
-| java | 307 / 456 | 67.3% |
-| swift | 191 / 456 | 41.9% |
+| python_pydantic2 | 459 / 459 | 100.0% |
+| typescript_node | 193 / 459 | 42.0% |
+| typescript_web_chromium | 169 / 459 | 36.8% |
+| typescript_web_cloudflare_workers | 169 / 459 | 36.8% |
+| cpp | 138 / 459 | 30.1% |
+| csharp | 0 / 459 | 0.0% |
+| rust | 235 / 459 | 51.2% |
+| go | 21 / 459 | 4.6% |
+| java | 307 / 459 | 66.9% |
+| swift | 191 / 459 | 41.6% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -29,6 +29,7 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | docstrings_etc/enum_doc_summary_and_members | - | - | - | - | - | - | - | y | - | - | all |  |
 | docstrings_etc/enum_summary_only_omits_member_comments | - | - | - | - | - | - | - | y | - | - | all |  |
 | docstrings_etc/go_codegen_function_doc_comment | - | - | - | - | - | - | - | y | - | - | all |  |
+| docstrings_etc/go_package_name_names_the_root_package | - | - | - | - | - | - | - | y | - | - | go | Go spells the package name in generated code |
 | docstrings_etc/imports | - | - | - | - | - | - | - | y | - | - | all |  |
 | docstrings_etc/main_class_doc_summary_and_attributes_section | y | y | - | - | y | - | y | - | y | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | docstrings_etc/main_class_doc_summary_present | - | - | - | - | - | - | - | - | - | y | all |  |
@@ -331,7 +332,7 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_adopts_a_promise_from_a_separate_browser_realm | - | - | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_callables_async_callable_future_completing_exceptionally_round_trips_original | - | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/host_callables_async_callable_returning_future_is_awaited_by_bridge | - | - | - | - | - | - | - | - | y | - | all |  |
-| function_calls/host_callables_async_callable_runs_to_completion | y | - | - | - | - | - | y | - | y | y | all |  |
+| function_calls/host_callables_async_callable_runs_to_completion | y | y | y | y | - | - | y | - | y | y | all |  |
 | function_calls/host_callables_awaits_a_promise_returning_callback | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_baml_error_panicked_with_is_thrown_on | - | - | - | - | - | - | - | y | - | - | go | Go's completion classification of a BAML error a callback forwards by panicking with it |
 | function_calls/host_callables_call_repeatedly_invokes_callback_n_times | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -454,6 +455,7 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | function_calls/layered_callback_context_inheritance_and_restoration_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node async carrier, native signals, and entry-time snapshots are specific to TypeScript |
 | function_calls/layered_callback_context_restores_after_returned_callable | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/legacy_controls_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/linking_the_sdk_leaves_serde_json_features_alone | - | - | - | - | - | - | y | - | - | - | rust | cargo feature unification is Rust-only |
 | function_calls/live_token_cancels_after_admission | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_hello_world_returns_literal | y | - | - | - | y | - | y | - | y | y | all |  |
 | function_calls/main_rejects_mistyped_int_argument | y | y | y | y | - | - | - | - | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | statically typed SDKs cannot pass a mistyped argument |
@@ -692,6 +694,7 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | llm_functions/on_event_stream_raising_listener_does_not_fail | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
 | llm_functions/projects_static_and_instance_llm_methods_without_invoking_a_provider | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | validates TypeScript static and instance operation member spellings |
 | llm_functions/prompt_is_reusable_and_media_survives_request_preview | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python's portable Prompt and media wrapper surface |
+| llm_functions/recording_lands_in_cwd_project | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | native Python recording lands where `baml query --local` reads |
 | llm_functions/spec_projection_honors_cancellation | - | - | - | - | - | - | - | y | - | - | go | pins Go context cancellation through the Spec projection. |
 | llm_functions/stream_async_for_keeps_context_after_creator_returns | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python stream lifetime/context regression |
 | llm_functions/stream_contexts_are_isolated_during_concurrent_iteration | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python concurrent stream context isolation |
@@ -743,6 +746,9 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | type_shapes/declared_enum_functions_and_class_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/deep_namespace_thing_reachable | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/defaulted_enum_argument_and_invalid_values | - | - | - | - | - | - | - | y | - | - | all |  |
+| type_shapes/dynamic_class_union_field_round_trips_through_generic_decode | - | - | - | - | - | - | - | y | - | - | go | Go-only generic decoding of any-typed class unions. |
+| type_shapes/dynamic_class_union_field_round_trips_through_generic_list_decode | - | - | - | - | - | - | - | y | - | - | go | Go-only generic decoding of any-typed class unions. |
+| type_shapes/dynamic_class_union_field_round_trips_through_typed_decode | - | - | - | - | - | - | - | y | - | - | go | Go-only generic decoding of any-typed class unions. |
 | type_shapes/dynamic_union_accepts_natural_go_integers | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/dynamic_union_candidates_round_trip_as_concrete_go_values | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/dynamic_union_delegates_semantic_validation_to_baml | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -854,6 +860,8 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | type_shapes/opaque_rust_type_default_and_host_callback_positions | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/opaque_rust_type_nested_containers_classes_and_null | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/opaque_rust_type_round_trips_and_remains_reusable | - | - | - | - | - | - | - | y | - | - | all |  |
+| type_shapes/optional_constructor_leaves_optional_fields_none_rust_only | - | - | - | - | - | - | y | - | - | - | rust | exercises the Rust struct constructor and struct update syntax |
+| type_shapes/optional_constructor_with_struct_update_survives_new_optional_fields_rust_only | - | - | - | - | - | - | y | - | - | - | rust | exercises the Rust struct constructor and struct update syntax |
 | type_shapes/optional_omitted_nullable_keys_read_as_null | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | TypeScript object literals and constructor inits may leave nullable keys out |
 | type_shapes/optional_omitted_required_key_is_rejected | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | only TypeScript has a type-level check that a required key is present |
 | type_shapes/optional_round_trip_optional_container | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -980,6 +988,8 @@ Parity is the share of the 456 test IDs declared in `python_pydantic2` that are 
 | type_shapes/routing_round_trip_root_foo | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/routing_round_trip_root_foo_from_ab | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/routing_round_trip_thing_from_ab | y | y | y | y | y | - | y | - | y | y | all |  |
+| type_shapes/sdk_works_nested_in_an_application_package_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python packages nest by import path; other SDKs name their package at generation |
+| type_shapes/sdk_works_when_copied_under_another_name_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python packages nest by import path; other SDKs name their package at generation |
 | type_shapes/supported_namespaces_reachable | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/symbol_collisions_round_trip_deep | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/symbol_collisions_round_trip_fizz_buzz_foo_bar | y | y | y | y | y | - | y | - | y | y | all |  |

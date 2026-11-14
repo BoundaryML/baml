@@ -255,6 +255,20 @@ function f() -> int {
     assert_eq!(function(&project(source), "f").lines, 4);
 }
 
+/// A blank line inside a template's text is not a line of code, as a blank
+/// line between statements is not.
+#[test]
+fn template_blank_lines_are_not_code() {
+    let source = r#"
+function f(x: int) -> string {
+    `first ${x}
+
+    third`
+}
+"#;
+    assert_eq!(function(&project(source), "f").lines, 4);
+}
+
 #[test]
 fn file_lines_split_out_tests() {
     let source = r#"

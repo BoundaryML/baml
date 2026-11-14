@@ -1,14 +1,14 @@
 //! `TypeScriptFunction` — shared top-level factory binding.
 //!
-//! Rendered as `export const <name> = defineFunction(...)` with an `_async`
-//! sibling. The fields (`param_names`, `arg_tys`, …) carry the data the
+//! Rendered as `export const <name> = defineFunction(...)` with a `_sync`
+//! blocking sibling. The fields (`param_names`, `arg_tys`, …) carry the data the
 //! renderer needs to emit the typed cast.
 
 use baml_sdkgen_types::{FunctionArgumentDefault, Ty};
 
 /// Async/sync marker carried by factory bindings. Each BAML `Function`
-/// (and each of its companions) fans out into one sync and one async
-/// binding.
+/// (and each of its companions) fans out into one async binding (the plain
+/// name) and one blocking `_sync` binding.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SyncAsync {
     Sync,
@@ -16,8 +16,8 @@ pub(crate) enum SyncAsync {
 }
 
 pub(crate) struct TypeScriptFunction {
-    /// TS identifier. Sync form = BAML name verbatim; async form =
-    /// `<name>_async`. Companion forms (`foo$stream`, `foo_spec`) are also
+    /// TS identifier. Async form = BAML name verbatim; blocking form =
+    /// `<name>_sync`. Companion forms (`foo$stream`, `foo_spec`) are also
     /// `TypeScriptFunction` stubs.
     pub(crate) name: String,
     /// FQN passed as the first arg to `defineFunction`. Carries the

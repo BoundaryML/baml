@@ -1634,6 +1634,14 @@ fn host_callable_fixture_descriptor_is_current() {
                 Ty::Int,
             ),
             function_desc("TakeUnknown", vec![param("value", Ty::Unknown)], Ty::Int),
+            function_desc(
+                "SignalAfterCallbackStarts",
+                vec![
+                    param("callback", never_callback(vec![Ty::String], Ty::Bool)),
+                    param("path", Ty::String),
+                ],
+                Ty::Bool,
+            ),
         ],
         classes: vec![],
         enums: vec![],

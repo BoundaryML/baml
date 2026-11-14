@@ -1,0 +1,60 @@
+/* Motion for the /fight-slop-with-slop campaign page, scoped to its `.war-on-slop` wrapper. Colours
+   and type come from the theme tokens and the v4 type classes; this file only holds the keyframes
+   the pledge wall and the share button need. Keyframes are namespaced `wos-` so they can't collide
+   with the site's own. */
+
+/* The pledge wall: each row holds its cards twice and scrolls exactly one copy, so it loops
+   without a jump. The second row runs the other way. */
+@keyframes wos-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.war-on-slop .marquee-track {
+  animation: wos-marquee 45s linear infinite;
+}
+
+.war-on-slop .marquee-track-rev {
+  animation: wos-marquee 45s linear infinite reverse;
+}
+
+.war-on-slop .marquee-track:hover,
+.war-on-slop .marquee-track-rev:hover {
+  animation-play-state: paused;
+}
+
+/* The paper plane on the Share button while a pledge is sending. */
+@keyframes wos-paper-plane-send {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  45% {
+    transform: translate(8px, -8px) rotate(8deg);
+    opacity: 1;
+  }
+  46% {
+    transform: translate(-10px, 10px) rotate(8deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.war-on-slop .animate-paper-plane-send {
+  animation: wos-paper-plane-send 900ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .war-on-slop .marquee-track,
+  .war-on-slop .marquee-track-rev,
+  .war-on-slop .animate-paper-plane-send {
+    animation: none;
+  }
+}

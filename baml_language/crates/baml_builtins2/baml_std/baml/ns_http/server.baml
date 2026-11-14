@@ -162,8 +162,8 @@ function reject_websocket(req: ServerRequest) -> Response throws never {
 /// To force HTTP clients onto HTTPS, run two servers — a plaintext one on the
 /// HTTP port whose handler redirects, and the TLS one on the HTTPS port:
 /// ```baml
-/// let secure = http.Server.bind("0.0.0.0:443");
-/// let upgrade = http.Server.bind("0.0.0.0:80");
+/// let secure = baml.http.Server.bind("0.0.0.0:443");
+/// let upgrade = baml.http.Server.bind("0.0.0.0:80");
 /// spawn { upgrade.serve((req) -> {
 ///     baml.http.Response.new(308, { "Location": "https://" + req.headers.get("host") + req.url }, "".to_utf8())
 /// }) };

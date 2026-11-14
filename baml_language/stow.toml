@@ -46,7 +46,7 @@ ignore_crates = ["sdk_test_*"]
 # Graph visualization settings
 # Run: cargo stow --graph /tmp/deps.svg
 [graph]
-external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "rowan", "reqwest"]
+external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "reqwest"]
 
 # Implied dependencies: if a crate depends on both the key and a value,
 # the edge to the value is hidden (it's visually implied by the key).
@@ -93,10 +93,12 @@ reason = "Precompiled stdlib test helpers belong in dev-dependencies."
 [[namespaces]]
 name = "baml"
 # `fmt` is the formatter, `baml_fmt`, and its browser build, `baml_fmt_wasm`.
-approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt"]
+# `syntax` is the typed syntax tree (`baml_syntax`, `baml_syntax_macros`) and
+# `parser` the lexer+parser that builds it; both are foundational, like `baml_type`.
+approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt", "syntax", "parser"]
 # The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
 # the same shape), not a prefix + word.
-approved_suffixes = ["artifact", "compiler2_hir_ty", "test_support"]
+approved_suffixes = ["artifact", "compiler2_hir_ty", "project_root", "test_support"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring

@@ -60,10 +60,10 @@ fn init_warns_then_embedded_install_silences_authoring_commands() {
         "fmt --dry-run failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        !String::from_utf8_lossy(&output.stderr).contains("baml skill"),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
+        !stderr.contains("baml skill") && !stderr.contains("BAML agent skill"),
+        "{stderr}"
     );
 }
 

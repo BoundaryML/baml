@@ -1,0 +1,40 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"test \\\"x\\\" with R { t: 0.5 } {\\n  assert.is_true(true)\\n}\\n\")"
+---
+SourceFile@0..53
+  items: TestDef@0..53
+    kw: Test "test" @0..4
+    name: StringLit@5..8
+      token: String "\"x\"" @5..8
+    with: WithClause@9..26
+      kw: With "with" @9..13
+      items: ObjectLiteral@14..26
+        ctor: PathExpr@14..15
+          head: Name@14..15
+            token: Word "R" @14..15
+        l: LBrace "{" @16..17
+        members: ObjectField@18..24
+          key: DottedName@18..19
+            head: Name@18..19
+              token: Word "t" @18..19
+          colon: Colon ":" @19..20
+          value: LiteralExpr@21..24
+            token: Float "0.5" @21..24
+        r: RBrace "}" @25..26
+    body: Block@27..53
+      l: LBrace "{" @27..28
+      tail: CallExpr@31..51
+        callee: PathExpr@31..45
+          head: Name@31..37
+            token: Word "assert" @31..37
+          dot: Dot "." @37..38
+          name: Name@38..45
+            token: Word "is_true" @38..45
+        args: ArgList@45..51
+          l: LParen "(" @45..46
+          args: Arg@46..50
+            value: LiteralExpr@46..50
+              token: True "true" @46..50
+          r: RParen ")" @50..51
+      r: RBrace "}" @52..53

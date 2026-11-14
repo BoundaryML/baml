@@ -17,9 +17,10 @@
 // `Stream` on re-export (`export { BamlStream as Stream } from ...`).
 //
 // The per-chunk `next`/`final` pulls here are independent of whether the host
-// obtained the stream through `Fn$stream` or `Fn$stream_async`. Those bindings
+// obtained the stream through `Fn$stream` or `Fn$stream_sync`. Those bindings
 // send the authored FQN with the Stream boundary operation; the engine resolves
-// PPIR's private `Fn@stream`. The wrapper exposes both sync and async pulls.
+// PPIR's private `Fn@stream`. The wrapper exposes async pulls (`next`/`final`)
+// and blocking twins (`nextSync`/`finalSync`).
 import { supportsSyncStreamPulls } from './platform.js';
 import { invokeTarget } from './proto.js';
 /**
@@ -44,21 +45,23 @@ export class BamlStream {
     _toHandle() {
         return this._handle;
     }
-    next(options) {
-        return this._callSync(`${this._classFqn}.next`, options);
-    }
-    async nextAsync(options) {
+    async next(options) {
         return (await this._callAsync(`${this._classFqn}.next`, options));
     }
-    final(options) {
-        return this._callSync(`${this._classFqn}.final`, options);
+    /** Blocking twin of `next()`. Throws in Web runtimes (browser, workerd), which cannot block on a stream pull. */
+    nextSync(options) {
+        return this._callSync(`${this._classFqn}.next`, options);
     }
-    async finalAsync(options) {
+    async final(options) {
         return (await this._callAsync(`${this._classFqn}.final`, options));
+    }
+    /** Blocking twin of `final()`. Throws in Web runtimes (browser, workerd), which cannot block on a stream pull. */
+    finalSync(options) {
+        return this._callSync(`${this._classFqn}.final`, options);
     }
     _callSync(fqn, options) {
         if (!supportsSyncStreamPulls) {
-            throw new Error('synchronous stream pulls are unavailable in Web runtimes; use nextAsync() or finalAsync() instead');
+            throw new Error('synchronous stream pulls are unavailable in Web runtimes; use next() or final() instead');
         }
         return invokeTarget(fqn, { self: this }, options, false);
     }

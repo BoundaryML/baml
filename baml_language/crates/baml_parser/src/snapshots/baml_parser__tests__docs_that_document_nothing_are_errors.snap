@@ -1,0 +1,87 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f() -> int {\\n  /// not here\\n  1\\n}\\nclass C {\\n  /// orphan\\n  @@dynamic\\n  x: int\\n}\\n//baml:nope\\nfunction g() -> int { 1 }\\n/// baml:$trace=bad()\\nfunction h() -> int { 1 }\\n\")"
+---
+SourceFile@0..174
+  items: FunctionDef@0..42
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..12
+      l: LParen "(" @10..11
+      r: RParen ")" @11..12
+    ret: ReturnType@13..19
+      arrow: Arrow "->" @13..15
+      ty: PathType@16..19
+        head: Name@16..19
+          token: Word "int" @16..19
+    body: Block@20..42
+      l: LBrace "{" @20..21
+      stmts: Bogus@24..36
+        tokens: DocComment "/// not here" @24..36
+      tail: LiteralExpr@39..40
+        token: Integer "1" @39..40
+      r: RBrace "}" @41..42
+  items: ClassDef@43..88
+    kw: Class "class" @43..48
+    name: Name@49..50
+      token: Word "C" @49..50
+    l: LBrace "{" @51..52
+    members: Bogus@55..65
+      tokens: DocComment "/// orphan" @55..65
+    members: BlockAttr@68..77
+      at: AtAt "@@" @68..70
+      path: DottedName@70..77
+        head: Name@70..77
+          token: Dynamic "dynamic" @70..77
+    members: Field@80..86
+      name: Name@80..81
+        token: Word "x" @80..81
+      colon: Colon ":" @81..82
+      ty: PathType@83..86
+        head: Name@83..86
+          token: Word "int" @83..86
+    r: RBrace "}" @87..88
+  items: FunctionDef@89..126
+    docs: Bogus@89..100
+      tokens: DirectiveComment "//baml:nope" @89..100
+    kw: Function "function" @101..109
+    name: Name@110..111
+      token: Word "g" @110..111
+    params: ParamList@111..113
+      l: LParen "(" @111..112
+      r: RParen ")" @112..113
+    ret: ReturnType@114..120
+      arrow: Arrow "->" @114..116
+      ty: PathType@117..120
+        head: Name@117..120
+          token: Word "int" @117..120
+    body: Block@121..126
+      l: LBrace "{" @121..122
+      tail: LiteralExpr@123..124
+        token: Integer "1" @123..124
+      r: RBrace "}" @125..126
+  items: FunctionDef@127..174
+    docs: Bogus@127..148
+      tokens: DocComment "/// baml:$trace=bad()" @127..148
+    kw: Function "function" @149..157
+    name: Name@158..159
+      token: Word "h" @158..159
+    params: ParamList@159..161
+      l: LParen "(" @159..160
+      r: RParen ")" @160..161
+    ret: ReturnType@162..168
+      arrow: Arrow "->" @162..164
+      ty: PathType@165..168
+        head: Name@165..168
+          token: Word "int" @165..168
+    body: Block@169..174
+      l: LBrace "{" @169..170
+      tail: LiteralExpr@171..172
+        token: Integer "1" @171..172
+      r: RBrace "}" @173..174
+---
+InvalidDirective { message: "`///` doc comments and `//baml:` directives must directly precede the declaration they belong to; use `//` for a plain comment", range: 24..36 }
+InvalidDirective { message: "`///` doc comments and `//baml:` directives must directly precede the declaration they belong to; use `//` for a plain comment", range: 55..65 }
+InvalidDirective { message: "unknown directive `//baml:nope`", range: 89..100 }
+InvalidDirective { message: "Invalid trace hook directive on function `h`.\nExpected `/// baml:$trace=hook_name` with a function reference.\nhelp: Use a function name without call parentheses, for example `/// baml:$trace=trace.empty_span`.", range: 127..148 }

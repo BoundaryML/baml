@@ -37,6 +37,7 @@
 #![allow(clippy::doc_markdown)]
 
 use std::{
+    borrow::Cow,
     collections::HashMap,
     sync::{Mutex, OnceLock},
 };
@@ -71,10 +72,22 @@ const REFRESH_THRESHOLD_SECS: u64 = 225;
 // ---------------------------------------------------------------------------
 
 /// A minimal HTTP response.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HttpResponse {
     pub status: u16,
     pub body: String,
+}
+
+/// A token endpoint's body holds an access token, so `Debug` shows its length.
+impl std::fmt::Debug for HttpResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Destructured so a new field has to be placed here deliberately.
+        let Self { status, body } = self;
+        f.debug_struct("HttpResponse")
+            .field("status", status)
+            .field("body_len", &body.len())
+            .finish()
+    }
 }
 
 /// Async IO operations the resolver needs. Implemented by the host, typically
@@ -112,6 +125,12 @@ pub enum AuthError {
     NoCredentials(String),
     /// A credential type or source google-auth supports but this fork does not.
     Unsupported(String),
+    /// A setting that must name a credential file (`setting`) names no
+    /// readable file. `held` says what it holds instead, without its text.
+    UnusableCredentialPath {
+        setting: &'static str,
+        held: PathSetting,
+    },
 }
 
 impl std::fmt::Display for AuthError {
@@ -123,6 +142,9 @@ impl std::fmt::Display for AuthError {
             | AuthError::TokenEndpoint(m)
             | AuthError::NoCredentials(m)
             | AuthError::Unsupported(m) => write!(f, "Google Cloud: {m}"),
+            AuthError::UnusableCredentialPath { setting, held } => {
+                write!(f, "Google Cloud: {}", held.describe_unreadable(setting))
+            }
         }
     }
 }
@@ -201,7 +223,8 @@ pub async fn token_from_service_account_json(
     if let Some(token) = cached_token(&key) {
         return Ok(token);
     }
-    let token = mint_service_account(io, json_str, scope).await?;
+    let value = parse_json(json_str, "service account JSON")?;
+    let token = mint_service_account(io, &value, scope).await?;
     store_token(key, &token);
     Ok(token.access_token)
 }
@@ -228,10 +251,8 @@ pub async fn token_from_credentials_json(
 /// Does not perform any network IO. Mirrors the resolution-time probe the AWS
 /// SDK performs.
 pub async fn adc_available(io: &dyn TokenIo) -> bool {
-    if let Some(path) = gac_path(io).await {
-        if io.read_file(&path).await.is_some() {
-            return true;
-        }
+    if let Ok(Some(_)) = gac_contents(io).await {
+        return true;
     }
     if let Some(path) = adc_config_path(io).await {
         if io.read_file(&path).await.is_some() {
@@ -247,12 +268,7 @@ pub async fn adc_available(io: &dyn TokenIo) -> bool {
 pub async fn token_from_adc(io: &dyn TokenIo, scope: &str) -> Result<String, AuthError> {
     // 1. GOOGLE_APPLICATION_CREDENTIALS file path. Like google-auth, a set
     //    var whose file cannot be read is an error, not a fallthrough.
-    if let Some(path) = gac_path(io).await {
-        let Some(contents) = io.read_file(&path).await else {
-            return Err(AuthError::NoCredentials(format!(
-                "GOOGLE_APPLICATION_CREDENTIALS points to '{path}' but the file could not be read"
-            )));
-        };
+    if let Some(contents) = gac_contents(io).await? {
         return token_from_credentials_json(io, &contents, scope).await;
     }
 
@@ -278,39 +294,55 @@ pub async fn token_from_adc(io: &dyn TokenIo, scope: &str) -> Result<String, Aut
 /// `GOOGLE_APPLICATION_CREDENTIALS` file → the active gcloud configuration's
 /// `core.project` → the well-known ADC file's quota/project id → the GCE
 /// metadata server.
-pub async fn project_id(io: &dyn TokenIo) -> Option<String> {
+///
+/// `credentials` is the document the caller authenticates with, when it has
+/// one instead of Application Default Credentials. Its own project id comes
+/// first, and the chain's credential files are skipped: they belong to other
+/// identities, and a project taken from one is not the token's.
+///
+/// `Ok(None)` means no source names a project. A `GOOGLE_APPLICATION_CREDENTIALS`
+/// that names no readable file is an error, as it is for [`token_from_adc`]:
+/// the chain never moves past it to another source's project.
+pub async fn project_id(
+    io: &dyn TokenIo,
+    credentials: Option<&str>,
+) -> Result<Option<String>, AuthError> {
+    if let Some(pid) = credentials.and_then(project_id_from_json) {
+        return Ok(Some(pid));
+    }
+    let adc = credentials.is_none();
+
     for env_key in ["GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT"] {
         if let Some(val) = io.env(env_key).await {
             let val = val.trim().to_string();
             // Ignore unexpanded `$VAR` placeholders from .env files. A set-but-
             // empty var is honored so the misconfiguration is visible.
             if !val.starts_with('$') {
-                return Some(val);
+                return Ok(Some(val));
             }
         }
     }
 
-    if let Some(path) = gac_path(io).await {
-        if let Some(contents) = io.read_file(&path).await {
-            if let Some(pid) = project_id_from_json(&contents) {
-                return Some(pid);
-            }
-        }
+    if adc
+        && let Some(contents) = gac_contents(io).await?
+        && let Some(pid) = project_id_from_json(&contents)
+    {
+        return Ok(Some(pid));
     }
 
     if let Some(pid) = gcloud_config_project(io).await {
-        return Some(pid);
+        return Ok(Some(pid));
     }
 
-    if let Some(path) = adc_config_path(io).await {
-        if let Some(contents) = io.read_file(&path).await {
-            if let Some(pid) = project_id_from_json(&contents) {
-                return Some(pid);
-            }
-        }
+    if adc
+        && let Some(path) = adc_config_path(io).await
+        && let Some(contents) = io.read_file(&path).await
+        && let Some(pid) = project_id_from_json(&contents)
+    {
+        return Ok(Some(pid));
     }
 
-    metadata_project_id(io).await
+    Ok(metadata_project_id(io).await)
 }
 
 /// Extract a project id from a credential JSON document (`project_id`, falling
@@ -331,11 +363,11 @@ pub async fn quota_project_id(io: &dyn TokenIo) -> Option<String> {
     if let Some(val) = io.env("GOOGLE_CLOUD_QUOTA_PROJECT").await {
         return Some(val.trim().to_string());
     }
-    if let Some(path) = gac_path(io).await {
-        if let Some(contents) = io.read_file(&path).await {
-            if let Some(qp) = quota_project_id_from_json(&contents) {
-                return Some(qp);
-            }
+    // Best-effort: an unusable GOOGLE_APPLICATION_CREDENTIALS is the token
+    // and project lookups' error to report.
+    if let Ok(Some(contents)) = gac_contents(io).await {
+        if let Some(qp) = quota_project_id_from_json(&contents) {
+            return Some(qp);
         }
     }
     if let Some(path) = adc_config_path(io).await {
@@ -364,25 +396,33 @@ async fn mint_from_credentials_json(
     json_str: &str,
     scope: &str,
 ) -> Result<Token, AuthError> {
-    let value: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| AuthError::Parse(format!("failed to parse credential JSON: {e}")))?;
-    match value.get("type").and_then(serde_json::Value::as_str) {
-        Some("authorized_user") => mint_authorized_user(io, &value).await,
-        Some("service_account") => mint_service_account(io, json_str, scope).await,
-        Some("external_account") => mint_external_account(io, &value, scope).await,
-        Some("external_account_authorized_user") => {
+    let value = parse_json(json_str, "credential JSON")?;
+    match DocumentType::of(&value) {
+        DocumentType::Known(CredentialType::AuthorizedUser) => {
+            mint_authorized_user(io, &value).await
+        }
+        DocumentType::Known(CredentialType::ServiceAccount) => {
+            mint_service_account(io, &value, scope).await
+        }
+        DocumentType::Known(CredentialType::ExternalAccount) => {
+            mint_external_account(io, &value, scope).await
+        }
+        DocumentType::Known(CredentialType::ExternalAccountAuthorizedUser) => {
             mint_external_account_authorized_user(io, &value).await
         }
-        Some("impersonated_service_account") => mint_impersonated(io, &value, scope).await,
-        Some("gdch_service_account") => Err(AuthError::Unsupported(
+        DocumentType::Known(CredentialType::ImpersonatedServiceAccount) => {
+            mint_impersonated(io, &value, scope).await
+        }
+        DocumentType::Known(CredentialType::GdchServiceAccount) => Err(AuthError::Unsupported(
             "GDCH service-account credentials are not supported".to_string(),
         )),
-        Some(other) => Err(AuthError::NoCredentials(format!(
-            "unsupported ADC credential type '{other}' (supported: service_account, \
-             authorized_user, external_account, external_account_authorized_user, \
-             impersonated_service_account)"
-        ))),
-        None => Err(AuthError::Parse(
+        // The field is the document's own text: it is not quoted.
+        DocumentType::Unknown => Err(AuthError::NoCredentials(
+            "unsupported ADC credential type (supported: service_account, authorized_user, \
+             external_account, external_account_authorized_user, impersonated_service_account)"
+                .to_string(),
+        )),
+        DocumentType::Missing => Err(AuthError::Parse(
             "ADC JSON missing 'type' field".to_string(),
         )),
     }
@@ -392,22 +432,32 @@ async fn mint_from_credentials_json(
 // Flows: service account (RS256 JWT-bearer)
 // ---------------------------------------------------------------------------
 
-#[derive(serde::Deserialize)]
-struct ServiceAccount {
-    client_email: String,
-    private_key: String,
-    token_uri: Option<String>,
+struct ServiceAccount<'a> {
+    client_email: &'a str,
+    private_key: &'a str,
+    token_uri: Option<&'a str>,
+}
+
+impl<'a> ServiceAccount<'a> {
+    /// Read through [`str_field`], like every other flow, so a missing or
+    /// mistyped field is reported by name and never by value.
+    fn from_value(value: &'a serde_json::Value) -> Result<Self, AuthError> {
+        Ok(Self {
+            client_email: str_field(value, "client_email", "service_account")?,
+            private_key: str_field(value, "private_key", "service_account")?,
+            token_uri: value.get("token_uri").and_then(serde_json::Value::as_str),
+        })
+    }
 }
 
 async fn mint_service_account(
     io: &dyn TokenIo,
-    json_str: &str,
+    value: &serde_json::Value,
     scope: &str,
 ) -> Result<Token, AuthError> {
-    let sa: ServiceAccount = serde_json::from_str(json_str)
-        .map_err(|e| AuthError::Parse(format!("failed to parse service account JSON: {e}")))?;
+    let sa = ServiceAccount::from_value(value)?;
     let jwt = sign_service_account_jwt(&sa, scope)?;
-    let token_uri = sa.token_uri.as_deref().unwrap_or(DEFAULT_TOKEN_URI);
+    let token_uri = sa.token_uri.unwrap_or(DEFAULT_TOKEN_URI);
     let body = format!(
         "grant_type={}&assertion={}",
         encode("urn:ietf:params:oauth:grant-type:jwt-bearer"),
@@ -417,11 +467,14 @@ async fn mint_service_account(
 }
 
 /// Sign a service-account JWT using RSASSA-PKCS1-v1_5 with SHA-256.
-fn sign_service_account_jwt(sa: &ServiceAccount, scope: &str) -> Result<String, AuthError> {
-    #[allow(clippy::cast_possible_wrap)]
+fn sign_service_account_jwt(sa: &ServiceAccount<'_>, scope: &str) -> Result<String, AuthError> {
+    #[expect(
+        clippy::cast_possible_wrap,
+        reason = "Unix time in seconds fits an i64 until the year 292 billion"
+    )]
     let now = now_unix() as i64;
 
-    let token_uri = sa.token_uri.as_deref().unwrap_or(DEFAULT_TOKEN_URI);
+    let token_uri = sa.token_uri.unwrap_or(DEFAULT_TOKEN_URI);
     let header = serde_json::json!({ "alg": "RS256", "typ": "JWT" });
     let claims = serde_json::json!({
         "iss": sa.client_email,
@@ -435,7 +488,7 @@ fn sign_service_account_jwt(sa: &ServiceAccount, scope: &str) -> Result<String, 
     let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string());
     let signing_input = format!("{header_b64}.{claims_b64}");
 
-    let private_key = RsaPrivateKey::from_pkcs8_pem(&sa.private_key)
+    let private_key = RsaPrivateKey::from_pkcs8_pem(sa.private_key)
         .map_err(|e| AuthError::Signing(format!("failed to parse PKCS8 private key: {e}")))?;
     let signing_key = rsa::pkcs1v15::SigningKey::<sha2::Sha256>::new(private_key);
 
@@ -603,8 +656,7 @@ async fn fetch_subject_token(
                     "external_account JSON format missing 'subject_token_field_name'".to_string(),
                 )
             })?;
-        let parsed: serde_json::Value = serde_json::from_str(&raw)
-            .map_err(|e| AuthError::Parse(format!("failed to parse subject token JSON: {e}")))?;
+        let parsed = parse_json(&raw, "subject token JSON")?;
         parsed
             .get(field)
             .and_then(serde_json::Value::as_str)
@@ -665,16 +717,31 @@ async fn mint_impersonated(
         AuthError::Parse("impersonated_service_account missing 'source_credentials'".to_string())
     })?;
 
-    let source_token = match source.get("type").and_then(serde_json::Value::as_str) {
-        Some("authorized_user") => mint_authorized_user(io, source).await?,
-        Some("service_account") => {
-            mint_service_account(io, &source.to_string(), CLOUD_PLATFORM_SCOPE).await?
+    let source_token = match DocumentType::of(source) {
+        DocumentType::Known(CredentialType::AuthorizedUser) => {
+            mint_authorized_user(io, source).await?
         }
-        other => {
-            return Err(AuthError::Unsupported(format!(
-                "impersonated_service_account source_credentials type {other:?} is not \
-                 supported (only service_account and authorized_user)"
-            )));
+        DocumentType::Known(CredentialType::ServiceAccount) => {
+            mint_service_account(io, source, CLOUD_PLATFORM_SCOPE).await?
+        }
+        DocumentType::Known(
+            CredentialType::ExternalAccount
+            | CredentialType::ExternalAccountAuthorizedUser
+            | CredentialType::ImpersonatedServiceAccount
+            | CredentialType::GdchServiceAccount,
+        )
+        // The field is the document's own text: it is not quoted.
+        | DocumentType::Unknown => {
+            return Err(AuthError::Unsupported(
+                "impersonated_service_account source_credentials type is not supported (only \
+                 service_account and authorized_user)"
+                    .to_string(),
+            ));
+        }
+        DocumentType::Missing => {
+            return Err(AuthError::Parse(
+                "impersonated_service_account source_credentials missing 'type'".to_string(),
+            ));
         }
     };
 
@@ -712,11 +779,15 @@ async fn impersonate(
     if !(200..300).contains(&resp.status) {
         return Err(AuthError::TokenEndpoint(format!(
             "service-account impersonation endpoint returned status {}: {}",
-            resp.status, resp.body
+            resp.status,
+            describe_error_body(&resp.body)
         )));
     }
     let value: serde_json::Value = serde_json::from_str(&resp.body).map_err(|e| {
-        AuthError::TokenEndpoint(format!("failed to parse impersonation response: {e}"))
+        AuthError::TokenEndpoint(format!(
+            "failed to parse impersonation response: {}",
+            json_error(&e)
+        ))
     })?;
     let access_token = value
         .get("accessToken")
@@ -787,15 +858,20 @@ async fn post_token_form(
     if resp.status < 200 || resp.status >= 300 {
         return Err(AuthError::TokenEndpoint(format!(
             "token endpoint returned status {}: {}",
-            resp.status, resp.body
+            resp.status,
+            describe_error_body(&resp.body)
         )));
     }
     parse_token_response(&resp.body)
 }
 
 fn parse_token_response(body: &str) -> Result<Token, AuthError> {
-    let value: serde_json::Value = serde_json::from_str(body)
-        .map_err(|e| AuthError::TokenEndpoint(format!("failed to parse token response: {e}")))?;
+    let value: serde_json::Value = serde_json::from_str(body).map_err(|e| {
+        AuthError::TokenEndpoint(format!(
+            "failed to parse token response: {}",
+            json_error(&e)
+        ))
+    })?;
     let access_token = value
         .get("access_token")
         .and_then(serde_json::Value::as_str)
@@ -822,6 +898,290 @@ fn parse_token_response(body: &str) -> Result<Token, AuthError> {
 /// as-is so it fails visibly instead of being silently skipped.
 async fn gac_path(io: &dyn TokenIo) -> Option<String> {
     io.env("GOOGLE_APPLICATION_CREDENTIALS").await
+}
+
+/// The `GOOGLE_APPLICATION_CREDENTIALS` file's contents: `None` when the
+/// variable is unset. A set variable that names no readable file is an error,
+/// never a fallthrough to the next source (google-auth parity).
+async fn gac_contents(io: &dyn TokenIo) -> Result<Option<String>, AuthError> {
+    let Some(value) = gac_path(io).await else {
+        return Ok(None);
+    };
+    match io.read_file(&value).await {
+        Some(contents) => Ok(Some(contents)),
+        None => Err(AuthError::UnusableCredentialPath {
+            setting: "GOOGLE_APPLICATION_CREDENTIALS",
+            held: PathSetting::classify(&value),
+        }),
+    }
+}
+
+/// The `type` of a credential document, as google-auth names them.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CredentialType {
+    AuthorizedUser,
+    ServiceAccount,
+    ExternalAccount,
+    ExternalAccountAuthorizedUser,
+    ImpersonatedServiceAccount,
+    GdchServiceAccount,
+}
+
+impl CredentialType {
+    fn parse(type_field: &str) -> Option<Self> {
+        Some(match type_field {
+            "authorized_user" => Self::AuthorizedUser,
+            "service_account" => Self::ServiceAccount,
+            "external_account" => Self::ExternalAccount,
+            "external_account_authorized_user" => Self::ExternalAccountAuthorizedUser,
+            "impersonated_service_account" => Self::ImpersonatedServiceAccount,
+            "gdch_service_account" => Self::GdchServiceAccount,
+            _ => return None,
+        })
+    }
+
+    /// The `type` field's value.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::AuthorizedUser => "authorized_user",
+            Self::ServiceAccount => "service_account",
+            Self::ExternalAccount => "external_account",
+            Self::ExternalAccountAuthorizedUser => "external_account_authorized_user",
+            Self::ImpersonatedServiceAccount => "impersonated_service_account",
+            Self::GdchServiceAccount => "gdch_service_account",
+        }
+    }
+}
+
+/// What a credential document's `type` field says.
+enum DocumentType {
+    Known(CredentialType),
+    /// A `type` google-auth does not define.
+    Unknown,
+    /// No string `type` field.
+    Missing,
+}
+
+impl DocumentType {
+    fn of(document: &serde_json::Value) -> Self {
+        match document.get("type").and_then(serde_json::Value::as_str) {
+            Some(type_field) => {
+                CredentialType::parse(type_field).map_or(Self::Unknown, Self::Known)
+            }
+            None => Self::Missing,
+        }
+    }
+}
+
+/// What a setting that should name a credential file holds.
+///
+/// Users put credential documents and tokens in such settings by mistake, and
+/// errors reach logs, so a value is classified once and every message is built
+/// from the classification, never from the raw text: only the cases that are
+/// plainly a path carry it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PathSetting {
+    /// The empty string, or only whitespace.
+    Empty,
+    /// Plainly a path to a `.json` file.
+    Path(String),
+    /// A plain path wrapped in quotes, as some `.env` loaders leave it.
+    QuotedPath(String),
+    /// A plain path with whitespace around it.
+    PaddedPath(String),
+    /// A JSON object, directly or wrapped in a JSON string (as `vercel env
+    /// pull` writes one). `kind` is its `type`, when that is a known one.
+    Document {
+        kind: Option<CredentialType>,
+        length: usize,
+    },
+    /// Anything else.
+    Unrecognized { length: usize },
+}
+
+impl PathSetting {
+    /// Classify the value of a setting that should name a credential file.
+    pub fn classify(value: &str) -> Self {
+        let length = value.chars().count();
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Self::Empty;
+        }
+        if let Some((_, document)) = parse_credential_document(value) {
+            return Self::Document {
+                kind: document_kind(&document),
+                length,
+            };
+        }
+        if let Ok(serde_json::Value::String(inner)) = serde_json::from_str(value) {
+            if is_plain_path(&inner) {
+                return Self::QuotedPath(inner);
+            }
+        }
+        if is_plain_path(value) {
+            Self::Path(value.to_string())
+        } else if is_plain_path(trimmed) {
+            Self::PaddedPath(trimmed.to_string())
+        } else {
+            Self::Unrecognized { length }
+        }
+    }
+
+    /// Why `setting`, holding this value, names no readable file.
+    pub fn describe_unreadable(&self, setting: &str) -> String {
+        match self {
+            Self::Empty => format!("{setting} is set but empty"),
+            Self::Path(path) => {
+                format!("{setting} points to '{path}' but the file could not be read")
+            }
+            Self::QuotedPath(path) => format!(
+                "{setting} holds the path '{path}' wrapped in quotes; set it without the quotes"
+            ),
+            Self::PaddedPath(path) => format!(
+                "{setting} holds the path '{path}' with whitespace around it; set it without the \
+                 whitespace"
+            ),
+            Self::Document { kind, length } => {
+                let document = match kind {
+                    Some(kind) => {
+                        let name = kind.as_str();
+                        let article = if name.starts_with(['a', 'e', 'i', 'o', 'u']) {
+                            "an"
+                        } else {
+                            "a"
+                        };
+                        format!("{article} {name} credential document")
+                    }
+                    None => "a JSON document".to_string(),
+                };
+                format!(
+                    "{setting} holds {document} ({length} characters, not shown), but it must be \
+                     a file path"
+                )
+            }
+            Self::Unrecognized { length } => format!(
+                "{setting} does not name a readable file (the value, {length} characters, is \
+                 not shown because it does not look like a path to a .json file)"
+            ),
+        }
+    }
+}
+
+/// `text` as a credential document: itself when it is a JSON object, or the
+/// text a JSON string holds when that is one (`vercel env pull` and friends
+/// store documents so). `None` for anything else.
+pub fn credential_document(text: &str) -> Option<Cow<'_, str>> {
+    parse_credential_document(text).map(|(document, _)| document)
+}
+
+/// [`credential_document`]'s text, with the object it parses to.
+fn parse_credential_document(text: &str) -> Option<(Cow<'_, str>, serde_json::Value)> {
+    match serde_json::from_str::<serde_json::Value>(text).ok()? {
+        document @ serde_json::Value::Object(_) => Some((Cow::Borrowed(text), document)),
+        serde_json::Value::String(inner) => match serde_json::from_str(&inner).ok()? {
+            document @ serde_json::Value::Object(_) => Some((Cow::Owned(inner), document)),
+            serde_json::Value::Null
+            | serde_json::Value::Bool(_)
+            | serde_json::Value::Number(_)
+            | serde_json::Value::String(_)
+            | serde_json::Value::Array(_) => None,
+        },
+        serde_json::Value::Null
+        | serde_json::Value::Bool(_)
+        | serde_json::Value::Number(_)
+        | serde_json::Value::Array(_) => None,
+    }
+}
+
+fn document_kind(document: &serde_json::Value) -> Option<CredentialType> {
+    match DocumentType::of(document) {
+        DocumentType::Known(kind) => Some(kind),
+        DocumentType::Unknown | DocumentType::Missing => None,
+    }
+}
+
+/// Whether an error may quote `value` as a path: one to a `.json` file, with
+/// nothing in it that a misplaced document or token has and a path does not.
+/// The check errs toward hiding.
+fn is_plain_path(value: &str) -> bool {
+    value.len() <= 512
+        && value.to_ascii_lowercase().ends_with(".json")
+        && !value
+            .chars()
+            .any(|c| matches!(c, '{' | '}' | '"' | '\'') || c.is_control())
+}
+
+/// Parse `text` as JSON, reporting a failure without the input.
+fn parse_json(text: &str, what: &str) -> Result<serde_json::Value, AuthError> {
+    serde_json::from_str(text)
+        .map_err(|e| AuthError::Parse(format!("failed to parse {what}: {}", json_error(&e))))
+}
+
+/// A JSON error without the input: serde's typed errors quote the offending
+/// value (`invalid type: string "…"`), which may be a credential.
+fn json_error(e: &serde_json::Error) -> String {
+    let kind = match e.classify() {
+        serde_json::error::Category::Io => "an IO error",
+        serde_json::error::Category::Syntax => "invalid JSON",
+        serde_json::error::Category::Data => "an unexpected shape",
+        serde_json::error::Category::Eof => "truncated JSON",
+    };
+    format!("{kind} at line {} column {}", e.line(), e.column())
+}
+
+/// The longest provider-supplied text an error carries.
+const MAX_ERROR_TEXT: usize = 300;
+
+/// What an error may say about a token or IAM endpoint's error body.
+///
+/// The body comes from whatever server the credential document names, so it
+/// is never quoted whole: only the fields Google's OAuth2 (`error`,
+/// `error_description`) and API (`error.status`, `error.message`) error
+/// formats define, each bounded and with control characters removed. Any
+/// other body is described by its length.
+fn describe_error_body(body: &str) -> String {
+    let field =
+        |v: Option<&serde_json::Value>| v.and_then(serde_json::Value::as_str).map(bounded_text);
+    let parsed = serde_json::from_str::<serde_json::Value>(body).ok();
+    let description = field(parsed.as_ref().and_then(|v| v.get("error_description")));
+    let parts: Vec<String> = match parsed.as_ref().and_then(|v| v.get("error")) {
+        Some(serde_json::Value::String(code)) => [Some(bounded_text(code)), description]
+            .into_iter()
+            .flatten()
+            .collect(),
+        Some(serde_json::Value::Object(object)) => {
+            [field(object.get("status")), field(object.get("message"))]
+                .into_iter()
+                .flatten()
+                .collect()
+        }
+        Some(
+            serde_json::Value::Null
+            | serde_json::Value::Bool(_)
+            | serde_json::Value::Number(_)
+            | serde_json::Value::Array(_),
+        )
+        | None => description.into_iter().collect(),
+    };
+    if parts.is_empty() {
+        format!("a {}-byte body (not shown)", body.len())
+    } else {
+        parts.join(": ")
+    }
+}
+
+/// `text` cut to [`MAX_ERROR_TEXT`] characters, marked when cut, with control
+/// characters (terminal escapes, newlines) replaced so it cannot rewrite a log.
+fn bounded_text(text: &str) -> String {
+    let mut out: String = text
+        .chars()
+        .take(MAX_ERROR_TEXT)
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    if text.chars().nth(MAX_ERROR_TEXT).is_some() {
+        out.push('…');
+    }
+    out
 }
 
 /// The gcloud config directory: `$CLOUDSDK_CONFIG`, `$HOME/.config/gcloud`
@@ -937,7 +1297,10 @@ fn rfc3339_to_unix(s: &str) -> Option<u64> {
     if days < 0 {
         return None;
     }
-    #[allow(clippy::cast_sign_loss)]
+    #[expect(
+        clippy::cast_sign_loss,
+        reason = "`days` was checked to be non-negative"
+    )]
     Some(days as u64 * 86_400 + hour * 3_600 + minute * 60 + second)
 }
 
@@ -963,8 +1326,8 @@ mod tests {
     #[test]
     fn rejects_invalid_private_key() {
         let sa = ServiceAccount {
-            client_email: "x@y.iam.gserviceaccount.com".into(),
-            private_key: "not-a-pem".into(),
+            client_email: "x@y.iam.gserviceaccount.com",
+            private_key: "not-a-pem",
             token_uri: None,
         };
         assert!(sign_service_account_jwt(&sa, CLOUD_PLATFORM_SCOPE).is_err());

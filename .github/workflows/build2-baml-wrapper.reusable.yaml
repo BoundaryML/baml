@@ -1,0 +1,84 @@
+name: BAML Release - Pack published BAML wrapper
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
+      wrapper_version:
+        type: string
+        required: true
+    secrets:
+      BAML_WRAPPER_BOUNDARY_API_KEY:
+        description: BCS telemetry API key to embed in the packed wrapper
+        required: true
+      BAML_WRAPPER_BCS_PROJECT:
+        description: Owning organization/project asserted when embedding the telemetry key
+        required: true
+      BAML_WRAPPER_BCS_ENVIRONMENT:
+        description: Environment the embedded telemetry key must exclusively write to
+        required: true
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+env:
+  # Keep the compiler/build process out of product telemetry.
+  DO_NOT_TRACK: '1'
+  BAML_TELEMETRY: 'off'
+  BAML_WRAPPER_BCS_TELEMETRY: 'off'
+jobs:
+  pack:
+    # Packing does not execute target binaries. The bootstrap compiler and each
+    # target host come from this run's toolchain artifacts, never a release URL.
+    runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: toolchain-*
+          path: toolchains
+      - name: Unpack compiler and target hosts
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import tarfile, zipfile
+          for directory in Path('toolchains').iterdir():
+              archives = list(directory.glob('*.tar.gz')) + list(directory.glob('*.zip'))
+              assert len(archives) == 1, directory
+              archive = archives[0]
+              if archive.suffix == '.zip':
+                  with zipfile.ZipFile(archive) as source:
+                      source.extractall(directory / 'unpacked')
+              else:
+                  with tarfile.open(archive) as source:
+                      source.extractall(directory / 'unpacked', filter='data')
+          PY
+      - name: Pack published archives for every wrapper platform and shipped variant
+        env:
+          WRAPPER_VERSION: ${{ inputs.wrapper_version }}
+          BAML_WRAPPER_BOUNDARY_API_KEY: ${{ secrets.BAML_WRAPPER_BOUNDARY_API_KEY }}
+          BAML_WRAPPER_BCS_PROJECT: ${{ secrets.BAML_WRAPPER_BCS_PROJECT }}
+          BAML_WRAPPER_BCS_ENVIRONMENT: ${{ secrets.BAML_WRAPPER_BCS_ENVIRONMENT }}
+        run: |
+          python scripts/baml-pack-wrapper-release \
+            --toolchains toolchains \
+            --out wrapper-dist \
+            --version "$WRAPPER_VERSION"
+      - uses: actions/upload-artifact@v7
+        with:
+          # Publishers download this exact artifact; Rust references stay separate.
+          name: wrapper-baml
+          path: |
+            wrapper-dist/*.tar.gz
+            wrapper-dist/*.zip
+          if-no-files-found: error

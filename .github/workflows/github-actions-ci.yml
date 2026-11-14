@@ -1,0 +1,260 @@
+# Tests the public GitHub Actions in packaging/github-actions. Also called by
+# sync-github-actions-mirror.yml, so a mirror only moves after these pass.
+# baml-action is tested with the setup-baml next to it, which is the setup-baml
+# its published copy pins, so its jobs are also setup-baml integration tests.
+
+name: GitHub Actions CI
+
+on:
+  pull_request:
+    paths:
+      - "packaging/github-actions/**"
+      - ".github/workflows/github-actions-ci.yml"
+      - ".github/workflows/sync-github-actions-mirror.yml"
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  setup-baml-lint-and-test:
+    name: setup-baml lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: packaging/github-actions
+          filter: blob:none
+
+      - name: Test wrapper output parsing
+        working-directory: packaging/github-actions/setup-baml
+        run: npm test
+
+      # The sync publishes setup-baml before baml-action and pins it there.
+      - name: Test mirror sync
+        run: bash packaging/github-actions/mirror/test.sh
+
+      - name: Lint Bash
+        working-directory: packaging/github-actions
+        run: shellcheck setup-baml/scripts/setup.sh mirror/*.sh
+
+      - name: Parse PowerShell
+        working-directory: packaging/github-actions/setup-baml
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path scripts/setup.ps1), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+
+  setup-baml-cross-platform:
+    name: setup-baml exact version (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: packaging/github-actions
+          filter: blob:none
+
+      - name: Write conflicting project selector
+        shell: pwsh
+        run: |
+          @("[toolchain]", 'channel = "canary"') | Set-Content -Path baml.toml
+
+      - name: Set up BAML
+        id: baml
+        uses: ./packaging/github-actions/setup-baml
+        with:
+          toolchain: 0.16.0
+
+      - name: Verify setup outputs and PATH
+        shell: pwsh
+        env:
+          RESOLVED_VERSION: ${{ steps.baml.outputs.version }}
+          WRAPPER_PATH: ${{ steps.baml.outputs.path }}
+          TOOLCHAIN_PATH: ${{ steps.baml.outputs.toolchain-path }}
+        run: |
+          baml --version
+          if ($env:RESOLVED_VERSION -ne "0.16.0") { throw "unexpected version: $($env:RESOLVED_VERSION)" }
+          if (-not (Test-Path -LiteralPath $env:WRAPPER_PATH -PathType Leaf)) { throw "wrapper output does not exist" }
+          if (-not (Test-Path -LiteralPath $env:TOOLCHAIN_PATH -PathType Leaf)) { throw "toolchain output does not exist" }
+
+  setup-baml-project-selector:
+    name: setup-baml resolves baml.toml
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: packaging/github-actions
+          filter: blob:none
+
+      - name: Write project selector
+        run: printf '[toolchain]\nchannel = "nightly"\n' > baml.toml
+
+      - name: Set up BAML from project
+        id: baml
+        uses: ./packaging/github-actions/setup-baml
+
+      - name: Verify nightly resolution
+        env:
+          RESOLVED_VERSION: ${{ steps.baml.outputs.version }}
+        run: |
+          test -n "$RESOLVED_VERSION"
+          test "$(baml toolchain list | node packaging/github-actions/setup-baml/lib/wrapper-output.mjs selector)" = "nightly"
+          baml --version
+
+  setup-baml-canary-selector:
+    name: setup-baml installs canary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: packaging/github-actions
+          filter: blob:none
+
+      - name: Write conflicting project selector
+        run: printf '[toolchain]\nchannel = "nightly"\n' > baml.toml
+
+      - name: Set up BAML canary
+        id: baml
+        uses: ./packaging/github-actions/setup-baml
+        with:
+          toolchain: canary
+
+      - name: Verify canary resolution
+        env:
+          RESOLVED_VERSION: ${{ steps.baml.outputs.version }}
+        run: |
+          test -n "$RESOLVED_VERSION"
+          test "$(baml toolchain list | node packaging/github-actions/setup-baml/lib/wrapper-output.mjs selector)" = "canary"
+          baml --version
+
+  baml-action-lint-and-test:
+    name: baml-action lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            .github/workflows
+            packaging/github-actions
+          filter: blob:none
+
+      - name: Set up BAML
+        uses: ./packaging/github-actions/setup-baml
+        with:
+          toolchain: nightly
+
+      # Unset BAML_TOOLCHAIN so the renderer's own baml.toml picks its toolchain,
+      # as it does when the action runs it.
+      - name: Test comment rendering
+        working-directory: packaging/github-actions/baml-action/codequality
+        run: env -u BAML_TOOLCHAIN baml --agent-skill-check off --color never test
+
+      - name: Lint Bash
+        working-directory: packaging/github-actions/baml-action
+        run: shellcheck scripts/*.sh
+
+      - name: Lint workflows and action metadata
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color .github/workflows/github-actions-ci.yml .github/workflows/sync-github-actions-mirror.yml
+
+  baml-action-passing:
+    name: baml-action passing project (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: packaging/github-actions
+          filter: blob:none
+
+      - name: Run BAML
+        id: baml
+        uses: ./packaging/github-actions/baml-action
+        with:
+          toolchain: nightly
+          project: packaging/github-actions/baml-action/test/fixtures/passing
+          # Only one matrix leg posts, so the comment isn't rewritten three times.
+          comment: ${{ matrix.os == 'ubuntu-latest' }}
+
+      - name: Verify version output
+        shell: bash
+        env:
+          VERSION: ${{ steps.baml.outputs.version }}
+        run: test -n "$VERSION"
+
+  baml-action-failing:
+    name: baml-action failing projects report each failure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: packaging/github-actions
+          filter: blob:none
+
+      - name: Failing tests
+        id: failing
+        continue-on-error: true
+        uses: ./packaging/github-actions/baml-action
+        with:
+          toolchain: nightly
+          project: packaging/github-actions/baml-action/test/fixtures/failing
+          comment: false
+
+      - name: Type error
+        id: invalid
+        continue-on-error: true
+        uses: ./packaging/github-actions/baml-action
+        with:
+          toolchain: nightly
+          project: packaging/github-actions/baml-action/test/fixtures/invalid
+          test: false
+          fmt: false
+          codequality: false
+          comment: false
+
+      - name: No tests
+        id: empty
+        uses: ./packaging/github-actions/baml-action
+        with:
+          toolchain: nightly
+          project: packaging/github-actions/baml-action/test/fixtures/empty
+          comment: false
+
+      - name: Verify outcomes
+        env:
+          FAILING: ${{ steps.failing.outcome }}
+          INVALID: ${{ steps.invalid.outcome }}
+        run: |
+          test "$FAILING" = failure
+          test "$INVALID" = failure

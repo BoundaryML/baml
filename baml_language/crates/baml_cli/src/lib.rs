@@ -16,9 +16,7 @@ pub(crate) mod bytecode_cache;
 #[cfg(test)]
 mod cache_test_support;
 pub(crate) mod check_command;
-pub(crate) mod clean_command;
 mod cloud_config;
-mod cloud_query;
 pub(crate) mod codequality_command;
 pub(crate) mod commands;
 pub(crate) mod describe_command;
@@ -28,7 +26,6 @@ pub(crate) mod diagnostics_cache;
 #[cfg(test)]
 mod diagnostics_cache_oracle;
 mod embed_telemetry;
-pub(crate) mod feedback_command;
 pub(crate) mod format;
 pub(crate) mod generate;
 pub(crate) mod help_command;
@@ -43,7 +40,7 @@ pub(crate) mod paint;
 pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub(crate) mod project_session;
-pub(crate) mod query_command;
+pub(crate) mod recordings;
 pub mod reporter;
 pub(crate) mod run_command;
 pub(crate) mod runtime_telemetry;
@@ -55,105 +52,77 @@ pub(crate) mod test_command;
 pub(crate) mod test_filter;
 pub(crate) mod util;
 
-// TODO: These modules are disabled for now as they depend on baml_runtime
-// pub(crate) mod api_client;
-// pub(crate) mod auth;
-// pub(crate) mod colordiff;
-// pub(crate) mod format;
-// pub(crate) mod propelauth;
-// pub(crate) mod tui;
+use anyhow::Result;
 
-use anyhow::{Result, anyhow};
-
-#[derive(Debug, Clone)]
+/// Process exit status. Every command uses the same three; anything finer is
+/// in the command's output. `baml run` alone can also exit with the code the
+/// program chose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitCode {
     Success,
-    InvalidArgs,
-    Other,
-    HumanEvalRequired,
-    TestFailure,
-    TestCancelled,
-    NoTestsRun,
-    // `baml run` / packed-binary target failures: unhandled user-code
-    // errors or input-shape errors (bad `--json-args`, unknown function,
-    // etc.). Mapped to `1` to match Unix CLI convention and the packed
-    // runtime (`baml_pack_host` returns `ExitCode::FAILURE = 1` for the
-    // same conditions); BEP-027 §"Exit codes" only mandates non-zero,
-    // so we pick the conventional code and keep the two runtimes aligned.
-    TargetError,
-    /// `baml fmt --check` found files that formatting would change. `1`
-    /// matches `cargo fmt --check`, `ruff format --check`, and
-    /// `prettier --check`; read or parse failures stay on `Other`.
-    Unformatted,
-    // `baml query` owns the same numeric range with its own meanings, so
-    // it gets its own variants rather than borrowing the test-shaped ones
-    // (its `3` is a budget, not a cancelled test run). Numbers below are
-    // the documented query contract and are part of its public surface.
-    /// The result is missing evidence: rows returned, completeness lost.
-    QueryIncomplete,
-    /// Invalid SQL, or a relation the caller is not authorized to read.
-    QueryInvalid,
-    /// A query budget (rows, wall-clock, decoded bytes) was exhausted.
-    QueryBudgetExhausted,
-    /// The query was cancelled before it completed.
-    QueryCancelled,
-    /// Any other query failure, including setup failures before execution.
-    QueryFailed,
+    /// The command ran and failed: compile errors, failing tests, an
+    /// unformatted file, a failed query, a network error.
+    Failure,
+    /// The invocation was wrong: bad flags or arguments.
+    Usage,
 }
+
+impl ExitCode {
+    /// The status an error that escaped a command exits with.
+    pub fn for_error(error: &anyhow::Error) -> Self {
+        if error.is::<UsageError>() {
+            Self::Usage
+        } else {
+            Self::Failure
+        }
+    }
+}
+
+impl From<ExitCode> for u8 {
+    fn from(exit_code: ExitCode) -> Self {
+        match exit_code {
+            ExitCode::Success => 0,
+            ExitCode::Failure => 1,
+            ExitCode::Usage => 2,
+        }
+    }
+}
+
+/// An invocation that is wrong in a way clap cannot express, such as flags
+/// that conflict only in combination. Exits like clap's own errors.
+#[derive(Debug)]
+pub struct UsageError(String);
+
+impl UsageError {
+    pub(crate) fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
+impl std::fmt::Display for UsageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for UsageError {}
+
+macro_rules! usage_bail {
+    ($($arg:tt)*) => {
+        return Err($crate::UsageError::new(format!($($arg)*)).into())
+    };
+}
+pub(crate) use usage_bail;
 
 impl From<ExitCode> for i32 {
     fn from(exit_code: ExitCode) -> Self {
-        match exit_code {
-            // All tests passed
-            ExitCode::Success => 0,
-            // All tests completed, but some required human evaluation, OR
-            // `baml run` / packed-binary target failure
-            ExitCode::HumanEvalRequired | ExitCode::TargetError => 1,
-            // `baml fmt --check` found unformatted files
-            ExitCode::Unformatted => 1,
-            // Some tests failed
-            ExitCode::TestFailure => 2,
-            // Execution was interrupted
-            ExitCode::TestCancelled => 3,
-            // Some internal error occurred
-            ExitCode::Other | ExitCode::InvalidArgs => 4,
-            // No tests were found
-            ExitCode::NoTestsRun => 5,
-            // `baml query` contract (documented per-command)
-            ExitCode::QueryIncomplete => 1,
-            ExitCode::QueryInvalid => 2,
-            ExitCode::QueryBudgetExhausted => 3,
-            ExitCode::QueryCancelled => 4,
-            ExitCode::QueryFailed => 5,
-        }
+        u8::from(exit_code).into()
     }
 }
 
 impl From<ExitCode> for u32 {
     fn from(exit_code: ExitCode) -> Self {
-        match exit_code {
-            // All tests passed
-            ExitCode::Success => 0,
-            // All tests completed, but some required human evaluation, OR
-            // `baml run` / packed-binary target failure
-            ExitCode::HumanEvalRequired | ExitCode::TargetError => 1,
-            // `baml fmt --check` found unformatted files
-            ExitCode::Unformatted => 1,
-            // Some tests failed
-            ExitCode::TestFailure => 2,
-            // Execution was interrupted
-            ExitCode::TestCancelled => 3,
-            // Some internal error occurred
-            ExitCode::Other | ExitCode::InvalidArgs => 4,
-            // No tests were found
-            ExitCode::NoTestsRun => 5,
-            // `baml query` contract (documented per-command)
-            ExitCode::QueryIncomplete => 1,
-            ExitCode::QueryInvalid => 2,
-            ExitCode::QueryBudgetExhausted => 3,
-            ExitCode::QueryCancelled => 4,
-            ExitCode::QueryFailed => 5,
-        }
+        u8::from(exit_code).into()
     }
 }
 
@@ -162,82 +131,23 @@ impl From<ExitCode> for u32 {
 /// Dispatches to one of: `run`, `check`, `generate`, `test`, `pack`,
 /// `fmt`, ... `baml run` is the top-level entry for standalone execution.
 pub fn run_cli(argv: Vec<String>) -> Result<ExitCode> {
-    if argv.get(1).map(String::as_str) == Some("update") {
-        return Err(anyhow!(
-            "`baml update` is ambiguous.\n\
-             To use the latest version of BAML, run `baml toolchain update`.\n\
-             To use the latest BAML toolchain selector, run `baml self-update`."
-        ));
-    }
     let cli = commands::RuntimeCli::parse_from_smart(argv);
     cli.run()
-}
-
-// TODO: Original run_cli that used RuntimeCliDefaults is commented out
-// pub fn run_cli(
-//     argv: Vec<String>,
-//     caller_type: baml_runtime::RuntimeCliDefaults,
-// ) -> Result<ExitCode> {
-//     let mut cli = commands::RuntimeCli::parse_from_smart(argv);
-//     if !matches!(cli.command, commands::Commands::Test(_)) {
-//         // We only need to set the exit handlers if we're not running tests
-//         // and the caller is Python.
-//         if caller_type.output_type == baml_types::GeneratorOutputType::PythonPydantic {
-//             set_exit_handlers();
-//         }
-//     }
-//
-//     let exit_code = cli.run(caller_type)?;
-//
-//     match exit_code {
-//         ExitCode::Success => Ok(ExitCode::Success),
-//         // Use the same exit code mechanism as Clap uses for invalid arguments (error.exit())
-//         _ => std::process::exit(exit_code.into()),
-//     }
-// }
-
-fn set_exit_handlers() {
-    // SIGINT (Ctrl+C) Handling Implementation
-    let (interrupt_send, interrupt_recv) = std::sync::mpsc::channel();
-
-    ctrlc::set_handler(move || {
-        #[allow(clippy::print_stderr)]
-        {
-            eprintln!("\nShutting Down BAML...");
-        }
-        interrupt_send.send(()).ok();
-    })
-    .expect("Error setting Ctrl-C handler");
-
-    std::thread::spawn(move || {
-        if interrupt_recv.recv().is_ok() {
-            std::process::exit(130);
-        }
-    });
 }
 
 #[cfg(test)]
 mod exit_code_tests {
     use super::*;
 
-    /// `baml run` target failures and the packed runtime
-    /// (`baml_pack_host`) must agree on the shell exit code. The packed
-    /// host returns `std::process::ExitCode::FAILURE = 1`; the
-    /// `TargetError` variant exists precisely so `baml run` lines up at
-    /// `1` for the same condition. BEP-027 §"Exit codes" only mandates
-    /// non-zero, so we pick the conventional `1` and keep both runtimes
-    /// emitting it.
+    /// `baml run` target failures and the packed runtime (`baml_pack_host`,
+    /// which returns `std::process::ExitCode::FAILURE`) agree on `1`.
     #[test]
-    fn target_error_maps_to_one() {
-        assert_eq!(i32::from(ExitCode::TargetError), 1);
-        assert_eq!(u32::from(ExitCode::TargetError), 1);
+    fn failure_maps_to_one() {
+        assert_eq!(i32::from(ExitCode::Failure), 1);
     }
 
-    /// `Other` continues to mean "internal error" (used by check /
-    /// generate / format / test internal failures). It must not collide
-    /// with the new `TargetError`.
     #[test]
-    fn other_stays_at_four() {
-        assert_eq!(i32::from(ExitCode::Other), 4);
+    fn usage_matches_clap() {
+        assert_eq!(i32::from(ExitCode::Usage), 2);
     }
 }

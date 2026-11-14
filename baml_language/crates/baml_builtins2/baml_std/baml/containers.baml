@@ -1,7 +1,7 @@
 /// An ordered, growable sequence of `T`.
 ///
 /// `Array<T>` and the `T[]` shorthand are the same type. Values come from an
-/// array literal (`[1, 2, 3]`) or from the `Array.filled` / `Array.generate`
+/// array literal (`[1, 2, 3]`) or from the `baml.Array.filled` / `baml.Array.generate`
 /// constructors below.
 ///
 /// Arrays are heap objects with reference semantics: binding one to a second
@@ -32,7 +32,7 @@ class Array<T> {
     ///
     /// Every slot holds that one `value`, so for a reference type all slots
     /// alias the same object and mutating one slot mutates them all. Use
-    /// `Array.generate` for an independent value per slot.
+    /// `baml.Array.generate` for an independent value per slot.
     ///
     /// # Parameters
     /// - `length`: how many elements to create. Zero or negative produces an
@@ -41,11 +41,11 @@ class Array<T> {
     ///
     /// # Examples
     /// ```baml
-    /// Array.filled(3, 0)     // [0, 0, 0]
-    /// Array.filled(-1, 0)    // []
+    /// baml.Array.filled(3, 0)     // [0, 0, 0]
+    /// baml.Array.filled(-1, 0)    // []
     ///
     /// let shared: int[] = [];
-    /// let rows = Array.filled(3, shared);   // every slot is `shared` itself
+    /// let rows = baml.Array.filled(3, shared);   // every slot is `shared` itself
     /// rows[0].push(1);                      // rows is now [[1], [1], [1]]
     /// ```
     function filled(length: int, value: T) -> T[] throws never {
@@ -54,7 +54,7 @@ class Array<T> {
 
     /// Returns an array of `length` elements, where element `i` is `f(i)`.
     ///
-    /// Unlike `Array.filled`, which reuses one shared value, every slot gets an
+    /// Unlike `baml.Array.filled`, which reuses one shared value, every slot gets an
     /// independent value — the alias-free way to build runtime-sized buffers of
     /// reference types, such as the rows of a grid. This is JavaScript's
     /// [`Array.from({ length }, f)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/from)
@@ -68,9 +68,9 @@ class Array<T> {
     ///
     /// # Examples
     /// ```baml
-    /// Array.generate(3, (i: int) -> int { i * i })      // [0, 1, 4]
+    /// baml.Array.generate(3, (i: int) -> int { i * i })      // [0, 1, 4]
     /// // A 2D grid whose rows can be mutated independently:
-    /// Array.generate(rows, (r: int) -> int[] { Array.filled(cols, 0) })
+    /// baml.Array.generate(rows, (r: int) -> int[] { baml.Array.filled(cols, 0) })
     /// ```
     function generate<E>(length: int, f: (int) -> T throws E) -> T[] throws E {
         let out: T[] = [];
@@ -84,6 +84,7 @@ class Array<T> {
 
     /// Returns the number of elements. `O(1)` — the length is stored, not
     /// counted.
+    //baml:local_twin
     function length(self) -> int throws never {
         $rust_function
     }
@@ -105,6 +106,7 @@ class Array<T> {
     /// [10, 20, 30].at(-1)   // 30
     /// [10, 20, 30].at(99)   // null
     /// ```
+    //baml:local_twin
     function at(self, index: int) -> T? throws never {
         $rust_function
     }
@@ -112,6 +114,7 @@ class Array<T> {
     /// Appends `item` to the end of the array and returns the new length.
     /// Amortized `O(1)`.
     //baml:mut_self
+    //baml:local_twin
     function push(self, item: T) -> int throws never {
         $rust_function
     }
@@ -123,6 +126,7 @@ class Array<T> {
     /// last element was `null`". Drive a drain loop off `length()` in that
     /// case.
     //baml:mut_self
+    //baml:local_twin
     function pop(self) -> T? throws never {
         $rust_function
     }
@@ -141,12 +145,14 @@ class Array<T> {
     /// xs.remove_at(99)  // null
     /// ```
     //baml:mut_self
+    //baml:local_twin
     function remove_at(self, index: int) -> T? throws never {
         $rust_function
     }
 
     /// Returns the elements of `self` followed by the elements of `other`.
     /// Neither input is mutated.
+    //baml:local_twin
     function concat(self, other: T[]) -> T[] throws never {
         $rust_function
     }
@@ -201,6 +207,7 @@ class Array<T> {
     /// let reversed = arr.reverse();
     /// assert.equal(reversed, [3, 2, 1]);
     /// ```
+    //baml:local_twin
     function reverse(self) -> T[] throws never {
         $rust_function
     }
@@ -322,6 +329,7 @@ class Array<T> {
     /// [1, 2, 3].slice(-2, 3)     // [2, 3]
     /// [1, 2, 3].slice(2, 1)      // []
     /// ```
+    //baml:local_twin
     function slice(self, start: int, end: int) -> T[] throws never {
         $rust_function
     }
@@ -576,6 +584,7 @@ class Array<T> {
     /// it observes the empty array too. Rebind to a fresh `[]` to leave the
     /// original alone.
     //baml:mut_self
+    //baml:local_twin
     function clear(self) -> null throws never {
         $rust_function
     }
@@ -594,6 +603,7 @@ class Array<T> {
     /// [].shift()      // null
     /// ```
     //baml:mut_self
+    //baml:local_twin
     function shift(self) -> T? throws never {
         $rust_function
     }
@@ -610,6 +620,7 @@ class Array<T> {
     /// xs              // [1, 2, 3]
     /// ```
     //baml:mut_self
+    //baml:local_twin
     function unshift(self, item: T) -> int throws never {
         $rust_function
     }
@@ -635,6 +646,7 @@ class Array<T> {
     /// xs.insert(0, 100)      // throws — idx beyond length
     /// ```
     //baml:mut_self
+    //baml:local_twin
     function insert(self, item: T, idx: int) -> int throws root.errors.InvalidArgument {
         $rust_function
     }
@@ -706,6 +718,7 @@ class Array<T> {
 /// the way to tell the two apart.
 class Map<K extends root.Hash & root.ops.Equals, V> {
     /// Returns the number of entries. `O(1)`.
+    //baml:local_twin
     function length(self) -> int throws never {
         $rust_function
     }
@@ -716,6 +729,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// but `get` cannot say so.
     //baml:mut_vm
     //baml:may_yield
+    //baml:local_twin
     function has(self, key: K) -> bool throws never {
         $rust_function
     }
@@ -726,6 +740,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// do not change it, and mutating it does not change the map. Iterating it
     /// while mutating the map is therefore safe.
     //baml:mut_vm
+    //baml:local_twin
     function keys(self) -> K[] throws never {
         $rust_function
     }
@@ -736,6 +751,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// The array is a snapshot, but the values are not copied: a reference type
     /// is shared with the map, so mutating a value obtained here also mutates
     /// the one the map holds.
+    //baml:local_twin
     function values(self) -> V[] throws never {
         $rust_function
     }
@@ -756,6 +772,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
+    //baml:local_twin
     function set(self, key: K, value: V) -> V? throws never {
         $rust_function
     }
@@ -773,6 +790,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// ```
     //baml:mut_vm
     //baml:may_yield
+    //baml:local_twin
     function get(self, key: K) -> V? throws never {
         $rust_function
     }
@@ -780,6 +798,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// Reads `key`, raising `baml.panics.MapKeyNotFound` if it is absent.
     //baml:mut_vm
     //baml:may_yield
+    //baml:local_twin
     function index(self, key: K) -> V throws never {
         $rust_function
     }
@@ -801,6 +820,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
+    //baml:local_twin
     function delete(self, key: K) -> V? throws never {
         $rust_function
     }
@@ -825,6 +845,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
+    //baml:local_twin
     function get_or_insert(self, key: K, default: V) -> V throws never {
         $rust_function
     }
@@ -835,6 +856,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// observes the empty map too. Rebind to a fresh `{}` to leave the original
     /// alone.
     //baml:mut_self
+    //baml:local_twin
     function clear(self) -> null throws never {
         $rust_function
     }

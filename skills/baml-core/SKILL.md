@@ -23,13 +23,15 @@ brew install baml                # CLI binary: `baml`
 baml init                        # new project (baml.toml + baml_src/)
 baml help <command>              # CLI options and examples
 baml describe baml.json          # reference for any module/type/method/signature/keyword
-baml describe Array --budget 120 #   (Array, String, Map, assert, match, patterns, spawn, python, ...)
-                                 #   ends with "N more lines"? re-run with `--budget <N>`
+baml describe Array --limit 120  #   (Array, String, Map, assert, match, patterns, spawn, python, ...)
+                                 #   ends with "N more lines"? re-run with `--limit <N>`
 baml check                       # compile-check the project
 baml run -e 'expr'               # eval an expression; fast feedback + syntax check
 baml test --list && baml test    # run every test/testset block
 baml fmt baml_src/main.baml      # canonicalize the project's formatting
 baml codequality --functions     # complexity per function, worst first
+baml <command> --output-format json  # one JSON document on stdout, status on stderr
+                                 #   (`baml run` also passes the program's own output through)
 ```
 
 `baml describe <name>` prints the **full source body** of stdlib functions. It's the fastest way to verify behavior, and the only path for embedded builtins like `assert` (no on-disk file). Pure functions need no test/client; check them with `baml run -e 'add(2, 3)'`. For anything not shown here (signatures, niche stdlib, advanced features), run `baml describe <name>`; never guess the stdlib.
@@ -116,17 +118,17 @@ To add cross-cutting behavior (metering, caching, replay, budgets), write a clas
 
 ### Debugging a recorded call
 
-Runs record their calls, and AI functions record their inputs, output, error and type arguments by default. `baml query` answers SQL over them (`baml query --schema` lists the tables). To turn a failing call into a test:
+Runs record their calls, and AI functions record their inputs, output, error and type arguments by default. `baml local recordings query` answers SQL over them (`baml local recordings schema` lists the tables). To turn a failing call into a test:
 
 ```bash
 # 1. Find the call.
-baml query "SELECT span_id, input_args, error_value FROM spans
+baml local recordings query "SELECT span_id, input_args, error_value FROM spans
   WHERE span_name = 'user.Extract' AND error_value IS NOT NULL ORDER BY start_time DESC LIMIT 1"
 # 2. Its types as BAML code, classes and enums built at run time included.
 #    baml_code also takes an instance or enum value: input_args['row'].
-baml query "SELECT baml_code(type_args['T']) FROM spans WHERE span_id = '<span_id>'"
+baml local recordings query "SELECT baml_code(type_args['T']) FROM spans WHERE span_id = '<span_id>'"
 # 3. The model's raw HTTP response, from the request under the call.
-baml query "SELECT network_event_values FROM spans
+baml local recordings query "SELECT network_event_values FROM spans
   WHERE span_type = 'network_span' AND parent_span_id = '<span_id>' ORDER BY start_time"
 ```
 

@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
+import { chmod, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import { parseBamlVersionOutput } from '../lib/generated-content/baml-binary.ts';
+import {
+  parseHelp,
+  resolveCliHelpBinary,
+} from '../lib/generated-content/cli-generator.ts';
 import { hashDocumentManifest } from '../lib/generated-content/document-ir.ts';
 import { projectDocumentRelease } from '../lib/generated-content/document-projector.ts';
 import {
@@ -19,6 +27,151 @@ import {
   referencePageDataSchema,
   referencePageRowSchema,
 } from '../lib/generated-content/schemas.ts';
+
+test('baml --version identity reads wrapper 0.3 and wrapper 0.2 output', () => {
+  // Wrapper 0.3+ passes --version through to the selected toolchain.
+  const current = 'baml wrapper 0.3.1\nbaml-cli 0.25.1\n';
+  assert.deepEqual(parseBamlVersionOutput(current), {
+    productVersion: '0.25.1',
+    rawVersionOutput: current,
+    wrapperVersion: '0.3.1',
+  });
+  // Wrapper 0.2 reported the toolchain on its own line.
+  assert.equal(
+    parseBamlVersionOutput(
+      'baml wrapper 0.2.4\nbaml toolchain 0.16.0 (nightly)\n',
+    ).productVersion,
+    '0.16.0',
+  );
+  assert.equal(
+    parseBamlVersionOutput('baml wrapper 0.2.5\nbaml toolchain 0.25.0\n')
+      .productVersion,
+    '0.25.0',
+  );
+  assert.equal(
+    parseBamlVersionOutput(
+      'baml wrapper 0.2.5\nbaml toolchain baml-cli 0.25.0 (local: /work/baml-cli)\n  set by $BAML_TOOLCHAIN\n',
+    ).productVersion,
+    '0.25.0',
+  );
+});
+
+test('baml --version identity rejects output without both identities', () => {
+  for (const output of [
+    'baml wrapper 0.3.1\n',
+    'baml-cli 0.25.1\n',
+    'baml wrapper 0.2.4\nbaml toolchain not installed\n',
+    'baml wrapper 0.2.4\nbaml toolchain not resolved\n',
+  ]) {
+    assert.throws(
+      () => parseBamlVersionOutput(output),
+      /wrapper and toolchain identities/,
+    );
+  }
+});
+
+// Verbatim `baml toolchain help` from wrapper 0.3.1, which has no Usage line.
+const WRAPPER_03_TOOLCHAIN_HELP = `BAML toolchain management
+
+Commands:
+  use [-g|--global] <selector>  Install if needed and select in the closest baml.toml
+                           -g, --global selects in $BAML_HOME/config.toml instead
+  install [<selector>] [--force]
+  update
+  status [--install] [--json]
+  list
+  uninstall <version>
+
+Selectors: canary, nightly, exact release version, or a local baml-cli path
+Wrapper updates: baml self-update
+`;
+
+test('wrapper help without a Usage line parses with the fallback usage', () => {
+  const toolchain = parseHelp(
+    WRAPPER_03_TOOLCHAIN_HELP,
+    'baml toolchain <command>',
+  );
+  assert.equal(toolchain.usage, 'baml toolchain <command>');
+  assert.equal(toolchain.description, 'BAML toolchain management');
+  assert.deepEqual(
+    toolchain.commandRows.map((row) => row.specification),
+    [
+      'use [-g|--global] <selector>',
+      'install [<selector>] [--force]',
+      'update',
+      'status [--install] [--json]',
+      'list',
+      'uninstall <version>',
+    ],
+  );
+  assert.equal(
+    toolchain.commandRows[0].description,
+    'Install if needed and select in the closest baml.toml -g, --global selects in $BAML_HOME/config.toml instead',
+  );
+
+  const selfUpdate = parseHelp(
+    'baml self-update: update the wrapper executable independently of language toolchains; use baml toolchain status to check language updates\n',
+    'baml self-update',
+  );
+  assert.equal(selfUpdate.usage, 'baml self-update');
+  assert.match(selfUpdate.description ?? '', /^baml self-update: update/);
+
+  assert.throws(
+    () => parseHelp(WRAPPER_03_TOOLCHAIN_HELP),
+    /does not contain a Usage section/,
+  );
+});
+
+test('wrapper 0.2 and clap help keep their own Usage line', () => {
+  const legacy = parseHelp(
+    'BAML wrapper self-update\n\nUsage:\n  baml self-update\n\nUpdates the wrapper binary only.\n',
+    'unused fallback',
+  );
+  assert.equal(legacy.usage, 'baml self-update');
+  assert.equal(legacy.description, 'BAML wrapper self-update');
+
+  const clap = parseHelp(
+    'Build and run BAML projects.\n\nUsage: baml [OPTIONS] <COMMAND>\n\nCommands:\n  check        Check BAML source files for compiler errors\n  help         Display documentation for a command\n\nGlobal options:\n  -h, --help                        Display concise help for this command\n',
+  );
+  assert.equal(clap.usage, 'baml [OPTIONS] <COMMAND>');
+  assert.deepEqual(
+    clap.commandRows.map((row) => row.specification),
+    ['check', 'help'],
+  );
+});
+
+async function stubBinary(directory: string, name: string, script: string) {
+  const binary = path.join(directory, name);
+  await writeFile(binary, `#!/bin/sh\n${script}\n`);
+  await chmod(binary, 0o755);
+  return binary;
+}
+
+test('CLI help comes from the toolchain under wrapper 0.3 and the wrapper under 0.2', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'cli-help-binary-'));
+  const cli = await stubBinary(
+    directory,
+    'baml-cli',
+    'printf "baml-cli 0.25.1\\n"',
+  );
+  const wrapper = await stubBinary(
+    directory,
+    'baml',
+    `printf '{"schema_version":1,"selector":"0.25.1","version":"0.25.1","toolchain_path":"${cli}","managed":true,"installed":true}\\n'`,
+  );
+  const identity = (wrapperVersion: string, productVersion = '0.25.1') => ({
+    productVersion,
+    rawVersionOutput: '',
+    wrapperVersion,
+  });
+
+  assert.equal(await resolveCliHelpBinary(wrapper, identity('0.3.1')), cli);
+  assert.equal(await resolveCliHelpBinary(wrapper, identity('0.2.5')), wrapper);
+  await assert.rejects(
+    resolveCliHelpBinary(wrapper, identity('0.3.1', '0.25.2')),
+    /resolved toolchain 0\.25\.1, but reported 0\.25\.2/,
+  );
+});
 
 test('canonical JSON sorts object keys, preserves arrays, and normalizes negative zero', () => {
   assert.equal(
