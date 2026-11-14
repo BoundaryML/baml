@@ -2454,6 +2454,12 @@ impl BexVm {
     /// Returns an empty slice for calls with `ntypeargs == 0` and from outside
     /// any call dispatch context.
     pub fn current_call_type_args(&self) -> &[bex_vm_types::RealizedTy] {
+        if let Some(lent) = self.compiled.lent_type_args {
+            // SAFETY: set only while `with_call_type_args` runs a builtin
+            // with the lender's array borrowed for it.
+            #[allow(unsafe_code)]
+            return unsafe { lent.0.as_ref() };
+        }
         &self.pending_call_type_args
     }
 

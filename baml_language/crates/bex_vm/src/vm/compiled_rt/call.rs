@@ -51,7 +51,7 @@ impl BexVm {
     pub fn call_builtin_typed(
         &mut self,
         builtin: NativeFunction,
-        type_args: &[RealizedTy],
+        type_args: &mut [RealizedTy],
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         self.with_call_type_args(type_args, |vm| builtin(vm, args))
@@ -71,21 +71,22 @@ impl BexVm {
     }
 
     /// Run a generic builtin's entry point with `type_args` as its call's
-    /// type arguments, and finish its result.
+    /// type arguments, and finish its result. The arguments are lent, not
+    /// copied: the builtin reads them through `current_call_type_args`, and
+    /// the collector roots and updates them in place for the call.
     #[inline]
     pub fn with_call_type_args(
         &mut self,
-        type_args: &[RealizedTy],
+        type_args: &mut [RealizedTy],
         call: impl FnOnce(&mut Self) -> NativeCallResult,
     ) -> Result<Value, Box<VmError>> {
-        self.save_call_types();
-        let mut buffer = std::mem::take(&mut self.compiled.builtin_type_args);
-        buffer.clear();
-        buffer.extend_from_slice(type_args);
-        self.pending_call_type_args = buffer;
+        let previous = self
+            .compiled
+            .lent_type_args
+            .replace(super::state::LentTypeArgs(std::ptr::NonNull::from(type_args)));
+        let restore = RestoreLoan(&raw mut self.compiled.lent_type_args, previous);
         let outcome = call(self);
-        self.compiled.builtin_type_args = self.restore_call_types();
-        self.compiled.builtin_type_args.clear();
+        drop(restore);
         self.finish_builtin(outcome)
     }
 
@@ -460,6 +461,23 @@ impl BexVm {
                 .into(),
             )),
             Err(error) => Err(Box::new(error)),
+        }
+    }
+}
+
+/// Restores the previous type-argument loan when dropped, even if the
+/// builtin unwinds, so no loan outlives the array it names.
+struct RestoreLoan(
+    *mut Option<super::state::LentTypeArgs>,
+    Option<super::state::LentTypeArgs>,
+);
+
+impl Drop for RestoreLoan {
+    fn drop(&mut self) {
+        // SAFETY: the slot outlives this guard, which the call cannot reach.
+        #[allow(unsafe_code)]
+        unsafe {
+            *self.0 = self.1;
         }
     }
 }
