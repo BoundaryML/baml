@@ -206,6 +206,41 @@ impl<T> io::IoNamespaceJson for T {
 }
 
 // ============================================================================
+// `baml.future` — reading a running task's stack
+// ============================================================================
+
+/// Blanket impl: the engine answers `baml.future._task_stack` and
+/// `_task_report` itself, since they need every task paused; a provider never
+/// sees them.
+impl<T> io::IoNamespaceFuture for T {
+    fn _task_report(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        _future_id: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "task report".to_string(),
+            message: "only the engine can read a task's stack".to_string(),
+        })
+    }
+
+    fn _task_stack(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        _future_id: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<BexExternalValue>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "task report".to_string(),
+            message: "only the engine can read a task's stack".to_string(),
+        })
+    }
+}
+
+// ============================================================================
 // `baml.sync` — waiting for a contended `atomic` key or `Semaphore` slot
 // ============================================================================
 

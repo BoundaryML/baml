@@ -42,7 +42,7 @@ pub use dispatch::{
 };
 pub use envelope::{PACK_SECTION_NAME, PackEnvelope, PackMode, TargetEntry};
 #[cfg(not(target_arch = "wasm32"))]
-pub use interrupt::{Interrupt, Interrupts};
+pub use interrupt::{Interrupt, InterruptReport, Interrupts};
 pub use json_coerce::load_json_source;
 pub use launch_context::{
     CONTEXT_ENV, context_source_from_env, ensure_single_stdin_consumer, load_launch_context,
