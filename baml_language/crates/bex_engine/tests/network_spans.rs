@@ -475,18 +475,23 @@ const HANDLER_SOURCE: &str = r##"
         baml.http.Response.new(200, {}, "ok".to_utf8())
     }
 
-    function main() -> string {
+    function serve_once() -> string {
         let server = baml.http.Server.bind("127.0.0.1:0");
         let task = spawn { server.serve(handle) };
         let text = baml.http.fetch("http://" + server.addr + "/").text();
         let _ = task.cancel();
         text
     }
+
+    function main() -> string {
+        serve_once($trace = trace.context(distinct_id = "caller"))
+    }
 "##;
 
 /// A request handler runs on a task the server spawns for it. That task
 /// starts running when its body does, not when it completes: the handler's
-/// own calls come after its start.
+/// own calls come after its start. It runs in its caller's context from its
+/// first event on.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_request_task_starts_running_before_its_handler_calls() {
     use proto::span_event::Event;
@@ -527,12 +532,17 @@ async fn a_request_task_starts_running_before_its_handler_calls() {
     let mut running = BTreeMap::<u64, u64>::new();
     let mut completed = BTreeMap::<u64, u64>::new();
     let mut entered = BTreeMap::<u64, Vec<u64>>::new();
+    let mut contexts = BTreeMap::<u64, Vec<_>>::new();
     for section in read
         .files
         .iter()
         .flat_map(|file| file.spans.iter())
         .flat_map(|spans| &spans.sections)
     {
+        contexts
+            .entry(section.thread_id)
+            .or_default()
+            .push(section.context);
         for event in &section.events {
             match &event.event {
                 Some(Event::ThreadRunning(run)) => {
@@ -562,4 +572,13 @@ async fn a_request_task_starts_running_before_its_handler_calls() {
         "began running at {started}, after its call entered at {calls:?}"
     );
     assert!(started < completed[thread]);
+    // Every section of the handler task, its announcement's included, is in
+    // the context `main` gave `serve_once`.
+    let handler = &contexts[thread];
+    assert!(
+        handler
+            .iter()
+            .all(|context| context.is_some() && *context == handler[0]),
+        "{handler:?}"
+    );
 }
