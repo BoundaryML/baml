@@ -227,6 +227,27 @@ class Uint8Array {
         $rust_function
     }
 
+    /// Encodes the bytes as unpadded URL-safe Base64 (RFC 4648 §5), the form
+    /// JWT segments and JWK components use.
+    ///
+    /// Returns:
+    ///   The encoded string, with no `=` padding.
+    function to_base64url(self) -> string throws never {
+        $rust_function
+    }
+
+    /// Decodes unpadded URL-safe Base64.
+    ///
+    /// Args:
+    ///   encoded: Canonical input only. Padding, whitespace, the standard
+    ///     alphabet, and nonzero trailing bits are rejected.
+    ///
+    /// Throws:
+    ///   baml.errors.InvalidArgument: `encoded` is not canonical base64url.
+    function from_base64url(encoded: string) -> uint8array throws root.errors.InvalidArgument {
+        $rust_function
+    }
+
     implements root.ToString {
         /// Lossily decodes the bytes as UTF-8.
         ///

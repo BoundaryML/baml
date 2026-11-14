@@ -160,6 +160,25 @@ impl BamlClassUint8Array for PackageBamlImpl {
         bex_str::BexStr::from(base64::engine::general_purpose::STANDARD.encode(uint8array))
     }
 
+    fn from_base64url(encoded: &bex_str::BexStr) -> Result<Vec<u8>, VmRustFnError> {
+        use base64::Engine;
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(encoded.as_str())
+            .map_err(|_| {
+                VmBamlError::InvalidArgument {
+                    message: "invalid unpadded base64url".to_string(),
+                }
+                .into()
+            })
+    }
+
+    fn to_base64url(bytes: &[u8]) -> bex_str::BexStr {
+        use base64::Engine;
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(bytes)
+            .into()
+    }
+
     fn _to_string_impl(uint8array: &[u8]) -> bex_str::BexStr {
         bex_str::BexStr::from(String::from_utf8_lossy(uint8array).into_owned())
     }
@@ -167,5 +186,39 @@ impl BamlClassUint8Array for PackageBamlImpl {
     #[allow(clippy::unused_unit)]
     fn sort(uint8array: &mut Vec<u8>) -> () {
         uint8array.sort_unstable();
+    }
+}
+
+#[cfg(test)]
+mod base64url_tests {
+    use super::*;
+
+    #[test]
+    fn base64url_is_canonical_and_binary_safe() {
+        for (bytes, encoded) in [
+            (&b""[..], ""),
+            (b"f", "Zg"),
+            (b"fo", "Zm8"),
+            (b"foo", "Zm9v"),
+            (&[251, 255, 255], "-___"),
+        ] {
+            assert_eq!(PackageBamlImpl::to_base64url(bytes).as_str(), encoded);
+            assert_eq!(
+                PackageBamlImpl::from_base64url(&encoded.into()).unwrap(),
+                bytes
+            );
+        }
+        let bytes: Vec<u8> = (0..=255).collect();
+        assert_eq!(
+            PackageBamlImpl::from_base64url(&PackageBamlImpl::to_base64url(&bytes)).unwrap(),
+            bytes
+        );
+        for encoded in ["Zg=", "Zg==", "Zg\n", "Z g", "+///", "A", "Zh", "Zm9", "é"] {
+            assert!(PackageBamlImpl::from_base64url(&encoded.into()).is_err());
+        }
+        assert_eq!(
+            PackageBamlImpl::to_base64(&[251, 255, 255]).as_str(),
+            "+///"
+        );
     }
 }
