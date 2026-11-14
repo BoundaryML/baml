@@ -19,7 +19,7 @@ fn user.f(t: reflect.Type, value: unknown) -> unknown {
 
     bb1: {
         _0 = const null;
-        goto -> bb3;
+        return;
     }
 
     bb2: {

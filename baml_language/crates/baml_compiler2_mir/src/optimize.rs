@@ -18,6 +18,8 @@ use crate::{
 
 mod effects;
 pub(crate) mod inline;
+mod loops;
+mod redundancy;
 mod scalar_replace;
 mod values;
 
@@ -108,6 +110,9 @@ fn optimize_body(
         if before == size(body) {
             break;
         }
+    }
+    if opt >= crate::OptLevel::Two {
+        redundancy::optimize(body, arity);
     }
     if opt >= crate::OptLevel::One {
         values::materialize_operand_prefixes(body);

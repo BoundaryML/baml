@@ -20,10 +20,6 @@ fn user.add(base: int, amount: int) -> int {
 
     bb2: {
         _0 = copy _1 + copy _2;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }

@@ -1058,3 +1058,124 @@ fn array_rest_wildcard_skips_slice_projection() {
         "wildcard rest must not pay for a slice copy:\n{output}"
     );
 }
+
+/// The O2 bytecode of the user function declared as `name`.
+fn o2_instructions(db: &ProjectDatabase, name: &str) -> Vec<bex_vm_types::Instruction> {
+    let program = baml_db::CheckedWorld::collect(db, db.workspace_root().unwrap())
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("the program compiles");
+    program
+        .objects
+        .iter()
+        .find_map(|object| match object {
+            bex_vm_types::Object::Function(function)
+                if function
+                    .declared_name()
+                    .is_some_and(|declared| declared == name) =>
+            {
+                Some(function.bytecode.instructions.clone())
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no function `{name}` in the program"))
+}
+
+#[test]
+fn null_literal_comparison_is_a_tag_test_at_o2() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Link { next: Link?, value: int }
+function null_probe(link: Link?) -> int {
+  if (link == null) { return 0; }
+  if (null != link.next) { 1 } else { 2 }
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    let mir = function_mir(&output, "null_probe");
+    assert_eq!(mir.matches("is_type_tag(").count(), 2, "{mir}");
+    assert!(!mir.contains("equals_equals"), "{mir}");
+    // The negation is folded into its branch rather than computed.
+    assert!(!mir.contains(" = !"), "{mir}");
+
+    // Below O2 the comparison stays the general driver call.
+    let loc = file_functions(&db, file)[0];
+    let unoptimized = lower_function(&db, loc, OptLevel::One).as_ref().unwrap();
+    let unoptimized = display_function(&db, unoptimized);
+    assert_eq!(
+        unoptimized.matches("equals_equals").count(),
+        2,
+        "{unoptimized}"
+    );
+}
+
+#[test]
+fn counting_loop_tests_at_the_bottom() {
+    use bex_vm_types::Instruction;
+    let mut db = make_db();
+    db.file(
+        "test.baml",
+        r#"
+function rotation_probe(n: int) -> int {
+  let total = 0;
+  for (let i = 0; i < n; i += 1) { total += i; }
+  total
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let instructions = o2_instructions(&db, "rotation_probe");
+    // One test guards entry and one closes the loop; no iteration pays for an
+    // unconditional jump back to a test at the top.
+    let conditional = instructions
+        .iter()
+        .filter(|instruction| {
+            matches!(
+                instruction,
+                Instruction::PopJumpIfTrue(_) | Instruction::PopJumpIfFalse(_)
+            )
+        })
+        .count();
+    assert_eq!(conditional, 2, "{instructions:?}");
+    assert!(
+        !instructions
+            .iter()
+            .any(|instruction| matches!(instruction, Instruction::Jump(_))),
+        "{instructions:?}"
+    );
+}
+
+#[test]
+fn repeated_test_operand_is_computed_once() {
+    use bex_vm_types::Instruction;
+    let mut db = make_db();
+    db.file(
+        "test.baml",
+        r#"
+function reuse_probe(x: int) -> int {
+  if x % 5 == 0 { 1 }
+  else if x % 5 == 1 { 2 }
+  else if x % 5 == 2 { 3 }
+  else { 4 }
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let instructions = o2_instructions(&db, "reuse_probe");
+    let remainders = instructions
+        .iter()
+        .filter(|instruction| matches!(instruction, Instruction::ModInt))
+        .count();
+    assert_eq!(remainders, 1, "{instructions:?}");
+    // Every arm returns where it would have jumped to a shared return.
+    assert!(
+        !instructions
+            .iter()
+            .any(|instruction| matches!(instruction, Instruction::Jump(_))),
+        "{instructions:?}"
+    );
+}

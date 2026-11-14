@@ -8,10 +8,6 @@ fn user.accept(value: T) -> T {
 
     bb0: {
         _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
         return;
     }
 }
@@ -36,7 +32,7 @@ fn user.f(t: reflect.Type, value: unknown) -> bool {
 
     bb1: {
         _0 = const false;
-        goto -> bb4;
+        return;
     }
 
     bb2: {
@@ -49,10 +45,6 @@ fn user.f(t: reflect.Type, value: unknown) -> bool {
     bb3: {
         _8 = is_type(copy _5, #0);
         _0 = copy _8;
-        goto -> bb4;
-    }
-
-    bb4: {
         return;
     }
 }

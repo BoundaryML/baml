@@ -81,7 +81,7 @@ fn cycle_residue(rpo: &[usize], forward: &[Vec<usize>]) -> Vec<usize> {
 }
 
 /// The blocks reachable from `entry`, in reverse postorder.
-fn reverse_postorder(entry: usize, succs: &[Vec<usize>]) -> Vec<usize> {
+pub(crate) fn reverse_postorder(entry: usize, succs: &[Vec<usize>]) -> Vec<usize> {
     let mut postorder = Vec::with_capacity(succs.len());
     let mut visited = vec![false; succs.len()];
     let mut stack = vec![(entry, 0usize)];
@@ -105,7 +105,11 @@ fn reverse_postorder(entry: usize, succs: &[Vec<usize>]) -> Vec<usize> {
 /// Immediate dominators indexed by block (Cooper, Harvey & Kennedy, "A
 /// Simple, Fast Dominance Algorithm"). The entry is its own dominator;
 /// unreachable blocks keep `usize::MAX`.
-fn immediate_dominators(entry: usize, succs: &[Vec<usize>], rpo: &[usize]) -> Vec<usize> {
+pub(crate) fn immediate_dominators(
+    entry: usize,
+    succs: &[Vec<usize>],
+    rpo: &[usize],
+) -> Vec<usize> {
     let n = succs.len();
     let mut order = vec![usize::MAX; n];
     for (i, &node) in rpo.iter().enumerate() {

@@ -32,10 +32,6 @@ fn .<lambda(test_capture, 0)>(x: int) -> int {
     bb0: {
         _2 = copy *capture[0];
         _0 = copy _1 + copy _2;
-        goto -> bb1;
-    }
-
-    bb1: {
         return;
     }
 }
@@ -86,10 +82,6 @@ fn .<lambda(<lambda(test_nested, 0)>, 1)>(y: int) -> int {
     bb0: {
         _2 = copy *capture[0];
         _0 = copy _2 + copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
         return;
     }
 }

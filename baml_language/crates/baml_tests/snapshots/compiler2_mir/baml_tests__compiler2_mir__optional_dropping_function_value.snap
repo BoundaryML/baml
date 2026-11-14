@@ -34,10 +34,6 @@ fn user.combine(x: int, a: int, b: int) -> int {
     bb4: {
         _6 = copy _1 + copy _2;
         _0 = copy _6 + copy _3;
-        goto -> bb5;
-    }
-
-    bb5: {
         return;
     }
 }

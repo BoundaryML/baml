@@ -7,10 +7,6 @@ fn user.f() -> reflect.Type {
 
     bb0: {
         _0 = load_type(int[]);
-        goto -> bb1;
-    }
-
-    bb1: {
         return;
     }
 }

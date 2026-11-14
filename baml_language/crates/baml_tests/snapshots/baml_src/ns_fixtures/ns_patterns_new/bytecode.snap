@@ -8,12 +8,10 @@ function fixtures.patterns_new.chain_narrow_then_wildcard(v: int | string | bool
     narrow_bind int, slot=2
     pop_jump_if_true L0
     load_const 0
-    jump L1
+    return
 
   L0:
     load_var _2
-
-  L1:
     return
 }
 
@@ -29,15 +27,13 @@ function fixtures.patterns_new.or_with_repeated_typed_binding(v: int | string) -
     narrow_bind int, slot=3
     pop_jump_if_true L0
     load_const 0
-    jump L2
+    return
 
   L0:
     load_var _4
-    jump L2
+    return
 
   L1:
     load_var _2
-
-  L2:
     return
 }
