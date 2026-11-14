@@ -213,8 +213,36 @@ async fn fresh_and_incremental_indexes_are_identical() {
         24 * 4,
         "type_args_cas"
     );
+    // Futures that failed carry the error they ended with: `crash` (a root
+    // future) in both recordings, and the future each `main` of the second
+    // one spawns. No other future names an error.
+    let threads = &fresh.iter().find(|(table, _)| table == "thread").unwrap().1;
+    let failed = |spawned: bool| {
+        threads
+            .iter()
+            .filter(|row| {
+                row[THREAD_OUTCOME] == Value::Integer(2)
+                    && (row[THREAD_PARENT] != Value::Null) == spawned
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(failed(false).len(), 2, "one crash per recording");
+    assert_eq!(failed(true).len(), 24, "one failing spawn per main");
+    for row in threads {
+        assert_eq!(
+            row[THREAD_ERROR_CAS] != Value::Null,
+            row[THREAD_OUTCOME] == Value::Integer(2),
+            "{row:?}"
+        );
+    }
     assert_same(&fresh, &dump(&incremental));
 }
+
+/// Columns of `thread`, in table order.
+const THREAD_ID: usize = 1;
+const THREAD_PARENT: usize = 3;
+const THREAD_OUTCOME: usize = 10;
+const THREAD_ERROR_CAS: usize = 18;
 
 mod crafted {
     //! Evidence out of order and in conflict, written as recording files.
@@ -227,6 +255,9 @@ mod crafted {
     const EPOCH: u64 = 5;
     const CALLER: u64 = 21;
     const CALLEE: u64 = 22;
+    /// The thread that fails with an error, and that error's snapshot.
+    pub(super) const FAILED_THREAD: u64 = T3;
+    pub(super) const T3_ERROR: u64 = 66;
 
     pub(super) fn write(project: &std::path::Path, files: Vec<proto::RecordingFile>) {
         let id = [7_u8; 16];
@@ -524,6 +555,18 @@ mod crafted {
                             network_done(202, 50, proto::InvocationOutcome::Unspecified),
                         ],
                     ),
+                    section(
+                        T3,
+                        vec![
+                            // Fails with an error, before its definition.
+                            Event::ThreadCompletion(proto::ThreadCompletion {
+                                completed_at_ticks: 70,
+                                outcome: 2,
+                                error_cas_id: Some(snapshot(T3_ERROR)),
+                                ..Default::default()
+                            }),
+                        ],
+                    ),
                 ],
             }),
             aggregates: Some(proto::AggregateBatch {
@@ -568,6 +611,8 @@ mod crafted {
                             outcome: 2,
                             panicked: true,
                             usage: Vec::new(),
+                            // The first completion is kept, without this error.
+                            error_cas_id: Some(snapshot(91)),
                         }),
                         announce(200, 4, "POST", 22),
                         network_event(200, "await", 41, None),
@@ -682,5 +727,31 @@ fn late_and_conflicting_evidence_indexes_identically() {
         })
         .collect();
     assert_eq!(type_args, vec![100]);
+    // A thread keeps the error of its first completion, whichever file
+    // defines the thread: the conflicting second completion's is dropped.
+    let errors: Vec<(i64, Value)> = fresh
+        .iter()
+        .find(|(table, _)| table == "thread")
+        .unwrap()
+        .1
+        .iter()
+        .map(|row| match &row[THREAD_ID] {
+            Value::Blob(id) => (
+                i64::from_be_bytes(id[..].try_into().unwrap()),
+                row[THREAD_ERROR_CAS].clone(),
+            ),
+            other => panic!("{other:?}"),
+        })
+        .filter(|(_, error)| *error != Value::Null)
+        .collect();
+    let mut expected = crafted::T3_ERROR.to_le_bytes().to_vec();
+    expected.extend([0; 8]);
+    assert_eq!(
+        errors,
+        vec![(
+            i64::try_from(crafted::FAILED_THREAD).unwrap(),
+            Value::Blob(expected)
+        )]
+    );
     assert_same(&fresh, &incremental);
 }

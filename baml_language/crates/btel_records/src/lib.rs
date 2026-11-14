@@ -168,6 +168,13 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     /// before that node's completion, which carries it. Boxed so the model
     /// names never widen the slot.
     SpanUsage(Box<SpanUsage>),
+    /// Rare: the error that escaped the thread's outermost frame, written
+    /// just before the thread's completion, which carries it. A record of its
+    /// own keeps the capture out of `ThreadSpanCompletion`, which already
+    /// fills the slot.
+    ThreadSpanError {
+        captured_error: Option<ValueCapture>,
+    },
     /// An HTTP request started. Boxed, like the event and completion below,
     /// so its method and URL never widen the slot.
     NetworkSpanAnnouncement(Box<NetworkAnnouncement<InputCapture>>),
@@ -1344,6 +1351,7 @@ macro_rules! capture_slots {
             Self::ManualSpanAnnouncement(entry) => [Some($input($($borrow)+ entry.captured_inputs)), Some($input($($borrow)+ entry.captured_type_args))],
             Self::ManualSpanCompletion(done) => [Some($value($($borrow)+ done.captured_value)), None],
             Self::Log { captured_data, .. } => [Some($value(captured_data)), None],
+            Self::ThreadSpanError { captured_error } => [Some($value(captured_error)), None],
             Self::ContextSelected { captured_context } => [Some($input(captured_context)), None],
             Self::FunctionSpanAnnouncement {
                 captured_inputs,

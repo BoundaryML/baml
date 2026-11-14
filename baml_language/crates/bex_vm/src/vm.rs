@@ -7017,6 +7017,17 @@ impl BexVm {
                 if let Some(evidence) = evidence.take() {
                     self.error_not_caught(evidence, btel_records::UnwindResult::Unhandled);
                 }
+                // No frame is left to carry the error: the thread's own
+                // completion does, as its `baml.errors.Context`.
+                if self.telemetry.is_some() {
+                    let recorded = self.recorded_context(&mut context, exception_value);
+                    if let Some(state) = self.telemetry.as_mut() {
+                        // SAFETY: unwinding runs under the heap permit, and
+                        // `recorded` is the in-flight context or the thrown
+                        // value, both rooted by the unwinder.
+                        unsafe { state.record_thread_error(recorded) };
+                    }
+                }
                 let trace = match &context {
                     InFlightContext::Carried(context) => self.context_trace(*context)?,
                     InFlightContext::Fresh { trace, .. } => trace.to_vec(),

@@ -333,6 +333,7 @@ fn network_spans_are_spans_with_their_request_and_events() {
                         outcome: proto::InvocationOutcome::Ok as i32,
                         panicked: false,
                         usage: Vec::new(),
+                        error_cas_id: None,
                     }),
                 ],
             )])),

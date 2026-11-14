@@ -282,7 +282,7 @@ pub const SPANS: Relation = Relation {
         value("network_event_values", NETWORK_EVENTS_DOC),
         value(
             "error_value",
-            "the baml.errors.Context of a failed invocation; for a manual operation, the value passed to fail()",
+            "the baml.errors.Context of a failed invocation: of a function, the error it threw; of a future, the error that escaped it (recorded since format minor 14); for a manual operation, the value passed to fail(). A span records it by default; a cancellation only on request",
         ),
         col(
             "context_distinct_id",
@@ -381,7 +381,8 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   NULL AS input_args,
   NULL AS output_value,
   NULL AS network_event_values,
-  NULL AS error_value,
+  -- The error that escaped the future's outermost frame (format minor 14).
+  IIF(t.outcome = 2, __btel_ref(3, t.error_cas, NULL, 0), NULL) AS error_value,
   cx.distinct_id AS context_distinct_id,
   __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
   __btel_usage_value(NULL) AS self_usage,

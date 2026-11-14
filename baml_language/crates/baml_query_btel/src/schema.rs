@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 22;
+pub const SCHEMA_VERSION: i64 = 23;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -217,6 +217,9 @@ CREATE TABLE thread (
   -- as on `call`.
   usage TEXT,
   total_usage TEXT,
+  -- The baml.errors.Context of the error it ended with, from its first
+  -- completion (format minor 14); NULL when none was recorded.
+  error_cas BLOB,
   PRIMARY KEY (rec, thread_id)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX thread_by_parent ON thread (rec, parent_id);
