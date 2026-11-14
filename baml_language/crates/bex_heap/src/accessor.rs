@@ -5,7 +5,7 @@
 //! held `ActiveHeapPermit<T>`) to witness GC-exclusion at the type level.
 
 use bex_external_types::{BexExternalAdt, BexExternalValue, WeakHeapRef};
-use bex_vm_types::{HeapPtr, Object, PermitProof, Value};
+use bex_vm_types::{Field, HeapPtr, InstanceRef, Object, PermitProof, Value};
 
 use crate::BexHeap;
 
@@ -93,6 +93,8 @@ pub enum BexValue<'a> {
     HeapPtr(&'a HeapPtr),
     Value(&'a Value),
     OwnedValue(Value),
+    /// A float field, which an instance holds unboxed.
+    Float(f64),
 }
 
 impl<'a> From<&'a BexExternalValue> for BexValue<'a> {
@@ -106,7 +108,7 @@ pub enum BexClass<'a> {
         name: &'a String,
         fields: &'a indexmap::IndexMap<String, BexExternalValue>,
     },
-    Value(&'a bex_vm_types::Class, &'a bex_vm_types::Instance),
+    Value(&'a bex_vm_types::Class, InstanceRef),
 }
 
 impl<'a> BexClass<'a> {
@@ -126,15 +128,17 @@ impl<'a> BexClass<'a> {
                     .ok_or_else(|| AccessError::FieldNotFound {
                         expected: name.to_string(),
                     })?;
-                let field = instance
-                    .fields
-                    .get(field_idx)
-                    .ok_or_else(|| AccessError::FieldNotFound {
-                        expected: name.to_string(),
-                    })?
-                    .load();
-                Ok(BexValue::OwnedValue(field))
+                Ok(BexValue::from(instance.load(field_idx)))
             }
+        }
+    }
+}
+
+impl From<Field> for BexValue<'_> {
+    fn from(field: Field) -> Self {
+        match field {
+            Field::Value(value) => BexValue::OwnedValue(value),
+            Field::Float(float) => BexValue::Float(float),
         }
     }
 }
@@ -142,6 +146,7 @@ impl<'a> BexClass<'a> {
 impl<'a> BexValue<'a> {
     fn type_name(&self) -> String {
         match self {
+            BexValue::Float(float) => float.to_string(),
             BexValue::ExternalValue(value) => value.type_name().to_string(),
             BexValue::HeapPtr(ptr) => ptr.to_string(),
             BexValue::Value(value) => value.to_string(),
@@ -163,6 +168,21 @@ impl<'a> BexValue<'a> {
             other => Err(AccessError::TypeMismatch {
                 expected: "int",
                 actual: other.type_name(),
+            }),
+        }
+    }
+
+    pub fn as_float(self, heap: &BexHeap, permit: PermitProof<'a>) -> Result<f64, AccessError> {
+        match self {
+            BexValue::Float(float) | BexValue::ExternalValue(&BexExternalValue::Float(float)) => {
+                Ok(float)
+            }
+            other => other.as_object("float", heap, permit, |ptr| match unsafe { ptr.get() } {
+                Object::Float(float) => Ok(*float),
+                obj => Err(AccessError::TypeMismatch {
+                    expected: "float",
+                    actual: obj.to_string(),
+                }),
             }),
         }
     }
@@ -333,20 +353,13 @@ impl<'a> BexValue<'a> {
                 })
             }
             other => other.as_object("instance", heap, permit, |ptr| {
-                let obj = unsafe { ptr.get() };
-                let Object::Instance(instance) = obj else {
+                let Some(instance) = (unsafe { InstanceRef::of(*ptr) }) else {
                     return Err(AccessError::TypeMismatch {
                         expected: "instance",
-                        actual: obj.to_string(),
+                        actual: unsafe { ptr.get() }.to_string(),
                     });
                 };
-                let class_obj = unsafe { instance.class.get() };
-                let Object::Class(class) = class_obj else {
-                    return Err(AccessError::TypeMismatch {
-                        expected: "class",
-                        actual: class_obj.to_string(),
-                    });
-                };
+                let class = instance.class_object();
                 if class.name().display_name().as_str() != expected_class_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_class_name,
@@ -619,6 +632,7 @@ fn owned_inner(
             }
         }
         BexValue::OwnedValue(v) => owned_inner(BexValue::Value(&v), heap, lossy),
+        BexValue::Float(float) => Ok(BexExternalValue::Float(float)),
     }
 }
 
@@ -693,22 +707,17 @@ fn convert_object(
                     .collect::<Result<_, _>>()?,
             })
         }
-        Object::Instance(instance) => {
-            let class_obj = unsafe { instance.class.get() };
-            let Object::Class(class) = class_obj else {
-                return Err(AccessError::TypeMismatch {
-                    expected: "class",
-                    actual: class_obj.to_string(),
-                });
-            };
+        Object::Instance => {
+            let instance = unsafe { InstanceRef::of(heap_ptr) }.expect("an instance pointer");
+            let class = instance.class_object();
             let fields = class
                 .fields
                 .iter()
-                .zip(instance.fields.iter())
-                .map(|(field, slot)| {
+                .zip(instance.fields())
+                .map(|(field, value)| {
                     Ok((
                         field.name.clone(),
-                        owned_inner(BexValue::OwnedValue(slot.load()), heap, lossy)?,
+                        owned_inner(BexValue::from(value), heap, lossy)?,
                     ))
                 })
                 .collect::<Result<_, _>>()?;
@@ -717,7 +726,7 @@ fn convert_object(
                 // Instances store realized class type args, which the external
                 // boundary carries as annotations.
                 type_args: instance
-                    .class_type_args
+                    .type_args()
                     .iter()
                     .map(|arg| {
                         arg.try_map_heads(&mut bex_vm_types::TypeHead::to_annotation_head)

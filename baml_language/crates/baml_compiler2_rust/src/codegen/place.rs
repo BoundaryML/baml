@@ -1,10 +1,41 @@
 //! Reads and writes locals, fields, elements, and captured cells.
 //! Captured locals hold cells; dereferences access their values.
 
-use baml_compiler2_mir::{BlockId, CellId, Operand, Place};
+use baml_compiler2_mir::{BlockId, CellId, Operand, Place, RuntimeTy};
+use bex_vm_types::{ClassLayout, SlotKind};
 
 use super::{Expr, Gen, Generator, unsupported};
-use crate::{admit::Rejection, analysis::Repr, render::coerce};
+use crate::{
+    admit::Rejection,
+    analysis::Repr,
+    render::{class_ptr, coerce},
+};
+
+/// The accessor suffix and representation of a field stored as `kind`.
+pub(super) fn slot_repr(kind: SlotKind) -> (&'static str, Repr) {
+    match kind {
+        SlotKind::Int => ("i64", Repr::Int),
+        SlotKind::Float => ("f64", Repr::Float),
+        SlotKind::Bool => ("bool", Repr::Bool),
+        SlotKind::Value => ("value", Repr::Value),
+    }
+}
+
+/// A field of a statically known class: where it lives.
+struct ClassField<'a> {
+    object: usize,
+    layout: ClassLayout<'a>,
+    field: usize,
+}
+
+impl ClassField<'_> {
+    /// The accessor arguments after the receiver: the class, the field and
+    /// its slot.
+    fn args(&self) -> String {
+        let slot = self.layout.slot(self.field);
+        format!("{}, {}, {slot}", class_ptr(self.object), self.field)
+    }
+}
 
 impl<'db> Generator<'_, 'db> {
     pub(super) fn operand(&mut self, block: BlockId, operand: &Operand<'db>) -> Gen<Expr> {
@@ -42,18 +73,7 @@ impl<'db> Generator<'_, 'db> {
                 }
                 Ok(Expr::atom(format!("l{}", local.0), self.repr(*local)))
             }
-            Place::Field { base, field } => {
-                let needs = self.analysis.escape.object_needs(base);
-                let base = self.load(block, base)?;
-                let base = self.value_arg(&base);
-                let load = self.by_locality(
-                    needs,
-                    &format!("vm.load_field_local({base}, {field})"),
-                    &format!("vm.load_field({base}, {field})"),
-                );
-                let code = self.fallible(block, &load)?;
-                Ok(Expr::new(code, Repr::Value))
-            }
+            Place::Field { base, field } => self.load_field(block, base, *field),
             Place::Index { base, index, kind } => {
                 if !matches!(kind, baml_compiler2_mir::IndexKind::Array) {
                     return unsupported("map index");
@@ -82,6 +102,69 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
+    /// Field `field` of the instance `base` holds: at its slot, in its own
+    /// representation, when the class is known; as a value otherwise.
+    fn load_field(&mut self, block: BlockId, base: &Place, field: usize) -> Gen<Expr> {
+        let needs = self.analysis.escape.object_needs(base);
+        let class = self.class_field(base, field);
+        let base = self.load(block, base)?;
+        let base = self.value_arg(&base);
+        let (local, locked, repr) = match class {
+            Some(class) => {
+                let (suffix, repr) = slot_repr(class.layout.kind(field));
+                let args = format!("{base}, {}", class.args());
+                (
+                    format!("vm.field_{suffix}::<true>({args})"),
+                    format!("vm.field_{suffix}::<false>({args})"),
+                    repr,
+                )
+            }
+            None => (
+                format!("vm.load_field_local({base}, {field})"),
+                format!("vm.load_field({base}, {field})"),
+                Repr::Value,
+            ),
+        };
+        let load = self.by_locality(needs, &local, &locked);
+        let code = self.fallible(block, &load)?;
+        Ok(Expr::new(code, repr))
+    }
+
+    /// Store `value` into field `field` of the instance `base` holds, as
+    /// [`Self::load_field`] reads it.
+    fn store_field(
+        &mut self,
+        block: BlockId,
+        base: &Place,
+        field: usize,
+        value: &Expr,
+    ) -> Gen<String> {
+        let needs = self.analysis.escape.object_needs(base);
+        let class = self.class_field(base, field);
+        let (suffix, repr) = class.as_ref().map_or(("", Repr::Value), |class| {
+            slot_repr(class.layout.kind(field))
+        });
+        let value = self.repr_arg(value, repr);
+        let base = self.load(block, base)?;
+        let base = self.value_arg(&base);
+        let (local, locked) = match class {
+            Some(class) => {
+                let args = format!("{base}, {}, {value}", class.args());
+                (
+                    format!("vm.set_field_{suffix}::<true>({args})"),
+                    format!("vm.set_field_{suffix}::<false>({args})"),
+                )
+            }
+            None => (
+                format!("vm.store_field_local({base}, {field}, {value})"),
+                format!("vm.store_field({base}, {field}, {value})"),
+            ),
+        };
+        let store = self.by_locality(needs, &local, &locked);
+        let code = self.fallible(block, &store)?;
+        Ok(format!("{code};"))
+    }
+
     fn cell(&mut self, cell: &CellId) -> (String, Repr) {
         match cell {
             CellId::Local(local) => (format!("l{}", local.0), self.analysis.values[local.0]),
@@ -107,19 +190,7 @@ impl<'db> Generator<'_, 'db> {
                 let code = coerce(&value.code, value.repr, self.repr(*local));
                 Ok(format!("l{} = {code};", local.0))
             }
-            Place::Field { base, field } => {
-                let needs = self.analysis.escape.object_needs(base);
-                let value = self.value_arg(value);
-                let base = self.load(block, base)?;
-                let base = self.value_arg(&base);
-                let store = self.by_locality(
-                    needs,
-                    &format!("vm.store_field_local({base}, {field}, {value})"),
-                    &format!("vm.store_field({base}, {field}, {value})"),
-                );
-                let code = self.fallible(block, &store)?;
-                Ok(format!("{code};"))
-            }
+            Place::Field { base, field } => self.store_field(block, base, *field, value),
             Place::Index { base, index, kind } => {
                 if !matches!(kind, baml_compiler2_mir::IndexKind::Array) {
                     return unsupported("map index");
@@ -146,5 +217,34 @@ impl<'db> Generator<'_, 'db> {
                 "store into a closure's capture cell".into(),
             )),
         }
+    }
+}
+
+impl<'a> Generator<'a, '_> {
+    /// Field `field` of the instance `base` holds, when `base` is a local
+    /// statically of one class: the compiled access then goes straight to
+    /// its slot.
+    fn class_field(&self, base: &Place, field: usize) -> Option<ClassField<'a>> {
+        let Place::Local(local) = base else {
+            return None;
+        };
+        let decl = &self.body.locals[local.0];
+        // A `C?` local reads its fields only where the checker narrowed it
+        // to `C`; a null base misses the header compare and takes the
+        // generic path, which reports it.
+        let ty = decl.ty.strip_null();
+        let RuntimeTy::Class(head, _) = &ty else {
+            return None;
+        };
+        if decl.is_captured {
+            return None;
+        }
+        let (object, _) = self.index.class_at(head)?;
+        let layout = self.index.class_layout(object)?;
+        (field < layout.field_count()).then_some(ClassField {
+            object,
+            layout,
+            field,
+        })
     }
 }

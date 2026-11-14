@@ -5,8 +5,8 @@ use std::{
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, ObjectType, RootHaver, RootVisitor, ValueKind,
-    types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
+    Field, HeapPtr, InstanceRef, ObjectType, RootHaver, RootVisitor, ValueKind,
+    types::{Array, Map, Object, Value},
 };
 
 use super::{
@@ -154,13 +154,10 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// A non-instance receiver returns `true` defensively; the guard is only
     /// emitted for a class `cleanup(self)` method, whose `self` is an instance.
     fn _cleanup_begin(vm: &BexVm, value: &Value) -> bool {
-        match value.as_object_ptr() {
-            Some(ptr) => match vm.get_object(ptr) {
-                Object::Instance(inst) => inst.cleaned.begin(),
-                _ => true,
-            },
-            None => true,
-        }
+        value
+            .as_object_ptr()
+            .and_then(|ptr| vm.get_instance(ptr))
+            .is_none_or(InstanceRef::begin_cleanup)
     }
 
     // ── Numeric-array reductions (formerly `baml.math.*`) ──────────────────────
@@ -290,7 +287,13 @@ pub(super) fn collect_to_string_overrides(
             .into_iter()
             .flat_map(|(key, value)| [key, value])
             .collect(),
-        Object::Instance(inst) => inst.fields.iter().map(AtomicValueSlot::load).collect(),
+        // A raw float field has no override to find.
+        Object::Instance => vm
+            .get_instance(ptr)
+            .into_iter()
+            .flat_map(InstanceRef::fields)
+            .filter_map(Field::as_value)
+            .collect(),
         _ => Vec::new(),
     };
     for v in children {
@@ -548,7 +551,7 @@ enum DisplaySnap {
     /// A map whose keys and values are rendered recursively.
     Entries(Vec<(Value, Value)>, bool),
     /// A class instance — `ClassName { field: value, ... }`.
-    Instance(String, Vec<(String, Value)>, bool),
+    Instance(String, Vec<(String, Field)>, bool),
 }
 
 const DIAGNOSTIC_RENDER_MAX_DEPTH: usize = 32;
@@ -665,6 +668,21 @@ fn is_primitive_object(vm: &BexVm, ptr: HeapPtr) -> bool {
     matches!(vm.get_object(ptr), Object::String(_) | Object::Float(_))
 }
 
+/// A field of an instance being rendered: a raw float renders as a float
+/// value would.
+fn render_field(
+    vm: &BexVm,
+    field: Field,
+    depth: usize,
+    state: &mut StringRenderState<'_>,
+    sink: &mut impl StructuralRenderSink,
+) {
+    match field {
+        Field::Value(value) => render_to_sink(vm, value, true, depth, state, sink),
+        Field::Float(float) => sink.push_text(&bex_vm_types::format_float(float)),
+    }
+}
+
 /// Human-readable rendering used by `string.from` / the `baml.ToString` default.
 /// Structural: every value type renders to *something* and nothing throws. A
 /// node whose runtime class overrides `baml.ToString` (recorded
@@ -761,35 +779,23 @@ pub(super) fn render_to_sink(
                 map.len() > limit,
             )
         }
-        Object::Instance(inst) => {
-            let limit = state.snapshot_child_limit(inst.fields.len());
-            let (class_name, paired) = match vm.get_object(inst.class) {
-                Object::Class(class) => {
-                    let name = if state.qualified_class_names {
-                        class.name().to_string()
-                    } else {
-                        class.path.name.to_string()
-                    };
-                    let fields = inst
-                        .fields
-                        .iter()
-                        .take(limit)
-                        .map(AtomicValueSlot::load)
-                        .enumerate()
-                        .map(|(i, v)| {
-                            let field_name = class
-                                .fields
-                                .get(i)
-                                .map(|field| field.name.clone())
-                                .unwrap_or_else(|| i.to_string());
-                            (field_name, v)
-                        })
-                        .collect();
-                    (name, fields)
-                }
-                _ => (String::new(), Vec::new()),
+        Object::Instance => {
+            let inst = vm.get_instance(ptr).expect("an instance pointer");
+            let class = inst.class_object();
+            let limit = state.snapshot_child_limit(class.fields.len());
+            let class_name = if state.qualified_class_names {
+                class.name().to_string()
+            } else {
+                class.path.name.to_string()
             };
-            DisplaySnap::Instance(class_name, paired, inst.fields.len() > limit)
+            let paired = class
+                .fields
+                .iter()
+                .zip(inst.fields())
+                .take(limit)
+                .map(|(field, value)| (field.name.clone(), value))
+                .collect();
+            DisplaySnap::Instance(class_name, paired, class.fields.len() > limit)
         }
         Object::Variant(var) => {
             let name = match vm.get_object(var.enm) {
@@ -881,7 +887,7 @@ pub(super) fn render_to_sink(
                     }
                     sink.push_text(name);
                     sink.push_text(": ");
-                    render_to_sink(vm, *value, true, depth + 1, state, sink);
+                    render_field(vm, *value, depth + 1, state, sink);
                     rendered_count += 1;
                 }
                 if truncated {
@@ -993,24 +999,21 @@ fn deep_copy_value_recursive(
                     placeholder_ptr
                 }
 
-                Object::Instance(instance) => {
-                    // The copy starts with every field null and is filled slot by
-                    // slot: a field may reach back to this instance.
-                    let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
-                        instance.class,
-                        instance.class_type_args.to_vec().into_boxed_slice(),
-                        vec![Value::NULL; instance.fields.len()],
-                    )));
-                    copied_objects.insert(ptr, placeholder_ptr);
-
-                    for (slot, field) in instance.field_values().enumerate() {
-                        let copied = deep_copy_value_recursive(vm, field, copied_objects)?;
-                        let Object::Instance(copy) = vm.get_object(placeholder_ptr) else {
-                            unreachable!("the placeholder was allocated as an instance")
-                        };
-                        copy.store_field(slot, copied);
+                Object::Instance => {
+                    let source = vm.get_instance(ptr).expect("an instance pointer");
+                    // The copy starts zeroed and is filled slot by slot: a field
+                    // may reach back to this instance.
+                    let copy = vm
+                        .tlab
+                        .alloc_instance_zeroed(source.class(), source.type_args().into());
+                    copied_objects.insert(ptr, copy.ptr());
+                    for field in 0..source.field_len() {
+                        let value = vm.load_field_value(source, field);
+                        let copied = deep_copy_value_recursive(vm, value, copied_objects)?;
+                        copy.store_relaxed(field, copied)
+                            .map_err(|mismatch| vm.slot_kind_error(mismatch))?;
                     }
-                    placeholder_ptr
+                    copy.ptr()
                 }
 
                 // Bigint is behind Arc — clone() is cheap (increments refcount).

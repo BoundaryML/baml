@@ -25,7 +25,8 @@ impl BexVm {
         self.container_len_in::<true>(container)
     }
 
-    #[inline]
+    #[allow(clippy::inline_always, reason = "the array length's fast path")]
+    #[inline(always)]
     fn container_len_in<const THREAD_LOCAL: bool>(
         &self,
         container: Value,
@@ -72,7 +73,8 @@ impl BexVm {
         self.load_array_element_in::<true>(array, index)
     }
 
-    #[inline]
+    #[allow(clippy::inline_always, reason = "the array element read's fast path")]
+    #[inline(always)]
     fn load_array_element_in<const THREAD_LOCAL: bool>(
         &mut self,
         array: Value,
@@ -141,7 +143,8 @@ impl BexVm {
         self.store_array_element_in::<true>(array, index, new_value)
     }
 
-    #[inline]
+    #[allow(clippy::inline_always, reason = "the array element store's fast path")]
+    #[inline(always)]
     fn store_array_element_in<const THREAD_LOCAL: bool>(
         &mut self,
         array: Value,
@@ -209,12 +212,6 @@ impl BexVm {
         Box::new(self.index_out_of_bounds(index, length))
     }
 
-    #[cold]
-    #[inline(never)]
-    fn invalid_field_access_boxed(&mut self, idx: usize, length: usize) -> Box<VmError> {
-        Box::new(self.invalid_field_access_error(idx, length))
-    }
-
     /// `expected`, got `value`: the `TypeError` an accessor raises for an
     /// operand of the wrong type. Out of line, so the accessors' fast paths
     /// stay small enough to inline into compiled bodies.
@@ -244,33 +241,15 @@ impl BexVm {
         self.load_field_in::<true>(instance, idx)
     }
 
-    #[allow(clippy::inline_always)]
+    #[allow(clippy::inline_always, reason = "the generic field read's fast path")]
     #[inline(always)]
     fn load_field_in<const THREAD_LOCAL: bool>(
         &mut self,
         instance: Value,
         idx: usize,
     ) -> Result<Value, Box<VmError>> {
-        // The fast path: a tag check, the object's kind, a bounds check and
-        // the field load. Every failure leaves through a cold helper.
-        let Some(ptr) = instance.as_object_ptr() else {
-            return Err(self.type_error(ObjectType::Instance, instance));
-        };
-        let Object::Instance(object) = self.get_object(ptr) else {
-            return Err(self.type_error(ObjectType::Instance, instance));
-        };
-        let loaded = if THREAD_LOCAL {
-            object.try_load_field_relaxed(idx)
-        } else {
-            object.try_load_field(idx)
-        };
-        match loaded {
-            Some(value) => Ok(value),
-            None => {
-                let length = object.field_len();
-                Err(self.invalid_field_access_boxed(idx, length))
-            }
-        }
+        self.load_instance_field(instance, idx, THREAD_LOCAL)
+            .map_err(Box::new)
     }
 
     #[inline]
@@ -295,7 +274,7 @@ impl BexVm {
         self.store_field_in::<true>(instance, idx, new_value)
     }
 
-    #[allow(clippy::inline_always)]
+    #[allow(clippy::inline_always, reason = "the generic field store's fast path")]
     #[inline(always)]
     fn store_field_in<const THREAD_LOCAL: bool>(
         &mut self,
@@ -303,23 +282,8 @@ impl BexVm {
         idx: usize,
         new_value: Value,
     ) -> Result<(), Box<VmError>> {
-        let Some(obj_ptr) = instance.as_object_ptr() else {
-            return Err(self.type_error(ObjectType::Instance, instance));
-        };
-        let Object::Instance(object) = self.get_object(obj_ptr) else {
-            return Err(self.type_error(ObjectType::Instance, instance));
-        };
-        let length = object.field_len();
-        if idx >= length {
-            return Err(self.invalid_field_access_boxed(idx, length));
-        }
-
-        if THREAD_LOCAL {
-            object.store_field_relaxed(idx, new_value);
-        } else {
-            object.store_field(idx, new_value);
-        }
-        Ok(())
+        self.store_instance_field(instance, idx, new_value, THREAD_LOCAL)
+            .map_err(Box::new)
     }
 
     pub fn make_closure(
@@ -367,10 +331,7 @@ impl BexVm {
     #[inline]
     #[must_use]
     pub fn is_instance_of(&self, value: Value, class: HeapPtr) -> bool {
-        match value.as_object_ptr().map(|ptr| self.get_object(ptr)) {
-            Some(Object::Instance(instance)) => instance.class == class,
-            _ => false,
-        }
+        self.instance_class(value) == Some(class)
     }
 
     #[inline]

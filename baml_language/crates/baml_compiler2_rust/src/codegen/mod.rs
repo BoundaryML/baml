@@ -348,6 +348,7 @@ impl<'db> Generator<'_, 'db> {
         if iterations {
             self.emit_line("let mut iterations: u32 = 0;");
         }
+        self.emit_line("let statics = vm.static_objects(fr);");
         for block in &self.body.blocks {
             let declaration = match &block.terminator {
                 Some(
@@ -786,11 +787,16 @@ impl<'db> Generator<'_, 'db> {
 
     /// `expr` as an atomic `Value` argument.
     fn value_arg(&mut self, expr: &Expr) -> String {
-        if expr.atom && expr.repr == Repr::Value {
+        self.repr_arg(expr, Repr::Value)
+    }
+
+    /// `expr` in representation `repr`, bound to a local unless it is one.
+    fn repr_arg(&mut self, expr: &Expr, repr: Repr) -> String {
+        if expr.atom && expr.repr == repr {
             return expr.code.clone();
         }
-        let coerced = coerce(&expr.code, expr.repr, Repr::Value);
-        self.hoist(Expr::new(coerced, Repr::Value)).code
+        let coerced = coerce(&expr.code, expr.repr, repr);
+        self.hoist(Expr::new(coerced, repr)).code
     }
 
     fn flush_bindings(&mut self) {

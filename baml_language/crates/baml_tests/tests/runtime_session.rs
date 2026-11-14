@@ -471,11 +471,10 @@ async fn session_shape(engine: &Arc<BexEngine>, name: &str) -> PackageShape {
         .resolve_handle(active.proof(), &handle)
         .expect("the handle roots the session wrapper");
     // SAFETY: the active permit excludes collection; the handle roots the wrapper.
-    let Object::Instance(wrapper) = (unsafe { wrapper_ptr.get() }) else {
-        panic!("a Session handle wraps an instance")
-    };
+    let wrapper = unsafe { bex_vm_types::InstanceRef::of(wrapper_ptr) }
+        .expect("a Session handle wraps an instance");
     let package_ptr = wrapper
-        .load_field(0)
+        .load_value(0)
         .as_object_ptr()
         .expect("the wrapper holds its package");
     // SAFETY: the wrapper roots its package payload under the same permit.

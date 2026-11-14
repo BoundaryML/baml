@@ -1133,11 +1133,11 @@ fn test_finalizer_is_queued_when_its_runtime_class_was_evacuated() {
             *queued_cleanup, roots[1],
             "the queued finalizer is the class's relocated `cleanup` body"
         );
-        let Object::Instance(instance) = (unsafe { kept_alive.get() }) else {
-            panic!("the queued pointer is not an instance")
-        };
+        let instance = unsafe { bex_vm_types::InstanceRef::of(*kept_alive) }
+            .expect("the queued pointer is not an instance");
         assert_eq!(
-            instance.class, roots[0],
+            instance.class(),
+            roots[0],
             "the kept-alive instance points at its relocated class"
         );
     }

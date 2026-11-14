@@ -29,7 +29,7 @@ use std::{
 use baml_type::normalize::TypeContext;
 use bex_str::BexStr;
 use bex_vm_types::{
-    HeapPtr, RealizedTy, RootHaver, RootVisitor, ValueKind,
+    Field, HeapPtr, RealizedTy, RootHaver, RootVisitor, ValueKind,
     errors::VmInternalError,
     types::{LockedContainer, LockedReadGuard, Object, Type, Value},
 };
@@ -450,6 +450,47 @@ impl EqualsDriver {
         }
     }
 
+    /// Two instances: unequal across classes or instantiations, then the
+    /// class's own `Equals.eq` if it has one, else field by field.
+    fn compare_instances(&mut self, vm: &BexVm, pa: HeapPtr, pb: HeapPtr) -> Cmp {
+        let x = vm.get_instance(pa).expect("an instance pointer");
+        let y = vm.get_instance(pb).expect("an instance pointer");
+        // Different concrete type (class or generic instantiation) ⇒ never equal.
+        // `Equals.eq(self, other: Self)` requires the same `Self`, so differing
+        // `class_type_args` (`Box<int>` vs `Box<string>`) is unequal up front.
+        // Compared with `ty_args_equivalent`, not `==`, so union args match
+        // order-insensitively (`Box<int | string>` is the same `Self` as
+        // `Box<string | int>`) — the same notion of "same instantiation" the
+        // resolver and reflection use.
+        if x.class() != y.class()
+            || !resolve::ImplResolver::new(vm).ty_args_equivalent(x.type_args(), y.type_args())
+        {
+            return Cmp::NotEqual;
+        }
+        // Same concrete type: dispatch to the class's custom `Equals.eq` if it has
+        // one, else compare structurally (field by field).
+        match value_concrete_ty(vm, pa).map(|ty| resolve_equals_eq(vm, Value::object(pa), &ty)) {
+            Some(Ok(Some((callee, type_args)))) => {
+                return Cmp::Yield {
+                    callee,
+                    args: vec![Value::object(pa), Value::object(pb)],
+                    type_args,
+                };
+            }
+            Some(Err(e)) => return Cmp::Error(e),
+            Some(Ok(None)) | None => {}
+        }
+        // One class, one layout: a raw float pairs with a raw float.
+        for (fx, fy) in x.fields().zip(y.fields()) {
+            match (fx, fy) {
+                (Field::Value(fx), Field::Value(fy)) => self.stack.push((fx, fy)),
+                (Field::Float(fx), Field::Float(fy)) if bex_vm_types::float_order::eq(fx, fy) => {}
+                _ => return Cmp::NotEqual,
+            }
+        }
+        Cmp::Continue
+    }
+
     /// Compare two *distinct* heap objects (`pa != pb` — [`Self::compare_one`]
     /// settles identical pointers by reflexivity). Leaves decide directly;
     /// arrays/maps/instances push their children. Containers are snapshotted
@@ -538,42 +579,8 @@ impl EqualsDriver {
                 step(x.index == y.index)
             }
             (Object::Variant(_), _) => Cmp::NotEqual,
-            (Object::Instance(x), Object::Instance(y)) => {
-                // Different concrete type (class or generic instantiation) ⇒ never equal.
-                // `Equals.eq(self, other: Self)` requires the same `Self`, so differing
-                // `class_type_args` (`Box<int>` vs `Box<string>`) is unequal up front.
-                // Compared with `ty_args_equivalent`, not `==`, so union args match
-                // order-insensitively (`Box<int | string>` is the same `Self` as
-                // `Box<string | int>`) — the same notion of "same instantiation" the
-                // resolver and reflection use.
-                if x.class != y.class
-                    || !resolve::ImplResolver::new(vm)
-                        .ty_args_equivalent(&x.class_type_args, &y.class_type_args)
-                    || x.fields.len() != y.fields.len()
-                {
-                    return Cmp::NotEqual;
-                }
-                // Same concrete type: dispatch to the class's custom `Equals.eq` if it has
-                // one, else compare structurally (field by field).
-                match value_concrete_ty(vm, pa)
-                    .map(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
-                {
-                    Some(Ok(Some((callee, type_args)))) => {
-                        return Cmp::Yield {
-                            callee,
-                            args: vec![Value::object(pa), Value::object(pb)],
-                            type_args,
-                        };
-                    }
-                    Some(Err(e)) => return Cmp::Error(e),
-                    Some(Ok(None)) | None => {}
-                }
-                for (fx, fy) in x.fields.iter().zip(y.fields.iter()) {
-                    self.stack.push((fx.load(), fy.load()));
-                }
-                Cmp::Continue
-            }
-            (Object::Instance(_), _) => Cmp::NotEqual,
+            (Object::Instance, Object::Instance) => self.compare_instances(vm, pa, pb),
+            (Object::Instance, _) => Cmp::NotEqual,
 
             (Object::BoundMethod(x), Object::BoundMethod(y)) => {
                 // The same *value*, not an equivalent one: the same method on
@@ -731,15 +738,12 @@ impl Continuation for EqualsDriver {
 /// `None` for any other object kind (only instances/enums implement `Equals`).
 fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
     match vm.get_object(ptr) {
-        Object::Instance(inst) => {
-            let (class_ptr, type_args) = (inst.class, inst.class_type_args.to_vec());
-            match vm.get_object(class_ptr) {
-                Object::Class(class) => Some(RealizedTy::Class(
-                    bex_vm_types::TypeHead::new(class_ptr, class.type_tag),
-                    type_args.into(),
-                )),
-                _ => None,
-            }
+        Object::Instance => {
+            let inst = vm.get_instance(ptr)?;
+            Some(RealizedTy::Class(
+                bex_vm_types::TypeHead::new(inst.class(), inst.class_object().type_tag),
+                inst.type_args().into(),
+            ))
         }
         Object::Variant(v) => match vm.get_object(v.enm) {
             Object::Enum(e) => Some(RealizedTy::Enum(bex_vm_types::TypeHead::new(

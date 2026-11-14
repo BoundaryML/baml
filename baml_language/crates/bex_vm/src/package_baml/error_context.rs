@@ -36,7 +36,9 @@ impl BamlClassErrorsContext for PackageBamlImpl {
             let instance = vm
                 .as_instance(&cause_value)
                 .expect("baml.errors.Context.cause: expected Instance");
-            let link = view::errors::Context { instance };
+            let link = view::errors::Context {
+                instance: &instance,
+            };
             links.push((link.error(), link.stack_trace()));
             cause = link.cause(vm);
         }
@@ -52,7 +54,7 @@ impl BamlClassErrorsContext for PackageBamlImpl {
                 .as_instance(stack_trace)
                 .expect("baml.errors.Context.stack_trace: expected Instance");
             let st_view = view::errors::StackTrace {
-                instance: st_instance,
+                instance: &st_instance,
             };
             let trace =
                 <PackageBamlImpl as BamlClassErrorsStackTrace>::_to_string_impl(vm, &st_view);

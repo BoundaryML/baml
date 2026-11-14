@@ -209,7 +209,7 @@ fn object_to_serde_at(
                 _ => serde_json::Value::Null,
             }
         }
-        Object::Instance(_)
+        Object::Instance
         | Object::Class(_)
         | Object::Enum(_)
         | Object::TypeAlias(_)

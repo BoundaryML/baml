@@ -34,6 +34,21 @@ fn framed(tag: u8, bytes: &[u8]) -> Vec<u8> {
 }
 
 impl HashDriver {
+    /// An instance's own bytes, its class and field count; its fields are
+    /// queued to hash after it, in order.
+    fn instance_bytes(&mut self, vm: &mut BexVm, ptr: HeapPtr) -> Vec<u8> {
+        let instance = vm.get_instance(ptr).expect("an instance pointer");
+        let type_tag = instance.class_object().type_tag.as_i64();
+        let mut bytes = framed(9, &type_tag.to_le_bytes());
+        bytes.extend_from_slice(&(instance.field_len() as u64).to_le_bytes());
+        let fields: Vec<_> = instance.fields().collect();
+        for field in fields.into_iter().rev() {
+            let value = vm.field_to_value(field);
+            self.pending.push(Work::Value(value, true));
+        }
+        bytes
+    }
+
     fn drive(mut self, vm: &mut BexVm) -> NativeCallResult {
         while let Some(work) = self.pending.pop() {
             let bytes = match work {
@@ -150,23 +165,7 @@ impl HashDriver {
                                 }
                                 continue;
                             }
-                            Object::Instance(instance) => {
-                                let Object::Class(class) = vm.get_object(instance.class) else {
-                                    return panic("Invalid class while hashing");
-                                };
-                                let mut bytes = framed(9, &class.type_tag.as_i64().to_le_bytes());
-                                bytes.extend_from_slice(
-                                    &(instance.fields.len() as u64).to_le_bytes(),
-                                );
-                                self.pending.extend(
-                                    instance
-                                        .fields
-                                        .iter()
-                                        .rev()
-                                        .map(|field| Work::Value(field.load(), true)),
-                                );
-                                bytes
-                            }
+                            Object::Instance => self.instance_bytes(vm, ptr),
                             Object::Variant(variant) => {
                                 let Object::Enum(enm) = vm.get_object(variant.enm) else {
                                     return panic("Invalid enum while hashing");

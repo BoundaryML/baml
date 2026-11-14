@@ -225,13 +225,13 @@ impl ToJsonCache {
             Object::Uint8Array(_) => OverrideKey::Uint8Array,
             Object::Array(array) => OverrideKey::List((*array.element_ty).clone()),
             Object::Map(map) => OverrideKey::Map((*map.key_ty).clone(), (*map.value_ty).clone()),
-            Object::Instance(instance) => match vm.get_object(instance.class) {
-                Object::Class(class) => OverrideKey::Instance(
-                    TypeHead::new(instance.class, class.type_tag),
-                    instance.class_type_args.clone(),
-                ),
-                _ => return has_to_json_override(vm, value),
-            },
+            Object::Instance => {
+                let instance = vm.get_instance(ptr).expect("an instance pointer");
+                OverrideKey::Instance(
+                    TypeHead::new(instance.class(), instance.class_object().type_tag),
+                    instance.type_args().into(),
+                )
+            }
             Object::Variant(variant) => match vm.get_object(variant.enm) {
                 Object::Enum(enm) => OverrideKey::Variant(TypeHead::new(variant.enm, enm.type_tag)),
                 _ => return has_to_json_override(vm, value),
@@ -315,22 +315,23 @@ fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
             .into_iter()
             .map(|(_, value)| value)
             .collect(),
-        Object::Instance(instance) => match vm.get_object(instance.class) {
-            Object::Class(class)
-                if vm
-                    .stdlib_heads()
-                    .media_kind(TypeHead::new(instance.class, class.type_tag))
-                    .is_none() =>
-            {
-                instance
-                    .field_values()
-                    .zip(&class.fields)
-                    .filter(|(value, field)| options.writes_field(field, *value))
-                    .map(|(value, _)| value)
-                    .collect()
+        Object::Instance => {
+            let instance = vm.get_instance(ptr).expect("an instance pointer");
+            let class = instance.class_object();
+            let head = TypeHead::new(instance.class(), class.type_tag);
+            if vm.stdlib_heads().media_kind(head).is_some() {
+                return Vec::new();
             }
-            _ => Vec::new(),
-        },
+            // A raw float field is a leaf: nothing to descend into.
+            instance
+                .fields()
+                .zip(&class.fields)
+                .filter_map(|(field, declared)| {
+                    let value = field.as_value()?;
+                    options.writes_field(declared, value).then_some(value)
+                })
+                .collect()
+        }
         _ => Vec::new(),
     }
 }
@@ -670,7 +671,9 @@ impl Walker<'_, '_> {
             Object::Bigint(_) => Shape::Bigint,
             Object::Array(values) => Shape::Array(values.to_vec()),
             Object::Map(_) => Shape::Map,
-            Object::Instance(instance) => Shape::Instance(instance.class),
+            Object::Instance => {
+                Shape::Instance(vm.get_instance(ptr).expect("an instance pointer").class())
+            }
             Object::Variant(variant) => Shape::Variant(variant.enm, variant.index),
             Object::Uint8Array(_) => Shape::Unserializable(
                 "uint8array requires explicit encoding (use to_base64() or to_hex())",
@@ -907,21 +910,21 @@ impl Walker<'_, '_> {
         if let Some(plan) = plan {
             self.plans.insert(class, plan);
         }
-        let (Object::Instance(instance), Object::Class(declaration)) =
-            (vm.get_object(ptr), vm.get_object(class))
-        else {
-            unreachable!("the instance and its class were just read")
-        };
+        let instance = vm.get_instance(ptr).expect("an instance pointer");
+        let declaration = instance.class_object();
+        let values: Vec<Value> = (0..declaration.fields.len())
+            .map(|field| vm.load_field_value(instance, field))
+            .collect();
         // A `@json.fallback` class is the object it was read from.
-        let fallback = instance
-            .field_values()
+        let fallback = values
+            .iter()
             .zip(&declaration.fields)
-            .find_map(|(value, field)| field.json_fallback.then_some(value));
+            .find_map(|(value, field)| field.json_fallback.then_some(*value));
         if let Some(raw) = fallback {
             return self.visit(vm, raw, false, sink);
         }
-        let mut children: Vec<(Option<Slot>, Value)> = instance
-            .field_values()
+        let mut children: Vec<(Option<Slot>, Value)> = values
+            .into_iter()
             .zip(&declaration.fields)
             .enumerate()
             .filter(|(_, (value, field))| self.options.writes_field(field, *value))

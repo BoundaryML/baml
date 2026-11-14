@@ -36,6 +36,9 @@
 //! from-space scan may still read slots that are *not* in `forwarding`; those
 //! are dead objects, and they stay intact until their space is cleared.
 //!
+//! An instance cell is copied rather than moved, and its old cell is left
+//! as it was: the cell owns nothing, and `forwarding` alone says it moved.
+//!
 //! Because survivors are gone from from-space, a collection cannot be
 //! abandoned halfway: once the first object has moved, the roots are stale
 //! until root forwarding completes. A panic in that window must not resume
@@ -44,11 +47,11 @@
 use std::{cell::UnsafeCell, collections::HashMap};
 
 use bex_vm_types::{
-    FutureRead, HeapPtr, Meter, Object, Value,
+    Class, ClassLayout, FutureRead, HeapPtr, InstanceRef, Meter, Object, Value,
     types::{Future, Objects, Slots},
 };
 
-use crate::{BexHeap, chunked_vec::ChunkedVec};
+use crate::{BexHeap, cell_space::CellSpace, chunked_vec::ChunkedVec};
 
 /// Extract the inner `HeapPtr` held by a settled future (Ready / Error), if
 /// the held value is an object reference. Pending / Cancelled / InternalError
@@ -135,7 +138,7 @@ impl BexHeap {
     unsafe fn scan_dead_finalizers(
         &self,
         forwarding: &HashMap<HeapPtr, HeapPtr>,
-        gens: &[&ChunkedVec<Object>],
+        gens: &[&CellSpace],
     ) -> Vec<(HeapPtr, HeapPtr)> {
         // Fast path: if no class defines `cleanup`, no instance can ever be
         // finalizable.
@@ -163,43 +166,23 @@ impl BexHeap {
             // objects are allocated or rewritten there, and each collection
             // moves the survivors' entries and drops the rest.
             // SAFETY: GC safepoint; only addresses are compared.
-            let (generation, slot) = gens
+            let position = gens
                 .iter()
                 .enumerate()
-                .find_map(|(generation, space)| {
-                    unsafe { Self::locate_in_chunked_vec(space, ptr.as_ptr()) }.map(
-                        |(chunk_idx, offset)| {
-                            (
-                                generation,
-                                chunk_idx * ChunkedVec::<Object>::CHUNK_SIZE + offset,
-                            )
-                        },
-                    )
-                })
+                .find_map(|(generation, space)| Some((generation, space.position(ptr.cell())?)))
                 .unwrap_or_else(|| unreachable!("finalizable entry {ptr:?} is outside from-space"));
-            // SAFETY: from-space object is still intact pre-swap.
-            let Object::Instance(inst) = (unsafe { ptr.get() }) else {
-                continue;
-            };
-            if inst.cleaned.is_cleaned() {
+            // SAFETY: a dead instance's cell is intact until its space is cleared.
+            let inst = unsafe { InstanceRef::of(ptr) }.expect("finalizable entries are instances");
+            if inst.is_cleaned() {
                 continue; // explicit/`defer` already cleaned it — SuppressFinalize
             }
-            // A runtime-created class is itself collectible, so this
-            // collection may already have evacuated it: read it where it
-            // lives now. A compile-time class, or one this collection does
-            // not move, is still at `inst.class`.
-            let class_ptr = forwarding.get(&inst.class).copied().unwrap_or(inst.class);
-            // SAFETY: a forwarded pointer names an initialized destination
-            // slot; an unforwarded one names a slot no evacuation touched.
-            let Object::Class(class) = (unsafe { class_ptr.get() }) else {
-                continue;
-            };
+            let class = Self::class_in_collection(inst.class(), forwarding);
             // The finalizer is the class's own method, taken while the
             // class is in hand. The instance keeps its class alive and the
             // class its methods, so the closure copied from the seed
             // carries the function along.
             if let Some(cleanup) = class.cleanup() {
-                seeds.push(((generation, slot), ptr, cleanup));
+                seeds.push((position, ptr, cleanup));
             }
         }
         seeds.sort_unstable_by_key(|&(order, ..)| order);
@@ -223,15 +206,15 @@ impl BexHeap {
         }
         finalizable.instances.clear();
         // SAFETY: GC safepoint; nothing has moved yet.
-        for space in unsafe { [self.gen0_ref(), self.gen2_ref()] } {
-            for i in 0..space.len() {
-                // SAFETY: index in bounds; GC safepoint.
-                let ptr = unsafe { self.make_heap_ptr(space.get_ptr(i)) };
-                // SAFETY: nothing has moved, so the object and its class are intact.
-                if unsafe { Self::needs_finalizer_registration(ptr.get()) } {
-                    finalizable.instances.push(ptr);
+        for space in unsafe { [&*self.gen0_cells.get(), &*self.gen2_cells.get()] } {
+            space.for_each_cell(|cell| {
+                // SAFETY: nothing has moved, so the instance and its class are intact.
+                let instance = unsafe { InstanceRef::from_cell(cell) };
+                if Self::needs_finalizer(instance) {
+                    finalizable.instances.push(instance.ptr());
                 }
-            }
+                instance.layout().words()
+            });
         }
         finalizable.stale = false;
     }
@@ -256,8 +239,12 @@ impl BexHeap {
     ///
     /// SAFETY: GC safepoint, after the root trace, before the swap.
     unsafe fn keepalive_finalizers(&self, forwarding: &mut HashMap<HeapPtr, HeapPtr>) {
-        let seeds =
-            unsafe { self.scan_dead_finalizers(forwarding, &[self.gen0_ref(), self.gen2_ref()]) };
+        let seeds = unsafe {
+            self.scan_dead_finalizers(
+                forwarding,
+                &[&*self.gen0_cells.get(), &*self.gen2_cells.get()],
+            )
+        };
         if seeds.is_empty() {
             return;
         }
@@ -278,9 +265,7 @@ impl BexHeap {
                 continue;
             }
             let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
-            // SAFETY: just written into inactive; pointer valid.
-            let obj = unsafe { new_ptr.get() };
-            self.add_references_to_worklist(obj, &mut worklist);
+            self.trace(new_ptr, forwarding, &mut worklist);
         }
         for (instance, cleanup) in seeds {
             // Both were seeded above, so both are now in `forwarding`.
@@ -359,8 +344,7 @@ impl BexHeap {
                 continue;
             }
             let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
-            // SAFETY: `new_ptr` was just initialized in inactive space.
-            self.add_references_to_worklist(unsafe { new_ptr.get() }, &mut worklist);
+            self.trace(new_ptr, forwarding, &mut worklist);
         }
         for error in errors {
             let value = error.value.as_object_ptr().map_or(error.value, |ptr| {
@@ -406,6 +390,7 @@ impl BexHeap {
         // SAFETY: GC runs at safepoints, exclusive access guaranteed.
         unsafe {
             self.inactive_mut().clear();
+            (*self.inactive_cells.get()).clear();
         }
 
         // BFS from roots — copy every reachable object into inactive.
@@ -446,9 +431,7 @@ impl BexHeap {
             let new_ptr = self.evacuate_object(&self.inactive, old_ptr, &mut forwarding);
 
             // Enqueue this object's outgoing heap references.
-            // SAFETY: We just wrote the object into inactive, pointer is valid.
-            let obj = unsafe { new_ptr.get() };
-            self.add_references_to_worklist(obj, &mut worklist);
+            self.trace(new_ptr, &forwarding, &mut worklist);
         }
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Trace);
@@ -474,6 +457,8 @@ impl BexHeap {
         // locations, and take the census of what the survivors hold.
         // SAFETY: All live objects have been copied; no VMs are executing.
         let live_payload_bytes = unsafe { self.fixup_and_measure_survivors(&forwarding) };
+        // SAFETY: as above.
+        let (live_cells, live_cell_words) = unsafe { self.fixup_instances(&forwarding) };
 
         // Resolve weak function lookups before destroying from-space. These
         // pointers are deliberately absent from the root set.
@@ -483,7 +468,7 @@ impl BexHeap {
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
         // SAFETY: GC runs at safepoints.
-        let live_count = unsafe { self.inactive_ref().len() };
+        let live_count = unsafe { self.inactive_ref().len() } + live_cells;
         let collected_count = old_count.saturating_sub(live_count);
 
         // Swap inactive ↔ Gen2; clear Gen0.
@@ -492,6 +477,9 @@ impl BexHeap {
         unsafe {
             std::ptr::swap(self.gen2.get(), self.inactive.get());
             self.gen0_mut().clear();
+            std::ptr::swap(self.gen2_cells.get(), self.inactive_cells.get());
+            (*self.gen0_cells.get()).clear();
+            (*self.inactive_cells.get()).clear();
         }
 
         // Gen0 is now empty — reset the TLAB cursor to 0.
@@ -524,8 +512,9 @@ impl BexHeap {
         self.update_handles(&forwarding);
 
         self.gc_policy.after_full(
-            live_count
+            (live_count - live_cells)
                 .saturating_mul(size_of::<Object>())
+                .saturating_add(live_cell_words.saturating_mul(size_of::<u64>()))
                 .saturating_add(live_payload_bytes),
         );
 
@@ -570,6 +559,9 @@ impl BexHeap {
             !self.is_compile_time_ptr(old_ptr),
             "compile-time object {old_ptr:?} must never be evacuated"
         );
+        if old_ptr.is_instance() {
+            return self.evacuate_instance(old_ptr, forwarding);
+        }
         // Scans every chunk of `to`, so it is a `heap_debug` check rather than
         // a `debug_assert!`: it would otherwise run once per survivor.
         #[cfg(feature = "heap_debug")]
@@ -609,6 +601,101 @@ impl BexHeap {
         new_ptr
     }
 
+    /// Copy a surviving instance into the inactive cells and return its new
+    /// address. The old cell stays as it was; see the module docs.
+    fn evacuate_instance(
+        &self,
+        old_ptr: HeapPtr,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
+    ) -> HeapPtr {
+        // SAFETY: GC safepoint; the instance has not been evacuated yet.
+        let old = unsafe { InstanceRef::of(old_ptr) }.expect("an instance pointer");
+        let words = ClassLayout::of(Self::class_in_collection(old.class(), forwarding)).words();
+        // SAFETY: GC safepoint, exclusive access to the inactive cells; the
+        // destination is freshly carved, so the two never overlap.
+        let new_ptr = unsafe {
+            let to = (*self.inactive_cells.get()).carve(words);
+            std::ptr::copy_nonoverlapping(old_ptr.cell(), to, words);
+            InstanceRef::from_cell(to).ptr()
+        };
+        let previous = forwarding.insert(old_ptr, new_ptr);
+        debug_assert!(previous.is_none(), "{old_ptr:?} was evacuated twice");
+        new_ptr
+    }
+
+    /// The class `class` names, read where this collection has put it: a
+    /// runtime-created class is itself collectible, so it may have moved
+    /// already, leaving a tombstone at `class`.
+    fn class_in_collection(
+        class: HeapPtr,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
+    ) -> &'static Class {
+        let class = forwarding.get(&class).copied().unwrap_or(class);
+        // SAFETY: a forwarded pointer names an initialized destination slot;
+        // an unforwarded one names a slot no evacuation touched.
+        match unsafe { class.get() } {
+            Object::Class(class) => class,
+            other => unreachable!(
+                "an instance's class is a {}",
+                bex_vm_types::ObjectType::of(other)
+            ),
+        }
+    }
+
+    /// Enqueue the outgoing references of the survivor at `ptr`.
+    fn trace(
+        &self,
+        ptr: HeapPtr,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
+        worklist: &mut Vec<HeapPtr>,
+    ) {
+        // SAFETY: GC safepoint; `ptr` names a survivor's new copy.
+        let Some(instance) = (unsafe { InstanceRef::of(ptr) }) else {
+            self.add_references_to_worklist(unsafe { ptr.get() }, worklist);
+            return;
+        };
+        let class = instance.class();
+        worklist.push(class);
+        let layout = ClassLayout::of(Self::class_in_collection(class, forwarding));
+        worklist.extend(
+            layout
+                .value_slots()
+                // SAFETY: the layout names these value slots.
+                .filter_map(|slot| unsafe { instance.slot_value(slot) }.as_object_ptr()),
+        );
+    }
+
+    /// Repoint every surviving instance's class and value slots to where
+    /// this collection put them. Returns how many survived and their words.
+    ///
+    /// # Safety
+    /// Must be called after every survivor has been copied.
+    unsafe fn fixup_instances(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) -> (usize, usize) {
+        let (mut cells, mut words) = (0, 0);
+        // SAFETY: the caller guarantees the inactive cells are complete.
+        let survivors = unsafe { &*self.inactive_cells.get() };
+        survivors.for_each_cell(|cell| {
+            // SAFETY: every cell in the inactive space is a survivor's copy.
+            let instance = unsafe { InstanceRef::from_cell(cell) };
+            let class = instance.class();
+            if let Some(&moved) = forwarding.get(&class) {
+                instance.set_class(moved);
+            }
+            let layout = ClassLayout::of(Self::class_in_collection(class, forwarding));
+            for slot in layout.value_slots() {
+                // SAFETY: the layout names these value slots.
+                let mut value = unsafe { instance.slot_value(slot) };
+                self.fixup_value(&mut value, forwarding);
+                // SAFETY: as above.
+                unsafe { instance.set_slot_value(slot, value) };
+            }
+            cells += 1;
+            words += layout.words();
+            layout.words()
+        });
+        (cells, words)
+    }
+
     /// Add object references to the worklist for tracing.
     fn add_references_to_worklist(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
         match obj {
@@ -631,14 +718,8 @@ impl BexHeap {
                     }
                 }
             }
-            Object::Instance(inst) => {
-                worklist.push(inst.class);
-                for value in inst.field_values() {
-                    if let Some(ptr) = value.as_object_ptr() {
-                        worklist.push(ptr);
-                    }
-                }
-            }
+            // An instance's references are traced from its cell (`trace`).
+            Object::Instance => {}
             Object::Closure(closure) => {
                 worklist.push(closure.function);
                 for value in &closure.captures {
@@ -791,28 +872,36 @@ impl BexHeap {
     /// Must be called only at a GC safepoint (all permits parked).
     #[cfg(feature = "heap_debug")]
     unsafe fn debug_assert_post_collection_no_dead_refs(&self) {
+        let assert_survivors = |holder: &dyn std::fmt::Debug, refs: &[HeapPtr]| {
+            for &ref_ptr in refs {
+                let generation = self.generation_of(ref_ptr);
+                assert!(
+                    matches!(
+                        generation,
+                        crate::heap::Generation::CompileTime | crate::heap::Generation::Gen2
+                    ),
+                    "heap_debug: post-collection Gen2 {holder:?} holds a reference to \
+                     {ref_ptr:?} in {generation:?} — the fixup missed this reference",
+                );
+            }
+        };
+        let mut refs = Vec::new();
         // SAFETY: caller is at a GC safepoint.
         unsafe {
             let gen2 = &*self.gen2.get();
-            let mut refs = Vec::new();
             for runtime_idx in 0..gen2.len() {
                 let obj = gen2.get(runtime_idx);
                 refs.clear();
                 self.add_references_to_worklist(obj, &mut refs);
-                for &ref_ptr in &refs {
-                    let generation = self.generation_of(ref_ptr);
-                    assert!(
-                        matches!(
-                            generation,
-                            crate::heap::Generation::CompileTime | crate::heap::Generation::Gen2
-                        ),
-                        "heap_debug: post-collection Gen2 object at runtime_idx={runtime_idx} \
-                         (variant {:?}) holds a reference to {ref_ptr:?} in {generation:?} — \
-                         the fixup missed this reference",
-                        bex_vm_types::ObjectType::of(obj),
-                    );
-                }
+                assert_survivors(&(runtime_idx, bex_vm_types::ObjectType::of(obj)), &refs);
             }
+            (*self.gen2_cells.get()).for_each_cell(|cell| {
+                let instance = InstanceRef::from_cell(cell);
+                refs.clear();
+                self.trace(instance.ptr(), &HashMap::new(), &mut refs);
+                assert_survivors(&instance, &refs);
+                instance.layout().words()
+            });
         }
     }
 
@@ -856,17 +945,8 @@ impl BexHeap {
                     self.fixup_value(value, forwarding);
                 }
             }
-            Object::Instance(inst) => {
-                // Update class pointer
-                if let Some(&new_ptr) = forwarding.get(&inst.class) {
-                    inst.class = new_ptr;
-                }
-                for slot in &inst.fields {
-                    let mut value = slot.load();
-                    self.fixup_value(&mut value, forwarding);
-                    slot.store(value);
-                }
-            }
+            // Instances are fixed up from their cells (`fixup_instances`).
+            Object::Instance => {}
             Object::Closure(closure) => {
                 if let Some(&new_ptr) = forwarding.get(&closure.function) {
                     closure.function = new_ptr;
@@ -1063,7 +1143,7 @@ mod tests {
     use std::sync::Arc;
 
     use baml_type::RealizedTy;
-    use bex_vm_types::{Object, Value};
+    use bex_vm_types::{Field, Object, Value};
 
     use super::*;
     use crate::Tlab;
@@ -1224,12 +1304,11 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[cfg(feature = "heap_debug")]
+    /// An instance's size comes from its class, so values that do not fit
+    /// the class are refused when the instance is built, not stored.
     #[test]
-    fn test_full_verify_panics_on_instance_field_mismatch() {
+    fn an_instance_is_built_only_from_values_its_class_holds() {
         use std::panic::{AssertUnwindSafe, catch_unwind};
-
-        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
@@ -1265,25 +1344,22 @@ mod tests {
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
             redact: false,
         }))];
-        let debug = HeapDebuggerConfig {
-            enabled: true,
-            verify: HeapVerifyMode::Full,
-        };
-        let heap = BexHeap::with_tlab_size_and_debug(compile_time, 4, debug);
+        let heap = BexHeap::new(compile_time);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-
         let class_ptr = heap.compile_time_ptr(0);
-        // Instance has 3 fields but class expects 1 — should panic on verify
-        let _bad_instance = tlab.alloc(Object::Instance(bex_vm_types::types::Instance::new(
-            class_ptr,
-            Box::new([]),
-            vec![Value::int(1), Value::int(2), Value::int(3)],
-        )));
 
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            heap.verify_quick();
-        }));
-        assert!(result.is_err());
+        for fields in [
+            vec![Value::int(1), Value::int(2), Value::int(3)],
+            vec![Value::bool(true)],
+        ] {
+            let built = catch_unwind(AssertUnwindSafe(|| tlab.alloc_instance(class_ptr, fields)));
+            assert!(built.is_err());
+        }
+        let instance = tlab.alloc_instance(class_ptr, vec![Value::int(7)]);
+        // SAFETY: just allocated; single-threaded test.
+        let instance = unsafe { InstanceRef::of(instance) }.unwrap();
+        assert!(instance.store(0, Value::NULL).is_err());
+        assert_eq!(instance.load(0), Field::Value(Value::int(7)));
     }
 
     #[test]
@@ -1906,7 +1982,10 @@ mod tests {
         // Allocate a class (leaf), a string (leaf), then an instance referencing both
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("TestClass")),
-            fields: vec![],
+            fields: vec![
+                class_field("name", bex_vm_types::RuntimeTy::String),
+                class_field("count", bex_vm_types::RuntimeTy::Int),
+            ],
             description: None,
             alias: None,
             docstring: None,
@@ -1932,18 +2011,13 @@ mod tests {
         // collected_count may be non-zero due to unused TLAB chunk slots
 
         let inst_ptr = new_roots[0];
-        let Object::Instance(inst) = (unsafe { inst_ptr.get() }) else {
-            panic!("not instance")
-        };
-        assert_eq!(inst.fields.len(), 2);
-        assert!(inst.load_field(0).is_object());
-        assert_eq!(inst.load_field(1), Value::int(42));
+        let inst = unsafe { InstanceRef::of(inst_ptr) }.expect("an instance");
+        assert_eq!(inst.field_len(), 2);
+        assert!(inst.load_value(0).is_object());
+        assert_eq!(inst.load_value(1), Value::int(42));
 
         // Verify class is accessible through the instance
-        let Object::Class(c) = (unsafe { inst.class.get() }) else {
-            panic!("not class")
-        };
-        assert_eq!(c.path.name.as_str(), "TestClass");
+        assert_eq!(inst.class_object().path.name.as_str(), "TestClass");
     }
 
     #[test]
@@ -2667,7 +2741,7 @@ mod tests {
         use baml_type::Name;
         use bex_vm_types::{
             Class, Enum,
-            types::{Cell, Closure, Instance, Variant},
+            types::{Cell, Closure, Variant},
         };
 
         let heap = BexHeap::new(vec![]);
@@ -2712,7 +2786,7 @@ mod tests {
         // Instance requires a class pointer.
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("T")),
-            fields: vec![],
+            fields: vec![class_field("leaf", bex_vm_types::RuntimeTy::String)],
             description: None,
             alias: None,
             docstring: None,
@@ -2727,11 +2801,7 @@ mod tests {
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
             redact: false,
         })));
-        let instance_container = tlab.alloc(Object::Instance(Instance::new(
-            class_ptr,
-            Box::new([]),
-            vec![Value::object(leaf_string)],
-        )));
+        let instance_container = tlab.alloc_instance(class_ptr, vec![Value::object(leaf_string)]);
 
         // --- Container: Object::Variant ---
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
@@ -2826,11 +2896,9 @@ mod tests {
         assert_eq!(s, "cell_value");
 
         // Instance: fields[0] should be the (forwarded) leaf string.
-        let Object::Instance(inst) = (unsafe { new_roots[4].get() }) else {
-            panic!("new_roots[4] not Instance")
-        };
-        let Some(inst_leaf) = inst.fields.first().and_then(|v| v.load().as_object_ptr()) else {
-            panic!("instance.fields[0] not Object")
+        let inst = unsafe { InstanceRef::of(new_roots[4]) }.expect("new_roots[4] not an instance");
+        let Some(inst_leaf) = inst.load_value(0).as_object_ptr() else {
+            panic!("instance field 0 not Object")
         };
         let Object::String(s) = (unsafe { inst_leaf.get() }) else {
             panic!("instance field leaf not String")
@@ -2986,6 +3054,28 @@ mod tests {
         }))
     }
 
+    /// A declared field of type `field_type`.
+    fn class_field(name: &str, field_type: bex_vm_types::RuntimeTy) -> bex_vm_types::ClassField {
+        bex_vm_types::ClassField {
+            name: name.to_string(),
+            field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
+            field_type,
+            description: None,
+            alias: None,
+            docstring: None,
+            other: Default::default(),
+            skip: false,
+            stream_done: false,
+            must_exist: false,
+            runtime_type: None,
+            json_rename: None,
+            json_flatten: false,
+            json_fallback: false,
+            json_omit_null: false,
+            redact: false,
+        }
+    }
+
     fn finalizable_entries(heap: &BexHeap) -> Vec<HeapPtr> {
         let mut entries = heap.finalizable.lock().unwrap().instances.clone();
         entries.sort_unstable();
@@ -3055,10 +3145,9 @@ mod tests {
             vec![(forwarding[&instance], forwarding[&finalizer])]
         );
         // The engine runs `cleanup`, which latches the instance.
-        let Object::Instance(finalized) = (unsafe { pending[0].0.get() }) else {
-            panic!("a finalizer seed is an instance");
-        };
-        assert!(finalized.cleaned.begin());
+        let finalized =
+            unsafe { InstanceRef::of(pending[0].0) }.expect("a finalizer seed is an instance");
+        assert!(finalized.begin_cleanup());
 
         unsafe { heap.collect_garbage(&[]) };
         assert!(heap.take_pending_finalizers().is_empty());
@@ -3092,58 +3181,6 @@ mod tests {
         );
     }
 
-    /// Publishing an instance of a class with a finalizer registers it, as
-    /// allocating one does.
-    #[test]
-    fn a_published_finalizable_instance_is_finalized() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-        let finalizer = tlab.alloc_string("cleanup".to_string());
-        let class = tlab.alloc(class_object(Some(finalizer)));
-        heap.note_finalizable_class();
-        let reservation = tlab.reserve();
-        // SAFETY: no collection has run since the reservation.
-        let instance = unsafe {
-            tlab.publish(
-                reservation,
-                Object::Instance(bex_vm_types::types::Instance::new(
-                    class,
-                    Box::new([]),
-                    vec![],
-                )),
-            )
-        };
-
-        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
-        assert_eq!(
-            heap.take_pending_finalizers(),
-            vec![(forwarding[&instance], forwarding[&finalizer])]
-        );
-    }
-
-    /// An instance can name a class that is still only reserved; it is
-    /// allocated against the tombstone, so nothing registers it. Publishing
-    /// the class with a finalizer invalidates the list, and the next
-    /// collection finds the instance.
-    #[test]
-    fn publishing_a_class_with_a_finalizer_finds_its_earlier_instances() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(Arc::clone(&heap));
-        let finalizer = tlab.alloc_string("cleanup".to_string());
-        let reservation = tlab.reserve();
-        let early = tlab.alloc_instance(reservation.ptr(), vec![]);
-        assert!(finalizable_entries(&heap).is_empty());
-
-        // SAFETY: no collection has run since the reservation.
-        unsafe { tlab.publish(reservation, class_object(Some(finalizer))) };
-
-        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
-        assert_eq!(
-            heap.take_pending_finalizers(),
-            vec![(forwarding[&early], forwarding[&finalizer])]
-        );
-    }
-
     /// Seeds come back in from-space order, whatever order the instances were
     /// registered in.
     #[test]
@@ -3154,11 +3191,13 @@ mod tests {
         let finalizer = low.alloc_string("cleanup".to_string());
         let class = low.alloc(class_object(Some(finalizer)));
         heap.note_finalizable_class();
-        // `high` takes the next TLAB chunk, so its slots come after `low`'s,
-        // but it registers its instance first.
+        // `low` takes the first block of cells, so `high`'s come after it,
+        // but `high` registers its instance first.
+        let plain = low.alloc(class_object(None));
+        low.alloc_instance(plain, vec![]);
         let late = high.alloc_instance(class, vec![]);
         let early = low.alloc_instance(class, vec![]);
-        assert!(early.as_ptr() < late.as_ptr());
+        assert!(early.cell() < late.cell());
 
         let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
         let order: Vec<HeapPtr> = heap

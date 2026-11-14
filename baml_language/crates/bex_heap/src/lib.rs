@@ -61,6 +61,7 @@
 #![warn(clippy::disallowed_methods)]
 
 mod accessor;
+mod cell_space;
 mod chunked_vec;
 mod functions;
 mod gc;

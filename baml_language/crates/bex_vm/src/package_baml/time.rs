@@ -225,7 +225,10 @@ impl BamlClassTimePlainDate for PackageBamlImpl {
             let instance = vm
                 .as_instance(plaindate)
                 .expect("PlainDate.to_plain_datetime: expected PlainDate instance");
-            view::time::PlainDate { instance }._days()
+            view::time::PlainDate {
+                instance: &instance,
+            }
+            ._days()
         };
         let civil = i128::from(days) * NANOS_PER_DAY + i128::from(time_ns);
         let plaindatetime = copy::time::PlainDateTime {
@@ -313,7 +316,10 @@ impl BamlClassTimePlainDateTime for PackageBamlImpl {
             let instance = vm
                 .as_instance(plaindatetime)
                 .expect("PlainDateTime.to_plain_date: expected PlainDateTime instance");
-            view::time::PlainDateTime { instance }._nanoseconds()
+            view::time::PlainDateTime {
+                instance: &instance,
+            }
+            ._nanoseconds()
         };
         let days = i128::try_from(&*civil)
             .ok()
@@ -333,7 +339,10 @@ impl BamlClassTimePlainDateTime for PackageBamlImpl {
             let instance = vm
                 .as_instance(plaindatetime)
                 .expect("PlainDateTime.to_plain_time: expected PlainDateTime instance");
-            view::time::PlainDateTime { instance }._nanoseconds()
+            view::time::PlainDateTime {
+                instance: &instance,
+            }
+            ._nanoseconds()
         };
         // Euclidean modulo one day is exact regardless of the bigint's
         // magnitude or sign, and the result always fits in an i64.
@@ -447,7 +456,10 @@ impl BamlClassTimeTimeZoneOffset for PackageBamlImpl {
             let instance = vm
                 .as_instance(duration)
                 .expect("TimeZoneOffset.from_duration: expected Duration instance");
-            view::time::Duration { instance }._nanoseconds()
+            view::time::Duration {
+                instance: &instance,
+            }
+            ._nanoseconds()
         };
         let offset_ns = i64::try_from(&*nanos)
             .ok()

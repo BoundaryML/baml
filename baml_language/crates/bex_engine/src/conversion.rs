@@ -5,7 +5,7 @@
 //! representation (`BexValue`, `BexExternalValue`).
 
 use ::bex_heap::{BexValue, PermitProof};
-use ::bex_vm_types::{HeapPtr, Object, Value, ValueKind, float_order};
+use ::bex_vm_types::{Field, HeapPtr, InstanceRef, Object, Value, ValueKind, float_order};
 use baml_type::{ClassCrossing, Literal};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, UnionMetadata, WireHead, WireTy,
@@ -517,29 +517,20 @@ impl BexEngine {
                 })
             }
 
-            Object::Instance(instance) => {
-                let Object::Class(class) = (unsafe { instance.class.get() }) else {
-                    panic!("Instance.class should point to a Class object")
-                };
-                debug_assert_eq!(
-                    class.fields.len(),
-                    instance.fields.len(),
-                    "Class '{}' has {} fields but instance has {} fields",
-                    class.name(),
-                    class.fields.len(),
-                    instance.fields.len(),
-                );
+            Object::Instance => {
+                let instance = unsafe { InstanceRef::of(ptr) }.expect("an instance pointer");
+                let class = instance.class_object();
                 let ty = || {
                     to_annotation(&bex_vm_types::RealizedTy::Class(
-                        bex_vm_types::TypeHead::new(instance.class, class.type_tag),
-                        instance.class_type_args.clone(),
+                        bex_vm_types::TypeHead::new(instance.class(), class.type_tag),
+                        instance.type_args().into(),
                     ))
                 };
                 match class.crossing() {
                     ClassCrossing::Fields => Ok(BexExternalValue::Instance {
                         class_name: class.name().to_string(),
                         type_args: instance
-                            .class_type_args
+                            .type_args()
                             .iter()
                             .map(to_annotation)
                             .collect::<Result<Vec<_>, _>>()?,
@@ -584,7 +575,7 @@ impl BexEngine {
                             .position(|field| {
                                 field.name == bex_external_types::MEDIA_WRAPPER_DATA_FIELD
                             })
-                            .and_then(|slot| instance.fields[slot].load().as_object_ptr())
+                            .and_then(|slot| instance.load_value(slot).as_object_ptr())
                             .and_then(|data| match unsafe { data.get() } {
                                 Object::RustData(arc) => {
                                     bex_external_types::try_convert_rust_data(arc)
@@ -728,7 +719,7 @@ impl BexEngine {
     /// arguments.
     fn instance_fields(
         &self,
-        instance: &bex_vm_types::Instance,
+        instance: InstanceRef,
         class: &bex_vm_types::Class,
         vm: &BexVm,
         permit: PermitProof<'_>,
@@ -736,12 +727,18 @@ impl BexEngine {
         class
             .fields
             .iter()
-            .zip(instance.fields.iter())
-            .map(|(field, slot)| {
+            .zip(instance.fields())
+            .map(|(field, value)| {
+                let value = match value {
+                    Field::Value(value) => value,
+                    Field::Float(float) => {
+                        return Ok((field.name.clone(), BexExternalValue::Float(float)));
+                    }
+                };
                 // An instance is fully bound, so its field types are realized.
                 let field_type = field
                     .field_template
-                    .substitute(&instance.class_type_args, vm)
+                    .substitute(instance.type_args(), vm)
                     .map_err(|error| {
                         EngineError::VmInternalError(
                             bex_vm::errors::VmInternalError::TypeSubstitution {
@@ -754,12 +751,7 @@ impl BexEngine {
                     })?;
                 Ok((
                     field.name.clone(),
-                    self.convert_vm_value_to_external_with_type(
-                        slot.load(),
-                        &field_type,
-                        vm,
-                        permit,
-                    )?,
+                    self.convert_vm_value_to_external_with_type(value, &field_type, vm, permit)?,
                 ))
             })
             .collect()
@@ -1790,32 +1782,22 @@ fn find_matching_union_member(
                             .iter()
                             .find(|member| matches!(member, bex_vm_types::RealizedTy::String))
                     }),
-                Object::Instance(inst) => {
-                    let class_obj = unsafe { inst.class.get() };
-                    if let Object::Class(class) = class_obj {
-                        // Compare both class name and type args.  When the
-                        // union member has empty type args (e.g. a bare `Foo`)
-                        // it matches any instance of `Foo` regardless of its
-                        // class_type_args — preserving first-match semantics
-                        // for `Foo<int> | Foo`.  When type args are present
-                        // on the union member they must equal the instance's
-                        // class_type_args exactly.
-                        let head = bex_vm_types::TypeHead::new(inst.class, class.type_tag);
-                        members.iter().find(|m| {
-                            matches!(m, bex_vm_types::RealizedTy::Class(tn, expected_args)
-                                if *tn == head
-                                && (expected_args.is_empty()
-                                    || (expected_args.len() == inst.class_type_args.len()
-                                        && expected_args
-                                            .iter()
-                                            .zip(inst.class_type_args.iter())
-                                            .all(|(e, a)| {
-                                                e == a
-                                            }))))
-                        })
-                    } else {
-                        None
-                    }
+                Object::Instance => {
+                    let inst = unsafe { InstanceRef::of(ptr) }.expect("an instance pointer");
+                    // Compare both class name and type args.  When the union
+                    // member has empty type args (e.g. a bare `Foo`) it matches
+                    // any instance of `Foo` regardless of its type args —
+                    // preserving first-match semantics for `Foo<int> | Foo`.
+                    // When type args are present on the union member they must
+                    // equal the instance's exactly.
+                    let head =
+                        bex_vm_types::TypeHead::new(inst.class(), inst.class_object().type_tag);
+                    let actual = inst.type_args();
+                    members.iter().find(|m| {
+                        matches!(m, bex_vm_types::RealizedTy::Class(tn, expected_args)
+                            if *tn == head
+                            && (expected_args.is_empty() || **expected_args == *actual))
+                    })
                 }
                 Object::Variant(variant) => {
                     let enum_obj = unsafe { variant.enm.get() };

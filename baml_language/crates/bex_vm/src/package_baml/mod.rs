@@ -64,7 +64,7 @@ mod yaml;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArrayReadGuard, HeapPtr, MapReadGuard, RootHaver, RootVisitor,
-    types::{Instance, Object, Type, Value},
+    types::{InstanceRef, Object, Type, Value},
 };
 use indexmap::IndexMap;
 

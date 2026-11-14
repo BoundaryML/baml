@@ -1,7 +1,7 @@
 //! Unit tests for Phase 8: `Instance::class_type_args` and method-frame seeding.
 //!
 //! These tests exercise:
-//! - `Object::Instance` carrying `class_type_args` (8.1)
+//! - an instance carrying its class type args (8.1)
 //! - `AllocInstance { ntypeargs }` populating `class_type_args` from the stack (8.2)
 //! - A method-like function body reading `TypeArgRef(0)` when the frame has
 //!   been seeded with `[RuntimeTy::int()]` (simulating the 8.5 path) (8.5)
@@ -101,7 +101,7 @@ fn run_fn(program: Program, function_index: usize) -> (Value, BexVm) {
 // ─── 8.1 + 8.2 ── AllocInstance with ntypeargs stores class_type_args ────────
 
 /// `AllocInstance { class_obj, ntypeargs: 1 }` should pop the top `Object::Type`
-/// and store it in the resulting `Instance::class_type_args`.
+/// and store it as the resulting instance's class type args.
 #[test]
 fn alloc_instance_ntypeargs_stores_class_type_args() {
     let mut program = compile_source(STUB_SOURCE);
@@ -119,7 +119,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         type_tag: baml_type::typetag::TypeTag::from_i64(100),
         cleanup: None,
         methods: indexmap::IndexMap::new(),
-        generic_param_count: 0,
+        generic_param_count: 1,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
         redact: false,
@@ -149,15 +149,15 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
     let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
-    match vm.get_object(inst_ptr) {
-        Object::Instance(inst) => {
+    match vm.get_instance(inst_ptr) {
+        Some(inst) => {
             assert_eq!(
-                inst.class_type_args.to_vec(),
+                inst.type_args().to_vec(),
                 vec![RealizedTy::int()],
-                "Instance::class_type_args should equal [RealizedTy::int()]"
+                "the instance's class type args should equal [RealizedTy::int()]"
             );
         }
-        other => panic!("expected Object::Instance, got {other:?}"),
+        None => panic!("expected an instance, got {:?}", vm.get_object(inst_ptr)),
     }
 }
 
@@ -203,14 +203,14 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
     let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
-    match vm.get_object(inst_ptr) {
-        Object::Instance(inst) => {
+    match vm.get_instance(inst_ptr) {
+        Some(inst) => {
             assert!(
-                inst.class_type_args.is_empty(),
-                "monomorphic Instance::class_type_args should be empty"
+                inst.type_args().is_empty(),
+                "a monomorphic instance's class type args should be empty"
             );
         }
-        other => panic!("expected Object::Instance, got {other:?}"),
+        None => panic!("expected an instance, got {:?}", vm.get_object(inst_ptr)),
     }
 }
 

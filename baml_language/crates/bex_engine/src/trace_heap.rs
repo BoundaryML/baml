@@ -15,7 +15,9 @@ use std::{
 
 use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, try_convert_rust_data};
 use bex_heap::{BexHeap, PermitProof};
-use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
+use bex_vm_types::{
+    Field, HeapPtr, InstanceRef, MediaContent, MediaValue, Object, Value, ValueKind,
+};
 
 /// A structured-log snapshot could not allocate its owned value graph.
 #[derive(Debug)]
@@ -328,10 +330,8 @@ impl TraceSnapshotBuilder {
         ptr: HeapPtr,
     ) -> Result<TraceValueRef, CopyError> {
         let object = unsafe { ptr.get() };
-        let tracks_recursion = matches!(
-            object,
-            Object::Array(_) | Object::Map(_) | Object::Instance(_)
-        );
+        let tracks_recursion =
+            matches!(object, Object::Array(_) | Object::Map(_) | Object::Instance);
         if tracks_recursion && self.in_progress.contains(&ptr) {
             return self.omitted(TraceOmissionReason::CyclicReference, "cyclic reference");
         }
@@ -389,50 +389,48 @@ impl TraceSnapshotBuilder {
                     self.alloc(TraceValue::Map(entries))
                 }
             }
-            Object::Instance(instance) => {
-                let class_object = unsafe { instance.class.get() };
-                if let Object::Class(class) = class_object {
-                    let mut fields = Self::vec_with_capacity(class.fields.len())?;
-                    for (field, slot) in class.fields.iter().zip(instance.fields.iter()) {
-                        let name = Self::copy_str(&field.name)?;
-                        let value = self.copy_value(heap, permit, slot.load())?;
-                        fields.push((name, value));
-                    }
-                    let mut type_args = Self::vec_with_capacity(instance.class_type_args.len())?;
-                    for type_arg in &instance.class_type_args {
-                        // A snapshot is display data: a compiled declaration
-                        // by name, a runtime declaration by its label.
-                        let Ok(annotated) =
-                            crate::conversion::to_annotation::<std::convert::Infallible>(type_arg)
-                        else {
-                            continue;
-                        };
-                        type_args.push(baml_type::RuntimeTy::from(&annotated.map_heads(
-                            &mut |head: &bex_external_types::WireHead<std::convert::Infallible>| {
-                                match head {
-                                    bex_external_types::WireHead::Static(name) => name.clone(),
-                                    bex_external_types::WireHead::Live(never) => match *never {},
-                                    bex_external_types::WireHead::Anonymous(label) => {
-                                        baml_type::TypeName::local(label.clone())
-                                    }
-                                }
-                            },
-                        )));
-                    }
-                    // A trace is read by a person: the display name, never an
-                    // internal identity.
-                    let type_name = Self::copy_str(&class.name().to_string())?;
-                    self.alloc(TraceValue::Instance {
-                        type_name,
-                        type_args,
-                        fields,
-                    })
-                } else {
-                    self.omitted(
-                        TraceOmissionReason::InvalidRuntimeValue,
-                        "instance class pointer did not point at a class",
-                    )
+            Object::Instance => {
+                let instance = unsafe { InstanceRef::of(ptr) }.expect("an instance pointer");
+                let class = instance.class_object();
+                let mut fields = Self::vec_with_capacity(class.fields.len())?;
+                for (field, value) in class.fields.iter().zip(instance.fields()) {
+                    let name = Self::copy_str(&field.name)?;
+                    let value = match value {
+                        Field::Value(value) => self.copy_value(heap, permit, value)?,
+                        Field::Float(float) => self.alloc(TraceValue::Float(float))?,
+                    };
+                    fields.push((name, value));
                 }
+                let instance_args = instance.type_args();
+                let mut type_args = Self::vec_with_capacity(instance_args.len())?;
+                for type_arg in instance_args {
+                    // A snapshot is display data: a compiled declaration
+                    // by name, a runtime declaration by its label.
+                    let Ok(annotated) =
+                        crate::conversion::to_annotation::<std::convert::Infallible>(type_arg)
+                    else {
+                        continue;
+                    };
+                    type_args.push(baml_type::RuntimeTy::from(&annotated.map_heads(
+                        &mut |head: &bex_external_types::WireHead<std::convert::Infallible>| {
+                            match head {
+                                bex_external_types::WireHead::Static(name) => name.clone(),
+                                bex_external_types::WireHead::Live(never) => match *never {},
+                                bex_external_types::WireHead::Anonymous(label) => {
+                                    baml_type::TypeName::local(label.clone())
+                                }
+                            }
+                        },
+                    )));
+                }
+                // A trace is read by a person: the display name, never an
+                // internal identity.
+                let type_name = Self::copy_str(&class.name().to_string())?;
+                self.alloc(TraceValue::Instance {
+                    type_name,
+                    type_args,
+                    fields,
+                })
             }
             Object::Variant(variant) => {
                 let enum_object = unsafe { variant.enm.get() };
@@ -574,7 +572,7 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         | Object::Uint8Array(_)
         | Object::Array(_)
         | Object::Map(_)
-        | Object::Instance(_)
+        | Object::Instance
         | Object::Variant(_)
         | Object::Float(_) => "unsupported value",
     }

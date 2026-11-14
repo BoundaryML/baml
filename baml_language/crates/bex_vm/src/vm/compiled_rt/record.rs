@@ -590,6 +590,53 @@ impl BexVm {
         self.package_object(package, idx)
     }
 
+    /// The base of the program's compile-time objects when `record` runs a
+    /// body of the program itself, else null. Those objects never move, so a
+    /// body reads the base once and [`Self::class_at`] finds each class by
+    /// offset instead of resolving it through the record on every access.
+    #[inline]
+    #[must_use]
+    pub fn static_objects(&self, record: &FrameRecord) -> *const Object {
+        if record.package.get().as_ptr().is_null() {
+            self.heap.compile_time_base()
+        } else {
+            ptr::null()
+        }
+    }
+
+    /// [`Self::record_object`] for a body that read `statics` from
+    /// [`Self::static_objects`] at entry.
+    #[allow(
+        clippy::inline_always,
+        reason = "names the class on every compiled field access"
+    )]
+    #[inline(always)]
+    #[must_use]
+    pub fn class_at(
+        &self,
+        statics: *const Object,
+        record: &FrameRecord,
+        idx: bex_vm_types::ObjectIndex,
+    ) -> HeapPtr {
+        #[cfg(not(feature = "heap_debug"))]
+        if !statics.is_null() {
+            // SAFETY: emitted code names only objects of its own program,
+            // which live at their index in the never-resized compile-time
+            // array that `statics` points at.
+            return unsafe { HeapPtr::from_ptr(statics.add(idx.into_raw()).cast_mut()) };
+        }
+        let _ = statics;
+        self.class_at_slow(record, idx)
+    }
+
+    /// [`Self::class_at`] for a runtime package's body, kept out of line so a
+    /// field access in the program's own code inlines only its fast path.
+    #[cold]
+    #[inline(never)]
+    fn class_at_slow(&self, record: &FrameRecord, idx: bex_vm_types::ObjectIndex) -> HeapPtr {
+        self.record_object(record, idx)
+    }
+
     #[inline]
     pub(crate) fn level_count(&self) -> usize {
         self.frames.len() + self.chain().count.get() as usize

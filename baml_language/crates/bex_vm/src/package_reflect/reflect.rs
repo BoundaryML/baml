@@ -179,10 +179,10 @@ fn package_object(vm: &BexVm, value: Value) -> Result<HeapPtr, &'static str> {
     let Some(wrapper_ptr) = value.as_object_ptr() else {
         return Err("reflect.Package receiver is not an instance");
     };
-    let Object::Instance(wrapper) = vm.get_object(wrapper_ptr) else {
+    let Some(wrapper) = vm.get_instance(wrapper_ptr) else {
         return Err("reflect.Package receiver is not an instance");
     };
-    let Some(ptr) = wrapper.load_field(0).as_object_ptr() else {
+    let Some(ptr) = wrapper.load_value(0).as_object_ptr() else {
         return Err("reflect.Package is not initialized");
     };
     if !matches!(vm.get_object(ptr), Object::Package(_)) {
@@ -217,10 +217,8 @@ fn take_compile_artifact(
 ) -> Result<PinnedArtifact, String> {
     let Some(inner) = value
         .as_object_ptr()
-        .and_then(|pointer| match vm.get_object(pointer) {
-            Object::Instance(instance) => Some(instance.load_field(0)),
-            _ => None,
-        })
+        .and_then(|pointer| vm.get_instance(pointer))
+        .map(|instance| instance.load_value(0))
     else {
         return Err(invalid_message.to_string());
     };
@@ -1117,9 +1115,9 @@ impl RootHaver for FinishPackageTests {
 
 impl Continuation for FinishPackageTests {
     fn call(self: Box<Self>, vm: &mut BexVm, _value: Value) -> NativeCallResult {
-        let tests_value = match vm.get_object(self.collector_ptr) {
-            Object::Instance(collector) => collector.load_field(1),
-            _ => {
+        let tests_value = match vm.get_instance(self.collector_ptr) {
+            Some(collector) => collector.load_value(1),
+            None => {
                 return invalid_argument(vm, "test collector changed kind during registration")
                     .into();
             }
@@ -1133,11 +1131,11 @@ impl Continuation for FinishPackageTests {
             let Some(ptr) = registration.as_object_ptr() else {
                 continue;
             };
-            let Object::Instance(registration) = vm.get_object(ptr) else {
+            let Some(registration) = vm.get_instance(ptr) else {
                 continue;
             };
-            let name_value = registration.load_field(0);
-            let body = registration.load_field(1);
+            let name_value = registration.load_value(0);
+            let body = registration.load_value(1);
             let Ok(name) = vm.as_string(&name_value) else {
                 continue;
             };

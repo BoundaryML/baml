@@ -10,7 +10,7 @@ use bex_vm::{
     BexVm, VmExecState,
     vm::{BytecodeFrame, Frame, NativeFrame, THREAD_STACK_BUDGET_BYTES},
 };
-use bex_vm_types::{EarlyYieldCheck, Object, Program, Value, errors::VmError};
+use bex_vm_types::{EarlyYieldCheck, Program, Value, errors::VmError};
 
 const SOURCE: &str = r#"
     function depth(n: int) -> int {
@@ -109,13 +109,10 @@ fn drive(vm: &mut BexVm) -> Observation {
             Ok(VmExecState::EarlyYield) => {}
             Ok(VmExecState::Complete(value)) => break Ok(value.as_int().unwrap()),
             Err(VmError::ThrownUnhandled { value, .. }) => {
-                let Object::Instance(instance) = vm.get_object(value.as_object_ptr().unwrap())
-                else {
+                let Some(instance) = vm.get_instance(value.as_object_ptr().unwrap()) else {
                     panic!("expected panic instance")
                 };
-                let Object::Class(class) = vm.get_object(instance.class) else {
-                    panic!("expected panic class")
-                };
+                let class = instance.class_object();
                 break Err(class.path.to_string());
             }
             Err(error) => panic!("unexpected execution failure: {error:?}"),

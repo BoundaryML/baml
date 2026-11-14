@@ -7,6 +7,7 @@ pub(crate) use call::{FORCE_CALL_FUNNEL, FORCE_VM_FRAMES};
 mod cell;
 mod fiber;
 pub use fiber::STACKFUL_FIBERS_SUPPORTED;
+mod field;
 mod frame;
 pub(crate) use frame::attach_compiled_bodies;
 pub(in crate::vm) use frame::validate_compiled_program;

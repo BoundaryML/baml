@@ -28,7 +28,7 @@
 use std::fmt::Write;
 
 use bex_vm_types::{
-    ConstValue, HeapPtr,
+    ConstValue, HeapPtr, InstanceRef,
     bytecode::{CompactCode, Instruction, OpCode, read_i8, read_i32, read_u16, read_u32},
     indexable::{GlobalIndex, ObjectPool},
     types::{Function, Object, Value},
@@ -362,16 +362,11 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
     match object {
         Object::String(string) => format!("{string:?}"),
         // This one's a bit tricky to print.
-        Object::Instance(instance) => {
-            // SAFETY: During debug display, we assume the pointer is valid
-            let class = unsafe { instance.class.get() };
-            match class {
-                Object::Class(class) => format!("<{} instance>", class.name()),
-                // This will most likely never happen, but we're trying not
-                // to panic.
-                other => format!("<{other} instance>"),
-            }
-        }
+        // SAFETY: During debug display, we assume the pointer is valid
+        Object::Instance => match unsafe { InstanceRef::of(ptr) } {
+            Some(instance) => format!("<{} instance>", instance.class_object().name()),
+            None => "<instance>".to_string(),
+        },
 
         Object::Variant(variant) => {
             // SAFETY: During debug display, we assume the pointer is valid
