@@ -510,7 +510,7 @@ impl<'db> Generator<'_, 'db> {
             format!("{{ {bind} let __outcome = {call}; vm.finish_builtin(__outcome) }}")
         } else {
             format!(
-                "{{ {bind} let __types = [{}]; vm.with_call_type_args(&__types, |vm| {call}) }}",
+                "{{ {bind} let mut __types = [{}]; vm.with_call_type_args(&mut __types, |vm| {call}) }}",
                 types.join(", ")
             )
         })
