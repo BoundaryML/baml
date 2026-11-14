@@ -286,11 +286,24 @@ function request(
         let _ = questions.set(leaf.id, question);
     }
     let headers: map<string, string> = { "content-type": "application/json" };
-    if (!preview) {
+    if (c.long_context) {
+        let _ = headers.set("typesafe-danger-zone-long-context", "true");
+    }
+    // The caller's headers override everything, authorization included.
+    let extra: map<string, string> = {};
+    if let items: map<string, string> = c.headers {
+        for (let name in items.keys()) {
+            let _ = extra.set(name.to_lower_case(), items.get(name) ?? "");
+        }
+    }
+    if (!preview && !extra.has("authorization")) {
         let key: string = ai.wire.resolve_credential(c.api_key, "TYPESAFE_API_KEY") else {
             throw reject("typesafeai needs api_key or TYPESAFE_API_KEY")
         };
         let _ = headers.set("authorization", `Bearer ${key}`);
+    }
+    for (let name in extra.keys()) {
+        let _ = headers.set(name, extra.get(name) ?? "");
     }
     let base = ai.wire.resolve_credential(c.base_url, null) ?? "https://api.typesafe.ai/v1";
     baml.http.Request {

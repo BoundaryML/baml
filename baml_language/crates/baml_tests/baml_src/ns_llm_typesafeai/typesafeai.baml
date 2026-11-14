@@ -211,7 +211,10 @@ function noun_thresholds() -> bool {
         let cl = typesafeai.Client.new(api_key = "test-key", base_url = mock.base_url());
         let result = ai.Agent.new(client = cl).run(Urgent@spec("Production is down."));
         assert.is_true(result.value);
-        let usage = ai.events.usage_for(result.usage, ai.events.ModelKey { provider: "typesafeai", model: "jev-latest" });
+        let usage = ai.events.usage_for(
+            result.usage,
+            ai.events.ModelKey { provider: "typesafeai", model: "jev-latest" },
+        );
         assert.equal(usage?.input_tokens, 142);
         assert.equal(usage?.output_tokens, 9);
         let sent = mock.last_request();
@@ -330,6 +333,40 @@ test "client constructor keeps explicit credentials and endpoint overrides" {
     assert.equal(cl.api_key, "test-key");
     assert.equal(cl.base_url, "http://localhost:1234");
     assert.equal(cl.render(input(bool.type())).url, "http://localhost:1234/systemone")
+}
+
+test "long_context and headers appear in the rendered request" {
+    let request = typesafeai.Client
+        .new(long_context = true, headers = { "X-Trace": "abc", "Authorization": "Bearer proxy" })
+        .render(input(bool.type()));
+    assert.equal(request.headers.get("typesafe-danger-zone-long-context"), "true");
+    assert.equal(request.headers.get("x-trace"), "abc");
+    assert.equal(request.headers.get("authorization"), "Bearer proxy");
+    let plain = typesafeai.Client.new().render(input(bool.type()));
+    assert.equal(plain.headers.get("typesafe-danger-zone-long-context"), null)
+}
+
+function sends_long_context() -> bool {
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(noul_body(0.9))], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let cl = typesafeai.Client.new(
+            api_key = "test-key",
+            base_url = mock.base_url(),
+            long_context = true,
+            headers = { "authorization": "Bearer proxy", "content-type": "application/json; charset=utf-8" },
+        );
+        assert.is_true(ai.Agent.new(client = cl).run(Urgent@spec("Production is down.")).value);
+        let sent = mock.last_request();
+        assert.equal(sent.header("typesafe-danger-zone-long-context"), "true");
+        assert.equal(sent.header("authorization"), "Bearer proxy");
+        assert.equal(sent.header("content-type"), "application/json; charset=utf-8");
+        true
+    })
+}
+
+test "long_context header is sent and user headers override defaults" {
+    assert.is_true(sends_long_context())
 }
 
 test "int literal union" {
@@ -766,9 +803,7 @@ test "reject unoffered choice" {
 }
 
 test "reject missing choice" {
-    assert.is_true(
-        malformed(`{"answers":{"result":{"type":"choice"}}}`, ty = Team.type()),
-    )
+    assert.is_true(malformed(`{"answers":{"result":{"type":"choice"}}}`, ty = Team.type()))
 }
 
 function preview_metadata() -> bool {
