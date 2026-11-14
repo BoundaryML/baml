@@ -15,7 +15,7 @@ function echo_pair(value: (int, string)) -> (int, string) {
 }
 
 function swap_pair(value: (int, string)) -> (string, int) {
-  (value[1], value[0])
+  (value.1, value.0)
 }
 
 function echo_single(value: (int,)) -> (int,) {
