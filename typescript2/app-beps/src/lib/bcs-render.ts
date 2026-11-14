@@ -10,7 +10,9 @@ import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
 import rehypeRaw from "rehype-raw";
 import rehypeStringify from "rehype-stringify";
+import { bundledLanguages, codeToHast } from "shiki";
 import type { Element, ElementContent, Root, RootContent } from "hast";
+import { SHIKI_THEMES } from "./shiki-themes";
 
 export type BcsPageFormat = "markdown" | "html";
 
@@ -56,14 +58,19 @@ export async function renderBcsPage(options: RenderOptions): Promise<RenderedPag
   const blocks: string[] = [];
   const sources: Record<string, string> = {};
   // A page that brings its own stylesheet is laid out by it alone: the defaults would fight it.
-  const state = { mermaid: false, ownStyles: false, headings: [] as RenderedPage["headings"] };
+  const state = {
+    mermaid: false,
+    ownStyles: false,
+    highlighted: false,
+    headings: [] as RenderedPage["headings"],
+  };
   const body = String(
     await unified()
       .use(remarkParse)
       .use(remarkGfm)
       .use(remarkRehype, { allowDangerousHtml: true })
       .use(rehypeRaw)
-      .use(() => (tree: Root) => {
+      .use(() => async (tree: Root) => {
         adjust(tree, options.pageHref, state);
         for (const block of markBlocks(tree)) {
           blocks.push(block.id);
@@ -71,6 +78,8 @@ export async function renderBcsPage(options: RenderOptions): Promise<RenderedPag
             sources[block.id] = options.content.slice(block.start, block.end);
           }
         }
+        // After the ids: coloring keeps each block's text, so its id, the same.
+        state.highlighted = await highlight(tree);
       })
       .use(rehypeStringify)
       .process(options.content)
@@ -83,6 +92,7 @@ export async function renderBcsPage(options: RenderOptions): Promise<RenderedPag
 <title>${escapeHtml(options.title)}</title>
 <base target="_blank">
 ${state.ownStyles ? "" : `<style>${DEFAULT_CSS}</style>`}
+${state.highlighted ? `<style>${HIGHLIGHT_CSS}</style>` : ""}
 </head>
 <body>
 <article${state.ownStyles ? "" : ' class="bcs-page"'}>
@@ -202,6 +212,61 @@ function adjust(
   };
   walk(tree);
 }
+
+/**
+ * Colors each fenced code block whose language Shiki knows, with the themes BEP pages use, in both
+ * light and dark: the colors are CSS variables, and HIGHLIGHT_CSS picks the pair for the system's
+ * scheme. Only the code's children change, so its text, id and source position stay. Returns
+ * whether any block was colored.
+ */
+async function highlight(tree: Root): Promise<boolean> {
+  const blocks: { pre: Element; code: Element; lang: string }[] = [];
+  const walk = (node: Root | Element) => {
+    for (const child of node.children) {
+      if (child.type !== "element") continue;
+      if (child.tagName === "pre") {
+        const code = child.children.find(
+          (each): each is Element => each.type === "element" && each.tagName === "code"
+        );
+        const classes = Array.isArray(code?.properties.className) ? code.properties.className.map(String) : [];
+        const lang = classes.find((each) => each.startsWith("language-"))?.slice("language-".length);
+        if (code && lang && lang in bundledLanguages) blocks.push({ pre: child, code, lang });
+        continue;
+      }
+      walk(child);
+    }
+  };
+  walk(tree);
+  for (const block of blocks) {
+    const colored = await codeToHast(text(block.code).replace(/\n$/, ""), {
+      lang: block.lang,
+      themes: SHIKI_THEMES,
+      defaultColor: false,
+    });
+    const pre = colored.children.find((each): each is Element => each.type === "element" && each.tagName === "pre");
+    const code = pre?.children.find((each): each is Element => each.type === "element" && each.tagName === "code");
+    if (!pre || !code) continue;
+    block.pre.properties.className = ["shiki"];
+    block.pre.properties.style = pre.properties.style;
+    block.code.children = code.children;
+  }
+  return blocks.length > 0;
+}
+
+/**
+ * Shiki's colors for the system's scheme, on pages with their own stylesheet too (theirs come
+ * after). The block takes the page's code background (`--code`) when it has one: GitHub's light
+ * theme is white, which would vanish on a white page.
+ */
+const HIGHLIGHT_CSS = `
+pre.shiki { color: var(--shiki-light); background-color: var(--code, var(--shiki-light-bg)); border: 1px solid rgba(128, 128, 128, 0.25); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre.shiki code { background: none; border: 0; border-radius: 0; padding: 0; font: inherit; overflow-wrap: normal; }
+pre.shiki span { color: var(--shiki-light); }
+@media (prefers-color-scheme: dark) {
+  pre.shiki { color: var(--shiki-dark); background-color: var(--code, var(--shiki-dark-bg)); }
+  pre.shiki span { color: var(--shiki-dark); }
+}
+`;
 
 /** Elements a comment can be attached to; one inside another belongs to the outer one. */
 const BLOCK_TAGS = new Set([
