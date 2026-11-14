@@ -642,6 +642,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
                 AggregateKind::Class {
                     class,
                     type_arg_templates,
+                    ..
                 } => {
                     write!(f, "{}", crate::lower::class_display_name(db, *class))?;
                     if !type_arg_templates.is_empty() {

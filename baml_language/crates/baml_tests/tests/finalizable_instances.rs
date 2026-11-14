@@ -192,3 +192,44 @@ function main() -> string[] {
     );
     assert_eq!(strings(output.result), ["created", "cleaned"]);
 }
+
+/// Building an instance of a class with `cleanup` is an effect: the
+/// collector runs the finalizer when the instance dies. An instance nothing
+/// reads is still built, at every optimization level, whether the literal
+/// is written in place or reached through a call the optimizer inlines.
+#[tokio::test]
+async fn an_instance_nothing_reads_is_still_finalized() {
+    use baml_tests::engine::{OptLevel, run_test};
+    let source = r####"
+class Resource {
+  log: string[],
+  function cleanup(self) -> void {
+    self.log.push("cleaned");
+  }
+}
+
+function make(log: string[]) -> Resource { Resource { log: log } }
+
+function abandon(log: string[]) -> null {
+  let unused = Resource { log: log };
+  let _ = Resource { log: log };
+  let made = make(log);
+  null
+}
+
+function main() -> string[] {
+  let log: string[] = [];
+  abandon(log);
+  baml.sys.collect_garbage();
+  log
+}
+"####;
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let output = run_test(source, "main", indexmap::IndexMap::new(), opt).await;
+        assert_eq!(
+            strings(output.result),
+            ["cleaned", "cleaned", "cleaned"],
+            "{opt:?}"
+        );
+    }
+}

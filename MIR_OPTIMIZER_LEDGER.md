@@ -182,8 +182,8 @@ can be lifted later.
   a spawn names its task after the running function, cancellation and
   telemetry waits are attributed by frame, and the saving next to a
   suspension is nothing. Not tested, so not allowed.
-- **No construction of an instance with a finalizer in the callee.** See
-  "Found on the way" below.
+- ~~No construction of an instance with a finalizer in the callee.~~ Removed.
+  The general fix under "Bugs fixed" made it redundant.
 - **Arguments must line up.** The call's layout is mapped onto the callee's
   parameters with `CallLayout::map_to`, the same function dispatch uses.
   Named, reordered and omitted arguments are all handled, not refused.
@@ -301,13 +301,8 @@ Existing tests edited because their fixtures were inlined away:
 
 ### Found on the way
 
-- **The optimizer already drops a dead allocation of a class with a
-  finalizer.** `let x = Handle { … }` with `x` unused is removed at O2 today,
-  so `cleanup` never runs. This is not from inlining. Inlining would have
-  exposed more of it (`package_viewpoint::a_finalizer_runs…` failed), so the
-  inliner refuses callees that build such an instance. The underlying gap is
-  still there for code written directly. The dead-code pass has no database
-  handle, which is why it cannot ask.
+- The optimizer dropped a dead allocation of a class with a finalizer. Now
+  fixed, see "Bugs fixed".
 - **The 16 `root.trace*` corpus failures are not stable.** They come and go
   with machine load on every compiler, including the unmodified one (it
   failed them once in a trace-only run here).
@@ -318,3 +313,50 @@ Existing tests edited because their fixtures were inlined away:
 - The default test for an optional parameter filled by a run-time value.
 - `rust_differential` is `#[ignore]`d in the repo and was not run.
 - Depth and growth budgets were not swept.
+
+## Other pass ledgers
+
+- Scalar replacement: `MIR_OPTIMIZER_LEDGER.scalar_replace.md`.
+- Value reuse, negated branches, return threading, loop rotation and the
+  null tag test: `MIR_OPTIMIZER_LEDGER.loops.md`.
+
+## The three passes together
+
+Found when the inliner met the other two passes:
+
+- **Loop rotation dropped the inlined-call marker.** The copy of a loop test
+  was a fresh block with no `inline` scope, so an error raised in a rotated
+  test inside inlined code would have lost the callee's frame. The copy now
+  takes the header's scope, and a test that spans blocks of different scopes
+  is not rotated.
+- **Callees now arrive with several returns** (return threading runs before
+  the inliner copies them). The inliner handled that already. It now also
+  computes a value straight into the call's destination when the value is
+  computed right before the return, instead of into a temporary that is then
+  copied. Not done when the callee reads its return slot.
+- **The cleanup is run a second time on inlined bodies.** A unit test
+  (`loops.rs`, `cleaning_up_a_cleaned_up_body_changes_nothing`) checks that
+  two runs equal one. Rotation does not repeat because a rotated loop has no
+  unconditional back edge.
+- Test budgets: `gc_map_survives_pressure` is 46 instructions (inlined map
+  builder plus a rotated loop). `manhattan` in the Rust backend prune test is
+  now inlined, so it is unreachable there. Checked in the MIR, it is not a
+  reachability bug.
+
+## Bugs fixed
+
+- **A dead allocation of a class with a `cleanup` finalizer was dropped.**
+  `let x = Handle { … }` with `x` never read was removed by dead-code
+  elimination, at every level including O0, so `cleanup` never ran. Cause:
+  `Rvalue::can_discard` treated every aggregate as free to drop, and it has
+  no database to ask about the class. Fix: `AggregateKind::Class` carries
+  `finalizable`, set at lowering from `escape::may_finalize`, and
+  `can_discard` refuses a finalizable aggregate. Every pass that drops
+  unused evaluations goes through `can_discard`, so none can drop one.
+  Test: `finalizable_instances.rs::an_instance_nothing_reads_is_still_finalized`
+  (O0, O1, O2; it fails with the fix reverted). The inliner's own rule
+  against such callees was removed as redundant. Scalar replacement keeps
+  its own check: it replaces rather than discards.
+  Cost: `may_finalize` answers "maybe" for any class outside the package and
+  the standard library, so an unused instance of a dependency's class is
+  kept even when that class has no finalizer.

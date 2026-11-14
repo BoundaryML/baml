@@ -1933,6 +1933,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 baml_compiler2_mir::AggregateKind::Class {
                     class,
                     type_arg_templates,
+                    ..
                 },
             fields,
         } = rvalue

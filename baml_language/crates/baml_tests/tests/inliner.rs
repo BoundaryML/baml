@@ -456,17 +456,19 @@ async fn a_frame_inlined_from_another_file_reports_its_own_file_and_line() {
 }
 
 #[test]
-fn a_function_that_builds_a_finalizable_instance_keeps_its_call() {
-    assert_not_inlined(
-        r#"
+fn an_inlined_finalizable_instance_is_still_built() {
+    // Nothing reads the handle, but the collector will run its `cleanup`.
+    let source = r#"
 class Handle {
   log string[]
   function cleanup(self) -> void { self.log.push("closed"); }
 }
-function target(log: string[]) -> Handle { Handle { log: log } }
-function main(log: string[]) -> void { let handle = target(log); }
-"#,
-    );
+function open(log: string[]) -> Handle { Handle { log: log } }
+function main(log: string[]) -> void { let handle = open(log); }
+"#;
+    let (mir, calls) = lowered(source, "main", OptLevel::Two);
+    assert_eq!(calls, 0, "{mir}");
+    assert!(mir.contains("user.Handle {"), "{mir}");
 }
 
 #[tokio::test]

@@ -86,6 +86,7 @@ impl<'db> Generator<'_, 'db> {
                     AggregateKind::Class {
                         class,
                         type_arg_templates,
+                        ..
                     },
                 fields,
             } => {

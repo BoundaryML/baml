@@ -2292,6 +2292,7 @@ mod tests {
                             value: Rvalue::Aggregate {
                                 kind: baml_compiler2_mir::AggregateKind::Class {
                                     class: crate::tests::class_ref(&db, file, "GuideHooks"),
+                                    finalizable: false,
                                     type_arg_templates: vec![],
                                 },
                                 fields: vec![

@@ -2019,6 +2019,23 @@ impl<'db> LoweringContext<'db> {
     /// A class the language ships and lowering constructs by identity
     /// (`baml.TaggedString`, `baml.spawn.Params`), whichever lane serves the
     /// package. Its absence is a compiler/stdlib mismatch.
+    /// The aggregate kind of a `class` literal written in this body.
+    fn class_aggregate(
+        &self,
+        class: ClassRef<'db>,
+        type_arg_templates: Vec<TyTemplate>,
+    ) -> AggregateKind<'db> {
+        AggregateKind::Class {
+            finalizable: crate::escape::may_finalize(
+                self.db,
+                self.file.source_root(self.db),
+                &class,
+            ),
+            class,
+            type_arg_templates,
+        }
+    }
+
     fn lang_class(
         &self,
         package: baml_base::LangPackage,
@@ -5678,14 +5695,10 @@ impl<'db> LoweringContext<'db> {
                 self.builder.assign(
                     Place::local(ret),
                     Rvalue::Aggregate {
-                        kind: AggregateKind::Class {
-                            class: self.lang_class(
-                                baml_base::LangPackage::Baml,
-                                &[],
-                                "TaggedString",
-                            ),
-                            type_arg_templates: vec![],
-                        },
+                        kind: self.class_aggregate(
+                            self.lang_class(baml_base::LangPackage::Baml, &[], "TaggedString"),
+                            vec![],
+                        ),
                         fields: vec![
                             Operand::Copy(Place::local(parts_local)),
                             Operand::Copy(Place::local(values_local)),
@@ -10454,10 +10467,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
-                    kind: AggregateKind::Class {
-                        class,
-                        type_arg_templates,
-                    },
+                    kind: self.class_aggregate(class, type_arg_templates),
                     fields: field_operands,
                 },
             );
@@ -10541,10 +10551,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
-                    kind: AggregateKind::Class {
-                        class,
-                        type_arg_templates,
-                    },
+                    kind: self.class_aggregate(class, type_arg_templates),
                     fields: result,
                 },
             );

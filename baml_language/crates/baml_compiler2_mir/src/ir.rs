@@ -1246,6 +1246,14 @@ impl Rvalue<'_> {
             | Self::CurrentPackage
             | Self::Uint8Array(_)
             | Self::MakeGenericFunction { .. } => true,
+            // An instance with a finalizer is observed when it is collected.
+            Self::Aggregate {
+                kind:
+                    AggregateKind::Class {
+                        finalizable: true, ..
+                    },
+                ..
+            } => false,
             // Joining strings cannot fail.
             Self::Array(_, elements)
             | Self::ConcatStrings(elements)
@@ -1285,9 +1293,16 @@ pub enum AggregateKind<'db> {
     /// `enclosing_generic_params()`). These templates are emitted as
     /// `LoadType` instructions before `AllocInstance` so the VM can store
     /// resolved `Ty` values in `Instance::class_type_args`.
+    ///
+    /// `finalizable` says the class may have a `cleanup` finalizer, as the
+    /// package that wrote the literal sees it. The collector runs the
+    /// finalizer when the instance dies, so building one is an effect even
+    /// when nothing reads the result: [`Rvalue::can_discard`] refuses it,
+    /// and with it every pass that drops unused evaluations.
     Class {
         class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
         type_arg_templates: Vec<TyTemplate>,
+        finalizable: bool,
     },
 }
 

@@ -23,9 +23,9 @@ use baml_compiler2_hir::{
 };
 
 use crate::{
-    AggregateKind, BasicBlock, BinOp, BlockId, Constant, InlineScope, Local, LocalDecl,
-    MirFunction, MirFunctionBody, MirFunctionKind, Operand, OptLevel, Place, Rvalue, Statement,
-    StatementKind, Terminator, memory,
+    BasicBlock, BinOp, BlockId, Constant, InlineScope, Local, LocalDecl, MirFunction,
+    MirFunctionBody, MirFunctionKind, Operand, OptLevel, Place, Rvalue, Statement, StatementKind,
+    Terminator, memory,
 };
 
 /// The largest callee copied into a caller, in statements plus terminators.
@@ -165,7 +165,7 @@ pub(crate) fn inline_cost<'db>(
     if !mir.lambdas.is_empty() || body.locals.iter().any(|local| local.is_captured) {
         return None;
     }
-    body_cost(db, function, body)
+    body_cost(function, body)
 }
 
 /// Whether the call path does something for `function` beyond running it:
@@ -179,12 +179,7 @@ fn traced<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> bool {
 }
 
 /// See [`inline_cost`]: the part decided by the body alone.
-fn body_cost<'db>(
-    db: &'db dyn crate::Db,
-    function: FunctionLoc<'db>,
-    body: &MirFunctionBody<'db>,
-) -> Option<usize> {
-    let package = function.file(db).source_root(db);
+fn body_cost<'db>(function: FunctionLoc<'db>, body: &MirFunctionBody<'db>) -> Option<usize> {
     let mut reads_frame_types = false;
     let mut cost = 0;
     for block in &body.blocks {
@@ -208,17 +203,6 @@ fn body_cost<'db>(
                             | Rvalue::CurrentPackage
                             | Rvalue::MakeClosure { .. }
                     ) {
-                        return None;
-                    }
-                    // An instance with a finalizer is observed when it dies.
-                    // Behind a call it is always built; in the caller, the
-                    // cleanup passes drop a construction nothing reads.
-                    if let Rvalue::Aggregate {
-                        kind: AggregateKind::Class { class, .. },
-                        ..
-                    } = value
-                        && crate::escape::may_finalize(db, package, class)
-                    {
                         return None;
                     }
                 }
