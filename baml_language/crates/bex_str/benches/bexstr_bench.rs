@@ -212,7 +212,7 @@ fn scan_fixture(kind: &str, n: usize) -> BexStr {
 
 /// BAML `s.at(i)` for an in-range `i`, as `bex_vm`'s `string.rs` implements it.
 fn at(s: &BexStr, i: usize) -> Option<BexStr> {
-    (i < s.char_len()).then(|| s.char_slice(i..i + 1))
+    s.char_get(i)
 }
 
 /// Each sample gets a fresh fixture, built outside the timed region, so a
@@ -270,7 +270,7 @@ fn deep_rope_build_count_flatten(bencher: Bencher, n: usize) {
 //
 // End-to-end shapes of BAML string code, built from the same `BexStr` calls the
 // VM makes (`+` → `concat`, `replace_all` → `BexStr::from(str::replace)`, `at` →
-// `char_slice(i..i + 1)`). Each doubles `n` (codepoints); compare growth factors,
+// `char_get(i)`). Each doubles `n` (codepoints); compare growth factors,
 // and compare `w3_append_and_read_*` against `w3_append_only` to see what
 // reading costs on top of writing.
 
