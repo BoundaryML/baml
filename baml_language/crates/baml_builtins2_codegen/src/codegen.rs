@@ -850,8 +850,8 @@ fn emit_entry_module(out: &mut String, root: &NamespaceNode, package: &str) {
 
     out.push_str(
         "/// One plain entry point per builtin, at its BAML path: `baml.Array.push` is\n\
-         /// `builtins::Array::push`. Each calls the builtin's generated glue, so the\n\
-         /// interpreter and compiled code run the same body.\n",
+         /// `builtins::Array::push`. Each is the builtin's `__entry_*`, whose\n\
+         /// body the interpreter's glue runs too.\n",
     );
     out.push_str("#[allow(non_snake_case, clippy::used_underscore_items, clippy::too_many_arguments)]\n");
     out.push_str("pub mod builtins {\n    #[allow(unused_imports)]\n    use super::*;\n");
@@ -900,13 +900,16 @@ fn push_entry(
         write!(signature, ", {param}: Value").unwrap();
         signature
     });
-    let args = params.join(", ");
+    let call_args = params.iter().fold(String::new(), |mut args, param| {
+        write!(args, ", {param}").unwrap();
+        args
+    });
     let body = modules.entry(module).or_default();
     let mut twin = |suffix: &str, glue_suffix: &str, doc: &str| {
         writeln!(
             body,
             "/// `{path}`{doc}\n#[inline]\npub fn {name}{suffix}(vm: &mut BexVm{signature}) -> NativeCallResult {{\n    \
-             <{{IMPL}} as {trait_name}>::__glue_{glue_method}{glue_suffix}(vm, &[{args}])\n}}",
+             <{{IMPL}} as {trait_name}>::__entry_{glue_method}{glue_suffix}(vm{call_args})\n}}",
             path = b.path,
         )
         .unwrap();
@@ -1260,11 +1263,24 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
     }
 }
 
-/// The glue of [`emit_glue_method`] for a receiver only this thread can
-/// reach: the same body, with the receiver read through the thread-local
-/// accessor, which takes no lock. Callers select it per call site, where
-/// escape analysis proves the receiver thread-local. A yielding builtin's
-/// twin is declared for its implementation to write.
+/// A builtin's entry point and glue. `__entry_{name}` takes the builtin's
+/// arguments as `Value`s and holds its whole generated body: read each
+/// argument, call the Rust implementation, convert the result. It is
+/// `#[inline]`, so a caller that names it (compiled code, through
+/// `builtins::...`) gets the body inlined. `__glue_{name}` is the
+/// interpreter's adapter: it unpacks the argument slice into the entry.
+fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &NativeBuiltin) {
+    let mut body = String::new();
+    emit_glue_body(&mut body, trait_name, method_name, b);
+    out.push_str(&entry_from_glue_body(&body, method_name, "", b));
+    emit_glue_adapter(out, trait_name, method_name, "", b);
+}
+
+/// [`emit_glue_method`] for a receiver only this thread can reach: the same
+/// body, with the receiver read through the thread-local accessor, which
+/// takes no lock. Callers select it per call site, where escape analysis
+/// proves the receiver thread-local. A yielding builtin's twin entry is
+/// declared for its implementation to write.
 fn emit_thread_local_twin(
     out: &mut String,
     trait_name: &str,
@@ -1276,20 +1292,17 @@ fn emit_thread_local_twin(
         // its implementation knows every access the twin must make lock-free.
         writeln!(
             out,
-            "    /// `__glue_{method_name}` for a receiver escape analysis proved thread-local.\n    fn __glue_{method_name}__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult;"
+            "    /// `__entry_{method_name}` for a receiver escape analysis proved thread-local.\n    fn __entry_{method_name}__local(vm: &mut BexVm{}) -> NativeCallResult;",
+            entry_signature(b)
         )
         .unwrap();
+        emit_glue_adapter(out, trait_name, method_name, "__local", b);
         return;
     }
-    let mut glue = String::new();
-    emit_glue_method(&mut glue, trait_name, method_name, b);
-    let glue = glue.replacen(
-        &format!("fn __glue_{method_name}("),
-        &format!("fn __glue_{method_name}__local("),
-        1,
-    );
+    let mut body = String::new();
+    emit_glue_body(&mut body, trait_name, method_name, b);
     let mut replaced = 0;
-    let glue = [
+    let body = [
         (
             "vm.as_array_mut(&args[0])?",
             "unsafe { vm.as_array_mut_local(&args[0]) }?",
@@ -1308,9 +1321,9 @@ fn emit_thread_local_twin(
         ),
     ]
     .iter()
-    .fold(glue, |glue, (locked, local)| {
-        replaced += glue.matches(locked).count();
-        glue.replace(locked, local)
+    .fold(body, |body, (locked, local)| {
+        replaced += body.matches(locked).count();
+        body.replace(locked, local)
     });
     assert_eq!(
         replaced, 1,
@@ -1320,10 +1333,61 @@ fn emit_thread_local_twin(
     out.push_str(
         "    // SAFETY: selected only for a receiver escape analysis proved thread-local.\n    #[allow(unsafe_code)]\n",
     );
-    out.push_str(&glue);
+    out.push_str(&entry_from_glue_body(&body, method_name, "__local", b));
+    emit_glue_adapter(out, trait_name, method_name, "__local", b);
 }
 
-fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &NativeBuiltin) {
+/// `, a: Value, b: Value`: an entry point's parameters after `vm`.
+fn entry_signature(b: &NativeBuiltin) -> String {
+    entry_params(b).iter().fold(String::new(), |mut signature, param| {
+        write!(signature, ", {param}: Value").unwrap();
+        signature
+    })
+}
+
+/// Turn a body from [`emit_glue_body`], which reads `args`, into the entry
+/// `__entry_{method_name}{suffix}`, which takes the arguments as parameters
+/// and gathers them back into a local `args` the body reads unchanged.
+fn entry_from_glue_body(body: &str, method_name: &str, suffix: &str, b: &NativeBuiltin) -> String {
+    let header =
+        format!("    fn __glue_{method_name}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n");
+    let params = entry_params(b);
+    let entry = format!(
+        "    #[inline]\n    #[allow(unused_variables)]\n    fn __entry_{method_name}{suffix}(vm: &mut BexVm{}) -> NativeCallResult {{\n        let args: [Value; {}] = [{}];\n",
+        entry_signature(b),
+        params.len(),
+        params.join(", "),
+    );
+    assert!(
+        body.starts_with(&header),
+        "baml codegen error: {} glue body has an unexpected header",
+        b.path
+    );
+    body.replacen(&header, &entry, 1)
+}
+
+/// `__glue_{method_name}{suffix}`: the interpreter's adapter, unpacking the
+/// argument slice into the entry.
+fn emit_glue_adapter(
+    out: &mut String,
+    trait_name: &str,
+    method_name: &str,
+    suffix: &str,
+    b: &NativeBuiltin,
+) {
+    let args = (0..entry_params(b).len()).fold(String::new(), |mut args, i| {
+        write!(args, ", args[{i}]").unwrap();
+        args
+    });
+    writeln!(
+        out,
+        "    fn __glue_{method_name}{suffix}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n        \
+         <Self as {trait_name}>::__entry_{method_name}{suffix}(vm{args})\n    }}"
+    )
+    .unwrap();
+}
+
+fn emit_glue_body(out: &mut String, trait_name: &str, method_name: &str, b: &NativeBuiltin) {
     let glue_name = format!("__glue_{method_name}");
     // When the receiver is `&mut self`, parameter extractions run BEFORE the
     // mutable receiver extraction. If any parameter borrows VM state shared-ly
@@ -2738,7 +2802,7 @@ mod tests {
         ));
         assert!(entries.contains(
             "pub fn push(vm: &mut BexVm, array: Value, item: Value) -> NativeCallResult {\n            \
-             <PackageBamlImpl as BamlClassArray>::__glue_push(vm, &[array, item])"
+             <PackageBamlImpl as BamlClassArray>::__entry_push(vm, array, item)"
         ));
         assert!(entries.contains("pub fn push_local(vm: &mut BexVm, array: Value, item: Value)"));
         let push = builtins.iter().find(|b| b.path == "baml.Array.push").unwrap();

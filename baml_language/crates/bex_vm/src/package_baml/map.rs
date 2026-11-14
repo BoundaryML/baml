@@ -314,72 +314,72 @@ impl BamlClassMap for PackageBamlImpl {
         map.values().copied().collect()
     }
 
-    fn __glue_has(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Has, false)
+    fn __entry_has(vm: &mut BexVm, map: Value, key: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key], Operation::Has, false)
     }
 
-    fn __glue_has__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Has, true)
+    fn __entry_has__local(vm: &mut BexVm, map: Value, key: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key], Operation::Has, true)
     }
 
     fn has(_vm: &mut BexVm, _map: MapView<'_>, _key: &Value) -> NativeCallResult {
         unreachable!("Map.has uses custom glue")
     }
 
-    fn __glue_get(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Get, false)
+    fn __entry_get(vm: &mut BexVm, map: Value, key: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key], Operation::Get, false)
     }
 
-    fn __glue_get__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Get, true)
+    fn __entry_get__local(vm: &mut BexVm, map: Value, key: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key], Operation::Get, true)
     }
 
     fn get(_vm: &mut BexVm, _map: MapView<'_>, _key: &Value) -> NativeCallResult {
         unreachable!("Map.get uses custom glue")
     }
 
-    fn __glue_index(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Index, false)
+    fn __entry_index(vm: &mut BexVm, map: Value, key: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key], Operation::Index, false)
     }
 
-    fn __glue_index__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Index, true)
+    fn __entry_index__local(vm: &mut BexVm, map: Value, key: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key], Operation::Index, true)
     }
 
     fn index(_vm: &mut BexVm, _map: MapView<'_>, _key: &Value) -> NativeCallResult {
         unreachable!("Map.index uses custom glue")
     }
 
-    fn __glue_set(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Set, false)
+    fn __entry_set(vm: &mut BexVm, map: Value, key: Value, value: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key, value], Operation::Set, false)
     }
 
-    fn __glue_set__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Set, true)
+    fn __entry_set__local(vm: &mut BexVm, map: Value, key: Value, value: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key, value], Operation::Set, true)
     }
 
     fn set(_vm: &mut BexVm, _map: &Value, _key: &Value, _value: &Value) -> NativeCallResult {
         unreachable!("Map.set uses custom glue")
     }
 
-    fn __glue_delete(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Delete, false)
+    fn __entry_delete(vm: &mut BexVm, map: Value, key: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key], Operation::Delete, false)
     }
 
-    fn __glue_delete__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Delete, true)
+    fn __entry_delete__local(vm: &mut BexVm, map: Value, key: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key], Operation::Delete, true)
     }
 
     fn delete(_vm: &mut BexVm, _map: &Value, _key: &Value) -> NativeCallResult {
         unreachable!("Map.delete uses custom glue")
     }
 
-    fn __glue_get_or_insert(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::GetOrInsert, false)
+    fn __entry_get_or_insert(vm: &mut BexVm, map: Value, key: Value, default: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key, default], Operation::GetOrInsert, false)
     }
 
-    fn __glue_get_or_insert__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::GetOrInsert, true)
+    fn __entry_get_or_insert__local(vm: &mut BexVm, map: Value, key: Value, default: Value) -> NativeCallResult {
+        MapDriver::start(vm, &[map, key, default], Operation::GetOrInsert, true)
     }
 
     fn get_or_insert(
