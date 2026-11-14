@@ -367,7 +367,7 @@ def test_stream_recording_parent_chain(tmp_path):
         g.span_name AS grandparent
         FROM spans s LEFT JOIN spans p ON p.span_id = s.parent_span_id
         LEFT JOIN spans g ON g.span_id = p.parent_span_id
-        WHERE ({recording_filter}) AND CAST(s.context_metadata AS TEXT) LIKE '%{marker}%'"""
+        WHERE ({recording_filter})"""
     result = subprocess.run(
         [
             str(cli),
@@ -390,10 +390,11 @@ def test_stream_recording_parent_chain(tmp_path):
     assert result.returncode == 0, result.stderr + result.stdout
     data = json.loads(result.stdout)
     assert data["outcome"]["status"] == "complete"
-    rows = [
+    all_rows = [
         dict(zip((column["name"] for column in data["columns"]), row))
         for row in data["rows"]
     ]
+    rows = [row for row in all_rows if row["context_metadata"].get("stream_audit") == marker]
     origins = {
         row["context_metadata"]["case"]: row
         for row in rows
@@ -409,7 +410,7 @@ def test_stream_recording_parent_chain(tmp_path):
     }
     networks = [row for row in rows if row["span_type"] == "network_span"]
     assert len(networks) == 5
-    by_id = {row["span_id"]: row for row in rows}
+    by_id = {row["span_id"]: row for row in all_rows}
     for request in networks:
         origin = origins[request["context_metadata"]["case"]]
         assert request["parent"] == "ai.clients.retry_attempt"
