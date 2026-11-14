@@ -87,6 +87,7 @@ with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
         command.extend(["--target", args.target])
     if args.pack_host:
         command.extend(["--host-binary", str(args.pack_host.resolve())])
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         command, check=True, cwd=repo, env=dict(os.environ, BAML_CLI_ALLOW_DIRECT="1")
     )
