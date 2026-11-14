@@ -9,7 +9,7 @@ import { AlertCircle, Brain, Heart, HelpCircle, ThumbsDown, ThumbsUp } from "luc
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CommentState } from "../actions";
-import { GitHubAvatar } from "../avatar";
+import { CommentAuthor } from "../avatar";
 import { BcsFrame, type BcsFrameHandle } from "./frame";
 
 export type Reactions = {
@@ -24,6 +24,8 @@ export type Comment = {
   version: number;
   anchor?: { block: string; text: string };
   author: string;
+  /** The coding agent that wrote it for the author, when one said so. */
+  agent?: string;
   body: string;
   type: "discussion" | "concern" | "question";
   reactions: Reactions;
@@ -330,10 +332,7 @@ function TypeSelect({ value = "discussion" }: { value?: string }) {
 function Meta({ comment, version, thread }: { comment: Comment; version: number; thread?: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-      <span className="inline-flex items-center gap-1.5">
-        <GitHubAvatar login={comment.author} size={thread ? "md" : "sm"} />
-        <span className="font-medium text-foreground">{comment.author}</span>
-      </span>
+      <CommentAuthor login={comment.author} agent={comment.agent} size={thread ? "md" : "sm"} />
       {thread && <KindBadge type={comment.type} />}
       <span>{formatDistanceToNow(comment.createdAt, { addSuffix: true })}</span>
       {comment.editedAt && <span title={new Date(comment.editedAt).toLocaleString()}>edited</span>}
