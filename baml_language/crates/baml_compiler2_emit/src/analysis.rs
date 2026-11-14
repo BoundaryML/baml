@@ -1992,7 +1992,7 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, body: &MirFunctionBo
 
 /// Check if a call-like result is used as part of a stack-consumable aggregate prefix.
 ///
-/// Map and array allocation consume values in source order, so a chain like
+/// Map, array, tuple, and class allocation consume values in source order, so a chain like
 /// `v1 = call ...; v2 = call ...; map { "a": v1, "b": v2 }` can keep `v1`
 /// and `v2` on the VM stack until the final `alloc_map`.
 fn is_call_result_aggregate_operand(
@@ -2074,6 +2074,12 @@ fn aggregate_stack_prefix_operands<'a, 'db>(
         Rvalue::Map(_, _, entries) => Some(entries.iter().map(|(_key, value)| value).collect()),
         Rvalue::Aggregate {
             kind: baml_compiler2_mir::AggregateKind::Array,
+            fields,
+        } => Some(fields.iter().collect()),
+        // Tuple allocation pushes its elements in slot order, then its
+        // descriptor `LoadType`, so the elements form a carryable prefix.
+        Rvalue::Aggregate {
+            kind: baml_compiler2_mir::AggregateKind::Tuple { .. },
             fields,
         } => Some(fields.iter().collect()),
         Rvalue::Aggregate {

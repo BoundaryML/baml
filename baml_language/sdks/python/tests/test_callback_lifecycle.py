@@ -31,6 +31,7 @@ def test_discarded_args_release_each_nested_wire_owner_once(heap):
         call.args.add().value.map_value.entries.add().value,
         call.args.add().value.class_value.fields.add().value,
         call.args.add().value.union_variant_value.value,
+        call.args.add().value.tuple_value.items.add(),
     ]
     wire_keys = []
     for holder in holders:
@@ -162,12 +163,15 @@ def test_decode_failure_counts_repeated_keys_and_ignores_borrowed_host_keys(
     assert _handle_refcount(key) is None
 
 
-@pytest.mark.parametrize("container", ["arguments", "list", "map", "class", "union"])
+_CONTAINERS = ["arguments", "list", "map", "class", "union", "tuple", "carried_tuple"]
+
+
+@pytest.mark.parametrize("container", _CONTAINERS)
 def test_decode_failure_preserves_transferred_owner_and_releases_remaining(
     container, decoding_models
 ):
     # Every occurrence owns a reference, even when all references share a key.
-    slab = 0xDEC0DE + ["arguments", "list", "map", "class", "union"].index(container)
+    slab = 0xDEC0DE + _CONTAINERS.index(container)
     key, kind = _seed_heap_handle(slab)
     owner = BamlPyHandle(key, kind)
     call = baml_outbound_pb2.BamlToHostCall()
@@ -179,6 +183,14 @@ def test_decode_failure_preserves_transferred_owner_and_releases_remaining(
             root = root.union_variant_value.value
         if container in ("list", "union"):
             holders = [root.list_value.items.add() for _ in range(3)]
+        elif container in ("tuple", "carried_tuple"):
+            holders = [root.tuple_value.items.add() for _ in range(3)]
+            if container == "carried_tuple":
+                # A tuple that carries its type decodes to a `BamlTuple`, but
+                # only once every slot has decoded: a failing later slot
+                # leaves the earlier slots' owners to the same cleanup.
+                for _ in range(3):
+                    root.tuple_value.tuple_type.tuple.items.add().unknown.SetInParent()
         elif container == "map":
             holders = []
             for name in ("first", "reject", "last"):

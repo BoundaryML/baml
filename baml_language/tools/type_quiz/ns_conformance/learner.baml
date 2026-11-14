@@ -186,7 +186,7 @@ function sit_from(
 ///
 /// Over twelve sittings, not one, and asked as two tests of six. What it
 /// costs varies enormously with the draw — the spread runs from the low
-/// eighties to the budget, and two of the twelve do not finish inside it —
+/// seventies to the budget, and three of the twelve do not finish inside it —
 /// so a single session measures the luck of that session, and the version of
 /// this test that asked one certified by chance. Splitting the twelve is for
 /// the clock rather than the measurement: driving them is the slowest thing
@@ -376,7 +376,7 @@ function repetition_report() -> string throws never {
 test "learner: the same item comes round again and again" {
     assert.equal(
         repetition_report(),
-        `steps=110 distinct=39 top=["param_contravariant=6", "array_element=6", "double_contravariance=6", "carried_2=5", "return_covariant=5"]`,
+        `steps=76 distinct=37 top=["carried_2=5", "two_recursions=4", "unknown_holds=4", "carried_3=4", "param_contravariant=4"]`,
     )
 }
 
@@ -397,14 +397,14 @@ function mean_of(values: int[]) -> int throws never {
 test "learner: a learner of the axioms is not marched into depth" {
     assert.equal(
         beginner_escalation_report(),
-        `steps=140 depth_first20=130 depth_last20=145 spread=["1:105", "2:23", "3:9", "4:3", "5:0"] chance_last20=6690`,
+        `steps=140 depth_first20=120 depth_last20=160 spread=["1:107", "2:21", "3:7", "4:5", "5:0"] chance_last20=6375`,
     )
 }
 
 test "learner: the questions stop getting harder once the bank runs out of depth" {
     assert.equal(
         escalation_report(),
-        `steps=110 depth_first20=140 depth_last20=150 spread=["1:74", "2:18", "3:11", "4:4", "5:3"] chance_last20=8720`,
+        `steps=76 depth_first20=135 depth_last20=135 spread=["1:54", "2:9", "3:8", "4:4", "5:1"] chance_last20=8650`,
     )
 }
 
@@ -474,8 +474,8 @@ function beginner_report() -> string throws never {
     `certified=${sat.standing.why == root.engine.Why.Mastered} variance_mastered=${variance.length()} axioms_above_variance=${mean_offset(sat, false) > mean_offset(sat, true)} withheld_some=${sat.standing.withheld > 0.0}`
 }
 
-test "learner: certifying a perfect learner costs 91 to 130 questions over sessions 1 to 6, and one does not finish" {
-    // The two that do not finish across the twelve are the measurement, not a
+test "learner: certifying a perfect learner costs 76 to 132 questions over sessions 1 to 6, and one does not finish" {
+    // The three that do not finish across the twelve are the measurement, not a
     // fluke to be tuned away: at this budget a learner who answers everything
     // right is still sometimes left uncertified, and three models that sat the
     // quiz said independently that it should have had their measure by about
@@ -489,16 +489,22 @@ test "learner: certifying a perfect learner costs 91 to 130 questions over sessi
     // question, and two sittings run out of budget rather than one. The
     // evidence those cases used to give was never earned: the learner could
     // answer them without knowing the wrap was invariant.
+    //
+    // It became three when the unguarded cycle was promoted from a
+    // divergence. Its item is a shape whose two members turn on two rules
+    // of their own, each evidenced only by the half of its draws that is
+    // that member, so a sitting has two more rules to certify on evidence
+    // that comes in at half the rate.
     assert.equal(
         expert_report_over([1, 2, 3, 4, 5, 6]),
-        `certified=5 of 6 steps=["Mastered:130", "Mastered:96", "Mastered:110", "Budget:140", "Mastered:91", "Mastered:97"] withheld=0.0 suspected=none`,
+        `certified=5 of 6 steps=["Mastered:132", "Budget:140", "Mastered:76", "Mastered:108", "Mastered:124", "Mastered:115"] withheld=0.0 suspected=none`,
     )
 }
 
-test "learner: certifying a perfect learner costs 81 to 133 questions over sessions 7 to 12, and one does not finish" {
+test "learner: certifying a perfect learner costs 88 to 113 questions over sessions 7 to 12, and two do not finish" {
     assert.equal(
         expert_report_over([7, 8, 9, 10, 11, 12]),
-        `certified=5 of 6 steps=["Mastered:118", "Mastered:81", "Mastered:99", "Budget:140", "Mastered:110", "Mastered:133"] withheld=0.0 suspected=none`,
+        `certified=4 of 6 steps=["Budget:140", "Mastered:113", "Mastered:88", "Mastered:104", "Mastered:103", "Budget:140"] withheld=0.0 suspected=none`,
     )
 }
 
@@ -513,7 +519,7 @@ test "learner: a learner who never commits is never certified" {
 test "learner: strict coverage costs no fewer questions than an overall picture" {
     assert.equal(
         coverage_report(),
-        "loose_first=true loose_done=Mastered loose_steps=110 strict_done=Mastered strict_steps=110 uncertified=0 rules=31",
+        "loose_first=true loose_done=Mastered loose_steps=76 strict_done=Mastered strict_steps=76 uncertified=0 rules=33",
     )
 }
 
@@ -531,14 +537,14 @@ function parity_report() -> string throws never {
 test "learner: answering by an unrelated bit is suspected of no model" {
     assert.equal(
         parity_report(),
-        "suspected=none why=Stalled commits_unsure=95 leading=spelling=14,shape=12,bounds=10,covariant=5,typescript=4,structural=0",
+        "suspected=none why=Budget commits_unsure=97 leading=covariant=18,typescript=17,structural=12,spelling=6,shape=5,bounds=-9",
     )
 }
 
 test "learner: reasoning as TypeScript does is found out as TypeScript" {
     assert.equal(
         typescripter_report(),
-        "suspected=typescript leading=typescript=61,bounds=25,covariant=22,structural=0,shape=-16,spelling=-23 taught=true on_point=true both_kinds=true",
+        "suspected=typescript leading=typescript=59,bounds=20,structural=-5,covariant=-6,shape=-17,spelling=-23 taught=true on_point=true both_kinds=true",
     )
 }
 
@@ -780,10 +786,8 @@ test "profile: the same session seed serves the same cases" {
 
 /// Every rule a verified item can conclude has an order. The two site rules
 /// are not among them — a site is the frame a case stands in rather than
-/// something to master — and neither is the unguarded-cycle rule, since only
-/// the diverging item reaches it, which is the one the count below is short
-/// of. The three carrying variance rules reach five: an axiom under four
-/// wraps, which is as deep as the bank goes today.
+/// something to master. The three carrying variance rules reach five: an
+/// axiom under four wraps, which is as deep as the bank goes today.
 function orders_report() -> string throws never {
     let orders = root.bank.rule_orders(4);
     let counted = [1, 2, 3, 4, 5].map((order) -> {
@@ -816,7 +820,7 @@ function orders_report() -> string throws never {
 test "orders: every servable rule has one, and only the carrying variance rules reach four or more" {
     assert.equal(
         orders_report(),
-        `rules=31 of 32 by_order=[27, 1, 0, 1, 2] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=4`,
+        `rules=33 of 33 by_order=[29, 1, 0, 1, 2] deepest=["variance/function-parameter-contravariant", "variance/function-return-covariant", "variance/function-error-covariant"] never_alone=4`,
     )
 }
 
@@ -930,15 +934,16 @@ class Sitting {
 test "sitting: nothing well enough seen in a sitting leans more than fifteen points" {
     // WHAT THIS DOES NOT COVER. `served_surface` now reads the whole surface,
     // the same `surface_of` the bank sweep uses, so the pair features are in
-    // the vocabulary here — but 237 questions do not see them often enough to
-    // hold them to anything. Measured with the support floor dropped to one:
+    // the vocabulary here — but 220 questions do not see them often enough to
+    // hold them to anything. Measured with the support floor dropped to one,
+    // the features seen at least eight times:
     //
-    //   pair:same-spelling          100% of 11
-    //   pair:source-within-target    65% of 23
-    //   kind:literal                 65% of 23
-    //   decl:implements              32% of 19
+    //   pair:same-spelling          100% of 9
+    //   kind:alias                   79% of 14
+    //   pair:source-within-target    75% of 20
+    //   site:two `implements` blocks 38% of 8
     //
-    // The first is the bank's recorded debt showing through, and eleven cases
+    // The first is the bank's recorded debt showing through, and nine cases
     // is no evidence either way: the standard error at that count is about
     // fifteen points, the width of the whole bar. Lowering the floor would
     // buy noise, not coverage. What would buy coverage is more sittings, and
@@ -947,5 +952,5 @@ test "sitting: nothing well enough seen in a sitting leans more than fifteen poi
     // So this holds the eight or so features a sitting shows often enough to
     // judge, and the BANK sweep is what holds the pair features. Selection
     // over-serving one of them by less than the floor would pass here.
-    assert.equal(served_leaning_report(), `compiles=48% of 237 leaning=[]`)
+    assert.equal(served_leaning_report(), `compiles=54% of 220 leaning=[]`)
 }

@@ -95,6 +95,18 @@ impl ExprExt for AnyExpr {
             AnyExpr::Backtick(s) => verbatim_width(input, s),
             AnyExpr::Path(path) => path.single_line_width(input),
             AnyExpr::GenericApply(ga) => ga.single_line_width(input),
+            AnyExpr::Tuple(id) => {
+                let elements = tree.list(tree.get(id).elements);
+                let mut width = 2 + usize::from(elements.len() == 1);
+                for (i, element) in elements.iter().enumerate() {
+                    width += element.item.single_line_width(input)? + if i > 0 { 2 } else { 0 };
+                }
+                Some(width)
+            }
+            AnyExpr::TupleField(id) => {
+                let node = tree.get(id);
+                Some(node.base.single_line_width(input)? + usize::from(input.range(node.dot).len()) + usize::from(input.range(node.slot).len()))
+            }
             AnyExpr::Paren(paren) => paren.single_line_width(input),
             AnyExpr::Binary(binary) => binary.single_line_width(input),
             AnyExpr::Is(is) => is.single_line_width(input),
@@ -137,11 +149,12 @@ impl ExprExt for AnyExpr {
 
     fn binds_as_postfix_operand(self, tree: &FileTree) -> bool {
         match self {
-            AnyExpr::Call(_) | AnyExpr::Index(_) | AnyExpr::FieldAccess(_) => {
+            AnyExpr::Call(_) | AnyExpr::Index(_) | AnyExpr::FieldAccess(_) | AnyExpr::TupleField(_) => {
                 !self.has_optional_chain_link(tree)
             }
             AnyExpr::Path(_)
             | AnyExpr::EnvAccess(_)
+            | AnyExpr::Tuple(_)
             | AnyExpr::Array(_)
             | AnyExpr::String(_)
             | AnyExpr::Backtick(_) => true,
@@ -156,6 +169,10 @@ impl ExprExt for AnyExpr {
             | AnyExpr::OptionalCall(_) => true,
             AnyExpr::Call(call) => tree.get(call).callee.has_optional_chain_link(tree),
             AnyExpr::Index(index) => tree.get(index).base.has_optional_chain_link(tree),
+            AnyExpr::TupleField(id) => {
+                let node = tree.get(id);
+                tree.tokens().kind(node.dot.idx) == baml_syntax::token::TokenKind::QuestionDot || node.base.has_optional_chain_link(tree)
+            }
             AnyExpr::FieldAccess(fa) => tree.get(fa).base.has_optional_chain_link(tree),
             AnyExpr::Paren(paren) => present(tree.get(paren).inner).has_optional_chain_link(tree),
             _ => false,
@@ -208,6 +225,14 @@ impl Printable for AnyExpr {
                 chain.print(shape, printer)
             }
             AnyExpr::GenericApply(ga) => printer.print(ga, shape),
+            AnyExpr::Tuple(id) => printer.print(id, shape),
+            AnyExpr::TupleField(id) => {
+                let node = printer.tree.get(id);
+                printer.print(node.base, shape);
+                printer.print_token(node.dot);
+                printer.print_token(node.slot);
+                PrintInfo::default_single_line()
+            }
             AnyExpr::Paren(paren) => printer.print(paren, shape),
             AnyExpr::Binary(binary) => printer.print(binary, shape),
             AnyExpr::Is(is) => printer.print(is, shape),

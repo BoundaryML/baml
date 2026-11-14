@@ -42,7 +42,7 @@ use emit::{
     FnKind, RenderedField, indent_lines, render_callable, render_class, render_enum,
     render_opaque_class, render_type_alias, sort_key,
 };
-use translate_ty::{TranslateCtx, normalize_union, slot_expr, translate_ty};
+use translate_ty::{TranslateCtx, holds_native_tuple, normalize_union, slot_expr, translate_ty};
 
 /// Build the Swift SDK output tree using precompiled BAML bytecode as
 /// the runtime payload. Returned paths are relative to the generated
@@ -327,9 +327,9 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
     }
 }
 
-/// Direct (non-heap) class targets of a field type: bare class refs
-/// and refs behind Optional (null-unions) store inline in a Swift
-/// struct; List/Map contents are already heap-allocated and never
+/// Direct (non-heap) class targets of a field type: bare class refs,
+/// refs behind Optional (null-unions) and tuple slots store inline in a
+/// Swift struct; List/Map contents are already heap-allocated and never
 /// force boxing. Aliases resolve through (they're non-recursive here).
 fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
     match ty {
@@ -344,6 +344,13 @@ fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
             // Only the Optional collapse (1 arm) stores inline.
             if non_null.len() == 1 {
                 direct_class_targets(&non_null[0], pool, out);
+            }
+        }
+        // A native tuple and a `Tuple1` store their slots inline, like
+        // fields of their own.
+        Ty::Tuple(items) => {
+            for item in items {
+                direct_class_targets(item, pool, out);
             }
         }
         Ty::TypeAlias(name) => {
@@ -484,6 +491,14 @@ fn render_supported_class(
             doc: prop.docstring.clone(),
             is_rust: matches!(prop.ty, Ty::RustType),
             slot: slot_expr(&prop.ty, ctx, &class_argument).ok_or_else(unrepresentable)?,
+            equal_slot: if holds_native_tuple(&prop.ty, ctx) {
+                Some(
+                    slot_expr(&prop.ty, ctx, &translate_ty::generic_param_slot)
+                        .ok_or_else(unrepresentable)?,
+                )
+            } else {
+                None
+            },
         });
     }
 
@@ -1663,5 +1678,316 @@ mod tests {
         );
         // map with non-string key — not yet
         assert_eq!(t(&map(int(), int())), None);
+        // Tuples of two or more slots are native Swift tuples at every arity,
+        // slot order and repeats kept; one slot is the runtime's `Tuple1`.
+        let tuple = Ty::Tuple(Box::new([int(), string()]));
+        assert_eq!(t(&tuple).as_deref(), Some("(Swift.Int, Swift.String)"));
+        assert_eq!(
+            t(&Ty::Tuple(Box::new([string(), int()]))).as_deref(),
+            Some("(Swift.String, Swift.Int)")
+        );
+        assert_eq!(
+            t(&Ty::Tuple(Box::new([int(), int(), int()]))).as_deref(),
+            Some("(Swift.Int, Swift.Int, Swift.Int)")
+        );
+        assert_eq!(
+            t(&Ty::Tuple(Box::new([string()]))).as_deref(),
+            Some("BamlBridge.Tuple1<Swift.String>")
+        );
+        assert_eq!(
+            t(&Ty::Tuple(Box::new([tuple.clone()]))).as_deref(),
+            Some("BamlBridge.Tuple1<(Swift.Int, Swift.String)>")
+        );
+        assert_eq!(
+            t(&list(tuple.clone())).as_deref(),
+            Some("[(Swift.Int, Swift.String)]")
+        );
+        assert_eq!(
+            t(&union(vec![tuple.clone(), null()])).as_deref(),
+            Some("(Swift.Int, Swift.String)?")
+        );
+        assert_eq!(
+            t(&union(vec![tuple.clone(), string()])).as_deref(),
+            Some("BamlUnion2<(Swift.Int, Swift.String), Swift.String>")
+        );
+        assert_eq!(
+            t(&Ty::Tuple(Box::new([tuple.clone(), Ty::Bool]))).as_deref(),
+            Some("((Swift.Int, Swift.String), Swift.Bool)")
+        );
+        let wide = Ty::Tuple(vec![int(); 14].into_boxed_slice());
+        assert_eq!(
+            t(&wide).as_deref(),
+            Some(format!("({})", vec!["Swift.Int"; 14].join(", ")).as_str())
+        );
+        // A stream of tuples is the runtime's stream, which needs no
+        // conformance of its values.
+        let tuple_stream = Ty::Class(
+            Name::new(
+                baml_base::Name::new("ai"),
+                vec![baml_base::Name::new("stream")],
+                baml_base::Name::new("Stream"),
+            ),
+            Box::new([tuple]),
+        );
+        assert_eq!(
+            t(&tuple_stream).as_deref(),
+            Some("BamlStream<(Swift.Int, Swift.String)>")
+        );
+        // A slot with no Swift type leaves the tuple unsupported, as it does
+        // any other type holding it: `unknown`, and media with no struct of
+        // its own, have none.
+        assert_eq!(t(&Ty::Tuple(Box::new([int(), map(int(), int())]))), None);
+        assert_eq!(t(&Ty::Unknown), None);
+        assert_eq!(t(&Ty::Tuple(Box::new([int(), Ty::Unknown]))), None);
+        assert_eq!(t(&list(Ty::Unknown)), None);
+        let image = Ty::Media(baml_base::MediaKind::Image);
+        assert_eq!(t(&image), None);
+        assert_eq!(t(&Ty::Tuple(Box::new([image, int()]))), None);
+        assert_eq!(t(&Ty::Tuple(Box::new([]))), None);
+    }
+
+    #[test]
+    fn tuple_slots_state_every_slot_in_order() {
+        let ctx = TranslateCtx {
+            supported_classes: BTreeSet::new(),
+            supported_enums: BTreeSet::new(),
+            supported_aliases: BTreeSet::new(),
+            nullable_aliases: BTreeSet::new(),
+            alias_bodies: BTreeMap::new(),
+            crossings: BTreeMap::new(),
+            class_names: BTreeMap::new(),
+        };
+        let slot = |ty: &Ty| slot_expr(ty, &ctx, &translate_ty::generic_param_slot);
+        // A media slot is spelled by the class crossing as that media, as
+        // media is everywhere else.
+        let image_class = Name::new(
+            baml_base::Name::new("baml"),
+            vec![baml_base::Name::new("media")],
+            baml_base::Name::new("Image"),
+        );
+        let media_ctx = TranslateCtx {
+            supported_classes: BTreeSet::from([image_class.to_string()]),
+            crossings: BTreeMap::from([(
+                image_class.to_string(),
+                ClassCrossing::Media(baml_base::MediaKind::Image),
+            )]),
+            class_names: BTreeMap::from([(image_class.to_string(), image_class)]),
+            supported_enums: BTreeSet::new(),
+            supported_aliases: BTreeSet::new(),
+            nullable_aliases: BTreeSet::new(),
+            alias_bodies: BTreeMap::new(),
+        };
+        let image = Ty::Media(baml_base::MediaKind::Image);
+        let image_swift = translate_ty(&image, &media_ctx).expect("media has a struct");
+        assert_eq!(
+            translate_ty(&Ty::Tuple(Box::new([image.clone(), int()])), &media_ctx),
+            Some(format!("({image_swift}, Swift.Int)"))
+        );
+        assert_eq!(
+            slot_expr(
+                &Ty::Tuple(Box::new([image, int()])),
+                &media_ctx,
+                &translate_ty::generic_param_slot
+            ),
+            Some(format!(
+                "BamlSlots.tuple(BamlSlot<{image_swift}>.own, BamlSlot<Swift.Int>.own)"
+            ))
+        );
+        assert_eq!(
+            slot(&Ty::Tuple(Box::new([int(), string_literal("a")]))).as_deref(),
+            Some("BamlSlots.tuple(BamlSlot<Swift.Int>.own, BamlSlot<Swift.String>.literal(\"a\"))")
+        );
+        assert_eq!(
+            slot(&Ty::Tuple(Box::new([string()]))).as_deref(),
+            Some("BamlSlots.tuple(BamlSlot<Swift.String>.own)")
+        );
+        let mut slots = vec![int(); 13];
+        slots.push(type_var());
+        assert_eq!(
+            slot(&Ty::Tuple(slots.into_boxed_slice())).as_deref(),
+            Some(
+                format!(
+                    "BamlSlots.tuple({}, BamlSlot<T>.own)",
+                    vec!["BamlSlot<Swift.Int>.own"; 13].join(", ")
+                )
+                .as_str()
+            )
+        );
+    }
+
+    fn type_var() -> Ty {
+        Ty::TypeVar(ParamTy::new(0, "T".into()))
+    }
+
+    fn class(name: &str, generic_params: Vec<&str>, properties: Vec<(&str, Ty)>) -> Symbol {
+        Symbol::Class(baml_sdkgen_types::Class {
+            name: user(name),
+            generic_params: generic_params.into_iter().map(Into::into).collect(),
+            docstring: None,
+            properties: properties
+                .into_iter()
+                .map(|(name, ty)| baml_sdkgen_types::ClassProperty {
+                    name: name.into(),
+                    docstring: None,
+                    ty,
+                })
+                .collect(),
+            static_methods: Vec::new(),
+            instance_methods: Vec::new(),
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
+            origin: origin(),
+        })
+    }
+
+    #[test]
+    fn tuple_signatures_are_native_tuples_at_every_arity() {
+        let pair = Ty::Tuple(Box::new([int(), string()]));
+        let single = Ty::Tuple(Box::new([string()]));
+        let wide = Ty::Tuple(vec![int(); 13].into_boxed_slice());
+        let pool = SymbolPool::from([
+            (
+                user("pair"),
+                function("pair", vec![("t", pair.clone())], pair),
+            ),
+            (
+                user("single"),
+                function("single", vec![("t", single.clone())], single),
+            ),
+            (
+                user("wide"),
+                function("wide", vec![("t", wide.clone())], wide),
+            ),
+        ]);
+        let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
+        let emitted: String = files.values().map(String::as_str).collect();
+        assert!(
+            emitted.contains(
+                "public static func pair(t: (Swift.Int, Swift.String), baml: Baml.BamlOptions = .init()) \
+                 throws -> (Swift.Int, Swift.String)"
+            ),
+            "{emitted}"
+        );
+        assert!(
+            emitted.contains(
+                "BamlArgument(\"t\", t, as: BamlSlots.tuple(BamlSlot<Swift.Int>.own, \
+                 BamlSlot<Swift.String>.own))"
+            ),
+            "{emitted}"
+        );
+        assert!(
+            emitted.contains(
+                "public static func single(t: BamlBridge.Tuple1<Swift.String>, baml: \
+                 Baml.BamlOptions = .init()) throws -> BamlBridge.Tuple1<Swift.String>"
+            ),
+            "{emitted}"
+        );
+        let ints = vec!["Swift.Int"; 13].join(", ");
+        assert!(
+            emitted.contains(&format!("public static func wide(t: ({ints}), ")),
+            "{emitted}"
+        );
+        // No generated tuple types, and nothing skipped.
+        assert!(!files.contains_key(&PathBuf::from("_BamlTuples.swift")));
+        assert!(!emitted.contains("struct Tuple"), "{emitted}");
+        let manifest = &files[&PathBuf::from("_BamlSkipped.swift")];
+        for name in ["pair", "single", "wide"] {
+            assert!(!manifest.contains(&format!("`user.{name}`")), "{manifest}");
+        }
+    }
+
+    #[test]
+    fn structs_holding_tuples_spell_their_equality_out() {
+        let pair = Ty::Tuple(Box::new([int(), string()]));
+        let pool = SymbolPool::from([
+            (
+                user("Holder"),
+                class(
+                    "Holder",
+                    Vec::new(),
+                    vec![("pair", pair.clone()), ("n", int()), ("pairs", list(pair))],
+                ),
+            ),
+            (
+                user("Single"),
+                class(
+                    "Single",
+                    Vec::new(),
+                    vec![("one", Ty::Tuple(Box::new([int()])))],
+                ),
+            ),
+        ]);
+        let emitted = emit(&pool);
+        // `Equatable` stays declared, its `==` written through each tuple
+        // field's slot.
+        for expected in [
+            "public struct Holder: Equatable, Sendable, BamlTyped, BamlDecodable {",
+            "public nonisolated static func == (lhs: Self, rhs: Self) -> Swift.Bool {",
+            "(BamlSlots.tuple(BamlSlot<Swift.Int>.own, BamlSlot<Swift.String>.own))\
+             ._bamlEqual(lhs.pair, rhs.pair)",
+            "&& lhs.n == rhs.n",
+            "&& (BamlSlots.list(BamlSlots.tuple(BamlSlot<Swift.Int>.own, \
+             BamlSlot<Swift.String>.own)))._bamlEqual(lhs.pairs, rhs.pairs)",
+        ] {
+            assert!(emitted.contains(expected), "{expected}\n{emitted}");
+        }
+        // A `Tuple1` of an `Equatable` slot is `Equatable` itself.
+        let single = emitted
+            .split_once("public struct Single:")
+            .map(|(_, rest)| rest)
+            .unwrap_or_default();
+        assert!(!single.contains("static func =="), "{single}");
+    }
+
+    #[test]
+    fn tuples_cannot_be_generic_arguments() {
+        let pair = Ty::Tuple(Box::new([int(), string()]));
+        let boxed = |arg: Ty| Ty::Class(user("Box"), Box::new([arg]));
+        let pool = SymbolPool::from([
+            (
+                user("Box"),
+                class("Box", vec!["T"], vec![("value", type_var())]),
+            ),
+            (
+                user("boxed_pair"),
+                function("boxed_pair", vec![("b", boxed(pair))], int()),
+            ),
+            (
+                user("boxed_single"),
+                function(
+                    "boxed_single",
+                    vec![("b", boxed(Ty::Tuple(Box::new([int()]))))],
+                    int(),
+                ),
+            ),
+        ]);
+        let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
+        let emitted: String = files.values().map(String::as_str).collect();
+        // A native tuple fills no `BamlCodableValue` parameter: the function
+        // is skipped like any other with an unrepresentable type...
+        let manifest = &files[&PathBuf::from("_BamlSkipped.swift")];
+        assert!(manifest.contains("`user.boxed_pair`"), "{manifest}");
+        // ...while a `Tuple1` of a conforming slot is one.
+        assert!(
+            emitted.contains("b: Baml.Box<BamlBridge.Tuple1<Swift.Int>>"),
+            "{emitted}"
+        );
+    }
+
+    #[test]
+    fn a_class_reached_through_a_tuple_slot_is_boxed() {
+        let node = Ty::Union(Box::new([Ty::Class(user("Node"), Box::new([])), null()]));
+        let pool = SymbolPool::from([(
+            user("Node"),
+            class(
+                "Node",
+                Vec::new(),
+                vec![("next", Ty::Tuple(Box::new([int(), node])))],
+            ),
+        )]);
+        let emitted = emit(&pool);
+        assert!(
+            emitted.contains("@BamlIndirect public var next: (Swift.Int, Baml.Node?)"),
+            "{emitted}"
+        );
     }
 }

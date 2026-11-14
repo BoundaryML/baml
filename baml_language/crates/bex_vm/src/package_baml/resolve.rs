@@ -460,9 +460,16 @@ impl<'vm> ImplResolver<'vm> {
             ));
         }
         let kind = self.structural_default(interface, args)?;
-        if kind == StructuralInterface::Hash
-            && !self.hash_eligible(self_ty, interface, &mut Vec::new(), &mut Vec::new())
-        {
+        let eligible = match kind {
+            StructuralInterface::Hash => {
+                self.hash_eligible(self_ty, interface, &mut Vec::new(), &mut Vec::new())
+            }
+            StructuralInterface::Compare => {
+                self.tuple_compare_eligible(self_ty, interface, &mut Vec::new())
+            }
+            _ => true,
+        };
+        if !eligible {
             return None;
         }
         Some((
@@ -581,6 +588,23 @@ impl<'vm> ImplResolver<'vm> {
         };
         active.pop();
         eligible
+    }
+
+    /// The compiler-derived tuple `Compare` witness: a tuple whose every slot
+    /// type implements `Compare` (explicitly, or as a nested eligible tuple).
+    /// No other receiver has a structural `Compare`.
+    fn tuple_compare_eligible(
+        self,
+        ty: &RealizedTy,
+        compare: TypeHead,
+        stack: &mut Vec<Obligation>,
+    ) -> bool {
+        match &*concrete_base(ty) {
+            RealizedTy::Tuple(slots) => slots
+                .iter()
+                .all(|slot| self.prove(slot, compare, &[], &[], stack)),
+            _ => false,
+        }
     }
 
     fn interface_requires_hash(self, head: TypeHead, hash: TypeHead) -> bool {
@@ -963,9 +987,14 @@ impl<'vm> ImplResolver<'vm> {
                 requested_assoc.is_empty()
                     && self
                         .structural_default(iface, requested_args)
-                        .is_some_and(|kind| {
-                            kind != StructuralInterface::Hash
-                                || self.hash_eligible(concrete_ty, iface, &mut Vec::new(), stack)
+                        .is_some_and(|kind| match kind {
+                            StructuralInterface::Hash => {
+                                self.hash_eligible(concrete_ty, iface, &mut Vec::new(), stack)
+                            }
+                            StructuralInterface::Compare => {
+                                self.tuple_compare_eligible(concrete_ty, iface, stack)
+                            }
+                            _ => true,
                         })
             }
         };

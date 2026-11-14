@@ -31,6 +31,16 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
+  × a destructure started with `const` binds only with `const`
+    ╭─[declarations.baml:18:14]
+ 18 │ const ALIAS: let OTHER = 4;
+    · ──┬──        ─┬─
+    ·   │           ╰── write `const` here, or start the destructure with `let` to mix introducers
+    ·   ╰── the destructure starts with `const` here
+    ╰────
+
+  [hir] E0010
+
   × invalid top-level `const`: `const … else` needs a body to leave; a global variable's initializer must produce its value
     ╭─[declarations.baml:21:1]
  21 │ const MAYBE: int = 5 else { 6 };

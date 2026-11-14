@@ -491,6 +491,7 @@ export function _finishHostCallExecution(_execution: object): void { }
 function releaseControlValue(value: baml_bridge.cffi.v1.IBamlOutboundValue): void {
     if (value.handleValue && !isHostValueHandleType(value.handleValue.handleType ?? 0)) releaseWasmHandle(BigInt(value.handleValue.key!.toString()));
     for (const item of value.listValue?.items ?? []) releaseControlValue(item);
+    for (const item of value.tupleValue?.items ?? []) releaseControlValue(item);
     for (const item of value.mapValue?.entries ?? value.classValue?.fields ?? []) if (item.value) releaseControlValue(item.value);
     if (value.unionVariantValue?.value) releaseControlValue(value.unionVariantValue.value);
 }

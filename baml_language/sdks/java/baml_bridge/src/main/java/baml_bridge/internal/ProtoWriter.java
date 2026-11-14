@@ -340,6 +340,13 @@ public final class ProtoWriter {
         if (returnedHandle != null) {
             return encodeInboundValue(returnedHandle, contextualType, nesting);
         }
+        // A generated tuple record (or a received tuple, which keeps its
+        // carried type), and otherwise the tuple a plain list stands in for
+        // where the slot supplies one.
+        TypeRegistry.TupleWire tupleRecord = TypeRegistry.tupleWire(value);
+        BamlType listTuple = tupleRecord == null && value instanceof List<?> items
+                ? tupleSlot(contextualType, items.size())
+                : null;
         // bool must precede the integer arms (mirrors Python's isinstance order).
         if (value instanceof Boolean b) {
             w.writeBool(IV_BOOL, b);
@@ -361,6 +368,22 @@ public final class ProtoWriter {
             w.writeString(IV_STRING, s);
         } else if (value instanceof byte[] bytes) {
             w.writeBytes(IV_UINT8ARRAY, bytes);
+        } else if (tupleRecord != null) {
+            // A generated tuple record crosses as a list stating the tuple
+            // identity its class was registered for, never the slot's: like a
+            // class instance, it is the type it is, and the engine judges it
+            // against the slot. Each item goes under its own slot type.
+            w.writeMessage(
+                    IV_LIST, encodeTupleItems(tupleRecord.items, tupleRecord.type, enterLevel(nesting)));
+            statedType = tupleRecord.type;
+        } else if (listTuple != null) {
+            // A plain list stands in for a tuple only where the slot supplies
+            // the tuple's shape: exactly its arity, each item converted against
+            // its own slot. It states that tuple type, so the engine builds a
+            // tuple of it (a list states no identity a tuple could be read from).
+            List<?> list = (List<?>) value;
+            w.writeMessage(IV_LIST, encodeTupleItems(list.toArray(), listTuple, enterLevel(nesting)));
+            statedType = isExact(listTuple) ? listTuple : stateTupleNatural(list, listTuple, nesting);
         } else if (value instanceof List<?> list) {
             BamlType slot = containerSlot(contextualType, BamlType.Kind.LIST, list.isEmpty());
             w.writeMessage(
@@ -559,6 +582,83 @@ public final class ProtoWriter {
     }
 
     /**
+     * The tuple type a plain list of {@code size} items is written as under
+     * {@code contextualType}, or {@code null} when the slot makes it a list.
+     * Lists and tuples share a shape: a member that is a list type keeps the
+     * value the list it naturally is, as does an open member (a type variable,
+     * {@code unknown}, an interface) that could take it as it is. Otherwise the
+     * one tuple member of exactly that arity is the shape; several are
+     * ambiguous, and tuple members of other arities alone refuse the list, since
+     * no conversion pads or truncates a tuple.
+     */
+    private static BamlType tupleSlot(BamlType contextualType, int size) {
+        if (contextualType == null) {
+            return null;
+        }
+        java.util.LinkedHashSet<BamlType> tuples = new java.util.LinkedHashSet<>();
+        boolean open = collectMembers(contextualType, BamlType.Kind.TUPLE, tuples, new java.util.HashSet<>());
+        if (tuples.isEmpty()) {
+            return null;
+        }
+        java.util.LinkedHashSet<BamlType> lists = new java.util.LinkedHashSet<>();
+        collectMembers(contextualType, BamlType.Kind.LIST, lists, new java.util.HashSet<>());
+        if (!lists.isEmpty() || open) {
+            return null;
+        }
+        List<BamlType> fitting = tuples.stream()
+                .filter(tuple -> tuple.tupleItems().size() == size)
+                .toList();
+        if (fitting.size() == 1) {
+            return fitting.get(0);
+        }
+        if (fitting.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "a list of " + size + " items is not a value of " + contextualType
+                            + ": a tuple takes exactly one item per slot");
+        }
+        throw new IllegalArgumentException(
+                "a list of " + size + " items is ambiguous under " + contextualType
+                        + ": it could be each of " + fitting + "; pass a generated tuple record");
+    }
+
+    /**
+     * Encode a tuple's items as the {@code InboundListValue} a tuple crosses
+     * as: one entry per slot, in order, each under its own slot type (a null
+     * item keeps its position). {@code nesting} already counts the tuple.
+     */
+    private static byte[] encodeTupleItems(Object[] items, BamlType tupleType, int nesting) {
+        List<BamlType> slots = tupleType.tupleItems();
+        if (items.length != slots.size()) {
+            throw new IllegalArgumentException(
+                    "a " + tupleType + " has " + slots.size() + " slots, not " + items.length);
+        }
+        WireWriter w = new WireWriter();
+        for (int i = 0; i < items.length; i++) {
+            w.writeMessage(LIST_VALUES, encodeInboundValue(items[i], slots.get(i), nesting));
+        }
+        return w.toByteArray();
+    }
+
+    /**
+     * The tuple type a list states under a tuple slot that leaves some slot
+     * open (a type variable): each exact slot as declared, each open one as
+     * its item's own type, so the engine still receives a tuple of the slot's
+     * arity whose type it can judge.
+     */
+    private static BamlType stateTupleNatural(List<?> items, BamlType tupleType, int nesting) {
+        List<BamlType> slots = tupleType.tupleItems();
+        BamlType[] stated = new BamlType[slots.size()];
+        for (int i = 0; i < stated.length; i++) {
+            BamlType slot = slots.get(i);
+            Object item = items.get(i);
+            stated[i] = isExact(slot)
+                    ? slot
+                    : item == null ? BamlType.NULL : stateNatural(naturalType(item, enterLevel(nesting)), slot);
+        }
+        return BamlType.tuple(stated);
+    }
+
+    /**
      * Gather the members of {@code type} that have the given {@code shape} into
      * {@code shaped}, flattening optionals, unions and recursive aliases (each
      * alias read once, so a self-reference outside a container ends). Returns
@@ -586,8 +686,8 @@ public final class ProtoWriter {
             case TYPE_ALIAS -> seenAliases.add(type)
                     && collectMembers(TypeRegistry.aliasBody(type), shape, shaped, seenAliases);
             case TYPEVAR, UNKNOWN, INTERFACE -> true;
-            case PRIMITIVE, CLASS, ENUM, LIST, MAP, LITERAL, FUNCTION, ENUM_VARIANT, MEDIA, NEVER,
-                    PROMPT_AST, TYPE, OPAQUE -> false;
+            case PRIMITIVE, CLASS, ENUM, LIST, MAP, TUPLE, LITERAL, FUNCTION, ENUM_VARIANT, MEDIA,
+                    NEVER, PROMPT_AST, TYPE, OPAQUE -> false;
         };
     }
 
@@ -629,6 +729,7 @@ public final class ProtoWriter {
             case LIST -> mentionsHole(type.listItem());
             case MAP -> mentionsHole(type.mapKey()) || mentionsHole(type.mapValue());
             case UNION -> type.unionOptions().stream().anyMatch(ProtoWriter::mentionsHole);
+            case TUPLE -> type.tupleItems().stream().anyMatch(ProtoWriter::mentionsHole);
             case CLASS -> type.classTypeArgs().stream().anyMatch(ProtoWriter::mentionsHole);
             case PRIMITIVE, ENUM, LITERAL, TYPE_ALIAS, FUNCTION, ENUM_VARIANT, MEDIA, INTERFACE,
                     PROMPT_AST, TYPE, TYPEVAR, UNKNOWN -> false;
@@ -646,6 +747,8 @@ public final class ProtoWriter {
             case MAP -> BamlType.map(holesToUnknown(type.mapKey()), holesToUnknown(type.mapValue()));
             case UNION -> BamlType.union(
                     type.unionOptions().stream().map(ProtoWriter::holesToUnknown).toArray(BamlType[]::new));
+            case TUPLE -> BamlType.tuple(
+                    type.tupleItems().stream().map(ProtoWriter::holesToUnknown).toArray(BamlType[]::new));
             case CLASS -> BamlType.classByFqn(
                     type.fqn(),
                     type.classTypeArgs().stream().map(ProtoWriter::holesToUnknown).toArray(BamlType[]::new));
@@ -665,6 +768,8 @@ public final class ProtoWriter {
                 yield key != null ? key : firstTypeVar(type.mapValue());
             }
             case UNION -> type.unionOptions().stream().map(ProtoWriter::firstTypeVar)
+                    .filter(java.util.Objects::nonNull).findFirst().orElse(null);
+            case TUPLE -> type.tupleItems().stream().map(ProtoWriter::firstTypeVar)
                     .filter(java.util.Objects::nonNull).findFirst().orElse(null);
             case CLASS -> type.classTypeArgs().stream().map(ProtoWriter::firstTypeVar)
                     .filter(java.util.Objects::nonNull).findFirst().orElse(null);
@@ -706,6 +811,12 @@ public final class ProtoWriter {
         }
         if (value instanceof byte[]) {
             return BamlType.BYTES;
+        }
+        // A tuple record is the tuple identity it was registered for, whatever
+        // its slots hold.
+        TypeRegistry.TupleWire tuple = TypeRegistry.tupleWire(value);
+        if (tuple != null) {
+            return tuple.type;
         }
         if (value instanceof List<?> list) {
             return BamlType.list(naturalElementType(list, enterLevel(nesting)));
@@ -828,6 +939,14 @@ public final class ProtoWriter {
                 if (natural.kind() == BamlType.Kind.MAP) {
                     unify(desc.mapKey(), natural.mapKey(), bindings);
                     unify(desc.mapValue(), natural.mapValue(), bindings);
+                }
+            }
+            case TUPLE -> {
+                if (natural.kind() == BamlType.Kind.TUPLE
+                        && desc.tupleItems().size() == natural.tupleItems().size()) {
+                    for (int i = 0; i < desc.tupleItems().size(); i++) {
+                        unify(desc.tupleItems().get(i), natural.tupleItems().get(i), bindings);
+                    }
                 }
             }
             case CLASS -> {

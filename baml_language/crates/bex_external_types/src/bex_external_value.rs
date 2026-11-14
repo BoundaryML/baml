@@ -202,6 +202,17 @@ pub enum BexExternalValue {
         entries: IndexMap<String, BexExternalValue>,
     },
 
+    /// Owned tuple with its slot types.
+    Tuple {
+        /// The tuple's slot types, one per item (`int | string` for the first
+        /// slot of an `(int | string, bool)`). Inbound, each item must be a
+        /// member of its slot type; the tuple's type is the tuple of them,
+        /// never one inferred from the items.
+        element_types: Vec<WireTy>,
+        /// The tuple elements, in order.
+        items: Vec<BexExternalValue>,
+    },
+
     /// Class instance with class name and field values.
     Instance {
         /// The class, as a host spells it (`user.Reading`, `baml.errors.Io`).
@@ -291,6 +302,14 @@ impl std::fmt::Debug for BexExternalValue {
                 .field("element_type", element_type)
                 .field("items", items)
                 .finish(),
+            Self::Tuple {
+                element_types,
+                items,
+            } => f
+                .debug_struct("Tuple")
+                .field("element_types", element_types)
+                .field("items", items)
+                .finish(),
             Self::Map {
                 key_type,
                 value_type,
@@ -365,6 +384,16 @@ impl PartialEq for BexExternalValue {
                 },
                 Self::Array {
                     element_type: et2,
+                    items: i2,
+                },
+            ) => et1 == et2 && i1 == i2,
+            (
+                Self::Tuple {
+                    element_types: et1,
+                    items: i1,
+                },
+                Self::Tuple {
+                    element_types: et2,
                     items: i2,
                 },
             ) => et1 == et2 && i1 == i2,
@@ -523,6 +552,7 @@ impl BexExternalValue {
             BexExternalValue::String(_) => "string",
             BexExternalValue::Array { .. } => "array",
             BexExternalValue::Map { .. } => "map",
+            BexExternalValue::Tuple { .. } => "tuple",
             BexExternalValue::Instance { .. } => "instance",
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",
@@ -550,6 +580,13 @@ impl BexExternalValue {
                 items,
             } => BexExternalValue::Array {
                 element_type,
+                items: items.into_iter().map(Self::into_host_value).collect(),
+            },
+            BexExternalValue::Tuple {
+                element_types,
+                items,
+            } => BexExternalValue::Tuple {
+                element_types,
                 items: items.into_iter().map(Self::into_host_value).collect(),
             },
             BexExternalValue::Map {
@@ -651,6 +688,14 @@ impl BexExternalValue {
             BexExternalValue::Array { items, .. } => {
                 let inner: Vec<String> = items.iter().map(Self::render_readable).collect();
                 format!("[{}]", inner.join(", "))
+            }
+            BexExternalValue::Tuple { items, .. } => {
+                let inner: Vec<String> = items.iter().map(Self::render_readable).collect();
+                if inner.len() == 1 {
+                    format!("({},)", inner[0])
+                } else {
+                    format!("({})", inner.join(", "))
+                }
             }
             BexExternalValue::Map { entries, .. } => {
                 let inner: Vec<String> = entries

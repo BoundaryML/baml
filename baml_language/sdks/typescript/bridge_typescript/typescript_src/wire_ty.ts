@@ -46,7 +46,8 @@ export type BamlTypeToken =
     | { list: BamlTypeToken }
     | { map: [BamlTypeToken, BamlTypeToken] }
     | { optional: BamlTypeToken }
-    | { union: BamlTypeToken[] };
+    | { union: BamlTypeToken[] }
+    | { tuple: BamlTypeToken[] };
 
 export interface BamlTypeMetadata {
     alias?: string;
@@ -98,6 +99,7 @@ export function liveKeys(ty: Ty | null | undefined): HandleKey[] {
         visit(node.map?.value);
         visit(node.optional?.inner);
         node.union?.options?.forEach(visit);
+        node.tuple?.items?.forEach(visit);
         node.function?.params?.forEach((param) => visit(param.ty));
         visit(node.function?.ret);
         visit(node.function?.throws);
@@ -246,6 +248,11 @@ export function lowerTypeToWireTy(token: BamlTypeToken): baml_bridge.cffi.v1.IBa
             if (!Array.isArray(shape.union)) return unsupported(token);
             return { union: { options: (shape.union as BamlTypeToken[]).map(lowerTypeToWireTy) } };
         }
+        if ('tuple' in shape) {
+            // Slots keep their order and repeats; a tuple has at least one.
+            if (!Array.isArray(shape.tuple) || shape.tuple.length === 0) return unsupported(token);
+            return { tuple: { items: (shape.tuple as BamlTypeToken[]).map(lowerTypeToWireTy) } };
+        }
         const fqn = getTypeMap().jsTypeToBamlType(token);
         if (fqn) return { enum: { name: fqn } };
     }
@@ -280,6 +287,11 @@ export function outboundTyToBamlTypeToken(
     if (ty.optional) {
         const inner = outboundTyToBamlTypeToken(ty.optional.inner);
         return inner === undefined ? undefined : { optional: inner };
+    }
+    if (ty.tuple) {
+        const items = (ty.tuple.items ?? []).map(outboundTyToBamlTypeToken);
+        if (items.length === 0 || items.some((item) => item === undefined)) return undefined;
+        return { tuple: items as BamlTypeToken[] };
     }
     if (ty.classTy) {
         const token = resolveNamedToken(ty.classTy.name ?? '');

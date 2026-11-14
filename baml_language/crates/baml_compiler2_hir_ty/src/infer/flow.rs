@@ -169,7 +169,7 @@ impl InferenceContext<'_> {
         });
         let (rhs_ty, right) = self.check_truthy_operand(body, rhs, true, position);
         let taken_flow = std::mem::replace(&mut self.flow, skipped_flow);
-        let reassigned = self.assigned_bindings(body, rhs);
+        let reassigned = self.assigned_bindings(body, rhs, None);
         for binding in &reassigned {
             match (taken_flow.get(binding), self.flow.get(binding)) {
                 (Some(taken), Some(skipped)) if taken == skipped => {}
@@ -421,10 +421,18 @@ impl InferenceContext<'_> {
     }
 
     /// Every narrowable binding the subtree assigns - the loop havoc set.
-    pub(super) fn assigned_bindings(&self, body: &ExprBody, root: ExprId) -> FxHashSet<BindingId> {
+    /// `after` is a C-style loop's update slot (`for (…; …; i += 1)`), which
+    /// runs before every later iteration just like the body.
+    pub(super) fn assigned_bindings(
+        &self,
+        body: &ExprBody,
+        root: ExprId,
+        after: Option<StmtId>,
+    ) -> FxHashSet<BindingId> {
         use baml_compiler2_ast::{Stmt, traverse::BodyNode};
         let mut out = FxHashSet::default();
         let mut stack = vec![BodyNode::Expr(root)];
+        stack.extend(after.map(BodyNode::Stmt));
         while let Some(node) = stack.pop() {
             let mut children = Vec::new();
             match node {

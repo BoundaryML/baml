@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Recursive type aliases through tuples. Every tuple element is required, so
+// a recursion through a tuple needs a base case (`null`, or an empty list or
+// map) somewhere it can actually stop.
+
+// Valid: `null` ends the chain.
+type Chain = (int, Chain?);
+
+type ChainOrNull = (int, ChainOrNull) | null;
+
+// Valid: an empty list ends the recursion.
+type Tree = (int, Tree[]);
+
+// Invalid: no value of this type is finite.
+type Endless = (int, Endless);
+
+// Invalid: the nullable sibling does not terminate the required element.
+type Bad = (Bad, int?);
+
+// Invalid: the list slot does not supply the required first element.
+type HeadFirst = (HeadFirst, HeadFirst[]);
+
+// Invalid, mutually: each needs the other.
+type Ping = (int, Pong);
+
+type Pong = (Ping, string);
+
+// Valid, mutually: `Back` can be `null`.
+type There = (int, Back);
+
+type Back = There | null;

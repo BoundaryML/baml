@@ -333,6 +333,19 @@ func equalBAMLType(left, right *cffi.BamlTy, allowTopLevelOptional bool) bool {
 		rightValue, ok := right.Ty.(*cffi.BamlTy_Map)
 		return ok && leftValue.Map != nil && rightValue.Map != nil &&
 			equalBAMLType(leftValue.Map.Key, rightValue.Map.Key, false) && equalBAMLType(leftValue.Map.Value, rightValue.Map.Value, false)
+	case *cffi.BamlTy_Tuple:
+		// Slots compare in order; a union inside a slot still compares
+		// independently of its member order.
+		rightValue, ok := right.Ty.(*cffi.BamlTy_Tuple)
+		if !ok || leftValue.Tuple == nil || rightValue.Tuple == nil || len(leftValue.Tuple.Items) != len(rightValue.Tuple.Items) {
+			return false
+		}
+		for index, item := range leftValue.Tuple.Items {
+			if !equalBAMLType(item, rightValue.Tuple.Items[index], false) {
+				return false
+			}
+		}
+		return true
 	default:
 		// Optionality is semantically significant at every nested position:
 		// list<int> must not compare equal to list<int?>. Selected union arms
@@ -482,6 +495,11 @@ func validateBAMLTypeAt(value *cffi.BamlTy, position typePosition, depth int) er
 			return fmt.Errorf("union descriptor has no options")
 		}
 		return validateMany(item.Union.Options)
+	case *cffi.BamlTy_Tuple:
+		if item.Tuple == nil || len(item.Tuple.Items) == 0 {
+			return fmt.Errorf("tuple descriptor has no items")
+		}
+		return validateMany(item.Tuple.Items)
 	case *cffi.BamlTy_Literal:
 		if item.Literal == nil || item.Literal.Literal == nil {
 			return fmt.Errorf("literal descriptor has no value")

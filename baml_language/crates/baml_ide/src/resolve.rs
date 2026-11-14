@@ -521,6 +521,82 @@ pub fn receiver_at_dot<'db>(
         .map(|(owner, ty, _)| (owner, ty))
 }
 
+/// Calls `visit` with every body that can own code at `offset`, together
+/// with its source map and inference — the bodies [`receiver_at_dot`]
+/// searches, each visited once.
+fn visit_bodies_at<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    offset: TextSize,
+    mut visit: impl FnMut(
+        baml_compiler2_hir::body::BodyOwnerId<'db>,
+        &baml_compiler2_ast::ExprBody,
+        &baml_compiler2_ast::AstSourceMap,
+        &'db baml_compiler2_hir_ty::infer::InferenceResult<'db>,
+    ),
+) {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let mut seen: Vec<baml_compiler2_hir::body::BodyOwnerId<'db>> = Vec::new();
+    for scope_id in scope_candidates_at(db, file, index, offset) {
+        let Some(owner_scope) = enclosing_body_scope(index, scope_id) else {
+            continue;
+        };
+        let Some(owner) = scope_body_owner(db, index, owner_scope) else {
+            continue;
+        };
+        if seen.contains(&owner) {
+            continue;
+        }
+        seen.push(owner);
+        let body = baml_compiler2_hir::body::body(db, owner);
+        let (Some(expr_body), Some(source_map), Some(inference)) = (
+            body.expr_body(),
+            baml_compiler2_hir::body::body_source_map(db, owner),
+            baml_compiler2_hir_ty::ide::infer_for_scope(
+                db,
+                index.scope_ids[owner_scope.index() as usize],
+            ),
+        ) else {
+            continue;
+        };
+        visit(owner, expr_body, &source_map, inference);
+    }
+}
+
+pub(crate) fn tuple_slots(db: &dyn baml_compiler2_hir::Db, ty: &baml_type::Ty) -> Option<Vec<baml_type::Ty>> {
+    let mut ty = ty.clone();
+    for _ in 0..32 {
+        match ty {
+            baml_type::Ty::Tuple(elements) => return Some(elements.into_vec()),
+            baml_type::Ty::TypeAlias(ref name) => {
+                let alias = baml_compiler2_hir_ty::layout::alias_ref_of(db, name)?;
+                ty = baml_compiler2_hir_ty::layout::alias_value(db, alias).clone();
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
+pub struct TupleAccess { pub access: String, pub ty: baml_type::Ty }
+
+pub fn tuple_access_at(db: &dyn baml_compiler2_hir::Db, file: SourceFile, offset: TextSize) -> Option<TupleAccess> {
+    let mut best: Option<(TextSize, TupleAccess)> = None;
+    visit_bodies_at(db, file, offset, |_, body, source_map, inference| {
+        for (id, expr) in body.exprs.iter() {
+            let (Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. }) = expr else { continue };
+            if member.as_str().parse::<u32>().is_err() { continue; }
+            let Some(span) = source_map.member_name_span(id) else { continue };
+            if !span.contains(offset) { continue; }
+            let Some(ty) = inference.type_of_expr.get(&id).filter(|ty| !matches!(ty, baml_type::Ty::Error)) else { continue };
+            if best.as_ref().is_none_or(|(len, _)| span.len() < *len) {
+                best = Some((span.len(), TupleAccess { access: body.display_expr(id), ty: ty.clone() }));
+            }
+        }
+    });
+    best.map(|(_, access)| access)
+}
+
 /// The type declaration a qualifier path names, when it names one:
 /// `baml.iter.Range`, `root.Point`, or a builtin alias like `int` (whose
 /// declaration is the companion class the language defines it by).
@@ -1293,6 +1369,13 @@ fn operator_target_at(
 
     let (_, dispatch, lhs, rhs) = claim?;
     let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
+    // Indexing a tuple selects a slot; it dispatches no method, and a slot
+    // has no declaration to name.
+    if dispatch == ops::INDEX_DISPATCH
+        && tuple_slots(db, inference.type_of_expr.get(&lhs)?).is_some()
+    {
+        return None;
+    }
     let lhs_ty = baml_type::interned::Ty::from_plain(inference.type_of_expr.get(&lhs)?);
     let rhs_ty = rhs
         .and_then(|rhs| inference.type_of_expr.get(&rhs))

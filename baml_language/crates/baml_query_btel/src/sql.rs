@@ -156,6 +156,7 @@ pub fn translate(sql: &str) -> Result<Translation, SqlError> {
 }
 
 fn parse(sql: &str) -> Result<Vec<Statement>, SqlError> {
+    let sql = &*slot_dots(sql);
     match Parser::parse_sql(&GenericDialect {}, sql) {
         Ok(statements) => Ok(statements),
         Err(error) => {
@@ -174,6 +175,75 @@ fn parse(sql: &str) -> Result<Vec<Statement>, SqlError> {
             Err(SqlError(format!("SQL syntax: {error}")))
         }
     }
+}
+
+/// `output_value.0` as `output_value[0]`: a tuple slot spelled the way BAML
+/// spells it, a dot and a decimal slot number, is the same integer path
+/// segment as its bracket form. SQL lexes `.0` as a number, and `.0.1` as two
+/// (`.0` and `.1`), so the rewrite is of tokens: a number that is a dot and
+/// digits, written right after a name, `]` or `)`. Everything else, string
+/// literals and real numbers (`x = 0.1`) included, is left as written.
+fn slot_dots(sql: &str) -> std::borrow::Cow<'_, str> {
+    use sqlparser::tokenizer::{Token, Tokenizer};
+    let Ok(tokens) = Tokenizer::new(&GenericDialect {}, sql).tokenize_with_location() else {
+        // The parser reports what the tokenizer could not read.
+        return sql.into();
+    };
+    let line_starts: Vec<usize> = std::iter::once(0)
+        .chain(sql.match_indices('\n').map(|(at, _)| at + 1))
+        .collect();
+    let offset = |line: u64, column: u64| -> Option<usize> {
+        let start = *line_starts.get(usize::try_from(line).ok()?.checked_sub(1)?)?;
+        let skip = usize::try_from(column).ok()?.checked_sub(1)?;
+        Some(match sql[start..].char_indices().nth(skip) {
+            Some((at, _)) => start + at,
+            None => sql.len(),
+        })
+    };
+    let mut out = String::new();
+    let mut copied = 0;
+    // Whether the token before is a slot number, as `.0` is in `.0.1`.
+    let mut after_slot = false;
+    for pair in tokens.windows(2) {
+        let [before, token] = pair else {
+            unreachable!("windows of two")
+        };
+        let before_slot = std::mem::take(&mut after_slot);
+        let Token::Number(number, false) = &token.token else {
+            continue;
+        };
+        let Some(slot) = number.strip_prefix('.') else {
+            continue;
+        };
+        let decimal = !slot.is_empty()
+            && slot.bytes().all(|b| b.is_ascii_digit())
+            && (slot == "0" || !slot.starts_with('0'));
+        let after_operand = before_slot
+            || matches!(
+                before.token,
+                Token::Word(_) | Token::RBracket | Token::RParen
+            );
+        if !decimal || !after_operand {
+            continue;
+        }
+        let Some(at) = offset(token.span.start.line, token.span.start.column) else {
+            continue;
+        };
+        if sql.get(at..at + number.len()) != Some(number.as_str()) {
+            continue;
+        }
+        out.push_str(&sql[copied..at]);
+        out.push('[');
+        out.push_str(slot);
+        out.push(']');
+        copied = at + number.len();
+        after_slot = true;
+    }
+    if out.is_empty() {
+        return sql.into();
+    }
+    out.push_str(&sql[copied..]);
+    out.into()
 }
 
 /// Wrap a translated set operation, whose branches kept value handles, so

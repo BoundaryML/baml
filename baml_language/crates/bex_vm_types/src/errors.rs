@@ -326,6 +326,12 @@ pub enum VmInternalError {
     #[error("virtual call could not resolve interface method `{method}`")]
     UnresolvedVirtualCall { method: String },
 
+    /// `AllocTuple` was handed a type operand that is not a tuple type of its
+    /// arity. The compiler loads the tuple's own instantiated type before
+    /// every allocation, so this is a compiler/VM inconsistency.
+    #[error("tuple of {arity} elements allocated at the type `{ty}`")]
+    TupleTypeMismatch { arity: usize, ty: String },
+
     /// An impl rule's `interface_head` does not point at an `Object::Interface`.
     /// The head is bound to the rule's interface declaration at load/graft, so
     /// any other object kind is a corrupt or stale rule — never "no interface".

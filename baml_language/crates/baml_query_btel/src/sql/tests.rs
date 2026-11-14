@@ -525,3 +525,46 @@ fn recursive_ctes_walk_span_trees_with_values() {
     // A non-recursive CTE in a WITH RECURSIVE clause translates as usual.
     ok("WITH RECURSIVE x AS (SELECT span_id FROM spans) SELECT * FROM x");
 }
+
+/// `output_value.0` is the tuple slot `output_value[0]`: the same navigation,
+/// chained (`.0.1` lexes as two numbers), mixed with brackets, and past any
+/// arity, which is answered when read rather than here.
+#[test]
+fn dotted_slot_numbers_navigate_as_bracket_indices() {
+    for (dotted, bracketed) in [
+        ("output_value.0", "output_value[0]"),
+        ("output_value.0.1", "output_value[0][1]"),
+        ("output_value.10.2.0", "output_value[10][2][0]"),
+        ("output_value[0].1", "output_value[0][1]"),
+        ("output_value.0['name']", "output_value[0]['name']"),
+        ("output_value['pair'].1", "output_value['pair'][1]"),
+        ("c.input_args.0.1", "c.input_args[0][1]"),
+        ("output_value.7", "output_value[7]"),
+    ] {
+        let from = |path: &str| {
+            ok(&format!(
+                "SELECT {path} AS v FROM spans c WHERE {path} = 1 AND {path} IS NOT NULL"
+            ))
+            .sql
+        };
+        assert_eq!(from(dotted), from(bracketed), "{dotted}");
+    }
+    let t = ok("SELECT output_value.0.1 AS v FROM spans");
+    assert!(
+        t.sql.contains("__btel_nav(output_value, 0, 1)"),
+        "{}",
+        t.sql
+    );
+}
+
+/// Only a dot and decimal digits right after a value is a slot: real numbers,
+/// spaced dots, string contents and malformed slot numbers are left as written.
+#[test]
+fn numbers_and_strings_are_not_slot_numbers() {
+    let t = ok("SELECT output_value AS v FROM spans WHERE 0.1 < 1 AND span_name <> 'a.0'");
+    assert!(t.sql.contains("0.1"), "{}", t.sql);
+    assert!(t.sql.contains("'a.0'"), "{}", t.sql);
+    assert!(!t.sql.contains("__btel_nav"), "{}", t.sql);
+    assert!(fails("SELECT output_value.01 FROM spans").contains("syntax"));
+    assert!(fails("SELECT output_value.1e0 FROM spans").contains("syntax"));
+}

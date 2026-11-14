@@ -20,6 +20,7 @@ union_printable!(AnyType {
     Path,
     Literal,
     Paren,
+    Tuple,
     Function,
     Optional,
     Array,
@@ -36,7 +37,7 @@ pub(crate) fn multi_line_is_indented(tree: &FileTree, ty: AnyType) -> bool {
         AnyType::Union(_) | AnyType::Function(_) => true,
         AnyType::Optional(optional) => multi_line_is_indented(tree, tree.get(optional).inner),
         AnyType::Array(array) => multi_line_is_indented(tree, tree.get(array).inner),
-        AnyType::Paren(_) | AnyType::Literal(_) | AnyType::Qualified(_) => false,
+        AnyType::Tuple(_) | AnyType::Paren(_) | AnyType::Literal(_) | AnyType::Qualified(_) => false,
         AnyType::Bogus(_) => unreachable!("the formatter prints only error-free trees"),
     }
 }

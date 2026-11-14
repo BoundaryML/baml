@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0004
+
+  × `(int, uint8array)` does not implement `Compare`, so it cannot be ordered with `<`
+   ╭─[tuple_compare.baml:5:5]
+ 5 │     a < b
+   ·     ─────
+   ╰────
+
+  [type] E0004
+
+  × `(int, (string, uint8array))` does not implement `Compare`, so it cannot be ordered with `>=`
+    ╭─[tuple_compare.baml:10:5]
+ 10 │     a >= b
+    ·     ──────
+    ╰────
+
+  [type] E0004
+
+  × `(int | string, int)` does not implement `Compare`, so it cannot be ordered with `<=`
+    ╭─[tuple_compare.baml:15:5]
+ 15 │     a <= b
+    ·     ──────
+    ╰────
+
+  [type] E0001
+
+  × type `(int, uint8array)` does not implement interface `baml.ops.Compare`
+    ╭─[tuple_compare.baml:23:5]
+ 23 │     needs_compare(x)
+    ·     ────────────────
+    ╰────
+
+  [type] E0004
+
+  × `(A, int)` does not implement `Compare`, so it cannot be ordered with `>`
+    ╭─[tuple_compare.baml:28:5]
+ 28 │     a > b
+    ·     ─────
+    ╰────
+
+  [type] E0007
+
+  × type `(NoOrder,)` has no member `cmp`
+    ╭─[tuple_compare.baml:36:5]
+ 36 │     a.cmp(b)
+    ·     ────────
+    ╰────

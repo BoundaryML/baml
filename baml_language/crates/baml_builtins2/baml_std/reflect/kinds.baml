@@ -451,3 +451,89 @@ class Function {
         $rust_function
     }
 }
+
+/// A tuple-kind view of a `type` value. Users never construct this class.
+///
+/// Reflection is the only way to name the zero-length tuple: BAML has no
+/// `()` syntax for its type or its value (`null` is the unit value). Its type
+/// renders as `()` for display only, and `to_baml` spells it the same way.
+class Tuple {
+    /// The wrapped `type` value. Private by invariant: reflection natives are
+    /// its only readers, and each kind method panics if the held type no longer
+    /// classifies as this view's kind.
+    _ty: root.Type,
+
+    /// Constructs the tuple type whose slots are `element_types`, in order.
+    ///
+    /// One element type gives the singleton tuple `(T,)`, never `T` itself,
+    /// and no element types give the zero-length tuple type, rendered `()`.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// let pair = reflect.Tuple.new([reflect.Type.of<int>(), reflect.Type.of<string>()]);  // (int, string)
+    /// let empty = reflect.Tuple.new([]);  // ()
+    /// ```
+    function new(element_types: root.TypeView[]) -> root.Tuple throws never {
+        Tuple._new(root._as_types(element_types))
+    }
+
+    /// (internal) Internal native backing `new`; every element is a `type`
+    /// value.
+    //baml:mut_vm
+    function _new(element_types: root.Type[]) -> root.Tuple throws never {
+        $rust_function
+    }
+
+    /// Builds a value of the tuple type `T` from its slot values, in order.
+    ///
+    /// `T` is a tuple type, such as `(int, string)`, or one held as a
+    /// `reflect.Type` and named with `let type`. This is how a zero-length
+    /// tuple value is made: instantiate the type `reflect.Tuple.new([])`
+    /// with no values. Each value is stored as given, not copied or
+    /// converted, and the tuple carries `T`'s slot types, so
+    /// `reflect.Type.of_value` of the result is `T`.
+    ///
+    /// # Parameters
+    ///
+    /// - `values`: one value per slot of `T`, in position order.
+    ///
+    /// # Returns
+    ///
+    /// A new tuple of type `T`.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.InvalidArgument` if `T` is not a tuple type, if
+    ///   `values` does not have exactly one value per slot, or if a value is
+    ///   not of its slot's type. The message names the slot and the type it
+    ///   expects.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// let pair = reflect.Tuple.instantiate<(int, string)>([1, "a"]);  // (1, "a")
+    ///
+    /// let type Unit = reflect.Tuple.new([]).as_type();
+    /// let unit = reflect.Tuple.instantiate<Unit>([]);                 // ()
+    /// ```
+    //baml:mut_vm
+    function instantiate<T>(values: unknown[]) -> T throws root.errors.InvalidArgument {
+        $rust_function
+    }
+
+    implements root.TypeView {
+        //baml:vm
+        //baml:fallible
+        function as_type(self) -> root.Type throws never {
+            $rust_function
+        }
+    }
+    /// The tuple's element types, in position order; empty for the
+    /// zero-length tuple.
+    //baml:mut_vm
+    //baml:fallible
+    function element_types(self) -> root.Type[] throws never {
+        $rust_function
+    }
+}

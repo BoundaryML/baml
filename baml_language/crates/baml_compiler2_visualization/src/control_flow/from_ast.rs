@@ -459,7 +459,14 @@ impl<'a> AstGraphBuilder<'a> {
                 .expect("frame stack should not be empty");
             frame.next_ordinal(&CounterKind::BranchGroup)
         };
-        let label = format!("match ({})", render_expr_compact_ast(self.body, scrutinee));
+        // A tuple scrutinee is its own delimiters: `match (a, b)`, never
+        // `match ((a, b))`.
+        let label = match &self.body.exprs[scrutinee] {
+            ast::Expr::Tuple { .. } => {
+                format!("match {}", render_expr_compact_ast(self.body, scrutinee))
+            }
+            _ => format!("match ({})", render_expr_compact_ast(self.body, scrutinee)),
+        };
         let slug = {
             let slug_base = slugify(&label);
             if slug_base.is_empty() {
@@ -776,6 +783,14 @@ impl<'a> AstGraphBuilder<'a> {
                     field_strs.join(", ")
                 )
             }
+            ast::Pattern::Tuple(elements) => {
+                let parts: Vec<String> = elements.iter().map(|p| self.format_pattern(*p)).collect();
+                if parts.len() == 1 {
+                    format!("({},)", parts[0])
+                } else {
+                    format!("({})", parts.join(", "))
+                }
+            }
             ast::Pattern::Array {
                 prefix,
                 rest,
@@ -942,7 +957,7 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
                 collect_callee_names_expr(body, spread.expr, names);
             }
         }
-        ast::Expr::Array { elements } => {
+        ast::Expr::Array { elements } | ast::Expr::Tuple { elements } => {
             for element in elements {
                 collect_callee_names_expr(body, *element, names);
             }
@@ -1210,6 +1225,20 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 "[...]".to_string()
             }
         }
+        // Unlike a list, a tuple renders its elements: the arity and the
+        // positions are what a reader matches a tuple scrutinee or receiver
+        // against. A singleton keeps its comma.
+        ast::Expr::Tuple { elements } => {
+            let parts: Vec<_> = elements
+                .iter()
+                .map(|element| render_expr_compact_ast(body, *element))
+                .collect();
+            match parts.as_slice() {
+                [only] => format!("({only},)"),
+                _ => format!("({})", parts.join(", ")),
+            }
+        }
+        ast::Expr::OptionalChain { expr } => render_expr_compact_ast(body, *expr),
         // Rendered in full, as the `Path` spelling of the same reference is:
         // this is a callee name, and eliding it to `...` would leave the CFG
         // node blank for the one call form that must be written out.
@@ -1627,6 +1656,7 @@ mod tests {
                 pattern: pat,
                 initializer: Some(if_expr),
                 origin: ast::LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             });
             Some(exprs.alloc(ast::Expr::Block {
@@ -1667,6 +1697,7 @@ mod tests {
                 pattern: pat,
                 initializer: Some(if_expr),
                 origin: ast::LetOrigin::Source,
+                is_const: false,
                 else_branch: None,
             });
             Some(exprs.alloc(ast::Expr::Block {
@@ -2209,6 +2240,116 @@ mod tests {
         assert_eq!(
             prepared_if.callee_names,
             vec!["Abs".to_string(), "LineTotal".to_string()]
+        );
+    }
+
+    fn path(exprs: &mut Arena<ast::Expr>, name: &str) -> ast::ExprId {
+        exprs.alloc(ast::Expr::Path(baml_base::Path::bare(name.into())))
+    }
+
+    fn call0(exprs: &mut Arena<ast::Expr>, name: &str) -> ast::ExprId {
+        let callee = path(exprs, name);
+        exprs.alloc(ast::Expr::Call {
+            callee,
+            type_args: vec![],
+            args: vec![],
+        })
+    }
+
+    #[test]
+    fn tuple_scrutinee_labels_match_with_its_own_delimiters() {
+        let body = make_ast_body(|exprs, _, patterns, match_arms| {
+            let a = path(exprs, "a");
+            let b = path(exprs, "b");
+            let scrutinee = exprs.alloc(ast::Expr::Tuple {
+                elements: vec![a, b],
+            });
+            let pattern = patterns.alloc(ast::Pattern::Wildcard);
+            let arm_body = exprs.alloc(ast::Expr::Null);
+            let arm = match_arms.alloc(ast::MatchArm {
+                pattern,
+                guard: None,
+                body: arm_body,
+            });
+            Some(exprs.alloc(ast::Expr::Match {
+                scrutinee,
+                scrutinee_type: None,
+                arms: vec![arm],
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let group = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::BranchGroup))
+            .expect("should have BranchGroup for the match");
+        assert_eq!(group.label, "match (a, b)");
+    }
+
+    #[test]
+    fn tuples_and_tuple_access_render_compactly() {
+        let mut exprs = Arena::new();
+        let a = path(&mut exprs, "a");
+        let single = exprs.alloc(ast::Expr::Tuple { elements: vec![a] });
+        let zero = exprs.alloc(ast::Expr::Literal(ast::Literal::Int(0)));
+        let one = exprs.alloc(ast::Expr::Literal(ast::Literal::Int(1)));
+        // `(a,)[0][1]`
+        let first = exprs.alloc(ast::Expr::Index {
+            base: single,
+            index: zero,
+        });
+        let nested = exprs.alloc(ast::Expr::Index {
+            base: first,
+            index: one,
+        });
+        // `t[i + 1]`
+        let t = path(&mut exprs, "t");
+        let i = path(&mut exprs, "i");
+        let sum = exprs.alloc(ast::Expr::Binary {
+            op: ast::BinaryOp::Add,
+            lhs: i,
+            rhs: one,
+        });
+        let computed = exprs.alloc(ast::Expr::Index {
+            base: t,
+            index: sum,
+        });
+        // `t?.[0]`
+        let optional_index = exprs.alloc(ast::Expr::OptionalIndex {
+            base: t,
+            index: zero,
+        });
+        let optional = exprs.alloc(ast::Expr::OptionalChain {
+            expr: optional_index,
+        });
+        let body = make_ast_body(|_, _, _, _| None);
+        let body = ast::ExprBody { exprs, ..body };
+        assert_eq!(render_expr_compact_ast(&body, single), "(a,)");
+        assert_eq!(render_expr_compact_ast(&body, nested), "(a,)[0][1]");
+        assert_eq!(render_expr_compact_ast(&body, computed), "t[i + 1]");
+        assert_eq!(render_expr_compact_ast(&body, optional), "t?.[0]");
+    }
+
+    #[test]
+    fn tuple_access_callees_follow_evaluation_order() {
+        let mut exprs = Arena::new();
+        // `(f(), g())[choose_index()]`: the receiver's elements in order,
+        // then the index.
+        let f = call0(&mut exprs, "f");
+        let g = call0(&mut exprs, "g");
+        let pair = exprs.alloc(ast::Expr::Tuple {
+            elements: vec![f, g],
+        });
+        let choose = call0(&mut exprs, "choose_index");
+        let access = exprs.alloc(ast::Expr::Index {
+            base: pair,
+            index: choose,
+        });
+        let body = make_ast_body(|_, _, _, _| None);
+        let body = ast::ExprBody { exprs, ..body };
+        assert_eq!(
+            collect_callee_names(&body, access),
+            vec!["f".to_string(), "g".to_string(), "choose_index".to_string()]
         );
     }
 

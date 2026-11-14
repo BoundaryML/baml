@@ -260,12 +260,18 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
         (Ty::Union(..), _) | (_, Ty::Union(..)) => Overlap::Unknown,
         // Every remaining pair is genuinely disjoint: distinct concrete constructors
         // denote disjoint value sets, same-constructor pairs already recursed inside
-        // `unify_into`, and a type variable outside `env.vars` is an opaque atom. No
+        // `unify_into`, and a type variable outside `env.vars` is an opaque atom.
+        // Tuples are among them: a tuple type here is a whole-tuple type test of
+        // the carried type, which is invariant, so equality failing means no
+        // shared value (`(int,)` and `(int?,)` share none). Destructuring tuple
+        // patterns never reach the oracle as tuples; their element tests are
+        // checked slot by slot. No
         // total wildcard on the left so a new `Ty` variant must be classified here.
         (
             Ty::Class(..)
             | Ty::List(..)
             | Ty::Map { .. }
+            | Ty::Tuple(..)
             | Ty::Future(..)
             | Ty::Int
             | Ty::Bigint

@@ -675,6 +675,13 @@ func decodeDynamicValue(value Value, path string, depth int) (any, error) {
 			}
 		}
 		return decoded, nil
+	case *cffi.BamlOutboundValue_TupleValue:
+		// An `any` position has no declared tuple type: the tuple's carried
+		// type finds its named struct, else its list fallback.
+		if item.TupleValue == nil {
+			return nil, fmt.Errorf("%s: BAML tuple payload is empty", path)
+		}
+		return decodeDynamicTuple(value, item.TupleValue, path, depth)
 	case *cffi.BamlOutboundValue_MapValue:
 		if item.MapValue == nil {
 			return nil, fmt.Errorf("%s: BAML map payload is empty", path)

@@ -175,6 +175,7 @@ fn is_abstract_head(head: &InferTy) -> bool {
         | InferTy::Class(..)
         | InferTy::Enum(..)
         | InferTy::List(..)
+        | InferTy::Tuple(..)
         | InferTy::Map { .. }
         | InferTy::Function { .. }
         | InferTy::Future(..)
@@ -477,9 +478,12 @@ impl<'db> InferenceContext<'db> {
                 if purpose == GoalPurpose::Bound
                     && is_abstract_head(bound_subject.kind())
                     && !crate::impls::is_structural_interface(self.db, &interface)
-                    && !(crate::impls::structural_interface(self.db, &interface.name)
-                        == Some(baml_type::StructuralInterface::Hash)
-                        && crate::impls::hash_eligible(self.db, &self.facts, &ty, &interface))
+                    && crate::impls::conditional_structural_verdict(
+                        self.db,
+                        &self.facts,
+                        &ty,
+                        &interface,
+                    ) != Some(true)
                 {
                     // Named as the user wrote it: the judgment widened.
                     self.pending_diags
@@ -632,15 +636,29 @@ impl<'db> InferenceContext<'db> {
             if crate::impls::is_structural_interface(self.db, interface) {
                 return Ok(None);
             }
-            if crate::impls::structural_interface(self.db, &interface.name)
-                == Some(baml_type::StructuralInterface::Hash)
-            {
-                if goal.has_infer() || interface_has_infer(interface) {
-                    return Err(Selection::Unresolved);
+            match crate::impls::structural_interface(self.db, &interface.name) {
+                Some(baml_type::StructuralInterface::Hash) => {
+                    if goal.has_infer() || interface_has_infer(interface) {
+                        return Err(Selection::Unresolved);
+                    }
+                    if crate::impls::hash_eligible(self.db, &self.facts, subject, interface) {
+                        return Ok(None);
+                    }
                 }
-                if crate::impls::hash_eligible(self.db, &self.facts, subject, interface) {
-                    return Ok(None);
+                // The derived tuple witness: open slots may still solve either way.
+                Some(baml_type::StructuralInterface::Compare)
+                    if matches!(subject.kind(), InferTy::Tuple(_)) =>
+                {
+                    if goal.has_infer() || interface_has_infer(interface) {
+                        return Err(Selection::Unresolved);
+                    }
+                    if crate::impls::derived_tuple_compare(self.db, &self.facts, subject, interface)
+                        == Some(true)
+                    {
+                        return Ok(None);
+                    }
                 }
+                _ => {}
             }
             return Err(Selection::NoCandidate);
         };
@@ -1163,6 +1181,11 @@ impl<'db> InferenceContext<'db> {
                 crate::impls::structural_interface_roots(self.db)
                     .into_iter()
                     .chain(crate::impls::hash_interface_root(self.db))
+                    .chain(
+                        matches!(receiver.kind(), InferTy::Tuple(_))
+                            .then(|| crate::impls::compare_interface_root(self.db))
+                            .flatten(),
+                    )
                     .collect()
             } else {
                 crate::impls::applicable_structural_interface_roots(self.db, &self.facts, receiver)
@@ -1185,7 +1208,7 @@ impl<'db> InferenceContext<'db> {
             // Discovering a conditional default's signature does not prove
             // conformance. Fulfillment checks it once the receiver resolves.
             if crate::impls::structural_interface(self.db, &interface.name)
-                == Some(baml_type::StructuralInterface::Hash)
+                .is_some_and(baml_type::StructuralInterface::is_conditional)
             {
                 self.register_obligation(Obligation::implements(
                     receiver.clone(),
@@ -1268,10 +1291,10 @@ impl<'db> InferenceContext<'db> {
         if crate::impls::is_structural_interface(self.db, interface) {
             return true;
         }
-        if crate::impls::structural_interface(self.db, &interface.name)
-            == Some(baml_type::StructuralInterface::Hash)
+        if let Some(eligible) =
+            crate::impls::conditional_structural_verdict(self.db, &self.facts, ty, interface)
         {
-            return crate::impls::hash_eligible(self.db, &self.facts, ty, interface);
+            return eligible;
         }
         let target = interface.clone();
         let eq = crate::impls::AliasOnlyFacts::new(self.db);

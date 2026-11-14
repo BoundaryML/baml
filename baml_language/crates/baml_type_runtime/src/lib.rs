@@ -229,8 +229,8 @@ fn solve_var<N: Head + HeadDisplay>(
                 if !ctx.equivalent(first, other) {
                     return fail(format!(
                         "`{param}` would have to be both `{first}` and `{other}` at the same \
-                         time. Because `{param}` appears inside a list, map, or class type, it \
-                         has to be exactly the same type in every argument."
+                         time. Because `{param}` appears inside a list, map, tuple, or class type, \
+                         it has to be exactly the same type in every argument."
                     ));
                 }
             }
@@ -515,6 +515,14 @@ fn collect<N: Head>(
             collect(fr, ar, variance, vars, opts, ctx);
             collect(fth, ath, variance, vars, opts, ctx);
         }
+        // Tuples are invariant elementwise (their slots are writable), like
+        // class arguments.
+        (Ty::Tuple(f_elems), Ty::Tuple(a_elems)) if f_elems.len() == a_elems.len() => {
+            let inv = variance.compose(Variance::Invariant);
+            for (ft, at) in f_elems.iter().zip(a_elems.iter()) {
+                collect(ft, at, inv, vars, opts, ctx);
+            }
+        }
         (Ty::Class(fn_name, f_args), Ty::Class(an_name, a_args)) if fn_name == an_name => {
             let inv = variance.compose(Variance::Invariant);
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
@@ -680,6 +688,7 @@ fn heads_correspond<N: Head>(formal: &Ty<N>, actual: &Ty<N>) -> bool {
         | (Ty::Map { .. }, Ty::Map { .. })
         | (Ty::Function { .. }, Ty::Function { .. })
         | (Ty::Future(..), Ty::Future(..)) => true,
+        (Ty::Tuple(f), Ty::Tuple(a)) => f.len() == a.len(),
         _ => false,
     }
 }
@@ -871,6 +880,12 @@ pub fn erase_typevars_matching<N: Head>(
                 .map(|member| erase_typevars_matching(member, should_erase))
                 .collect(),
         ),
+        Ty::Tuple(elements) => Ty::Tuple(
+            elements
+                .iter()
+                .map(|element| erase_typevars_matching(element, should_erase))
+                .collect(),
+        ),
         Ty::Future(value, error) => Ty::Future(
             Box::new(erase_typevars_matching(value, should_erase)),
             Box::new(erase_typevars_matching(error, should_erase)),
@@ -938,6 +953,22 @@ mod tests {
 
     fn null() -> Ty<TypeName> {
         Ty::Null
+    }
+
+    #[test]
+    fn tuple_slots_are_invariant_positions() {
+        // `(T, T)` vs `(int, string)`: each slot is an equality constraint, so
+        // `T` cannot be both, where covariant slots would join them.
+        let tuple = |a, b| Ty::Tuple(Box::new([a, b]));
+        let mut cons = InferenceConstraints::new();
+        cons.record(&tuple(tv("T"), tv("T")), &tuple(int(), string()), &NoFacts);
+        assert!(cons.solve(&NoFacts).is_err());
+        let mut same = InferenceConstraints::new();
+        same.record(&tuple(tv("T"), tv("T")), &tuple(int(), int()), &NoFacts);
+        assert_eq!(
+            same.solve(&NoFacts).expect("one binding").get(&param("T")),
+            Some(&int())
+        );
     }
 
     #[test]

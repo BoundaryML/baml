@@ -391,11 +391,16 @@ fn decode_inbound(
             Ok(BexExternalValue::Bool(b))
         }
         InboundValueVariant::ListValue(list) => {
-            let element = match required(stated, "list_value", "a list type")? {
-                WireTy::List(element) => *element,
-                other => return Err(shape("list_value", "a list type", &other)),
-            };
-            convert_list(list, element, handle_table, owners)
+            match required(stated, "list_value", "a list or tuple type")? {
+                WireTy::List(element) => convert_list(list, *element, handle_table, owners),
+                // A tuple crosses as a list stating its tuple type, whose slot
+                // types the tuple carries; only the arity is checked here, and
+                // each element's membership in its slot when it is built.
+                WireTy::Tuple(slots) if slots.len() == list.values.len() => {
+                    convert_tuple(list, slots.into_vec(), handle_table, owners)
+                }
+                other => Err(shape("list_value", "a list or tuple type", &other)),
+            }
         }
         InboundValueVariant::MapValue(map) => {
             let (key, value) = match required(stated, "map_value", "a map type")? {
@@ -640,6 +645,23 @@ fn convert_list(
     Ok(BexExternalValue::Array {
         element_type,
         items: items?,
+    })
+}
+
+fn convert_tuple(
+    list: InboundListValue,
+    element_types: Vec<WireTy>,
+    handle_table: &CffiHandleTable,
+    owners: &mut InboundOwners<'_>,
+) -> Result<BexExternalValue, CtypesError> {
+    let items = list
+        .values
+        .into_iter()
+        .map(|v| decode_inbound(v, handle_table, owners))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(BexExternalValue::Tuple {
+        element_types,
+        items,
     })
 }
 
@@ -1433,7 +1455,7 @@ mod tests {
                     error,
                     CtypesError::ValueTypeShape {
                         node: "list_value",
-                        expected: "a list type",
+                        expected: "a list or tuple type",
                         ..
                     }
                 ),
@@ -1773,5 +1795,25 @@ mod tests {
                 fields: IndexMap::from([("value".to_string(), BexExternalValue::Int(5))]),
             }
         );
+    }
+
+    #[test]
+    fn a_list_stating_a_tuple_type_of_its_arity_is_a_tuple() {
+        let table = CffiHandleTable::new();
+        let int = |value| InboundValue {
+            value: Some(InboundValueVariant::IntValue(value)),
+            ..Default::default()
+        };
+        let pair = WireTy::Tuple(Box::new([WireTy::int(), WireTy::int()]));
+        let list = |values| InboundValueVariant::ListValue(InboundListValue { values });
+        assert_eq!(
+            inbound_to_external(typed_input(&pair, list(vec![int(1), int(2)])), &table).unwrap(),
+            BexExternalValue::Tuple {
+                element_types: vec![WireTy::int(), WireTy::int()],
+                items: vec![BexExternalValue::Int(1), BexExternalValue::Int(2)],
+            }
+        );
+        // A tuple type of another arity does not describe the list.
+        assert!(inbound_to_external(typed_input(&pair, list(vec![int(1)])), &table).is_err());
     }
 }

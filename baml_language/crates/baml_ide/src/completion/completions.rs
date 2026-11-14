@@ -303,6 +303,27 @@ impl<'db> Completions<'db> {
         self.push(None, item);
     }
 
+    /// A tuple slot offered as the constant index that reads it, detailed
+    /// with the slot's type. The receiver's own positions, so they rank
+    /// with its inherent members.
+    pub(super) fn add_tuple_slot(&mut self, slot: usize, ty: &baml_type::Ty) {
+        let item = Completion {
+            label: slot.to_string(),
+            source_range: self.source_range,
+            insert: CompletionInsert::Plain(slot.to_string()),
+            kind: CompletionKind::Field,
+            detail: Some(crate::render::display_ty_canonical_for_file(
+                self.db, self.file, ty,
+            )),
+            documentation: None,
+            relevance: CompletionRelevance {
+                is_inherent: true,
+                ..CompletionRelevance::default()
+            },
+        };
+        self.push(None, item);
+    }
+
     /// An unwritten field in an object literal, inserted ready for its
     /// value.
     pub(super) fn add_record_field(

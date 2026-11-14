@@ -12,6 +12,10 @@
 //!   when the slot is an enum.
 //! - A pydantic instance is an instance of its class; a `dict` with string
 //!   keys stands in for a class when every key is a declared field.
+//! - A `list` is a list and a `tuple` a tuple: where the slot fixes no type,
+//!   a tuple is the tuple of its items' own types, or the type it carries
+//!   when BAML handed it out. Either stands in for the other in a list or
+//!   tuple slot of its length.
 //! - A callable becomes a host callable bound to a function slot, and the
 //!   slot's signature is recorded so the result can be encoded against it.
 //! - Handles, media, prompts and type values are leaves the bridge
@@ -286,6 +290,8 @@ pub(crate) struct Cx<'py> {
     baml_type: Bound<'py, PyAny>,
     /// `baml_bridge.proto._BamlTypeMetadataRow`, a record of five attributes.
     metadata_row: Bound<'py, PyAny>,
+    /// `baml_bridge.proto.BamlTuple`, a tuple received with its carried type.
+    baml_tuple: Bound<'py, PyAny>,
     /// Streams, function specs, runtime values, opaque standard-library
     /// instances and BAML closures: Python wrappers around an engine handle,
     /// reached through `_to_pyhandle`.
@@ -307,6 +313,7 @@ impl<'py> Cx<'py> {
             prompt_ast: proto.getattr("_PortablePromptAst")?,
             baml_type: proto.getattr("BamlType")?,
             metadata_row: proto.getattr("_BamlTypeMetadataRow")?,
+            baml_tuple: proto.getattr("BamlTuple")?,
             handle_wrappers: [
                 proto.getattr("BamlStream")?,
                 proto.getattr("BamlFunctionSpec")?,
@@ -636,6 +643,22 @@ impl<'py> PyValue<'_, 'py> {
         })
     }
 
+    /// The slot types of a tuple received with the type it carries; `None`
+    /// for any other tuple, which knows only its items.
+    fn carried_slots(&self) -> PyResult<Option<Vec<StatedTy>>> {
+        if !self.is_a(&self.cx.baml_tuple) {
+            return Ok(None);
+        }
+        // The carried type is an annotation: no runtime declaration row to
+        // reference, so restating it creates nothing.
+        match self.cx.wire_ty(&self.obj.getattr("_ty")?)? {
+            StatedTy::Tuple(slots) => Ok(Some(slots.into_vec())),
+            _ => Err(PyTypeError::new_err(
+                "a BamlTuple carries a type that is not a tuple type",
+            )),
+        }
+    }
+
     /// Python's `int`: the VM's integer when it fits, a `bigint` beyond.
     fn int_scalar(&self) -> PyResult<Scalar> {
         if let Ok(int) = self.obj.extract::<i64>()
@@ -696,8 +719,14 @@ impl<'py> HostValue for PyValue<'_, 'py> {
             // overrides `__iter__` is read the way Python reads it, and one
             // item at a time, so an endless `__iter__` yields only what the
             // walker's budget lets it read.
-            let items = obj.try_iter()?.map(move |item| Ok(cx.value(item?)));
-            return Ok(HostShape::List(Box::new(items)));
+            let items = Box::new(obj.try_iter()?.map(move |item| Ok(cx.value(item?))));
+            if obj.is_instance_of::<PyList>() {
+                return Ok(HostShape::List(items));
+            }
+            return Ok(HostShape::Tuple {
+                slots: self.carried_slots()?,
+                items,
+            });
         }
         if obj.cast::<PyDict>().is_ok() {
             // Through Python's own `items()` iterator, not PyO3's: reading a

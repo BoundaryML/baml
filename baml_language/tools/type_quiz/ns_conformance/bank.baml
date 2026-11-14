@@ -855,7 +855,7 @@ function depth_report() -> string throws never {
 }
 
 test "bank: nearly every case it can draw turns on a single rule" {
-    assert.equal(depth_report(), `cases=320 rules=["0:0", "1:256", "2:32", "3:16", "4:8", "5:8"]`)
+    assert.equal(depth_report(), `cases=328 rules=["0:0", "1:264", "2:32", "3:16", "4:8", "5:8"]`)
 }
 
 // ─── which sites the bank reaches ────────────────────────────────────────────
@@ -868,7 +868,9 @@ test "bank: nearly every case it can draw turns on a single rule" {
 /// A site nothing reaches is a site that is not being tested. The coherence
 /// site is reachable only for a pair of types an `implements` block may name,
 /// which rules out a union, a literal, an interface, `never`, `unknown` and a
-/// recursive alias, so it takes the smaller share.
+/// recursive alias, so it takes the smaller share. The unguarded cycle is
+/// put at no site at all — a declaration is the whole of its program — and
+/// is what `other` counts.
 function sites_reached_report() -> string throws never {
     let concluded = root.bank.items()
         .filter((item) -> {
@@ -900,11 +902,11 @@ function sites_reached_report() -> string throws never {
 }
 
 test "bank: the coherence site takes the smaller share of the bank's cases" {
-    assert.equal(sites_reached_report(), "coherence=5 flow=315 other=0")
+    assert.equal(sites_reached_report(), "coherence=5 flow=315 other=8")
 }
 
 test "bank: every item answers both ways" {
-    assert.equal(items_answering_report(), "always=0 never=0 both=40")
+    assert.equal(items_answering_report(), "always=0 never=0 both=41")
 }
 
 // ─── every fact reaches the compiler ─────────────────────────────────────────

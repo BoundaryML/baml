@@ -378,6 +378,7 @@ pub(super) fn let_stmt(ctx: &mut LoweringContext, v: View<'_>, id: Id<LetStmt>) 
             pattern,
             initializer,
             origin: LetOrigin::Source,
+            is_const: v.tree.tokens().kind(node.introducer.idx) == TokenKind::Const,
             else_branch,
         },
         span,
@@ -597,6 +598,31 @@ fn expression_in_chain(ctx: &mut LoweringContext, v: View<'_>, expr: AnyExpr) ->
             let token = v.node(id).token;
             let expr = literal_token(ctx, v, token.idx);
             ctx.alloc_expr(expr, span)
+        }
+        AnyExpr::Tuple(id) => {
+            let elements = v.tree.list(v.node(id).elements).iter().map(|element| expression(ctx, v, element.item)).collect();
+            ctx.alloc_expr(Expr::Tuple { elements }, span)
+        }
+        AnyExpr::TupleField(id) => {
+            let node = *v.node(id);
+            let mut base = expression_in_chain(ctx, v, node.base);
+            let range = v.token_range(node.slot.idx);
+            let mut start = range.start();
+            let optional = v.tree.tokens().kind(node.dot.idx) == TokenKind::QuestionDot;
+            for (index, part) in v.text(node.slot.idx).split('.').enumerate() {
+                let end = start + text_size::TextSize::of(part);
+                let expr = if optional && index == 0 {
+                    Expr::OptionalMemberAccess { base, member: Name::new(part) }
+                } else { Expr::MemberAccess { base, member: Name::new(part) } };
+                let next = ctx.alloc_expr(expr, TextRange::new(span.start(), end));
+                ctx.source_map.member_access_member_spans.insert(next, TextRange::new(start, end));
+                if ctx.needs_chain_wrap.remove(&base) || (optional && index == 0) {
+                    ctx.needs_chain_wrap.insert(next);
+                }
+                base = next;
+                start = end + text_size::TextSize::from(1);
+            }
+            base
         }
         AnyExpr::String(id) => string_literal(ctx, v, id),
         AnyExpr::FieldAccess(id) => {
@@ -1715,6 +1741,14 @@ pub(super) fn pattern(ctx: &mut LoweringContext, v: View<'_>, pattern: AnyPatter
             ctx.alloc_pattern(Pattern::Wildcard, span)
         }
         AnyPattern::Destructure(id) => destructure_pattern(ctx, v, id),
+        AnyPattern::Tuple(id) => {
+            let elements: Vec<_> = v.tree.list(v.node(id).elements).iter().map(|element| self::pattern(ctx, v, element.item)).collect();
+            let types: Option<Vec<_>> = elements.iter().map(|id| match &ctx.patterns[*id] { Pattern::Type(ty) => Some(ty.clone()), _ => None }).collect();
+            match types {
+                Some(elements) => ctx.alloc_pattern(Pattern::Type(TypeExprKind::Tuple { elements }.at(span)), span),
+                None => ctx.alloc_pattern(Pattern::Tuple(elements), span),
+            }
+        }
         AnyPattern::Array(id) => array_pattern(ctx, v, id),
         AnyPattern::Type(id) => {
             let ty = types::lower_type(v, &mut ctx.diags, v.node(id).ty);

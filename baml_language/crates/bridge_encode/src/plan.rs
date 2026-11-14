@@ -456,6 +456,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 self.enumeration(tree, slot, name, Some(variant.as_str()))
             }
             SlotTy::List(inner) => self.list(tree, slot, inner),
+            SlotTy::Tuple(elements) => self.tuple(tree, slot, elements),
             SlotTy::Map { key, value } => self.map(tree, slot, key, value),
             SlotTy::Class(WireHead::Static(name), args) => self.class(tree, slot, name, args),
             // A declaration the engine created at run time: the facts know
@@ -532,6 +533,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                     items: nodes,
                 }
             }
+            Shape::Tuple { items, .. } => return self.natural_tuple(tree, items),
             Shape::Map(entries) => {
                 let mut keys = Vec::with_capacity(entries.len());
                 let mut nodes = Vec::with_capacity(entries.len());
@@ -657,6 +659,27 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         }
     }
 
+    /// `items` as the tuple they make. A tuple's type is made slot by slot,
+    /// never joined: `(1, "a")` is `(int, string)`. One that knows its slot
+    /// types states them, each item planned against its own, so it keeps
+    /// that identity under a slot that fixes nothing.
+    fn natural_tuple(&mut self, tree: &'t Tree<V>, items: &'t [Tree<V>]) -> Planned<'t, V> {
+        let known = self.known_slots(tree)?;
+        let mut nodes = Vec::with_capacity(items.len());
+        for (index, item) in items.iter().enumerate() {
+            let node = match &known {
+                Some(known) => self.plan(item, &known[index]),
+                None => self.natural(item),
+            };
+            nodes.push(node.map_err(|failure| failure.at(Step::Index(index)))?);
+        }
+        let ty = match known {
+            Some(known) => SlotTy::Tuple(known.into()),
+            None => SlotTy::Tuple(nodes.iter().map(|node| node.ty()).collect()),
+        };
+        Ok(Rc::new(Node::List { ty, items: nodes }))
+    }
+
     // ── Host-supplied types ─────────────────────────────────────────────────
 
     /// A type the host spelled (an instance's own type arguments), in stated
@@ -681,6 +704,24 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             }));
         }
         Ok(args.iter().map(|arg| self.host_stated(arg)).collect())
+    }
+
+    /// The slot types a tuple value knows, in stated form, or `None` for a
+    /// value that knows none. A value whose slots are not its arity is not
+    /// the tuple it names.
+    fn known_slots(&self, tree: &'t Tree<V>) -> Result<Option<Vec<SlotTy>>, Box<Failure<'t, V>>> {
+        let Shape::Tuple {
+            slots: Some(slots),
+            items,
+        } = &tree.shape
+        else {
+            return Ok(None);
+        };
+        let known: Vec<SlotTy> = slots.iter().map(|slot| self.host_stated(slot)).collect();
+        if known.len() != items.len() {
+            return Err(mismatch(tree, &SlotTy::Tuple(known.into())));
+        }
+        Ok(Some(known))
     }
 
     // ── Unions ──────────────────────────────────────────────────────────────
@@ -744,11 +785,29 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     /// whose plan made the fewest such reads wins (`{text}` under
     /// `Note { text, meta: json } | Tag { text }` is a `Tag`); otherwise the
     /// value is `Ambiguous` among exactly those.
+    ///
+    /// A list that does not say it is not a tuple (a JavaScript array the
+    /// runtime did not decode from a BAML tuple) is a tuple wherever a tuple
+    /// takes it: `[1, 2]` under `(int, int) | int[]` is the tuple, and among
+    /// tuples its natural type is the tuple of its items' types.
     fn tiebreak<'m>(
         &mut self,
         tree: &'t Tree<V>,
         mut fits: Vec<(&'m SlotTy, Rc<Node<'t, V>>)>,
     ) -> Planned<'t, V> {
+        let as_tuple = match &tree.shape {
+            Shape::List(items) if !V::RULES.lists_are_not_tuples() => {
+                let is_tuple =
+                    |member: &SlotTy| matches!(self.facts.unfold(member), SlotTy::Tuple(_));
+                if fits.iter().any(|(member, _)| is_tuple(member)) {
+                    fits.retain(|(member, _)| is_tuple(member));
+                    Some(items)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
         let mut distinct: Vec<(SlotTy, usize)> = Vec::new();
         for (index, (_, node)) in fits.iter().enumerate() {
             let ty = node.ty();
@@ -763,7 +822,11 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 // The value's own type, computed only now that it decides. A
                 // value with no natural type has none to prefer; a fault or the
                 // host's own error while finding it is final.
-                let natural = match self.natural(tree) {
+                let natural = match as_tuple {
+                    Some(items) => self.natural_tuple(tree, items),
+                    None => self.natural(tree),
+                };
+                let natural = match natural {
                     Ok(node) => Some(node.ty()),
                     Err(failure) => match failure.kind {
                         FailKind::Unfit(_) => None,
@@ -823,7 +886,36 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             ) if enumeration == name => Some(Rank::Identity),
             (Shape::EnumMember { .. }, _) => None,
             (Shape::List(_), SlotTy::List(_)) => Some(Rank::Natural),
+            (Shape::List(items), SlotTy::Tuple(elements)) if items.len() == elements.len() => {
+                Some(Rank::Natural)
+            }
             (Shape::List(_), _) => None,
+            // A tuple that knows its slot types is the tuple of those types:
+            // that identity decides before any sequence of its arity does.
+            (
+                Shape::Tuple {
+                    slots: Some(slots),
+                    items,
+                },
+                SlotTy::Tuple(elements),
+            ) if slots.len() == items.len()
+                && equivalent(
+                    &SlotTy::Tuple(slots.iter().map(|slot| self.host_stated(slot)).collect()),
+                    member,
+                ) =>
+            {
+                debug_assert_eq!(elements.len(), items.len());
+                Some(Rank::Identity)
+            }
+            // Lists and tuples of the arity share a rank: the value's natural
+            // type, a list's or a tuple's, breaks a tie between them.
+            (Shape::Tuple { items, .. }, SlotTy::Tuple(elements))
+                if items.len() == elements.len() =>
+            {
+                Some(Rank::Natural)
+            }
+            (Shape::Tuple { .. }, SlotTy::List(_)) => Some(Rank::Natural),
+            (Shape::Tuple { .. }, _) => None,
             (Shape::Map(_), SlotTy::Map { .. }) => Some(Rank::Natural),
             (Shape::Map(_), SlotTy::Class(..)) => Some(Rank::Conversion),
             (Shape::Map(_), _) => None,
@@ -981,7 +1073,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     // ── Containers ──────────────────────────────────────────────────────────
 
     fn list(&mut self, tree: &'t Tree<V>, slot: &SlotTy, inner: &SlotTy) -> Planned<'t, V> {
-        let Shape::List(items) = &tree.shape else {
+        let Some(items) = sequence(&tree.shape) else {
             return Err(mismatch(tree, slot));
         };
         let inner = if mentions_type_var(inner) {
@@ -1014,6 +1106,41 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             ty: SlotTy::List(Box::new(inner)),
             items: nodes,
         }))
+    }
+
+    /// A tuple: a host sequence (a list or a tuple) of exactly its arity,
+    /// each element planned against its own slot. It crosses as a list node
+    /// stating the tuple type: the declared one where it is realized, and
+    /// otherwise the elements' own types, which a tuple's type is made of. A
+    /// slot the call left open takes the slot type a tuple value knows, so a
+    /// tuple keeps its identity through an open slot.
+    fn tuple(&mut self, tree: &'t Tree<V>, slot: &SlotTy, elements: &[SlotTy]) -> Planned<'t, V> {
+        let Some(items) = sequence(&tree.shape) else {
+            return Err(mismatch(tree, slot));
+        };
+        if items.len() != elements.len() {
+            return Err(mismatch(tree, slot));
+        }
+        let known = self.known_slots(tree)?;
+        let mut nodes = Vec::with_capacity(items.len());
+        let mut tys = Vec::with_capacity(items.len());
+        for (index, (item, element)) in items.iter().zip(elements).enumerate() {
+            let known = known
+                .as_ref()
+                .map(|known| &known[index])
+                .filter(|_| mentions_type_var(element));
+            let node = self
+                .plan(item, known.unwrap_or(element))
+                .map_err(|failure| failure.at(Step::Index(index)))?;
+            tys.push(known.cloned().unwrap_or_else(|| node.ty()));
+            nodes.push(node);
+        }
+        let ty = if mentions_type_var(slot) {
+            SlotTy::Tuple(tys.into())
+        } else {
+            slot.clone()
+        };
+        Ok(Rc::new(Node::List { ty, items: nodes }))
     }
 
     fn map(
@@ -1362,6 +1489,15 @@ impl Solution {
                     self.learn(inner, found);
                 }
             }
+            SlotTy::Tuple(elements) => {
+                if let SlotTy::Tuple(found) = found
+                    && found.len() == elements.len()
+                {
+                    for (element, found) in elements.iter().zip(found.iter()) {
+                        self.learn(element, found);
+                    }
+                }
+            }
             SlotTy::Map { key, value } => {
                 if let SlotTy::Map {
                     key: found_key,
@@ -1588,6 +1724,9 @@ fn fills(holey: &SlotTy, target: &SlotTy) -> bool {
     }
     match (holey, target) {
         (SlotTy::List(holey), SlotTy::List(target)) => fills(holey, target),
+        (SlotTy::Tuple(holey), SlotTy::Tuple(target)) => {
+            holey.len() == target.len() && holey.iter().zip(target.iter()).all(|(h, t)| fills(h, t))
+        }
         (
             SlotTy::Map {
                 key: holey_key,
@@ -1633,6 +1772,15 @@ fn restate<V>(node: Rc<Node<'_, V>>, target: SlotTy) -> Rc<Node<'_, V>> {
             let items = items
                 .iter()
                 .map(|item| restate(Rc::clone(item), (**inner).clone()))
+                .collect();
+            Rc::new(Node::List { ty, items })
+        }
+        // A tuple crosses as a list node: each element takes its own slot.
+        (Node::List { items, .. }, SlotTy::Tuple(slots)) if items.len() == slots.len() => {
+            let items = items
+                .iter()
+                .zip(slots.iter())
+                .map(|(item, slot)| restate(Rc::clone(item), slot.clone()))
                 .collect();
             Rc::new(Node::List { ty, items })
         }
@@ -1772,6 +1920,15 @@ fn canonical(ty: &SlotTy) -> SlotTy {
 /// Are `a` and `b` the same type?
 fn equivalent(a: &SlotTy, b: &SlotTy) -> bool {
     a == b || canonical(a) == canonical(b)
+}
+
+/// The items of a host sequence: lists and tuples share a shape wherever a
+/// slot fixes the sequence's type.
+fn sequence<C>(shape: &Shape<C>) -> Option<&[C]> {
+    match shape {
+        Shape::List(items) | Shape::Tuple { items, .. } => Some(items),
+        _ => None,
+    }
 }
 
 fn mismatch<'t, V: HostValue>(tree: &'t Tree<V>, slot: &SlotTy) -> Box<Failure<'t, V>> {

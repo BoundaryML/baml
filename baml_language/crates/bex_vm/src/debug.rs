@@ -306,6 +306,8 @@ pub(crate) fn display_instruction(
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::ConcatStrings(_)
+        | Instruction::AllocTuple(_)
+        | Instruction::LoadTupleField(_)
         | Instruction::AllocMap(_)
         | Instruction::LoadArrayElement
         | Instruction::LoadArrayElementLocal
@@ -457,6 +459,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::LoadField(_)
         | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
+        | Instruction::LoadTupleField(_)
         | Instruction::LoadArrayElement
         | Instruction::LoadArrayElementLocal
         | Instruction::LoadMapElement => Style::new().blue(),
@@ -533,7 +536,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_)
-        | Instruction::ConcatStrings(_) => Style::new().cyan(),
+        | Instruction::ConcatStrings(_)
+        | Instruction::AllocTuple(_) => Style::new().cyan(),
         Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await | Instruction::AwaitAny => {
             Style::new().green().bright()
         }
@@ -895,6 +899,8 @@ fn display_instruction_textual(
             let name = meta_str(idx);
             format!("store_field_local .{name}")
         }
+        // A tuple slot is its number, so it needs no name metadata.
+        Instruction::LoadTupleField(slot) => format!("load_tuple_field .{slot}"),
         // The operand indexes the *interface's* field list, not the receiver's
         // layout, so show the name and mark it virtual.
         Instruction::VirtualLoadField(idx) => {
@@ -1050,6 +1056,7 @@ fn display_instruction_textual(
         // --- Allocation ---
         Instruction::AllocArray(n) => format!("alloc_array {n}"),
         Instruction::ConcatStrings(n) => format!("concat_strings {n}"),
+        Instruction::AllocTuple(n) => format!("alloc_tuple {n}"),
         Instruction::AllocMap(n) => format!("alloc_map {n}"),
         Instruction::AllocInstance {
             class_obj: _,
@@ -1588,6 +1595,8 @@ pub fn display_compact_bytecode(
             | OpCode::Copy
             | OpCode::AllocArray
             | OpCode::ConcatStrings
+            | OpCode::AllocTuple
+            | OpCode::LoadTupleField
             | OpCode::AllocMap
             | OpCode::InitInstance
             | OpCode::AllocVariant

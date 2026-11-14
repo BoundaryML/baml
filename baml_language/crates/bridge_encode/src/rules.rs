@@ -51,6 +51,17 @@ impl Rules {
             Rules::JavaScript => javascript(scalar, slot),
         }
     }
+
+    /// Whether a list says it is not a tuple. A Python `list` does, since a
+    /// tuple would be a `tuple`; a JavaScript array is both the language's
+    /// list and its tuple, so one the runtime did not decode from a BAML
+    /// tuple says neither.
+    pub(crate) fn lists_are_not_tuples(self) -> bool {
+        match self {
+            Rules::Python => true,
+            Rules::JavaScript => false,
+        }
+    }
 }
 
 /// A value that is exactly one BAML scalar fits that slot or an open one.

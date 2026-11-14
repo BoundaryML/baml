@@ -175,7 +175,7 @@ pub use types::{
     InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
     MapContainer, MapData, MapEntry, MapEpochChanged, MapKeyUndecided, MapReadGuard, MapWriteGuard,
     Object, ObjectType, PanicClass, Program, RenderedCallable, SpelledBound, SysOp,
-    SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard,
+    SysOpErrorCategory, SysOpPanicCategory, Tuple, TupleShapeMismatch, Uint8ArrayContainer, Uint8ArrayReadGuard,
     Uint8ArrayWriteGuard, Value, ValueKind, Variant, format_float, map_int_hash, map_string_hash,
     sys_op_for_path, type_tags,
 };

@@ -125,6 +125,10 @@ impl BamlClassType for PackageReflectImpl {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Function)
     }
 
+    fn as_tuple(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Tuple)
+    }
+
     fn _validate_renderable(vm: &mut BexVm, self_value: &Value) -> Result<(), VmRustFnError> {
         let type_value = cloned_type_value(vm, *self_value);
         let root = match &type_value.ty {
@@ -393,6 +397,10 @@ impl RenderDefinitionValidator<'_> {
                 .iter()
                 .enumerate()
                 .find_map(|(index, member)| self.visit(member, &origins.union_member(index))),
+            bex_vm_types::RealizedTy::Tuple(elements) => elements
+                .iter()
+                .enumerate()
+                .find_map(|(index, element)| self.visit(element, &origins.tuple_element(index))),
             bex_vm_types::RealizedTy::Future(value, error) => self
                 .visit(value, &origins.future_value())
                 .or_else(|| self.visit(error, &origins.future_error())),
@@ -787,6 +795,11 @@ impl RenderDefinitionEquivalence<'_> {
             (RealizedTy::Union(left), RealizedTy::Union(right)) => {
                 self.type_lists_equivalent(left, right)
             }
+            // Slot order is identity: `type_lists_equivalent` pairs slots by
+            // position, and a length mismatch is a different arity.
+            (RealizedTy::Tuple(left), RealizedTy::Tuple(right)) => {
+                self.type_lists_equivalent(left, right)
+            }
             (
                 RealizedTy::Function {
                     params: left_params,
@@ -896,6 +909,9 @@ fn first_open_interface(
         bex_vm_types::RealizedTy::Union(members) => members
             .iter()
             .find_map(|member| first_open_interface(vm, member, path, visited)),
+        bex_vm_types::RealizedTy::Tuple(elements) => elements
+            .iter()
+            .find_map(|element| first_open_interface(vm, element, path, visited)),
         bex_vm_types::RealizedTy::Future(value, error) => {
             first_open_interface(vm, value, path, visited)
                 .or_else(|| first_open_interface(vm, error, path, visited))
@@ -1090,6 +1106,14 @@ fn render_named_ty_source(ty: &baml_type::RealizedTy<baml_type::TaggedTypeName>)
                 render_named_ty_source(value)
             )
         }
+        // A tuple closes its own parentheses, so a slot never needs grouping;
+        // the singleton keeps its comma and the empty tuple renders `()`.
+        baml_type::RealizedTy::Tuple(elements) => baml_type::render_tuple(
+            &elements
+                .iter()
+                .map(render_named_ty_source)
+                .collect::<Vec<_>>(),
+        ),
         baml_type::RealizedTy::Class(head, args) if args.is_empty() => {
             head.display_name().to_string()
         }

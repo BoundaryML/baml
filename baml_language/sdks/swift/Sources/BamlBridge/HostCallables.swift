@@ -83,12 +83,12 @@ public struct BamlHostArgs: Sendable {
 
     /// Decode required positional arg `index` as a node of its declared
     /// type `slot`.
-    public func required<T: BamlDecodable>(_ index: Int, as slot: BamlSlot<T>) throws -> T {
+    public func required<T>(_ index: Int, as slot: BamlSlot<T>) throws -> T {
         guard positional.indices.contains(index) else {
             throw BamlHostFault(message: "the callback has no positional argument \(index)")
         }
         do {
-            return try T._bamlDecode(positional[index], as: slot)
+            return try slot._bamlDecode(positional[index])
         } catch {
             throw BamlHostFault(message: "positional argument \(index) could not be decoded: \(error)")
         }
@@ -96,13 +96,13 @@ public struct BamlHostArgs: Sendable {
 
     /// Decode optional named arg `name` as a node of `slot`, its declared
     /// type without the null: omitted → `.unset`, explicit null → `.null`.
-    public func optional<T: BamlDecodable>(_ name: String, as slot: BamlSlot<T>) throws -> BamlOptional<T> {
+    public func optional<T: Sendable>(_ name: String, as slot: BamlSlot<T>) throws -> BamlOptional<T> {
         guard let value = named[name] else { return .unset }
         switch value.normalized.value {
         case nil, .nullValue: return .null
         default:
             do {
-                return .value(try T._bamlDecode(value, as: slot))
+                return .value(try slot._bamlDecode(value))
             } catch {
                 throw BamlHostFault(message: "argument `\(name)` could not be decoded: \(error)")
             }
@@ -112,9 +112,9 @@ public struct BamlHostArgs: Sendable {
     /// The callable's result, encoded against its declared return type
     /// `slot`. A result that cannot be encoded is the bridge's failure, not
     /// the callable's.
-    public func result<Value: BamlEncodable>(_ value: Value, as slot: BamlSlot<Value>) throws -> BamlInboundValue {
+    public func result<Value>(_ value: Value, as slot: BamlSlot<Value>) throws -> BamlInboundValue {
         do {
-            return try value._bamlEncode(as: slot)
+            return try slot._bamlEncode(value)
         } catch {
             throw BamlHostFault(message: "the callback's result could not be encoded: \(error)")
         }
@@ -126,13 +126,14 @@ public struct BamlHostArgs: Sendable {
 /// `throws` contract) — the Swift analog of Python raising
 /// `BamlError(SomeGeneratedModel(...))` inside a callback.
 public struct BamlThrownValue: Error {
-    // `Error` implies `Sendable`, so the stored payload must be too
-    // (strict-concurrency checking on newer compilers rejects a bare
-    // `any BamlTyped` here). Every realistic conformer already is:
-    // generated models are Sendable value types.
-    public let value: any BamlTyped & Sendable
+    // `Error` implies `Sendable`, so the stored payload must be too. Every
+    // realistic value already is: generated models are Sendable value
+    // types, and so is a native tuple of them. A value that is not
+    // `BamlTyped` (a native tuple) crosses only under a declared throws slot
+    // of its Swift type.
+    public let value: any Sendable
 
-    public init(_ value: any BamlTyped & Sendable) {
+    public init<Value: Sendable>(_ value: Value) {
         self.value = value
     }
 }
@@ -144,27 +145,27 @@ public struct BamlThrownValue: Error {
 public struct BamlThrownSlot: Sendable {
     private let slot: any ThrownSlot
 
-    public init<Value: BamlEncodable>(_ slot: BamlSlot<Value>) {
+    public init<Value>(_ slot: BamlSlot<Value>) {
         self.slot = TypedThrownSlot(slot: slot)
     }
 
     /// `value` encoded under this slot, or `nil` when it is not of the
     /// slot's Swift type.
-    func encode(_ value: any BamlTyped & Sendable) throws -> BamlInboundValue? {
+    func encode(_ value: any Sendable) throws -> BamlInboundValue? {
         try slot.encode(value)
     }
 }
 
 private protocol ThrownSlot: Sendable {
-    func encode(_ value: any BamlTyped & Sendable) throws -> BamlInboundValue?
+    func encode(_ value: any Sendable) throws -> BamlInboundValue?
 }
 
-private struct TypedThrownSlot<Value: BamlEncodable>: ThrownSlot {
+private struct TypedThrownSlot<Value>: ThrownSlot {
     let slot: BamlSlot<Value>
 
-    func encode(_ value: any BamlTyped & Sendable) throws -> BamlInboundValue? {
+    func encode(_ value: any Sendable) throws -> BamlInboundValue? {
         guard let value = value as? Value else { return nil }
-        return try value._bamlEncode(as: slot)
+        return try slot._bamlEncode(value)
     }
 }
 
@@ -267,7 +268,7 @@ public struct BamlHostCallable: Sendable {
     /// takes it (a panic, or a value outside the declaration, which the
     /// engine refuses), it states its own type.
     private func thrownOutcome(
-        _ value: any BamlTyped & Sendable
+        _ value: any Sendable
     ) -> BamlBridge_Cffi_V1_HostCallCompletion.OneOf_Outcome {
         do {
             for slot in thrown {
@@ -275,7 +276,13 @@ public struct BamlHostCallable: Sendable {
                     return .thrown(encoded.raw)
                 }
             }
-            return .thrown(try value._bamlEncode().raw)
+            guard let typed = value as? any BamlTyped else {
+                return .bridgeFailure(
+                    "the callback's thrown \(type(of: value)) fills no declared throws type "
+                        + "and has no BAML type of its own"
+                )
+            }
+            return .thrown(try typed._bamlEncode().raw)
         } catch {
             return .bridgeFailure("the callback's thrown value could not be encoded: \(error)")
         }
@@ -420,19 +427,8 @@ enum HostInvocationScope {
 }
 
 func releaseControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
-    switch value.value {
-    case .handleValue(let handle):
-        switch BamlHandle.keySpace(of: handle.handleType) {
-        case .engine: _ = BamlApi.handleRelease(handle.key)
-        case .host: break
-        }
-    case .listValue(let list): for item in list.items { releaseControlValue(item) }
-    case .mapValue(let map): for item in map.entries { releaseControlValue(item.value) }
-    case .classValue(let cls): for item in cls.fields { releaseControlValue(item.value) }
-    case .unionVariantValue(let variant): releaseControlValue(variant.value)
-    case .tyValue(let ty): for key in liveKeys(ty) { _ = BamlApi.handleRelease(key) }
-    default: break
-    }
+    releaseEngineHandles(value)
+    releaseTypeValues(value)
 }
 
 private final class HostInvocationFrame: @unchecked Sendable {
@@ -511,10 +507,10 @@ func rehydrateHostError(_ payload: BamlBridge_Cffi_V1_BamlOutboundValue) -> (any
 }
 
 /// `value`, received from the engine, restated as the host sends a value:
-/// each list, map and class states the exact type the engine gave it, a
-/// union selection is its selected value, and each engine handle is a fresh
-/// clone (the received key stays with the error that carried it, which may
-/// be forwarded again). A value that cannot be restated (a runtime
+/// each list, tuple, map and class states the exact type the engine gave
+/// it, a union selection is its selected value, and each engine handle is a
+/// fresh clone (the received key stays with the error that carried it,
+/// which may be forwarded again). A value that cannot be restated (a runtime
 /// declaration, whose rows went back on arrival, or a map keyed by other
 /// than strings) is refused, its clones released.
 func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault) -> BamlBridge_Cffi_V1_InboundValue {
@@ -581,6 +577,26 @@ func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault
             throw error
         }
         restated.valueType = BamlTypeDescriptor.list(BamlTypeDescriptor(list.itemType)).raw
+        restated.listValue.values = items
+    case .tupleValue(let tuple):
+        // A tuple goes back as a list stating the tuple type it carries, so
+        // it keeps its slot types (never ones read back off its elements).
+        guard tuple.hasTupleType,
+            case .tuple(let slots)? = tuple.tupleType.ty,
+            slots.items.count == tuple.items.count
+        else {
+            throw BamlHostFault(message: "a tuple without its tuple type cannot be restated")
+        }
+        try requireNamedHeads(tuple.tupleType)
+        var items: [BamlBridge_Cffi_V1_InboundValue] = []
+        items.reserveCapacity(tuple.items.count)
+        do throws(BamlHostFault) {
+            for item in tuple.items { items.append(try restate(item)) }
+        } catch {
+            items.forEach(releaseInbound)
+            throw error
+        }
+        restated.valueType = tuple.tupleType
         restated.listValue.values = items
     case .mapValue(let map):
         guard map.hasKeyType, map.hasValueType, map.keyType == BamlTypeDescriptor.string.raw else {
