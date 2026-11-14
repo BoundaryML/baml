@@ -108,6 +108,7 @@ export default function WhoAreWePage() {
             We're a small team rebuilding those foundations for a world where AI
             does most of it.
           </p>
+          <FounderNote />
         </div>
         <Image
           alt="The Boundary team"
@@ -196,10 +197,6 @@ export default function WhoAreWePage() {
             </li>
           ))}
         </ul>
-      </section>
-
-      <section className={`${PAGE_WRAP} pb-16 md:pb-24`}>
-        <FounderNote />
       </section>
 
       <section
