@@ -75,7 +75,7 @@ impl std::fmt::Display for Enum {
     }
 }
 
-/// Same as [`crate::Instance`] but for enums.
+/// A value of an enum: the enum it belongs to and the variant's index.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Variant {
     /// Pointer to the enum object in the heap.
