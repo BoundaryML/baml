@@ -98,7 +98,7 @@ impl BamlPackageReflect for PackageReflectImpl {
 /// image's root reaches them — the runtime mirror of the compiler's edge
 /// table for a package without a manifest, so the package can name exactly
 /// what its compile could.
-fn runtime_edges(
+pub(crate) fn runtime_edges(
     vm: &BexVm,
     declared: &IndexMap<String, HeapPtr>,
 ) -> IndexMap<baml_type::Name, Edge> {
@@ -2073,6 +2073,28 @@ fn callee_fn_ty(sig: &CallableSignature) -> RealizedTy {
         ret: Box::new(sig.ret.clone()),
         throws: Box::new(sig.throws.clone()),
     }
+}
+
+/// Why `replacement`'s type is not exactly `target`'s, or `None` when it is:
+/// each must be a subtype of the other, `throws` included.
+pub(crate) fn replacement_type_problem(
+    vm: &BexVm,
+    target: &bex_vm_types::Function,
+    replacement: &bex_vm_types::Function,
+) -> Option<String> {
+    let (Ok(target), Ok(replacement)) = (
+        crate::vm::function_callable_signature(vm, target, &[], false),
+        crate::vm::function_callable_signature(vm, replacement, &[], false),
+    ) else {
+        return Some("the signatures could not be read".to_string());
+    };
+    let expected = callee_fn_ty(&target);
+    let actual = callee_fn_ty(&replacement);
+    let actual_ty = Ty::from(actual.clone());
+    let expected_ty = Ty::from(expected.clone());
+    let same = normalize::is_subtype(&actual_ty, &expected_ty, vm)
+        && normalize::is_subtype(&expected_ty, &actual_ty, vm);
+    (!same).then(|| format!("the replacement has type `{actual}`, not `{expected}`"))
 }
 
 /// A value's reconstructed type, `unknown` when it has none (a bound method, an

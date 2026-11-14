@@ -67,6 +67,9 @@ Target options:
 
           Use `--context @file` to read JSON from a file or `--context -` for standard input.
 
+      --hot
+          Watch the project's files and hot swap each save into the running program
+
       --list
           List runnable targets (scripts, functions)
 

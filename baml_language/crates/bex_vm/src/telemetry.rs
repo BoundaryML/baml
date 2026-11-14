@@ -1713,6 +1713,26 @@ impl ::bex_vm_types::RootHaver for TelemetryState {
         // the visitor.
         let old_paths = std::mem::take(call_paths);
         call_path_keys.clear();
+        if crate::hotswap::any_queued() {
+            // A call path only needs its functions to tell paths apart, so once
+            // a swap exists it must not keep them alive: every replaced swap
+            // would stay in memory for the life of the VM.
+            for (mut key, id) in old_paths {
+                if key.visit_weak(visitor) {
+                    call_paths.insert(key, id);
+                    call_path_keys.insert(id, key);
+                }
+            }
+            for slot in last_call_path.iter_mut() {
+                if slot
+                    .as_mut()
+                    .is_some_and(|(key, _)| !key.visit_weak(visitor))
+                {
+                    *slot = None;
+                }
+            }
+            return;
+        }
         for (mut key, id) in old_paths {
             key.visit_roots(visitor);
             call_paths.insert(key, id);
@@ -1721,6 +1741,18 @@ impl ::bex_vm_types::RootHaver for TelemetryState {
         for (key, _) in last_call_path.iter_mut().flatten() {
             key.visit_roots(visitor);
         }
+    }
+}
+
+impl CallPathKey {
+    /// Repoint both functions without keeping them alive. `false` once either
+    /// is gone, and the key must then be dropped.
+    fn visit_weak(&mut self, visitor: &mut dyn ::bex_vm_types::RootVisitor) -> bool {
+        let caller_live = self
+            .visible_caller
+            .as_mut()
+            .is_none_or(|caller| visitor.visit_weak(caller));
+        visitor.visit_weak(&mut self.callee) && caller_live
     }
 }
 
@@ -2708,6 +2740,7 @@ mod tests {
             ),
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
+            hotswap_redirect: bex_vm_types::types::HotswapRedirect::default(),
             compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),

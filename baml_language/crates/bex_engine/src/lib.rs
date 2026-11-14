@@ -169,6 +169,13 @@ pub trait RuntimeCompiler: Send + Sync + 'static {
         &self,
         request: bex_vm_types::RuntimeCompileRequest,
     ) -> Result<bex_vm::RuntimeCompileArtifact, Vec<bex_vm_types::RuntimeCompileDiagnostic>>;
+
+    /// Each declaration of `files` by its tokens, which a hot swap compares
+    /// with the program as built (BEP-087).
+    fn declaration_fingerprints(
+        &self,
+        files: &IndexMap<String, String>,
+    ) -> bex_vm_types::DeclFingerprints;
 }
 
 /// The declarations of every runtime package a sys-op's type arguments reach,
@@ -701,6 +708,23 @@ impl Drop for RootCallWork {
     }
 }
 
+/// Why `BexEngine::hotswap_patch` installed nothing.
+#[derive(Debug, thiserror::Error)]
+pub enum HotswapError {
+    #[error(
+        "hot swapping is off: start with `baml run --hot`, or set `EngineConfig::hotswap_baseline` after `baml_env::set_hotswap_enabled`"
+    )]
+    Disabled,
+    #[error("hot swapping needs a runtime compiler, and none is installed")]
+    NoCompiler,
+    #[error("the new source does not compile: {0}")]
+    Compile(String),
+    #[error("{}", .0.join("; "))]
+    Rejected(Vec<String>),
+    #[error("a changed client failed to build: {0}")]
+    Initializer(String),
+}
+
 /// Errors that can occur during engine execution.
 #[derive(Debug, PartialEq, Error, Clone)]
 pub enum EngineError {
@@ -1008,6 +1032,11 @@ pub struct EngineConfig {
     /// The caller owns this invariant; engines do not coordinate global state.
     pub launch_context: btel_types::context::Context,
     pub runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
+    /// The root package's source as built, which every hot swap is compared
+    /// with (BEP-087). `None` turns hot swapping off. The program must have
+    /// been compiled after `baml_env::set_hotswap_enabled`, so no caller looks
+    /// through a function a swap can replace.
+    pub hotswap_baseline: Option<bex_vm_types::DeclFingerprints>,
     pub clock_mode: btel_clock::ClockMode,
     /// Publisher-owned artifact settings; absent for ordinary source execution.
     pub artifact_telemetry: Option<btel_settings::artifact::ArtifactTelemetry>,
@@ -1022,6 +1051,7 @@ impl Default for EngineConfig {
         Self {
             launch_context: btel_types::context::Context::default(),
             runtime_compiler: None,
+            hotswap_baseline: None,
             clock_mode: btel_settings::clock::DEFAULT_MODE,
             artifact_telemetry: None,
             #[cfg(not(target_arch = "wasm32"))]
@@ -1161,6 +1191,14 @@ pub struct BexEngine {
     /// System operations provider.
     sys_ops: std::sync::Arc<sys_ops::SysOps>,
     runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
+    /// Serializes `hotswap_patch`, so swaps install in the order they arrive.
+    hotswap_lock: tokio::sync::Mutex<()>,
+    /// The source as built, when hot swapping is on: what every patch is
+    /// compared with.
+    hotswap_baseline: Option<bex_vm_types::DeclFingerprints>,
+    /// The source the last installed patch, or the build, declared: what the
+    /// next patch reports its changes against.
+    hotswap_applied: std::sync::Mutex<bex_vm_types::DeclFingerprints>,
     /// Context passed to `sys_ops` that need engine-level information.
     sys_op_ctx: sys_types::EngineSysOpContext,
     /// Process argv passed in at engine creation. Exposed to BAML via
@@ -1863,6 +1901,7 @@ impl BexEngine {
         let EngineConfig {
             launch_context,
             runtime_compiler,
+            hotswap_baseline,
             clock_mode,
             artifact_telemetry,
             #[cfg(not(target_arch = "wasm32"))]
@@ -1959,6 +1998,12 @@ impl BexEngine {
         // without re-resolving it.
         let packages = Arc::new(package_index);
         let root_package = packages.root();
+        // Calls consult redirects only in a program that can be swapped.
+        let hotswap_baseline = hotswap_baseline.filter(|_| baml_env::hotswap_enabled());
+        if hotswap_baseline.is_some() {
+            heap.hotswap_enable();
+        }
+        let hotswap_applied = hotswap_baseline.clone().unwrap_or_default();
         let method_owners: HashMap<HeapPtr, HeapPtr> = packages
             .package_ptrs()
             .flat_map(|package_ptr| {
@@ -2359,6 +2404,9 @@ impl BexEngine {
             resolved_enum_names,
             sys_ops,
             runtime_compiler,
+            hotswap_lock: tokio::sync::Mutex::new(()),
+            hotswap_baseline,
+            hotswap_applied: std::sync::Mutex::new(hotswap_applied),
             sys_op_ctx,
             argv,
             heap_permit_manager,
@@ -3214,6 +3262,9 @@ impl BexEngine {
         let mut all_roots = self.heap.collect_handle_roots();
 
         heap_guard.collect_roots(&mut all_roots);
+        // An occupied hot swap redirect may be all that keeps a replacement's
+        // package alive.
+        all_roots.extend(self.heap.hotswap_roots());
 
         tracing::debug!(
             "GC: {} total roots from {} handles and {} parked heap permits",
@@ -3257,6 +3308,7 @@ impl BexEngine {
             &forwarding,
             &*self.heap,
         ));
+        self.heap.hotswap_forward(&heap_guard, &forwarding);
 
         // Bug H, check 3 (heap_debug only): after `forward_roots`, no
         // holder root should still point into the inactive (former
@@ -3784,6 +3836,171 @@ impl BexEngine {
         // would record its start at its completion, as if cancelled unstarted.
         permit.vm.mark_telemetry_running();
         permit
+    }
+
+    /// Install a new version of the running program from its complete source,
+    /// `files` (project-relative path to text), compared with the program as
+    /// built (BEP-087). Returns the functions it swapped or restored since the
+    /// last patch. An edit that needs a restart installs nothing, and neither
+    /// does a changed client whose initializer fails, though any writes that
+    /// initializer made to live objects remain.
+    pub async fn hotswap_patch(
+        self: &Arc<Self>,
+        files: IndexMap<String, String>,
+    ) -> Result<Vec<String>, HotswapError> {
+        let Some(baseline) = &self.hotswap_baseline else {
+            return Err(HotswapError::Disabled);
+        };
+        let compiler = self
+            .runtime_compiler
+            .clone()
+            .ok_or(HotswapError::NoCompiler)?;
+        let _serial = self.hotswap_lock.lock().await;
+        let thread = self.new_admin_thread().await;
+        let root = thread.vm.hotswap_root();
+        let request = {
+            let aliased = thread.vm.hotswap_dependencies(root);
+            let packages = Self::mounts_reached(&thread.vm, &aliased)
+                .map_err(|error| HotswapError::Compile(error.to_string()))?;
+            bex_vm_types::RuntimeCompileRequest {
+                files,
+                packages,
+                aliases: aliased
+                    .iter()
+                    .map(|(alias, ptr)| {
+                        (
+                            alias.clone(),
+                            bex_vm_types::RuntimePackageIdentity::of(*ptr),
+                        )
+                    })
+                    .collect(),
+                mode: bex_vm_types::RuntimeCompileMode::Package,
+            }
+        };
+        // Compile without the heap permit, as `Package.compile` does.
+        let inactive = thread.release();
+        let compiled = catch_unwind(AssertUnwindSafe(|| {
+            let fingerprints = compiler.declaration_fingerprints(&request.files);
+            compiler
+                .compile(request)
+                .map(|artifact| (artifact, fingerprints))
+        }));
+        let thread = inactive.acquire().await;
+        let (artifact, fingerprints) = match compiled {
+            Ok(Ok(compiled)) => compiled,
+            Ok(Err(diagnostics)) => {
+                let messages: Vec<String> = diagnostics
+                    .into_iter()
+                    .filter(|diagnostic| {
+                        diagnostic.severity == bex_vm_types::RuntimeDiagnosticSeverity::Error
+                    })
+                    .map(|diagnostic| diagnostic.message)
+                    .collect();
+                return Err(HotswapError::Compile(messages.join("\n")));
+            }
+            Err(_) => return Err(HotswapError::Compile("the compiler panicked".to_string())),
+        };
+        let installed = self
+            .hotswap_install(thread, &artifact, baseline, &fingerprints)
+            .await;
+        // A patch allocates a package, installed or not; with every call
+        // blocked elsewhere, nothing else would notice the pressure.
+        self.maybe_collect_garbage().await;
+        let names = installed?;
+        // Every patch swaps all that differs from the build; report this one.
+        let mut applied = self
+            .hotswap_applied
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let changes = bex_vm::hotswap::hotswap_changes(&applied, &fingerprints);
+        *applied = fingerprints;
+        Ok(names
+            .into_iter()
+            .filter(|name| changes.contains(name))
+            .collect())
+    }
+
+    /// Link a compiled patch against the running program, build its changed
+    /// clients, and install it. Consumes `thread`, so its permit is released
+    /// however this returns.
+    async fn hotswap_install(
+        self: &Arc<Self>,
+        mut thread: ActiveHeapPermit<BexThread>,
+        artifact: &bex_vm::RuntimeCompileArtifact,
+        baseline: &bex_vm_types::DeclFingerprints,
+        fingerprints: &bex_vm_types::DeclFingerprints,
+    ) -> Result<Vec<String>, HotswapError> {
+        // Pointers may have moved while the permit was released.
+        let root = thread.vm.hotswap_root();
+        let aliased = thread.vm.hotswap_dependencies(root);
+        let applied = self
+            .hotswap_applied
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let initializers = thread
+            .vm
+            .hotswap_prepare_patch(root, artifact, baseline, &applied, fingerprints, &aliased)
+            .map_err(HotswapError::Rejected)?;
+        // Changed clients build once, before anything is installed, with this
+        // VM seeing the patched call graph.
+        for index in 0..initializers {
+            let helper = thread.vm.hotswap_initializer(index);
+            thread.vm.set_entry_point(helper, &[]);
+            let value = loop {
+                match thread.vm.exec() {
+                    Ok(VmExecState::Complete(value)) => break value,
+                    Ok(VmExecState::Event { .. } | VmExecState::Log { .. }) => {
+                        thread.vm.stack.push(Value::NULL);
+                    }
+                    // Offer a waiting collection the permit, as `$init` does.
+                    // The prepared patch is rooted on this VM.
+                    Ok(VmExecState::EarlyYield) => thread = thread.release().acquire().await,
+                    Ok(VmExecState::Checkpoint) => thread.vm.pass_checkpoint(),
+                    Ok(_) => {
+                        return Err(HotswapError::Initializer(
+                            "an initializer may not wait, spawn or perform io".to_string(),
+                        ));
+                    }
+                    Err(error) => {
+                        return Err(HotswapError::Initializer(describe_init_failure(
+                            &self.heap,
+                            thread.proof(),
+                            &thread.vm.hotswap_package_name(),
+                            &error,
+                            &HashMap::new(),
+                        )));
+                    }
+                }
+            };
+            thread.vm.hotswap_store_initialized(index, value);
+        }
+        let names = thread.vm.hotswap_queue();
+        // Install with every VM parked, the way a collection runs: no call is
+        // mid-selection when a redirect changes. The queue roots the swaps.
+        drop(thread.release());
+        {
+            #[cfg(not(target_arch = "wasm32"))]
+            let park_request_guard = ParkRequestGuard::new(Arc::clone(&self.park_requested));
+            let parked = self.heap_permit_manager.request_park().await;
+            #[cfg(not(target_arch = "wasm32"))]
+            drop(park_request_guard);
+            self.heap.hotswap_apply_pending(&parked);
+        }
+        Ok(names)
+    }
+
+    /// A thread for the engine's own work over the heap: no telemetry, no
+    /// invocation, and its own heap permit.
+    async fn new_admin_thread(self: &Arc<Self>) -> ActiveHeapPermit<BexThread> {
+        let mut vm = self.new_vm(None);
+        vm.thread_id = self.next_bex_thread_id().0;
+        let thread = BexThread::new_root(vm, TaskCancel::root(CancellationToken::new()));
+        self.heap_permit_manager
+            .new_permit(thread)
+            .await
+            .acquire()
+            .await
     }
 
     /// A VM over this engine's heap and program, running nothing, recording

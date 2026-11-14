@@ -69,6 +69,7 @@ mod gc_profile;
 mod heap;
 mod heap_debugger;
 mod heap_guard;
+mod hotswap;
 mod tlab;
 
 // Re-export types from bex_external_types for convenience
