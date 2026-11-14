@@ -760,8 +760,207 @@ pub fn generate_native_trait_for(
 
     emit_subtree_traits(&mut out, &tree, "");
     emit_root_trait(&mut out, &tree, package);
+    emit_entry_module(&mut out, &tree, package);
 
     out
+}
+
+// ============================================================================
+// Entry points
+// ============================================================================
+
+/// Where a builtin's entry point lives and how to call it: `baml.Array.push`
+/// is `bex_vm::package_baml::builtins::Array::push(vm, array, item)`.
+///
+/// The one naming rule shared by the generator, which defines the entry
+/// points, and the Rust emitter, which calls them.
+pub struct NativeEntry {
+    /// The full Rust path of the function.
+    pub path: String,
+    /// The `Value` arguments after `vm`: the receiver, if any, then the params.
+    pub arity: usize,
+    /// Whether a `{path}_local` twin takes the receiver without its lock.
+    pub local_twin: bool,
+}
+
+impl NativeEntry {
+    #[must_use]
+    pub fn of(b: &NativeBuiltin, package: &str) -> Self {
+        let (modules, name) = entry_segments(&b.path, package);
+        let mut path = format!("bex_vm::package_{package}::builtins");
+        for module in &modules {
+            path.push_str("::");
+            path.push_str(module);
+        }
+        path.push_str("::");
+        path.push_str(&name);
+        Self {
+            path,
+            arity: entry_params(b).len(),
+            local_twin: b.local_twin,
+        }
+    }
+}
+
+/// The modules under `builtins` and the function name of a builtin's entry
+/// point. Modules spell the BAML path's segments (`json`, `Array`,
+/// `media::Pdf`), so a namespace and a same-named class never collide.
+fn entry_segments(path: &str, package: &str) -> (Vec<String>, String) {
+    let rest = path.strip_prefix(&format!("{package}.")).unwrap_or(path);
+    let mut segments: Vec<&str> = rest.split('.').collect();
+    let name = segments.pop().unwrap_or(rest);
+    let modules = segments
+        .iter()
+        .map(|segment| {
+            let ident = sanitize_ident(segment);
+            if syn::parse_str::<syn::Ident>(&ident).is_ok() {
+                ident
+            } else {
+                format!("{ident}_")
+            }
+        })
+        .collect();
+    (modules, rust_method_name(name))
+}
+
+/// The entry point's `Value` parameters, named as the builtin's own (the
+/// receiver, then each param), or positionally if those would clash.
+fn entry_params(b: &NativeBuiltin) -> Vec<String> {
+    let receiver = b
+        .receiver
+        .as_ref()
+        .filter(|recv| !recv.receiver_type.is_static())
+        .map(receiver_param_name);
+    let names: Vec<String> = receiver
+        .into_iter()
+        .chain(b.params.iter().map(|param| rust_field_ident(&param.name).to_string()))
+        .collect();
+    let mut seen = std::collections::HashSet::new();
+    let clean = names.iter().all(|name| name != "vm" && seen.insert(name.as_str()));
+    if clean {
+        names
+    } else {
+        (0..names.len()).map(|i| format!("arg{i}")).collect()
+    }
+}
+
+/// Emit `pub mod builtins`: one plain function per builtin, at its BAML path,
+/// calling the builtin's glue. Compiled code calls these by name, so rustc
+/// sees the callee and can inline it; the interpreter keeps calling the same
+/// glue through its dispatch table.
+fn emit_entry_module(out: &mut String, root: &NamespaceNode, package: &str) {
+    let mut modules: BTreeMap<Vec<String>, String> = BTreeMap::new();
+    collect_entries(&mut modules, root, "", package, &package_trait_name(package));
+    let impl_ty = format!("Package{}Impl", to_pascal_case(package));
+    let impl_ty = impl_ty.as_str();
+
+    out.push_str(
+        "/// One plain entry point per builtin, at its BAML path: `baml.Array.push` is\n\
+         /// `builtins::Array::push`. Each calls the builtin's generated glue, so the\n\
+         /// interpreter and compiled code run the same body.\n",
+    );
+    out.push_str("#[allow(non_snake_case, clippy::used_underscore_items, clippy::too_many_arguments)]\n");
+    out.push_str("pub mod builtins {\n    #[allow(unused_imports)]\n    use super::*;\n");
+    emit_entry_tree(out, &modules, &[], impl_ty, 1);
+    out.push_str("}\n");
+}
+
+/// Gather each entry function's source under its module path.
+fn collect_entries(
+    modules: &mut BTreeMap<Vec<String>, String>,
+    node: &NamespaceNode,
+    namespace_prefix: &str,
+    package: &str,
+    free_fn_trait: &str,
+) {
+    for (class_name, entries) in &node.classes {
+        let trait_name = class_trait_name(namespace_prefix, class_name);
+        for entry in entries {
+            push_entry(modules, entry.builtin, package, &trait_name, &entry.rust_method_name);
+        }
+    }
+    for entry in &node.free_fns {
+        push_entry(modules, entry.builtin, package, free_fn_trait, &entry.rust_method_name);
+    }
+    for (ns_name, sub_node) in &node.sub_namespaces {
+        let child_prefix = if namespace_prefix.is_empty() {
+            ns_name.clone()
+        } else {
+            format!("{namespace_prefix}.{ns_name}")
+        };
+        let child_trait = namespace_trait_name(&child_prefix);
+        collect_entries(modules, sub_node, &child_prefix, package, &child_trait);
+    }
+}
+
+fn push_entry(
+    modules: &mut BTreeMap<Vec<String>, String>,
+    b: &NativeBuiltin,
+    package: &str,
+    trait_name: &str,
+    glue_method: &str,
+) {
+    let (module, name) = entry_segments(&b.path, package);
+    let params = entry_params(b);
+    let signature = params.iter().fold(String::new(), |mut signature, param| {
+        write!(signature, ", {param}: Value").unwrap();
+        signature
+    });
+    let args = params.join(", ");
+    let body = modules.entry(module).or_default();
+    let mut twin = |suffix: &str, glue_suffix: &str, doc: &str| {
+        writeln!(
+            body,
+            "/// `{path}`{doc}\n#[inline]\npub fn {name}{suffix}(vm: &mut BexVm{signature}) -> NativeCallResult {{\n    \
+             <{{IMPL}} as {trait_name}>::__glue_{glue_method}{glue_suffix}(vm, &[{args}])\n}}",
+            path = b.path,
+        )
+        .unwrap();
+    };
+    twin("", "", "");
+    if b.local_twin {
+        twin(
+            "_local",
+            "__local",
+            ", for a receiver escape analysis proved thread-local: it is read\n/// without its lock.",
+        );
+    }
+}
+
+/// Emit `modules` as nested `pub mod` blocks below `prefix`.
+fn emit_entry_tree(
+    out: &mut String,
+    modules: &BTreeMap<Vec<String>, String>,
+    prefix: &[String],
+    impl_ty: &str,
+    depth: usize,
+) {
+    let indent = "    ".repeat(depth);
+    if let Some(body) = modules.get(prefix) {
+        for line in body.replace("{IMPL}", impl_ty).lines() {
+            if line.is_empty() {
+                out.push('\n');
+            } else {
+                writeln!(out, "{indent}{line}").unwrap();
+            }
+        }
+    }
+    let children: std::collections::BTreeSet<&String> = modules
+        .keys()
+        .filter(|path| path.len() > prefix.len() && path.starts_with(prefix))
+        .map(|path| &path[prefix.len()])
+        .collect();
+    for child in children {
+        let mut path = prefix.to_vec();
+        path.push(child.clone());
+        writeln!(
+            out,
+            "{indent}pub mod {child} {{\n{indent}    #[allow(unused_imports)]\n{indent}    use super::*;"
+        )
+        .unwrap();
+        emit_entry_tree(out, modules, &path, impl_ty, depth + 1);
+        writeln!(out, "{indent}}}").unwrap();
+    }
 }
 
 /// Recursively emit class traits and namespace traits (bottom-up).
@@ -2524,6 +2723,8 @@ mod tests {
     fn test_array_push_mut_receiver() {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
+        // The trait methods, not the `builtins` entry points, which all take `vm`.
+        let (output, _) = output.split_once("pub mod builtins").unwrap();
 
         assert!(
             output.contains("fn push(array: &mut Vec<Value>, item: &Value)"),
@@ -2533,6 +2734,28 @@ mod tests {
             !output.contains("fn push(vm: &mut BexVm,"),
             "Array.push should NOT have vm as first param:\n{output}"
         );
+    }
+
+    /// Each builtin's entry point is a plain function at its BAML path, under
+    /// the path `NativeEntry` gives the Rust emitter, calling the builtin's glue.
+    #[test]
+    fn entry_points_live_at_their_baml_path() {
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
+        let output = generate_native_trait(&builtins, &class_defs);
+        let (_, entries) = output.split_once("pub mod builtins").unwrap();
+        assert!(entries.contains(
+            "pub mod Array {\n        #[allow(unused_imports)]\n        use super::*;"
+        ));
+        assert!(entries.contains(
+            "pub fn push(vm: &mut BexVm, array: Value, item: Value) -> NativeCallResult {\n            \
+             <PackageBamlImpl as BamlClassArray>::__glue_push(vm, &[array, item])"
+        ));
+        assert!(entries.contains("pub fn push_local(vm: &mut BexVm, array: Value, item: Value)"));
+        let push = builtins.iter().find(|b| b.path == "baml.Array.push").unwrap();
+        let entry = NativeEntry::of(push, "baml");
+        assert_eq!(entry.path, "bex_vm::package_baml::builtins::Array::push");
+        assert_eq!(entry.arity, 2);
+        assert!(entry.local_twin);
     }
 
     #[test]

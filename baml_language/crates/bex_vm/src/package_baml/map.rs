@@ -47,6 +47,11 @@ impl MapDriver {
             .as_string(&args[1])
             .ok()
             .map(|key| bex_vm_types::map_string_hash(key.as_str()));
+        if let Some(hash) = string_hash
+            && let Some(done) = Self::string_key(vm, args, operation, thread_local, hash)
+        {
+            return done;
+        }
         let (state, hasher) = if string_hash.is_some() {
             (Value::NULL, None)
         } else {
@@ -73,6 +78,69 @@ impl MapDriver {
         }
         let result = super::hashing::hash_value(vm, driver.key, state);
         super::chain(vm, result, Box::new(driver))
+    }
+
+    /// `has`, `get`, `index` or `set` with a string key, when every key in the
+    /// key's bucket is a string too: equality is then plain string equality,
+    /// which runs no user code, so the operation takes one lock and needs no
+    /// snapshot, epoch check or continuation. `None` (before any change) sends
+    /// every other case down the general path.
+    #[allow(unsafe_code)]
+    fn string_key(
+        vm: &BexVm,
+        args: &[Value],
+        operation: Operation,
+        thread_local: bool,
+        hash: u64,
+    ) -> Option<NativeCallResult> {
+        let key = vm.as_string(&args[1]).ok()?;
+        let Object::Map(map) = vm.get_object(args[0].as_object_ptr()?) else {
+            return None;
+        };
+        let all_strings = |data: &MapData| {
+            let mut strings = true;
+            data.get_hashed(hash, |candidate| {
+                strings &= vm.as_string(candidate).is_ok();
+                false
+            });
+            strings
+        };
+        let is_key = |candidate: &Value| vm.as_string(candidate).is_ok_and(|text| text == key);
+        let found = match operation {
+            Operation::Has | Operation::Get | Operation::Index => {
+                let data = if thread_local {
+                    // SAFETY: only the `$local` twins set `thread_local`; see `entries`.
+                    unsafe { map.lock_thread_local() }
+                } else {
+                    map.lock()
+                };
+                if !all_strings(&data) {
+                    return None;
+                }
+                data.get_hashed(hash, is_key)
+            }
+            Operation::Set => {
+                let debt = vm.tlab.alloc_debt();
+                let mut data = if thread_local {
+                    // SAFETY: as above.
+                    unsafe { map.lock_mut_thread_local(debt) }
+                } else {
+                    map.lock_mut(debt)
+                };
+                if !all_strings(&data) {
+                    return None;
+                }
+                data.set_hashed(hash, is_key, args[1], args[2])
+            }
+            Operation::Delete | Operation::GetOrInsert => return None,
+        };
+        Some(match operation {
+            Operation::Has => NativeCallResult::Done(Value::bool(found.is_some())),
+            Operation::Index if found.is_none() => {
+                NativeCallResult::Error(VmRustFnError::Panic(VmPanic::MapKeyNotFound))
+            }
+            _ => NativeCallResult::Done(found.unwrap_or(Value::NULL)),
+        })
     }
 
     /// The map's backing store, read without its lock when it is thread-local.

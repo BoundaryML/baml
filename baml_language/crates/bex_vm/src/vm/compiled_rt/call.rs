@@ -36,41 +36,75 @@ impl BexVm {
             .map_err(|error| Box::new(error.into()))
     }
 
+    /// Call a builtin through its function pointer.
     pub fn call_builtin(
         &mut self,
         builtin: NativeFunction,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         let outcome = builtin(self, args);
-        self.settle();
-        match outcome {
-            NativeCallResult::Done(value) => Ok(value),
-            NativeCallResult::Error(error) => Err(Box::new(self.native_error_to_vm_error(error))),
-            NativeCallResult::YieldToCall { .. } => Err(Box::new(
-                VmInternalError::CompiledBody {
-                    message: "a builtin yielded inside compiled code".to_string(),
-                }
-                .into(),
-            )),
-        }
+        self.finish_builtin(outcome)
     }
 
-    /// Call a generic builtin with type arguments available through `current_call_type_args()`.
+    /// Call a generic builtin through its function pointer, with type
+    /// arguments available through `current_call_type_args()`.
     pub fn call_builtin_typed(
         &mut self,
         builtin: NativeFunction,
         type_args: &[RealizedTy],
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
+        self.with_call_type_args(type_args, |vm| builtin(vm, args))
+    }
+
+    /// The result of a builtin call: what generated code does after calling a
+    /// builtin's entry point (`package_baml::builtins::Array::push`, …) by
+    /// name, as [`Self::call_builtin`] does after calling one through its
+    /// pointer.
+    #[inline]
+    pub fn finish_builtin(&mut self, outcome: NativeCallResult) -> Result<Value, Box<VmError>> {
+        self.settle();
+        match outcome {
+            NativeCallResult::Done(value) => Ok(value),
+            outcome => Err(self.builtin_failed(outcome)),
+        }
+    }
+
+    /// Run a generic builtin's entry point with `type_args` as its call's
+    /// type arguments, and finish its result.
+    #[inline]
+    pub fn with_call_type_args(
+        &mut self,
+        type_args: &[RealizedTy],
+        call: impl FnOnce(&mut Self) -> NativeCallResult,
+    ) -> Result<Value, Box<VmError>> {
         self.save_call_types();
         let mut buffer = std::mem::take(&mut self.compiled.builtin_type_args);
         buffer.clear();
         buffer.extend_from_slice(type_args);
         self.pending_call_type_args = buffer;
-        let result = self.call_builtin(builtin, args);
+        let outcome = call(self);
         self.compiled.builtin_type_args = self.restore_call_types();
         self.compiled.builtin_type_args.clear();
-        result
+        self.finish_builtin(outcome)
+    }
+
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "boxing out of line keeps the allocation off the inlined fast path"
+    )]
+    #[cold]
+    #[inline(never)]
+    fn builtin_failed(&mut self, outcome: NativeCallResult) -> Box<VmError> {
+        match outcome {
+            NativeCallResult::Error(error) => Box::new(self.native_error_to_vm_error(error)),
+            NativeCallResult::Done(_) | NativeCallResult::YieldToCall { .. } => Box::new(
+                VmInternalError::CompiledBody {
+                    message: "a builtin yielded inside compiled code".to_string(),
+                }
+                .into(),
+            ),
+        }
     }
 
     #[inline]

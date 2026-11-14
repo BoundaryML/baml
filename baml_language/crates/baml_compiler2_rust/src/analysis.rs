@@ -769,8 +769,15 @@ fn is_primitive_key(ty: &RuntimeTy) -> bool {
 /// Keep aligned with `bex_vm::package_baml::VM_NATIVE_PACKAGES`.
 const VM_PACKAGES: &[&str] = &["baml", "testing", "ai", "reflect", "trace"];
 
-fn builtin_metadata() -> Result<&'static HashMap<String, bool>, &'static str> {
-    static TABLE: OnceLock<Result<HashMap<String, bool>, String>> = OnceLock::new();
+/// What the Rust emitter knows about a VM builtin, from the stdlib source
+/// the VM's own dispatch is generated from.
+pub(crate) struct BuiltinMeta {
+    may_yield: bool,
+    pub(crate) entry: baml_builtins2_codegen::NativeEntry,
+}
+
+fn builtin_metadata() -> Result<&'static HashMap<String, BuiltinMeta>, &'static str> {
+    static TABLE: OnceLock<Result<HashMap<String, BuiltinMeta>, String>> = OnceLock::new();
     TABLE
         .get_or_init(|| {
             let mut table = HashMap::new();
@@ -780,7 +787,11 @@ fn builtin_metadata() -> Result<&'static HashMap<String, bool>, &'static str> {
                         format!("the stdlib's `{package}` builtins do not extract: {error}")
                     })?;
                 for builtin in builtins {
-                    table.insert(builtin.path, builtin.may_yield);
+                    let meta = BuiltinMeta {
+                        may_yield: builtin.may_yield,
+                        entry: baml_builtins2_codegen::NativeEntry::of(&builtin, package),
+                    };
+                    table.insert(builtin.path, meta);
                 }
             }
             Ok(table)
@@ -794,7 +805,12 @@ pub(crate) fn validate_builtin_metadata() -> Result<(), String> {
 }
 
 fn builtin_may_yield(key: &str) -> Option<bool> {
-    builtin_metadata().ok()?.get(key).copied()
+    builtin_metadata().ok()?.get(key).map(|meta| meta.may_yield)
+}
+
+/// The generated entry point compiled code calls for builtin `key`.
+pub(crate) fn builtin_entry(key: &str) -> Option<&'static baml_builtins2_codegen::NativeEntry> {
+    builtin_metadata().ok()?.get(key).map(|meta| &meta.entry)
 }
 
 // Primitive values cannot override `to_string`.

@@ -10,7 +10,9 @@ use bex_vm_types::ConstValue;
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     Rejection,
-    analysis::{CallShape, Repr, builtin_is_callable, reads_frame, static_realized},
+    analysis::{
+        CallShape, Repr, builtin_entry, builtin_is_callable, reads_frame, static_realized,
+    },
     render::{binop_name, class_ptr, cmp_name, object_value},
 };
 
@@ -155,15 +157,9 @@ impl<'db> Generator<'_, 'db> {
                         "yielding builtin `{key}` emitted inline"
                     )));
                 }
-                let ordinal = self.builtin_ordinal(key);
                 let template = self.hoist(Expr::new(object_value(object), Repr::Value));
-                self.fallible(
-                    block,
-                    &format!(
-                        "vm.call_builtin(builtin_{ordinal}()?, &[{}])",
-                        template.code
-                    ),
-                )?
+                let call = Self::builtin_call(key, false, &[template.code], &[])?;
+                self.fallible(block, &call)?
             }
             Rvalue::MakeClosure {
                 lambda_idx,
@@ -445,9 +441,54 @@ impl<'db> Generator<'_, 'db> {
         Ok(name)
     }
 
-    pub(super) fn builtin_ordinal(&mut self, key: &str) -> usize {
-        let next = self.builtins.len();
-        *self.builtins.entry(key.to_owned()).or_insert(next)
+    /// A call to builtin `key`'s generated entry point, or with `local` its
+    /// lock-free twin, finished as [`bex_vm::BexVm::call_builtin`] finishes
+    /// one: an `R<Value>` expression.
+    pub(super) fn builtin_call(
+        key: &str,
+        local: bool,
+        args: &[String],
+        types: &[String],
+    ) -> Gen<String> {
+        let Some(entry) = builtin_entry(key) else {
+            return Err(Rejection::Invalid(format!(
+                "builtin `{key}` has no generated entry point"
+            )));
+        };
+        if args.len() != entry.arity {
+            return Err(Rejection::Invalid(format!(
+                "builtin `{key}` takes {} arguments, given {}",
+                entry.arity,
+                args.len()
+            )));
+        }
+        if local && !entry.local_twin {
+            return Err(Rejection::Invalid(format!(
+                "builtin `{key}` has no thread-local twin"
+            )));
+        }
+        let path = if local {
+            format!("{}_local", entry.path)
+        } else {
+            entry.path.clone()
+        };
+        // Arguments are evaluated before `vm` is lent to the call.
+        let names: Vec<String> = (0..args.len()).map(|i| format!("__a{i}")).collect();
+        let call = if names.is_empty() {
+            format!("{path}(vm)")
+        } else {
+            format!("{path}(vm, {})", names.join(", "))
+        };
+        let bind = format!("let ({},) = ({},);", names.join(", "), args.join(", "));
+        let bind = if args.is_empty() { String::new() } else { bind };
+        Ok(if types.is_empty() {
+            format!("{{ {bind} let __outcome = {call}; vm.finish_builtin(__outcome) }}")
+        } else {
+            format!(
+                "{{ {bind} let __types = [{}]; vm.with_call_type_args(&__types, |vm| {call}) }}",
+                types.join(", ")
+            )
+        })
     }
 
     fn binary(&mut self, block: BlockId, op: BinOp, left: &Expr, right: &Expr) -> Gen<Expr> {

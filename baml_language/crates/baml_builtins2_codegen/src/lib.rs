@@ -7,7 +7,7 @@ mod lang_item;
 mod rust_ident;
 mod types;
 
-pub use codegen::{generate_native_trait, generate_native_trait_for};
+pub use codegen::{NativeEntry, generate_native_trait, generate_native_trait_for};
 pub use codegen_errors::generate_error_enums;
 pub use codegen_io::{
     generate_io_adapter, generate_io_structs, generate_io_traits, generate_runtime_io,

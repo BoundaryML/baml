@@ -125,7 +125,7 @@ pub fn compile_program(
         }
         retain_reachable(&index, &mut lowered);
     }
-    let (mut bodies, mut functions, builtins) =
+    let (mut bodies, mut functions) =
         admission_fixpoint(db, &index, &mut lowered.units, &mut lowered.rejected);
     crate::init::compile_chainers(
         program,
@@ -135,7 +135,7 @@ pub fn compile_program(
         &mut lowered.rejected,
     );
 
-    let source = render_module(&bodies, &functions, &builtins, artifact_path, fingerprint);
+    let source = render_module(&bodies, &functions, artifact_path, fingerprint);
     Ok(RustModule {
         source,
         functions,
@@ -278,7 +278,7 @@ fn admission_fixpoint(
     index: &ProgramIndex,
     units: &mut BTreeMap<usize, Unit<'_>>,
     rejected: &mut Vec<(String, Rejection)>,
-) -> (String, Vec<CompiledFunction>, BTreeMap<String, usize>) {
+) -> (String, Vec<CompiledFunction>) {
     // Every failed round removes at least one unit.
     loop {
         let graph: BTreeMap<usize, BTreeSet<usize>> = units
@@ -325,7 +325,6 @@ fn admission_fixpoint(
             .collect();
         let mut bodies = String::new();
         let mut functions = Vec::new();
-        let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
         let mut failed = Vec::new();
         for (&object, unit) in units.iter() {
             let program = ProgramContext {
@@ -337,7 +336,7 @@ fn admission_fixpoint(
                 signatures: &signatures,
                 masks: &masks,
             };
-            let mut generator = Generator::new(&program, &mut builtins, object, unit);
+            let mut generator = Generator::new(&program, object, unit);
             match generator.function(&symbols[&object]) {
                 Ok(code) => {
                     let Ok(slots) = u32::try_from(generator.slots) else {
@@ -365,7 +364,7 @@ fn admission_fixpoint(
             }
         }
         if failed.is_empty() {
-            break (bodies, functions, builtins);
+            break (bodies, functions);
         }
         for (object, rejection) in failed {
             units.remove(&object);
