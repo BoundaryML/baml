@@ -61,14 +61,40 @@ export const list = query({
         openByPage[comment.page] = (openByPage[comment.page] ?? 0) + 1;
       }
     }
-    const threads = all
-      .filter((comment) => !comment.parentId && comment.page === args.page)
-      .sort((a, b) => a.createdAt - b.createdAt)
-      .map((comment) => ({
-        ...shown(comment),
-        replies: (replies.get(comment._id) ?? []).sort((a, b) => a.createdAt - b.createdAt).map(shown),
-      }));
-    return { threads, openByPage };
+    return { threads: withReplies(all, replies, args.page), openByPage };
+  },
+});
+
+/** The threads among `all` (on `page`, or on every page), oldest first, each with its replies. */
+function withReplies(all: Doc<"bcsComments">[], replies: Map<string, Doc<"bcsComments">[]>, page?: string) {
+  return all
+    .filter((comment) => !comment.parentId && (page === undefined || comment.page === page))
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .map((comment) => ({
+      ...shown(comment),
+      replies: (replies.get(comment._id) ?? []).sort((a, b) => a.createdAt - b.createdAt).map(shown),
+    }));
+}
+
+/**
+ * Every thread of a proposal on every page, oldest first, each with all its replies: what the
+ * agent route (`bep bcs comments`) hands out.
+ */
+export const threads = query({
+  args: { secret: v.string(), number: v.number() },
+  handler: async (ctx, args) => {
+    requireServerSecret(args.secret);
+    const doc = await byNumber(ctx, args.number);
+    if (!doc) return null;
+    const all = await ctx.db
+      .query("bcsComments")
+      .withIndex("by_doc", (q) => q.eq("docId", doc._id))
+      .collect();
+    const replies = new Map<string, Doc<"bcsComments">[]>();
+    for (const comment of all) {
+      if (comment.parentId) replies.set(comment.parentId, [...(replies.get(comment.parentId) ?? []), comment]);
+    }
+    return withReplies(all, replies);
   },
 });
 

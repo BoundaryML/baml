@@ -30,6 +30,8 @@ export type RenderedPage = {
   document: string;
   /** The ids of the blocks comments can be attached to, in reading order: none for HTML pages. */
   blocks: string[];
+  /** Each block's Markdown source, by id, where the parser knows it: what a comment's agent edits. */
+  sources: Record<string, string>;
   /** The page's h1 to h3 headings, for a table of contents: none for HTML pages. */
   headings: { id: string; text: string; depth: number }[];
 };
@@ -44,9 +46,15 @@ export async function renderBcsPage(options: RenderOptions): Promise<RenderedPag
       : `<!doctype html>\n${options.content}`;
     // Keep its #links inside the frame (see FRAGMENT_SCRIPT). Appended rather than placed before
     // </body>, which could be text inside the page's own script; browsers run it in the body.
-    return { document: `${page}\n<script>${FRAGMENT_SCRIPT}</script>`, blocks: [], headings: [] };
+    return {
+      document: `${page}\n<script>${FRAGMENT_SCRIPT}</script>`,
+      blocks: [],
+      sources: {},
+      headings: [],
+    };
   }
   const blocks: string[] = [];
+  const sources: Record<string, string> = {};
   // A page that brings its own stylesheet is laid out by it alone: the defaults would fight it.
   const state = { mermaid: false, ownStyles: false, headings: [] as RenderedPage["headings"] };
   const body = String(
@@ -57,7 +65,12 @@ export async function renderBcsPage(options: RenderOptions): Promise<RenderedPag
       .use(rehypeRaw)
       .use(() => (tree: Root) => {
         adjust(tree, options.pageHref, state);
-        blocks.push(...markBlocks(tree));
+        for (const block of markBlocks(tree)) {
+          blocks.push(block.id);
+          if (block.start !== undefined && block.end !== undefined) {
+            sources[block.id] = options.content.slice(block.start, block.end);
+          }
+        }
       })
       .use(rehypeStringify)
       .process(options.content)
@@ -84,7 +97,7 @@ ${
 }
 </body>
 </html>`;
-  return { document, blocks, headings: state.headings };
+  return { document, blocks, sources, headings: state.headings };
 }
 
 function escapeHtml(text: string): string {
@@ -216,9 +229,10 @@ function withoutPositions(node: unknown): unknown {
 
 /**
  * Gives each commentable block a `data-bcs-block` id from its tag and text, so a comment finds its
- * block again in later versions as long as the block's text is unchanged. Returns the ids.
+ * block again in later versions as long as the block's text is unchanged. Returns the ids, with
+ * where each block starts and ends in the Markdown when the parser recorded it.
  */
-function markBlocks(tree: Root): string[] {
+function markBlocks(tree: Root): { id: string; start?: number; end?: number }[] {
   const found: { node: Element; key: string }[] = [];
   const walk = (node: Root | Element) => {
     for (const child of node.children) {
@@ -238,7 +252,7 @@ function markBlocks(tree: Root): string[] {
   walk(tree);
   const repeats = new Map<string, number>();
   for (const block of found) repeats.set(block.key, (repeats.get(block.key) ?? 0) + 1);
-  const ids: string[] = [];
+  const ids: { id: string; start?: number; end?: number }[] = [];
   const used = new Map<string, number>();
   found.forEach((block, index) => {
     // A block whose text repeats ("TBD" twice) is told apart by its neighbours, so inserting
@@ -252,7 +266,7 @@ function markBlocks(tree: Root): string[] {
     used.set(base, count + 1);
     const id = count === 0 ? base : `${base}-${count + 1}`;
     block.node.properties.dataBcsBlock = id;
-    ids.push(id);
+    ids.push({ id, start: block.node.position?.start.offset, end: block.node.position?.end.offset });
   });
   return ids;
 }
@@ -372,9 +386,19 @@ const BRIDGE_SCRIPT = `
     current = block;
     place(add, block, counts[block.getAttribute("data-bcs-block")] ? 96 : 0);
   });
+  // The text a thread quotes. An SVG has no innerText, and its textContent runs every label into
+  // the next ("Control planeData plane"), so its text pieces are joined with spaces instead.
+  function quoteOf(block) {
+    var svg = block instanceof SVGElement || block.querySelector("svg");
+    if (!svg) return block.innerText || block.textContent || "";
+    var parts = [];
+    var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) parts.push(walker.currentNode.nodeValue);
+    return parts.join(" ");
+  }
   add.addEventListener("click", function () {
     if (!current) return;
-    var words = (current.innerText || current.textContent || "").replace(/\\s+/g, " ").trim();
+    var words = quoteOf(current).replace(/\\s+/g, " ").trim();
     send({ type: "bcs-comment", block: current.getAttribute("data-bcs-block"), text: words.slice(0, 280) });
   });
 
