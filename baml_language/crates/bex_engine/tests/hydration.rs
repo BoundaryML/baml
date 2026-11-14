@@ -785,8 +785,8 @@ async fn a_type_value_naming_an_undeclared_variant_is_refused() {
 #[tokio::test]
 async fn a_tuple_is_built_at_its_stated_slot_types_and_is_invariant() {
     let source = r#"
-        function second(t: (int, string)) -> string { t[1] }
-        function first_of_wide(t: (int | string, string?)) -> int | string { t[0] }
+        function second(t: (int, string)) -> string { t.1 }
+        function first_of_wide(t: (int | string, string?)) -> int | string { t.0 }
         function wide_is_wide(t: (int | string, string?)) -> bool {
             is_of<(int | string, string?)>(t) && !is_of<(int, string)>(t)
         }

@@ -141,7 +141,7 @@ function draw_flow(
     seed: root.engine.Seed,
 ) -> Drawn? throws never {
     let streams = root.engine.split(seed);
-    let d = fact.generate(streams.left).value;
+    let d = (fact.generate)(streams.left).value;
     let relation = root.algebra.decided(root.algebra.knowledge(d))
         ?? return null;
     let direction = root.engine.below(streams.right, 2);

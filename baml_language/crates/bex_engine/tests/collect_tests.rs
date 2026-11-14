@@ -1135,17 +1135,17 @@ async fn collect_tests_run_all_parallel_class_spreads_keep_local_slots_in_bounds
 
         test "spread 1" {
             let options = Options { ...defaults(1, dispatch), value: 11 };
-            assert.equal(options.dispatch([options.value]), [11]);
+            assert.equal((options.dispatch)([options.value]), [11]);
         }
 
         test "spread 2" {
             let options = Options { ...defaults(2, dispatch), value: 22 };
-            assert.equal(options.dispatch([options.value]), [22]);
+            assert.equal((options.dispatch)([options.value]), [22]);
         }
 
         test "spread 3" {
             let options = Options { ...defaults(3, dispatch), value: 33 };
-            assert.equal(options.dispatch([options.value]), [33]);
+            assert.equal((options.dispatch)([options.value]), [33]);
         }
     "#;
 
