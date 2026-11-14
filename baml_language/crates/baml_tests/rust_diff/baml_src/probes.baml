@@ -39,8 +39,6 @@ function Tuples() -> void {
     );
 }
 
-// Optional-receiver indexing, a common-prefix read through a union of tuples,
-// and a pattern projection (a nested destructure read at constant indices).
 function TupleFirst(value: (int, string)?) -> int? {
     value?.[0]
 }

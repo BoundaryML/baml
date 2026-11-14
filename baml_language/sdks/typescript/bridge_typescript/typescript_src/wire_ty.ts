@@ -249,7 +249,6 @@ export function lowerTypeToWireTy(token: BamlTypeToken): baml_bridge.cffi.v1.IBa
             return { union: { options: (shape.union as BamlTypeToken[]).map(lowerTypeToWireTy) } };
         }
         if ('tuple' in shape) {
-            // Slots keep their order and repeats; a tuple has at least one.
             if (!Array.isArray(shape.tuple) || shape.tuple.length === 0) return unsupported(token);
             return { tuple: { items: (shape.tuple as BamlTypeToken[]).map(lowerTypeToWireTy) } };
         }

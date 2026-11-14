@@ -1,16 +1,3 @@
-//! Roundtrip coverage for `baml_sdk::tuples`: a BAML tuple is a native Rust
-//! tuple at every arity, in every position the generated SDK reaches. Past
-//! 12 slots Rust's standard library implements neither `Debug` nor
-//! `PartialEq` for it (nor for a class or union holding one), so those
-//! tests compare slots in parts.
-//!
-//! The generated signatures make a wrong arity or slot a compile error, so
-//! the rejection cases go through the dynamic surface (`invoke`, `Value`):
-//! an argument the engine refuses, and a received tuple decoded at a type it
-//! does not have. A tuple received with no declared tuple type (`unknown`)
-//! keeps its carried type: it decodes at that type only, never as a list,
-//! and goes back as the same tuple. Values cross by copy: changing a
-//! received Rust tuple never changes the BAML one.
 use baml_sdk::tuples::{
     IntOrString,
     IntStringIntStringIntStringIntStringIntStringIntStringIntTupleOrString as WideOrString,
@@ -28,7 +15,6 @@ fn s(value: &str) -> String {
     value.to_string()
 }
 
-/// Call `user.tuples.<name>` through the dynamic surface.
 fn call(name: &str, args: Vec<(&str, Input)>, types: Vec<(&str, Type)>) -> Value {
     try_call(name, args, types).unwrap_or_else(|error| panic!("{name} failed: {error}"))
 }
@@ -92,7 +78,6 @@ fn test_tuples_round_trip_optional_slot_and_optional_tuple() {
     );
 }
 
-/// The thirteen-slot tuple of `round_trip_wide`.
 type Wide = (
     i64,
     String,
@@ -127,7 +112,6 @@ fn wide() -> Wide {
     )
 }
 
-/// A wide tuple's slots, as parts that implement `PartialEq` and `Debug`.
 fn wide_parts(t: Wide) -> ([i64; 7], [String; 6]) {
     (
         [t.0, t.2, t.4, t.6, t.8, t.10, t.12],
@@ -137,12 +121,13 @@ fn wide_parts(t: Wide) -> ([i64; 7], [String; 6]) {
 
 #[test]
 fn test_tuples_round_trip_wide() {
+    assert_wide_class_and_union();
+    assert_wide20();
     let back = round_trip_wide(wide()).unwrap();
     assert_eq!(wide_parts(back), wide_parts(wide()));
 }
 
-#[test]
-fn test_tuples_round_trip_wide20() {
+fn assert_wide20() {
     let twenty = (
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
     );
@@ -153,13 +138,11 @@ fn test_tuples_round_trip_wide20() {
     );
 }
 
-#[test]
-fn test_tuples_wide_tuple_in_a_class_and_a_union() {
+fn assert_wide_class_and_union() {
     let holder = WideTupleHolder {
         wide: wide(),
         label: s("w"),
     };
-    // Cloning is all a class holding a wide tuple derives.
     let back = round_trip_wide_holder(&holder.clone()).unwrap();
     assert_eq!(back.label, "w");
     assert_eq!(wide_parts(back.wide), wide_parts(wide()));
@@ -176,8 +159,7 @@ fn test_tuples_wide_tuple_in_a_class_and_a_union() {
     assert_eq!(back, "s");
 }
 
-#[test]
-fn test_tuples_wide_tuple_rejects_another_shape() {
+fn assert_wide_shape_validation() {
     let pair = call(
         "make_pair",
         vec![("n", Input::new(1i64)), ("s", Input::new(s("a")))],
@@ -189,7 +171,6 @@ fn test_tuples_wide_tuple_rejects_another_shape() {
         wide_parts(back.decode::<Wide>().unwrap()),
         wide_parts(wide())
     );
-    // Twelve of its thirteen slots, or a string where an int goes.
     assert!(
         back.decode::<(
             i64,
@@ -234,10 +215,8 @@ fn test_tuples_wide_tuple_rejects_another_shape() {
     );
 }
 
-#[test]
-fn test_tuples_generic_slot() {
+fn assert_generic_slots() {
     assert_eq!(pair_with(s("x"), 1).unwrap(), (s("x"), 1));
-    // The slot binds to a tuple type too.
     assert_eq!(pair_with((true, s("y")), 2).unwrap(), ((true, s("y")), 2));
 }
 
@@ -248,7 +227,6 @@ fn test_tuples_cross_by_copy() {
         vec![("n", Input::new(1i64)), ("s", Input::new(s("a")))],
         vec![],
     );
-    // Writing to the Rust tuple leaves the BAML tuple as it was.
     let mut host = pair.decode::<(i64, String)>().unwrap();
     host.0 = 99;
     assert_eq!(
@@ -257,14 +235,12 @@ fn test_tuples_cross_by_copy() {
             .unwrap(),
         (1, s("a"))
     );
-    // And the copy sent to BAML is BAML's own.
     assert_eq!(round_trip_pair(host.clone()).unwrap(), (99, s("a")));
 }
 
 #[test]
 fn test_tuples_wrong_arity_and_slots_rejected() {
-    // An argument the generated signature would not compile is refused by
-    // the engine: too few slots, too many, and slots out of order.
+    assert_wide_shape_validation();
     assert!(try_call("round_trip_pair", vec![("t", Input::new((1i64,)))], vec![]).is_err());
     assert!(
         try_call(
@@ -282,7 +258,6 @@ fn test_tuples_wrong_arity_and_slots_rejected() {
         )
         .is_err()
     );
-    // A received tuple decodes only at its own arity and slot types.
     let pair = call(
         "make_pair",
         vec![("n", Input::new(1i64)), ("s", Input::new(s("a")))],
@@ -315,7 +290,6 @@ fn test_tuples_round_trip_union_arms() {
         round_trip_tuple_or_string(s("s")).unwrap(),
         IntStringTupleOrString::String(s("s"))
     );
-    // Same-arity arms: the engine's selected arm picks the variant.
     assert_eq!(
         round_trip_tuple_arms((1, s("a"))).unwrap(),
         IntStringTupleOrStringIntTuple::IntStringTuple((1, s("a")))
@@ -339,6 +313,7 @@ fn test_tuples_round_trip_class_fields() {
 
 #[test]
 fn test_tuples_round_trip_generic_argument() {
+    assert_generic_slots();
     let boxed = TupleBox::<(i64, String)> { value: (1, s("a")) };
     assert_eq!(round_trip_tuple_box(&boxed).unwrap(), boxed);
 }
@@ -348,7 +323,6 @@ fn test_tuples_make_swap_and_index() {
     assert_eq!(make_pair(1, s("a")).unwrap(), (1, s("a")));
     assert_eq!(swap_pair((1, s("a"))).unwrap(), (s("a"), 1));
     assert_eq!(pair_first((7, s("a"))).unwrap(), 7);
-    // A tuple BAML made goes back as the tuple it is.
     assert_eq!(
         round_trip_pair(make_pair(2, s("b")).unwrap()).unwrap(),
         (2, s("b"))
@@ -370,7 +344,6 @@ fn test_tuples_host_callback_args_and_results() {
     assert_eq!(swapped, (s("a"), 1));
     assert_eq!(*seen.lock().unwrap(), vec![(1, s("a"))]);
 
-    // The async call, with an async callback.
     let swapped = tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(call_tuple_callback_async(
@@ -392,7 +365,6 @@ fn test_tuples_thrown_value() {
 
 #[test]
 fn test_tuples_dynamic_value_keeps_carried_type() {
-    // `(1, true)` is an `(int | string, bool)` by its carried type.
     let held = call(
         "tuple_as_unknown",
         vec![("t", Input::new((IntOrString::Int(1), true)))],
@@ -402,14 +374,12 @@ fn test_tuples_dynamic_value_keeps_carried_type() {
         held.decode::<(IntOrString, bool)>().unwrap(),
         (IntOrString::Int(1), true)
     );
-    // Sent back as it arrived, it restates that type, not `(int, bool)`.
     let carried = call(
         "unknown_has_carried_tuple_type",
         vec![("v", Input::new(held.clone()))],
         vec![],
     );
     assert!(carried.decode::<bool>().unwrap());
-    // A host tuple states the type of its own Rust slots.
     let stated = call(
         "unknown_has_carried_tuple_type",
         vec![("v", Input::new((1i64, true)))],
@@ -425,12 +395,9 @@ fn test_tuples_dynamic_value_decodes_as_a_tuple() {
         vec![("n", Input::new(1i64)), ("s", Input::new(s("a")))],
         vec![],
     );
-    // Its own type: the native tuple.
     assert_eq!(pair.decode::<(i64, String)>().unwrap(), (1, s("a")));
-    // A tuple is never a list, of its slots' join or of dynamic values.
     assert!(pair.decode::<Vec<IntOrString>>().is_err());
     assert!(pair.decode::<Vec<Value>>().is_err());
-    // However it was decoded, the value goes back as the tuple it is.
     assert_eq!(
         call("round_trip_pair", vec![("t", Input::new(pair))], vec![])
             .decode::<(i64, String)>()
@@ -448,17 +415,14 @@ fn test_tuples_reflected_type_token() {
             .unwrap()
     };
     assert!(has_type(Input::new((1i64, s("a"))), pair_type()));
-    // Slot order is part of the type.
     assert!(!has_type(
         Input::new((1i64, s("a"))),
         vec![("T", Type::of::<(String, i64)>())]
     ));
-    // A list of the same elements is not the tuple.
     assert!(!has_type(
         Input::new(vec![IntOrString::Int(1), IntOrString::String(s("a"))]),
         pair_type()
     ));
-    // A tuple type binds a type parameter of a generated generic function.
     assert_eq!(
         tuple_generic_identity::<(i64, String)>((1, s("a"))).unwrap(),
         (1, s("a"))
@@ -468,19 +432,16 @@ fn test_tuples_reflected_type_token() {
 #[test]
 fn test_tuples_method_round_trip() {
     let pair_box = TuplePairBox { a: 1, b: s("a") };
-    // An instance method returning a tuple, and one taking a tuple.
     assert_eq!(pair_box.as_pair().unwrap(), (1, s("a")));
     assert_eq!(
         pair_box.with_pair((2, s("b"))).unwrap(),
         TuplePairBox { a: 2, b: s("b") }
     );
-    // A static method taking a tuple.
     assert_eq!(
         TuplePairBox::from_pair((3, s("c"))).unwrap(),
         TuplePairBox { a: 3, b: s("c") }
     );
 
-    // The async bindings.
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         assert_eq!(pair_box.as_pair_async().await.unwrap(), (1, s("a")));
         assert_eq!(
@@ -496,8 +457,6 @@ fn test_tuples_method_round_trip() {
 
 #[test]
 fn test_tuples_function_handle_round_trip() {
-    // A BAML closure returned to the host: its handle takes and returns
-    // tuples.
     let swap = make_tuple_swapper().unwrap();
     assert_eq!(swap.call(((1, s("a")),)).unwrap(), (s("a"), 1));
     assert_eq!(swap.call(((2, s("b")),)).unwrap(), (s("b"), 2));

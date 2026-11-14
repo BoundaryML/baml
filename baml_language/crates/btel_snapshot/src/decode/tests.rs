@@ -890,7 +890,6 @@ fn format_6_reads_format_5_content_under_its_own_ids() {
     assert_ne!(v5.id, v6.id);
 }
 
-/// A snapshot of one tuple carrying `element_types`.
 fn tuple_snapshot(
     limits: Limits,
     element_types: Vec<OwnedType>,
@@ -905,7 +904,6 @@ fn tuple_snapshot(
     assert_eq!(decoded.id, snapshot.root_id(), "identity verifies");
     (snapshot, decoded)
 }
-/// The decoded root tuple's carried slot types, items and arity.
 fn decoded_tuple(decoded: &DecodedSnapshot) -> (Vec<OwnedType>, &[DecodedValue], u64) {
     let DecodedRoot::Value(DecodedValue::Object(id)) = &decoded.root else {
         panic!("object root")
@@ -927,7 +925,6 @@ fn decoded_tuple(decoded: &DecodedSnapshot) -> (Vec<OwnedType>, &[DecodedValue],
 
 #[test]
 fn a_tuple_round_trips_its_carried_slot_types() {
-    // `((int?, string), bool?)`: nested and optional slot types.
     let inner = RealizedTy::Tuple(Box::new([
         RealizedTy::optional(int_type()),
         RealizedTy::String,
@@ -978,7 +975,6 @@ fn equal_contents_carrying_different_slot_types_have_different_ids() {
 fn a_tuple_whose_slot_types_miss_its_arity_is_invalid() {
     let (snapshot, _) = tuple_snapshot(Limits::default(), vec![int_type()], vec![V::Int(1)]);
     let mut bytes = encode(&snapshot);
-    // The tuple tag, one carried type (`int`), then the arity as a u64.
     let int = borsh::to_vec(&int_type()).unwrap();
     let mut pattern = vec![crate::tags::ObjectTag::Tuple as u8];
     pattern.extend_from_slice(&1u32.to_le_bytes());

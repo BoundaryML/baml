@@ -200,8 +200,6 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
                 translate_ty_from(value, ctx, side)
             )
         }
-        // Tuples are fixed-arity (arity >= 1), so `typing.Tuple[A, B]` /
-        // `typing.Tuple[A]` never needs the `typing.Tuple[()]` or `...` forms.
         Ty::Tuple(items) => format!(
             "typing.Tuple[{}]",
             items

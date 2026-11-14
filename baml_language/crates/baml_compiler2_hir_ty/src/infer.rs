@@ -1140,19 +1140,12 @@ enum PendingDiag<'db> {
     PositionalAfterNamed {
         expr: ExprId,
     },
-    /// `t[0] = v` / `t[0] += v`: tuples are immutable.
     TupleElementAssign {
         expr: ExprId,
     },
-    /// `t[i]` on a tuple with an `int` index whose value is not known
-    /// statically: each slot has its own type, so the index must be static
-    /// or have an integer literal type.
-    TupleIndexNotStatic {
+    FunctionFieldNeedsParens {
         expr: ExprId,
-        found: Ty,
     },
-    /// `t[2]` on a pair, `t[-1]`: a static index outside the receiver's
-    /// slots (for a union, outside `variant`'s).
     TupleIndexOutOfRange {
         expr: ExprId,
         index: i64,
@@ -1286,8 +1279,6 @@ enum PendingDiag<'db> {
         expected: Ty,
         found: Ty,
     },
-    /// A whole-tuple type test that no tuple of the scrutinee's static type
-    /// can pass: it compares carried types, which never match.
     TupleTypeTestNeverMatches {
         pat: PatId,
         scrutinee: Ty,
@@ -2239,10 +2230,6 @@ struct InferenceContext<'db> {
     /// to overlap reports, from the chain's own frame) and `is` tests
     /// (a disjoint runtime type test is legal and answers `false`).
     pub(crate) or_probe_depth: u32,
-    /// How many of the `or_probe_depth` levels are `is` tests probing
-    /// silently. A whole-tuple type test that can never match still
-    /// reports inside them: it is a likely mistake for `==`, not a
-    /// legitimate `false`.
     pub(crate) silent_test_depth: u32,
     /// Nonzero while lowering the subtree of an already-REJECTED rest
     /// sub-pattern. The subtree still lowers (bindings must record, no
@@ -3343,13 +3330,6 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             Expr::Tuple { elements } => {
-                // With a unique expected tuple of the same arity, each element
-                // is CHECKED against its slot and the literal takes exactly
-                // those slot types, as an array literal takes its expected
-                // element type: tuples are invariant, so a fresh literal is
-                // the one place a wider tuple type can be built. Otherwise
-                // elements synthesize and widen, like array elements:
-                // `(1, "a")` is `(int, string)`.
                 match self.expected_tuple_elements(expected, elements.len()) {
                     Some(slots) => {
                         for (element, slot) in elements.iter().zip(&slots) {
@@ -3540,10 +3520,9 @@ impl<'db> InferenceContext<'db> {
                 pattern,
                 initializer,
                 else_branch,
-                is_const,
                 ..
             } => {
-                self.infer_let(body, *pattern, *initializer, *else_branch, *is_const);
+                self.infer_let(body, *pattern, *initializer, *else_branch);
             }
             Stmt::Return(value) => {
                 if !self.defer_loop_floors.is_empty() {
@@ -4316,21 +4295,12 @@ impl<'db> InferenceContext<'db> {
     /// against it (`_` holes as fresh vars, filled by the resulting bounds);
     /// without one, the initializer synthesizes and fresh literals widen at
     /// the binding site.
-    ///
-    /// An unannotated `const NAME = <int literal>` binds the widened type
-    /// too, but keeps the literal as a flow fact, exactly as if the binding
-    /// had been assigned it (`infer_assign`'s narrow-on-assign rule): its
-    /// value is statically known, so `t[NAME]` names a tuple slot. A `let`
-    /// does not, so `let i = 1; t[i]` stays a runtime index. The fact
-    /// follows the flow rules: a reassignment replaces it, a loop that
-    /// assigns the binding havocs it, and a captured binding carries none.
     fn infer_let(
         &mut self,
         body: &ExprBody,
         pattern: PatId,
         initializer: Option<ExprId>,
         else_branch: Option<ExprId>,
-        is_const: bool,
     ) {
         if else_branch.is_some() {
             // let-else is REFUTABLE (Rust's let-else): every pattern -
@@ -4352,7 +4322,6 @@ impl<'db> InferenceContext<'db> {
                 // (`let xs: [..]: int[]`) record every binding.
                 let subpat = *subpat;
                 let annotation = subpat.and_then(|sub| self.pattern_ascription_ty(body, sub));
-                let mut const_value = None;
                 let settled = match annotation {
                     Some(annotation_ty) => {
                         if let Some(init) = initializer {
@@ -4363,30 +4332,12 @@ impl<'db> InferenceContext<'db> {
                     None => match initializer {
                         Some(init) => {
                             let init_ty = self.infer_expr(body, init, &Expectation::None);
-                            if is_const && subpat.is_none() {
-                                let resolved = self.table.resolve_completely(&init_ty);
-                                if matches!(resolved.kind(), InferTy::Literal(Literal::Int(_), _)) {
-                                    const_value = Some(resolved);
-                                }
-                            }
                             self.widen_fresh(&init_ty)
                         }
                         None => Ty::error(),
                     },
                 };
                 self.lower_pattern(body, pattern, &settled);
-                // Like any flow fact, only for a binding no closure captures
-                // (`narrowable_binding`'s rule).
-                if let Some(value) = const_value
-                    && let Some(binding) = self.binding_for_pattern(pattern)
-                    && !self
-                        .index
-                        .scope_bindings
-                        .get(binding.scope.index() as usize)
-                        .is_some_and(|bindings| bindings.captured_bindings.contains(&binding))
-                {
-                    self.flow.insert(binding, value);
-                }
                 self.finish_let_else(body, else_branch);
             }
             // Destructures: the pattern walk records each binding's type
@@ -4412,12 +4363,17 @@ impl<'db> InferenceContext<'db> {
         op: Option<baml_compiler2_ast::AssignOp>,
     ) {
         let mut place = target;
-        if let Expr::OptionalChain { expr } = body.exprs[place] { place = expr; }
-        if let Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. } = &body.exprs[place] {
+        if let Expr::OptionalChain { expr } = body.exprs[place] {
+            place = expr;
+        }
+        if let Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. } =
+            &body.exprs[place]
+        {
             if member.as_str().parse::<u32>().is_ok() {
                 self.infer_expr(body, target, &Expectation::None);
                 self.infer_expr(body, value, &Expectation::None);
-                self.pending_diags.push(PendingDiag::TupleElementAssign { expr: target });
+                self.pending_diags
+                    .push(PendingDiag::TupleElementAssign { expr: target });
                 return;
             }
         }
@@ -4432,19 +4388,6 @@ impl<'db> InferenceContext<'db> {
             let (base, index) = (*base, *index);
             let element = self.infer_index(body, target, base, index, false, true);
             self.result.type_of_expr.insert(target, element.clone());
-            // A TUPLE-ELEMENT target (`t[0] = v`): tuples are immutable. The
-            // receiver and value still type (their own errors report), then
-            // the store is rejected here, so MIR never sees a tuple store.
-            let base_ty = self.result.type_of_expr.get(&base).cloned();
-            if let Some(base_ty) = base_ty {
-                let resolved = self.structurally_resolve(&base_ty);
-                if self.tuple_variants(&resolved).is_some() {
-                    self.infer_expr(body, value, &Expectation::None);
-                    self.pending_diags
-                        .push(PendingDiag::TupleElementAssign { expr: target });
-                    return;
-                }
-            }
             match op {
                 None => {
                     if !element.has_error() {
@@ -4515,14 +4458,6 @@ impl<'db> InferenceContext<'db> {
                 result
             }
         };
-        // A TUPLE-ELEMENT target behind an optional chain (`t?.[0] = v`,
-        // `x?.t[0] += v`) types through the place road above; the store is
-        // rejected the same as a plain `t[0] = v`, so MIR never sees it.
-        if self.optional_chain_tuple_store(body, target) {
-            self.pending_diags
-                .push(PendingDiag::TupleElementAssign { expr: target });
-            return;
-        }
         // A top-level binding is written once, by `$init`, and then shared by
         // every call: the binding itself never changes. Only a target that
         // IS the global (`x = v`, `root.ns.x += v`) is refused — `x.f = v` and
@@ -4574,35 +4509,6 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// Whether an optional-chain assignment target (`t?.[0]`, `x?.t[0]`)
-    /// stores to a tuple slot: its outermost access is an index whose
-    /// receiver, null peeled, is a tuple or a union of tuples. Reads the
-    /// receiver type the target's inference recorded.
-    fn optional_chain_tuple_store(&mut self, body: &ExprBody, target: ExprId) -> bool {
-        let Expr::OptionalChain { expr: inner } = &body.exprs[target] else {
-            return false;
-        };
-        let (Expr::Index { base, .. } | Expr::OptionalIndex { base, .. }) = &body.exprs[*inner]
-        else {
-            return false;
-        };
-        let Some(base_ty) = self.result.type_of_expr.get(base).cloned() else {
-            return false;
-        };
-        let resolved = self.structurally_resolve(&base_ty);
-        let nonnull = self.remove_null(&resolved);
-        self.tuple_variants(&nonnull).is_some()
-    }
-
-    /// A path target (`x`, `x.f.g`) writes through the local or global its
-    /// root names. AST lowering admits any path syntactically; a root that
-    /// resolves to something else - a function, an enum variant - has no
-    /// storage, and MIR would otherwise either fail to find a place or store
-    /// into a temporary that is thrown away. A global root is not this
-    /// check's concern: `x.f = v` through a global is a real store, and
-    /// `x = v` already reports `AssignmentToGlobal`. An unresolved root
-    /// already reported `unresolved name` (its type is the error sentinel)
-    /// and is skipped.
     fn check_path_assignment_target(&mut self, body: &ExprBody, target: ExprId) {
         let Expr::Path(segments) = &body.exprs[target] else {
             return;
@@ -4664,8 +4570,6 @@ impl<'db> InferenceContext<'db> {
                 }
                 Some(Ty::union(members))
             }
-            // `let t: (int | string, bool)` is already a `Pattern::Type`: AST
-            // lowering turns a tuple made only of types into the tuple type.
             _ => None,
         }
     }
@@ -4940,8 +4844,6 @@ impl<'db> InferenceContext<'db> {
                 let error_ok = self.eq_piece(&ae, &be);
                 value_ok && error_ok
             }
-            // Tuples are invariant: Sub decays
-            // to Eq of each slot pair.
             (InferTy::Tuple(a_elems), InferTy::Tuple(b_elems))
                 if a_elems.len() == b_elems.len() =>
             {
@@ -5704,10 +5606,9 @@ impl<'db> InferenceContext<'db> {
         base: ExprId,
         index: ExprId,
         optional: bool,
-        write: bool,
+        _write: bool,
     ) -> Ty {
         let base_ty = self.infer_expr(body, base, &Expectation::None);
-        let base_ty_for_chain = base_ty.clone();
         let subject = if optional {
             // Chain semantics: the base's null peels here and the
             // enclosing OptionalChain boundary re-unions it.
@@ -7116,11 +7017,10 @@ impl<'db> InferenceContext<'db> {
         let resolved = self.structurally_resolve(receiver);
         let candidate =
             crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member);
-        if candidate.is_none()
-            && let Some((field, resolution)) =
-                self.class_field_access(member_expr, &resolved, member)
-        {
-            return (field, false, resolution);
+        if member.as_str().parse::<u32>().is_ok() {
+            self.pending_diags
+                .push(PendingDiag::FunctionFieldNeedsParens { expr: member_expr });
+            return (Ty::error(), false, None);
         }
         // Callee position on a UNION: the member resolves through the
         // single interface every arm shares (TIR's rule - the union as
@@ -7306,6 +7206,16 @@ impl<'db> InferenceContext<'db> {
             self.member_probe_depth += 1;
             let (field, field_resolution) = self.field_access_resolved(call, &resolved, member);
             self.member_probe_depth -= 1;
+            if matches!(
+                field_resolution,
+                Some(
+                    MemberResolution::Field { .. } | MemberResolution::InterfaceVirtualField { .. }
+                )
+            ) {
+                self.pending_diags
+                    .push(PendingDiag::FunctionFieldNeedsParens { expr: member_expr });
+                return (Ty::error(), false, None);
+            }
             // Every tier exhausted: the COMMITTED member failure reports
             // here (probes above stayed silent). A union base says "no
             // common interface" - each arm may well declare `member` via
@@ -7462,6 +7372,11 @@ impl<'db> InferenceContext<'db> {
         call: ExprId,
         bind_self: bool,
     ) -> (Ty, bool) {
+        if !interface_member.is_method {
+            self.pending_diags
+                .push(PendingDiag::FunctionFieldNeedsParens { expr: call });
+            return (Ty::error(), false);
+        }
         // A `self`-LESS method binds no receiver whatever the spelling: the
         // receiver named where to find the member, it is not an argument.
         let bound = interface_member.is_method
@@ -10134,28 +10049,6 @@ impl<'db> InferenceContext<'db> {
         ty
     }
 
-    /// The tuple variants of an index receiver: a tuple, or a union (through
-    /// aliases and nested unions) whose every non-`never` member is one.
-    /// `None` when any member is not a tuple, or nothing is left.
-    fn tuple_variants(&mut self, ty: &Ty) -> Option<Vec<Ty>> {
-        let mut variants = Vec::new();
-        let mut pending = vec![ty.clone()];
-        // A recursive alias resolves one layer per step; the budget only
-        // bounds a pathological (already diagnosed) cycle.
-        let mut budget = 256usize;
-        while let Some(next) = pending.pop() {
-            budget = budget.checked_sub(1)?;
-            let resolved = self.structurally_resolve(&next);
-            match resolved.kind() {
-                InferTy::Tuple(_) => variants.push(resolved),
-                InferTy::Never => {}
-                InferTy::Union(members) => pending.extend(members.iter().rev().cloned()),
-                _ => return None,
-            }
-        }
-        (!variants.is_empty()).then_some(variants)
-    }
-
     fn report_bare_output_format_reference(&mut self, expr: ExprId, function: FunctionRef<'db>) {
         let Some(class) = callable_owner_type(self.db, function) else {
             return;
@@ -10246,8 +10139,15 @@ impl<'db> InferenceContext<'db> {
         let resolved = self.structurally_resolve(base_ty);
         if let Ok(slot) = member.as_str().parse::<usize>() {
             if let InferTy::Tuple(elements) = resolved.kind() {
-                if let Some(element) = elements.get(slot) { return (element.clone(), None); }
-                self.pending_diags.push(PendingDiag::TupleIndexOutOfRange { expr: at, index: i64::try_from(slot).unwrap_or(i64::MAX), tuple: resolved, variant: None });
+                if let Some(element) = elements.get(slot) {
+                    return (element.clone(), None);
+                }
+                self.pending_diags.push(PendingDiag::TupleIndexOutOfRange {
+                    expr: at,
+                    index: i64::try_from(slot).unwrap_or(i64::MAX),
+                    tuple: resolved,
+                    variant: None,
+                });
                 return (Ty::error(), None);
             }
         }
@@ -11007,10 +10907,6 @@ impl<'db> InferenceContext<'db> {
         )
     }
 
-    /// The TUPLE literal's counterpart of `expected_list_element`: the
-    /// element slots of the unique expected tuple arm of this arity. Arity
-    /// disambiguates, so `(int, string) | (int, int, int)` still gives a
-    /// 2-tuple literal its slots.
     fn expected_tuple_elements(&mut self, expected: &Expectation, arity: usize) -> Option<Vec<Ty>> {
         let shape = self.expectation_shape(expected)?;
         self.unique_expected_arm(
@@ -13323,15 +13219,12 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::FunctionFieldNeedsParens { expr } => {
+                        (TirTypeError::FunctionFieldNeedsParens, expr)
+                    }
                     PendingDiag::TupleElementAssign { expr } => {
                         (TirTypeError::TupleElementNotAssignable, expr)
                     }
-                    PendingDiag::TupleIndexNotStatic { expr, found } => (
-                        TirTypeError::TupleIndexNotStatic {
-                            found: self.plain_finalized(&found),
-                        },
-                        expr,
-                    ),
                     PendingDiag::TupleIndexOutOfRange {
                         expr,
                         index,
@@ -15820,8 +15713,6 @@ impl RelaxationVariance {
 /// `unknown`; under a parameter, `(T | int) -> void` → `(int) -> void`); a
 /// function flips the direction for its parameters and keeps it for the
 /// return and throws (`() -> T throws T` → `() -> unknown throws unknown`);
-/// an invariant constructor (classes, lists, maps, tuples, interfaces,
-/// futures, projections) has no nearer relative than the bound itself, so any
 /// mention inside collapses it whole (`T[]` → `unknown`).
 ///
 /// This is what a clause outside the block may say about a value typed by

@@ -47,7 +47,6 @@ def test_a_tuple_decodes_native_and_keeps_its_carried_type():
     assert decoded == (1, True)
     assert repr(decoded) == "(1, True)"
     assert isinstance(decoded, BamlTuple)
-    # Every tuple operation makes a plain tuple, which carries nothing.
     assert type(decoded[:]) is tuple
     assert type(tuple(decoded)) is tuple
     assert type(copy.copy(decoded)) is tuple
@@ -82,11 +81,9 @@ def test_a_native_tuple_states_a_tuple_of_its_items_types_and_a_list_a_list():
         baml_type_pb2.BAML_TY_PRIMITIVE_STRING,
     ]
     assert _stated([1, "a"]).value_type.WhichOneof("ty") == "list"
-    # `None` is a slot of its own type, not a hole: `(int, null)`.
     slots = _stated((1, None)).value_type.tuple.items
     assert slots[0].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_INT
     assert slots[1].primitive.kind == baml_type_pb2.BAML_TY_PRIMITIVE_NULL
-    # A nested tuple is a tuple too, slot by slot.
     nested = _stated(((1, "a"), [True]))
     outer = nested.value_type.tuple.items
     assert outer[0].WhichOneof("ty") == "tuple"
@@ -109,7 +106,6 @@ class Pair(pydantic.BaseModel, typing.Generic[T]):
 
 
 def test_capture_copies_tuples_as_lists_and_states_tuple_type_arguments():
-    # An observation has no tuple value of its own: the items, in order.
     assert json.loads(capture((1, "a"))) == ["list", [["number", 1], ["string", "a"]]]
     saved = get_type_map()
     set_type_map(

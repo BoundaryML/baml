@@ -19,23 +19,19 @@ function tuples.tpe_carried_prefix() -> (int, int) {
 
 function tuples.tpe_slot_sum(t: (int, string, int)) -> int {
     load_var t
-    load_const 0
-    load_array_element
+    load_tuple_field .0
     store_var a
     load_var2 2 1
-    load_const 2
-    load_array_element
+    load_tuple_field .2
     add_int
     return
 }
 
 function tuples.tpe_union_slot_mixed(t: (int, bool) | (float, bool)) -> string {
     load_var t
-    load_const 0
-    load_array_element
-    store_var _5
-    load_var _5
-    narrow_bind int, slot=2
+    store_var _2
+    load_var _2
+    narrow_bind (int, bool), slot=2
     pop_jump_if_true L0
     load_const "float"
     jump L1
@@ -49,22 +45,27 @@ function tuples.tpe_union_slot_mixed(t: (int, bool) | (float, bool)) -> string {
 
 function tuples.tpe_union_slot_sum(t: (int, bool) | (int, string, float)) -> int {
     load_var t
-    is_type (unknown, unknown)
-    pop_jump_if_true L0
+    is_type type tag 14
+    pop_jump_if_false L0
     load_var t
-    load_const 0
-    load_array_element
+    container_len
     load_const 2
-    add_int
-    jump L1
+    cmp_int_op ==
+    pop_jump_if_true L1
 
   L0:
     load_var t
-    load_const 0
-    load_array_element
+    load_tuple_field .0
+    load_const 2
+    add_int
+    jump L2
+
+  L1:
+    load_var t
+    load_tuple_field .0
     load_const 1
     add_int
 
-  L1:
+  L2:
     return
 }

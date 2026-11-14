@@ -646,8 +646,6 @@ impl GoNames {
             .expect("typed union name was not registered during allocation")
     }
 
-    /// The generated named struct of a tuple used in `package`. Declarations,
-    /// references and codecs all spell the tuple through this one name.
     pub(crate) fn tuple(&self, package: &baml_base::Name, key: &GoTupleKey) -> &GoName {
         self.tuples
             .get(&(package.clone(), key.clone()))
@@ -872,12 +870,6 @@ impl GoNames {
         }
     }
 
-    /// Names every named tuple `TupleN_<slot components>`: the arity, then
-    /// each slot's union-arm component in slot order, repeats kept. Slot
-    /// components reuse the union naming rules (nested types, aliases,
-    /// namespaces and escaping); a name already taken in the package, by a
-    /// declaration, a union family or another tuple, gains `_` until free, as
-    /// a union's does.
     fn allocate_tuples(&mut self, packages: &GoPackages, projection: &GoTypeProjection<'_>) {
         let mut used = BTreeMap::<GoPackageName, BTreeSet<Box<str>>>::new();
         for name in self.allocations.values() {
@@ -1020,10 +1012,6 @@ fn callback_options_component(key: &GoFunctionKey, names: &GoNames) -> String {
     base
 }
 
-/// The structural name of a tuple, `TupleN_` and then each slot's union-arm
-/// component in slot order. A tuple nested in a slot or a union arm
-/// contributes this same name, so a name never depends on where its tuple
-/// appears.
 fn tuple_type_component(key: &GoTupleKey, names: &GoNames) -> String {
     let mut component = format!("Tuple{}_", key.slots().len());
     for slot in key.slots() {

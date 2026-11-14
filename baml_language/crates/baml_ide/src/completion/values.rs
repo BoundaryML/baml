@@ -44,8 +44,6 @@ pub(crate) fn complete(
     out.add_builtin_type(baml_type::BuiltinTypeName::Json.alias());
 }
 
-/// The bare names in scope at `offset` that `keep` accepts — the name half
-/// of [`complete`], for positions that narrow what a name may be.
 pub(crate) fn complete_names<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     file: SourceFile,
@@ -54,9 +52,6 @@ pub(crate) fn complete_names<'db>(
     mut keep: impl FnMut(&ScopeName<'db>) -> bool,
 ) {
     for entry in names_in_scope_at(db, file, offset) {
-        // The resolver would resolve a `$`-companion if a reader could write
-        // one; none can, so the enumeration of what to WRITE drops them —
-        // the same rule search enumerates by.
         if let ScopeNameKind::Item(def) = &entry.kind
             && !symbols::offered_in_completion(db, &entry.name, *def)
         {

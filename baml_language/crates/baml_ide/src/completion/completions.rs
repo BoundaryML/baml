@@ -303,9 +303,6 @@ impl<'db> Completions<'db> {
         self.push(None, item);
     }
 
-    /// A tuple slot offered as the constant index that reads it, detailed
-    /// with the slot's type. The receiver's own positions, so they rank
-    /// with its inherent members.
     pub(super) fn add_tuple_slot(&mut self, slot: usize, ty: &baml_type::Ty) {
         let item = Completion {
             label: slot.to_string(),

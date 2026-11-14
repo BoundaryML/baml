@@ -68,9 +68,6 @@ pub(crate) enum GoTy {
     Optional(Box<Self>),
     Function(GoFunctionKey),
     TypedUnion(GoUnionKey),
-    /// A BAML tuple. Go has no tuple type: a tuple whose slots Go can spell
-    /// is a generated named struct (`Tuple2_IntString`), and any other is its
-    /// slots' dynamic join, `[]any`. See [`GoTupleKey::is_named`].
     Tuple(GoTupleKey),
     /// Renders as `any`, but deliberately retains every canonical candidate.
     DynamicUnion {
@@ -99,11 +96,6 @@ impl GoUnionKey {
     }
 }
 
-/// The identity of one tuple shape: its slots, in order. Unlike a union's
-/// members, slots are never sorted or deduplicated, and a nested tuple or a
-/// union inside a slot keeps its own identity, so `(int, string)` and
-/// `(string, int)`, or `(int | string, bool)` and `(int, bool) | (string,
-/// bool)`, are distinct keys.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct GoTupleKey(Box<[GoTy]>);
 
@@ -112,11 +104,6 @@ impl GoTupleKey {
         &self.0
     }
 
-    /// Whether a generated named struct represents this tuple. A struct
-    /// declared once per package cannot spell a slot that is a callable's
-    /// type parameter, so such a tuple falls back to the host form of its
-    /// slots' join, which mentions a type parameter and is therefore the
-    /// dynamic `any`: the tuple is a `[]any` of its slots.
     pub(crate) fn is_named(&self) -> bool {
         !self.0.iter().any(contains_type_var)
     }
@@ -280,8 +267,6 @@ pub(crate) struct GoTypeProjection<'a> {
     /// Typed unions used by each generated Go package. Placement is a usage
     /// property; identity is exclusively [`GoUnionKey`].
     typed_unions: BTreeMap<BaseName, BTreeSet<GoUnionKey>>,
-    /// Named tuples used by each generated Go package, placed by usage like
-    /// typed unions; identity is exclusively [`GoTupleKey`].
     typed_tuples: BTreeMap<BaseName, BTreeSet<GoTupleKey>>,
     callback_options: BTreeMap<BaseName, BTreeSet<GoFunctionKey>>,
 }
@@ -543,9 +528,6 @@ impl<'a> GoTypeProjection<'a> {
                     GoTy::Function(key)
                 }
             }
-            // Slots keep their order and their own identities: a union in a
-            // slot is not distributed over the tuple, and a singleton tuple is
-            // not its element.
             Ty::Tuple(items) => {
                 let slots = items
                     .iter()
@@ -923,7 +905,6 @@ fn contains_dynamic_union(ty: &GoTy) -> bool {
     match ty {
         GoTy::DynamicUnion { .. } => true,
         GoTy::TypedUnion(key) => key.members().iter().any(contains_dynamic_union),
-        // A tuple without a named struct is the dynamic `[]any`.
         GoTy::Tuple(key) => !key.is_named() || key.slots().iter().any(contains_dynamic_union),
         GoTy::Class(_, arguments) => arguments.iter().any(contains_dynamic_union),
         GoTy::FunctionSpec { output } => contains_dynamic_union(output),
@@ -1034,7 +1015,6 @@ mod tests {
         };
         assert_eq!(key.slots(), &[GoTy::Int, GoTy::String]);
         assert!(key.is_named());
-        // Slot order and repeats are identity; a union slot is not expanded.
         assert_ne!(
             int_string,
             projection.project(&tuple(vec![Ty::String, Ty::Int]))
@@ -1050,7 +1030,6 @@ mod tests {
         ]));
         assert!(matches!(product, GoTy::Tuple(_)));
         assert!(matches!(expanded, GoTy::TypedUnion(_)));
-        // A singleton tuple is not its element.
         assert_ne!(projection.project(&tuple(vec![Ty::Int])), GoTy::Int);
     }
 

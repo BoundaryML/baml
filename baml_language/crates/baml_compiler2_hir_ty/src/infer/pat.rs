@@ -993,8 +993,6 @@ impl<'db> InferenceContext<'db> {
         }
         if !outcome.covers_type {
             if self.tuple_type_test_never_matches(scrut, pat_ty) {
-                // Reported even where a disjoint `is` test is otherwise a
-                // legal `false`: the likely intent was a value comparison.
                 if self.or_probe_depth == self.silent_test_depth && self.rest_reject_depth == 0 {
                     self.pending_diags
                         .push(super::PendingDiag::TupleTypeTestNeverMatches {
@@ -1010,10 +1008,6 @@ impl<'db> InferenceContext<'db> {
         outcome
     }
 
-    /// Whether `pat_ty` is a whole-tuple type test that no member of
-    /// `scrut` can pass, where `scrut` has a tuple member: the test compares
-    /// carried types, and none can be equivalent. Open members (`unknown`,
-    /// type parameters) are never provably disjoint, so they keep it legal.
     fn tuple_type_test_never_matches(&mut self, scrut: &Ty, pat_ty: &Ty) -> bool {
         if !matches!(self.expand_alias_ty(pat_ty).kind(), InferTy::Tuple(_)) {
             return false;
@@ -1101,12 +1095,6 @@ impl<'db> InferenceContext<'db> {
         match (&pat, &scrut) {
             (P::Never, _) => true,
             (P::List(a), P::List(b)) => self.pattern_matchable(a, b),
-            // Invariant: a tuple type pattern tests the carried type, so it
-            // shares a value with a tuple type only when the two are
-            // equivalent (`(int, string?)` and `(int?, string)` share none,
-            // though `(1, "a")` fits both slotwise). Destructuring patterns
-            // never reach here as tuple types: their element tests are
-            // checked slot by slot against the scrutinee's own slots.
             (P::Tuple(_), P::Tuple(_)) => {
                 baml_type::normalize::equivalent(&pat, &scrut, &self.facts)
             }
@@ -1330,10 +1318,6 @@ impl<'db> InferenceContext<'db> {
                     pat_plain,
                 )
             }
-            // A tuple type test checks the carried type, so it covers only
-            // an equivalent tuple column (the universal rule above) and never
-            // decomposes: `(int, s)` and `(string, s)` do not cover
-            // `(int | string, s)`, whose values carry neither type.
             InferTy::Tuple(_) => DPat::type_test(pat_plain, col_plain),
             InferTy::TypeVar(..) => {
                 // Rigid: covers only a column of the SAME variable;
@@ -1572,21 +1556,6 @@ impl<'db> InferenceContext<'db> {
     /// Array destructure: elements lower against the scrutinee's element
     /// type (ascription intersects when written); a rest binding takes the
     /// list type. A length-constrained shape never covers by type alone.
-    /// Tuple destructure `(p1, p2, ...)`. Against a same-arity tuple the
-    /// sub-patterns lower against the element types. Against a union, the
-    /// pattern claims EVERY same-arity tuple member it could fit (unlike
-    /// class/array patterns' unique claim: tuples are structural, so
-    /// `(let a, let b)` over `(int, string) | (string, int)` really matches
-    /// both); each claimed member contributes one `UnionMember` alternative
-    /// to the matrix, probed silently, and the bindings are typed once at the
-    /// elementwise join of the claimed members.
-    ///
-    /// Element tests narrow the bindings they produce, never a tuple type:
-    /// a later slot write could break any refinement of the scrutinee. Their
-    /// only effect on the scrutinee is arm elimination: a union member whose
-    /// slot type is provably disjoint from an element test is not claimed,
-    /// and the claimed members are kept whole. That is sound because a
-    /// tuple's carried slot types are fixed and bound every write.
     fn lower_tuple_pattern(
         &mut self,
         body: &ExprBody,
@@ -1604,13 +1573,6 @@ impl<'db> InferenceContext<'db> {
             return self.lower_tuple_elements(body, elements, &slots, &structure);
         }
         match structure.kind() {
-            // A top-typed scrutinee is not a tuple type, so the pattern
-            // refines nothing and nothing is known about the slots: the
-            // runtime shape test decides whether the value is a tuple of this
-            // arity, and the elements lower against `unknown`. The matrix row
-            // stands for "some tuple of this arity whose elements pass these
-            // tests" (a tuple of the elements' refined types, for the matrix
-            // only), which never covers.
             InferTy::Unknown => {
                 let unknown = Ty::intern(InferTy::Unknown);
                 let refined: Vec<Ty> = elements
@@ -1645,8 +1607,6 @@ impl<'db> InferenceContext<'db> {
                     let mut consumes = true;
                     let single = claimed.len() == 1;
                     for (member, slots) in &claimed {
-                        // With one claim the member lowering IS the
-                        // recording pass; with several, each is a probe.
                         if !single {
                             self.or_probe_depth += 1;
                         }
@@ -1663,7 +1623,6 @@ impl<'db> InferenceContext<'db> {
                         ));
                     }
                     if !single {
-                        // Record the bindings once, at the elementwise join.
                         let joined: Vec<Ty> = (0..arity)
                             .map(|i| {
                                 let at_i: Vec<Ty> =
@@ -1690,9 +1649,6 @@ impl<'db> InferenceContext<'db> {
             }
             _ => {}
         }
-        // No tuple of this arity can reach this pattern. Lower the elements
-        // against the error sentinel so their bindings record without
-        // cascading, and report the dead pattern once.
         let error_slots = vec![Ty::error(); arity];
         self.or_probe_depth += 1;
         self.lower_tuple_elements(body, elements, &error_slots, &Ty::error());
@@ -1718,10 +1674,6 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// Lower each tuple sub-pattern against its slot of `tuple_ty`. The
-    /// matched type is `tuple_ty` itself, never a tuple of the elements'
-    /// refined types, so the pattern consumes it only when every element
-    /// covers its slot.
     fn lower_tuple_elements(
         &mut self,
         body: &ExprBody,
@@ -2063,10 +2015,6 @@ impl<'db> InferenceContext<'db> {
                 let class = class.clone();
                 self.class_head_fits(&class, &expanded)
             }
-            // A tuple pattern demands a tuple of its arity whose elements
-            // each fit; an open or top-typed value could still be one. An
-            // element type test provably disjoint from its slot type is a
-            // misfit too: that is what eliminates a union arm.
             Pattern::Tuple(elements) => match expanded.kind() {
                 InferTy::Tuple(element_tys) if element_tys.len() == elements.len() => {
                     let pairs: Vec<(PatId, Ty)> = elements
@@ -2093,10 +2041,6 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// [`Self::pattern_fits`] for a tuple element: a bare type test (or an
-    /// alternation of them) misfits when provably disjoint from the slot
-    /// type. An open slot (`unknown`, a type parameter) is never provably
-    /// disjoint, so it keeps its arm.
     fn tuple_element_fits(&mut self, body: &ExprBody, sub: PatId, slot: &Ty) -> bool {
         match &body.patterns[sub] {
             Pattern::Type(_) => match self.pattern_ascription_ty(body, sub) {
@@ -2425,9 +2369,6 @@ impl PatCtx for HirPatCtx<'_, '_> {
             ],
             P::Null | P::Literal(..) | P::EnumVariant(..) => vec![Ctor::Type(ty.clone())],
             P::Never => vec![],
-            // Members are peeled like the patterns that claim them (a
-            // recursive alias such as `type Chain = (int, Chain?)` reaches a
-            // union column unexpanded).
             P::Union(members) => members
                 .iter()
                 .map(|member| Ctor::UnionMember(self.peel_aliases(member.clone(), 8)))
@@ -2446,7 +2387,6 @@ impl PatCtx for HirPatCtx<'_, '_> {
             P::Interface(..) => vec![Ctor::Interface(ty.clone())],
             // Slice splitting owns list columns; empty defers to it.
             P::List(..) => vec![],
-            // A tuple column has exactly one constructor: its arity.
             P::Tuple(elements) => vec![Ctor::Tuple(elements.len())],
             // Everything else is an infinite or open alphabet.
             _ => vec![Ctor::NonExhaustive],

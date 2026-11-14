@@ -1482,9 +1482,6 @@ pub(crate) fn compare_interface_root(db: &dyn baml_compiler2_hir::Db) -> Option<
     ))
 }
 
-/// The verdict of a conditional structural default (`Hash`, or `Compare` for
-/// a tuple receiver), or `None` when `interface` has none for `ty` and the
-/// ordinary implementation search decides.
 pub(crate) fn conditional_structural_verdict(
     db: &dyn baml_compiler2_hir::Db,
     facts: &crate::facts::Facts<'_>,
@@ -1501,13 +1498,6 @@ pub(crate) fn conditional_structural_verdict(
     }
 }
 
-/// The compiler-derived tuple `Compare` witness. Every tuple whose slot types
-/// all implement `Compare` does too - at any arity, nested tuples included,
-/// with no source implementation - ordering lexicographically through the
-/// slots. `Some(eligible)` for a tuple receiver; `None` for every other
-/// receiver, whose `Compare` comes only from an explicit implementation.
-/// Rigid slots are proved from `facts`' bounds, so `A: Compare` and
-/// `B: Compare` prove `(A, B): Compare` in a generic body.
 pub(crate) fn derived_tuple_compare(
     db: &dyn baml_compiler2_hir::Db,
     facts: &crate::facts::Facts<'_>,
@@ -1770,8 +1760,6 @@ fn hash_eligible_within_depth(
                             || interface_requires(db, &bound, hash, ty, REQUIRES_CLOSURE_FUEL)
                     })
             }
-            // Tuples are never map keys, even with hashable elements, so they
-            // have no structural `Hash`.
             InferTy::Tuple(_) => false,
             _ => false,
         };

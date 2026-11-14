@@ -234,9 +234,6 @@ fn fields_struct(
     // Field attributes are for serde's derive, which a `@json.fallback` class
     // does without.
     let derived_fields = derives_serde && fallback.is_none();
-    // Rust implements `Debug` and `PartialEq` for tuples of at most 12
-    // slots, so a class holding a wider one derives only `Clone`, and says
-    // why on its docs.
     let derives = std_trait_derives(
         properties
             .iter()

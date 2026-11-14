@@ -1,12 +1,3 @@
-// Tuples as stream items, offline: `tuple_streams` scripts each function's
-// client to replay fixed text deltas, so the generated stream companions run
-// the ordinary partial/final parse with no replay server.
-//
-//   * `stream_tuple_items` -- `(string, int)[]`: partials are vectors of
-//     std::tuple, `[("a", 1)]` first; the final value is
-//     `[("a", 1), ("b", 2)]`.
-//   * `stream_tuple_final` -- `(int, string)`: every partial is itself a
-//     std::tuple, and so is the final value `(1, "a")`.
 #include <baml_sdk.h>
 #include <baml_test.h>
 
@@ -61,7 +52,6 @@ void assert_items_partials(const std::vector<Items>& partials) {
   BAML_ASSERT(!partials.empty());
   BAML_ASSERT(partials.front() == Items{Item("a", 1)});
   for (const Items& partial : partials) {
-    // Each partial is a prefix of the final value.
     BAML_ASSERT(partial.size() <= kItems.size());
     BAML_ASSERT(
         Items(kItems.begin(), kItems.begin() + static_cast<std::ptrdiff_t>(
@@ -84,7 +74,6 @@ BAML_TEST(tuples_stream_items) {
   const baml::stream<Items> stream = streams::stream_tuple_items_stream("x");
   assert_items_partials(drain(stream));
   BAML_ASSERT(stream.final_() == kItems);
-  // The non-streaming call parses the same reply to the same value.
   BAML_ASSERT(streams::stream_tuple_items("x") == kItems);
 
   const baml::stream<Items> async_stream =

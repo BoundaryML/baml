@@ -156,7 +156,6 @@ pub mod internal {
         )
     }
 
-    /// The slot of a tuple's element at `index`, from the tuple's own slot.
     pub fn tuple_element_slot<Tuple: __BamlValuePrivate, T: __BamlValuePrivate>(
         slot: &wire::BamlTy,
         index: usize,
@@ -311,7 +310,6 @@ pub mod internal {
         })))
     }
 
-    /// Wire `BamlTy` for the tuple `(items...)`.
     pub fn tuple_ty(items: Vec<wire::BamlTy>) -> wire::BamlTy {
         super::wire_ty(wire::baml_ty::Ty::Tuple(wire::BamlTyTuple { items }))
     }
@@ -462,8 +460,6 @@ pub(crate) fn wire_variant_kind(v: &wire::BamlOutboundValue) -> &'static str {
     }
 }
 
-/// The error for a value that is not an `expected`. The value is refused,
-/// so the engine references it holds are released.
 fn wrong_type(expected: &'static str, v: wire::BamlOutboundValue) -> DecodeError {
     let error = DecodeError::WrongType {
         expected,
@@ -473,8 +469,6 @@ fn wrong_type(expected: &'static str, v: wire::BamlOutboundValue) -> DecodeError
     error
 }
 
-/// Decode a map's entries in order. Entries not taken after one fails to
-/// decode are released, as [`OutboundItems`] releases a list's.
 fn decode_entries<K: BamlMapKey, V: __BamlValuePrivate, M: FromIterator<(K, V)>>(
     entries: Vec<wire::BamlOutboundMapEntry>,
 ) -> Result<M, DecodeError> {
@@ -498,11 +492,6 @@ fn decode_entries<K: BamlMapKey, V: __BamlValuePrivate, M: FromIterator<(K, V)>>
     decoded
 }
 
-/// The items of an outbound list or tuple, decoded in order. Items not
-/// taken when it is dropped (those after an item that failed to decode)
-/// are released, so a container that fails partway gives up every
-/// reference it held: earlier items through the values they decoded to,
-/// later ones here.
 pub struct OutboundItems(std::vec::IntoIter<wire::BamlOutboundValue>);
 
 impl OutboundItems {
@@ -740,24 +729,8 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
     }
 }
 
-/// The widest BAML tuple `baml_bridge` converts: Rust tuples of arity 1
-/// through this many implement [`BamlValue`].
-///
-/// The impls must live here: the generated crate can implement neither this
-/// crate's trait for a native tuple (Rust's orphan rule forbids a foreign
-/// trait on a foreign type) nor a wrapper without giving up the native
-/// tuple. So the bound is fixed, and generous: well past std's own 12-slot
-/// trait impls and any tuple a BAML program plausibly declares, while each
-/// impl stays cheap to compile. `sdkgen_rust` (`MAX_BRIDGE_TUPLE_ARITY`)
-/// reports a wider tuple as an unsupported type and skips its symbol,
-/// rather than emitting a type that has no impl.
 pub const MAX_TUPLE_ARITY: usize = 32;
 
-/// BAML tuples `(A, B, ...)` map to native Rust tuples of arity 1 through
-/// [`MAX_TUPLE_ARITY`] (the empty tuple `()` is BAML's `null`). A tuple
-/// travels inbound as a list node that states the tuple type, and outbound
-/// as a `tuple_value`. Either way the host and the engine each hold their
-/// own copy: writing to a Rust tuple never changes a BAML one.
 macro_rules! impl_baml_tuple {
     ($len:literal; $($name:ident : $idx:tt),+) => {
         impl<$($name: __BamlValuePrivate),+> __BamlValuePrivate for ($($name,)+) {
@@ -806,8 +779,6 @@ macro_rules! impl_baml_tuple {
     };
 }
 
-/// [`impl_baml_tuple!`] for every prefix of the slot list: each slot is
-/// `(type parameter, index, arity of the tuple it ends)`.
 macro_rules! impl_baml_tuples {
     ([$($done:ident : $done_idx:tt),*]) => {};
     ([$($done:ident : $done_idx:tt),*] ($name:ident $idx:tt $len:literal) $($rest:tt)*) => {

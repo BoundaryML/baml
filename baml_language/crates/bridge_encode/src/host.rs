@@ -88,7 +88,6 @@ pub enum HostShape<'a, V: HostValue> {
         variant: String,
     },
     List(Children<'a, V>),
-    /// A fixed sequence the language marks as a tuple; see [`Shape::Tuple`].
     Tuple {
         slots: Option<Vec<StatedTy>>,
         items: Children<'a, V>,
@@ -123,12 +122,6 @@ pub enum Shape<C> {
         variant: String,
     },
     List(Vec<C>),
-    /// A fixed sequence the language marks as a tuple (a Python `tuple`), as
-    /// opposed to a list. Its natural type is the tuple of its items' own
-    /// types; it still stands in for a list where the slot is a list.
-    /// `slots` are the slot types the value knows (a tuple of a registered
-    /// tuple type, one received with the type it carries); `None` when it
-    /// knows only its items.
     Tuple {
         slots: Option<Vec<StatedTy>>,
         items: Vec<C>,

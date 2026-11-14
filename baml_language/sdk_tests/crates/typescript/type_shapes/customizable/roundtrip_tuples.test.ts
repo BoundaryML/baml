@@ -1,8 +1,3 @@
-// Roundtrip coverage for baml_sdk/tuples: a BAML tuple is a TypeScript
-// `[A, B]`, represented by an array. Arrays sent to a declared tuple
-// slot must have its arity and fit each slot in order; a tuple received with
-// no declared tuple type (held as `unknown`, a callback argument, a thrown
-// value) keeps its carried type, so sending it back restates the same tuple.
 import "./baml_sdk/index.js";
 import { describe, it, expect } from "vitest";
 import { BamlError, BamlType } from "@boundaryml/baml-bridge";
@@ -84,7 +79,6 @@ describe("roundtrip tuples", () => {
   it("tuples_round_trip_union_arms", () => {
     expect(round_trip_tuple_or_string([1, "a"])).toEqual([1, "a"]);
     expect(round_trip_tuple_or_string("s")).toBe("s");
-    // Same-arity arms: the slots decide, and a fit in neither order fails.
     expect(round_trip_tuple_arms([1, "a"])).toEqual([1, "a"]);
     expect(round_trip_tuple_arms(["a", 1])).toEqual(["a", 1]);
     expect(() => round_trip_tuple_arms([true, 1] as never)).toThrow();
@@ -92,9 +86,7 @@ describe("roundtrip tuples", () => {
 
   // SDK_PARITY_LINT(skip): only a TypeScript array is both a list and a tuple
   it("tuples_array_fitting_tuple_and_list_is_tuple", () => {
-    // `[1, 2]` fits `(int, int)` and `int[]`: the tuple wins.
     expect(tuple_or_list_is_tuple([1, 2])).toBe(true);
-    // An array of another arity fits only the list.
     expect(tuple_or_list_is_tuple([1, 2, 3])).toBe(false);
   });
 
@@ -114,7 +106,6 @@ describe("roundtrip tuples", () => {
     const box = new TupleBox<[number, string]>({ value: [1, "a"] });
     const back = round_trip_tuple_box(box);
     expect(back).toEqual(box);
-    // The generic argument crosses back as a tuple type token.
     expect((back as unknown as { $types?: unknown }).$types).toEqual({ T: { tuple: ["int", "string"] } });
   });
 
@@ -142,9 +133,7 @@ describe("roundtrip tuples", () => {
     }, [1, "a"]);
     expect(seen).toEqual([[1, "a"]]);
     expect(swapped).toEqual(["a", 1]);
-    // A callback result of the wrong arity breaks the callback's contract.
     await expect(call_tuple_callback_async(() => ["a"] as never, [1, "a"])).rejects.toThrow();
-    // A synchronous call cannot dispatch a host callback.
     expect(() => call_tuple_callback((t) => [t[1], t[0]], [1, "a"])).toThrow();
   });
 
@@ -161,13 +150,10 @@ describe("roundtrip tuples", () => {
 
   // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_dynamic_value_keeps_carried_type", async () => {
-    // `(1, true)` is an `(int | string, bool)` by its carried type.
     const held = tuple_as_unknown([1, true]);
     expect(held).toEqual([1, true]);
     expect(unknown_has_carried_tuple_type(held)).toBe(true);
-    // A plain array at an open slot is a list, not a tuple.
     expect(unknown_has_carried_tuple_type([1, true])).toBe(false);
-    // A callback argument at an open slot, returned at an open slot.
     expect(await call_unknown_tuple_callback_async((v) => v, [1, true])).toBe(true);
   });
 
@@ -175,7 +161,6 @@ describe("roundtrip tuples", () => {
   it("tuples_reflected_type_token", () => {
     expect(BamlType.from({ tuple: ["int", "string"] })).toBeInstanceOf(BamlType);
     expect(() => BamlType.from({ tuple: [] })).toThrow();
-    // A tuple type token binds a type parameter, in slot order.
     const pair = make_pair(1, "a");
     expect(value_has_type(pair, { $types: { T: { tuple: ["int", "string"] } } })).toBe(true);
     expect(value_has_type(pair, { $types: { T: { tuple: ["string", "int"] } } })).toBe(false);
@@ -185,11 +170,8 @@ describe("roundtrip tuples", () => {
   // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_method_round_trip", async () => {
     const box = new TuplePairBox({ a: 1, b: "a" });
-    // Instance bindings are per-instance bound fields, so compare data fields.
-    // An instance method returning a tuple, and one taking a tuple.
     expect(box.as_pair()).toEqual([1, "a"]);
     expect(box.with_pair([2, "b"])).toMatchObject({ a: 2, b: "b" });
-    // A static method taking a tuple.
     expect(TuplePairBox.from_pair([3, "c"])).toBeInstanceOf(TuplePairBox);
     expect(TuplePairBox.from_pair([3, "c"])).toMatchObject({ a: 3, b: "c" });
     expect(await box.as_pair_async()).toEqual([1, "a"]);
@@ -200,7 +182,6 @@ describe("roundtrip tuples", () => {
 
   // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
   it("tuples_function_handle_round_trip", async () => {
-    // A BAML closure returned to the host: its handle takes and returns tuples.
     const swap = make_tuple_swapper();
     expect(typeof swap).toBe("function");
     expect(swap([1, "a"])).toEqual(["a", 1]);

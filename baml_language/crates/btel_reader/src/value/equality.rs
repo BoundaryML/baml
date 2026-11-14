@@ -112,8 +112,6 @@ enum Value<'a> {
     Uint8Array(&'a [u8]),
     Enum(&'a DecodedName, &'a str),
     List(Vec<Self>),
-    /// A captured tuple: equal only to a tuple of equal elements, never to a
-    /// list holding the same ones.
     Tuple(Vec<Self>),
     Map(Fields<'a>),
     GeneralMap(Vec<(Self, Self)>),
@@ -514,8 +512,6 @@ impl<'a> Builder<'a> {
                         .collect::<Result<_, _>>()?,
                 )
             }
-            // Carried slot types do not take part, as a list's element
-            // type does not.
             DecodedObject::Tuple {
                 items,
                 original_len,

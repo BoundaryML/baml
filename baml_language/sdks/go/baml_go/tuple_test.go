@@ -124,7 +124,6 @@ func outboundBool(value bool) *cffi.BamlOutboundValue {
 	return &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_BoolValue{BoolValue: value}}
 }
 
-// testFloatString stands in for a generated named tuple struct.
 type testFloatString struct {
 	Item0 float64
 	Item1 string
@@ -164,27 +163,23 @@ func TestDynamicTuplesFindTheirRegisteredStructByCarriedType(t *testing.T) {
 	if err != nil || got != (testFloatString{Item0: 1.5, Item1: "x"}) {
 		t.Fatalf("registered tuple = %#v, %v", got, err)
 	}
-	// Slot order is part of the identity: `(string, float)` is not registered.
 	swapped := TupleBAMLType(PrimitiveBAMLType(StringType), PrimitiveBAMLType(FloatType))
 	got, err = DecodeAs[any](carriedTuple(swapped, outboundString("x"), outboundFloat(1.5)))
 	if err != nil || !reflect.DeepEqual(got, []any{"x", 1.5}) {
 		t.Fatalf("unregistered swapped tuple = %#v, %v", got, err)
 	}
-	// Nested: the inner tuple carries its own type and finds its struct.
 	nested := TupleBAMLType(floatStringTuple(), PrimitiveBAMLType(IntType))
 	inner := carriedTuple(floatStringTuple(), outboundFloat(2), outboundString("y")).value
 	got, err = DecodeAs[any](carriedTuple(nested, inner, outboundInt(3)))
 	if err != nil || !reflect.DeepEqual(got, []any{testFloatString{Item0: 2, Item1: "y"}, int64(3)}) {
 		t.Fatalf("nested tuple = %#v, %v", got, err)
 	}
-	// Slots of one registered tuple type join to a typed slice of its struct.
 	pairOfPairs := TupleBAMLType(floatStringTuple(), floatStringTuple())
 	got, err = DecodeAs[any](carriedTuple(pairOfPairs, inner, inner))
 	want := []testFloatString{{Item0: 2, Item1: "y"}, {Item0: 2, Item1: "y"}}
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("joined registered slots = %#v, %v", got, err)
 	}
-	// A malformed registered tuple is an error, not a fallback.
 	if _, err := DecodeAs[any](carriedTuple(floatStringTuple(), outboundFloat(1), outboundInt(2))); err == nil {
 		t.Fatal("a malformed registered tuple decoded")
 	}
@@ -201,13 +196,11 @@ func TestUnregisteredDynamicTuplesDecodeAsTheListOfTheirSlotJoin(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(got, []int64{1, 1, 2}) {
 		t.Fatalf("(int, int, int) keeps every slot = %#v, %v", got, err)
 	}
-	// A heterogeneous join is a union, whose Go carrier is `any`.
 	mixed := TupleBAMLType(PrimitiveBAMLType(BoolType), PrimitiveBAMLType(IntType))
 	got, err = DecodeAs[any](carriedTuple(mixed, outboundBool(true), outboundInt(1)))
 	if err != nil || !reflect.DeepEqual(got, []any{true, int64(1)}) {
 		t.Fatalf("(bool, int) = %#v, %v", got, err)
 	}
-	// An optional slot's join is not one Go type either.
 	optional := TupleBAMLType(OptionalBAMLType(PrimitiveBAMLType(IntType)), OptionalBAMLType(PrimitiveBAMLType(IntType)))
 	got, err = DecodeAs[any](carriedTuple(optional, outboundInt(1), &cffi.BamlOutboundValue{}))
 	if err != nil || !reflect.DeepEqual(got, []any{int64(1), nil}) {

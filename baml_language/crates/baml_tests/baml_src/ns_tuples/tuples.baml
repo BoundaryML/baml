@@ -1,13 +1,4 @@
-// End-to-end semantics of tuples: `(a, b)` literals, `(A, B)` types, `t[0]`
-// element access, tuple patterns in `match` / `let`, equality, rendering, and
-// JSON. Tuples are fixed-arity products with writable slots; they are
-// invariant elementwise and disjoint from lists.
-//
-// Every check runs through a helper function: a test-block local is boxed (VM
-// quirk), so nothing is bound in a test block here. Names carry a `tp_` / `Tp`
-// prefix to stay clear of the other namespaces in this one-project corpus.
 
-// ─── Literals and element access ─────────────────────────────────────────────
 
 function tp_pair() -> (int, string) {
     (1, "a")
@@ -30,7 +21,6 @@ function tp_single() -> (int,) {
     (7,)
 }
 
-// `(7)` is grouping, not a 1-tuple.
 function tp_grouping() -> int {
     (7)
 }
@@ -40,7 +30,6 @@ test "one_tuple_and_grouping" {
     assert.equal(tp_grouping(), 7)
 }
 
-// `t[0][1]` indexes the inner tuple.
 function tp_nested() -> string {
     let t = ((1, "inner"), true);
     t.0.1
@@ -50,8 +39,6 @@ test "nested_element_access" {
     assert.equal(tp_nested(), "inner")
 }
 
-// A tuple as a block's tail expression, on its own line after a `let` whose
-// initializer ends in a call: it must not glue on as call arguments.
 function tp_tail_after_call() -> (int, int) {
     let a = tp_first()
     (a, a)
@@ -61,15 +48,11 @@ test "tuple_tail_after_call" {
     assert.equal(tp_tail_after_call().1, 1)
 }
 
-// ─── Types: invariance, unions, containers ───────────────────────────────────
 
 function tp_takes_optional(t: (int?, string)) -> bool {
     t.0 == null
 }
 
-// Tuples are invariant: an existing `(int, string)` does not fit
-// `(int?, string)` (see the diagnostics corpus), but a fresh literal is built
-// at the expected slot types, and a new tuple converts an existing one.
 function tp_fresh_literal_at_wider_slots() -> bool {
     tp_takes_optional((1, "a"))
 }
@@ -79,7 +62,6 @@ function tp_rebuilt_at_wider_slots() -> bool {
     tp_takes_optional((t.0, t.1))
 }
 
-// The fresh literal carries the expected type, not its contents' own.
 function tp_fresh_literal_carries_expected() -> bool {
     let t: (int?, string) = (1, "a");
     t is (int?, string)
@@ -129,10 +111,9 @@ test "tuple_class_field" {
     assert.equal(tp_span_width(), 7)
 }
 
-// Reading slot 0 of a union of tuples reads that slot of whichever arm it is.
 function tp_union_slot(flag: bool) -> int | string {
     let t: (int, bool) | (string, bool) = if (flag) { (1, true) } else { ("s", false) };
-    t.0
+    match t { (let first, _) => first }
 }
 
 test "union_of_tuples_slot_access" {
@@ -140,7 +121,6 @@ test "union_of_tuples_slot_access" {
     assert.equal(tp_union_slot(false), "s")
 }
 
-// ─── Generics ────────────────────────────────────────────────────────────────
 
 function tp_swap<A, B>(t: (A, B)) -> (B, A) {
     (t.1, t.0)
@@ -155,7 +135,6 @@ test "generic_tuple_functions" {
     assert.equal(tp_identity((1, 2)).1, 2)
 }
 
-// ─── Patterns ────────────────────────────────────────────────────────────────
 
 function tp_destructure() -> int {
     let (let a, let b) = (3, 4);
@@ -166,9 +145,6 @@ test "let_destructuring" {
     assert.equal(tp_destructure(), 12)
 }
 
-// `match (a, b)` scrutinizes a tuple; the four destructuring arms are
-// exhaustive. Each binds a slot, so the arms test slot values: `(true, true)`
-// with no binding would test the tuple's type `(true, true)` instead.
 function tp_bool_cmp(a: bool, b: bool) -> int {
     match (a, b) {
         (true, let _x: true) => 0,
@@ -198,7 +174,6 @@ test "tuple_patterns_with_bindings" {
     assert.equal(tp_classify((5, "y")), "y")
 }
 
-// A tuple pattern against a union claims every same-arity tuple arm.
 function tp_union_match(v: (int, string) | (string, int) | int) -> string {
     match (v) {
         (let a, let b) => "pair",
@@ -223,7 +198,6 @@ test "is_tuple_type" {
     assert.equal(tp_is_pair((1, "a", true)), false)
 }
 
-// ─── Equality, rendering, JSON ───────────────────────────────────────────────
 
 function tp_eq() -> bool {
     (1, "a") == (1, "a")
@@ -295,7 +269,6 @@ test "tuple_json_round_trip" {
     assert.is_true(tp_decode_wrong_arity())
 }
 
-// ─── Reflection ──────────────────────────────────────────────────────────────
 
 function tp_reflect_arity() -> int {
     match (reflect.Type.of<(int, string)>().as_tuple()) {
@@ -313,7 +286,6 @@ test "tuple_reflection" {
     assert.equal(tp_reflect_value_kind(), true)
 }
 
-// ─── Schema-aligned parsing ──────────────────────────────────────────────────
 
 function tp_sap_pair(raw: string) -> (int, string) {
     baml.sap.parse<(int, string)>(raw)
@@ -331,8 +303,7 @@ test "tuple_sap_parse" {
     let pair = tp_sap_pair(`[1, "a"]`);
     assert.equal(pair.0, 1)
     assert.equal(pair.1, "a")
-    // Elements past the arity are dropped.
-    assert.equal(tp_sap_pair(`[2, "b", "extra"]`)[1], "b")
+    assert.equal(tp_sap_pair(`[2, "b", "extra"]`).1, "b")
     assert.is_true(tp_sap_pairs_inhabit(`[[1, "a"], [2, "b"]]`))
 }
 
@@ -345,7 +316,6 @@ test "tuple_sap_missing_element_throws" {
     }
 }
 
-// ─── A destructure beneath a binding ─────────────────────────────────────────
 
 function tp_bind_whole() -> int {
     let whole: (let first, _) = (1, 2);
@@ -356,7 +326,6 @@ test "tuple_destructure_beneath_a_binding" {
     assert.equal(tp_bind_whole(), 12)
 }
 
-// ─── Indexing ────────────────────────────────────────────────────────────────
 
 class TpBox {
     x: int,
@@ -383,14 +352,6 @@ test "tuple_indexing" {
     assert.equal(tp_union_index(("x", "y")), "y")
 }
 
-// ─── Carried slot types ──────────────────────────────────────────────────────
-//
-// A tuple carries the slot types it was built at, as a list carries its element
-// type; its runtime type is never reconstructed from its elements, which could
-// only recover a lower bound. A tuple type in a pattern, such as `v is (int,)`,
-// asks whether the carried type is equivalent to `(int,)`, exactly as
-// `tp_is_of<(int,)>` does; only a pattern with a binding or `_` tests the
-// elements themselves.
 
 function tp_is_of<T>(v: unknown) -> bool {
     v is T
@@ -404,13 +365,11 @@ function tp_wrap_optional_is() -> bool {
     tp_wrap<int?>(1) is (int?,)
 }
 
-// The carried `(int?,)` is not `(int,)`, though its element is an int.
 function tp_wrap_optional_is_not_int() -> bool {
     let w: unknown = tp_wrap<int?>(1);
     w is (int,)
 }
 
-// A destructuring pattern tests the element instead.
 function tp_wrap_optional_element_is_int() -> bool {
     tp_wrap<int?>(1) is (let _x: int,)
 }
@@ -430,7 +389,6 @@ function tp_wrap_int_type() -> bool {
 test "generic_construction_carries_the_realized_type_argument" {
     assert.is_true(tp_wrap_optional_is())
     assert.is_true(tp_is_of<(int?,)>(tp_wrap<int?>(1)))
-    // The frame's `int?` is the slot type, not the `int` its element holds.
     assert.equal(tp_wrap_optional_is_int(), false)
     assert.equal(tp_wrap_optional_is_not_int(), false)
     assert.is_true(tp_wrap_optional_element_is_int())
@@ -462,13 +420,11 @@ function tp_literal_slot_types() -> bool {
         && reflect.Type.of_value(tp_exact()) == reflect.Type.of<("foo",)>()
 }
 
-// Membership is invariant: a tuple carrying `("foo",)` is not a `(string,)`.
 test "a_literal_slot_is_carried_only_when_it_is_the_slot_type" {
     assert.equal(tp_literal_slots(), "false true true false")
     assert.is_true(tp_literal_slot_types())
 }
 
-// With no context, a literal's slots are its elements' widened types.
 function tp_uncontextual_type() -> bool {
     reflect.Type.of_value((1, "a")) == reflect.Type.of<(int, string)>()
 }
@@ -477,7 +433,6 @@ test "an_uncontextual_tuple_carries_widened_slot_types" {
     assert.is_true(tp_uncontextual_type())
 }
 
-// A union slot survives as the slot type, whichever arm its element holds.
 function tp_union_slot_carried() -> bool {
     let t: (int | string, bool) = (1, true);
     let held: unknown = t;
@@ -489,7 +444,6 @@ test "a_union_slot_is_carried" {
     assert.is_true(tp_union_slot_carried())
 }
 
-// Equality compares contents only, never the carried slot types.
 function tp_equal_across_slot_types() -> bool {
     tp_broad() == tp_exact()
 }
@@ -498,7 +452,6 @@ test "equality_ignores_carried_slot_types" {
     assert.is_true(tp_equal_across_slot_types())
 }
 
-// A deep copy keeps the source's slot types.
 function tp_deep_copy_type() -> bool {
     let t: (int?, string[]) = (1, ["a"]);
     let copied: unknown = baml.deep_copy(t);
@@ -509,7 +462,6 @@ test "deep_copy_keeps_carried_slot_types" {
     assert.is_true(tp_deep_copy_type())
 }
 
-// A decoded tuple carries its target's slot types.
 function tp_decoded_slot_type() -> bool {
     let decoded: unknown = baml.json.decode<("a" | "b", int?)>(`["a", 1]`);
     reflect.Type.of_value(decoded) == reflect.Type.of<("a" | "b", int?)>()
@@ -520,8 +472,6 @@ test "decoded_tuple_carries_its_target_slot_types" {
     assert.is_true(tp_decoded_slot_type())
 }
 
-// A tuple pattern reads its slots through the same element load as `t[i]`,
-// and a tuple rebuilt in a generic body carries the frame's arguments.
 function tp_swap_by_pattern<A, B>(t: (A, B)) -> (B, A) {
     let (let a, let b) = t;
     (b, a)

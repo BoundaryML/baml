@@ -421,8 +421,6 @@ impl InferenceContext<'_> {
     }
 
     /// Every narrowable binding the subtree assigns - the loop havoc set.
-    /// `after` is a C-style loop's update slot (`for (…; …; i += 1)`), which
-    /// runs before every later iteration just like the body.
     pub(super) fn assigned_bindings(
         &self,
         body: &ExprBody,

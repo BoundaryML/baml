@@ -22,10 +22,6 @@ extension BamlStreamNext: Equatable where Value: Equatable {}
 /// (no dedicated native stream API). A reference type on purpose:
 /// consuming `next()` advances shared engine-side state, like `File`'s
 /// cursor.
-///
-/// Each value decodes as its stream's declared item type: the stream keeps
-/// the item slot it was decoded under, so a stream of values with no
-/// `BamlDecodable` conformance (native tuples) decodes them too.
 public final class BamlStream<Value>: @unchecked Sendable {
     private static var doneFQN: String { "ai.stream.Done" }
 
@@ -101,9 +97,6 @@ extension BamlStream: BamlTyped where Value: BamlTyped {
 }
 
 extension BamlSlots {
-    /// The slot of the stream class `fqn` of `value`s. A stream rides as its
-    /// handle, so the slot states only its type, and decodes a stream whose
-    /// values decode under `value`.
     public static func stream<Value>(
         _ fqn: String,
         _ value: BamlSlot<Value>
@@ -119,8 +112,6 @@ extension BamlSlots {
 }
 
 extension BamlStream: BamlDecodable {
-    /// A stream decoded with no declared slot decodes its values through
-    /// their own `BamlDecodable` conformance.
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlStream<Value> {
         try decode(value) { try decodeOwn($0, as: Value.self) }
     }

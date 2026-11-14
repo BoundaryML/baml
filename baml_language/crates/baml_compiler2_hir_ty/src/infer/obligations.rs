@@ -645,7 +645,6 @@ impl<'db> InferenceContext<'db> {
                         return Ok(None);
                     }
                 }
-                // The derived tuple witness: open slots may still solve either way.
                 Some(baml_type::StructuralInterface::Compare)
                     if matches!(subject.kind(), InferTy::Tuple(_)) =>
                 {

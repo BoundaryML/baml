@@ -62,8 +62,6 @@ pub enum Ctor {
     /// Interface destructure. Sub-patterns' types come from the interface's
     /// field view, with generic substitution applied.
     Interface(Ty),
-    /// Tuple destructure of the given arity: the only constructor of a tuple
-    /// column. Sub-patterns' types are the column tuple's element types.
     Tuple(usize),
 
     /// "Which member of a union" tag, with arity 1. Sub-pattern's type is
@@ -968,7 +966,6 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
             r
         }
         Ty::Union(members) => members.iter().any(|m| is_inhabited_default(m, cx, seen)),
-        // Every element is present in every tuple value.
         Ty::Tuple(elements) => elements.iter().all(|e| is_inhabited_default(e, cx, seen)),
         // `T[]` always inhabits `[]`, so it is inhabited regardless of T.
         Ty::List(_) => true,
@@ -1748,8 +1745,6 @@ fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col_ty: &Ty) -> Vec<Ty> {
         Ctor::Slice(shape) => cx.slice_field_types(shape, col_ty),
         Ctor::Tuple(arity) => match col_ty {
             Ty::Tuple(elements) if elements.len() == *arity => elements.to_vec(),
-            // A column that is not this tuple (an error-recovery sentinel)
-            // suppresses verdicts below it, like `dpat_ty`'s open columns.
             _ => vec![Ty::Error; *arity],
         },
         // UnionMember projects a column from the union type down to the

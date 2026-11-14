@@ -348,8 +348,6 @@ nonisolated struct BamlBridge_Cffi_V1_BamlOutboundValue: @unchecked Sendable {
     set {_uniqueStorage()._value = .tyValue(newValue)}
   }
 
-  /// A tuple value, carrying its instantiated tuple type. Positions also
-  /// carry their own union envelopes where their slot is a union.
   var tupleValue: BamlBridge_Cffi_V1_BamlValueTuple {
     get {
       if case .tupleValue(let v)? = _storage._value {return v}
@@ -388,8 +386,6 @@ nonisolated struct BamlBridge_Cffi_V1_BamlOutboundValue: @unchecked Sendable {
     /// Shares the `BamlTy` representation with the inbound side; a runtime
     /// declaration it names is a row the host now holds.
     case tyValue(BamlBridge_Cffi_V1_BamlTy)
-    /// A tuple value, carrying its instantiated tuple type. Positions also
-    /// carry their own union envelopes where their slot is a union.
     case tupleValue(BamlBridge_Cffi_V1_BamlValueTuple)
 
   }
@@ -463,27 +459,15 @@ nonisolated struct BamlBridge_Cffi_V1_BamlValueList: Sendable {
   fileprivate var _itemType: BamlBridge_Cffi_V1_BamlTy? = nil
 }
 
-/// A tuple value: exactly as many items as the tuple's arity (at least one).
-/// Hosts send tuples inbound as a list; the declared type makes it a tuple.
 nonisolated struct BamlBridge_Cffi_V1_BamlValueTuple: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
 
   var items: [BamlBridge_Cffi_V1_BamlOutboundValue] = []
 
-  /// The tuple's carried (instantiated) type, always the `tuple` arm of
-  /// `BamlTy` with one slot type per item, in order. It is the value's own
-  /// identity, not one recovered from its items or the declared type, so a
-  /// host can look up its tuple representation (and restate the tuple when
-  /// sending it back) without a declared signature.
   var tupleType: BamlBridge_Cffi_V1_BamlTy {
     get {_tupleType ?? BamlBridge_Cffi_V1_BamlTy()}
     set {_tupleType = newValue}
   }
-  /// Returns true if `tupleType` has been explicitly set.
   var hasTupleType: Bool {self._tupleType != nil}
-  /// Clears the value of `tupleType`. Subsequent reads from it will return its default value.
   mutating func clearTupleType() {self._tupleType = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -1653,9 +1637,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueTuple: SwiftProtobuf.Message, 
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.items) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._tupleType) }()
@@ -1665,10 +1646,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueTuple: SwiftProtobuf.Message, 
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.items.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.items, fieldNumber: 1)
     }

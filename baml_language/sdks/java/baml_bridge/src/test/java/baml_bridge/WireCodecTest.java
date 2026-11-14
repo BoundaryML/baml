@@ -1826,7 +1826,6 @@ class WireCodecTest {
         Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ovHandle(
                 103L, ADT_TAGGED_HEAP_HANDLE, tyClass("ai.stream.Stream", tyPrimitive(PRIM_INT)))));
         assertEquals(BamlType.INT, assertInstanceOf(BamlStream.class, decoded).valueType());
-        // No type argument: the stream's values decode wire-driven.
         Object bare = ProtoReader.decodeOutboundResult(
                 okEnvelope(ovHandle(104L, ADT_TAGGED_HEAP_HANDLE, tyClass("ai.stream.Stream"))));
         assertNull(assertInstanceOf(BamlStream.class, bare).valueType());

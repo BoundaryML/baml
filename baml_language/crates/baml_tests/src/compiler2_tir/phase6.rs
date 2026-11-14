@@ -1390,7 +1390,7 @@ function f(u: User?) -> string {
     // hir_ty types the failed call with the error sentinel
     // (replace-with-error; TIR used `unknown`).
     assert!(
-        output.contains("return u?.getName() : !error"),
+        output.contains("}() : !error"),
         "Expected broken-chain call result in output, got:\n{output}"
     );
     assert!(

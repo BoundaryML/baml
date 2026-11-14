@@ -612,10 +612,6 @@ function decodeValueHolder(
         }
     }
     if (holder.tupleValue) {
-        // A BAML tuple decodes to a plain array, matching the generated
-        // `[A, B]` types. The array remembers the tuple's carried
-        // type, so sent back where no tuple type is declared it restates
-        // that tuple rather than a list.
         const items = (holder.tupleValue.items || []).map(item => decodeValueHolder(item, typeMap, ownership));
         const carried = holder.tupleValue.tupleType;
         if (carried?.tuple) carriedTupleTypes.set(items, carried);

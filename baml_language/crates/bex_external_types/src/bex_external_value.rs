@@ -202,14 +202,8 @@ pub enum BexExternalValue {
         entries: IndexMap<String, BexExternalValue>,
     },
 
-    /// Owned tuple with its slot types.
     Tuple {
-        /// The tuple's slot types, one per item (`int | string` for the first
-        /// slot of an `(int | string, bool)`). Inbound, each item must be a
-        /// member of its slot type; the tuple's type is the tuple of them,
-        /// never one inferred from the items.
         element_types: Vec<WireTy>,
-        /// The tuple elements, in order.
         items: Vec<BexExternalValue>,
     },
 

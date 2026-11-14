@@ -45,7 +45,6 @@ impl BexVm {
             Object::Map(map) if THREAD_LOCAL => unsafe { map.lock_thread_local() }.len() as i64,
             Object::Array(arr) => arr.len() as i64,
             Object::Uint8Array(bytes) => bytes.len() as i64,
-            // A tuple's arity: the tuple pattern shape test.
             Object::Tuple(tuple) => tuple.len() as i64,
             Object::Map(map) => map.len() as i64,
             Object::String(s) => s.byte_len() as i64,
@@ -324,7 +323,6 @@ impl BexVm {
         Ok(())
     }
 
-    /// Read tuple slot `idx`, as the interpreter's `LoadTupleField` does.
     pub fn load_tuple_field(&mut self, tuple: Value, idx: usize) -> Result<Value, Box<VmError>> {
         let load_result = {
             let tuple = self.as_tuple(&tuple)?;
@@ -411,9 +409,6 @@ impl BexVm {
         Value::object(self.alloc_array(element_ty, values))
     }
 
-    /// A tuple of `values` at the instantiated tuple type `tuple_ty`, whose
-    /// slot types it carries, as the interpreter's `AllocTuple` builds it
-    /// from its loaded type.
     #[inline]
     pub fn new_tuple(
         &mut self,

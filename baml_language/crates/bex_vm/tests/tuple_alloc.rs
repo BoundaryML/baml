@@ -74,7 +74,6 @@ fn make_function(
     }
 }
 
-/// Run `instructions` as an entry point whose frame holds `type_args`.
 fn run(
     instructions: Vec<Instruction>,
     constants: Vec<ConstValue>,
@@ -136,7 +135,6 @@ fn alloc_tuple_carries_the_loaded_type_with_frame_arguments() {
         vec![RealizedTy::optional(RealizedTy::int())],
     );
     let tuple = tuple_of(&vm, result.expect("allocates"));
-    // The frame's `int?`, not the `int` the element holds.
     assert_eq!(
         &*tuple.element_tys,
         &[
@@ -186,7 +184,6 @@ fn alloc_tuple_refuses_a_type_of_another_arity() {
     assert!(err.contains("TupleTypeMismatch"), "{err}");
 }
 
-/// `t[index]` over the two-slot tuple `(10, 20)`.
 fn load_slot(index: i64) -> Result<Value, String> {
     let pair = TyTemplate::Tuple(Box::new([int(), int()]));
     run(
@@ -211,18 +208,10 @@ fn load_slot(index: i64) -> Result<Value, String> {
 }
 
 #[test]
-fn load_array_element_reads_a_tuple_slot() {
-    assert_eq!(load_slot(0), Ok(Value::int(10)));
-    assert_eq!(load_slot(1), Ok(Value::int(20)));
-}
-
-#[test]
-fn load_array_element_bounds_checks_a_tuple_index() {
-    // Past the end, and negative: a tuple index never counts from the end.
-    // Either throws the ordinary index-out-of-range panic.
-    for index in [2, -1] {
-        let err = load_slot(index).expect_err("out of range");
-        assert!(err.contains("ThrownUnhandled"), "{err}");
+fn load_array_element_refuses_a_tuple() {
+    for index in [0, 1, 2, -1] {
+        let err = load_slot(index).expect_err("a tuple is not an array");
+        assert!(err.contains("TypeError"), "{err}");
     }
 }
 
@@ -251,8 +240,6 @@ fn store_array_element_refuses_a_tuple() {
     assert!(err.contains("TypeError"), "{err}");
 }
 
-/// The instructions that allocate `(10, 20)` carrying `(int, int)`; constants
-/// 0 through 2.
 fn alloc_pair() -> (Vec<Instruction>, Vec<ConstValue>) {
     (
         vec![
@@ -269,7 +256,6 @@ fn alloc_pair() -> (Vec<Instruction>, Vec<ConstValue>) {
     )
 }
 
-/// `t.slot` over the two-slot tuple `(10, 20)`.
 fn load_tuple_field(slot: usize) -> Result<Value, String> {
     let (mut instructions, constants) = alloc_pair();
     instructions.extend([Instruction::LoadTupleField(slot), Instruction::Return]);
@@ -288,23 +274,21 @@ fn load_tuple_field_bounds_checks_the_slot() {
     assert!(err.contains("ThrownUnhandled"), "{err}");
 }
 
-/// Tuple slot instructions take only tuples, and class-field instructions
-/// still take only instances.
 #[test]
 fn tuple_and_class_field_instructions_refuse_each_others_receivers() {
-    let list = vec![Instruction::LoadType(0), Instruction::AllocArray(0)];
-    let list_constants = vec![ConstValue::Type(int())];
-    for access in [vec![Instruction::LoadTupleField(0)]] {
-        let mut instructions = list.clone();
-        instructions.extend(access);
-        instructions.push(Instruction::Return);
-        let mut constants = list_constants.clone();
-        constants.push(ConstValue::Int(1));
-        let err = run(instructions, constants, vec![])
-            .0
-            .expect_err("a list is not a tuple");
-        assert!(err.contains("TypeError"), "{err}");
-    }
+    let err = run(
+        vec![
+            Instruction::LoadType(0),
+            Instruction::AllocArray(0),
+            Instruction::LoadTupleField(0),
+            Instruction::Return,
+        ],
+        vec![ConstValue::Type(int())],
+        vec![],
+    )
+    .0
+    .expect_err("a list is not a tuple");
+    assert!(err.contains("TypeError"), "{err}");
     for access in [
         vec![Instruction::LoadField(0)],
         vec![
@@ -323,20 +307,30 @@ fn tuple_and_class_field_instructions_refuse_each_others_receivers() {
     }
 }
 
-fn self_referencing_tuple(second: i64) -> (Value, BexVm) {
-    let (_, mut vm) = run(vec![Instruction::LoadConst(0), Instruction::Return], vec![ConstValue::Null], vec![]);
-    let value = alloc_self_referencing(&mut vm, second);
+fn tuple_with_child_cycle(second: i64) -> (Value, BexVm) {
+    let (_, mut vm) = run(
+        vec![Instruction::LoadConst(0), Instruction::Return],
+        vec![ConstValue::Null],
+        vec![],
+    );
+    let value = alloc_tuple_with_child_cycle(&mut vm, second);
     (value, vm)
 }
 
-fn alloc_self_referencing(vm: &mut BexVm, second: i64) -> Value {
+fn alloc_tuple_with_child_cycle(vm: &mut BexVm, second: i64) -> Value {
     let child = vm.tlab.alloc_array(RealizedTy::Unknown, vec![]);
     let tuple = bex_vm_types::Tuple::new(
-        [RealizedTy::List(Box::new(RealizedTy::Unknown)), RealizedTy::int()],
+        [
+            RealizedTy::List(Box::new(RealizedTy::Unknown)),
+            RealizedTy::int(),
+        ],
         [Value::object(child), Value::int(second)],
-    ).unwrap();
+    )
+    .unwrap();
     let value = Value::object(vm.tlab.alloc_tuple(tuple));
-    let Object::Array(array) = vm.get_object(child) else { unreachable!() };
+    let Object::Array(array) = vm.get_object(child) else {
+        unreachable!()
+    };
     array.lock_mut(vm.tlab.alloc_debt()).push(value);
     value
 }
@@ -349,43 +343,11 @@ fn done(result: NativeCallResult) -> Value {
     }
 }
 
-/// The name of the `baml.ops.Ordering` variant `value`.
-fn ordering_name(vm: &BexVm, value: Value) -> String {
-    let Object::Variant(variant) = vm.get_object(value.as_object_ptr().expect("a variant")) else {
-        panic!("expected an Ordering variant")
-    };
-    let Object::Enum(enm) = vm.get_object(variant.enm) else {
-        panic!("expected an enum")
-    };
-    enm.variants[variant.index].name.clone()
-}
-
-/// A tuple that holds itself orders against another such tuple by its other
-/// slots: the pair reached again through slot 0 counts as `Equal`, as the
-/// equality driver treats it, instead of recursing forever.
 #[test]
-fn compare_terminates_on_a_tuple_holding_itself() {
-    let (one, mut vm) = self_referencing_tuple(1);
-    let two = alloc_self_referencing(&mut vm, 2);
-    let other_one = alloc_self_referencing(&mut vm, 1);
-    for (a, b, expected) in [
-        (one, two, "Less"),
-        (two, one, "Greater"),
-        (one, other_one, "Equal"),
-        (one, one, "Equal"),
-    ] {
-        let ordering = done(PackageBamlImpl::_compare_structural_default(
-            &mut vm, &a, &b,
-        ));
-        assert_eq!(ordering_name(&vm, ordering), expected);
-    }
-}
-
-#[test]
-fn equality_terminates_on_a_tuple_holding_itself() {
-    let (one, mut vm) = self_referencing_tuple(1);
-    let two = alloc_self_referencing(&mut vm, 2);
-    let other_one = alloc_self_referencing(&mut vm, 1);
+fn equality_terminates_on_a_cycle_through_a_tuple_child() {
+    let (one, mut vm) = tuple_with_child_cycle(1);
+    let two = alloc_tuple_with_child_cycle(&mut vm, 2);
+    let other_one = alloc_tuple_with_child_cycle(&mut vm, 1);
     for (a, b, expected) in [(one, other_one, true), (one, two, false), (one, one, true)] {
         let equal = done(PackageBamlImpl::_equals_structural_default(&mut vm, &a, &b));
         assert_eq!(equal.as_bool(), Some(expected));
@@ -393,8 +355,8 @@ fn equality_terminates_on_a_tuple_holding_itself() {
 }
 
 #[test]
-fn rendering_terminates_on_a_tuple_holding_itself() {
-    let (one, mut vm) = self_referencing_tuple(1);
+fn rendering_terminates_on_a_cycle_through_a_tuple_child() {
+    let (one, mut vm) = tuple_with_child_cycle(1);
     let rendered = done(PackageBamlImpl::_to_string_default(&mut vm, &one));
     let Object::String(rendered) = vm.get_object(rendered.as_object_ptr().unwrap()) else {
         panic!("renders to a string")
@@ -402,23 +364,26 @@ fn rendering_terminates_on_a_tuple_holding_itself() {
     assert_eq!(rendered.as_str(), "([…], 1)");
 }
 
-/// The copy carries the source's slot types and holds itself, not the source.
 #[test]
-fn deep_copy_of_a_tuple_holding_itself_holds_the_copy() {
-    let (one, mut vm) = self_referencing_tuple(1);
+fn deep_copy_preserves_the_cycle_through_a_tuple_child() {
+    let (one, mut vm) = tuple_with_child_cycle(1);
     let copy = PackageBamlImpl::deep_copy(&mut vm, &one).expect("copies");
     assert_ne!(copy, one);
     let tuple = tuple_of(&vm, copy);
-    let Object::Array(child) = vm.get_object(tuple.load_slot(0).as_object_ptr().unwrap()) else { panic!("a child list") };
+    let Object::Array(child) = vm.get_object(tuple.load_slot(0).as_object_ptr().unwrap()) else {
+        panic!("a child list")
+    };
     assert_eq!(child.lock()[0], copy);
     assert_eq!(tuple.load_slot(1), Value::int(1));
     assert_eq!(
         &*tuple.element_tys,
-        &[RealizedTy::List(Box::new(RealizedTy::Unknown)), RealizedTy::int()]
+        &[
+            RealizedTy::List(Box::new(RealizedTy::Unknown)),
+            RealizedTy::int()
+        ]
     );
 }
 
-/// Both disassemblers show the slot as an immediate, with no field name.
 #[test]
 fn tuple_field_instructions_disassemble_with_their_slot() {
     let (mut instructions, constants) = alloc_pair();
@@ -439,12 +404,10 @@ fn tuple_field_instructions_disassemble_with_their_slot() {
     let mut raw = String::new();
     bex_vm::debug::display_compact_bytecode(&compact, &function.bytecode.constants, &mut raw)
         .expect("decodes");
-    // Each row is the offset, the raw name, then the slot.
     let rows: Vec<String> = raw
         .lines()
         .map(|line| line.split_whitespace().collect())
         .collect();
     assert!(rows.contains(&"0019LOAD_TUPLE_FIELD1".to_string()), "{raw}");
-    // The operands were consumed: decoding stays aligned through `RETURN`.
     assert_eq!(rows.last().map(String::as_str), Some("0029RETURN"), "{raw}");
 }

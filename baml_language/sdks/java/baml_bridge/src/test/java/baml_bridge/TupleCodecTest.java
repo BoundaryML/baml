@@ -27,14 +27,12 @@ import org.junit.jupiter.api.Test;
  * types, then a plain {@code List<Object>}.
  */
 class TupleCodecTest {
-    // BamlOutboundValue oneof field numbers.
     private static final int OV_STRING = 3;
     private static final int OV_INT = 4;
     private static final int OV_BOOL = 6;
     private static final int OV_LIST = 11;
     private static final int OV_UNION = 13;
     private static final int OV_TUPLE = 23;
-    // InboundValue: value_type = 1, list_value = 6; InboundListValue.values = 1.
     private static final int IV_VALUE_TYPE = 1;
     private static final int IV_LIST = 6;
     private static final int LIST_VALUES = 1;
@@ -59,14 +57,12 @@ class TupleCodecTest {
 
     @BeforeAll
     static void registerFixtures() {
-        // Mirrors the generated Baml static initializer's registerTuple calls.
         TypeRegistry.registerTuple(Tuple2_IntString.class.getName(), INT_STRING);
         TypeRegistry.registerTuple(Tuple2_StringInt.class.getName(), STRING_INT);
         TypeRegistry.registerTuple(Tuple2_Tuple2_IntStringBoolean.class.getName(), NESTED);
         TypeRegistry.registerTuple(Tuple2_IntOptionalString.class.getName(), INT_OPT_STRING);
     }
 
-    // -- outbound builders (mirror the engine's value_encode side) -----------
 
     private static byte[] ovInt(long v) {
         WireWriter w = new WireWriter();
@@ -171,17 +167,14 @@ class TupleCodecTest {
         return found;
     }
 
-    // -- the type token --------------------------------------------------------
 
     @Test
     void tuple_tokens_are_ordered_slot_identities() {
         assertEquals("(int, string)", INT_STRING.toString());
         assertEquals("(int,)", BamlType.tuple(BamlType.INT).toString());
         assertNotEquals(INT_STRING, STRING_INT);
-        // A one-slot tuple is not its slot, and a tuple is not a list.
         assertNotEquals(BamlType.INT, BamlType.tuple(BamlType.INT));
         assertNotEquals(BamlType.list(BamlType.INT), BamlType.tuple(BamlType.INT));
-        // A product of unions is not the union of products it expands to.
         BamlType product = BamlType.tuple(BamlType.union(BamlType.INT, BamlType.STRING), BamlType.BOOL);
         BamlType sum = BamlType.union(
                 BamlType.tuple(BamlType.INT, BamlType.BOOL), BamlType.tuple(BamlType.STRING, BamlType.BOOL));
@@ -194,10 +187,8 @@ class TupleCodecTest {
         for (BamlType type : List.of(INT_STRING, NESTED, INT_OPT_STRING, BamlType.tuple(BamlType.INT))) {
             assertEquals(type, BamlType.fromWireTy(type.toWireTy()));
         }
-        // BamlTy.tuple = 25, BamlTyTuple.items = 1.
         byte[] items = fieldOf(INT_STRING.toWireTy(), 25);
         assertEquals(2, fieldsOf(items, 1).size());
-        // A slot the grammar cannot spell poisons the whole token.
         WireWriter future = new WireWriter();
         future.writeMessage(16, new byte[0]); // rust_type
         WireWriter tuple = new WireWriter();
@@ -216,7 +207,6 @@ class TupleCodecTest {
 
     @Test
     void conflicting_tuple_registrations_are_refused() {
-        // Re-registering the same pair is idempotent.
         TypeRegistry.registerTuple(Tuple2_IntString.class.getName(), INT_STRING);
         assertThrows(
                 IllegalStateException.class,
@@ -230,7 +220,6 @@ class TupleCodecTest {
                 () -> TypeRegistry.registerTuple("some.List", BamlType.list(BamlType.INT)));
     }
 
-    // -- outbound: BAML -> Java ------------------------------------------------
 
     @Test
     void decode_registered_tuple_constructs_its_record() {
@@ -242,7 +231,6 @@ class TupleCodecTest {
         assertEquals(
                 new Tuple2_IntOptionalString(3L, null),
                 decode(ovTuple(ovInt(3), ovNull()), INT_OPT_STRING));
-        // Inside containers, through the element descriptor.
         assertEquals(
                 List.of(new Tuple2_IntString(1L, "a"), new Tuple2_IntString(2L, "b")),
                 decode(
@@ -257,7 +245,6 @@ class TupleCodecTest {
                 () -> decode(ovTuple(ovInt(1), ovString("a"), ovInt(2)), INT_STRING));
         assertTrue(error.getMessage().contains("has 2 slots"), error.getMessage());
         assertThrows(BamlError.class, () -> decode(ovTuple(ovInt(1)), INT_STRING));
-        // A thrown value still surfaces: lenient decode keeps the slots.
         assertEquals(
                 List.of(1L, "a", 2L),
                 ProtoReader.decodeWithDesc(ovTuple(ovInt(1), ovString("a"), ovInt(2)), INT_STRING, true));
@@ -269,35 +256,28 @@ class TupleCodecTest {
         Object got = decode(ovTuple(ovInt(1), ovBool(true)), intBool);
         assertEquals(
                 List.of(new Union2.Arm0<Long, Boolean>(1L), new Union2.Arm1<Long, Boolean>(true)), got);
-        // Exactly the slots, in order, and immutable like a generated record.
         assertThrows(UnsupportedOperationException.class, () -> ((List<?>) got).add(null));
 
-        // The join is of the declared slots, not of the values: a union slot
-        // contributes its members, and the item keeps the member it decoded to.
         BamlType product = BamlType.tuple(BamlType.union(BamlType.INT, BamlType.STRING), BamlType.BOOL);
         assertEquals(
                 List.of(
                         new Union3.Arm1<Long, String, Boolean>("x"),
                         new Union3.Arm2<Long, String, Boolean>(false)),
                 decode(ovTuple(ovString("x"), ovBool(false)), product));
-        // An optional slot admits a null element.
         BamlType optional = BamlType.tuple(BamlType.optional(BamlType.STRING), BamlType.INT);
         List<Object> withNull = new ArrayList<>();
         withNull.add(null);
         withNull.add(new Union2.Arm1<String, Long>(4L));
         assertEquals(withNull, decode(ovTuple(ovNull(), ovInt(4)), optional));
-        // One distinct slot type is that type's own list.
         assertEquals(List.of(1L, 2L), decode(ovTuple(ovInt(1), ovInt(2)), BamlType.tuple(BamlType.INT, BamlType.INT)));
     }
 
     @Test
     void tuple_without_a_union_representation_is_a_plain_list() {
-        // A type variable slot has no generated union.
         BamlType open = BamlType.tuple(BamlType.typeVar("T"), BamlType.INT);
         Object got = decode(ovTuple(ovString("v"), ovInt(1)), open);
         assertEquals(List.of("v", 1L), got);
         assertThrows(UnsupportedOperationException.class, () -> ((List<?>) got).set(0, null));
-        // Nor does a join of more than ten members.
         BamlType[] slots = new BamlType[11];
         byte[][] items = new byte[11][];
         List<Object> expected = new ArrayList<>();
@@ -321,31 +301,24 @@ class TupleCodecTest {
 
     @Test
     void carried_tuple_type_is_the_identity_without_a_declared_type() {
-        // No declared type: the carried identity finds the registered record.
         assertEquals(
                 new Tuple2_IntString(1L, "a"),
                 decode(ovCarriedTuple(INT_STRING, ovInt(1), ovString("a")), null));
         assertEquals(
                 new Tuple2_StringInt("a", 1L),
                 decode(ovCarriedTuple(STRING_INT, ovString("a"), ovInt(1)), null));
-        // Nested in a tuple and inside an untyped container, through the
-        // carried slot types.
         assertEquals(
                 new Tuple2_Tuple2_IntStringBoolean(new Tuple2_IntString(2L, "b"), true),
                 decode(ovCarriedTuple(NESTED, ovCarriedTuple(INT_STRING, ovInt(2), ovString("b")), ovBool(true)), null));
         assertEquals(
                 List.of(new Tuple2_IntString(1L, "a")),
                 decode(ovList(ovCarriedTuple(INT_STRING, ovInt(1), ovString("a"))), null));
-        // A thrown value decodes leniently, by the same identity.
         assertEquals(
                 new Tuple2_IntString(1L, "a"),
                 ProtoReader.decodeWithDesc(ovCarriedTuple(INT_STRING, ovInt(1), ovString("a")), null, true));
-        // A declared tuple over an unbound type variable has no one identity;
-        // the carried one is, while a concrete declared tuple stays in charge.
         BamlType open = BamlType.tuple(BamlType.typeVar("T"), BamlType.INT);
         assertEquals(new Tuple2_StringInt("a", 1L), decode(ovCarriedTuple(STRING_INT, ovString("a"), ovInt(1)), open));
         assertEquals(List.of("v", 1L), decode(ovTuple(ovString("v"), ovInt(1)), open));
-        // An open declared slot leaves the tuple's own identity in charge.
         assertEquals(
                 List.of(new Tuple2_IntString(1L, "a")),
                 decode(ovList(ovCarriedTuple(INT_STRING, ovInt(1), ovString("a"))),
@@ -354,8 +327,6 @@ class TupleCodecTest {
 
     @Test
     void carried_identity_is_the_type_not_the_values() {
-        // `(int | string, bool)` holding `(1, true)` is not `(int, bool)`: the
-        // join is of the carried slots, the union slot decoded to its arm.
         BamlType product = BamlType.tuple(BamlType.union(BamlType.INT, BamlType.STRING), BamlType.BOOL);
         byte[] value = ovCarriedTuple(
                 product, ovUnion(BamlType.union(BamlType.INT, BamlType.STRING), ovInt(1)), ovBool(true));
@@ -366,12 +337,10 @@ class TupleCodecTest {
         BamlTupleList list = assertInstanceOf(BamlTupleList.class, got);
         assertEquals(product, list.tupleType());
         assertThrows(UnsupportedOperationException.class, () -> list.add(null));
-        // Unregistered `(int, bool)`: a list of its join, keeping the identity.
         BamlType intBool = BamlType.tuple(BamlType.INT, BamlType.BOOL);
         Object pair = decode(ovCarriedTuple(intBool, ovInt(1), ovBool(true)), null);
         assertEquals(List.of(new Union2.Arm0<Long, Boolean>(1L), new Union2.Arm1<Long, Boolean>(true)), pair);
         assertEquals(intBool, ((BamlTupleList) pair).tupleType());
-        // A carried type of another arity names no identity for these items.
         assertEquals(List.of(1L, "a", 2L), decode(ovCarriedTuple(INT_STRING, ovInt(1), ovString("a"), ovInt(2)), null));
     }
 
@@ -379,20 +348,16 @@ class TupleCodecTest {
     void received_tuple_list_restates_its_carried_type() {
         BamlType intBool = BamlType.tuple(BamlType.INT, BamlType.BOOL);
         Object received = decode(ovCarriedTuple(intBool, ovInt(1), ovBool(true)), null);
-        // Sent back with no slot to supply a shape, it is still that tuple: a
-        // list stating the carried type, each slot unwrapped from its join arm.
         byte[] got = ProtoWriter.encodeInboundValue(received);
         assertArrayEquals(intBool.toWireTy(), fieldOf(got, IV_VALUE_TYPE));
         List<byte[]> items = fieldsOf(fieldOf(got, IV_LIST), LIST_VALUES);
         assertEquals(2, items.size());
         assertArrayEquals(ProtoWriter.encodeInboundValue(1L), items.get(0));
         assertArrayEquals(ProtoWriter.encodeInboundValue(true), items.get(1));
-        // Its identity decides, not the shape: no ambiguity under two same-arity arms.
         BamlType arms = BamlType.union(intBool, BamlType.tuple(BamlType.BOOL, BamlType.INT));
         assertArrayEquals(
                 intBool.toWireTy(),
                 fieldOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(received, arms)), IV_VALUE_TYPE));
-        // A plain list with the same elements has no identity of its own.
         assertArrayEquals(
                 BamlType.list(BamlType.union(BamlType.INT, BamlType.BOOL)).toWireTy(),
                 fieldOf(ProtoWriter.encodeInboundValue(List.of(1L, true)), IV_VALUE_TYPE));
@@ -404,10 +369,8 @@ class TupleCodecTest {
         assertTrue(ProtoReader.armMatchesValue(INT_STRING, intString));
         assertFalse(ProtoReader.armMatchesValue(STRING_INT, intString));
         assertFalse(ProtoReader.armMatchesValue(BamlType.tuple(BamlType.INT), intString));
-        // A tuple is not a list, nor a list a tuple.
         assertFalse(ProtoReader.armMatchesValue(BamlType.list(BamlType.INT), ovTuple(ovInt(1))));
         assertFalse(ProtoReader.armMatchesValue(BamlType.tuple(BamlType.INT), ovList(ovInt(1))));
-        // An optional slot takes a null item; a union slot's item comes in its envelope.
         assertTrue(ProtoReader.armMatchesValue(INT_OPT_STRING, ovTuple(ovInt(1), ovNull())));
         BamlType product = BamlType.tuple(BamlType.union(BamlType.INT, BamlType.STRING), BamlType.BOOL);
         assertTrue(ProtoReader.armMatchesValue(
@@ -426,7 +389,6 @@ class TupleCodecTest {
                 decode(ovUnion(union, ovTuple(ovInt(1), ovString("a"))), union));
     }
 
-    // -- inbound: Java -> BAML -------------------------------------------------
 
     @Test
     void encode_record_states_its_registered_identity() {
@@ -436,19 +398,16 @@ class TupleCodecTest {
         assertEquals(2, items.size());
         assertArrayEquals(ProtoWriter.encodeInboundValue(1L), items.get(0));
         assertArrayEquals(ProtoWriter.encodeInboundValue("a"), items.get(1));
-        // A record states its own identity, under any slot: the engine judges it.
         assertArrayEquals(
                 STRING_INT.toWireTy(),
                 fieldOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(new Tuple2_StringInt("a", 1L), INT_STRING)),
                         IV_VALUE_TYPE));
-        // Nested records state their own identities too.
         byte[] nested = ProtoWriter.encodeInboundValue(
                 new Tuple2_Tuple2_IntStringBoolean(new Tuple2_IntString(1L, "a"), false));
         assertArrayEquals(NESTED.toWireTy(), fieldOf(nested, IV_VALUE_TYPE));
         assertArrayEquals(
                 INT_STRING.toWireTy(),
                 fieldOf(fieldsOf(fieldOf(nested, IV_LIST), LIST_VALUES).get(0), IV_VALUE_TYPE));
-        // An optional slot's null keeps its position.
         byte[] optional = ProtoWriter.encodeInboundValue(new Tuple2_IntOptionalString(1L, null));
         assertEquals(2, fieldsOf(fieldOf(optional, IV_LIST), LIST_VALUES).size());
     }
@@ -458,7 +417,6 @@ class TupleCodecTest {
         byte[] got = ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(1L, "a"), INT_STRING));
         assertArrayEquals(INT_STRING.toWireTy(), fieldOf(got, IV_VALUE_TYPE));
         assertEquals(2, fieldsOf(fieldOf(got, IV_LIST), LIST_VALUES).size());
-        // Under an optional tuple, and as a list of tuples.
         assertArrayEquals(
                 INT_STRING.toWireTy(),
                 fieldOf(ProtoWriter.encodeInboundValue(
@@ -468,11 +426,9 @@ class TupleCodecTest {
         assertArrayEquals(
                 INT_STRING.toWireTy(),
                 fieldOf(fieldsOf(fieldOf(listOfTuples, IV_LIST), LIST_VALUES).get(0), IV_VALUE_TYPE));
-        // With no tuple slot a list is the list it is.
         assertArrayEquals(
                 BamlType.list(BamlType.union(BamlType.INT, BamlType.STRING)).toWireTy(),
                 fieldOf(ProtoWriter.encodeInboundValue(List.of(1L, "a")), IV_VALUE_TYPE));
-        // A list member keeps a list a list.
         BamlType listOrPair = BamlType.union(BamlType.list(BamlType.INT), BamlType.tuple(BamlType.INT, BamlType.INT));
         assertArrayEquals(
                 BamlType.list(BamlType.INT).toWireTy(),
@@ -488,13 +444,11 @@ class TupleCodecTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(1L, "a", 2L), INT_STRING)));
-        // Two same-arity tuple members: a list states no identity to choose by.
         IllegalArgumentException ambiguous = assertThrows(
                 IllegalArgumentException.class,
                 () -> ProtoWriter.encodeInboundValue(
                         new BamlTypedValue(List.of(1L, "a"), BamlType.union(INT_STRING, STRING_INT))));
         assertTrue(ambiguous.getMessage().contains("ambiguous"), ambiguous.getMessage());
-        // One of them by arity is no ambiguity.
         BamlType byArity = BamlType.union(INT_STRING, BamlType.tuple(BamlType.INT));
         assertArrayEquals(
                 BamlType.tuple(BamlType.INT).toWireTy(),
@@ -511,7 +465,6 @@ class TupleCodecTest {
 
     @Test
     void callback_result_encodes_against_its_declared_tuple() {
-        // A host callable's result is encoded against the declared return.
         byte[] got = ProtoWriter.encodeResult(List.of(1L, "a"), INT_STRING);
         assertArrayEquals(INT_STRING.toWireTy(), fieldOf(got, IV_VALUE_TYPE));
         assertThrows(IllegalArgumentException.class, () -> ProtoWriter.encodeResult(List.of(1L), INT_STRING));

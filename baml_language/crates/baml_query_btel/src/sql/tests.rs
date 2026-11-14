@@ -526,9 +526,6 @@ fn recursive_ctes_walk_span_trees_with_values() {
     ok("WITH RECURSIVE x AS (SELECT span_id FROM spans) SELECT * FROM x");
 }
 
-/// `output_value.0` is the tuple slot `output_value[0]`: the same navigation,
-/// chained (`.0.1` lexes as two numbers), mixed with brackets, and past any
-/// arity, which is answered when read rather than here.
 #[test]
 fn dotted_slot_numbers_navigate_as_bracket_indices() {
     for (dotted, bracketed) in [
@@ -557,8 +554,6 @@ fn dotted_slot_numbers_navigate_as_bracket_indices() {
     );
 }
 
-/// Only a dot and decimal digits right after a value is a slot: real numbers,
-/// spaced dots, string contents and malformed slot numbers are left as written.
 #[test]
 fn numbers_and_strings_are_not_slot_numbers() {
     let t = ok("SELECT output_value AS v FROM spans WHERE 0.1 < 1 AND span_name <> 'a.0'");

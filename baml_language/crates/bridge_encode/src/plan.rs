@@ -659,10 +659,6 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         }
     }
 
-    /// `items` as the tuple they make. A tuple's type is made slot by slot,
-    /// never joined: `(1, "a")` is `(int, string)`. One that knows its slot
-    /// types states them, each item planned against its own, so it keeps
-    /// that identity under a slot that fixes nothing.
     fn natural_tuple(&mut self, tree: &'t Tree<V>, items: &'t [Tree<V>]) -> Planned<'t, V> {
         let known = self.known_slots(tree)?;
         let mut nodes = Vec::with_capacity(items.len());
@@ -706,9 +702,6 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         Ok(args.iter().map(|arg| self.host_stated(arg)).collect())
     }
 
-    /// The slot types a tuple value knows, in stated form, or `None` for a
-    /// value that knows none. A value whose slots are not its arity is not
-    /// the tuple it names.
     fn known_slots(&self, tree: &'t Tree<V>) -> Result<Option<Vec<SlotTy>>, Box<Failure<'t, V>>> {
         let Shape::Tuple {
             slots: Some(slots),
@@ -785,11 +778,6 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     /// whose plan made the fewest such reads wins (`{text}` under
     /// `Note { text, meta: json } | Tag { text }` is a `Tag`); otherwise the
     /// value is `Ambiguous` among exactly those.
-    ///
-    /// A list that does not say it is not a tuple (a JavaScript array the
-    /// runtime did not decode from a BAML tuple) is a tuple wherever a tuple
-    /// takes it: `[1, 2]` under `(int, int) | int[]` is the tuple, and among
-    /// tuples its natural type is the tuple of its items' types.
     fn tiebreak<'m>(
         &mut self,
         tree: &'t Tree<V>,
@@ -890,8 +878,6 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 Some(Rank::Natural)
             }
             (Shape::List(_), _) => None,
-            // A tuple that knows its slot types is the tuple of those types:
-            // that identity decides before any sequence of its arity does.
             (
                 Shape::Tuple {
                     slots: Some(slots),
@@ -907,8 +893,6 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 debug_assert_eq!(elements.len(), items.len());
                 Some(Rank::Identity)
             }
-            // Lists and tuples of the arity share a rank: the value's natural
-            // type, a list's or a tuple's, breaks a tie between them.
             (Shape::Tuple { items, .. }, SlotTy::Tuple(elements))
                 if items.len() == elements.len() =>
             {
@@ -1108,12 +1092,6 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         }))
     }
 
-    /// A tuple: a host sequence (a list or a tuple) of exactly its arity,
-    /// each element planned against its own slot. It crosses as a list node
-    /// stating the tuple type: the declared one where it is realized, and
-    /// otherwise the elements' own types, which a tuple's type is made of. A
-    /// slot the call left open takes the slot type a tuple value knows, so a
-    /// tuple keeps its identity through an open slot.
     fn tuple(&mut self, tree: &'t Tree<V>, slot: &SlotTy, elements: &[SlotTy]) -> Planned<'t, V> {
         let Some(items) = sequence(&tree.shape) else {
             return Err(mismatch(tree, slot));
@@ -1775,7 +1753,6 @@ fn restate<V>(node: Rc<Node<'_, V>>, target: SlotTy) -> Rc<Node<'_, V>> {
                 .collect();
             Rc::new(Node::List { ty, items })
         }
-        // A tuple crosses as a list node: each element takes its own slot.
         (Node::List { items, .. }, SlotTy::Tuple(slots)) if items.len() == slots.len() => {
             let items = items
                 .iter()
@@ -1922,8 +1899,6 @@ fn equivalent(a: &SlotTy, b: &SlotTy) -> bool {
     a == b || canonical(a) == canonical(b)
 }
 
-/// The items of a host sequence: lists and tuples share a shape wherever a
-/// slot fixes the sequence's type.
 fn sequence<C>(shape: &Shape<C>) -> Option<&[C]> {
     match shape {
         Shape::List(items) | Shape::Tuple { items, .. } => Some(items),

@@ -11,8 +11,6 @@ import (
 	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
-// testImageString stands in for a generated named tuple struct whose first
-// slot holds a handle.
 type testImageString struct {
 	Item0 Image
 	Item1 string
@@ -40,8 +38,6 @@ func (testImageString) BAMLDecode(value Value) (any, error) {
 	return testImageString{Item0: first, Item1: second}, nil
 }
 
-// tupleMediaHooks counts media clones and records media releases, which a
-// finalizer may report from its own goroutine.
 type tupleMediaHooks struct {
 	mu       sync.Mutex
 	clones   []uint64
@@ -82,7 +78,6 @@ func (hooks *tupleMediaHooks) snapshot() (clones, released []uint64) {
 	return append([]uint64(nil), hooks.clones...), append([]uint64(nil), hooks.released...)
 }
 
-// awaitReleased collects garbage until every key in want is released.
 func (hooks *tupleMediaHooks) awaitReleased(t *testing.T, want []uint64) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
@@ -110,10 +105,6 @@ func tupleResult(t *testing.T, tupleType BAMLType, items ...*cffi.BamlOutboundVa
 	return value
 }
 
-// A registered tuple whose later slot fails to decode is an error, not a
-// fallback: the earlier slot's handle is decoded once, the clone it took is
-// released when the partial struct is dropped, and the result's owner still
-// releases the engine's original key exactly once.
 func TestTupleLaterSlotFailureReleasesEarlierSlotHandles(t *testing.T) {
 	RegisterTuple[testImageString]()
 	hooks := installTupleMediaHooks(t)
@@ -137,8 +128,6 @@ func TestTupleLaterSlotFailureReleasesEarlierSlotHandles(t *testing.T) {
 	}
 }
 
-// An unregistered tuple falls back to a list of its slots, and the slots are
-// decoded once: each handle is cloned once, for the one Image the list holds.
 func TestTupleListFallbackDecodesEachHandleOnce(t *testing.T) {
 	hooks := installTupleMediaHooks(t)
 	ownerReleased := installOutboundReleaseRecorder(t)

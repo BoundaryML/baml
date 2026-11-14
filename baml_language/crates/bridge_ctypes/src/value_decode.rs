@@ -393,9 +393,6 @@ fn decode_inbound(
         InboundValueVariant::ListValue(list) => {
             match required(stated, "list_value", "a list or tuple type")? {
                 WireTy::List(element) => convert_list(list, *element, handle_table, owners),
-                // A tuple crosses as a list stating its tuple type, whose slot
-                // types the tuple carries; only the arity is checked here, and
-                // each element's membership in its slot when it is built.
                 WireTy::Tuple(slots) if slots.len() == list.values.len() => {
                     convert_tuple(list, slots.into_vec(), handle_table, owners)
                 }
@@ -1813,7 +1810,6 @@ mod tests {
                 items: vec![BexExternalValue::Int(1), BexExternalValue::Int(2)],
             }
         );
-        // A tuple type of another arity does not describe the list.
         assert!(inbound_to_external(typed_input(&pair, list(vec![int(1)])), &table).is_err());
     }
 }

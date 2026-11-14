@@ -2852,13 +2852,6 @@ internal static unsafe class Program
             "a type naming one declaration twice did not release each occurrence exactly once");
     }
 
-    /// <summary>
-    /// A tuple owns its slots' handles: a later slot that fails to decode
-    /// releases the handles earlier slots claimed, each exactly once, and
-    /// trying the registered tuple then falling back to a list re-reads the
-    /// one decoded tree instead of claiming or cloning its handles again. A
-    /// tuple missing its carried type fails before claiming any slot handle.
-    /// </summary>
     private static void VerifyTupleOwnership()
     {
         BamlApiV1 table = CreateValidTable();
@@ -2882,9 +2875,6 @@ internal static unsafe class Program
             return new BamlTy { Tuple = tuple };
         }
 
-        // `(Response, Response, (int, string))` whose last slot is a tuple
-        // carrying two slot types for one item: the slot fails after both
-        // earlier handles were claimed.
         var malformed = new BamlValueTuple
         {
             TupleType = TupleType(intType, stringType),
@@ -2909,8 +2899,6 @@ internal static unsafe class Program
             releasedHandles == 2 && clonedHandles == 0,
             $"a tuple slot failure did not release the earlier slots' handles exactly once (released {releasedHandles}, cloned {clonedHandles})");
 
-        // A tuple with no carried type fails before any slot claims its
-        // handle, so the ownership scope releases both, each exactly once.
         var untyped = new BamlValueTuple();
         untyped.Items.Add(Response(903));
         untyped.Items.Add(Response(904));
@@ -2925,9 +2913,6 @@ internal static unsafe class Program
             releasedHandles == 2 && clonedHandles == 0,
             $"a tuple missing its type did not release its slots' handles exactly once (released {releasedHandles}, cloned {clonedHandles})");
 
-        // `(Response, int)`: no C# tuple is registered for it, so a request
-        // for a tuple of other slot types fails and the list fallback reads
-        // the same decoded slots, claiming nothing again.
         var pair = new BamlValueTuple { TupleType = TupleType(responseType, intType) };
         pair.Items.Add(Response(902));
         pair.Items.Add(new BamlOutboundValue { IntValue = 7 });

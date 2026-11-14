@@ -1,5 +1,3 @@
-// Recursive aliases through tuples: `null` ends a chain of required pairs,
-// so `(1, (2, null))` is a finite `Chain`.
 
 type TpChain = (int, TpChain?)
 
@@ -17,7 +15,6 @@ function tp_chain_sum(chain: TpChain?) -> int {
     }
 }
 
-// A match on the optional alias sees through it to the tuple arm.
 function tp_chain_match_sum(chain: TpChain?) -> int {
     match (chain) {
         null => 0,
@@ -25,8 +22,6 @@ function tp_chain_match_sum(chain: TpChain?) -> int {
     }
 }
 
-// `chain[1]` is the optional alias `TpChain?`: `?.[` sees through it to the
-// tuple.
 function tp_chain_second(chain: TpChain) -> int? {
     chain.1?.0
 }

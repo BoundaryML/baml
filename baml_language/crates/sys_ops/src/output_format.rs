@@ -854,8 +854,6 @@ impl OutputFormatContent {
                                     | SapTy::Null
                             )
                         }),
-                        // A tuple already renders bracketed (`[int, string]`), so a list of
-                        // them is `[int, string][]` unless the tuple itself spans lines.
                         SapTy::Tuple(..) => inner_str.contains('\n'),
                         _ => true,
                     };
@@ -869,8 +867,6 @@ impl OutputFormatContent {
                 }
             }
 
-            // A tuple is a fixed-length JSON array: `[int, string]`, or one element per line
-            // when any element spans lines.
             SapTy::Tuple(items) => {
                 let rendered = items
                     .iter()
@@ -4940,10 +4936,6 @@ Answer in JSON using this type: A"#
         );
     }
 
-    // ========================================================================
-    // Tuples
-    // ========================================================================
-
     fn ty_tuple(items: Vec<RuntimeTy>) -> RuntimeTy {
         RuntimeTy::Tuple(items.into())
     }
@@ -5086,7 +5078,6 @@ Answer in JSON using this type: A"#
 
     #[test]
     fn test_build_output_format_detects_recursion_through_tuple() {
-        // class Node { value: int, next: (int, Node)? }
         let node = key(&baml_type::TypeName::local("Node".into()));
         let node_ty = RuntimeTy::Class(node.clone(), Box::new([]));
         let mut classes = indexmap::IndexMap::new();

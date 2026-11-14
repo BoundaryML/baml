@@ -69,7 +69,6 @@ struct BamlValueList {
 struct BamlValueTuple {
     #[prost(message, repeated, tag = "1")]
     items: Vec<BamlOutboundValue>,
-    /// The tuple's carried type: the `tuple` arm, one slot type per item.
     #[prost(message, optional, tag = "2")]
     tuple_type: Option<BamlTy>,
 }
@@ -1016,7 +1015,6 @@ mod tests {
 
     #[test]
     fn tuple_trace_values_carry_their_slot_types() {
-        // `(int?,)` holding `1`: the same contents as an `(int,)`.
         let snapshot = TraceSnapshot::for_test(
             TraceValueRef::for_test(1),
             vec![

@@ -62,11 +62,8 @@ def _assert_items_partials(partials):
     for partial in partials:
         assert isinstance(partial, list)
         for item in partial:
-            # Each element arrives as a native tuple, never a list, and
-            # carries its `(string, int)` type.
             _assert_carries(item, [_STRING, _INT])
             assert isinstance(item[0], str) and isinstance(item[1], int)
-        # Each partial is a prefix of the final value.
         assert partial == [("a", 1), ("b", 2)][: len(partial)]
 
 
@@ -78,7 +75,6 @@ def test_tuples_stream_items():
     assert final == [("a", 1), ("b", 2)]
     for item in final:
         _assert_carries(item, [_STRING, _INT])
-    # The non-streaming call parses the same reply to the same value.
     assert stream_tuple_items("x") == final
 
     async def run_async():

@@ -304,8 +304,6 @@ public final class BamlType implements Comparable<BamlType> {
     private final int primitiveKind; // PRIMITIVE only (a BamlTyPrimitiveKind value)
     private final String fqn; // CLASS / ENUM only
     // CLASS: concrete type args (declaration order). LIST: [item]. MAP:
-    // [key, value]. OPTIONAL: [inner]. UNION: the options. TUPLE: the slots,
-    // in position order. FUNCTION: [ret, throws]. Always non-null.
     private final List<BamlType> children;
     private final List<Param> params; // FUNCTION only
     // FUNCTION only: the functional interface a generated position spells the
@@ -379,7 +377,6 @@ public final class BamlType implements Comparable<BamlType> {
         if (enumFqn != null) {
             return new BamlType(Kind.ENUM, 0, enumFqn, List.of(), 0, null);
         }
-        // A generated tuple record names the tuple identity it was registered for.
         BamlType tupleType = TypeRegistry.tupleTypeForJavaClass(type);
         if (tupleType != null) {
             return tupleType;
@@ -1149,8 +1146,6 @@ public final class BamlType implements Comparable<BamlType> {
                 msg.skipField(wire);
             }
         }
-        // A slot the grammar cannot spell would misalign every later position,
-        // and a tuple with no slots is no BAML type.
         if (itemOutOfGrammar || items.isEmpty()) {
             return null;
         }
@@ -1380,7 +1375,6 @@ public final class BamlType implements Comparable<BamlType> {
             case UNION -> children.stream()
                     .map(BamlType::toString)
                     .collect(Collectors.joining(" | "));
-            // A one-slot tuple keeps its trailing comma, as BAML spells it.
             case TUPLE -> children.size() == 1
                     ? "(" + children.get(0) + ",)"
                     : children.stream()

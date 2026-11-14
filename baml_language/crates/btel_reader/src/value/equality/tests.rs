@@ -509,8 +509,6 @@ fn a_tuple_equals_only_a_tuple_of_equal_elements() {
     let mut b = a.clone();
     b.id = CasId::from_bytes([1; 16]);
     assert_eq!(eq(&a, &b), Ok(Some(true)));
-    // Carried slot types do not take part: `(int,)` and `(int?,)` holding
-    // the same elements are equal, as lists of different element types are.
     let DecodedObject::Tuple { element_types, .. } = &mut b.objects[0] else {
         unreachable!()
     };
@@ -520,7 +518,6 @@ fn a_tuple_equals_only_a_tuple_of_equal_elements() {
     assert_eq!(eq(&a, &b), Ok(Some(true)));
     b.objects[0] = tuple(vec![V::Int(1), V::Int(3)]);
     assert_eq!(eq(&a, &b), Ok(Some(false)));
-    // The same elements in a list are a different value.
     b.objects[0] = list(vec![V::Int(1), V::Int(2)]);
     assert_eq!(eq(&a, &b), Ok(Some(false)));
 }

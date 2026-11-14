@@ -333,9 +333,6 @@ function unguarded_cycle_rejected() -> root.engine.Rule throws never {
     )
 }
 
-/// The other half of the per-SCC check, and what the unguarded cycle's near
-/// miss turns on: a cycle that passes through a list or a map anywhere is
-/// legal, however unguarded the rest of it is.
 function guarded_cycle_legal() -> root.engine.Rule throws never {
     composite(
         "aliases/guarded-cycle-legal",

@@ -18,9 +18,9 @@ use baml_syntax::{
         FieldAccessExpr, FieldValue, GenericApplyExpr, GenericArgs, GenericParamList, IfExpr,
         IfLetExpr, IndexExpr, IsExpr, LambdaExpr, LiteralExpr, MapEntry, MapLiteral, MatchArm,
         MatchExpr, MatchGuard, MatchParen, ObjectField, ObjectLiteral, OptionalCallExpr,
-        TupleExpr, TupleFieldExpr, OptionalFieldAccessExpr, OptionalIndexExpr, ParenExpr, PathExpr, PathSegment, ReturnExpr,
+        OptionalFieldAccessExpr, OptionalIndexExpr, ParenExpr, PathExpr, PathSegment, ReturnExpr,
         SpawnExpr, SpecExpr, SpreadElement, TaggedTemplateExpr, ThrowExpr, ThrowsClause,
-        TraceBinding, TypeAscription, UnaryExpr, UpcastExpr, WithClause,
+        TraceBinding, TupleExpr, TupleFieldExpr, TypeAscription, UnaryExpr, UpcastExpr, WithClause,
     },
     ops::{AssignOp, BinaryOp, IS_BINDING_POWER, PREFIX_BINDING_POWER, UnaryOpToken},
     token::{
@@ -68,6 +68,7 @@ bitflags::bitflags! {
         /// A postfix `catch` belongs to the prefix form around this
         /// expression (`throw x catch …` is `(throw x) catch …`), not to it.
         const NO_CATCH = 1 << 2;
+        const MATCH_GUARD = 1 << 3;
     }
 }
 
@@ -262,16 +263,36 @@ fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) 
                     r,
                 },
             ));
-        } else if p.cur.at_set(KindSet::new(&[TokenKind::Dot, TokenKind::QuestionDot]))
+        } else if p
+            .cur
+            .at_set(KindSet::new(&[TokenKind::Dot, TokenKind::QuestionDot]))
             && p.cur.kind(1).is_some_and(|kind| NUMBER.contains(kind))
         {
-            let dot = p.cur.eat_in::<baml_syntax::token::sets::TupleDot>().expect("tuple dot");
+            let dot = p
+                .cur
+                .eat_in::<baml_syntax::token::sets::TupleDot>()
+                .expect("tuple dot");
             let slot = p.cur.eat_in::<LiteralExprToken>().expect("numeric slot");
             let text = p.cur.text_of(slot.idx);
-            if !text.split('.').all(|part| !part.is_empty() && part.bytes().all(|c| c.is_ascii_digit()) && (part == "0" || !part.starts_with('0')) && part.parse::<u32>().is_ok()) {
-                p.error("tuple slots must be decimal slot numbers", p.cur.tokens().range(slot.idx));
+            if !text.split('.').all(|part| {
+                !part.is_empty()
+                    && part.bytes().all(|c| c.is_ascii_digit())
+                    && (part == "0" || !part.starts_with('0'))
+                    && part.parse::<u32>().is_ok()
+            }) {
+                p.error(
+                    "tuple slots must be decimal slot numbers",
+                    p.cur.tokens().range(slot.idx),
+                );
             }
-            lhs = AnyExpr::TupleField(p.alloc(mark, TupleFieldExpr { base: lhs, dot, slot }));
+            lhs = AnyExpr::TupleField(p.alloc(
+                mark,
+                TupleFieldExpr {
+                    base: lhs,
+                    dot,
+                    slot,
+                },
+            ));
         } else if let Some(qdot) = p.cur.eat::<punct::QuestionDot>() {
             lhs = if let Some(l) = p.cur.eat::<punct::LParen>() {
                 let args = ArgList::parse(p, l);
@@ -543,7 +564,11 @@ fn primary(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> 
     if let Some(kw) = p.cur.eat::<kw::Match>() {
         return Ok(AnyExpr::Match(match_expr(p, kw, r)));
     }
-    let lambda = p.cur.at(TokenKind::LParen) && looks_like_lambda(p.cur);
+    let lambda = p.cur.at(TokenKind::LParen)
+        && looks_like_lambda(p.cur)
+        && !(r.contains(Restrictions::MATCH_GUARD)
+            && crate::lookahead::matching_close(p.cur, p.cur.pos())
+                .is_some_and(|close| p.cur.kind_at_sig(close + 1) == Some(TokenKind::FatArrow)));
     let projection =
         p.cur.at(TokenKind::LParen) && !lambda && looks_like_qualified_projection(p.cur);
     if let Some(l) = p.cur.eat::<punct::LParen>() {
@@ -612,7 +637,9 @@ impl Parse for PathExpr {
             };
             let continues =
                 p.cur.at(TokenKind::Dot) && p.cur.kind(1).is_some_and(|k| allowed.contains(k));
-            if p.cur.kind(1).is_some_and(|kind| NUMBER.contains(kind)) || (!continues && segments.is_empty()) {
+            if p.cur.kind(1).is_some_and(|kind| NUMBER.contains(kind))
+                || (!continues && segments.is_empty())
+            {
                 break;
             }
             let Some(dot) = p.cur.eat::<punct::Dot>() else {
@@ -952,7 +979,33 @@ fn else_branch(p: &mut Parser<'_, '_>, r: Restrictions) -> Option<ElseBranch> {
 /// After `match`: `(x: T) { arms }` or `x { arms }`.
 fn match_expr(p: &mut Parser<'_, '_>, kw: Token!["match"], r: Restrictions) -> Id<MatchExpr> {
     let scrutinee = if let Some(l) = p.cur.eat::<punct::LParen>() {
-        let expr = operand(p, Restrictions::empty());
+        let first = operand(p, Restrictions::empty());
+        let expr = if let Some(sep) = p.cur.eat::<punct::Comma>() {
+            let mut elements = Vec::new();
+            if let Ok(item) = first {
+                elements.push(SepItem {
+                    item,
+                    sep: Some(sep),
+                });
+            }
+            while !p.cur.at(TokenKind::RParen) && !p.cur.at_end() {
+                let Ok(item) = operand(p, Restrictions::empty()) else {
+                    break;
+                };
+                let sep = p.cur.eat::<punct::Comma>();
+                elements.push(SepItem { item, sep });
+                if sep.is_none() {
+                    break;
+                }
+            }
+            let elements = p.out.alloc_list(elements);
+            let r = p.expect::<punct::RParen>();
+            let tuple = AnyExpr::Tuple(p.alloc(Mark::of(l), TupleExpr { l, elements, r }));
+            let lbrace = p.expect_as::<punct::LBrace>("'{' after match scrutinee");
+            return match_with_bare_tuple(p, kw, tuple, lbrace);
+        } else {
+            first
+        };
         let ascription = p.cur.eat::<punct::Colon>().map(|colon| {
             let ty = any_type(p);
             p.alloc(
@@ -977,6 +1030,24 @@ fn match_expr(p: &mut Parser<'_, '_>, kw: Token!["match"], r: Restrictions) -> I
         operand(p, r.before_body()).map(AnyMatchScrutinee::Bare)
     };
     let l = p.expect_as::<punct::LBrace>("'{' after match scrutinee");
+    match_with_scrutinee(p, kw, scrutinee, l)
+}
+
+fn match_with_bare_tuple(
+    p: &mut Parser<'_, '_>,
+    kw: Token!["match"],
+    tuple: AnyExpr,
+    l: Result<Token!["{"], Missing>,
+) -> Id<MatchExpr> {
+    match_with_scrutinee(p, kw, Ok(AnyMatchScrutinee::Bare(tuple)), l)
+}
+
+fn match_with_scrutinee(
+    p: &mut Parser<'_, '_>,
+    kw: Token!["match"],
+    scrutinee: Result<AnyMatchScrutinee, Missing>,
+    l: Result<Token!["{"], Missing>,
+) -> Id<MatchExpr> {
     let mut arms = Vec::new();
     let mut saw_line = false;
     if l.is_ok() {
@@ -1021,7 +1092,7 @@ fn match_arm(p: &mut Parser<'_, '_>) -> Id<MatchArm> {
     let mark = p.cur.mark();
     let pattern = pattern(p, Restrictions::empty());
     let guard = p.cur.eat::<kw::If>().map(|kw| {
-        let cond = operand(p, Restrictions::STATEMENT);
+        let cond = operand(p, Restrictions::STATEMENT | Restrictions::MATCH_GUARD);
         MatchGuard { kw, cond }
     });
     let arrow = p.expect_as::<punct::FatArrow>("'=>' after pattern");
@@ -1203,12 +1274,21 @@ fn paren_or_tuple(p: &mut Parser<'_, '_>, l: Token!["("]) -> AnyExpr {
     let comma = p.cur.eat::<punct::Comma>();
     if let Some(sep) = comma {
         let mut elements = Vec::new();
-        if let Ok(item) = first { elements.push(SepItem { item, sep: Some(sep) }); }
+        if let Ok(item) = first {
+            elements.push(SepItem {
+                item,
+                sep: Some(sep),
+            });
+        }
         while !p.cur.at(TokenKind::RParen) && !p.cur.at_end() {
-            let Ok(item) = operand(p, Restrictions::empty()) else { break };
+            let Ok(item) = operand(p, Restrictions::empty()) else {
+                break;
+            };
             let sep = p.cur.eat::<punct::Comma>();
             elements.push(SepItem { item, sep });
-            if sep.is_none() { break; }
+            if sep.is_none() {
+                break;
+            }
         }
         let elements = p.out.alloc_list(elements);
         let r = p.expect::<punct::RParen>();

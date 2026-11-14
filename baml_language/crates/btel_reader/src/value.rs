@@ -1247,10 +1247,6 @@ impl<'a> Renderer<'a> {
             map.insert("$id".into(), Json::from(label));
         }
         match blob.object(id) {
-            // JSON represents a tuple as an array, exactly as it does a list:
-            // the same plain form when whole and unshared, and the same
-            // envelope when shared or cut. The JSON view is not a lossless
-            // decoder; the snapshot keeps the tuple's kind.
             DecodedObject::List {
                 items,
                 original_len,

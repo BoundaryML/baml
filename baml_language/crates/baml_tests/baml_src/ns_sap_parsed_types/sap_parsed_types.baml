@@ -123,9 +123,6 @@ test "parse throws for a type it cannot model" {
     )
 }
 
-// Among perfect matches, SAP picks the more specific union member whatever the
-// union's order: a literal beats its base type, element by element and field
-// by field. Without a clear winner the leftmost member wins.
 
 class AnyX {
     x: int,

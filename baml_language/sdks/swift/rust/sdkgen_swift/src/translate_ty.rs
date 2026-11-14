@@ -165,9 +165,6 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
                 if args.is_empty() {
                     return Some(path);
                 }
-                // A generated struct's type parameter takes only a
-                // `BamlCodableValue`, which a native tuple can never be: it
-                // conforms to no protocol.
                 if args.iter().any(|arg| holds_native_tuple(arg, ctx)) {
                     return None;
                 }
@@ -203,31 +200,18 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
     }
 }
 
-/// Swift spelling of a tuple. Two or more slots are a native Swift tuple,
-/// `(A, B, ...)`, at every arity; one slot is the runtime's `Tuple1<A>`,
-/// since Swift has no one-element tuple (`(A)` is `A`). Slots keep
-/// declaration order and repeats. A native tuple conforms to no protocol, so
-/// it crosses through its slot's codec ([`slot_expr`]), never its own
-/// conformance.
 fn translate_tuple(items: &[Ty], ctx: &TranslateCtx) -> Option<String> {
     let slots = items
         .iter()
         .map(|item| translate_ty(item, ctx))
         .collect::<Option<Vec<_>>>()?;
     match slots.as_slice() {
-        // No BAML syntax spells an empty tuple.
         [] => None,
-        // Module-qualified: a user type named `Tuple1` is declared in the
-        // `Baml` namespace the generated code is written in.
         [item] => Some(format!("BamlBridge.Tuple1<{item}>")),
         _ => Some(format!("({})", slots.join(", "))),
     }
 }
 
-/// Whether the Swift spelling of `ty` holds a native Swift tuple outside any
-/// nominal type of its own: such a type is not `Equatable`, `Hashable` or
-/// any bridge protocol, so it cannot be a generic argument, and a struct
-/// holding it spells its `==` out instead of synthesizing it.
 pub(crate) fn holds_native_tuple(ty: &Ty, ctx: &TranslateCtx) -> bool {
     match ty {
         Ty::Tuple(items) => {
@@ -236,14 +220,10 @@ pub(crate) fn holds_native_tuple(ty: &Ty, ctx: &TranslateCtx) -> bool {
         Ty::List(inner) => holds_native_tuple(inner, ctx),
         Ty::Map { value, .. } => holds_native_tuple(value, ctx),
         Ty::Union(members) => members.iter().any(|member| holds_native_tuple(member, ctx)),
-        // A non-recursive alias is a `typealias` of its body; a recursive one
-        // is an enum of its own.
         Ty::TypeAlias(name) => ctx
             .alias_bodies
             .get(&name.to_string())
             .is_some_and(|body| holds_native_tuple(body, ctx)),
-        // Every class is a nominal type with its own conformances (a stream
-        // or spec compares by its handle).
         _ => false,
     }
 }
@@ -446,8 +426,6 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
             let fqn = name.to_string();
             let swift = translate_ty(ty, ctx)?;
             // Runtime-owned handle wrappers: a handle states nothing, so the
-            // slot carries the type an enclosing statement spells, and how
-            // the values the stream or spec produces decode.
             let constructor = match ctx.crossing(name) {
                 Some(ClassCrossing::FunctionSpec) => Some("functionSpec"),
                 Some(ClassCrossing::Stream) => Some("stream"),
@@ -490,8 +468,6 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
         Ty::RustType => {
             Some("BamlSlots.optional(BamlSlot<BamlHandle>._leaf(.rustType))".to_string())
         }
-        // One slot per tuple slot, in slot order; the overload taking one
-        // slot builds a `Tuple1`'s.
         Ty::Tuple(items) if !items.is_empty() => {
             let slots = items
                 .iter()

@@ -96,15 +96,12 @@ class TupleOwnershipTest {
 
     @Test
     void a_later_slot_failure_releases_handles_from_earlier_slots() {
-        // Slot 1 is a tuple of the wrong arity: decoding it fails the tuple.
         BamlType imagePair = BamlType.tuple(IMAGE, BamlType.tuple(BamlType.INT, BamlType.INT));
         byte[] shortSlot = ovCarriedTuple(
                 imagePair, ovImage(71), ovCarriedTuple(BamlType.tuple(BamlType.INT), ovInt(5)));
         assertThrows(BamlError.class, () -> ProtoReader.decodeWithDesc(shortSlot, imagePair, false));
-        // Released at once and exactly once, with no fallback decoding slot 0 again.
         assertEquals(List.of(71L), released());
 
-        // The references a container in an earlier slot holds go too.
         BamlType imagesPair = BamlType.tuple(BamlType.list(IMAGE), BamlType.tuple(BamlType.INT, BamlType.INT));
         byte[] nested = ovCarriedTuple(
                 imagesPair,
@@ -113,8 +110,6 @@ class TupleOwnershipTest {
         assertThrows(BamlError.class, () -> ProtoReader.decodeWithDesc(nested, imagesPair, false));
         assertEquals(List.of(71L, 72L, 73L), released());
 
-        // Slot 1 decodes, but the registered record refuses it (an int where
-        // it holds a string): the slots are released, not traded for a list.
         BamlType imageString = BamlType.tuple(IMAGE, BamlType.STRING);
         byte[] refused = ovCarriedTuple(imageString, ovImage(74), ovInt(5));
         assertThrows(RuntimeException.class, () -> ProtoReader.decodeWithDesc(refused, imageString, false));
@@ -123,7 +118,6 @@ class TupleOwnershipTest {
 
     @Test
     void the_list_fallback_holds_the_slots_decoded_once() {
-        // `(image, image)` has no record: it falls back to a list of its slots.
         BamlType imagePair = BamlType.tuple(IMAGE, IMAGE);
         Object got = ProtoReader.decodeWithDesc(ovCarriedTuple(imagePair, ovImage(81), ovImage(82)), imagePair, false);
         List<?> list = assertInstanceOf(BamlTupleList.class, got);
@@ -132,7 +126,6 @@ class TupleOwnershipTest {
         Image second = assertInstanceOf(Image.class, list.get(1));
         assertEquals(81L, first.bamlHandle().key());
         assertEquals(82L, second.bamlHandle().key());
-        // Reading the list again yields the same owners, not fresh decodes.
         assertSame(first, list.get(0));
         assertTrue(released().isEmpty(), "decoding released " + released());
         first.bamlHandle().close();
@@ -140,7 +133,6 @@ class TupleOwnershipTest {
         first.bamlHandle().close();
         assertEquals(List.of(81L, 82L), released());
 
-        // A registered tuple decodes to its record and takes each handle once.
         BamlType imageString = BamlType.tuple(IMAGE, BamlType.STRING);
         WireWriter s = new WireWriter();
         s.writeString(3, "a"); // string_value = 3

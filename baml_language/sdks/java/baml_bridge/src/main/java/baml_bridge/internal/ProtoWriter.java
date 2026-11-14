@@ -340,9 +340,6 @@ public final class ProtoWriter {
         if (returnedHandle != null) {
             return encodeInboundValue(returnedHandle, contextualType, nesting);
         }
-        // A generated tuple record (or a received tuple, which keeps its
-        // carried type), and otherwise the tuple a plain list stands in for
-        // where the slot supplies one.
         TypeRegistry.TupleWire tupleRecord = TypeRegistry.tupleWire(value);
         BamlType listTuple = tupleRecord == null && value instanceof List<?> items
                 ? tupleSlot(contextualType, items.size())
@@ -369,18 +366,10 @@ public final class ProtoWriter {
         } else if (value instanceof byte[] bytes) {
             w.writeBytes(IV_UINT8ARRAY, bytes);
         } else if (tupleRecord != null) {
-            // A generated tuple record crosses as a list stating the tuple
-            // identity its class was registered for, never the slot's: like a
-            // class instance, it is the type it is, and the engine judges it
-            // against the slot. Each item goes under its own slot type.
             w.writeMessage(
                     IV_LIST, encodeTupleItems(tupleRecord.items, tupleRecord.type, enterLevel(nesting)));
             statedType = tupleRecord.type;
         } else if (listTuple != null) {
-            // A plain list stands in for a tuple only where the slot supplies
-            // the tuple's shape: exactly its arity, each item converted against
-            // its own slot. It states that tuple type, so the engine builds a
-            // tuple of it (a list states no identity a tuple could be read from).
             List<?> list = (List<?>) value;
             w.writeMessage(IV_LIST, encodeTupleItems(list.toArray(), listTuple, enterLevel(nesting)));
             statedType = isExact(listTuple) ? listTuple : stateTupleNatural(list, listTuple, nesting);
@@ -812,8 +801,6 @@ public final class ProtoWriter {
         if (value instanceof byte[]) {
             return BamlType.BYTES;
         }
-        // A tuple record is the tuple identity it was registered for, whatever
-        // its slots hold.
         TypeRegistry.TupleWire tuple = TypeRegistry.tupleWire(value);
         if (tuple != null) {
             return tuple.type;

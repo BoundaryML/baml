@@ -5,12 +5,10 @@ use crate::{
     sap_model::{TyResolvedRef, TypeIdent},
 };
 
-/// Whether the value is a JSON-array-shaped value (a list or a tuple).
 fn is_sequence<N: TypeIdent>(value: &BamlValueWithFlags<'_, '_, '_, N>) -> bool {
     matches!(&value.value, BamlValue::Array(..) | BamlValue::Tuple(..))
 }
 
-/// Whether the value is a list or tuple built by wrapping a single non-array value.
 fn is_single_to_array<N: TypeIdent>(value: &BamlValueWithFlags<'_, '_, '_, N>) -> bool {
     is_sequence(value)
         && value
@@ -20,17 +18,12 @@ fn is_single_to_array<N: TypeIdent>(value: &BamlValueWithFlags<'_, '_, '_, N>) -
             .any(|f| matches!(f, Flag::SingleToArray))
 }
 
-/// Whether a union should keep looking past this perfect (score-zero) match for a perfect
-/// tuple: a list built from a real JSON array yields to a tuple that matches the same array
-/// without repair, so `[1, 1]` becomes `(int, int)` rather than `int[]`.
 pub(super) fn defers_to_perfect_tuple<N: TypeIdent>(
     value: &BamlValueWithFlags<'_, '_, '_, N>,
 ) -> bool {
     matches!(&value.value, BamlValue::Array(..)) && !is_single_to_array(value)
 }
 
-/// Whether the value is a tuple built from a real JSON array; when perfect, it wins over a
-/// perfect list match (see [`defers_to_perfect_tuple`]).
 pub(super) fn is_array_tuple<N: TypeIdent>(value: &BamlValueWithFlags<'_, '_, '_, N>) -> bool {
     matches!(&value.value, BamlValue::Tuple(..)) && !is_single_to_array(value)
 }
@@ -136,10 +129,6 @@ pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
             // relation (`baml_type::normalize::is_subtype`) here
             // to ensure that we're accepting the "best" type.
             // E.g. if a is a subtype of b, we should prefer a over b. (empty list is a subtype of any list)
-            //
-            // Lists and tuples compare alike here: a real array beats one wrapped around a
-            // single value, so an exact-arity tuple beats a `SingleToArray` list (and a real
-            // list beats a `SingleToArray` 1-tuple).
             if is_sequence(a_val) && is_sequence(b_val) {
                 let a_is_single = is_single_to_array(a_val);
                 let b_is_single = is_single_to_array(b_val);
@@ -195,7 +184,6 @@ pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
                 }
             }
 
-            // When one candidate is a non-array and the other is an array (list or tuple)
             // created via SingleToArray, prefer the non-array (the array was
             // artificially constructed by wrapping a single value).
             if !is_sequence(a_val) && is_single_to_array(b_val) {

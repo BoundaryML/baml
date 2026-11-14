@@ -545,8 +545,6 @@ pub(crate) fn discard_host_call_args(args: &[u8]) {
                     discard(value);
                 }
             }
-            // A tuple's carried type is an annotation and names no row; only
-            // its items can hold one.
             Some(OutboundValue::TupleValue(tuple)) => {
                 for value in tuple.items {
                     discard(value);

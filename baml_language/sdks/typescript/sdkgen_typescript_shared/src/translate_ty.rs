@@ -113,9 +113,6 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             };
             TranslatedType { expr, imports }
         }
-        // BAML tuples are mutable, so project them as mutable TS tuples. Values
-        // cross the boundary by copy, so writing to the host array never
-        // changes a BAML tuple. Arity is always >= 1, so `[A]` is the 1-tuple.
         Ty::Tuple(items) => {
             let mut imports = BTreeSet::new();
             let parts: Vec<String> = items
@@ -409,8 +406,6 @@ pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType
             };
             TranslatedType { expr, imports }
         }
-        // As in `translate_ty`: a mutable TS tuple, each slot projected as a
-        // returned value so a returned engine function keeps its controls.
         Ty::Tuple(items) => {
             let mut imports = BTreeSet::new();
             let parts: Vec<_> = items

@@ -795,8 +795,6 @@ impl RenderDefinitionEquivalence<'_> {
             (RealizedTy::Union(left), RealizedTy::Union(right)) => {
                 self.type_lists_equivalent(left, right)
             }
-            // Slot order is identity: `type_lists_equivalent` pairs slots by
-            // position, and a length mismatch is a different arity.
             (RealizedTy::Tuple(left), RealizedTy::Tuple(right)) => {
                 self.type_lists_equivalent(left, right)
             }
@@ -1106,8 +1104,6 @@ fn render_named_ty_source(ty: &baml_type::RealizedTy<baml_type::TaggedTypeName>)
                 render_named_ty_source(value)
             )
         }
-        // A tuple closes its own parentheses, so a slot never needs grouping;
-        // the singleton keeps its comma and the empty tuple renders `()`.
         baml_type::RealizedTy::Tuple(elements) => baml_type::render_tuple(
             &elements
                 .iter()

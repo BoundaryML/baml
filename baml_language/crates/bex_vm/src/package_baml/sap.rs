@@ -899,7 +899,6 @@ enum Parsed<'s> {
         element: ParseTy,
         items: Vec<Parsed<'s>>,
     },
-    /// A tuple's target slot types and elements, in position order.
     Tuple {
         elements: Vec<ParseTy>,
         items: Vec<Parsed<'s>>,
@@ -1156,7 +1155,6 @@ fn to_heap(
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
         }
-        // A tuple carries its target's slot types, as a list its element type.
         BamlValue::Tuple(tuple) => {
             let elements = tuple_slot_types(value)?
                 .iter()
@@ -1288,7 +1286,6 @@ fn heap_int(value: i64, mode: Mode) -> Result<Value, VmRustFnError> {
     })
 }
 
-/// The slot types of the tuple target a parsed tuple was read at.
 fn tuple_slot_types(
     value: &BamlValueWithFlags<'_, '_, '_, NamedTy>,
 ) -> Result<Vec<ParseTy>, VmRustFnError> {
@@ -1301,7 +1298,6 @@ fn tuple_slot_types(
     Ok(tuple_ty.items.iter().map(ToBamlTy::to_baml_ty).collect())
 }
 
-/// A tuple of `items` at the slot types `elements`.
 fn heap_tuple(
     vm: &mut BexVm,
     elements: Vec<RealizedTy>,
@@ -1648,7 +1644,6 @@ pub(super) fn empty_value(
         RealizedTy::Map { key, value } => {
             Value::object(vm.alloc_map((**key).clone(), (**value).clone(), IndexMap::new()))
         }
-        // Every element's empty value, or none when an element has none.
         RealizedTy::Tuple(elements) => {
             let mut items = Vec::with_capacity(elements.len());
             for element in elements {

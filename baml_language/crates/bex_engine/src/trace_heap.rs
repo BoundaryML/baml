@@ -58,8 +58,6 @@ pub enum TraceValue {
     String(String),
     Bytes(Vec<u8>),
     Array(Vec<TraceValueRef>),
-    /// A tuple: its carried slot types, one per item, as the host wire's
-    /// `BexExternalValue::Tuple` holds them, and its items in slot order.
     Tuple {
         element_types: Vec<baml_type::RuntimeTy>,
         items: Vec<TraceValueRef>,
@@ -372,8 +370,6 @@ impl TraceSnapshotBuilder {
                 self.alloc(TraceValue::Array(items))
             }
             Object::Tuple(tuple) => {
-                // The carried slot types, never the types of what the slots
-                // hold now: `(int,)` and `(int?,)` holding `1` differ.
                 let mut element_types = Self::vec_with_capacity(tuple.element_tys.len())?;
                 for ty in &tuple.element_tys {
                     element_types.push(display_ty(ty).unwrap_or(baml_type::RuntimeTy::Unknown));
@@ -590,9 +586,6 @@ fn unsupported_object_message(object: &Object) -> &'static str {
     }
 }
 
-/// A VM type as a trace shows it. A snapshot is display data: a compiled
-/// declaration by name, a runtime declaration by its label. `None` for a type
-/// with an unresolved head.
 fn display_ty(ty: &bex_vm_types::RealizedTy) -> Option<baml_type::RuntimeTy> {
     let annotated = crate::conversion::to_annotation::<std::convert::Infallible>(ty).ok()?;
     Some(baml_type::RuntimeTy::from(&annotated.map_heads(
@@ -729,7 +722,9 @@ mod tests {
             .await
             .acquire()
             .await;
-        let child = permit.tlab_mut().alloc_array(bex_vm_types::RealizedTy::Unknown, vec![]);
+        let child = permit
+            .tlab_mut()
+            .alloc_array(bex_vm_types::RealizedTy::Unknown, vec![]);
         let tuple = permit.tlab_mut().alloc_tuple(
             bex_vm_types::Tuple::new(
                 [
@@ -747,7 +742,9 @@ mod tests {
             .unwrap(),
         );
         // SAFETY: this test is the child's only reader or writer.
-        let Object::Array(array) = (unsafe { child.get() }) else { unreachable!() };
+        let Object::Array(array) = (unsafe { child.get() }) else {
+            unreachable!()
+        };
         unsafe { array.data_unchecked_mut() }.push(Value::object(tuple));
         let trace_heap = TraceHeap::new();
         let handle =
@@ -772,7 +769,7 @@ mod tests {
         );
         assert_eq!(snapshot.value(items[0]), Some(&TraceValue::Int(1)));
         assert!(matches!(
-            match snapshot.value(items[1]) { Some(TraceValue::List(children)) => snapshot.value(children[0]), _ => None },
+            match snapshot.value(items[1]) { Some(TraceValue::Array(children)) => snapshot.value(children[0]), _ => None },
             Some(TraceValue::Omitted(descriptor))
                 if descriptor.reason == TraceOmissionReason::CyclicReference
         ));

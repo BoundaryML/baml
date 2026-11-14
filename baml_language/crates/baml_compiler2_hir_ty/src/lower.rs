@@ -2902,7 +2902,6 @@ pub fn class_lowering_diagnostics<'db>(
     out
 }
 
-/// The package that owns `file`.
 fn file_root(
     db: &dyn baml_compiler2_hir::Db,
     file: baml_base::SourceFile,
@@ -2910,18 +2909,9 @@ fn file_root(
     baml_compiler2_hir::file_package::file_package(db, file).root
 }
 
-/// A package's ill-founded recursive declarations
-/// ([`baml_type::decl_cycles`]): type aliases with no finite value or no
-/// constructor in their cycle (reported at the alias), and classes whose
-/// required fields form a cycle (not reported: an unconstructable class is
-/// legal source, and the corpus exercises it). Cycles never cross packages
-/// (a dependency cannot name its dependent), so one package's declarations
-/// decide them.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DeclCycles {
-    /// Sorted.
     pub invalid_aliases: Vec<DeclName>,
-    /// Each cycle's members in cycle order.
     pub class_cycles: Vec<Vec<DeclName>>,
 }
 
@@ -3289,8 +3279,6 @@ pub fn type_alias_lowering_diagnostics<'db>(
     for error in crate::interfaces::type_generic_bound_errors(db, &FxHashMap::default(), &lowered) {
         out.push((source_map.type_refs.span(value), error));
     }
-    // A recursive alias with no finite value (`type T = (int, T)`) or no
-    // constructor in its cycle (`type A = A?`).
     let head = qualify_def(db, Definition::TypeAlias(alias), &data.name);
     if package_decl_cycles(db, file_root(db, alias.file(db)))
         .invalid_aliases

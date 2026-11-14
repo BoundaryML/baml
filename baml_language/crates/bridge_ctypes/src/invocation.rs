@@ -35,8 +35,6 @@ pub fn release_outbound_references(value: BamlOutboundValue) {
                 release_outbound_references(value);
             }
         }
-        // A tuple's carried type is an annotation and names no row; only
-        // its items can hold references.
         Some(Value::TupleValue(tuple)) => {
             for value in tuple.items {
                 release_outbound_references(value);

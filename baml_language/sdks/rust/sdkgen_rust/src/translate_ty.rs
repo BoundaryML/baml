@@ -26,19 +26,12 @@ pub(crate) struct Unsupported {
     pub(crate) reason: String,
 }
 
-/// Largest tuple arity `baml_bridge` implements its value trait for: its
-/// `baml_value::MAX_TUPLE_ARITY`, which must match. The trait impls for
-/// native tuples can only live in the bridge (the orphan rule keeps the
-/// generated crate from adding them), so a wider tuple has no Rust type.
 pub(crate) const MAX_BRIDGE_TUPLE_ARITY: usize = 32;
 
-/// Whether a BAML tuple of `arity` slots is a native Rust tuple the bridge
-/// converts. The empty tuple is not: Rust's `()` is BAML's `null`.
 pub(crate) fn tuple_arity_is_supported(arity: usize) -> bool {
     (1..=MAX_BRIDGE_TUPLE_ARITY).contains(&arity)
 }
 
-/// Why a tuple of `arity` slots has no Rust type, or `None` when it has one.
 pub(crate) fn unsupported_tuple_arity(arity: usize) -> Option<String> {
     (!tuple_arity_is_supported(arity)).then(|| {
         if arity == 0 {
@@ -144,11 +137,6 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             let inner = translate_inner(inner, ctx, true)?;
             Ok(quote! { ::std::vec::Vec<#inner> })
         }
-        // A BAML tuple is a native Rust tuple, `(A,)` for one slot. Its
-        // elements are stored inline (no heap indirection), so the caller's
-        // `under_heap` carries through: a same-SCC class element of a tuple
-        // field still boxes. Each slot translates as it would anywhere else,
-        // so a slot the SDK cannot represent skips the symbol.
         Ty::Tuple(items) => {
             if let Some(reason) = unsupported_tuple_arity(items.len()) {
                 return Err(Unsupported { reason });
@@ -390,14 +378,9 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
     }
 }
 
-/// Whether a union-enum arm holds a class in `owner`'s containment SCC
-/// by value (directly or through inline tuple elements), which makes the
-/// enum itself part of the cycle.
 fn arm_holds_inline(arm: &Ty, owner: &Name, analysis: &Analysis) -> bool {
     match arm {
         Ty::Class(name, _) | Ty::TypeAlias(name) => analysis.needs_box(owner, name),
-        // A tuple holds its elements by value; a nested (e.g. nullable)
-        // union element is `Option<_>`/an enum, also held by value.
         Ty::Tuple(items) | Ty::Union(items) => items
             .iter()
             .any(|item| arm_holds_inline(item, owner, analysis)),

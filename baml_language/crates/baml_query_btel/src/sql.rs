@@ -177,16 +177,9 @@ fn parse(sql: &str) -> Result<Vec<Statement>, SqlError> {
     }
 }
 
-/// `output_value.0` as `output_value[0]`: a tuple slot spelled the way BAML
-/// spells it, a dot and a decimal slot number, is the same integer path
-/// segment as its bracket form. SQL lexes `.0` as a number, and `.0.1` as two
-/// (`.0` and `.1`), so the rewrite is of tokens: a number that is a dot and
-/// digits, written right after a name, `]` or `)`. Everything else, string
-/// literals and real numbers (`x = 0.1`) included, is left as written.
 fn slot_dots(sql: &str) -> std::borrow::Cow<'_, str> {
     use sqlparser::tokenizer::{Token, Tokenizer};
     let Ok(tokens) = Tokenizer::new(&GenericDialect {}, sql).tokenize_with_location() else {
-        // The parser reports what the tokenizer could not read.
         return sql.into();
     };
     let line_starts: Vec<usize> = std::iter::once(0)
@@ -202,7 +195,6 @@ fn slot_dots(sql: &str) -> std::borrow::Cow<'_, str> {
     };
     let mut out = String::new();
     let mut copied = 0;
-    // Whether the token before is a slot number, as `.0` is in `.0.1`.
     let mut after_slot = false;
     for pair in tokens.windows(2) {
         let [before, token] = pair else {

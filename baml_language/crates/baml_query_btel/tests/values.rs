@@ -411,8 +411,6 @@ async fn captured_images_store_each_content_once_and_render_as_descriptors() {
     assert_eq!(result.rows.len(), 2);
 }
 
-/// A tuple slot reads the same as `output_value.0` and `output_value[0]`,
-/// nested or not, and so does a slot past the tuple's arity.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dotted_and_bracketed_tuple_slots_read_the_same() {
     let project = tempfile::tempdir().unwrap();

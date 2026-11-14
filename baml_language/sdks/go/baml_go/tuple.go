@@ -8,35 +8,7 @@ import (
 	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
-// Go has no tuple type, so a BAML tuple crosses as one of two shapes:
-//
-//   - A generated named struct (`Tuple2_IntString`) whose fields are its
-//     slots, in order. It is the representation of every tuple whose slot
-//     types Go can spell. It encodes itself through TupleInput, states its
-//     tuple type through BAMLType, and decodes through Value.Tuple and
-//     DecodeTupleSlot, so it is found by tuple identity wherever the
-//     generated codecs, DecodeAs or a dynamic union's candidates look.
-//   - A `[]any` of exactly the tuple's slots, in order, when no named struct
-//     represents the tuple (a slot mentions a type parameter, so its join is
-//     dynamic). It still crosses as the tuple its declaration states:
-//     TupleListEncoder states the declared tuple type and TupleListDecoder
-//     checks the arity.
-//
-// Where no declaration names the tuple (an `any` position, a thrown value, a
-// slot over a type parameter), the decoder finds the named struct by the
-// tuple type the value carries: every generated named struct registers
-// itself with RegisterTuple under its tuple type. A tuple whose type no
-// struct registered decodes as a list of the join of its carried slot types:
-// a typed slice when that join is one Go type (`[]int64` for `(int, int)`),
-// else `[]any`, Go's carrier for a union. Either list holds exactly the
-// tuple's slots, in order.
-//
-// Inbound, a tuple is a list stating its tuple type: the engine checks the
-// arity and every slot against that statement. Outbound, it is the wire's
-// tuple value, whose arity the decoder checks; a plain BAML list never
-// decodes as a tuple.
 
-// TupleBAMLType describes the fixed-arity BAML tuple `(items[0], items[1], ...)`.
 func TupleBAMLType(items ...BAMLType) BAMLType {
 	encoded := make([]*cffi.BamlTy, len(items))
 	for index, item := range items {
@@ -45,8 +17,6 @@ func TupleBAMLType(items ...BAMLType) BAMLType {
 	return composeBAMLType(&cffi.BamlTy{Ty: &cffi.BamlTy_Tuple{Tuple: &cffi.BamlTyTuple{Items: encoded}}}, items...)
 }
 
-// tupleArity is the arity of a tuple descriptor, or false when value does not
-// describe a tuple.
 func tupleArity(value BAMLType) (int, bool) {
 	tuple, ok := value.value.GetTy().(*cffi.BamlTy_Tuple)
 	if !ok || tuple.Tuple == nil {
@@ -55,10 +25,6 @@ func tupleArity(value BAMLType) (int, bool) {
 	return len(tuple.Tuple.Items), true
 }
 
-// TupleInput encodes the BAML tuple of type tupleType whose slots are items,
-// in order. It is a list stating its tuple type, which is how a tuple crosses
-// inbound; each item states or implies its own type, and the engine holds it
-// to its slot.
 func TupleInput(tupleType BAMLType, items ...Input) Input {
 	if tupleType.err != nil {
 		return Input{err: fmt.Errorf("tuple type: %w", tupleType.err)}
@@ -97,10 +63,6 @@ func TupleInput(tupleType BAMLType, items ...Input) Input {
 	return Input{deferred: &inputEncoder{encode: prepare}}
 }
 
-// TupleListEncoder encodes a `[]any` standing in for the BAML tuple of type
-// tupleType: exactly one element per slot, in order, each encoded as a
-// dynamic value. The list states tupleType, so it crosses as that tuple, not
-// as a list.
 func TupleListEncoder(tupleType BAMLType) func([]any) Input {
 	return func(values []any) Input {
 		items := make([]Input, len(values))
@@ -111,8 +73,6 @@ func TupleListEncoder(tupleType BAMLType) func([]any) Input {
 	}
 }
 
-// Tuple returns the slots of a BAML tuple of exactly arity slots, in order.
-// A BAML list is never a tuple, whatever its length.
 func (value Value) Tuple(arity int) ([]Value, error) {
 	unwrapped, err := value.unwrapUnionVariants()
 	if err != nil {
@@ -135,8 +95,6 @@ func (value Value) Tuple(arity int) ([]Value, error) {
 	return slots, nil
 }
 
-// DecodeTupleSlot decodes slot index of slots, which Value.Tuple returned,
-// with the converter of that slot's type.
 func DecodeTupleSlot[T any](slots []Value, index int, decode func(Value) (T, error)) (T, error) {
 	decoded, err := decode(slots[index])
 	if err != nil {
@@ -146,8 +104,6 @@ func DecodeTupleSlot[T any](slots []Value, index int, decode func(Value) (T, err
 	return decoded, nil
 }
 
-// TupleListDecoder decodes a BAML tuple of exactly arity slots into a `[]any`
-// holding each slot's dynamic Go value, in order.
 func TupleListDecoder(arity int) func(Value) ([]any, error) {
 	return func(value Value) ([]any, error) {
 		slots, err := value.Tuple(arity)
@@ -164,8 +120,6 @@ func TupleListDecoder(arity int) func(Value) ([]any, error) {
 	}
 }
 
-// tupleRegistration is a generated named tuple struct registered under its
-// tuple type.
 type tupleRegistration struct {
 	tupleType *cffi.BamlTy
 	goType    reflect.Type
@@ -174,16 +128,9 @@ type tupleRegistration struct {
 
 var tupleRegistry struct {
 	sync.RWMutex
-	// byArity buckets registrations by arity; a bucket is searched by tuple
-	// type equality, which compares slots in order.
 	byArity map[int][]tupleRegistration
 }
 
-// RegisterTuple registers the generated named tuple struct T under the tuple
-// type it reifies, so a tuple whose declared type is out of reach (an `any`
-// position, a thrown value, a slot over a type parameter) still decodes as T
-// by the tuple type it carries. Generated packages call it from init; a
-// second registration of one tuple type keeps the first.
 func RegisterTuple[T interface {
 	DynamicType
 	DynamicDecoder
@@ -214,8 +161,6 @@ func RegisterTuple[T interface {
 	})
 }
 
-// registeredTuple is the registration of tupleType, if a generated struct
-// registered it.
 func registeredTuple(tupleType *cffi.BamlTy) (tupleRegistration, bool) {
 	tuple, ok := tupleType.GetTy().(*cffi.BamlTy_Tuple)
 	if !ok || tuple.Tuple == nil {
@@ -231,9 +176,6 @@ func registeredTuple(tupleType *cffi.BamlTy) (tupleRegistration, bool) {
 	return tupleRegistration{}, false
 }
 
-// tupleJoinGoType is the Go type the dynamic decoder gives every value of
-// the join of slots, or nil when that join is not one Go type: slots of one
-// primitive scalar type, or of one registered tuple type.
 func tupleJoinGoType(slots []*cffi.BamlTy) reflect.Type {
 	if len(slots) == 0 {
 		return nil
@@ -263,10 +205,6 @@ func tupleJoinGoType(slots []*cffi.BamlTy) reflect.Type {
 	return nil
 }
 
-// decodeDynamicTuple decodes a tuple no declaration names, by the tuple type
-// it carries: its registered named struct, else the list of the join of its
-// carried slot types, else `[]any`. The slots are decoded once, whichever
-// representation holds them.
 func decodeDynamicTuple(value Value, tuple *cffi.BamlValueTuple, path string, depth int) (any, error) {
 	carried := tuple.GetTupleType()
 	if registration, ok := registeredTuple(carried); ok {

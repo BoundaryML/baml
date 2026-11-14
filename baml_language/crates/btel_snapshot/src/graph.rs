@@ -178,8 +178,6 @@ pub enum SnapshotObject {
         items: Range<SnapshotValue>,
         original_len: usize,
     },
-    /// A tuple: its carried slot types and its elements, both in position
-    /// order. The slot types come from the tuple, never from its elements.
     Tuple {
         element_types: Range<OwnedType>,
         items: Range<SnapshotValue>,

@@ -10,14 +10,10 @@ pub enum StructuralInterface {
     FromJson,
     Equals,
     Hash,
-    /// Conditional, like `Hash`: only tuples whose every slot implements
-    /// `Compare` qualify, ordering lexicographically through the slots.
     Compare,
 }
 
 impl StructuralInterface {
-    /// Whether membership needs a per-receiver eligibility proof rather than
-    /// holding for every admissible type.
     pub const fn is_conditional(self) -> bool {
         matches!(self, Self::Hash | Self::Compare)
     }

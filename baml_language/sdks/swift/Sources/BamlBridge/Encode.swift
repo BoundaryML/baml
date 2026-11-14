@@ -121,7 +121,6 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
         return BamlTypeDescriptor(ty)
     }
 
-    /// A fixed-arity tuple, one type per slot in slot order.
     public static func tuple(_ items: [BamlTypeDescriptor]) -> BamlTypeDescriptor {
         var tuple = BamlBridge_Cffi_V1_BamlTyTuple()
         tuple.items = items.map(\.raw)
@@ -286,9 +285,6 @@ public struct BamlSlot<Value>: @unchecked Sendable {
 struct BamlSlotNode: @unchecked Sendable {
     let type: BamlTypeDescriptor
     let shape: Shape
-    /// How the values filling this slot cross, where their Swift type cannot
-    /// say so itself (see [`BamlSlotCodec`]); `nil` where it conforms to
-    /// `BamlEncodable` and `BamlDecodable`.
     let codec: BamlSlotCodec?
 
     init(type: BamlTypeDescriptor, shape: Shape, codec: BamlSlotCodec? = nil) {
@@ -308,8 +304,6 @@ struct BamlSlotNode: @unchecked Sendable {
         case optional(wrapped: BamlSlotNode)
         /// A `BamlUnionN`: one arm per case, in case order.
         case union(arms: [BamlSlotNode])
-        /// A tuple (a native Swift tuple, or a `Tuple1`): one slot per tuple
-        /// slot, in slot order.
         case tuple(items: [BamlSlotNode])
     }
 
@@ -321,37 +315,13 @@ struct BamlSlotNode: @unchecked Sendable {
     }
 }
 
-/// How the values of one slot cross the boundary and compare, for a Swift type
-/// that conforms to none of the bridge's protocols: a native Swift tuple
-/// conforms to no protocol at all, so it cannot cross through `BamlEncodable`
-/// and `BamlDecodable` as every other value does, and neither can an array,
-/// dictionary, optional, union or `Tuple1` holding one, whose conformances
-/// require their contents' own.
-///
-/// The slot constructor of a tuple knows its slot types statically (a
-/// variadic generic function, `BamlSlots.tuple`), so it builds the codec there,
-/// out of its slots' own; a container constructor whose contents' slot has a
-/// codec builds one the same way. Every crossing goes through its position's
-/// slot (`BamlSlot._bamlEncode(_:)`, `_bamlDecode(_:)`), which takes the codec
-/// where there is one and the conformance everywhere else, so a tuple crosses
-/// at any depth with no conformance of its own.
-///
-/// The closures are type-erased because a node is: each takes and returns
-/// exactly the slot's Swift type.
 struct BamlSlotCodec {
     let encode: (Any) throws -> BamlInboundValue
     let decode: (BamlOutboundValue) throws -> Any
-    /// Value equality, which a generated struct holding a tuple spells its
-    /// `==` in: a tuple is not `Equatable` either.
     let equal: (Any, Any) -> Bool
 }
 
 extension BamlSlot {
-    /// `value` as a node of this slot: through the slot's codec where `Value`
-    /// has no conformance of its own (a native tuple, or a container or union
-    /// holding one), else through `Value`'s `BamlEncodable` conformance. Every
-    /// value generated code sends crosses here, so a caller needs no
-    /// conformance of `Value`, only its slot.
     public func _bamlEncode(_ value: Value) throws -> BamlInboundValue {
         if let codec = node.codec { return try codec.encode(value) }
         guard let encodable = Value.self as? any BamlEncodable.Type else {
@@ -363,9 +333,6 @@ extension BamlSlot {
         return try encode(encodable)
     }
 
-    /// `value` decoded as a node of this slot: through the slot's codec where
-    /// `Value` has no conformance of its own, else through `Value`'s
-    /// `BamlDecodable` conformance.
     public func _bamlDecode(_ value: BamlOutboundValue) throws -> Value {
         if let codec = node.codec { return try codec.decode(value) as! Value }
         guard let decodable = Value.self as? any BamlDecodable.Type else {
@@ -377,9 +344,6 @@ extension BamlSlot {
         return try decode(decodable)
     }
 
-    /// Whether `lhs` and `rhs` are equal values of this slot: through the
-    /// slot's codec where `Value` has no conformance of its own, else through
-    /// `Value`'s `Equatable` conformance.
     public func _bamlEqual(_ lhs: Value, _ rhs: Value) -> Bool {
         if let codec = node.codec { return codec.equal(lhs, rhs) }
         guard let equatable = Value.self as? any Equatable.Type else {
@@ -472,10 +436,6 @@ extension BamlSlot {
 
 /// Constructors of the structural slots. Each result's Swift type follows
 /// from its arguments, so generated slot expressions need no annotations.
-///
-/// A container whose contents' slot carries a codec (a tuple, or something
-/// holding one) carries one too, built from that slot's, so its contents
-/// cross with no conformance of their own (see [`BamlSlotCodec`]).
 public enum BamlSlots {
     public static func list<Element>(_ item: BamlSlot<Element>) -> BamlSlot<[Element]> {
         let type = BamlTypeDescriptor.list(item.type)
@@ -528,7 +488,6 @@ public enum BamlSlots {
         ))
     }
 
-    /// The codec of a Swift `Optional` whose wrapped slot has one.
     private static func optionalCodec<Wrapped>(_ wrapped: BamlSlot<Wrapped>) -> BamlSlotCodec? {
         wrapped.node.codec.map { _ in
             BamlSlotCodec(
@@ -566,10 +525,6 @@ public enum BamlSlots {
         return BamlTypeDescriptor(ty)
     }
 
-    /// The slot of a `BamlUnionN`: one arm per case, in case order. When an
-    /// arm's slot carries a codec, so does the union's (see `unionCodec`),
-    /// built from `arms`, `split` (a value's case index and payload) and
-    /// `join` (the case of a payload).
     static func union<Value>(
         _ nodes: [BamlSlotNode],
         arms: () -> [BamlUnionArm],
@@ -617,11 +572,6 @@ public protocol BamlEncodable {
 /// one within the bound crosses is [`BamlWireDepth`]'s exact measure, taken
 /// once the value is built.
 ///
-/// Only a list, map or class adds a wire level, and only the list, map and
-/// class encoders here (`BamlInboundValue.listNode`, `mapNode` and
-/// `classValue`) and the tuple encoder (`BamlInboundValue.tupleNode`, a list)
-/// build one (`BamlInboundValue` is opaque outside this module), so no other
-/// encoder can nest without being counted. Encoding is synchronous, so
 /// one value's levels are all entered and left on one thread: the count is
 /// per thread, and costs no frame of its own on the recursion.
 enum BamlValueNesting {
@@ -1020,8 +970,6 @@ extension BamlInboundValue {
         return BamlInboundValue(v)
     }
 
-    /// A list node of `values`, each encoded by `encode`. A value that cannot
-    /// be encoded releases the items encoded before it.
     static func listNode<Element>(
         _ values: [Element],
         stating type: BamlTypeDescriptor,
@@ -1029,8 +977,6 @@ extension BamlInboundValue {
     ) throws -> BamlInboundValue {
         try BamlValueNesting.enter()
         defer { BamlValueNesting.leave() }
-        // The descent keeps no wire message in this frame: the list is
-        // assembled once every item is encoded.
         var items: [BamlInboundValue] = []
         items.reserveCapacity(values.count)
         do {
@@ -1044,8 +990,6 @@ extension BamlInboundValue {
         return .listNode(items, stating: type)
     }
 
-    /// A map node of `values`, each encoded by `encode`. A value that cannot
-    /// be encoded releases the entries encoded before it.
     static func mapNode<Value>(
         _ values: [String: Value],
         stating type: BamlTypeDescriptor,

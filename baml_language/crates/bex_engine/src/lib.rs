@@ -8484,10 +8484,6 @@ mod type_identity_tests {
         assert_eq!(landed.ty, baml_type::RealizedTy::int());
     }
 
-    /// A tuple cycle through a list fails outbound conversion with an error
-    /// instead of recursing forever (built by hand: no BAML test can observe
-    /// host conversion). A tuple shared by two slots without a cycle converts
-    /// once per reference.
     #[tokio::test]
     async fn a_cycle_through_a_tuple_fails_outbound_conversion() {
         use bex_vm_types::{
@@ -8546,8 +8542,6 @@ mod type_identity_tests {
             panic!("a tuple exports as a tuple, got {exported:?}")
         };
         assert_eq!(items.len(), 2);
-
-
     }
 
     /// A handle from a *different* engine does not resolve here, so a

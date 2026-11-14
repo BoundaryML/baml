@@ -11,9 +11,6 @@ import (
 	baml_go "github.com/boundaryml/baml-go"
 )
 
-// Go has no tuple type. A tuple is a generated `TupleN_<slots>` struct with one
-// `ItemN` field per slot, except that a generated function returning a tuple
-// returns one Go result per slot beside its error.
 
 // SDK_PARITY_LINT(skip): Go-only: a tuple return expands to one Go result per slot
 func Test_tuples_return_expands_to_one_result_per_slot(t *testing.T) {
@@ -65,7 +62,6 @@ func Test_tuples_round_trip_optional_slot_and_optional_tuple(t *testing.T) {
 	if err != nil || n != 2 || got != nil {
 		t.Fatalf("null slot = %v, %v, %v", n, got, err)
 	}
-	// A tuple inside an optional is one value, not expanded.
 	pair := baml_sdk.Tuple2_IntString{Item0: 3, Item1: "three"}
 	present, err := baml_sdk.TuplesRoundTripOptionalTuple(ctx, &pair)
 	if err != nil || present == nil || *present != pair {
@@ -184,7 +180,6 @@ func Test_tuples_failing_return_gives_zero_values_and_the_error(t *testing.T) {
 	if !strings.Contains(err.Error(), "pair_or_fail") {
 		t.Fatalf("failure error = %v", err)
 	}
-	// A thrown tuple fails the call; the error carries the BAML failure.
 	if _, err := baml_sdk.TuplesThrowPair(ctx, baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}); err == nil {
 		t.Fatal("throw_pair unexpectedly returned")
 	}
@@ -231,8 +226,6 @@ func Test_tuples_reflected_type_token(t *testing.T) {
 	}
 }
 
-// A thrown tuple, which no declaration names, finds its named struct by the
-// tuple type it carries.
 // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 func Test_tuples_thrown_value(t *testing.T) {
 	pair := baml_sdk.Tuple2_IntString{Item0: 1, Item1: "one"}
@@ -243,7 +236,6 @@ func Test_tuples_thrown_value(t *testing.T) {
 	}
 }
 
-// A thrown tuple no struct registers is the list of its slot types' join.
 // SDK_PARITY_LINT(skip): only Go and Java need a fallback for a tuple with no generated type
 func Test_tuples_thrown_unnamed_tuple(t *testing.T) {
 	_, err := baml_sdk.GoCodegenTupleEdgesThrowUnnamedPair(context.Background())
@@ -263,8 +255,6 @@ func Test_tuples_type_parameter_slots_use_the_carried_type(t *testing.T) {
 	}
 }
 
-// A callback throws on the BAML error it received: the tuple it carries is
-// restated with its carried tuple type, so BAML catches it as that tuple.
 // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 func Test_tuples_callback_forwards_a_thrown_tuple_under_its_carried_type(t *testing.T) {
 	ctx := context.Background()
@@ -287,13 +277,10 @@ func Test_tuples_callback_forwards_a_thrown_tuple_under_its_carried_type(t *test
 func Test_tuples_method_round_trip(t *testing.T) {
 	ctx := context.Background()
 	box := baml_sdk.TuplesTuplePairBox{A: 1, B: "one"}
-	// A method returning a tuple expands it, as a generated function does.
 	n, s, err := box.AsPair(ctx)
 	if err != nil || n != 1 || s != "one" {
 		t.Fatalf("AsPair() = %v, %q, %v", n, s, err)
 	}
-	// A method taking a tuple, and the static method Go exposes as a
-	// package helper.
 	with, err := box.WithPair(ctx, baml_sdk.Tuple2_IntString{Item0: 2, Item1: "two"})
 	if err != nil || with != (baml_sdk.TuplesTuplePairBox{A: 2, B: "two"}) {
 		t.Fatalf("WithPair() = %#v, %v", with, err)
@@ -307,8 +294,6 @@ func Test_tuples_method_round_trip(t *testing.T) {
 // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 func Test_tuples_function_handle_round_trip(t *testing.T) {
 	ctx := context.Background()
-	// A BAML closure returned to the host: its handle takes and returns
-	// tuples, as one named struct each (a handle's result is not expanded).
 	swap, err := baml_sdk.TuplesMakeTupleSwapper(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -329,9 +314,6 @@ func Test_tuples_wrong_arity_and_slots_rejected(t *testing.T) {
 		_, err := baml_sdk.Invoke(ctx, baml_sdk.NamedTarget("user.tuples.round_trip_pair"), baml_sdk.Arguments{"t": input}, nil)
 		return err
 	}
-	// The named structs make a wrong arity or slot unrepresentable, so the
-	// rejections go through inputs stating the tuple type: too few and too
-	// many slots are refused host-side, swapped slots by the engine.
 	if err := call(baml_go.TupleInput(pairType, baml_go.Int64(1))); err == nil {
 		t.Fatal("a one-slot input was accepted as a pair")
 	}
@@ -344,7 +326,6 @@ func Test_tuples_wrong_arity_and_slots_rejected(t *testing.T) {
 	if err := call(baml_go.TupleInput(pairType, baml_go.Int64(1), baml_go.String("one"))); err != nil {
 		t.Fatalf("a well-formed pair was refused: %v", err)
 	}
-	// A received tuple decodes only at its own arity and slot types.
 	pair, err := baml_sdk.Invoke(ctx, baml_sdk.NamedTarget("user.tuples.make_pair"), baml_sdk.Arguments{"n": baml_go.Int64(1), "s": baml_go.String("one")}, nil)
 	if err != nil {
 		t.Fatal(err)

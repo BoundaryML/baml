@@ -1,8 +1,4 @@
-// JSON decode error paths, `FromJson` overrides inside tuples, and SAP's
-// preference for a tuple over a list when both fit.
 
-// The error names the expected and actual arity, or the failing slot, and
-// the path to it.
 function tpj_decode_error(raw: string) -> (string, string)? {
     baml.json.decode<map<string, (int, string)>>(raw) catch (e) {
         baml.json.DecodeError => return (e.message, e.path),
@@ -26,7 +22,6 @@ test "tuple_json_decode_errors" {
     )
 }
 
-// A class's `FromJson` decides its slot, even nested inside a tuple.
 class TpjOverride {
     n: int
     implements baml.FromJson {
@@ -45,8 +40,6 @@ test "tuple_json_nested_from_json" {
     assert.equal(tpj_nested_override(), 43)
 }
 
-// `[1, 1]` fits both `(int, int)` and `int[]`; SAP prefers the tuple in
-// either union order.
 function tpj_sap_tuple_first() -> bool {
     let parsed: unknown = baml.sap.parse<(int, int) | int[]>(`[1, 1]`);
     parsed is (int, int)

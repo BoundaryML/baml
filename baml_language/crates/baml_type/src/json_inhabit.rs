@@ -220,7 +220,6 @@ enum Node<'t, H: Head> {
     Union(Vec<&'t RuntimeTy<H>>),
     /// A list's element or a map's value.
     Container(&'t RuntimeTy<H>),
-    /// A tuple's elements: like a class's fields, every one is required.
     Product(&'t [RuntimeTy<H>]),
     Def(DefId<H>),
 }
@@ -326,8 +325,6 @@ impl<H: Head> JsonInhabitance<H> {
                 JsonStatus::Json | JsonStatus::Empty => JsonStatus::Json,
                 JsonStatus::NoJson => JsonStatus::NoJson,
             },
-            // Inhabited, so no element is `Empty`: JSON exactly when every
-            // element has a JSON form.
             Node::Product(elements) => {
                 if elements
                     .iter()
@@ -895,7 +892,6 @@ fn has_empty_value_within<H: Head, D: JsonDefs<H>>(
             within.pop();
             all
         }
-        // One empty value per position, like a class's fields.
         RuntimeTy::Tuple(elements) => {
             for element in elements {
                 if !has_empty_value_within(defs, element, within)? {

@@ -36,8 +36,6 @@ pub(crate) enum VisitedType<'t, N> {
     Class(&'t N),
     /// Anonymous array types are identified by the address of the model node.
     Array(*const ()),
-    /// Anonymous tuple types are identified by the address of the model node. Only the
-    /// single-value-to-1-tuple path re-enters with the same value.
     Tuple(*const ()),
 }
 
@@ -84,7 +82,6 @@ fn write_shape_key<N: TypeIdent>(
             }
             out.push(']');
         }
-        // Parenthesized, so a tuple never shares a key with a list.
         BamlValue::Tuple(tuple) => {
             out.push('(');
             for (index, item) in tuple.value.iter().enumerate() {

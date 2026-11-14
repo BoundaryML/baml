@@ -202,8 +202,6 @@ pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
                 .collect::<Option<Box<[_]>>>()?;
             Some(Ty::Class(name.clone(), args))
         }
-        // A tuple is typed only if every element is; an element that must
-        // fall back to `Error::Runtime` takes the whole tuple with it.
         Ty::Tuple(items) => Some(Ty::Tuple(
             items
                 .iter()
@@ -241,8 +239,6 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
         Ty::List(inner) => register_unions_in(inner, leaf, analysis, registry),
         Ty::Map { key: _, value, .. } => register_unions_in(value, leaf, analysis, registry),
         // A union nested inside a generic instantiation (`GenericBox<int |
-        // string>`) or a tuple element is registered in the same leaf as its
-        // enclosing symbol.
         Ty::Class(_, args) | Ty::Tuple(args) => {
             for arg in args {
                 register_unions_in(arg, leaf, analysis, registry);
@@ -381,9 +377,6 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
             analysis.is_emitted(name)
         }
         Ty::List(inner) => arm_is_representable(inner, analysis),
-        // A native Rust tuple, within the arities the bridge converts. A
-        // `null` element is the unit `()`; only a top-level `null` arm is
-        // optionality (stripped before arms are classified).
         Ty::Tuple(items) => {
             crate::translate_ty::tuple_arity_is_supported(items.len())
                 && items
@@ -508,9 +501,6 @@ fn variant_name(arm: &Ty, qualify: usize) -> Option<String> {
         // (`T | string` → `TOrString { T(T), String(String) }`).
         Ty::TypeVar(var) => Some(var.as_str().to_string()),
         Ty::List(inner) => Some(format!("{}List", variant_name(inner, qualify)?)),
-        // `(int, string)` → `IntStringTuple`. Distinct tuple shapes yield
-        // distinct names except for collisions `shape_error` already rejects
-        // as duplicate variant names.
         Ty::Tuple(items) => {
             let mut name = String::new();
             for item in items {

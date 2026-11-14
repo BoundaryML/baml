@@ -355,15 +355,6 @@ ty_family! {
         InferVar {
             var: crate::interned::InferVar,
         } = 37,
-        /// Tuple type `(T1, T2, ...)`: a fixed-arity product with writable
-        /// slots. Source syntax needs at least one element; reflection can
-        /// build the empty tuple. Invariant elementwise (a slot can be written,
-        /// so a wider view would admit ill-typed writes) and disjoint from
-        /// `List`. A tuple value carries its instantiated slot types; they are
-        /// never derived from its elements.
-        ///
-        /// Declared last: `InferTy` orders by declaration position while the
-        /// plain members order by discriminant, and the two must agree.
         #[axis(concrete)]
         Tuple(Box<[Ty<N>]>) = 38,
     }

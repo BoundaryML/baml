@@ -63,9 +63,6 @@ describe('host argument decoding ownership', () => {
             else if (container === 'map') args = [{ mapValue: { entries: values.map((value, index) => ({ key: String(index), value })) } }];
             else if (container === 'class') args = [{ classValue: { name: 'Capture', fields: values.map((value, index) => ({ key: String(index), value })) } }];
             else if (container === 'union') args = [{ unionVariantValue: { value: { listValue: { items: values } } } }];
-            // A tuple whose later slot fails: the earlier slot's owner went to
-            // its wrapper, the later slot's is released, and a carried tuple
-            // type changes neither.
             else if (container === 'tuple') args = [{ tupleValue: { items: values } }];
             else if (container === 'carried tuple') {
                 args = [{ tupleValue: { items: values, tupleType: { tuple: { items: values.map(() => ({ unknown: {} })) } } } }];

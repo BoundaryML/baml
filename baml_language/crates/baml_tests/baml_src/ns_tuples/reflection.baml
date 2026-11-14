@@ -1,13 +1,4 @@
-// Tuple reflection: building tuple types and values with `reflect.Tuple`,
-// rendering the view, and the reflection walkers (render validation,
-// definition equivalence, open-interface checks, witness substitution) that
-// must visit every slot of a tuple type. Source has no `()` syntax, so
-// reflection is the only way to name a zero-length tuple.
-//
-// Names carry a `tr_` / `Tr` prefix to stay clear of the other namespaces in
-// this one-project corpus.
 
-// ─── Construction ────────────────────────────────────────────────────────────
 
 test "tuple_new_builds_slots_in_order" {
     let pair = reflect.Tuple.new([int.type(), string.type()]);
@@ -37,7 +28,6 @@ test "tuple_new_accepts_an_empty_list" {
     assert.is_true(empty.as_type() != reflect.Type.of<null>())
 }
 
-// ─── Rendering ───────────────────────────────────────────────────────────────
 
 function tr_view_string() -> string {
     let view: reflect.Tuple = reflect.Type.of<(int, string)>().as_tuple() else {
@@ -79,7 +69,6 @@ test "tuple_kind_matches_the_tuple_arm" {
     assert.equal(arity, 3)
 }
 
-// ─── Values ──────────────────────────────────────────────────────────────────
 
 function tr_instantiated_pair() -> (int, string) {
     reflect.Tuple.instantiate<(int, string)>([1, "a"])
@@ -92,7 +81,6 @@ test "tuple_instantiate_builds_a_value" {
     )
 }
 
-// The value carries `T`'s slot types, not ones reconstructed from the data.
 function tr_instantiated_wide() -> (string | int,) {
     reflect.Tuple.instantiate<(string | int,)>(["x"])
 }
@@ -141,8 +129,6 @@ function tr_instantiate_non_tuple() -> string {
     "no error"
 }
 
-// A nested tuple must carry its slot's type exactly: tuples are invariant, so
-// a `(1,)` built as `(int,)` does not fill a `(int?,)` slot.
 function tr_instantiate_nested(inner: (int,)) -> string {
     reflect.Tuple.instantiate<((int?,),)>([inner]) catch (e) {
         reflect.errors.InvalidArgument { message } => {
@@ -177,13 +163,10 @@ test "tuple_instantiate_rejects_bad_values" {
     )
 }
 
-// A tuple's type is carried, so reflecting it never walks its elements: type
-// values held in slots stay values, and a cycle through a mutable list
-// terminates.
 function tr_holds_types() -> bool {
     let held = (int.type(), (reflect.Tuple.new([]).as_type(),));
     reflect.Type.of_value(held) == reflect.Type.of<(reflect.Type, (reflect.Type,))>()
-        && held.1[0] == reflect.Tuple.new([]).as_type()
+        && held.1.0 == reflect.Tuple.new([]).as_type()
 }
 
 function tr_cyclic() -> bool {
@@ -198,7 +181,6 @@ test "tuple_value_reflection_does_not_walk_slots" {
     assert.is_true(tr_cyclic())
 }
 
-// ─── Interface witnesses ─────────────────────────────────────────────────────
 
 interface TrPair<T> {
     pair: (T, int),
@@ -240,7 +222,6 @@ test "witness_rejects_a_mismatched_tuple_field" {
     assert.is_true(result == null)
 }
 
-// ─── Render validation through tuple slots ───────────────────────────────────
 
 client TrClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
@@ -304,4 +285,25 @@ test "open_interface_in_a_tuple_slot_is_rejected" {
         rendered.starts_with("E0161|field `TrOpenHolder.pair` has open interface type `"),
     );
     assert.is_true(rendered.includes("TrOpen`, which cannot be rendered"))
+}
+
+function tr_get_error(value: unknown, index: int) -> string {
+    reflect.Tuple.get_element(value, index) catch (e) {
+        reflect.errors.InvalidArgument { message } => { return message; }
+    };
+    "no error"
+}
+
+test "tuple_reflection_reads_runtime_selected_slots" {
+    let index = 1;
+    assert.equal(reflect.Tuple.get_element((1, "a"), index), "a")
+    assert.equal(reflect.Tuple.get_element((1, "a"), 0), 1)
+    assert.equal(tr_get_error((1, "a"), -1), "reflect.Tuple.get_element: slot -1 is out of range for a tuple of 2 slots")
+    assert.equal(tr_get_error((1, "a"), 2), "reflect.Tuple.get_element: slot 2 is out of range for a tuple of 2 slots")
+    assert.equal(tr_get_error([1, 2], 0), "reflect.Tuple.get_element expects a tuple value")
+    let child = [1];
+    let tuple = (child, "a");
+    let held = reflect.Tuple.get_element(tuple, 0);
+    if let items: int[] = held { items.push(2); }
+    assert.equal(tuple.0, [1, 2])
 }

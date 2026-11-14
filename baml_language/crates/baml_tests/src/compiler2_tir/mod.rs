@@ -1000,8 +1000,6 @@ pub(crate) mod support {
         // Pre-compute throw sets for the package
         let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
 
-        // The package's invalid class cycles (the declaration cycle analysis
-        // over hir-lowered values; alias cycles ride the alias walk below).
         let mut class_cycle_map = std::collections::HashMap::new();
         for members in &baml_compiler2_hir_ty::lower::package_decl_cycles(db, pkg_id).class_cycles {
             let cycle = baml_type::decl_cycles::ClassCycleInfo {
@@ -1121,8 +1119,6 @@ pub(crate) mod support {
                                     writeln!(output, "  !! {start}..{end}: {}", diag.render(&vp))
                                         .ok();
                                 }
-                                // (An invalid recursive cycle is one of these:
-                                // `package_decl_cycles` feeds the alias walk.)
                                 break;
                             }
                         }

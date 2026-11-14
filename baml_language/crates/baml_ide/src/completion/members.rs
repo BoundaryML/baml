@@ -32,7 +32,9 @@ pub(crate) fn complete(
                 return;
             }
             if let Some(elements) = crate::resolve::tuple_slots(db, receiver) {
-                for (slot, ty) in elements.iter().enumerate() { out.add_tuple_slot(slot, ty); }
+                for (slot, ty) in elements.iter().enumerate() {
+                    out.add_tuple_slot(slot, ty);
+                }
             }
             for candidate in baml_compiler2_hir_ty::ide::members_for_receiver(db, *owner, receiver)
             {

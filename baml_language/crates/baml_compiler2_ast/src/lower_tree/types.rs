@@ -37,7 +37,12 @@ pub fn lower_type(cx: View<'_>, diags: &mut Vec<LoweringDiagnostic>, ty: AnyType
         // Grouping only: the parens leave no trace.
         AnyType::Paren(id) => lower_type_or_missing(cx, diags, cx.node(id).inner),
         AnyType::Tuple(id) => {
-            let elements = cx.tree.list(cx.node(id).elements).iter().map(|element| lower_type(cx, diags, element.item)).collect();
+            let elements = cx
+                .tree
+                .list(cx.node(id).elements)
+                .iter()
+                .map(|element| lower_type(cx, diags, element.item))
+                .collect();
             TypeExprKind::Tuple { elements }.at(cx.range_of(id))
         }
         AnyType::Function(id) => lower_function(cx, diags, id),

@@ -93,13 +93,6 @@ public final class TypeRegistry {
     // that is the body's list member, and nothing else could say so.
     private static final ConcurrentHashMap<String, BamlType> aliasBodiesByFqn = new ConcurrentHashMap<>();
 
-    // Tuples. Forward index (decode): keyed by the tuple's canonical type
-    // identity, a {@link BamlType#tuple} token whose value equality is ordered
-    // slot identity and arity ({@code (int, string)} and {@code (string, int)}
-    // are two keys; {@code (int | string, bool)} is neither of
-    // {@code (int, bool)} / {@code (string, bool)}). Reverse index (encode): the
-    // generated record's binary name -> the same entry, so a record names its
-    // tuple identity by its class, never by its spelling or its components.
     private static final ConcurrentHashMap<BamlType, TupleEntry> tuplesByType = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, TupleEntry> tuplesByJavaName = new ConcurrentHashMap<>();
 
@@ -352,8 +345,6 @@ public final class TypeRegistry {
         if (tupleType.kind() != BamlType.Kind.TUPLE) {
             throw new IllegalArgumentException("not a tuple type: " + tupleType);
         }
-        // Claim the record name first, so a refused registration leaves no
-        // identity bound to it.
         TupleEntry entry = new TupleEntry(javaRecordName, tupleType);
         TupleEntry byName = tuplesByJavaName.putIfAbsent(javaRecordName, entry);
         if (byName != null && !byName.tupleType.equals(tupleType)) {
@@ -1114,8 +1105,6 @@ public final class TypeRegistry {
         final String javaRecordName;
         final BamlType tupleType;
 
-        // Lazily resolved canonical constructor and component accessors. Benign
-        // races only re-resolve to equal values.
         private volatile Constructor<?> ctor;
         private volatile Method[] accessors;
 

@@ -4,108 +4,187 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [parse] E0010
 
-  × invalid syntax
-   ╭─[tuples.baml:4:14]
- 4 │     let e = ();
+  × unexpected token
+   ╭─[tuples.baml:2:14]
+ 2 │     let e = ();
    ·              ┬
-   ·              ╰── empty tuple `()` is not supported
-   ╰────
-
-  [hir] E0108
-
-  × could not parse type expression for parameter `x` in `empty_tuple_type`
-   ╭─[tuples.baml:8:30]
- 8 │ function empty_tuple_type(x: ()) -> int {
-   ·                              ─┬
-   ·                               ╰── unparseable type
+   ·              ╰── expected `expression`, found `')'`
    ╰────
 
   [parse] E0010
 
   × invalid syntax
-   ╭─[tuples.baml:8:32]
- 8 │ function empty_tuple_type(x: ()) -> int {
+   ╭─[tuples.baml:6:32]
+ 6 │ function empty_tuple_type(x: ()) -> int {
    ·                                ┬
-   ·                                ╰── empty tuple type `()` is not supported
+   ·                                ╰── a parenthesized type holds one type; a parameter list needs `->` to form a function type
    ╰────
 
   [parse] E0010
 
-  × invalid syntax
-    ╭─[tuples.baml:14:10]
- 14 │         () => 1,
+  × unexpected token
+    ╭─[tuples.baml:12:10]
+ 12 │         () => 1,
     ·          ┬
-    ·          ╰── empty tuple pattern `()` is not supported
+    ·          ╰── expected `pattern`, found `')'`
     ╰────
 
   [parse] E0010
 
   × invalid syntax
-    ╭─[tuples.baml:21:7]
- 21 │     t.0
-    ·       ┬
-    ·       ╰── tuple elements are accessed by index: write `t[0]`, not `t.0`
+    ╭─[tuples.baml:17:49]
+ 17 │ function labeled_elements(p: (x: int, y: string)) -> int {
+    ·                                                 ┬
+    ·                                                 ╰── Named parameters in type expression require `->` to form a function type
     ╰────
 
-  [parse] E0010
+  [type] E0002
 
-  × invalid syntax
-    ╭─[tuples.baml:27:31]
- 27 │ function labeled_elements(p: (x: int, y: string)) -> int {
-    ·                               ┬
-    ·                               ╰── tuple elements cannot be labeled; did you mean a function type `(x: int, y: string) -> ...` or a class?
-    ╰────
-
-  [parse] E0010
-
-  × invalid syntax
-    ╭─[tuples.baml:32:13]
- 32 │     let q: (x: int, y: string) = (1, "a");
-    ·             ┬
-    ·             ╰── tuple elements cannot be labeled; did you mean a function type `(x: int, y: string) -> ...` or a class?
+  × unresolved type: x
+    ╭─[tuples.baml:22:13]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·             ─
     ╰────
 
   [parse] E0010
 
   × unexpected token
-    ╭─[tuples.baml:43:17]
- 43 │         (let a, ..) => a,
+    ╭─[tuples.baml:22:14]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·              ┬
+    ·              ╰── expected `')'`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:22:19]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·                   ┬
+    ·                   ╰── expected `expression`, found `','`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:22:22]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·                      ┬
+    ·                      ╰── expected `expression`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:22:30]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·                              ┬
+    ·                              ╰── expected `expression`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:22:32]
+ 22 │     let q: (x: int, y: string) = (1, "a");
+    ·                                ┬
+    ·                                ╰── expected `expression`, found `'='`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:32:17]
+ 32 │         (let a, ..) => a,
     ·                 ─┬
     ·                  ╰── expected `pattern`, found `'..'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:32:19]
+ 32 │         (let a, ..) => a,
+    ·                   ┬
+    ·                   ╰── expected `pattern`, found `')'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:32:21]
+ 32 │         (let a, ..) => a,
+    ·                     ─┬
+    ·                      ╰── expected `pattern`, found `'=>'`
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: a
+    ╭─[tuples.baml:32:24]
+ 32 │         (let a, ..) => a,
+    ·                        ─
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:32:25]
+ 32 │         (let a, ..) => a,
+    ·                         ┬
+    ·                         ╰── expected `'=>' after pattern`, found `','`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:37:23]
+ 37 │     let (let a, let b): (int, int) = t;
+    ·                       ┬
+    ·                       ╰── expected `initializer (=)`, found `':'`
     ╰────
 
   [hir] E0010
 
   × invalid assignment target; only a variable, a field, or an index can be assigned to
-    ╭─[tuples.baml:50:23]
- 50 │     let (let a, let b): (int, int) = t;
-    ·                       ──────┬─────
-    ·                             ╰── cannot assign to this expression
+    ╭─[tuples.baml:37:25]
+ 37 │     let (let a, let b): (int, int) = t;
+    ·                         ─────┬────
+    ·                              ╰── cannot assign to this expression
     ╰────
 
   [parse] E0010
 
   × unexpected token
-    ╭─[tuples.baml:50:23]
- 50 │     let (let a, let b): (int, int) = t;
-    ·                       ┬
-    ·                       ╰── expected `initializer (=)`, found `':'`
+    ╭─[tuples.baml:41:33]
+ 41 │ function destructured_parameter((let a, let b): (int, int)) -> int {
+    ·                                 ┬
+    ·                                 ╰── expected `parameter name`, found `'('`
     ╰────
 
   [parse] E0010
 
   × invalid syntax
-    ╭─[tuples.baml:55:33]
- 55 │ function destructured_parameter((let a, let b): (int, int)) -> int {
-    ·                                 ┬
-    ·                                 ╰── parameters cannot be destructured; name the parameter and destructure it in the body: `let (let a, let b) = pair;`
+    ╭─[tuples.baml:41:34]
+ 41 │ function destructured_parameter((let a, let b): (int, int)) -> int {
+    ·                                  ─┬─
+    ·                                   ╰── Unexpected 'let' in type expression
     ╰────
 
-  [hir] E0107
+  [parse] E0010
 
-  × parameter in function `destructured_parameter` is missing a name
-    ╭─[tuples.baml:55:33]
- 55 │ function destructured_parameter((let a, let b): (int, int)) -> int {
-    ·                                 ─────────────┬────────────
-    ·                                              ╰── expected a parameter name
+  × unexpected token
+    ╭─[tuples.baml:41:34]
+ 41 │ function destructured_parameter((let a, let b): (int, int)) -> int {
+    ·                                  ─┬─
+    ·                                   ╰── expected `type`, found `let`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[tuples.baml:41:47]
+ 41 │ function destructured_parameter((let a, let b): (int, int)) -> int {
+    ·                                               ┬
+    ·                                               ╰── expected `')'`, found `':'`
     ╰────

@@ -1502,8 +1502,6 @@ fn typed_callable_expr(
 
 fn needs_inbound_descriptor(ty: &Ty, ctx: &TranslateCtx<'_>) -> bool {
     match ty {
-        // A tuple position states its tuple type, so a plain list can stand in
-        // for its record nested where Java's types admit one.
         Ty::List(..) | Ty::Map { .. } | Ty::Union(..) | Ty::Literal(..) | Ty::Tuple(..) => true,
         Ty::Class(_, args) => !args.is_empty(),
         Ty::TypeAlias(name) => ctx.aliases.get(name).is_none_or(|(resolved, recursive)| {
@@ -1658,13 +1656,6 @@ fn render_opts_bag(optionals: &[(String, String)]) -> String {
     out
 }
 
-/// A generated tuple record ([`crate::tuples`]): one component per slot,
-/// `item0`, `item1`, … in slot order, each the Java type of its slot (unboxed
-/// primitives, `@Nullable` on an optional slot). The record is the tuple's
-/// host type for a position of exactly this identity; the anchor registers it
-/// under that identity. A record's own `equals` compares a `byte[]` component
-/// by reference, so a record with one gets `Arrays`-based value equality, as a
-/// generated class does.
 pub(crate) fn render_tuple_record(
     decl: &crate::tuples::TupleDecl,
     ctx: &TranslateCtx<'_>,

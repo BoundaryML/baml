@@ -7,7 +7,6 @@ use crate::{
     compiler_aliases::{self, CompilerAlias, Construction},
 };
 
-/// The ten sealed runtime views of a reflected `type` value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TypeKind {
     Class,
@@ -115,7 +114,6 @@ pub fn classify_type<N: Clone>(ty: &RealizedTy<N>) -> TypeKind {
     }
 }
 
-/// Whether a nominal class is one of the ten sealed reflection-kind classes,
 /// by wire name.
 pub fn is_type_kind_class(name: &QualifiedTypeName) -> bool {
     name.package().as_str() == "reflect" && is_type_kind_class_path(name.namespace(), name.name())

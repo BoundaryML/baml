@@ -1,7 +1,3 @@
-// `const` takes every destructuring head `let` does, tuples included. A
-// `const` destructure binds only with `const` (recursively); a `let` one may
-// mix introducers. `const` still behaves like `let` (each introducer carries
-// that warning).
 
 class TpcPoint {
     x: int,

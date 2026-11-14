@@ -323,9 +323,6 @@ inline void restate_shape(pb::InboundValue& out,
       return;
     }
     case pb::BamlOutboundValue::kTupleValue: {
-      // A tuple travels inbound as a list stating a tuple type: the one it
-      // carries, so it keeps its slot types (never ones read back off its
-      // elements).
       const encode_level level;
       const pb::BamlValueTuple& tuple = v.tuple_value();
       if (!tuple.has_tuple_type() || !tuple.tuple_type().has_tuple() ||

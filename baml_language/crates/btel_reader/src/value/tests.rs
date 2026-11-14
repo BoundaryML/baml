@@ -842,9 +842,6 @@ fn redacted_values_are_withheld_present_values() {
     );
 }
 
-/// A tuple's JSON view is an array under exactly a list's policy: plain
-/// when whole and unshared, the `$list` envelope when shared or cut — never
-/// a tuple-specific wrapper. Structured projections report `json`.
 #[test]
 fn tuples_render_as_json_arrays_under_the_list_policy() {
     use DecodedObject as O;
@@ -874,7 +871,6 @@ fn tuples_render_as_json_arrays_under_the_list_policy() {
     assert_eq!(whole, json!([1, "a"]));
     assert_eq!(kind, Kind::Json);
 
-    // A list holding the same tuple twice: the second visit is a reference.
     let (shared, _) = render(vec![
         O::List {
             element_type: ty(),
@@ -889,7 +885,6 @@ fn tuples_render_as_json_arrays_under_the_list_policy() {
     ]);
     assert_eq!(shared, json!([{"$id": 0, "$list": [1]}, {"$ref": 0}]));
 
-    // Captured positions keep their places; the rest is the original arity.
     let (cut, _) = render(vec![O::Tuple {
         element_types: vec![ty(), ty(), ty()],
         items: vec![V::Int(1)],
@@ -898,16 +893,10 @@ fn tuples_render_as_json_arrays_under_the_list_policy() {
     assert_eq!(cut, json!({"$list": [1], "$original_len": 3}));
 }
 
-/// Tuple slots are integer path segments, as `output_value[0]` and
-/// `output_value.0` both spell them: a captured slot is found, one inside the
-/// original arity but past the captured prefix is unavailable, one past the
-/// arity is missing, and a string key addresses no slot. The same holds
-/// through a nested tuple.
 #[test]
 fn tuple_slots_navigate_by_position_through_nested_and_cut_tuples() {
     use DecodedObject as O;
     use DecodedValue as V;
-    // `((1, "a"), true, <cut>)`: three slots, the last not captured.
     let snapshot = Arc::new(DecodedSnapshot {
         id: CasId::from_bytes([9; 16]),
         encoded_len: 0,

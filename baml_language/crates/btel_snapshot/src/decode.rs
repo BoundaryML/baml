@@ -189,8 +189,6 @@ pub enum DecodedObject {
         items: Vec<DecodedValue>,
         original_len: u64,
     },
-    /// A tuple: its carried slot types, one for every slot of the original
-    /// tuple, and its captured elements, both in position order.
     Tuple {
         element_types: Vec<TypeDescription>,
         items: Vec<DecodedValue>,
