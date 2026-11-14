@@ -9,6 +9,8 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::{FormatOptions, format_salsa};
 
+const BYTE_ORDER_MARK: char = '\u{feff}';
+
 /// A package's formatted, normalized source text: what its source hash is
 /// taken over.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,8 +63,14 @@ pub fn package_source(
             });
         }
         let text = file.text(db);
-        let formatted = format_salsa(db, file, FormatOptions::default())
-            .map_or_else(|_| text.clone(), |formatted| formatted.apply_to(text));
+        // The lexer does not read a byte-order mark as whitespace, so a file
+        // that opens with one is formatted without it.
+        let formatted = match text.strip_prefix(BYTE_ORDER_MARK) {
+            None => format_salsa(db, file, FormatOptions::default())
+                .map_or_else(|_| text.clone(), |formatted| formatted.apply_to(text)),
+            Some(unmarked) => crate::format(unmarked, &FormatOptions::default())
+                .unwrap_or_else(|_| unmarked.to_owned()),
+        };
         files.insert(normalized, normalize_text(&formatted));
     }
     Ok(PackageSource { files })
@@ -90,7 +98,7 @@ fn normalize_path(relative: &Path) -> Result<(String, String), PackageSourceErro
 
 /// Formatted text as it is recorded: `\n` line breaks and no byte-order mark.
 fn normalize_text(text: &str) -> String {
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let text = text.strip_prefix(BYTE_ORDER_MARK).unwrap_or(text);
     if text.contains('\r') {
         text.replace("\r\n", "\n").replace('\r', "\n")
     } else {
@@ -127,6 +135,7 @@ mod tests {
             "function f() -> int { 1 }",
             "function f()   ->   int {\r\n  1\r\n}\r\n",
             "\u{feff}function f() -> int {\n    1\n}\n",
+            "\u{feff}function f() -> int { 1 }",
         ] {
             let other = package(&[("a.baml", variant)]).unwrap();
             assert_eq!(other, base, "{variant:?}");

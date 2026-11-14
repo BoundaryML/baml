@@ -138,12 +138,17 @@ impl Program {
     /// carries no metadata, which leaves it without one.
     #[must_use]
     pub fn linked_id(&self) -> Option<[u8; 16]> {
-        let units = self
+        let packages = self
             .packages
             .iter()
-            .map(|package| Some(package.metadata.as_ref()?.compilation_unit_hash))
+            .map(|package| {
+                Some(crate::identity::LinkedPackage {
+                    unit: package.metadata.as_ref()?.compilation_unit_hash,
+                    edges: &package.edges,
+                })
+            })
             .collect::<Option<Vec<_>>>()?;
-        Some(crate::identity::linked_program_id(self.root, &units))
+        Some(crate::identity::linked_program_id(self.root, &packages))
     }
 
     pub fn new() -> Self {

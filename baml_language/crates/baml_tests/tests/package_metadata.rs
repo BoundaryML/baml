@@ -221,11 +221,19 @@ fn the_linked_program_carries_every_package_and_a_content_identity() {
         .collect();
     assert!(units.contains(&metadata(&db, lib).compilation_unit_hash));
     assert!(units.contains(&metadata(&db, app).compilation_unit_hash));
-    assert_eq!(
-        program.linked_id(),
-        Some(bex_vm_types::identity::linked_program_id(
-            program.root,
-            &units
-        ))
-    );
+    let id = program
+        .linked_id()
+        .expect("a compiled program has a content identity");
+
+    // Binding an edge to another package is another program, even when no
+    // unit changes.
+    let mut rebound = program.clone();
+    let edge = rebound
+        .packages
+        .iter_mut()
+        .flat_map(|package| &mut package.edges)
+        .next()
+        .expect("the program has an edge");
+    edge.target = (edge.target + 1) % u32::try_from(units.len()).unwrap();
+    assert_ne!(rebound.linked_id(), Some(id));
 }

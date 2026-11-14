@@ -196,3 +196,45 @@ fn injected_panic_is_internal_error_and_state_survives() {
     }]);
     assert!(applied.rejected.is_empty());
 }
+
+/// A root that is upserted again takes the claim its manifest now makes: a
+/// version bump, or a manifest discovered after the root was first created.
+#[test]
+fn a_reupserted_root_takes_the_current_claim() {
+    let mut state = GlobalState::new(Executors::single(Arc::new(ThreadPool::new(1))), None);
+    let upsert = |state: &mut GlobalState, claim: baml_base::ClaimedIdentity| {
+        let applied = state.apply(vec![SourceMutation::UpsertRoot {
+            spec: RootSpec {
+                path: PathBuf::from("/ws"),
+                self_name: None,
+                kind: SourceRootKind::Workspace,
+                claim,
+            },
+            files: vec![(
+                PathBuf::from("/ws/main.baml"),
+                "class A { x int }\n".to_owned(),
+            )],
+        }]);
+        assert!(applied.rejected.is_empty(), "{:?}", applied.rejected);
+    };
+    let claimed = |state: &GlobalState| {
+        let snap = state.snapshot(RequestCx::default());
+        let db = snap.db();
+        let root = db
+            .source_root_for_path(&baml_db::canonicalize_lossy(std::path::Path::new("/ws")))
+            .expect("the root exists");
+        root.claim(db)
+    };
+    let version = |version: &str| baml_base::ClaimedIdentity {
+        name: Some("app".to_owned()),
+        version: Some(version.to_owned()),
+        ..baml_base::ClaimedIdentity::default()
+    };
+
+    upsert(&mut state, baml_base::ClaimedIdentity::default());
+    assert_eq!(claimed(&state), baml_base::ClaimedIdentity::default());
+    upsert(&mut state, version("1.0.0"));
+    assert_eq!(claimed(&state), version("1.0.0"));
+    upsert(&mut state, version("2.0.0"));
+    assert_eq!(claimed(&state), version("2.0.0"));
+}

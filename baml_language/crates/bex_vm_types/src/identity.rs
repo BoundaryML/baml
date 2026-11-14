@@ -81,9 +81,10 @@ pub struct PackageMetadata {
 ///
 /// The interface hash carries the claimed identity and the dependencies'
 /// interfaces in, so the unit hash moves with either. The compiled output is
-/// hashed without its source positions ([`strip_source_positions`]): they
-/// are numbered by the database that compiled it, and they move with
-/// whitespace and comments, neither of which is the package's content.
+/// hashed in a machine-independent form ([`normalize_for_unit_hash`]),
+/// without its source positions: they are numbered by the database that
+/// compiled it, and they move with whitespace and comments, neither of
+/// which is the package's content.
 pub struct CompilationUnitHasher(sha2::Sha256);
 
 impl CompilationUnitHasher {
@@ -116,17 +117,23 @@ impl std::io::Write for CompilationUnitHasher {
     }
 }
 
-/// Remove where in the source each function of `objects` came from: its
-/// span, its line tables, and the spans its debug locals are in scope for.
-/// What is left is what the function does. A file is numbered by the
-/// database that compiled it, and a position moves with every edit above it,
-/// so neither belongs in a hash of the compiled package.
-pub fn strip_source_positions(objects: &mut [crate::Object]) {
+/// Put each function of `objects` in the form its package is hashed in.
+///
+/// Where in the source it came from is removed: its span, its line tables,
+/// and the spans its debug locals are in scope for. A file is numbered by
+/// the database that compiled it, and a position moves with every edit above
+/// it, so neither belongs in a hash of the compiled package. The path of its
+/// source file is spelled with `/`, whatever separator the compiling
+/// platform displays paths with.
+pub fn normalize_for_unit_hash(objects: &mut [crate::Object]) {
     let nowhere = baml_base::Span::default();
     for object in objects {
         let crate::Object::Function(function) = object else {
             continue;
         };
+        if function.source_file.contains('\\') {
+            function.source_file = function.source_file.replace('\\', "/");
+        }
         function.span = nowhere;
         function.bytecode.line_table.clear();
         if let Some(compact) = &mut function.bytecode.compact {
@@ -164,6 +171,14 @@ pub fn package_source_hash<'a>(files: impl IntoIterator<Item = (&'a str, &'a [u8
     SourceHash(hasher.finalize().into())
 }
 
+/// One package of a linked program, as [`linked_program_id`] reads it: what
+/// was compiled, and which packages its edges were bound to.
+#[derive(Clone, Copy, Debug)]
+pub struct LinkedPackage<'a> {
+    pub unit: CompilationUnitHash,
+    pub edges: &'a [crate::types::ProgramEdge],
+}
+
 /// The identity of a linked program: a function of what was linked, so one
 /// link set is one program however many times it is linked, cached, or run.
 ///
@@ -171,21 +186,41 @@ pub fn package_source_hash<'a>(files: impl IntoIterator<Item = (&'a str, &'a [u8
 /// first 16 bytes of SHA-256( "baml-linked-program-v1"
 ///                          ‖ root ordinal as u32 big-endian
 ///                          ‖ package count as u64 big-endian
-///                          ‖ each package's compilation unit hash, in program order )
+///                          ‖ for each package, in program order:
+///                              compilation unit hash
+///                            ‖ edge count as u64 big-endian
+///                            ‖ for each edge, in table order:
+///                                framed(name (utf8))
+///                              ‖ target ordinal as u32 big-endian
+///                              ‖ kind (0 dependency, 1 re-exported) )
 /// ```
+///
+/// A unit hash covers the interfaces a package was compiled against, not
+/// which packages its edges were bound to: two packages with one interface
+/// are interchangeable to it. The edges say which was linked.
 ///
 /// with the version and variant bits of a `UUIDv8` (RFC 9562's custom
 /// layout), so it never collides with the random `UUIDv7` a program gets
 /// when it has no content identity.
 #[must_use]
-pub fn linked_program_id(root: u32, units: &[CompilationUnitHash]) -> [u8; 16] {
+pub fn linked_program_id(root: u32, packages: &[LinkedPackage<'_>]) -> [u8; 16] {
     use sha2::Digest;
+    let count = |len: usize| u64::try_from(len).unwrap_or(u64::MAX).to_be_bytes();
     let mut hasher = sha2::Sha256::new();
     hasher.update(b"baml-linked-program-v1");
     hasher.update(root.to_be_bytes());
-    hasher.update(u64::try_from(units.len()).unwrap_or(u64::MAX).to_be_bytes());
-    for unit in units {
-        hasher.update(unit.0);
+    hasher.update(count(packages.len()));
+    for package in packages {
+        hasher.update(package.unit.0);
+        hasher.update(count(package.edges.len()));
+        for edge in package.edges {
+            update_framed(&mut hasher, edge.name.as_str().as_bytes());
+            hasher.update(edge.target.to_be_bytes());
+            hasher.update([match edge.kind {
+                crate::types::EdgeKind::Dependency => 0u8,
+                crate::types::EdgeKind::ReExported => 1,
+            }]);
+        }
     }
     let digest: [u8; 32] = hasher.finalize().into();
     let mut id = [0u8; 16];
@@ -347,15 +382,57 @@ mod tests {
 
     #[test]
     fn linked_program_id_is_a_uuid_v8_of_the_link_set() {
+        use crate::types::{EdgeKind, ProgramEdge};
+
         let a = CompilationUnitHash([1; 32]);
         let b = CompilationUnitHash([2; 32]);
-        let base = linked_program_id(1, &[a, b]);
-        assert_eq!(base, linked_program_id(1, &[a, b]));
-        assert_ne!(base, linked_program_id(0, &[a, b]), "the root is an input");
-        assert_ne!(base, linked_program_id(1, &[b, a]), "order is an input");
-        assert_ne!(base, linked_program_id(1, &[a]));
+        let edge = |name: &str, target, kind| ProgramEdge {
+            name: baml_base::Name::new(name),
+            target,
+            kind,
+        };
+        let to_first = [edge("lib", 0, EdgeKind::Dependency)];
+        let id = |root, packages: &[(CompilationUnitHash, &[ProgramEdge])]| {
+            let packages: Vec<_> = packages
+                .iter()
+                .map(|&(unit, edges)| LinkedPackage { unit, edges })
+                .collect();
+            linked_program_id(root, &packages)
+        };
+        let base = id(1, &[(a, &[]), (b, &to_first)]);
+        assert_eq!(base, id(1, &[(a, &[]), (b, &to_first)]));
+        assert_ne!(base, id(0, &[(a, &[]), (b, &to_first)]), "the root");
+        assert_ne!(base, id(1, &[(b, &to_first), (a, &[])]), "the order");
+        assert_ne!(base, id(1, &[(a, &[])]));
+        // The same units bound differently are another program.
+        for other in [
+            edge("lib", 1, EdgeKind::Dependency),
+            edge("other", 0, EdgeKind::Dependency),
+            edge("lib", 0, EdgeKind::ReExported),
+        ] {
+            let rebound = std::slice::from_ref(&other);
+            assert_ne!(base, id(1, &[(a, &[]), (b, rebound)]), "{other:?}");
+        }
+        assert_ne!(base, id(1, &[(a, &to_first), (b, &[])]), "the edge's owner");
         assert_eq!(base[6] >> 4, 8, "version 8");
         assert_eq!(base[8] >> 6, 0b10, "RFC 9562 variant");
+    }
+
+    #[test]
+    fn unit_hash_form_drops_positions_and_spells_paths_with_slashes() {
+        let function = |source_file: &str, file: u32| {
+            let mut function = crate::relink::tests::test_function();
+            function.source_file = source_file.to_owned();
+            function.span.file_id = baml_base::FileId::new(file);
+            let mut objects = [crate::Object::Function(Box::new(function))];
+            normalize_for_unit_hash(&mut objects);
+            borsh::to_vec(&objects).unwrap()
+        };
+        assert_eq!(
+            function("ns_a\\main.baml", 3),
+            function("ns_a/main.baml", 9)
+        );
+        assert_ne!(function("ns_a/main.baml", 3), function("ns_b/main.baml", 3));
     }
 
     #[test]

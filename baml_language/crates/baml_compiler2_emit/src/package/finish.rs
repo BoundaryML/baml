@@ -26,7 +26,7 @@ use baml_linker_types::{
 use bex_vm_types::{
     ClassMethodDef, DeclPath, Function, GlobalIndex, Object, ObjectIndex, ObjectPool,
     identity::{
-        CompilationUnitHasher, PackageInterfaceHash, PackageMetadata, strip_source_positions,
+        CompilationUnitHasher, PackageInterfaceHash, PackageMetadata, normalize_for_unit_hash,
     },
 };
 
@@ -325,7 +325,7 @@ fn package_metadata(
     tail: Option<&InitTail>,
 ) -> PackageMetadata {
     let package_interface = PackageInterfaceHash(interface_digest(db, root));
-    // Hashed without source positions, which costs a copy of the output.
+    // Hashed in a normalized form, which costs a copy of the output.
     let mut content = (unit.clone(), tail.cloned());
     for objects in [
         &mut content.0.classes,
@@ -334,10 +334,10 @@ fn package_metadata(
         &mut content.0.type_alias_objects,
         &mut content.0.code,
     ] {
-        strip_source_positions(objects);
+        normalize_for_unit_hash(objects);
     }
     if let Some(tail) = &mut content.1 {
-        strip_source_positions(&mut tail.objects);
+        normalize_for_unit_hash(&mut tail.objects);
     }
     let mut hasher = CompilationUnitHasher::new(package_interface);
     borsh::BorshSerialize::serialize(&content, &mut hasher)
