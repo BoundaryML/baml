@@ -607,12 +607,21 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
         if (timeout_ms > 0) {
             let timer: baml.future.Future<RunReport, never> = spawn {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms));
+                // Read before the race cancels the body: where it is stuck,
+                // and every task it is waiting on.
+                let report = baml.future._task_report(work._id());
+                let stuck = if (report == "") {
+                    ""
+                } else {
+                    "\n" + report
+                };
                 RunReport {
                     outcome: "fail",
                     duration_ms: 0,
                     message: "test timed out after "
                         + timeout_ms.to_string()
-                        + "ms (override with --test-timeout)",
+                        + "ms (override with --test-timeout)"
+                        + stuck,
                 }
             };
             racers.push(timer);

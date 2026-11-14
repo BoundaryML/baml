@@ -134,6 +134,84 @@ fn pack_signal_cancels_main_and_runs_defer() {
     }
 }
 
+/// Two tasks that each hold the key the other wants. Each takes its first
+/// key and waits until the other has its own before asking for the next, so
+/// the deadlock forms every time; `ready` appears once it has.
+const DEADLOCK: &str = r#"
+class Log {
+    entries: string[],
+}
+
+function pause() -> void {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(5))
+}
+
+function cross(first: Log, second: Log, started: Log) -> void {
+    baml.sync.atomic(first, () -> void {
+        started.entries.push("in");
+        while (started.entries.length() < 2) {
+            pause();
+        }
+        baml.sync.atomic(second, () -> void { });
+    })
+}
+
+function main() -> void {
+    let a = Log { entries: [] };
+    let b = Log { entries: [] };
+    let started = Log { entries: [] };
+    let x = spawn { cross(a, b, started) };
+    let y = spawn { cross(b, a, started) };
+    while (started.entries.length() < 2) {
+        pause();
+    }
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(100));
+    baml.fs.write("ready", "") catch_all (_) { _ => null };
+    await x;
+    await y;
+}
+"#;
+
+/// The first signal prints where every task is and names the deadlock before
+/// it cancels the root call; the process then dies by the signal.
+#[test]
+fn first_signal_reports_where_each_task_is() {
+    let tmp = tempfile::tempdir().unwrap();
+    common::write_project(tmp.path(), DEADLOCK);
+    let mut child = Command::new(common::baml_cli())
+        .args(["run", "main"])
+        .current_dir(tmp.path())
+        .env("BAML_HOME", common::shared_baml_home())
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn baml-cli");
+    wait_for_file(&tmp.path().join("ready"), &mut child);
+    send(&child, libc::SIGINT);
+    let status = wait_with_timeout(&mut child);
+    let mut stderr = String::new();
+    std::io::Read::read_to_string(&mut child.stderr.take().unwrap(), &mut stderr).unwrap();
+    assert_eq!(
+        status.signal(),
+        Some(libc::SIGINT),
+        "got {status}; stderr:\n{stderr}"
+    );
+    for expected in [
+        "interrupted: 3 tasks still running:",
+        "(called from the host), awaiting task ",
+        ", waiting for a key held by task ",
+        "in user.cross",
+        "deadlock: task ",
+    ] {
+        assert!(
+            stderr.contains(expected),
+            "missing {expected:?} in:\n{stderr}"
+        );
+    }
+}
+
 /// A second signal while the root call is still unwinding ends the process
 /// at once instead of waiting for a slow `defer`.
 #[test]
