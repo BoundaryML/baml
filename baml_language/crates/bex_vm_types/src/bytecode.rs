@@ -2301,6 +2301,46 @@ pub struct ShieldRange {
     pub end_pc: usize,
 }
 
+/// One call the optimizer replaced with a copy of its callee: the frame a
+/// stack trace shows for code running inside the copy, as if the call had
+/// been made.
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct InlineFrame {
+    /// The inlined callee.
+    pub function: crate::types::FunctionIdentity,
+    /// The display label of the callee's package when it is a standard
+    /// library package other than the enclosing function's own. `None` for a
+    /// callee of the enclosing function's package, whose name renders from
+    /// that function's owner.
+    pub package: Option<baml_base::Name>,
+    /// The callee's source file, as `Function::source_file` spells it.
+    pub source_file: String,
+    /// 1-indexed line of the replaced call, in the source of the code that
+    /// made it: the `parent` frame's callee, or the enclosing function.
+    pub call_line: usize,
+    /// The frame of the call this one was inlined through, as an index into
+    /// `Bytecode::inline_frames`; `None` when the enclosing function made the
+    /// call itself.
+    pub parent: Option<u32>,
+}
+
+/// Run-length encoded map from PCs to the inlined call their code belongs
+/// to. Each entry applies from `pc` (inclusive) until the next entry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct InlineTableEntry {
+    /// Bytecode program counter where this entry begins.
+    pub pc: usize,
+    /// Index into `Bytecode::inline_frames`, or `None` for the function's own
+    /// code.
+    pub frame: Option<u32>,
+}
+
+/// The innermost inlined call covering `pc` in `table` (sorted by `pc`).
+fn inline_frame_in(table: &[InlineTableEntry], pc: usize) -> Option<u32> {
+    let next = table.partition_point(|entry| entry.pc <= pc);
+    next.checked_sub(1).and_then(|index| table[index].frame)
+}
+
 /// Instruction indices for a MIR block, with `None` for positions that emit no instruction.
 #[derive(Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct BlockPcs {
@@ -2394,6 +2434,8 @@ pub struct CompactCode {
     /// Cancellation-shielded ranges with PCs translated to byte offsets.
     /// Parallel to `Bytecode::shield_table`.
     pub shield_table: Vec<ShieldRange>,
+    /// `Bytecode::inline_table` with PCs translated to byte offsets.
+    pub inline_table: Vec<InlineTableEntry>,
     /// Jump tables with offsets translated to byte offsets.
     /// Parallel to `Bytecode::jump_tables`.
     pub jump_tables: Vec<CompactJumpTable>,
@@ -2451,6 +2493,12 @@ impl CompactCode {
     /// Whether the code at byte-offset `pc` runs shielded from cancellation.
     pub fn pc_is_shielded(&self, pc: usize) -> bool {
         pc_in_ranges(&self.shield_table, pc)
+    }
+
+    /// The inlined call the code at byte-offset `pc` belongs to, as an index
+    /// into `Bytecode::inline_frames`.
+    pub fn inline_frame_for_pc(&self, pc: usize) -> Option<u32> {
+        inline_frame_in(&self.inline_table, pc)
     }
 }
 
@@ -2518,6 +2566,14 @@ pub struct Bytecode {
     /// Sorted by `start_pc`, non-overlapping. See [`ShieldRange`].
     pub shield_table: Vec<ShieldRange>,
 
+    /// The calls the optimizer inlined into this function. See
+    /// [`InlineFrame`].
+    pub inline_frames: Vec<InlineFrame>,
+
+    /// Which inlined call each PC's code belongs to. Empty when nothing was
+    /// inlined. Read only when a stack trace is built.
+    pub inline_table: Vec<InlineTableEntry>,
+
     /// Compile-time instruction positions indexed by MIR `BlockId`, empty after deserialization.
     #[borsh(skip)]
     pub block_pcs: Vec<BlockPcs>,
@@ -2549,6 +2605,8 @@ impl Bytecode {
             meta: Vec::new(),
             exception_table: Vec::new(),
             shield_table: Vec::new(),
+            inline_frames: Vec::new(),
+            inline_table: Vec::new(),
             block_pcs: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
@@ -2603,6 +2661,36 @@ impl Bytecode {
     /// Whether the instruction at index `pc` runs shielded from cancellation.
     pub fn pc_is_shielded(&self, pc: usize) -> bool {
         pc_in_ranges(&self.shield_table, pc)
+    }
+
+    /// The inlined call the instruction at index `pc` belongs to, as an index
+    /// into [`Self::inline_frames`].
+    pub fn inline_frame_for_pc(&self, pc: usize) -> Option<u32> {
+        inline_frame_in(&self.inline_table, pc)
+    }
+
+    /// The frames a stack trace shows for this function when it stands at a
+    /// PC whose innermost inlined call is `frame` and whose source line is
+    /// `line`, outermost first: the function itself, then each inlined call
+    /// down to the one the PC is in. Every frame but the last reports the
+    /// line of the call it made; the last reports `line`. The result is
+    /// `(inlined callee or None for the function itself, line)`.
+    pub fn inline_stack(
+        &self,
+        frame: Option<u32>,
+        line: usize,
+    ) -> Vec<(Option<&InlineFrame>, usize)> {
+        let mut stack = Vec::new();
+        let mut line = line;
+        let mut next = frame;
+        while let Some(inlined) = next.and_then(|index| self.inline_frames.get(index as usize)) {
+            stack.push((Some(inlined), line));
+            line = inlined.call_line;
+            next = inlined.parent;
+        }
+        stack.push((None, line));
+        stack.reverse();
+        stack
     }
 
     /// Encode `self.instructions` into a compact `Vec<u8>` byte stream.
@@ -3056,6 +3144,15 @@ impl Bytecode {
             })
             .collect();
 
+        let inline_table = self
+            .inline_table
+            .iter()
+            .map(|entry| InlineTableEntry {
+                pc: index_to_offset[entry.pc],
+                frame: entry.frame,
+            })
+            .collect();
+
         CompactCode {
             trace_hook_finish_pc: self
                 .instructions
@@ -3082,6 +3179,7 @@ impl Bytecode {
             exception_table,
             handler_context_table,
             shield_table,
+            inline_table,
             jump_tables,
             instruction_offsets: if keep_offsets {
                 index_to_offset
@@ -3311,6 +3409,8 @@ mod compact_tests {
             meta,
             exception_table: Vec::new(),
             shield_table: Vec::new(),
+            inline_frames: Vec::new(),
+            inline_table: Vec::new(),
             block_pcs: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
@@ -3899,6 +3999,8 @@ mod compact_tests {
             meta: vec![InstructionMeta { operand: None }; 2],
             exception_table: Vec::new(),
             shield_table: Vec::new(),
+            inline_frames: Vec::new(),
+            inline_table: Vec::new(),
             block_pcs: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
@@ -3933,6 +4035,8 @@ mod compact_tests {
                 context_slot: 1,
             }],
             shield_table: Vec::new(),
+            inline_frames: Vec::new(),
+            inline_table: Vec::new(),
             block_pcs: Vec::new(),
             handler_context_table: vec![HandlerContextEntry {
                 start_pc: 2,

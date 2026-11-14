@@ -419,7 +419,7 @@ fn can_summarize(db: &dyn crate::Db, caller: SourceRoot, callee: FunctionLoc<'_>
 /// Whether an instance of `class` built in `caller` may have a finalizer.
 /// Read from source only where [`can_summarize`] sees bodies, so a user
 /// dependency answers the same mounted or not: anything else may.
-fn may_finalize(db: &dyn crate::Db, caller: SourceRoot, class: &ClassRef<'_>) -> bool {
+pub(crate) fn may_finalize(db: &dyn crate::Db, caller: SourceRoot, class: &ClassRef<'_>) -> bool {
     let DeclRef::Source(class) = *class else {
         return true;
     };

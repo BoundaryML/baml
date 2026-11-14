@@ -137,7 +137,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 ///
 /// Version 30: a class field and an enum variant carry their `@json`
 /// attributes.
-pub const FORMAT_VERSION: u32 = 30;
+///
+/// Version 31: `Bytecode` carries `inline_frames` and `inline_table`, the
+/// calls the optimizer inlined into a function and the PCs each one covers,
+/// which a stack trace expands back into frames.
+pub const FORMAT_VERSION: u32 = 31;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

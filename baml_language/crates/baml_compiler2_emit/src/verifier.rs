@@ -129,6 +129,7 @@ mod tests {
                     handling: None,
                     landing: None,
                     shielded: false,
+                    inline: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -140,6 +141,7 @@ mod tests {
                     handling: None,
                     landing: None,
                     shielded: false,
+                    inline: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -151,6 +153,7 @@ mod tests {
                     handling: None,
                     landing: None,
                     shielded: false,
+                    inline: None,
                 },
             ],
             entry: BlockId(0),
@@ -186,6 +189,7 @@ mod tests {
                     handling: None,
                     landing: None,
                     shielded: false,
+                    inline: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
@@ -197,6 +201,7 @@ mod tests {
                     handling: None,
                     landing: None,
                     shielded: false,
+                    inline: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
@@ -208,6 +213,7 @@ mod tests {
                     handling: None,
                     landing: None,
                     shielded: false,
+                    inline: None,
                 },
             ],
             entry: BlockId(0),

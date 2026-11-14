@@ -17,6 +17,7 @@ use crate::{
 };
 
 mod effects;
+pub(crate) mod inline;
 mod values;
 
 pub use values::live_in_precise;
@@ -36,6 +37,19 @@ pub(crate) fn optimize_function(
     // profile and the call folds away in release.
     if cfg!(debug_assertions) {
         verify_mir(db, body, func.arity, &func.identity.display(db));
+    }
+}
+
+/// Run the cleanup passes again on a function and every lambda lowered
+/// inside it, after a pass that rewrote their bodies.
+pub(crate) fn optimize_function_tree(
+    db: &dyn crate::Db,
+    func: &mut MirFunction<'_>,
+    opt: crate::OptLevel,
+) {
+    optimize_function(db, func, opt);
+    for lambda in &mut func.lambdas {
+        optimize_function_tree(db, lambda, opt);
     }
 }
 

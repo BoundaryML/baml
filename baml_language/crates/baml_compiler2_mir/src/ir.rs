@@ -3,7 +3,7 @@
 //! This module defines the core types for the Mid-level Intermediate Representation:
 //! functions as control flow graphs, basic blocks, statements, terminators, and operands.
 
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
@@ -317,6 +317,34 @@ pub struct BasicBlock<'db> {
     /// suspend. Fixed at creation, like `unwind`; the emitter derives the
     /// bytecode's shield table from it.
     pub shielded: bool,
+    /// Set on a block the inliner copied out of a callee: whose body it came
+    /// from and where it was called. `None` for the function's own code.
+    /// Fixed at creation, like `unwind`, and never merged away: the emitter
+    /// records the scope of the block each instruction's statement is in, so
+    /// an error raised there still reports the callee's frame.
+    pub inline: Option<Arc<InlineScope<'db>>>,
+}
+
+/// The call an inlined block stands in for. A stack trace taken while the
+/// block runs shows one frame for `callee`, as if the call had been made,
+/// below the frame of the code that called it: the `parent` scope's callee,
+/// or the function the block is in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineScope<'db> {
+    /// The function the block was copied from.
+    pub callee: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    /// The span of the call the copy replaced, in the caller's source.
+    pub call_span: Option<Span>,
+    /// The scope of the block that held the call, when that block was
+    /// itself inlined.
+    pub parent: Option<Arc<InlineScope<'db>>>,
+}
+
+impl<'db> InlineScope<'db> {
+    /// This scope and its ancestors, innermost first.
+    pub fn chain(&self) -> impl Iterator<Item = &InlineScope<'db>> {
+        std::iter::successors(Some(self), |scope| scope.parent.as_deref())
+    }
 }
 
 impl BasicBlock<'_> {
@@ -332,6 +360,7 @@ impl BasicBlock<'_> {
             handling: None,
             landing: None,
             shielded: false,
+            inline: None,
         }
     }
 

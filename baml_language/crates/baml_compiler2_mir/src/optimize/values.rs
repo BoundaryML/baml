@@ -196,6 +196,19 @@ fn fold<'db>(value: &Rvalue<'db>) -> Option<Constant<'db>> {
                 BinOp::Ne => Some(Constant::Bool(false)),
                 _ => None,
             },
+            // A defaulted parameter's entry test, once inlining has put a
+            // call's argument in the parameter's place: only the omission
+            // sentinel equals itself.
+            (Constant::OmittedArg, other) | (other, Constant::OmittedArg)
+                if scalar(other) || matches!(other, Constant::OmittedArg) =>
+            {
+                let omitted = matches!(other, Constant::OmittedArg);
+                match op {
+                    BinOp::Eq => Some(Constant::Bool(omitted)),
+                    BinOp::Ne => Some(Constant::Bool(!omitted)),
+                    _ => None,
+                }
+            }
             _ => None,
         },
         _ => None,

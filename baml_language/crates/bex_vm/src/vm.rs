@@ -6604,38 +6604,58 @@ impl BexVm {
         // outer frames recorded their call-site PC in `faulting_pc` at call
         // time, and compiled frames their last reported instruction.
         let top_bc = self.live_bytecode_frame();
-        self.stack_view()
-            .into_iter()
-            .filter_map(|frame| {
-                if let FrameAt::Vm(idx) = frame
-                    && self
-                        .pending_trace_hooks
-                        .iter()
-                        .any(|hook| hook.frame == idx && hook.evaluating)
-                {
-                    return None;
-                }
-                let func = self.callable_function(self.frame_callable(frame))?;
-                if !self.frame_is_bytecode(frame) {
-                    return Some(StackFrame {
-                        function_name: func.name(),
-                        file_path: func.source_file.clone(),
-                        error_line: 0,
-                    });
-                }
-                let pc = self.frame_at_pc(frame, top_bc).unwrap_or(0);
-                let error_line = if let Some(compact) = &func.bytecode.compact {
-                    compact.source_line_for_pc(pc)
-                } else {
-                    func.bytecode.source_line_for_pc(pc)
-                };
-                Some(StackFrame {
+        let mut trace = Vec::new();
+        for frame in self.stack_view() {
+            if let FrameAt::Vm(idx) = frame
+                && self
+                    .pending_trace_hooks
+                    .iter()
+                    .any(|hook| hook.frame == idx && hook.evaluating)
+            {
+                continue;
+            }
+            let Some(func) = self.callable_function(self.frame_callable(frame)) else {
+                continue;
+            };
+            if !self.frame_is_bytecode(frame) {
+                trace.push(StackFrame {
                     function_name: func.name(),
                     file_path: func.source_file.clone(),
-                    error_line,
-                })
-            })
-            .collect()
+                    error_line: 0,
+                });
+                continue;
+            }
+            let pc = self.frame_at_pc(frame, top_bc).unwrap_or(0);
+            let (error_line, inlined) = if let Some(compact) = &func.bytecode.compact {
+                (
+                    compact.source_line_for_pc(pc),
+                    compact.inline_frame_for_pc(pc),
+                )
+            } else {
+                (
+                    func.bytecode.source_line_for_pc(pc),
+                    func.bytecode.inline_frame_for_pc(pc),
+                )
+            };
+            // A PC inside an inlined call stands for the frames that call
+            // would have pushed: the function's own, then one per inlined
+            // callee.
+            for (inlined, error_line) in func.bytecode.inline_stack(inlined, error_line) {
+                trace.push(match inlined {
+                    Some(inlined) => StackFrame {
+                        function_name: func.inlined_name(inlined),
+                        file_path: inlined.source_file.clone(),
+                        error_line,
+                    },
+                    None => StackFrame {
+                        function_name: func.name(),
+                        file_path: func.source_file.clone(),
+                        error_line,
+                    },
+                });
+            }
+        }
+        trace
     }
 
     /// The stack trace a caller sees on a thrown value or an escaping panic:

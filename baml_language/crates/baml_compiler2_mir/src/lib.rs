@@ -14,8 +14,8 @@ pub use ir::*;
 pub use lower::{
     LoweredLetBody, RuntimeLowering, class_display_name, definition_display_name,
     enum_display_name, function_display_name, function_is_interface_body, global_display_name,
-    interface_body_link_bounds_suffix, lower_function, lower_let_body, native_key_for,
-    resolved_aliases_for_package, tir2_to_template,
+    interface_body_link_bounds_suffix, is_model_invoke, lower_function, lower_let_body,
+    native_key_for, resolved_aliases_for_package, tir2_to_template,
 };
 pub use optimize::live_in_precise;
 
