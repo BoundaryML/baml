@@ -40,6 +40,11 @@ pub enum Segment {
     Index(i64),
 }
 
+/// The key that reads a media value's content: `value['photo']['base64']` is the content of
+/// the image at `photo` as base64 text, or absent when the value names a URL or a file and
+/// holds no content.
+pub const MEDIA_CONTENT: &str = "base64";
+
 /// Which root of a snapshot a column refers to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Root {
@@ -250,6 +255,12 @@ fn step<'a>(
         (DecodedObject::Truncated(limit), _) => {
             Err(Nav::Unavailable(Unavailable::Truncated(*limit)))
         }
+        // A value's rendering describes its media and leaves the content out, so that a row
+        // of a thousand runs is not a thousand pictures. A path asks for one picture's
+        // content by name.
+        (DecodedObject::Media(media), Segment::Key(key)) if key == MEDIA_CONTENT => Err(
+            span::media_text(source, current, media.source.data(), blobs_left),
+        ),
         (DecodedObject::List { .. }, Segment::Key(_))
         | (DecodedObject::Instance { .. }, Segment::Index(_))
         | (
@@ -821,7 +832,7 @@ pub fn render_code(
 /// reason's code. Media is described, never rendered:
 /// `{"$media": kind, "mime", "url" | "file", "base64_len"}`, with
 /// `base64_len` present when the value holds content, and its content is not
-/// read. A part past a render limit is `$truncated` with `render_depth` or
+/// read; a path that ends in [`MEDIA_CONTENT`] on the media value reads it. A part past a render limit is `$truncated` with `render_depth` or
 /// `render_size`: alone in place of a value or a piece of text, or beside
 /// what an object rendered before it ended. This is a display format, not a
 /// lossless serialization.
