@@ -13,7 +13,7 @@ use crate::trace_heap::{
 struct BamlOutboundValue {
     #[prost(
         oneof = "BamlValueVariant",
-        tags = "2, 3, 4, 5, 6, 7, 8, 11, 12, 17, 19, 20"
+        tags = "2, 3, 4, 5, 6, 7, 8, 11, 12, 17, 19, 20, 23"
     )]
     value: Option<BamlValueVariant>,
 }
@@ -48,6 +48,8 @@ enum BamlValueVariant {
     Uint8arrayValue(Vec<u8>),
     #[prost(string, tag = "20")]
     BigintValue(String),
+    #[prost(message, tag = "23")]
+    TupleValue(BamlValueTuple),
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -61,6 +63,15 @@ struct BamlValueNull {}
 struct BamlValueList {
     #[prost(message, repeated, tag = "2")]
     items: Vec<BamlOutboundValue>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlValueTuple {
+    #[prost(message, repeated, tag = "1")]
+    items: Vec<BamlOutboundValue>,
+    /// The tuple's carried type: the `tuple` arm, one slot type per item.
+    #[prost(message, optional, tag = "2")]
+    tuple_type: Option<BamlTy>,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -141,7 +152,7 @@ enum MediaTypeEnum {
 struct BamlTy {
     #[prost(
         oneof = "BamlTyVariant",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24, 25"
     )]
     ty: Option<BamlTyVariant>,
 }
@@ -192,6 +203,8 @@ enum BamlTyVariant {
     AssociatedTypeProjection(BamlTyAssociatedTypeProjection),
     #[prost(message, tag = "24")]
     Never(BamlTyNever),
+    #[prost(message, tag = "25")]
+    Tuple(BamlTyTuple),
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -259,6 +272,12 @@ struct BamlTyOptional {
 struct BamlTyUnion {
     #[prost(message, repeated, tag = "1")]
     options: Vec<BamlTy>,
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlTyTuple {
+    #[prost(message, repeated, tag = "1")]
+    items: Vec<BamlTy>,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -453,6 +472,19 @@ fn encode_value(
                 .map(|item| encode_value(snapshot, item))
                 .collect::<Result<_, _>>()?,
         })),
+        TraceValue::Tuple {
+            element_types,
+            items,
+        } => Some(BamlValueVariant::TupleValue(BamlValueTuple {
+            items: items
+                .iter()
+                .copied()
+                .map(|item| encode_value(snapshot, item))
+                .collect::<Result<_, _>>()?,
+            tuple_type: Some(runtime_ty_to_proto_ty(&RuntimeTy::Tuple(
+                element_types.clone().into(),
+            ))),
+        })),
         TraceValue::Map(entries) => Some(BamlValueVariant::MapValue(BamlValueMap {
             entries: entries
                 .iter()
@@ -609,6 +641,9 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
         RuntimeTy::Map { key, value, .. } => BamlTyVariant::Map(BamlTyMap {
             key: Some(Box::new(runtime_ty_to_proto_ty(key))),
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
+        }),
+        RuntimeTy::Tuple(elements) => BamlTyVariant::Tuple(BamlTyTuple {
+            items: elements.iter().map(runtime_ty_to_proto_ty).collect(),
         }),
         RuntimeTy::Union(members) => {
             let has_null = members.iter().any(RuntimeTy::is_null);
@@ -768,6 +803,14 @@ fn render_trace_value(value: &BamlOutboundValue, nested: bool) -> String {
                 .map(|item| render_trace_value(item, true))
                 .collect::<Vec<_>>();
             format!("[{}]", items.join(", "))
+        }
+        Some(BamlValueVariant::TupleValue(tuple)) => {
+            let items = tuple
+                .items
+                .iter()
+                .map(|item| render_trace_value(item, true))
+                .collect::<Vec<_>>();
+            baml_type::render_tuple(&items)
         }
         Some(BamlValueVariant::MapValue(map)) => {
             let entries = map
@@ -969,6 +1012,47 @@ mod tests {
             (content.name.as_str(), content.base64.as_str()),
             ("cat.png", "aW1hZ2UtYnl0ZXM=")
         );
+    }
+
+    #[test]
+    fn tuple_trace_values_carry_their_slot_types() {
+        // `(int?,)` holding `1`: the same contents as an `(int,)`.
+        let snapshot = TraceSnapshot::for_test(
+            TraceValueRef::for_test(1),
+            vec![
+                TraceValue::Int(1),
+                TraceValue::Tuple {
+                    element_types: vec![baml_type::RuntimeTy::Union(
+                        vec![baml_type::RuntimeTy::Int, baml_type::RuntimeTy::Null].into(),
+                    )],
+                    items: vec![TraceValueRef::for_test(0)],
+                },
+            ],
+        );
+
+        let bytes = super::encode_trace_snapshot_body(&snapshot).unwrap();
+        let decoded = BamlOutboundValue::decode(bytes.as_slice()).unwrap();
+        let Some(BamlValueVariant::TupleValue(tuple)) = decoded.value else {
+            panic!("root should encode as a tuple");
+        };
+        assert_eq!(tuple.items.len(), 1);
+        let Some(baml_ty::Ty::Tuple(ty)) = tuple.tuple_type.and_then(|ty| ty.ty) else {
+            panic!("the tuple should carry its tuple type");
+        };
+        assert_eq!(ty.items.len(), 1);
+        let Some(baml_ty::Ty::Optional(optional)) = ty.items[0].ty.as_ref() else {
+            panic!("the slot type should encode as an optional int");
+        };
+        let Some(baml_ty::Ty::Primitive(primitive)) =
+            optional.inner.as_ref().and_then(|inner| inner.ty.as_ref())
+        else {
+            panic!("the optional should wrap a primitive");
+        };
+        assert_eq!(
+            primitive.kind,
+            BamlTyPrimitiveKind::BamlTyPrimitiveInt as i32
+        );
+        assert_eq!(super::render_encoded_trace_value(&bytes).unwrap(), "(1,)");
     }
 
     #[test]

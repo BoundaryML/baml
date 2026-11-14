@@ -27,6 +27,7 @@ use std::{
 };
 
 use baml_type::normalize::TypeContext;
+use bex_heap::TlabHolder;
 use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, RealizedTy, RootHaver, RootVisitor, ValueKind,
@@ -489,6 +490,18 @@ impl EqualsDriver {
             }
             (Object::Array(_), _) => Cmp::NotEqual,
 
+            // Elementwise at equal arity, like lists ignoring the carried
+            // slot types. Each slot is loaded like an instance field; there is
+            // no tuple lock. A tuple never equals a list (`(1, 2) != [1, 2]`).
+            (Object::Tuple(x), Object::Tuple(y)) => {
+                if x.len() != y.len() {
+                    return Cmp::NotEqual;
+                }
+                self.stack.extend(x.slot_values().zip(y.slot_values()));
+                Cmp::Continue
+            }
+            (Object::Tuple(_), _) => Cmp::NotEqual,
+
             (Object::Map(x), Object::Map(y)) => {
                 let (xs, ys) = lock_pair_ordered(pa, &x.data, pb, &y.data);
                 if xs.len() != ys.len() {
@@ -817,4 +830,205 @@ pub(super) fn ordering_from_value(vm: &BexVm, value: Value) -> Option<std::cmp::
         "Greater" => Some(std::cmp::Ordering::Greater),
         _ => None,
     }
+}
+
+// ── Compare (structural tuple default) ─────────────────────────────────────
+
+/// One pending step of a [`CompareDriver`] walk.
+enum CompareStep {
+    /// Corresponding slots still to be ordered.
+    Pair(Value, Value),
+    /// A decided ordering, consulted once every pair pushed before it is
+    /// `Equal` (a tuple's arity tie-break; equal arities push `Equal`).
+    Decided(std::cmp::Ordering),
+}
+
+/// The structural `Compare.cmp` for tuples: corresponding slots
+/// lexicographically, left to right, returning the first non-`Equal`
+/// ordering. A nested tuple's slots are spliced in place, which orders it
+/// lexicographically at its position. Primitive slots are ordered natively,
+/// exactly as their `comparison.baml` implementations order them; every other
+/// slot dispatches its own `Compare.cmp` (a custom implementation), yielding
+/// back into the VM.
+///
+/// Tuples are mutable, so one can reach itself (`t.0 = t` when the slot type
+/// admits it). The walk keeps the `(left, right)` tuple pairs it has descended
+/// in `visited`, as the `Equals` driver does, and a pair reached again orders
+/// `Equal`: either it is still being compared higher up the walk (a cyclic
+/// back-edge), or it already finished, which it can only have done as `Equal`
+/// since any other result ends the walk. So `Compare` and `Equals` agree on
+/// cyclic values.
+struct CompareDriver {
+    /// Pending steps, the next on top.
+    stack: Vec<CompareStep>,
+    /// Tuple pairs already descended, keyed by `(left, right)` heap pointers.
+    visited: HashSet<(HeapPtr, HeapPtr)>,
+}
+
+/// What ordering one pair of slots needs.
+enum SlotOrder {
+    Decided(std::cmp::Ordering),
+    Tuple(Vec<Value>, Vec<Value>),
+    Dispatch {
+        callee: HeapPtr,
+        args: Vec<Value>,
+        type_args: Vec<RealizedTy>,
+    },
+}
+
+impl CompareDriver {
+    fn drive(mut self: Box<Self>, vm: &mut BexVm) -> NativeCallResult {
+        while let Some(step) = self.stack.pop() {
+            let (a, b) = match step {
+                CompareStep::Decided(std::cmp::Ordering::Equal) => continue,
+                CompareStep::Decided(ordering) => return ordering_result(vm, ordering),
+                CompareStep::Pair(a, b) => (a, b),
+            };
+            match order_slots(vm, a, b, &mut self.visited) {
+                Ok(SlotOrder::Decided(std::cmp::Ordering::Equal)) => {}
+                Ok(SlotOrder::Decided(ordering)) => return ordering_result(vm, ordering),
+                Ok(SlotOrder::Tuple(xs, ys)) => {
+                    self.stack
+                        .push(CompareStep::Decided(xs.len().cmp(&ys.len())));
+                    self.stack.extend(
+                        xs.into_iter()
+                            .zip(ys)
+                            .rev()
+                            .map(|(x, y)| CompareStep::Pair(x, y)),
+                    );
+                }
+                Ok(SlotOrder::Dispatch {
+                    callee,
+                    args,
+                    type_args,
+                }) => {
+                    return NativeCallResult::YieldToCall {
+                        callee,
+                        args,
+                        type_args,
+                        continuation: self,
+                    };
+                }
+                Err(e) => return NativeCallResult::from(e),
+            }
+        }
+        ordering_result(vm, std::cmp::Ordering::Equal)
+    }
+}
+
+/// Order one pair of corresponding slots, or name the `cmp` that does.
+fn order_slots(
+    vm: &BexVm,
+    a: Value,
+    b: Value,
+    visited: &mut HashSet<(HeapPtr, HeapPtr)>,
+) -> Result<SlotOrder, VmInternalError> {
+    let (Some(a), Some(b)) = (resolve_cells(vm, a), resolve_cells(vm, b)) else {
+        return Err(unresolved_op(crate::lang_items::BAML_OPS_COMPARE, "cmp"));
+    };
+    match (a.kind(), b.kind()) {
+        (ValueKind::Int(x), ValueKind::Int(y)) => return Ok(SlotOrder::Decided(x.cmp(&y))),
+        (ValueKind::Bool(x), ValueKind::Bool(y)) => return Ok(SlotOrder::Decided(x.cmp(&y))),
+        (ValueKind::Object(pa), ValueKind::Object(pb)) => {
+            match (vm.get_object(pa), vm.get_object(pb)) {
+                (Object::Float(x), Object::Float(y)) => {
+                    return Ok(SlotOrder::Decided(bex_vm_types::float_order::cmp(*x, *y)));
+                }
+                (Object::String(x), Object::String(y)) => {
+                    return Ok(SlotOrder::Decided(x.as_str().cmp(y.as_str())));
+                }
+                (Object::Bigint(x), Object::Bigint(y)) => return Ok(SlotOrder::Decided(x.cmp(y))),
+                (Object::Tuple(x), Object::Tuple(y)) => {
+                    if !visited.insert((pa, pb)) {
+                        return Ok(SlotOrder::Decided(std::cmp::Ordering::Equal));
+                    }
+                    return Ok(SlotOrder::Tuple(
+                        x.slot_values().collect(),
+                        y.slot_values().collect(),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    // Any other slot orders through its own implementation, resolved from the
+    // receiver's concrete runtime type.
+    let compare = vm
+        .lang_head(crate::lang_items::BAML_OPS_COMPARE)
+        .ok_or_else(|| unresolved_op(crate::lang_items::BAML_OPS_COMPARE, "cmp"))?;
+    let self_ty = vm
+        .value_concrete_ty(a)
+        .map(RealizedTy::from)
+        .ok_or_else(|| unresolved_op(crate::lang_items::BAML_OPS_COMPARE, "cmp"))?;
+    let resolver = resolve::ImplResolver::for_value(vm, a);
+    let implementation = resolver
+        .resolve_implementation(&self_ty, compare, &[])
+        .ok_or_else(|| unresolved_op(crate::lang_items::BAML_OPS_COMPARE, "cmp"))?;
+    let (callee, type_args) = resolver.implementation_method(&implementation, "cmp")?;
+    Ok(SlotOrder::Dispatch {
+        callee,
+        args: vec![a, b],
+        type_args,
+    })
+}
+
+/// The `baml.ops.Ordering` variant for `ordering`, as the native's result.
+fn ordering_result(vm: &mut BexVm, ordering: std::cmp::Ordering) -> NativeCallResult {
+    let name = match ordering {
+        std::cmp::Ordering::Less => "Less",
+        std::cmp::Ordering::Equal => "Equal",
+        std::cmp::Ordering::Greater => "Greater",
+    };
+    // `baml.ops.Ordering` is the stdlib's own; a miss is the stdlib and the
+    // runtime out of step.
+    let enm = vm.lang_object(crate::lang_items::BAML_OPS_ORDERING);
+    let index = match vm.get_object(enm) {
+        Object::Enum(e) => e.variants.iter().position(|v| v.name == name),
+        _ => None,
+    }
+    .unwrap_or_else(|| unreachable!("`baml.ops.Ordering` declares the variant `{name}`"));
+    NativeCallResult::Done(Value::object(vm.alloc_variant(enm, index)))
+}
+
+impl RootHaver for CompareDriver {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        for step in &mut self.stack {
+            if let CompareStep::Pair(a, b) = step {
+                a.visit_roots(visitor);
+                b.visit_roots(visitor);
+            }
+        }
+        // The cycle set is keyed by the pointers themselves: forward each pair
+        // and rebuild the set, so a pair reached after a collection still
+        // matches.
+        let mut pairs: Vec<_> = self.visited.drain().collect();
+        for pair in &mut pairs {
+            pair.visit_roots(visitor);
+        }
+        self.visited.extend(pairs);
+    }
+}
+
+impl Continuation for CompareDriver {
+    fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        match ordering_from_value(vm, value) {
+            Some(std::cmp::Ordering::Equal) => self.drive(vm),
+            Some(ordering) => ordering_result(vm, ordering),
+            // `cmp` is typed `-> Ordering throws never`, so anything else is a
+            // compiler/VM invariant break.
+            None => NativeCallResult::from(VmInternalError::TypeError {
+                expected: Type::Object(bex_vm_types::ObjectType::Variant),
+                got: vm.type_of(&value),
+            }),
+        }
+    }
+}
+
+pub(super) fn compare_structural_default(vm: &mut BexVm, a: Value, b: Value) -> NativeCallResult {
+    Box::new(CompareDriver {
+        stack: vec![CompareStep::Pair(a, b)],
+        visited: HashSet::new(),
+    })
+    .drive(vm)
 }

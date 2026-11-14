@@ -13,20 +13,6 @@ commit it was observed on), the kind of contradiction the item declares
 what the spec accepts; `Misreports`: it rejects as the spec does but with
 other codes or elsewhere), and the items it blocks.
 
-## CD-001: unguarded alias cycles are accepted
-
-Spec, "Productivity": "a fully unguarded cycle is uninhabited: `type B = B`
-denotes `never` (and is a compile error, E0068)".
-
-Compiler (canary `9184ee38e`, 2026-09-08): `type B = B;` and
-`type A = B; type B = A;` compile cleanly under both `baml check` and
-`reflect.Package.compile`, whether or not the alias is used as a parameter,
-binding, or field type. No E0068 is emitted.
-
-Contradiction: `Accepts`.
-
-Blocks: item `aliases/unguarded-cycle`.
-
 ## CD-002: function types are rejected as implementation targets
 
 Spec, "Concrete Types": concrete types "include all primitives, all class

@@ -173,8 +173,9 @@ pub use types::{
     InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
     MapContainer, MapData, MapEntry, MapEpochChanged, MapReadGuard, MapWriteGuard, Object,
     ObjectType, PanicClass, Program, RenderedCallable, SpelledBound, SysOp, SysOpErrorCategory,
-    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value,
-    ValueKind, Variant, format_float, map_string_hash, sys_op_for_path, type_tags,
+    SysOpPanicCategory, Tuple, TupleShapeMismatch, Uint8ArrayContainer, Uint8ArrayReadGuard,
+    Uint8ArrayWriteGuard, Value, ValueKind, Variant, format_float, map_string_hash,
+    sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

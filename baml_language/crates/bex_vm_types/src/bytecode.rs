@@ -1143,6 +1143,27 @@ pub enum Instruction {
         iterator: usize,
         index: usize,
     },
+
+    /// Builds a tuple and allocates it on the heap.
+    ///
+    /// Format: `ALLOC_TUPLE n` where `n` is the number of elements (zero is
+    /// valid). All elements must be on the stack, first element deepest, with
+    /// the tuple's instantiated type on top (a preceding `LoadType`, already
+    /// resolved against the frame's type args): `[e0, .., e(n-1), type((T0,
+    /// ..))] -> [tuple]`. The tuple carries those slot types; their count must
+    /// be `n`. Appended so serialized instruction discriminants stay stable.
+    AllocTuple(usize),
+
+    /// Load a slot of a tuple.
+    ///
+    /// Format: `LOAD_TUPLE_FIELD i` where `i` is the zero-based slot number,
+    /// fixed at compile time: `[tuple] -> [element]`. Accepts only a tuple
+    /// (class fields use [`Self::LoadField`]); an out-of-range slot is an
+    /// invalid field access. Appended so serialized instruction discriminants
+    /// stay stable.
+    LoadTupleField(usize),
+
+
 }
 
 /// Compact bytecode opcodes.
@@ -1384,6 +1405,11 @@ pub enum OpCode {
     // u32 iterator slot + u32 index slot; appended to preserve discriminants.
     ArrayIterNext,
     ArrayIterNextLocal,
+    /// Appended last to keep every earlier opcode byte stable.
+    AllocTuple,
+    // Tuple slot read/write (u32 slot), appended to keep every earlier opcode
+    // byte stable.
+    LoadTupleField,
 }
 
 impl OpCode {
@@ -1489,6 +1515,8 @@ impl OpCode {
             | Self::Copy
             | Self::AllocArray
             | Self::ConcatStrings
+            | Self::AllocTuple
+            | Self::LoadTupleField
             | Self::AllocMap
             | Self::InitInstance
             | Self::AllocVariant
@@ -1718,6 +1746,8 @@ impl TryFrom<u8> for OpCode {
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
+            x if x == Self::AllocTuple as u8 => Ok(Self::AllocTuple),
+            x if x == Self::LoadTupleField as u8 => Ok(Self::LoadTupleField),
             _ => Err(byte),
         }
     }
@@ -1844,6 +1874,8 @@ impl std::fmt::Display for OpCode {
             Self::Copy => "COPY",
             Self::AllocArray => "ALLOC_ARRAY",
             Self::ConcatStrings => "CONCAT_STRINGS",
+            Self::AllocTuple => "ALLOC_TUPLE",
+            Self::LoadTupleField => "LOAD_TUPLE_FIELD",
             Self::AllocMap => "ALLOC_MAP",
             Self::AllocInstance => "ALLOC_INSTANCE",
             Self::InitInstance => "INIT_INSTANCE",
@@ -2042,6 +2074,8 @@ impl std::fmt::Display for Instruction {
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
             Instruction::ConcatStrings(n) => write!(f, "CONCAT_STRINGS {n}"),
+            Instruction::AllocTuple(n) => write!(f, "ALLOC_TUPLE {n}"),
+            Instruction::LoadTupleField(i) => write!(f, "LOAD_TUPLE_FIELD {i}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
             Instruction::LoadMapElement => f.write_str("LOAD_MAP_ELEMENT"),
             Instruction::StoreArrayElement => f.write_str("STORE_ARRAY_ELEMENT"),
@@ -2754,6 +2788,8 @@ impl Bytecode {
                 | Instruction::Copy(v)
                 | Instruction::AllocArray(v)
                 | Instruction::ConcatStrings(v)
+                | Instruction::AllocTuple(v)
+                | Instruction::LoadTupleField(v)
                 | Instruction::AllocMap(v)
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
@@ -3181,6 +3217,8 @@ impl Bytecode {
             Instruction::Copy(_) => OpCode::Copy,
             Instruction::AllocArray(_) => OpCode::AllocArray,
             Instruction::ConcatStrings(_) => OpCode::ConcatStrings,
+            Instruction::AllocTuple(_) => OpCode::AllocTuple,
+            Instruction::LoadTupleField(_) => OpCode::LoadTupleField,
             Instruction::AllocMap(_) => OpCode::AllocMap,
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,
             Instruction::InitInstance(_) => OpCode::InitInstance,
@@ -3666,10 +3704,19 @@ mod compact_tests {
         assert_eq!(compact.code[10], OpCode::Return as u8);
     }
 
-    /// A wrong `encoded_size` silently desynchronizes the instruction stream: the
-    /// decoder reads the next opcode from the middle of an operand. The offset
-    /// table is built from `encoded_size` while the bytes are written by
-    /// `lower_to_compact`, so the two must agree for every opcode.
+    #[test]
+    fn encode_tuple_field_read() {
+        let bc = make_bytecode(vec![Instruction::LoadTupleField(258), Instruction::Return], Vec::new());
+        let compact = bc.lower_to_compact();
+        assert_eq!(compact.code.len(), 6);
+        assert_eq!(compact.code[0], OpCode::LoadTupleField as u8);
+        assert_eq!(u32::from_le_bytes(compact.code[1..5].try_into().unwrap()), 258);
+        assert_eq!(compact.code[5], OpCode::Return as u8);
+        let encoded = borsh::to_vec(&bc.instructions).unwrap();
+        let decoded: Vec<Instruction> = borsh::from_slice(&encoded).unwrap();
+        assert_eq!(format!("{decoded:?}"), format!("{:?}", bc.instructions));
+    }
+
     #[test]
     fn encoded_size_matches_emitted_bytes_for_every_opcode() {
         for (instruction, expected) in [
@@ -3710,6 +3757,8 @@ mod compact_tests {
                 },
                 OpCode::CallLocal,
             ),
+            (Instruction::AllocTuple(2), OpCode::AllocTuple),
+            (Instruction::LoadTupleField(1), OpCode::LoadTupleField),
         ] {
             let bc = make_bytecode(vec![instruction], Vec::new());
             let op = bc.instruction_to_opcode(&instruction);

@@ -29,6 +29,10 @@
 //! - Type aliases erase to their resolved type (Java has no alias
 //!   mechanism); **recursive** aliases mint a nominal type instead
 //!   (erasure would not terminate), named after the alias itself.
+//! - Tuples render as the generated record of their identity
+//!   (`baml_sdk.Tuple2_IntString`, see [`crate::tuples`]); a tuple that
+//!   mentions a type variable has no one identity and renders as
+//!   `java.lang.Object`, like a union with a type-variable arm.
 
 use std::collections::BTreeMap;
 
@@ -36,7 +40,10 @@ use baml_sdkgen_types::{
     CallableParam, ClassCrossing, CodegenFunctionParamMode, Name, Ty, is_synthetic_effect_param,
 };
 
-use crate::routing::{PackagePath, java_identifier, route};
+use crate::{
+    routing::{PackagePath, java_identifier, route},
+    tuples::{TupleTable, tuple_base_name},
+};
 
 /// Where a type expression appears, which decides primitive boxing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,6 +113,8 @@ pub(crate) struct UnionSink {
 pub(crate) struct TranslateCtx<'a> {
     pub(crate) aliases: &'a AliasTable,
     pub(crate) crossings: &'a CrossingTable,
+    /// The generated tuple records, by tuple identity.
+    pub(crate) tuples: &'a TupleTable,
     /// The package currently being rendered — where a minted host-callable
     /// interface is placed (so it sits beside the function/class that uses it).
     pub(crate) pkg: PackagePath,
@@ -190,6 +199,7 @@ pub(crate) fn translate_ty(
             )
         ),
         Ty::Union(items) => translate_union(items, ctx, sink),
+        Ty::Tuple(items) => tuple_type(items, ctx),
         Ty::Unknown => "java.lang.Object".to_string(),
         Ty::Function { params, ret, .. } => translate_callable(params, ret, ctx, sink),
         Ty::RustType => "baml_bridge.BamlHandle".to_string(),
@@ -202,6 +212,16 @@ pub(crate) fn translate_ty(
             "java.lang.Object".to_string()
         }
     }
+}
+
+/// The Java type of a tuple: its generated record (in the root package), or
+/// `java.lang.Object` for a tuple with no record, one that mentions a type
+/// variable — the bridge then hands over a list of its slots.
+fn tuple_type(items: &[Ty], ctx: &TranslateCtx<'_>) -> String {
+    ctx.tuples.decl(items, ctx.aliases).map_or_else(
+        || "java.lang.Object".to_string(),
+        |decl| format!("baml_sdk.{}", decl.ident),
+    )
 }
 
 fn primitive(pos: TyPosition, unboxed: &str, boxed: &str) -> String {
@@ -528,6 +548,15 @@ pub(crate) fn descriptor_expr(ty: &Ty, ctx: &TranslateCtx<'_>, sink: &mut UnionS
         }
         Ty::Literal(lit, ..) => literal_expr(lit),
         Ty::Union(items) => descriptor_union_expr(items, ctx, sink),
+        // The tuple identity itself: the slot types in order. The generated
+        // record is registered under exactly this token.
+        Ty::Tuple(items) => {
+            let items: Vec<String> = items
+                .iter()
+                .map(|i| descriptor_expr(i, ctx, sink))
+                .collect();
+            format!("baml_bridge.BamlType.tuple({})", items.join(", "))
+        }
         Ty::Function {
             params,
             ret,
@@ -682,6 +711,13 @@ pub(crate) fn registry_arm_expr(ty: &Ty, aliases: &AliasTable) -> String {
             format!("baml_bridge.BamlType.typeVar({:?})", name.as_str())
         }
         Ty::Literal(lit, ..) => literal_expr(lit),
+        Ty::Tuple(items) => {
+            let items: Vec<String> = items
+                .iter()
+                .map(|i| registry_arm_expr(i, aliases))
+                .collect();
+            format!("baml_bridge.BamlType.tuple({})", items.join(", "))
+        }
         _ => BAMLTYPE_UNKNOWN.to_string(),
     }
 }
@@ -786,6 +822,8 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
         Ty::Future(..) => "Future".to_string(),
         // validate() bans nested unions; unreachable in valid pools.
         Ty::Union(..) => "Union".to_string(),
+        // A tuple arm is named after its record's base name.
+        Ty::Tuple(items) => tuple_base_name(items),
     }
 }
 
@@ -1000,9 +1038,11 @@ mod tests {
     }
 
     fn ctx_in(aliases: &AliasTable) -> TranslateCtx<'_> {
+        static TUPLES: std::sync::OnceLock<TupleTable> = std::sync::OnceLock::new();
         TranslateCtx {
             aliases,
             crossings: crossings(),
+            tuples: TUPLES.get_or_init(TupleTable::default),
             pkg: PackagePath {
                 segments: vec!["callables".to_string()],
             },

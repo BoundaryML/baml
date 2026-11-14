@@ -93,6 +93,16 @@ public final class TypeRegistry {
     // that is the body's list member, and nothing else could say so.
     private static final ConcurrentHashMap<String, BamlType> aliasBodiesByFqn = new ConcurrentHashMap<>();
 
+    // Tuples. Forward index (decode): keyed by the tuple's canonical type
+    // identity, a {@link BamlType#tuple} token whose value equality is ordered
+    // slot identity and arity ({@code (int, string)} and {@code (string, int)}
+    // are two keys; {@code (int | string, bool)} is neither of
+    // {@code (int, bool)} / {@code (string, bool)}). Reverse index (encode): the
+    // generated record's binary name -> the same entry, so a record names its
+    // tuple identity by its class, never by its spelling or its components.
+    private static final ConcurrentHashMap<BamlType, TupleEntry> tuplesByType = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, TupleEntry> tuplesByJavaName = new ConcurrentHashMap<>();
+
     static {
         // Runtime-owned stdlib types the emitter deliberately does NOT generate
         // (RUNTIME_OWNED_FQNS in sdkgen_java) — their bodies ship in this runtime
@@ -330,6 +340,37 @@ public final class TypeRegistry {
         }
     }
 
+    /**
+     * Register a generated tuple record: {@code javaRecordName} is the binary
+     * name of the record whose components, in order, are the slots of
+     * {@code tupleType} (a {@link BamlType.Kind#TUPLE} token). Idempotent for
+     * the same record; a second record for one tuple identity, or one record
+     * for two identities, throws {@link IllegalStateException}, since decode
+     * would otherwise silently pick whichever registration won.
+     */
+    public static void registerTuple(String javaRecordName, BamlType tupleType) {
+        if (tupleType.kind() != BamlType.Kind.TUPLE) {
+            throw new IllegalArgumentException("not a tuple type: " + tupleType);
+        }
+        // Claim the record name first, so a refused registration leaves no
+        // identity bound to it.
+        TupleEntry entry = new TupleEntry(javaRecordName, tupleType);
+        TupleEntry byName = tuplesByJavaName.putIfAbsent(javaRecordName, entry);
+        if (byName != null && !byName.tupleType.equals(tupleType)) {
+            throw new IllegalStateException(
+                    "conflicting tuple registration for " + javaRecordName + ": already "
+                            + byName.tupleType + ", refused " + tupleType);
+        }
+        TupleEntry claimed = byName != null ? byName : entry;
+        TupleEntry existing = tuplesByType.putIfAbsent(tupleType, claimed);
+        if (existing != null && !existing.javaRecordName.equals(javaRecordName)) {
+            tuplesByJavaName.remove(javaRecordName, entry);
+            throw new IllegalStateException(
+                    "conflicting tuple registration for " + tupleType + ": already bound to "
+                            + existing.javaRecordName + ", refused rebind to " + javaRecordName);
+        }
+    }
+
     // -- decode (BAML FQN -> generated instance) -----------------------------
 
     /**
@@ -386,6 +427,16 @@ public final class TypeRegistry {
     }
 
     /**
+     * The type parameter names, in declaration order, of the registered generic
+     * class {@code bamlFqn}, or {@code null} when it is not registered or not
+     * generic.
+     */
+    public static String[] classTypeParams(String bamlFqn) {
+        ClassEntry entry = classesByFqn.get(bamlFqn);
+        return entry == null ? null : entry.typeParams;
+    }
+
+    /**
      * The per-field type-directed decode descriptors ({@link BamlType}, parallel
      * to {@link #classFieldOrder}) of the registered class {@code bamlFqn}, or
      * {@code null} when it is not registered or was registered without
@@ -406,6 +457,18 @@ public final class TypeRegistry {
     public static Object resolveEnum(String bamlFqn, String wireName) {
         EnumEntry entry = enumsByFqn.get(bamlFqn);
         return entry == null ? null : entry.constantFor(wireName);
+    }
+
+    /**
+     * Construct the generated record registered for the tuple identity
+     * {@code tupleType} from its decoded slot values, in order. Returns
+     * {@code null} when no record is registered for that identity, so the
+     * caller falls back to a list representation. The arity was checked by the
+     * caller; a mismatch here is a broken invariant.
+     */
+    public static Object constructTuple(BamlType tupleType, List<Object> items) {
+        TupleEntry entry = tuplesByType.get(tupleType);
+        return entry == null ? null : entry.instantiate(items);
     }
 
     /**
@@ -494,6 +557,32 @@ public final class TypeRegistry {
     public static int unionRecordArmIndex(Object obj) {
         UnionRecordEntry entry = unionRecordsByJavaName.get(obj.getClass().getName());
         return entry == null ? -1 : entry.armIndex;
+    }
+
+    /**
+     * The tuple payload for a host object: its registered tuple identity and
+     * its slot values in order, or {@code null} when the object's class is not
+     * a registered generated tuple record. A {@link BamlTupleList} is the tuple
+     * it was received as, its carried tuple type, where the wire can state it.
+     */
+    public static TupleWire tupleWire(Object obj) {
+        if (obj instanceof BamlTupleList received) {
+            return received.tupleType().isStatable()
+                    ? new TupleWire(received.tupleType(), received.slotValues())
+                    : null;
+        }
+        TupleEntry entry = tuplesByJavaName.get(obj.getClass().getName());
+        return entry == null ? null : entry.encode(obj);
+    }
+
+    /**
+     * The tuple identity of the registered generated tuple record
+     * {@code javaClass}, or {@code null} when it is not one. Lets
+     * {@link BamlType#of(Class)} name a tuple record's type.
+     */
+    public static BamlType tupleTypeForJavaClass(Class<?> javaClass) {
+        TupleEntry entry = tuplesByJavaName.get(javaClass.getName());
+        return entry == null ? null : entry.tupleType;
     }
 
     /**
@@ -661,6 +750,19 @@ public final class TypeRegistry {
             this.fieldValues = fieldValues;
             this.fieldDescs = fieldDescs;
             this.typeParams = typeParams;
+        }
+    }
+
+    /** A tuple record decomposed for the inbound list payload that states its tuple type. */
+    public static final class TupleWire {
+        /** The record's registered tuple identity, stated on the enclosing value. */
+        public final BamlType type;
+        /** The slot values in position order, read via the component accessors. */
+        public final Object[] items;
+
+        TupleWire(BamlType type, Object[] items) {
+            this.type = type;
+            this.items = items;
         }
     }
 
@@ -1005,6 +1107,110 @@ public final class TypeRegistry {
             }
             throw new IllegalStateException(
                     "no single-arg constructor on union record " + recordName);
+        }
+    }
+
+    private static final class TupleEntry {
+        final String javaRecordName;
+        final BamlType tupleType;
+
+        // Lazily resolved canonical constructor and component accessors. Benign
+        // races only re-resolve to equal values.
+        private volatile Constructor<?> ctor;
+        private volatile Method[] accessors;
+
+        TupleEntry(String javaRecordName, BamlType tupleType) {
+            this.javaRecordName = javaRecordName;
+            this.tupleType = tupleType;
+        }
+
+        int arity() {
+            return tupleType.tupleItems().size();
+        }
+
+        Object instantiate(List<Object> items) {
+            if (items.size() != arity()) {
+                throw new IllegalStateException(
+                        "a " + tupleType + " has " + arity() + " slots, not " + items.size());
+            }
+            try {
+                return constructor().newInstance(items.toArray());
+            } catch (ReflectiveOperationException | IllegalArgumentException e) {
+                throw new IllegalStateException(
+                        "failed to construct " + javaRecordName + " from tuple slots", e);
+            }
+        }
+
+        TupleWire encode(Object obj) {
+            Method[] acc = accessors(obj.getClass());
+            Object[] values = new Object[acc.length];
+            for (int i = 0; i < acc.length; i++) {
+                try {
+                    values[i] = acc[i].invoke(obj);
+                } catch (ReflectiveOperationException e) {
+                    throw new IllegalStateException(
+                            "failed to read slot " + i + " of " + javaRecordName, e);
+                }
+            }
+            return new TupleWire(tupleType, values);
+        }
+
+        private Class<?> javaClass() {
+            try {
+                return Class.forName(javaRecordName);
+            } catch (ClassNotFoundException e) {
+                throw new IllegalStateException(
+                        "generated tuple record not found on the classpath: " + javaRecordName, e);
+            }
+        }
+
+        private Constructor<?> constructor() {
+            Constructor<?> c = ctor;
+            if (c == null) {
+                Class<?> cls = javaClass();
+                Class<?>[] types = componentTypes(cls);
+                try {
+                    c = cls.getConstructor(types);
+                } catch (NoSuchMethodException e) {
+                    throw new IllegalStateException(
+                            "no canonical constructor on tuple record " + javaRecordName, e);
+                }
+                ctor = c;
+            }
+            return c;
+        }
+
+        /** The record's component accessors in slot order (from the object's own class). */
+        private Method[] accessors(Class<?> cls) {
+            Method[] m = accessors;
+            if (m == null) {
+                java.lang.reflect.RecordComponent[] components = recordComponents(cls);
+                m = new Method[components.length];
+                for (int i = 0; i < components.length; i++) {
+                    m[i] = components[i].getAccessor();
+                }
+                accessors = m;
+            }
+            return m;
+        }
+
+        private Class<?>[] componentTypes(Class<?> cls) {
+            java.lang.reflect.RecordComponent[] components = recordComponents(cls);
+            Class<?>[] types = new Class<?>[components.length];
+            for (int i = 0; i < components.length; i++) {
+                types[i] = components[i].getType();
+            }
+            return types;
+        }
+
+        private java.lang.reflect.RecordComponent[] recordComponents(Class<?> cls) {
+            java.lang.reflect.RecordComponent[] components = cls.getRecordComponents();
+            if (components == null || components.length != arity()) {
+                throw new IllegalStateException(
+                        javaRecordName + " is not a record of " + arity() + " components for "
+                                + tupleType);
+            }
+            return components;
         }
     }
 

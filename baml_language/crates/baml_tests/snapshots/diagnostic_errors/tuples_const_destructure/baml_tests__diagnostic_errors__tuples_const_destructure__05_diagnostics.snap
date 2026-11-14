@@ -1,0 +1,218 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:11:17]
+ 11 │     let (let a, const b) = pair;
+    ·                 ──┬──
+    ·                   ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:17:5]
+ 17 │     const (let a, const b) = pair;
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  × a destructure started with `const` binds only with `const`
+    ╭─[const_destructure.baml:17:12]
+ 17 │     const (let a, const b) = pair;
+    ·     ──┬──  ─┬─
+    ·       │     ╰── write `const` here, or start the destructure with `let` to mix introducers
+    ·       ╰── the destructure starts with `const` here
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:17:19]
+ 17 │     const (let a, const b) = pair;
+    ·                   ──┬──
+    ·                     ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:23:5]
+ 23 │     const (const a, (const b, let c)) = nested;
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:23:12]
+ 23 │     const (const a, (const b, let c)) = nested;
+    ·            ──┬──
+    ·              ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:23:22]
+ 23 │     const (const a, (const b, let c)) = nested;
+    ·                      ──┬──
+    ·                        ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  × a destructure started with `const` binds only with `const`
+    ╭─[const_destructure.baml:23:31]
+ 23 │     const (const a, (const b, let c)) = nested;
+    ·     ──┬──                     ─┬─
+    ·       │                        ╰── write `const` here, or start the destructure with `let` to mix introducers
+    ·       ╰── the destructure starts with `const` here
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:30:17]
+ 30 │     let (let a, const inner: (const b, let c)) = nested;
+    ·                 ──┬──
+    ·                   ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:30:31]
+ 30 │     let (let a, const inner: (const b, let c)) = nested;
+    ·                               ──┬──
+    ·                                 ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  × a destructure started with `const` binds only with `const`
+    ╭─[const_destructure.baml:30:40]
+ 30 │     let (let a, const inner: (const b, let c)) = nested;
+    ·                 ──┬──                  ─┬─
+    ·                   │                     ╰── write `const` here, or start the destructure with `let` to mix introducers
+    ·                   ╰── the destructure starts with `const` here
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:36:5]
+ 36 │     const [const first, let second] = xs else { return 0; };
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:36:12]
+ 36 │     const [const first, let second] = xs else { return 0; };
+    ·            ──┬──
+    ·              ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  × a destructure started with `const` binds only with `const`
+    ╭─[const_destructure.baml:36:25]
+ 36 │     const [const first, let second] = xs else { return 0; };
+    ·     ──┬──               ─┬─
+    ·       │                  ╰── write `const` here, or start the destructure with `let` to mix introducers
+    ·       ╰── the destructure starts with `const` here
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:41:5]
+ 41 │     const CdPoint { x: let px, y: (const a, let b) } = p;
+    ·     ──┬──
+    ·       ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  × a destructure started with `const` binds only with `const`
+    ╭─[const_destructure.baml:41:24]
+ 41 │     const CdPoint { x: let px, y: (const a, let b) } = p;
+    ·     ──┬──              ─┬─
+    ·       │                 ╰── write `const` here, or start the destructure with `let` to mix introducers
+    ·       ╰── the destructure starts with `const` here
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:41:36]
+ 41 │     const CdPoint { x: let px, y: (const a, let b) } = p;
+    ·                                    ──┬──
+    ·                                      ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  × a destructure started with `const` binds only with `const`
+    ╭─[const_destructure.baml:41:45]
+ 41 │     const CdPoint { x: let px, y: (const a, let b) } = p;
+    ·     ──┬──                                   ─┬─
+    ·       │                                      ╰── write `const` here, or start the destructure with `let` to mix introducers
+    ·       ╰── the destructure starts with `const` here
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:46:11]
+ 46 │     while const (let a, _) = pair {
+    ·           ──┬──
+    ·             ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  × a destructure started with `const` binds only with `const`
+    ╭─[const_destructure.baml:46:18]
+ 46 │     while const (let a, _) = pair {
+    ·           ──┬──  ─┬─
+    ·             │     ╰── write `const` here, or start the destructure with `let` to mix introducers
+    ·             ╰── the destructure starts with `const` here
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:54:10]
+ 54 │     for (const (const a, let b) in pairs) {
+    ·          ──┬──
+    ·            ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  ⚠ `const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.
+    ╭─[const_destructure.baml:54:17]
+ 54 │     for (const (const a, let b) in pairs) {
+    ·                 ──┬──
+    ·                   ╰── `const` behaves like `let` for now
+    ╰────
+
+  [hir] E0010
+
+  × a destructure started with `const` binds only with `const`
+    ╭─[const_destructure.baml:54:26]
+ 54 │     for (const (const a, let b) in pairs) {
+    ·          ──┬──           ─┬─
+    ·            │              ╰── write `const` here, or start the destructure with `let` to mix introducers
+    ·            ╰── the destructure starts with `const` here
+    ╰────

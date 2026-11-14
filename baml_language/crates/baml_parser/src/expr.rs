@@ -18,7 +18,7 @@ use baml_syntax::{
         FieldAccessExpr, FieldValue, GenericApplyExpr, GenericArgs, GenericParamList, IfExpr,
         IfLetExpr, IndexExpr, IsExpr, LambdaExpr, LiteralExpr, MapEntry, MapLiteral, MatchArm,
         MatchExpr, MatchGuard, MatchParen, ObjectField, ObjectLiteral, OptionalCallExpr,
-        OptionalFieldAccessExpr, OptionalIndexExpr, ParenExpr, PathExpr, PathSegment, ReturnExpr,
+        TupleExpr, TupleFieldExpr, OptionalFieldAccessExpr, OptionalIndexExpr, ParenExpr, PathExpr, PathSegment, ReturnExpr,
         SpawnExpr, SpecExpr, SpreadElement, TaggedTemplateExpr, ThrowExpr, ThrowsClause,
         TraceBinding, TypeAscription, UnaryExpr, UpcastExpr, WithClause,
     },
@@ -30,7 +30,7 @@ use baml_syntax::{
             StringToken,
         },
     },
-    tree::{AnyNodeId, Bogus, Id, Missing},
+    tree::{AnyNodeId, Bogus, Id, Missing, SepItem},
 };
 
 use crate::{
@@ -262,6 +262,16 @@ fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) 
                     r,
                 },
             ));
+        } else if p.cur.at_set(KindSet::new(&[TokenKind::Dot, TokenKind::QuestionDot]))
+            && p.cur.kind(1).is_some_and(|kind| NUMBER.contains(kind))
+        {
+            let dot = p.cur.eat_in::<baml_syntax::token::sets::TupleDot>().expect("tuple dot");
+            let slot = p.cur.eat_in::<LiteralExprToken>().expect("numeric slot");
+            let text = p.cur.text_of(slot.idx);
+            if !text.split('.').all(|part| !part.is_empty() && part.bytes().all(|c| c.is_ascii_digit()) && (part == "0" || !part.starts_with('0')) && part.parse::<u32>().is_ok()) {
+                p.error("tuple slots must be decimal slot numbers", p.cur.tokens().range(slot.idx));
+            }
+            lhs = AnyExpr::TupleField(p.alloc(mark, TupleFieldExpr { base: lhs, dot, slot }));
         } else if let Some(qdot) = p.cur.eat::<punct::QuestionDot>() {
             lhs = if let Some(l) = p.cur.eat::<punct::LParen>() {
                 let args = ArgList::parse(p, l);
@@ -543,11 +553,7 @@ fn primary(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> 
         if projection {
             return Ok(qualified_path_expr(p, l));
         }
-        let inner = operand(p, Restrictions::empty());
-        let r = p.expect::<punct::RParen>();
-        return Ok(AnyExpr::Paren(
-            p.alloc(Mark::of(l), ParenExpr { l, inner, r }),
-        ));
+        return Ok(paren_or_tuple(p, l));
     }
     if let Some(l) = p.cur.eat::<punct::LBracket>() {
         return Ok(AnyExpr::Array(ArrayLiteral::parse(p, l)));
@@ -606,7 +612,7 @@ impl Parse for PathExpr {
             };
             let continues =
                 p.cur.at(TokenKind::Dot) && p.cur.kind(1).is_some_and(|k| allowed.contains(k));
-            if !continues && segments.is_empty() {
+            if p.cur.kind(1).is_some_and(|kind| NUMBER.contains(kind)) || (!continues && segments.is_empty()) {
                 break;
             }
             let Some(dot) = p.cur.eat::<punct::Dot>() else {
@@ -1190,4 +1196,25 @@ pub(crate) fn with_clause(
         }
     });
     p.alloc(Mark::of(kw), WithClause { kw, items })
+}
+
+fn paren_or_tuple(p: &mut Parser<'_, '_>, l: Token!["("]) -> AnyExpr {
+    let first = operand(p, Restrictions::empty());
+    let comma = p.cur.eat::<punct::Comma>();
+    if let Some(sep) = comma {
+        let mut elements = Vec::new();
+        if let Ok(item) = first { elements.push(SepItem { item, sep: Some(sep) }); }
+        while !p.cur.at(TokenKind::RParen) && !p.cur.at_end() {
+            let Ok(item) = operand(p, Restrictions::empty()) else { break };
+            let sep = p.cur.eat::<punct::Comma>();
+            elements.push(SepItem { item, sep });
+            if sep.is_none() { break; }
+        }
+        let elements = p.out.alloc_list(elements);
+        let r = p.expect::<punct::RParen>();
+        AnyExpr::Tuple(p.alloc(Mark::of(l), TupleExpr { l, elements, r }))
+    } else {
+        let r = p.expect::<punct::RParen>();
+        AnyExpr::Paren(p.alloc(Mark::of(l), ParenExpr { l, inner: first, r }))
+    }
 }

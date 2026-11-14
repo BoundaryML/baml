@@ -32,6 +32,16 @@ public struct BamlError: Error {
         }
         return try T._bamlDecode(payload)
     }
+
+    /// Decode the thrown value as a node of `slot`, its declared type: the
+    /// way to read a thrown tuple, which has no `BamlDecodable` type
+    /// (`value(as: BamlSlots.tuple(BamlSlot<Int>.own, BamlSlot<String>.own))`).
+    public func value<T>(as slot: BamlSlot<T>) throws -> T {
+        guard let payload else {
+            throw BamlDecodeError.unsupported("thrown value has no payload")
+        }
+        return try slot._bamlDecode(payload)
+    }
 }
 
 extension BamlError {

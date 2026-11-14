@@ -186,10 +186,10 @@ interface        baml.ops.BitOr                   <builtin>/baml/ns_ops/bitwise.
 interface        baml.ops.BitXor                  <builtin>/baml/ns_ops/bitwise.baml:77
 interface        baml.ops.ShiftLeft               <builtin>/baml/ns_ops/bitwise.baml:101
 interface        baml.ops.ShiftRight              <builtin>/baml/ns_ops/bitwise.baml:125
-interface        baml.ops.Equals                  <builtin>/baml/ns_ops/comparison.baml:43
-interface        baml.ops.Compare                 <builtin>/baml/ns_ops/comparison.baml:85
-enum             baml.ops.Ordering                <builtin>/baml/ns_ops/comparison.baml:144
-function         baml.ops.equals_equals           <builtin>/baml/ns_ops/comparison.baml:179
+interface        baml.ops.Equals                  <builtin>/baml/ns_ops/comparison.baml:47
+interface        baml.ops.Compare                 <builtin>/baml/ns_ops/comparison.baml:89
+enum             baml.ops.Ordering                <builtin>/baml/ns_ops/comparison.baml:148
+function         baml.ops.equals_equals           <builtin>/baml/ns_ops/comparison.baml:183
 interface        baml.ops.Index                   <builtin>/baml/ns_ops/index.baml:32
 interface        baml.ops.Add                     <builtin>/baml/ns_ops/math.baml:47
 interface        baml.ops.Subtract                <builtin>/baml/ns_ops/math.baml:64

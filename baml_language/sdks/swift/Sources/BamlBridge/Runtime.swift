@@ -177,25 +177,25 @@ public final class BamlRuntime: @unchecked Sendable {
 
     /// Call `fqn` and decode its result as a node of `slot`, the declared
     /// return type: what generated code calls.
-    public func callSync<R: BamlDecodable>(
+    public func callSync<R>(
         _ fqn: String,
         args: [BamlArgument],
         typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init(),
         returns slot: BamlSlot<R>
     ) throws -> R {
-        try R._bamlDecode(callRawSync(fqn, args: args, typeArgs: typeArgs, baml: baml), as: slot)
+        try slot._bamlDecode(callRawSync(fqn, args: args, typeArgs: typeArgs, baml: baml))
     }
 
     /// The async form of [`callSync(_:args:typeArgs:baml:returns:)`].
-    public func call<R: BamlDecodable>(
+    public func call<R>(
         _ fqn: String,
         args: [BamlArgument],
         typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init(),
         returns slot: BamlSlot<R>
     ) async throws -> R {
-        try R._bamlDecode(await callRaw(fqn, args: args, typeArgs: typeArgs, baml: baml), as: slot)
+        try slot._bamlDecode(await callRaw(fqn, args: args, typeArgs: typeArgs, baml: baml))
     }
 
     public func callSync<R: BamlDecodable>(

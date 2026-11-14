@@ -1820,6 +1820,18 @@ class WireCodecTest {
         assertEquals("ai.stream.Stream.final", stream.methodFqn("final"));
     }
 
+    /** A stream's value type is its handle annotation's concrete type argument. */
+    @Test
+    void decode_stream_handle_reads_its_value_type() {
+        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ovHandle(
+                103L, ADT_TAGGED_HEAP_HANDLE, tyClass("ai.stream.Stream", tyPrimitive(PRIM_INT)))));
+        assertEquals(BamlType.INT, assertInstanceOf(BamlStream.class, decoded).valueType());
+        // No type argument: the stream's values decode wire-driven.
+        Object bare = ProtoReader.decodeOutboundResult(
+                okEnvelope(ovHandle(104L, ADT_TAGGED_HEAP_HANDLE, tyClass("ai.stream.Stream"))));
+        assertNull(assertInstanceOf(BamlStream.class, bare).valueType());
+    }
+
     /** A tagged stream handle without its type identity cannot be called safely. */
     @Test
     void decode_stream_handle_rejects_missing_class_fqn() {

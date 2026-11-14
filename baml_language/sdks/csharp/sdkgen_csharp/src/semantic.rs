@@ -943,6 +943,7 @@ impl RenderContext<'_> {
             Ty::Function { params, ret, .. } => {
                 function_type_source(params, ret, |item| self.type_source(item))
             }
+            Ty::Tuple(items) => tuple_source(items, |item| self.type_source(item)),
             _ => unreachable!("unsupported types are rejected before rendering"),
         }
     }
@@ -1026,6 +1027,7 @@ impl RenderContext<'_> {
             Ty::Function { params, ret, .. } => {
                 function_type_source(params, ret, |item| self.type_source_for(item, parameters))
             }
+            Ty::Tuple(items) => tuple_source(items, |item| self.type_source_for(item, parameters)),
             _ => self.type_source(ty),
         }
     }
@@ -1080,44 +1082,7 @@ impl RenderContext<'_> {
     }
 
     fn wire_type(&self, ty: &Ty) -> Ty {
-        match ty {
-            Ty::TypeAlias(name) => self.wire_type(self.alias_target(name)),
-            Ty::Class(name, arguments) => Ty::Class(
-                name.clone(),
-                arguments
-                    .iter()
-                    .map(|argument| self.wire_type(argument))
-                    .collect(),
-            ),
-            Ty::List(item) => Ty::List(Box::new(self.wire_type(item))),
-            Ty::Map { key, value } => Ty::Map {
-                key: Box::new(self.wire_type(key)),
-                value: Box::new(self.wire_type(value)),
-            },
-            Ty::Union(members) => normalize_ty(&Ty::Union(
-                members
-                    .iter()
-                    .map(|member| self.wire_type(member))
-                    .collect(),
-            )),
-            Ty::Function {
-                params,
-                ret,
-                throws,
-            } => Ty::Function {
-                params: params
-                    .iter()
-                    .map(|parameter| CallableParam {
-                        name: parameter.name.clone(),
-                        ty: self.wire_type(&parameter.ty),
-                        mode: parameter.mode,
-                    })
-                    .collect(),
-                ret: Box::new(self.wire_type(ret)),
-                throws: Box::new(self.wire_type(throws)),
-            },
-            _ => normalize_ty(ty),
-        }
+        wire_type_in(self.model, ty)
     }
 
     fn wire_metadata(&self, ty: &Ty) -> Vec<u8> {
@@ -1129,29 +1094,106 @@ impl RenderContext<'_> {
     }
 
     fn is_value_projection(&self, ty: &Ty) -> bool {
-        match ty {
-            Ty::TypeAlias(name) => self.is_value_projection(self.alias_target(name)),
-            Ty::Bool
-            | Ty::Int
-            | Ty::Bigint
-            | Ty::Float
-            | Ty::Uint8Array
-            | Ty::Enum(..)
-            | Ty::EnumVariant(..) => true,
-            Ty::Literal(Literal::String(_), ..) => false,
-            Ty::Literal(..) => true,
-            Ty::Union(members) => !members.iter().any(|member| matches!(member, Ty::Null)),
-            Ty::String
-            | Ty::Null
-            | Ty::Media(..)
-            | Ty::Class(..)
-            | Ty::List(..)
-            | Ty::Map { .. }
-            | Ty::Function { .. }
-            | Ty::Unknown
-            | Ty::Never => false,
-            _ => unreachable!("unsupported type reached projection classification"),
-        }
+        is_value_projection_in(self.model, ty)
+    }
+}
+
+/// The type the wire states for `ty`: non-recursive aliases resolved and
+/// unions normalized, recursively. Tuple slots keep their positions.
+fn wire_type_in(model: &CodegenModel, ty: &Ty) -> Ty {
+    match ty {
+        Ty::TypeAlias(name) => wire_type_in(model, model_alias_target(model, name)),
+        Ty::Class(name, arguments) => Ty::Class(
+            name.clone(),
+            arguments
+                .iter()
+                .map(|argument| wire_type_in(model, argument))
+                .collect(),
+        ),
+        Ty::List(item) => Ty::List(Box::new(wire_type_in(model, item))),
+        Ty::Map { key, value } => Ty::Map {
+            key: Box::new(wire_type_in(model, key)),
+            value: Box::new(wire_type_in(model, value)),
+        },
+        Ty::Union(members) => normalize_ty(&Ty::Union(
+            members
+                .iter()
+                .map(|member| wire_type_in(model, member))
+                .collect(),
+        )),
+        Ty::Tuple(items) => Ty::Tuple(items.iter().map(|item| wire_type_in(model, item)).collect()),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+        } => Ty::Function {
+            params: params
+                .iter()
+                .map(|parameter| CallableParam {
+                    name: parameter.name.clone(),
+                    ty: wire_type_in(model, &parameter.ty),
+                    mode: parameter.mode,
+                })
+                .collect(),
+            ret: Box::new(wire_type_in(model, ret)),
+            throws: Box::new(wire_type_in(model, throws)),
+        },
+        _ => normalize_ty(ty),
+    }
+}
+
+fn model_alias_target<'a>(model: &'a CodegenModel, name: &Name) -> &'a Ty {
+    let Some(Symbol::TypeAlias(alias)) = model.symbols.get(name) else {
+        panic!("every alias type has a declaration");
+    };
+    &alias.resolves_to
+}
+
+/// Whether `ty` projects to a C# value type, which nullability wraps in
+/// `System.Nullable<T>` rather than annotating.
+fn is_value_projection_in(model: &CodegenModel, ty: &Ty) -> bool {
+    match ty {
+        Ty::TypeAlias(name) => is_value_projection_in(model, model_alias_target(model, name)),
+        Ty::Bool
+        | Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::Uint8Array
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..) => true,
+        Ty::Literal(Literal::String(_), ..) => false,
+        Ty::Literal(..) => true,
+        Ty::Union(members) => !members.iter().any(|member| matches!(member, Ty::Null)),
+        // A tuple is a native `System.ValueTuple`.
+        Ty::Tuple(..) => true,
+        Ty::String
+        | Ty::Null
+        | Ty::Media(..)
+        | Ty::Class(..)
+        | Ty::List(..)
+        | Ty::Map { .. }
+        | Ty::Function { .. }
+        | Ty::Unknown
+        | Ty::Never => false,
+        _ => unreachable!("unsupported type reached projection classification"),
+    }
+}
+
+/// The most slots a native C# tuple holds without nesting a `TRest` tuple.
+/// A wider BAML tuple is an unsupported type.
+const NATIVE_TUPLE_MAX_ARITY: usize = 7;
+
+/// A tuple's C# type: a native tuple, `(long, string)`, or
+/// `System.ValueTuple<long>` for one slot. Each slot projects as its type
+/// does anywhere else, so slots whose BAML types erase in C# erase here too:
+/// `("a", int)` and `(string, int)` are both `(string, long)`, and the codec
+/// of the position, not the CLR type, states which tuple crosses.
+fn tuple_source(items: &[Ty], project: impl FnMut(&Ty) -> String) -> String {
+    let slots = items.iter().map(project).collect::<Vec<_>>();
+    if let [single] = slots.as_slice() {
+        format!("global::System.ValueTuple<{single}>")
+    } else {
+        format!("({})", slots.join(", "))
     }
 }
 
@@ -2027,6 +2069,23 @@ fn require_supported_type_inner(
             }
             _ => Err(unsupported(path, &format!("recursive type alias `{name}`"))),
         },
+        Ty::Tuple(items) => {
+            if items.is_empty() {
+                return Err(unsupported(path, "empty tuple type"));
+            }
+            if items.len() > NATIVE_TUPLE_MAX_ARITY {
+                return Err(unsupported(
+                    path,
+                    &format!(
+                        "tuple type `{ty}` with {} slots; a C# tuple holds at most {NATIVE_TUPLE_MAX_ARITY}",
+                        items.len()
+                    ),
+                ));
+            }
+            items
+                .iter()
+                .try_for_each(|item| require_supported_type(item, model, path))
+        }
         _ => Err(unsupported(path, &format!("type `{ty}`"))),
     }
 }
@@ -2099,7 +2158,7 @@ fn require_unambiguous_csharp_unions(
             require_unambiguous_csharp_unions(key, model, path)?;
             require_unambiguous_csharp_unions(value, model, path)
         }
-        Ty::Class(_, arguments) => arguments
+        Ty::Class(_, arguments) | Ty::Tuple(arguments) => arguments
             .iter()
             .try_for_each(|argument| require_unambiguous_csharp_unions(argument, model, path)),
         Ty::Function {
@@ -2163,6 +2222,14 @@ fn csharp_projection_key(ty: &Ty, model: &CodegenModel) -> String {
             members
                 .iter()
                 .map(|member| csharp_projection_key(member, model))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        Ty::Tuple(items) => format!(
+            "tuple<{}>",
+            items
+                .iter()
+                .map(|item| csharp_projection_key(item, model))
                 .collect::<Vec<_>>()
                 .join(",")
         ),
@@ -2303,6 +2370,7 @@ fn codec_type(ty: &Ty) -> Ty {
             value: Box::new(codec_type(value)),
         },
         Ty::Union(members) => normalize_ty(&Ty::Union(members.iter().map(codec_type).collect())),
+        Ty::Tuple(items) => Ty::Tuple(items.iter().map(codec_type).collect()),
         Ty::Function {
             params,
             ret,
@@ -2363,6 +2431,13 @@ fn collect_type_closure(
 ) -> Result<(), CSharpGenerationError> {
     require_supported_type(ty, model, "reachable type graph")?;
     if contains_type_var(ty) {
+        // A tuple over a type variable is built from its slots' tokens, so
+        // the slots without one are registered types.
+        if let Ty::Tuple(items) = ty {
+            for item in items {
+                collect_type_closure(item, model, types)?;
+            }
+        }
         return Ok(());
     }
     if !types.insert(codec_type(ty)) {
@@ -2423,6 +2498,11 @@ fn collect_type_closure(
         Ty::Map { key, value, .. } => {
             collect_type_closure(key, model, types)?;
             collect_type_closure(value, model, types)?;
+        }
+        Ty::Tuple(items) => {
+            for item in items {
+                collect_type_closure(item, model, types)?;
+            }
         }
         Ty::Union(members) => {
             for member in members {
@@ -2721,29 +2801,140 @@ fn render_generic_type_token(
     ty: &Ty,
     program: &str,
 ) -> String {
+    let type_var = |ty: &Ty| {
+        let Ty::TypeVar(name) = ty else {
+            unreachable!("only type variables are bound to locals")
+        };
+        let index = function
+            .generic_params
+            .iter()
+            .position(|candidate| candidate.name == name.name())
+            .unwrap_or_else(|| panic!("unbound generated type variable {name}"));
+        allocated(render.names, &function.locals.type_requests[index])
+            .source()
+            .to_string()
+    };
+    let position = |ty: &Ty| ty.to_string();
+    let registered = |ty: &Ty| format!("{program}.{}", render.type_field(ty));
+    render_type_token(
+        &TokenScope {
+            render,
+            parameters: &function.generic_params,
+            registry: format!("{program}.Registry"),
+            type_var: &type_var,
+            position: &position,
+            registered: &registered,
+        },
+        ty,
+        0,
+    )
+}
+
+/// Where a type token is emitted: the generic parameters in scope, the
+/// registry expression, and how a type variable, a resolved type's position
+/// and a registered (type-variable-free) type are spelled there.
+struct TokenScope<'s, 'a> {
+    render: &'s RenderContext<'a>,
+    parameters: &'s [GenericParamSpec<'a>],
+    registry: String,
+    type_var: &'s dyn Fn(&Ty) -> String,
+    position: &'s dyn Fn(&Ty) -> String,
+    registered: &'s dyn Fn(&Ty) -> String,
+}
+
+/// The `BamlGeneratedType<…>` token of `ty` in a generic scope. A type
+/// variable is its bound local and a type without one its registered token.
+/// A tuple over a type variable is built from its slots' tokens
+/// ([`render_slot_tuple_token`]); any other type over one resolves from its
+/// CLR type.
+fn render_type_token(scope: &TokenScope<'_, '_>, ty: &Ty, depth: usize) -> String {
     match ty {
-        Ty::TypeVar(name) => {
-            let parameter = function
-                .generic_params
-                .iter()
-                .find(|parameter| parameter.name == name.name())
-                .unwrap_or_else(|| panic!("unbound generated type variable {name}"));
-            let index = function
-                .generic_params
-                .iter()
-                .position(|candidate| candidate.name == parameter.name)
-                .expect("bound generic function parameter has a local");
-            allocated(render.names, &function.locals.type_requests[index])
-                .source()
-                .to_string()
+        Ty::TypeVar(..) => (scope.type_var)(ty),
+        Ty::Tuple(items) if contains_type_var(ty) => {
+            render_slot_tuple_token(scope, ty, items, depth)
         }
         _ if contains_type_var(ty) => format!(
-            "{program}.Registry.ResolveType<{}>({})",
-            render.type_source_for(ty, &function.generic_params),
-            csharp_string(&ty.to_string()),
+            "{}.ResolveType<{}>({})",
+            scope.registry,
+            scope.render.type_source_for(ty, scope.parameters),
+            csharp_string(&(scope.position)(ty)),
         ),
-        _ => format!("{program}.{}", render.type_field(ty)),
+        _ => (scope.registered)(ty),
     }
+}
+
+/// The token of a tuple over a type variable, stated as the tuple of its
+/// slots' tokens once the call binds them (`Registry.ResolveTupleType`). The
+/// slot tokens are bound once, as the arguments of a `System.Func` whose
+/// body resolves the tuple and converts between its C# value and one carrier
+/// per slot.
+fn render_slot_tuple_token(
+    scope: &TokenScope<'_, '_>,
+    ty: &Ty,
+    items: &[Ty],
+    depth: usize,
+) -> String {
+    let render = scope.render;
+    let registry = &scope.registry;
+    let value_type = "global::Baml.Generated.V1.BamlGeneratedValue";
+    let tuple_source = render.type_source_for(ty, scope.parameters);
+    let slot_sources = items
+        .iter()
+        .map(|item| render.type_source_for(item, scope.parameters))
+        .collect::<Vec<_>>();
+    let slot_tokens = items
+        .iter()
+        .map(|item| render_type_token(scope, item, depth + 1))
+        .collect::<Vec<_>>();
+    let slot = |index: usize| format!("bamlTupleSlot{depth}_{index}");
+    let context = format!("bamlTupleContext{depth}");
+    let value = format!("bamlTupleValue{depth}");
+    let carriers = format!("bamlTupleItems{depth}");
+    let mut slot_encodes = String::new();
+    for (index, source) in slot_sources.iter().enumerate() {
+        slot_encodes.push_str(&format!(
+            "                    {context}.Encode<{source}>({}, {value}.Item{}),\n",
+            slot(index),
+            index + 1
+        ));
+    }
+    let encode =
+        format!("new {value_type}[]\n                {{\n{slot_encodes}                }}");
+    let slots = slot_sources
+        .iter()
+        .enumerate()
+        .map(|(index, source)| {
+            format!(
+                "{context}.Decode<{source}>({}, {carriers}[{index}])",
+                slot(index)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",\n                ");
+    let decode = if items.len() == 1 {
+        format!("new {tuple_source}(\n                {slots})")
+    } else {
+        format!("(\n                {slots})")
+    };
+
+    let func_types = slot_sources
+        .iter()
+        .map(|source| format!("global::Baml.Generated.V1.BamlGeneratedType<{source}>"))
+        .chain(std::iter::once(format!(
+            "global::Baml.Generated.V1.BamlGeneratedType<{tuple_source}>"
+        )))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let slot_parameters = (0..items.len()).map(slot).collect::<Vec<_>>().join(", ");
+    let slot_arguments = (0..items.len())
+        .map(|index| format!("{registry}.TypeArgument({})", slot(index)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "new global::System.Func<{func_types}>(\n            ({slot_parameters}) => {registry}.ResolveTupleType<{tuple_source}>(\n                {position},\n                new global::Baml.Generated.V1.BamlGeneratedTypeArgument[] {{ {slot_arguments} }},\n                ({context}, {value}) => {encode},\n                ({context}, {carriers}) => {decode}))(\n            {})",
+        slot_tokens.join(",\n            "),
+        position = csharp_string(&(scope.position)(ty)),
+    )
 }
 
 /// The throws-type argument of a generated `HostCallable(...)` call. A throws
@@ -3097,6 +3288,12 @@ fn substitute_type_variables(ty: &Ty, parameters: &[BaseName], arguments: &[Ty])
                 .map(|member| substitute_type_variables(member, parameters, arguments))
                 .collect(),
         )),
+        Ty::Tuple(items) => Ty::Tuple(
+            items
+                .iter()
+                .map(|item| substitute_type_variables(item, parameters, arguments))
+                .collect(),
+        ),
         Ty::Function {
             params,
             ret,
@@ -3369,24 +3566,33 @@ fn render_method_type_token(
     ty: &Ty,
     program: &str,
 ) -> String {
-    match ty {
-        Ty::TypeVar(name) => {
-            let index = method
-                .type_params
-                .iter()
-                .rposition(|parameter| parameter.name == name.name())
-                .unwrap_or_else(|| panic!("unbound generated method type variable {name}"));
-            allocated(render.names, &method.locals.type_requests[index])
-                .source()
-                .to_string()
-        }
-        _ if contains_type_var(ty) => format!(
-            "{program}.Registry.ResolveType<{}>({})",
-            render.type_source_for(ty, &method.type_params),
-            csharp_string(&format!("{}.{}", method.method.name, ty)),
-        ),
-        _ => format!("{program}.{}", render.type_field(ty)),
-    }
+    let type_var = |ty: &Ty| {
+        let Ty::TypeVar(name) = ty else {
+            unreachable!("only type variables are bound to locals")
+        };
+        let index = method
+            .type_params
+            .iter()
+            .rposition(|parameter| parameter.name == name.name())
+            .unwrap_or_else(|| panic!("unbound generated method type variable {name}"));
+        allocated(render.names, &method.locals.type_requests[index])
+            .source()
+            .to_string()
+    };
+    let position = |ty: &Ty| format!("{}.{}", method.method.name, ty);
+    let registered = |ty: &Ty| format!("{program}.{}", render.type_field(ty));
+    render_type_token(
+        &TokenScope {
+            render,
+            parameters: &method.type_params,
+            registry: format!("{program}.Registry"),
+            type_var: &type_var,
+            position: &position,
+            registered: &registered,
+        },
+        ty,
+        0,
+    )
 }
 
 fn render_enum(render: &RenderContext<'_>, enumeration: &EnumSpec<'_>) -> String {
@@ -3728,6 +3934,7 @@ fn render_codec(render: &RenderContext<'_>, ty: &Ty, codec_name: &str) -> String
         Ty::List(item) => render_list_codec(render, item),
         Ty::Map { key, value, .. } => render_map_codec(render, key, value),
         Ty::Union(members) => render_union_codec(render, ty, members),
+        Ty::Tuple(items) => render_tuple_codec(render, ty, items),
         Ty::Function {
             params,
             ret,
@@ -4218,25 +4425,34 @@ fn render_generic_class_type_token(
     class: &ClassSpec<'_>,
     ty: &Ty,
 ) -> String {
-    match ty {
-        Ty::TypeVar(name) => {
-            let parameter = class
-                .generic_params
-                .iter()
-                .find(|parameter| parameter.name == name.name())
-                .unwrap_or_else(|| panic!("unbound generated class type variable {name}"));
-            format!(
-                "type_{}",
-                allocated(render.names, &parameter.request).source()
-            )
-        }
-        _ if contains_type_var(ty) => format!(
-            "registry.ResolveType<{}>({})",
-            render.type_source_for(ty, &class.generic_params),
-            csharp_string(&format!("{}.{}", class.name, ty)),
-        ),
-        _ => render.type_field(ty).to_string(),
-    }
+    let type_var = |ty: &Ty| {
+        let Ty::TypeVar(name) = ty else {
+            unreachable!("only type variables are bound to locals")
+        };
+        let parameter = class
+            .generic_params
+            .iter()
+            .find(|parameter| parameter.name == name.name())
+            .unwrap_or_else(|| panic!("unbound generated class type variable {name}"));
+        format!(
+            "type_{}",
+            allocated(render.names, &parameter.request).source()
+        )
+    };
+    let position = |ty: &Ty| format!("{}.{}", class.name, ty);
+    let registered = |ty: &Ty| render.type_field(ty).to_string();
+    render_type_token(
+        &TokenScope {
+            render,
+            parameters: &class.generic_params,
+            registry: "registry".to_string(),
+            type_var: &type_var,
+            position: &position,
+            registered: &registered,
+        },
+        ty,
+        0,
+    )
 }
 
 fn render_literal_codec(literal: &Literal) -> (String, String) {
@@ -4524,6 +4740,50 @@ fn render_union_codec(render: &RenderContext<'_>, ty: &Ty, members: &[Ty]) -> (S
     (encode, decode)
 }
 
+/// A tuple's codec. Both directions go through the tuple carrier: encoding
+/// states the tuple's own type (inbound tuples cross as a list stating a
+/// tuple type), and decoding checks the arity before each slot decodes
+/// through its own slot codec.
+fn render_tuple_codec(render: &RenderContext<'_>, ty: &Ty, items: &[Ty]) -> (String, String) {
+    let source = render.type_source(ty);
+    let metadata = byte_array_source(&render.wire_metadata(ty));
+    let mut encode = String::from(
+        "            return context.Tuple(\n                new global::Baml.Generated.V1.BamlGeneratedValue[]\n                {\n",
+    );
+    for (index, item) in items.iter().enumerate() {
+        encode.push_str(&format!(
+            "                    context.Encode({}, value.Item{}),\n",
+            render.type_field(item),
+            index + 1,
+        ));
+    }
+    encode.push_str(&format!(
+        "                }},\n                {metadata});\n"
+    ));
+
+    let slots = items
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            format!(
+                "context.Decode({}, items[{index}])",
+                render.type_field(item)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",\n                ");
+    let construct = if items.len() == 1 {
+        format!("new {source}(\n                {slots})")
+    } else {
+        format!("(\n                {slots})")
+    };
+    let decode = format!(
+        "            global::System.Collections.Generic.IReadOnlyList<global::Baml.Generated.V1.BamlGeneratedValue> items =\n                context.ReadTuple(value, {metadata}, {});\n            return {construct};\n",
+        items.len(),
+    );
+    (encode, decode)
+}
+
 fn render_map_key_encode(render: &RenderContext<'_>, ty: &Ty, expression: &str) -> String {
     match ty {
         Ty::String => expression.to_string(),
@@ -4737,6 +4997,13 @@ fn encode_type_metadata(ty: &Ty) -> Vec<u8> {
             push_message(&mut message, 22, &encoded);
         }
         Ty::Never => push_message(&mut message, 24, &[]),
+        Ty::Tuple(items) => {
+            let mut tuple = Vec::new();
+            for item in items {
+                push_message(&mut tuple, 1, &encode_type_metadata(item));
+            }
+            push_message(&mut message, 25, &tuple);
+        }
         Ty::TypeAlias(name) => {
             let mut encoded = Vec::new();
             push_string(&mut encoded, 1, &name.to_string());
@@ -6609,6 +6876,351 @@ mod tests {
             rust_type.to_string(),
             "C# generation does not yet support type `$rust_type` at test.location",
         );
+    }
+
+    /// The generated sources of one free function `Echo(value: ty) -> ty`.
+    fn echo_function_source(ty: Ty) -> String {
+        echo_function_generation(vec![], ty.clone(), ty).expect("tuples should generate")
+    }
+
+    /// Generate one free function
+    /// `Echo<generic_params…>(value: argument) -> return_type`.
+    fn echo_function_generation(
+        generic_params: Vec<BaseName>,
+        argument: Ty,
+        return_type: Ty,
+    ) -> Result<String, CSharpGenerationError> {
+        let function_name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("tuple_contract")],
+            BaseName::new("Echo"),
+        );
+        let function = baml_sdkgen_types::Function {
+            name: BaseName::new("Echo"),
+            generic_params,
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                injected: false,
+                name: BaseName::new("value"),
+                docstring: None,
+                ty: argument.canonicalize(),
+                default: None,
+            }],
+            return_type: return_type.canonicalize(),
+            throws: None,
+            watchers: vec![],
+            origin: baml_sdkgen_types::Origin {
+                source_file_path: "tuple_contract.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let mut symbols = HashMap::new();
+        symbols.insert(function_name.clone(), Symbol::Function(function));
+        let mut callables = HashMap::new();
+        callables.insert(
+            CallableKey::Free(function_name),
+            CallableIdentity {
+                family_name: BaseName::new("Echo"),
+                wire_name: BaseName::new("Echo"),
+                variant: CallableVariant::Execute,
+                receiver: None,
+            },
+        );
+        let tree = generate_program(
+            &CodegenModel { symbols, callables },
+            &[1, 2, 3],
+            "0.0.0-test",
+            "0.0.0-test",
+            "tuple-contract",
+        )?;
+        Ok(tree
+            .files
+            .iter()
+            .map(|file| String::from_utf8_lossy(&file.contents))
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
+
+    fn string_literal(value: &str) -> Ty {
+        Ty::Literal(
+            Literal::String(value.to_string()),
+            baml_sdkgen_types::Freshness::Regular,
+        )
+    }
+
+    #[test]
+    fn faithful_tuples_project_to_native_value_tuples() {
+        let source = echo_function_source(Ty::Tuple(Box::new([Ty::Int, Ty::String])));
+        assert!(
+            source.contains("public static (long, string) Echo(\n        (long, string) @value,"),
+            "{source}"
+        );
+        assert!(source.contains("context.Encode(") && source.contains("value.Item2)"));
+        assert!(source.contains("context.Tuple("), "{source}");
+        assert!(
+            source.contains("context.ReadTuple(value, new byte[] { 0xca, 0x01,"),
+            "tuple metadata is BamlTy.tuple (field 25): {source}"
+        );
+        assert!(!source.contains("public sealed record Tuple"), "{source}");
+    }
+
+    #[test]
+    fn singleton_tuples_keep_their_wrapper() {
+        let source = echo_function_source(Ty::Tuple(Box::new([Ty::Int])));
+        assert!(
+            source.contains("global::System.ValueTuple<long> Echo("),
+            "{source}"
+        );
+        assert!(source.contains("new global::System.ValueTuple<long>("));
+    }
+
+    #[test]
+    fn tuples_wider_than_a_native_tuple_are_unsupported() {
+        let seven = Ty::Tuple(vec![Ty::Int; 7].into());
+        let source = echo_function_source(seven);
+        assert!(
+            source.contains("(long, long, long, long, long, long, long) Echo("),
+            "{source}"
+        );
+        let wide = Ty::Tuple(vec![Ty::Int; 8].into());
+        for ty in [wide.clone(), Ty::List(Box::new(wide))] {
+            let error = echo_function_generation(vec![], ty.clone(), ty).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("with 8 slots; a C# tuple holds at most 7"),
+                "{error}"
+            );
+        }
+        // A generic tuple too: it binds a native tuple over its slots.
+        let parameter_t = BaseName::new("T");
+        let wide = Ty::Tuple(
+            std::iter::once(Ty::TypeVar(ParamTy::new(0, parameter_t.clone())))
+                .chain(std::iter::repeat_n(Ty::Int, 7))
+                .collect(),
+        );
+        let error = echo_function_generation(vec![parameter_t], wide.clone(), wide).unwrap_err();
+        assert!(
+            error.to_string().contains("a C# tuple holds at most 7"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn erasing_slots_project_as_they_do_anywhere_else() {
+        // A literal slot erases to its base type, a nullable reference to its
+        // reference type: each is still a native tuple.
+        let literal = Ty::Tuple(Box::new([string_literal("draft"), Ty::Int]));
+        let source = echo_function_source(literal);
+        assert!(source.contains("(string, long) Echo("), "{source}");
+        assert!(!source.contains("record Tuple"), "{source}");
+        // The codec states the declared tuple, so the literal slot is checked.
+        assert!(source.contains(r#"\"draft\""#), "{source}");
+        let nullable = Ty::Tuple(Box::new([
+            Ty::Union(Box::new([Ty::String, Ty::Null])),
+            Ty::Int,
+        ]));
+        let source = echo_function_source(nullable);
+        assert!(source.contains("(string?, long) Echo("), "{source}");
+        let source = echo_function_source(Ty::Tuple(Box::new([
+            Ty::Union(Box::new([Ty::Int, Ty::Null])),
+            Ty::String,
+        ])));
+        assert!(source.contains("(long?, string) Echo("), "{source}");
+        // Two tuples erasing to one C# type keep one codec each.
+        let source = echo_function_generation(
+            vec![],
+            Ty::Tuple(Box::new([string_literal("a"), Ty::Int])),
+            Ty::Tuple(Box::new([Ty::String, Ty::Int])),
+        )
+        .expect("erasing tuples generate");
+        assert!(
+            source.contains("public static (string, long) Echo(\n        (string, long) @value,"),
+            "{source}"
+        );
+    }
+
+    #[test]
+    fn product_of_unions_and_union_of_products_stay_distinct() {
+        let product = Ty::Tuple(Box::new([
+            Ty::Union(Box::new([Ty::Int, Ty::String])),
+            Ty::Bool,
+        ]));
+        let source = echo_function_source(product);
+        assert!(
+            source.contains("(global::Baml.BamlUnion<long, string>, bool) Echo("),
+            "{source}"
+        );
+        let sum = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([Ty::Int, Ty::Bool])),
+            Ty::Tuple(Box::new([Ty::String, Ty::Bool])),
+        ]));
+        let source = echo_function_source(sum);
+        assert!(
+            source.contains("global::Baml.BamlUnion<(long, bool), (string, bool)> Echo("),
+            "{source}"
+        );
+    }
+
+    #[test]
+    fn nested_tuples_keep_slot_order_and_wrappers() {
+        let inner = Ty::Tuple(Box::new([Ty::Int]));
+        let nested = Ty::Tuple(Box::new([inner, Ty::String, Ty::String]));
+        let source = echo_function_source(nested);
+        assert!(
+            source.contains("(global::System.ValueTuple<long>, string, string) Echo("),
+            "{source}"
+        );
+        let erasing_inner = Ty::Tuple(Box::new([string_literal("a"), Ty::Int]));
+        let nested = Ty::Tuple(Box::new([erasing_inner, Ty::Bool]));
+        let source = echo_function_source(nested);
+        assert!(source.contains("((string, long), bool) Echo("), "{source}");
+    }
+
+    #[test]
+    fn generic_tuples_with_erasing_slots_stay_native() {
+        // `(T, "a")` is the native `(T, string)`, built from its slots' tokens
+        // once the call binds `T`: the literal slot's token is its registered
+        // type, so the tuple still crosses as `(T, "a")`.
+        let parameter_t = BaseName::new("T");
+        let type_t = Ty::TypeVar(ParamTy::new(0, parameter_t.clone()));
+        let tuple = Ty::Tuple(Box::new([type_t.clone(), string_literal("a")]));
+        let source = echo_function_generation(vec![parameter_t.clone()], tuple.clone(), tuple)
+            .expect("a generic tuple with an erasing slot is native");
+        assert!(
+            source.contains("public static (T, string) Echo<T>("),
+            "{source}"
+        );
+        assert!(
+            source.contains(".ResolveTupleType<(T, string)>("),
+            "{source}"
+        );
+        assert!(source.contains(r#""(T, \"a\")""#), "{source}");
+        assert!(
+            source.contains(".Encode<string>(bamlTupleSlot0_1, bamlTupleValue0.Item2)"),
+            "{source}"
+        );
+        // Nullable and union slots project as they do anywhere else.
+        let tuple = Ty::Tuple(Box::new([
+            type_t.clone(),
+            Ty::Union(Box::new([Ty::String, Ty::Null])),
+            Ty::Union(Box::new([Ty::Int, Ty::String])),
+        ]));
+        let source = echo_function_generation(vec![parameter_t.clone()], tuple, type_t.clone())
+            .expect("a generic tuple with nullable and union slots is native");
+        assert!(
+            source.contains("(T, string?, global::Baml.BamlUnion<long, string>) @value"),
+            "{source}"
+        );
+        // A tuple nested in a generic tuple is native in either direction.
+        let inner = Ty::Tuple(Box::new([type_t.clone(), string_literal("a")]));
+        let outer = Ty::Tuple(Box::new([inner, Ty::Int]));
+        let source = echo_function_generation(vec![parameter_t], outer, type_t)
+            .expect("generic tuples nest");
+        assert!(source.contains("((T, string), long) @value"), "{source}");
+        assert!(source.contains("bamlTupleSlot1_0"), "{source}");
+    }
+
+    #[test]
+    fn generic_containers_of_erasing_tuples_follow_the_container_rules() {
+        // A list over a type variable resolves from its CLR type, as it does
+        // for any other element whose slots erase.
+        let model = CodegenModel {
+            symbols: HashMap::new(),
+            callables: HashMap::new(),
+        };
+        let tuple = Ty::Tuple(Box::new([
+            Ty::TypeVar(ParamTy::new(0, BaseName::new("T"))),
+            string_literal("a"),
+        ]));
+        require_supported_type(&Ty::List(Box::new(tuple)), &model, "test.location")
+            .expect("a list of a generic tuple is supported");
+    }
+
+    #[test]
+    fn generic_class_properties_hold_native_tuples_with_erasing_slots() {
+        // The generic class's property and a closed instantiation's codec
+        // both spell the tuple natively, so they agree.
+        let parameter_t = BaseName::new("T");
+        let class_name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("tuple_contract")],
+            BaseName::new("Holder"),
+        );
+        let class = Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
+            name: class_name.clone(),
+            generic_params: vec![parameter_t.clone()],
+            docstring: None,
+            properties: vec![ClassProperty {
+                name: BaseName::new("t"),
+                docstring: None,
+                ty: Ty::Tuple(Box::new([
+                    Ty::TypeVar(ParamTy::new(0, parameter_t)),
+                    string_literal("a"),
+                ])),
+            }],
+            static_methods: vec![],
+            instance_methods: vec![],
+            origin: baml_sdkgen_types::Origin {
+                source_file_path: "tuple_contract.baml".to_string(),
+                span_start: 0,
+            },
+        });
+        let holder = Ty::Class(class_name.clone(), Box::new([Ty::Int]));
+        let function_name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("tuple_contract")],
+            BaseName::new("Echo"),
+        );
+        let function = baml_sdkgen_types::Function {
+            name: BaseName::new("Echo"),
+            generic_params: vec![],
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                injected: false,
+                name: BaseName::new("value"),
+                docstring: None,
+                ty: holder.clone(),
+                default: None,
+            }],
+            return_type: holder,
+            throws: None,
+            watchers: vec![],
+            origin: baml_sdkgen_types::Origin {
+                source_file_path: "tuple_contract.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let mut symbols = HashMap::new();
+        symbols.insert(class_name, class);
+        symbols.insert(function_name.clone(), Symbol::Function(function));
+        let mut callables = HashMap::new();
+        callables.insert(
+            CallableKey::Free(function_name),
+            CallableIdentity {
+                family_name: BaseName::new("Echo"),
+                wire_name: BaseName::new("Echo"),
+                variant: CallableVariant::Execute,
+                receiver: None,
+            },
+        );
+        let tree = generate_program(
+            &CodegenModel { symbols, callables },
+            &[1, 2, 3],
+            "0.0.0-test",
+            "0.0.0-test",
+            "tuple-contract",
+        )
+        .expect("a generic class property holds a native tuple");
+        let source = tree
+            .files
+            .iter()
+            .map(|file| String::from_utf8_lossy(&file.contents))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(source.contains("(T, string) T"), "{source}");
+        assert!(source.contains("(long, string)"), "{source}");
     }
 
     #[test]

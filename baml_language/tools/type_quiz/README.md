@@ -60,7 +60,7 @@ bracketed program is the one that compiles four times in five.
 An equivalence or an unrelated pair reads the same in both directions and so
 has no foil, and neither does anything at the coherence site, where the
 reverse draw is the same two blocks the other way up. Twenty-two of the
-bank's forty served items pair, and every one of the forty answers both
+bank's forty-one served items pair, and every one of the forty-one answers both
 ways across its seeds, which the next section is about.
 
 ## What a case's surface may not say
@@ -93,7 +93,7 @@ the other, on a coin. Two separate items would each answer one way, and
 nothing that re-weights items could then be trusted to leave the kinds of
 question balanced — selection re-weights them on every step, for good
 reasons of its own. As one item, the balance is the item's, and every one
-of the forty the bank serves answers both ways. The invariant wrappers are
+of the forty-one the bank serves answers both ways. The invariant wrappers are
 shapes too: `Box<S>` against `Box<T>` over a strict pair, which is always
 rejected, beside the same over an equivalent pair, which always compiles.
 
@@ -185,8 +185,8 @@ it has already been served, so a rule may come round as often as the estimate
 wants it while the same template does not. Both are measured in the suite: a
 perfect learner's questions do not get shallower over a sitting, no item
 comes round more than six times in a hundred-odd questions, and certifying
-one costs 81 to 133 questions — with two sittings in twelve not certified
-inside the budget at all, for the reason below.
+one costs 76 to 132 questions — with three sittings in twelve not certified
+inside the budget at all, for the reasons below.
 
 Selection cannot see which way a draw's coins fell. Two coins decide the
 answer — which way a pair flows, and which fact of a shape a draw is — and
@@ -209,8 +209,8 @@ holding exactly the rules the tracer reads off its case.
 
 That costs questions, and it is why the default budget is 140. An
 equivalence's rule is evidenced only on the half of its item's draws that
-are the equivalence, so a learner who answers everything right needs 81 to
-133 questions to be certified where they had needed 60 to 68 — the price of
+are the equivalence, so a learner who answers everything right needs 76 to
+132 questions to be certified where they had needed 60 to 68 — the price of
 the kind of question saying nothing about its answer, over the questions a
 learner is actually asked as well as over the bank.
 
@@ -219,8 +219,15 @@ equivalence through unchanged, so a case putting an equivalence in a `Box`,
 an array or a map turns on the equivalence and not on the wrap: no reading
 of the wrap would answer it differently. The wrap's rule is therefore
 evidenced only where the wrap decides something — over a strict pair — and
-two sittings in twelve now run out of budget rather than one. The evidence
+two sittings in twelve ran out of budget rather than one. The evidence
 those cases used to give was never earned.
+
+The unguarded cycle costs the same way again. `type B = B;` is a shape
+beside the same cycle through a list, `type B = B | B[];`, which the spec
+accepts, and each turns on a rule of its own — that a fully unguarded cycle
+is rejected, and that a cycle group with a list or map edge is legal — so
+each rule is evidenced by half the item's draws, and three sittings in
+twelve now run out of budget.
 
 ## Interestingness
 

@@ -106,6 +106,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     ("llm_functions", "replay_harness.rs", Gate::Now),
     ("llm_functions", "test_main.rs", Gate::Now),
     ("llm_functions", "test_streaming_e2e.rs", Gate::Now),
+    ("llm_functions", "test_tuple_streams.rs", Gate::Now),
     ("type_shapes", "test_main.rs", Gate::Now),
     ("type_shapes", "test_complex_models.rs", Gate::Now),
     ("type_shapes", "test_generic.rs", Gate::Now),
@@ -161,6 +162,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         "roundtrip_tests/test_symbol_collisions.rs",
         Gate::Now,
     ),
+    ("type_shapes", "roundtrip_tests/test_tuples.rs", Gate::Now),
     ("type_shapes", "roundtrip_tests/test_unions.rs", Gate::Now),
     ("type_shapes", "roundtrip_tests/test_void.rs", Gate::Now),
 ];

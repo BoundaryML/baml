@@ -322,6 +322,22 @@ inline void restate_shape(pb::InboundValue& out,
           v.list_value().item_type();
       return;
     }
+    case pb::BamlOutboundValue::kTupleValue: {
+      // A tuple travels inbound as a list stating a tuple type: the one it
+      // carries, so it keeps its slot types (never ones read back off its
+      // elements).
+      const encode_level level;
+      const pb::BamlValueTuple& tuple = v.tuple_value();
+      if (!tuple.has_tuple_type() || !tuple.tuple_type().has_tuple() ||
+          tuple.tuple_type().tuple().items_size() != tuple.items_size())
+        throw bridge_error("a received tuple carries no tuple type to state");
+      require_statable(tuple.tuple_type());
+      pb::InboundListValue* list = out.mutable_list_value();
+      for (const pb::BamlOutboundValue& item : tuple.items())
+        restate_shape(*list->add_values(), item);
+      *out.mutable_value_type() = tuple.tuple_type();
+      return;
+    }
     case pb::BamlOutboundValue::kMapValue: {
       const encode_level level;
       if (!v.map_value().has_key_type() || !v.map_value().has_value_type())

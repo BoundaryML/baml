@@ -111,6 +111,8 @@ func bamlTypeChildren(value *cffi.BamlTy) []*cffi.BamlTy {
 		return []*cffi.BamlTy{item.Optional.GetInner()}
 	case *cffi.BamlTy_Union:
 		return item.Union.GetOptions()
+	case *cffi.BamlTy_Tuple:
+		return item.Tuple.GetItems()
 	case *cffi.BamlTy_Function:
 		children := make([]*cffi.BamlTy, 0, len(item.Function.GetParams())+2)
 		for _, param := range item.Function.GetParams() {

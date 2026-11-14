@@ -178,6 +178,13 @@ pub enum SnapshotObject {
         items: Range<SnapshotValue>,
         original_len: usize,
     },
+    /// A tuple: its carried slot types and its elements, both in position
+    /// order. The slot types come from the tuple, never from its elements.
+    Tuple {
+        element_types: Range<OwnedType>,
+        items: Range<SnapshotValue>,
+        original_len: usize,
+    },
     Map {
         key_type: TypeId,
         value_type: TypeId,
@@ -218,6 +225,11 @@ impl SnapshotObject {
         match self {
             Self::Uint8ArrayTruncated { .. } | Self::Truncated(_) => true,
             Self::List {
+                items,
+                original_len,
+                ..
+            }
+            | Self::Tuple {
                 items,
                 original_len,
                 ..

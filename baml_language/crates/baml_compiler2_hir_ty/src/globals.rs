@@ -85,6 +85,25 @@ pub fn global_value_type(
     Some(root_ty.clone().widen_fresh())
 }
 
+/// The value of an unannotated global whose initializer is an integer literal
+/// (or a fold of one: `const LAST = 2 - 1;`). A global is never reassigned, so
+/// its value is statically known, and a tuple index may name it (`t[LAST]`)
+/// even though readers see the widened `int`.
+pub fn global_int_literal(db: &dyn baml_compiler2_hir::Db, binding: LetLoc<'_>) -> Option<i64> {
+    if crate::lower::let_declared_type(db, binding).is_some() {
+        return None;
+    }
+    let body = baml_compiler2_hir::body::let_body(db, binding);
+    let baml_compiler2_hir::body::LetBody::Expr(body) = body.as_ref() else {
+        return None;
+    };
+    let inference = crate::infer::infer_body(db, BodyOwnerId::Let(binding));
+    match inference.type_of_expr.get(&body.root_expr?)? {
+        baml_type::Ty::Literal(baml_type::Literal::Int(value), _) => Some(*value),
+        _ => None,
+    }
+}
+
 /// What one body refers to that can matter to initialization order.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct InitRefs<'db> {

@@ -22,6 +22,48 @@ function Containers() -> void {
     baml.io.println(`${xs[0]}:${xs.length()}:${m["a"]}:${m["b"]}`);
 }
 
+function TupleArity(value: (int,) | (int, string)) -> int {
+    match (value) {
+        (let a,) => a,
+        (let a, let b) => a + b.length(),
+    }
+}
+
+function Tuples() -> void {
+    let pair = (1, "two");
+    let nested = (pair, [3, 4]);
+    let (let n, let s) = pair;
+    nested[1].push(5);
+    baml.io.println(
+        `${pair[0]}:${pair[1]}:${nested[0][1]}:${nested[1].length()}:${n}:${s}:${pair == (1, "two")}:${TupleArity((7,))}:${TupleArity((1, "abc"))}`,
+    );
+}
+
+// Optional-receiver indexing, a common-prefix read through a union of tuples,
+// and a pattern projection (a nested destructure read at constant indices).
+function TupleFirst(value: (int, string)?) -> int? {
+    value?.[0]
+}
+
+function TupleHead(value: (int, bool) | (string, bool, int)) -> string {
+    let head = value[0];
+    `${head}:${value[1]}`
+}
+
+function TupleProject(value: ((int, string), bool)) -> string {
+    match (value) {
+        ((let n, _), true) => `yes:${n}`,
+        ((_, let s), false) => `no:${s}`,
+    }
+}
+
+function TupleAccess() -> void {
+    let whole: (let a, (let b, let c)) = (1, ("two", 3));
+    baml.io.println(
+        `${TupleFirst((4, "x")) ?? -1}:${TupleFirst(null) ?? -1}:${TupleHead((5, true))}:${TupleHead(("six", false, 7))}:${TupleProject(((8, "y"), true))}:${TupleProject(((9, "z"), false))}:${a}:${b}:${c}:${whole[1][0]}`,
+    );
+}
+
 enum Color {
     Red,
     Blue,

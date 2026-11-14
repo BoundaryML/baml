@@ -122,3 +122,50 @@ test "parse throws for a type it cannot model" {
         "ParseError,ParseError,ParseError",
     )
 }
+
+// Among perfect matches, SAP picks the more specific union member whatever the
+// union's order: a literal beats its base type, element by element and field
+// by field. Without a clear winner the leftmost member wins.
+
+class AnyX {
+    x: int,
+}
+
+class OneX {
+    x: 1,
+}
+
+class MaybeX {
+    x: int?,
+}
+
+function is_one_list(value: unknown) -> bool {
+    match (value) {
+        let _list: 1[] => true,
+        _ => false,
+    }
+}
+
+function x_class(value: unknown) -> string {
+    match (value) {
+        let _c: OneX => "OneX",
+        let _c: AnyX => "AnyX",
+        let _c: MaybeX => "MaybeX",
+        _ => "other",
+    }
+}
+
+test "a literal list member beats an int list member in either order" {
+    assert.is_true(is_one_list(baml.sap.parse<int[] | 1[]>(`[1, 1]`)));
+    assert.is_true(is_one_list(baml.sap.parse<1[] | int[]>(`[1, 1]`)))
+}
+
+test "a literal class field beats an int field in either order" {
+    assert.equal(x_class(baml.sap.parse<AnyX | OneX>(`{"x": 1}`)), "OneX");
+    assert.equal(x_class(baml.sap.parse<OneX | AnyX>(`{"x": 1}`)), "OneX")
+}
+
+test "nullability is not ranked, so the leftmost member wins" {
+    assert.equal(x_class(baml.sap.parse<AnyX | MaybeX>(`{"x": 1}`)), "AnyX");
+    assert.equal(x_class(baml.sap.parse<MaybeX | AnyX>(`{"x": 1}`)), "MaybeX")
+}

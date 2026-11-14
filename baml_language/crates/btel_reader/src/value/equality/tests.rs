@@ -493,3 +493,34 @@ fn redacted_values_compare_as_unknown_unless_a_difference_decides() {
         Ok(Some(false))
     );
 }
+
+#[test]
+fn a_tuple_equals_only_a_tuple_of_equal_elements() {
+    use DecodedValue as V;
+    let tuple = |items: Vec<DecodedValue>| DecodedObject::Tuple {
+        element_types: items.iter().map(|_| ty()).collect(),
+        original_len: items.len() as u64,
+        items,
+    };
+    let a = snapshot(
+        V::Object(NodeId(0)),
+        vec![tuple(vec![V::Int(1), V::Int(2)])],
+    );
+    let mut b = a.clone();
+    b.id = CasId::from_bytes([1; 16]);
+    assert_eq!(eq(&a, &b), Ok(Some(true)));
+    // Carried slot types do not take part: `(int,)` and `(int?,)` holding
+    // the same elements are equal, as lists of different element types are.
+    let DecodedObject::Tuple { element_types, .. } = &mut b.objects[0] else {
+        unreachable!()
+    };
+    for ty in element_types {
+        ty.encoded = Box::new([0xff]);
+    }
+    assert_eq!(eq(&a, &b), Ok(Some(true)));
+    b.objects[0] = tuple(vec![V::Int(1), V::Int(3)]);
+    assert_eq!(eq(&a, &b), Ok(Some(false)));
+    // The same elements in a list are a different value.
+    b.objects[0] = list(vec![V::Int(1), V::Int(2)]);
+    assert_eq!(eq(&a, &b), Ok(Some(false)));
+}

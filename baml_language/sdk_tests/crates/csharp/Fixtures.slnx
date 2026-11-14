@@ -22,6 +22,7 @@
   <Project Path="stdlib_resources/StdlibResources.csproj" />
   <Project Path="stdlib_structurals/StdlibStructurals.csproj" />
   <Project Path="streaming/Streaming.csproj" />
+  <Project Path="tuples/Tuples.csproj" />
   <Project Path="type_roundtrips/TypeRoundtrips.csproj" />
   <Project Path="../../../sdks/csharp/bridge_csharp/tools/Baml.UnionGenerator/Baml.UnionGenerator.csproj" />
 </Solution>

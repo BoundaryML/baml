@@ -22,6 +22,10 @@
 //!     range — so do not use it to order text for display.
 //!   - `uint8array` compares by content and only at equal lengths; it has no
 //!     ordering.
+//!   - a tuple implements `Compare` automatically when every slot type does,
+//!     at any arity: corresponding slots compare left to right through each
+//!     slot's own `cmp`, and the first unequal pair decides. `(int, string)`
+//!     orders; `(int, uint8array)` does not.
 
 /// Equality that is an *equivalence relation*: reflexive (`x.eq(x)` is always
 /// true), symmetric, and transitive. There is no partial counterpart, so an

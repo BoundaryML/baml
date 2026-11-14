@@ -36,6 +36,10 @@ enum Mock {
     Str(&'static str),
     Bytes(Vec<u8>),
     List(Vec<Mock>),
+    /// A tuple, as a language with tuples of its own has one.
+    Tuple(Vec<Mock>),
+    /// A tuple that knows its slot types: a registered tuple type's value.
+    Carried(Vec<StatedTy>, Vec<Mock>),
     Map(Vec<(Mock, Mock)>),
     Instance {
         class: &'static str,
@@ -87,6 +91,14 @@ impl HostValue for Mock {
             Mock::Str(_) => HostShape::Scalar(Scalar::String),
             Mock::Bytes(_) => HostShape::Scalar(Scalar::Bytes),
             Mock::List(items) => HostShape::List(Box::new(items.iter().cloned().map(Ok))),
+            Mock::Tuple(items) => HostShape::Tuple {
+                slots: None,
+                items: Box::new(items.iter().cloned().map(Ok)),
+            },
+            Mock::Carried(slots, items) => HostShape::Tuple {
+                slots: Some(slots.clone()),
+                items: Box::new(items.iter().cloned().map(Ok)),
+            },
             Mock::Map(entries) => HostShape::Map(Box::new(entries.iter().cloned().map(Ok))),
             Mock::Instance {
                 class,
@@ -133,6 +145,70 @@ impl HostValue for Mock {
     }
 }
 
+/// The same mock read as a JavaScript value, through the bridges' shared
+/// [`js::JsView`]: every number is a double, and every sequence is an array,
+/// one that carries slot types only when it is [`Mock::Carried`].
+#[derive(Debug, Clone)]
+struct JsMock(Mock);
+
+impl js::JsView for JsMock {
+    type Error = String;
+
+    fn kind(&self) -> Result<js::JsKind, String> {
+        Ok(match &self.0 {
+            Mock::Null => js::JsKind::Null,
+            #[allow(clippy::cast_precision_loss)]
+            Mock::Int(int) => js::JsKind::Number(*int as f64),
+            Mock::Float(float) => js::JsKind::Number(*float),
+            Mock::Bool(bool) => js::JsKind::Bool(*bool),
+            Mock::Str(_) => js::JsKind::String,
+            Mock::List(_) | Mock::Tuple(_) | Mock::Carried(..) => js::JsKind::Array,
+            Mock::Map(_) => js::JsKind::PlainObject,
+            other => panic!("no JavaScript mock for {other:?}"),
+        })
+    }
+
+    fn elements(&self) -> Result<js::JsElements<'_, Self>, String> {
+        match &self.0 {
+            Mock::List(items) | Mock::Tuple(items) | Mock::Carried(_, items) => {
+                Ok(Box::new(items.iter().cloned().map(|item| Ok(JsMock(item)))))
+            }
+            other => Err(format!("{other:?} has no elements")),
+        }
+    }
+
+    fn entries(&self) -> Result<js::JsEntries<'_, Self>, String> {
+        Err(format!("{:?} has no entries", self.0))
+    }
+
+    fn type_args(&self) -> Result<Option<Vec<StatedTy>>, String> {
+        Ok(None)
+    }
+
+    fn tuple_slots(&self) -> Result<Option<Vec<StatedTy>>, String> {
+        Ok(match &self.0 {
+            Mock::Carried(slots, _) => Some(slots.clone()),
+            _ => None,
+        })
+    }
+
+    fn text(&self) -> Result<Cow<'_, str>, String> {
+        self.0.text()
+    }
+
+    fn bytes(&self) -> Result<Cow<'_, [u8]>, String> {
+        self.0.bytes()
+    }
+
+    fn describe(&self) -> String {
+        format!("{:?}", self.0)
+    }
+
+    fn string(&self, _value: String) -> Self {
+        JsMock(Mock::Str("key"))
+    }
+}
+
 fn host_key(key: u64) -> HostKey {
     HostKey::new(key).expect("test keys are nonzero")
 }
@@ -150,6 +226,33 @@ struct Recording {
     /// Fail the n-th registration (1-based).
     fail_register_at: Cell<Option<usize>>,
     next_key: Cell<u64>,
+}
+
+/// JavaScript values make no effects in these tests.
+impl Host<js::Js<JsMock>> for Recording {
+    fn register(
+        &self,
+        _callable: &js::Js<JsMock>,
+        _signature: &StatedTy,
+    ) -> Result<HostKey, String> {
+        Err("no callables in JavaScript mocks".to_string())
+    }
+
+    fn leaf(
+        &self,
+        _leaf: &js::Js<JsMock>,
+        _kind: LeafKind,
+    ) -> Result<(LeafWire, Option<Owner>), String> {
+        Err("no leaves in JavaScript mocks".to_string())
+    }
+
+    fn reference(&self, declaration: &bridge_ctypes::Handle) -> Result<TableKey, String> {
+        <Self as Host<Mock>>::reference(self, declaration)
+    }
+
+    fn release(&self, owner: Owner) {
+        <Self as Host<Mock>>::release(self, owner);
+    }
 }
 
 impl Host<Mock> for Recording {
@@ -452,6 +555,26 @@ impl Fixture {
         let result = encode(
             &self.facts,
             value,
+            &slot.into(),
+            Root::Argument("x".into()),
+            &mut owners,
+        );
+        if result.is_ok() {
+            owners.keep();
+        }
+        result
+    }
+
+    /// Encode `value`, read as a JavaScript value, under `slot`.
+    fn encode_js(
+        &self,
+        value: Mock,
+        slot: impl Into<SlotTy>,
+    ) -> Result<InboundValue, Error<String>> {
+        let mut owners = Owners::new(&self.host);
+        let result = encode(
+            &self.facts,
+            js::Js(JsMock(value)),
             &slot.into(),
             Root::Argument("x".into()),
             &mut owners,
@@ -1769,4 +1892,258 @@ fn an_endless_container_is_refused_at_the_node_budget() {
         message.contains("more than 1048576 nodes"),
         "the budget, not the host's length, bounds the read: {message}"
     );
+}
+
+// ── Tuples ──────────────────────────────────────────────────────────────────
+
+fn tuple_ty(elements: Vec<StatedTy>) -> StatedTy {
+    StatedTy::Tuple(elements.into_boxed_slice())
+}
+
+#[test]
+fn a_tuple_slot_takes_a_sequence_of_its_arity_as_a_list_stating_the_tuple() {
+    let f = Fixture::new();
+    let pair = tuple_ty(vec![StatedTy::Int, StatedTy::String]);
+    let encoded = f
+        .encode_in(Mock::List(vec![Mock::Int(1), Mock::Str("a")]), &pair)
+        .unwrap();
+    assert_eq!(stated(&encoded), Some(pair));
+    let Some(Value::ListValue(list)) = encoded.value else {
+        panic!("a tuple crosses as a list node")
+    };
+    assert_eq!(list.values.len(), 2);
+    // Each element is planned against its own slot.
+    assert!(matches!(list.values[0].value, Some(Value::IntValue(1))));
+}
+
+#[test]
+fn a_sequence_of_another_arity_does_not_fit_a_tuple() {
+    let f = Fixture::new();
+    let pair = tuple_ty(vec![StatedTy::Int, StatedTy::String]);
+    assert!(f.encode_in(Mock::List(vec![Mock::Int(1)]), &pair).is_err());
+    assert!(
+        f.encode_in(Mock::List(vec![Mock::Int(1), Mock::Int(2)]), &pair)
+            .is_err(),
+        "the second element must fit `string`"
+    );
+}
+
+#[test]
+fn a_union_of_tuples_takes_the_arm_of_the_sequences_arity() {
+    let f = Fixture::new();
+    let one = tuple_ty(vec![StatedTy::Int]);
+    let two = tuple_ty(vec![StatedTy::Int, StatedTy::Int]);
+    let slot = StatedTy::Union(Box::new([one, two.clone()]));
+    let encoded = f
+        .encode_in(Mock::List(vec![Mock::Int(1), Mock::Int(2)]), &slot)
+        .unwrap();
+    assert_eq!(stated(&encoded), Some(two));
+}
+
+#[test]
+fn holey_tuples_merge_so_an_open_element_type_binds() {
+    // `[(1, []), (2, [3])]` under `(T, T[])[]`: the empty list's hole is
+    // filled by its sibling, so `T` binds to `int`.
+    let f = Fixture::new();
+    let t = SlotTy::TypeVar(ParamTy::new(0, Name::new("T")));
+    let slot = SlotTy::List(Box::new(SlotTy::Tuple(Box::new([
+        t.clone(),
+        SlotTy::List(Box::new(t)),
+    ]))));
+    let value = Mock::List(vec![
+        Mock::List(vec![Mock::Int(1), Mock::List(vec![])]),
+        Mock::List(vec![Mock::Int(2), Mock::List(vec![Mock::Int(3)])]),
+    ]);
+    let encoded = f.encode_in(value, slot).unwrap();
+    assert_eq!(
+        stated(&encoded),
+        Some(list_ty(tuple_ty(vec![
+            StatedTy::Int,
+            list_ty(StatedTy::Int)
+        ])))
+    );
+}
+
+#[test]
+fn a_tuple_under_an_open_slot_states_the_tuple_of_its_items_types() {
+    let f = Fixture::new();
+    let pair = Mock::Tuple(vec![Mock::Int(1), Mock::Str("a")]);
+    let expected = tuple_ty(vec![StatedTy::Int, StatedTy::String]);
+    assert_eq!(stated(&f.ok(pair.clone(), "g")), Some(expected.clone()));
+    // A type variable the call left open is bound to that tuple type.
+    let t = SlotTy::TypeVar(ParamTy::new(0, Name::new("T")));
+    assert_eq!(stated(&f.encode_in(pair, t).unwrap()), Some(expected));
+    // Slot by slot, never joined; an empty list's element stays `unknown`.
+    let holey = Mock::Tuple(vec![Mock::List(vec![]), Mock::Int(1), Mock::Int(2)]);
+    assert_eq!(
+        stated(&f.ok(holey, "g")),
+        Some(tuple_ty(vec![
+            list_ty(StatedTy::Unknown),
+            StatedTy::Int,
+            StatedTy::Int
+        ]))
+    );
+    // A list is still a list.
+    assert_eq!(
+        stated(&f.ok(Mock::List(vec![Mock::Int(1), Mock::Str("a")]), "g")),
+        Some(list_ty(StatedTy::Union(Box::new([
+            StatedTy::Int,
+            StatedTy::String
+        ]))))
+    );
+}
+
+#[test]
+fn a_tuple_stands_in_for_a_list_and_a_list_for_a_tuple() {
+    let f = Fixture::new();
+    let ints = Mock::Tuple(vec![Mock::Int(1), Mock::Int(2)]);
+    assert_eq!(stated(&f.ok(ints, "s")), Some(list_ty(StatedTy::Int)));
+    let pair = tuple_ty(vec![StatedTy::Int, StatedTy::String]);
+    let encoded = f
+        .encode_in(Mock::Tuple(vec![Mock::Int(1), Mock::Str("a")]), &pair)
+        .unwrap();
+    assert_eq!(stated(&encoded), Some(pair.clone()));
+    assert!(
+        f.encode_in(Mock::Tuple(vec![Mock::Int(1)]), &pair).is_err(),
+        "a tuple of another arity does not fit"
+    );
+}
+
+#[test]
+fn lists_and_tuples_of_one_arity_share_a_rank_and_the_natural_type_breaks_the_tie() {
+    let f = Fixture::new();
+    let ints = list_ty(StatedTy::Int);
+    let pair = tuple_ty(vec![StatedTy::Int, StatedTy::Int]);
+    for slot in [
+        StatedTy::Union(Box::new([ints.clone(), pair.clone()])),
+        StatedTy::Union(Box::new([pair.clone(), ints.clone()])),
+    ] {
+        let list = Mock::List(vec![Mock::Int(1), Mock::Int(2)]);
+        assert_eq!(
+            stated(&f.encode_in(list, &slot).unwrap()),
+            Some(ints.clone())
+        );
+        let tuple = Mock::Tuple(vec![Mock::Int(1), Mock::Int(2)]);
+        assert_eq!(
+            stated(&f.encode_in(tuple, &slot).unwrap()),
+            Some(pair.clone())
+        );
+    }
+    // Neither member is the value's own type: ambiguous, list or tuple.
+    let either = StatedTy::Union(Box::new([StatedTy::Int, StatedTy::String]));
+    let slot = StatedTy::Union(Box::new([
+        list_ty(either.clone()),
+        tuple_ty(vec![either.clone(), either]),
+    ]));
+    for value in [
+        Mock::Tuple(vec![Mock::Int(1), Mock::Str("a")]),
+        Mock::List(vec![Mock::Int(1), Mock::Int(2)]),
+    ] {
+        assert!(
+            refusal(f.encode_in(value, &slot)).contains("fits more than one"),
+            "an unresolved tie is refused"
+        );
+    }
+}
+
+#[test]
+fn a_javascript_array_that_fits_a_tuple_and_a_list_is_the_tuple() {
+    let f = Fixture::new();
+    let ints = list_ty(StatedTy::Int);
+    let pair = tuple_ty(vec![StatedTy::Int, StatedTy::Int]);
+    let array = || Mock::List(vec![Mock::Int(1), Mock::Int(2)]);
+    // An array cannot say whether it is a tuple or a list: the tuple wins in
+    // either order, where a Python list stays the list.
+    for slot in [
+        StatedTy::Union(Box::new([ints.clone(), pair.clone()])),
+        StatedTy::Union(Box::new([pair.clone(), ints.clone()])),
+    ] {
+        assert_eq!(
+            stated(&f.encode_js(array(), &slot).unwrap()),
+            Some(pair.clone())
+        );
+        assert_eq!(
+            stated(&f.encode_in(array(), &slot).unwrap()),
+            Some(ints.clone())
+        );
+    }
+    // An array of another arity is still the list.
+    let triple = Mock::List(vec![Mock::Int(1), Mock::Int(2), Mock::Int(3)]);
+    let slot = StatedTy::Union(Box::new([pair.clone(), ints.clone()]));
+    assert_eq!(
+        stated(&f.encode_js(triple, &slot).unwrap()),
+        Some(ints.clone())
+    );
+    // Among tuples, the tuple of its items' types breaks the tie, as it does
+    // for a Python tuple; with none of them, the tuples stay ambiguous.
+    let either = StatedTy::Union(Box::new([StatedTy::Int, StatedTy::String]));
+    let loose = tuple_ty(vec![either.clone(), either.clone()]);
+    let slot = StatedTy::Union(Box::new([
+        loose.clone(),
+        list_ty(either.clone()),
+        pair.clone(),
+    ]));
+    assert_eq!(
+        stated(&f.encode_js(array(), &slot).unwrap()),
+        Some(pair.clone())
+    );
+    let mixed = tuple_ty(vec![StatedTy::Int, either.clone()]);
+    let slot = StatedTy::Union(Box::new([loose.clone(), list_ty(either.clone()), mixed]));
+    let refused = refusal(f.encode_js(array(), &slot));
+    assert!(refused.contains("fits more than one"), "{refused}");
+    // Known tuple identity decides before the array heuristic.
+    let carried = Mock::Carried(
+        vec![either.clone(), either],
+        vec![Mock::Int(1), Mock::Int(2)],
+    );
+    let slot = StatedTy::Union(Box::new([pair, ints, loose.clone()]));
+    assert_eq!(stated(&f.encode_js(carried, &slot).unwrap()), Some(loose));
+}
+
+#[test]
+fn a_tuple_that_knows_its_slot_types_keeps_that_identity() {
+    let f = Fixture::new();
+    let either = StatedTy::Union(Box::new([StatedTy::Int, StatedTy::String]));
+    let carried = tuple_ty(vec![either.clone(), StatedTy::Bool]);
+    let value = || {
+        Mock::Carried(
+            vec![either.clone(), StatedTy::Bool],
+            vec![Mock::Int(1), Mock::Bool(true)],
+        )
+    };
+    // Under a slot that fixes nothing, the type it carries, not its items'.
+    assert_eq!(stated(&f.ok(value(), "g")), Some(carried.clone()));
+    // An open slot takes the carried slot type: `T` binds `int | string`.
+    let t = SlotTy::TypeVar(ParamTy::new(0, Name::new("T")));
+    let open = SlotTy::Tuple(Box::new([t, SlotTy::Bool]));
+    assert_eq!(
+        stated(&f.encode_in(value(), open).unwrap()),
+        Some(carried.clone())
+    );
+    // Identity decides a union before the sequence heuristic: a plain tuple
+    // of the same items is the natural `(int, bool)`.
+    let natural = tuple_ty(vec![StatedTy::Int, StatedTy::Bool]);
+    for slot in [
+        StatedTy::Union(Box::new([natural.clone(), carried.clone()])),
+        StatedTy::Union(Box::new([carried.clone(), natural.clone()])),
+    ] {
+        assert_eq!(
+            stated(&f.encode_in(value(), &slot).unwrap()),
+            Some(carried.clone())
+        );
+        let plain = Mock::Tuple(vec![Mock::Int(1), Mock::Bool(true)]);
+        assert_eq!(
+            stated(&f.encode_in(plain, &slot).unwrap()),
+            Some(natural.clone())
+        );
+    }
+    // A realized slot is stated as itself, and still checked slot by slot.
+    assert_eq!(
+        stated(&f.encode_in(value(), &natural).unwrap()),
+        Some(natural)
+    );
+    // Slot types that are not its arity are not the tuple it names.
+    let short = Mock::Carried(vec![StatedTy::Int], vec![Mock::Int(1), Mock::Bool(true)]);
+    let refused = f.refusal(short, "g");
+    assert!(refused.contains("expected (int"), "{refused}");
 }

@@ -22,12 +22,13 @@ import java.util.stream.Collectors;
  *       {@link #BOOL}, {@link #FLOAT};</li>
  *   <li>{@link #of(Class)} for a registered generated class or enum (the BAML
  *       FQN is resolved via {@link TypeRegistry} — the same lookup the value
- *       encoder uses);</li>
+ *       encoder uses), or a generated tuple record (its registered tuple
+ *       type);</li>
  *   <li>{@link #of(Class, BamlType...)} for a reified generic class (e.g.
  *       {@code Box<int>}), carrying its concrete args in declaration order;</li>
  *   <li>the structural constructors {@link #list(BamlType)},
- *       {@link #map(BamlType, BamlType)}, {@link #optional(BamlType)}, and
- *       {@link #union(BamlType...)}; and</li>
+ *       {@link #map(BamlType, BamlType)}, {@link #optional(BamlType)},
+ *       {@link #union(BamlType...)}, and {@link #tuple(BamlType...)}; and</li>
  *   <li>the literal-type constructors {@link #literalString(String)},
  *       {@link #literalInt(long)}, {@link #literalBool(boolean)},
  *       {@link #literalFloat(String)}, {@link #literalBigint(BigInteger)}.</li>
@@ -70,7 +71,8 @@ import java.util.stream.Collectors;
  * BamlTy oneof:      primitive = 1, class_ty = 2, enum = 3, list = 4, map = 5,
  *                    optional = 6, union = 7, literal = 8, type_alias = 9,
  *                    unknown = 10, media = 11, interface = 12, enum_variant = 13,
- *                    function = 14, meta_type = 17, prompt_ast = 19, never = 24
+ *                    function = 14, meta_type = 17, prompt_ast = 19, never = 24,
+ *                    tuple = 25
  * BamlTyFunction:    params = 3 (repeated BamlTyFunctionParam), ret = 4, throws = 5
  * BamlTyFunctionParam: name = 1 (optional string), ty = 2, mode = 3 (REQUIRED=1, OPTIONAL=2)
  * BamlTyPrimitive:   kind = 1 (BamlTyPrimitiveKind: STRING=1, INT=2, FLOAT=3, BOOL=4,
@@ -82,6 +84,7 @@ import java.util.stream.Collectors;
  * BamlTyMap:         key = 1 (BamlTy), value = 2 (BamlTy)
  * BamlTyOptional:    inner = 1 (BamlTy)     (BAML `T?` — matches Python's `_fill_wire_ty`)
  * BamlTyUnion:       options = 1 (repeated BamlTy)
+ * BamlTyTuple:       items = 1 (repeated BamlTy, one per slot, at least one)
  * BamlTyLiteral:     oneof literal: string_value=1, int_value=2, bool_value=3,
  *                    bigint_value=4 (decimal string), float_value=5 (decimal string)
  * </pre>
@@ -119,6 +122,7 @@ public final class BamlType implements Comparable<BamlType> {
     private static final int TY_META_TYPE = 17;
     private static final int TY_PROMPT_AST = 19;
     private static final int TY_NEVER = 24;
+    private static final int TY_TUPLE = 25;
     private static final int MEDIA_KIND = 1; // BamlTyMedia.kind
     private static final int INTERFACE_NAME = 1; // BamlTyInterface.name
     private static final int INTERFACE_TYPE_ARGS = 2; // BamlTyInterface.type_args (repeated)
@@ -155,6 +159,7 @@ public final class BamlType implements Comparable<BamlType> {
     private static final int MAP_VALUE = 2; // BamlTyMap.value
     private static final int OPT_INNER = 1; // BamlTyOptional.inner
     private static final int UNION_OPTIONS = 1; // BamlTyUnion.options (repeated)
+    private static final int TUPLE_ITEMS = 1; // BamlTyTuple.items (repeated)
 
     // BamlTyLiteral oneof arms.
     private static final int LIT_STRING = 1;
@@ -185,6 +190,12 @@ public final class BamlType implements Comparable<BamlType> {
         MAP,
         OPTIONAL,
         UNION,
+        /**
+         * A fixed-arity tuple {@code (A, B)}: one slot type per position, in
+         * order, as its children. Distinct from a list even when a host value
+         * of it is one.
+         */
+        TUPLE,
         LITERAL,
         /** A named type alias (FQN in {@link #fqn}), such as {@code baml.json.json}. */
         TYPE_ALIAS,
@@ -293,8 +304,8 @@ public final class BamlType implements Comparable<BamlType> {
     private final int primitiveKind; // PRIMITIVE only (a BamlTyPrimitiveKind value)
     private final String fqn; // CLASS / ENUM only
     // CLASS: concrete type args (declaration order). LIST: [item]. MAP:
-    // [key, value]. OPTIONAL: [inner]. UNION: the options. FUNCTION:
-    // [ret, throws]. Always non-null.
+    // [key, value]. OPTIONAL: [inner]. UNION: the options. TUPLE: the slots,
+    // in position order. FUNCTION: [ret, throws]. Always non-null.
     private final List<BamlType> children;
     private final List<Param> params; // FUNCTION only
     // FUNCTION only: the functional interface a generated position spells the
@@ -343,7 +354,7 @@ public final class BamlType implements Comparable<BamlType> {
     private static boolean isNominal(Kind kind) {
         return switch (kind) {
             case CLASS, ENUM, TYPE_ALIAS, INTERFACE, ENUM_VARIANT -> true;
-            case PRIMITIVE, LIST, MAP, OPTIONAL, UNION, LITERAL, FUNCTION, MEDIA, NEVER,
+            case PRIMITIVE, LIST, MAP, OPTIONAL, UNION, TUPLE, LITERAL, FUNCTION, MEDIA, NEVER,
                     PROMPT_AST, TYPE, TYPEVAR, UNKNOWN, OPAQUE -> false;
         };
     }
@@ -368,8 +379,13 @@ public final class BamlType implements Comparable<BamlType> {
         if (enumFqn != null) {
             return new BamlType(Kind.ENUM, 0, enumFqn, List.of(), 0, null);
         }
+        // A generated tuple record names the tuple identity it was registered for.
+        BamlType tupleType = TypeRegistry.tupleTypeForJavaClass(type);
+        if (tupleType != null) {
+            return tupleType;
+        }
         throw new IllegalArgumentException(
-                "not a registered BAML class or enum: " + type.getName()
+                "not a registered BAML class, enum or tuple: " + type.getName()
                         + " (the generated type must be registered before a BamlType can name it)");
     }
 
@@ -470,7 +486,7 @@ public final class BamlType implements Comparable<BamlType> {
         return switch (kind) {
             case TYPEVAR -> bindings.getOrDefault(fqn, this);
             case PRIMITIVE, ENUM, ENUM_VARIANT, MEDIA, LITERAL, NEVER, PROMPT_AST, TYPE, TYPE_ALIAS, UNKNOWN, OPAQUE -> this;
-            case CLASS, INTERFACE, LIST, MAP, OPTIONAL, UNION -> {
+            case CLASS, INTERFACE, LIST, MAP, OPTIONAL, UNION, TUPLE -> {
                 List<BamlType> mapped = new ArrayList<>(children.size());
                 for (BamlType child : children) {
                     mapped.add(child.substitute(bindings));
@@ -566,6 +582,20 @@ public final class BamlType implements Comparable<BamlType> {
     public static BamlType union(BamlType... options) {
         Objects.requireNonNull(options, "options");
         return new BamlType(Kind.UNION, 0, null, copyChildren("union option", options), 0, null);
+    }
+
+    /**
+     * A tuple type token {@code (A, B, ...)} carrying one slot token per
+     * position, in order. A tuple has at least one slot: BAML has no empty
+     * tuple type. {@code (int,)} is not {@code int}, and the order of the slots
+     * is part of the type.
+     */
+    public static BamlType tuple(BamlType... items) {
+        Objects.requireNonNull(items, "items");
+        if (items.length == 0) {
+            throw new IllegalArgumentException("a tuple type has at least one slot");
+        }
+        return new BamlType(Kind.TUPLE, 0, null, copyChildren("tuple slot", items), 0, null);
     }
 
     /** A string-literal type token (BAML {@code "draft"}). */
@@ -669,6 +699,13 @@ public final class BamlType implements Comparable<BamlType> {
                     un.writeMessage(UNION_OPTIONS, option.toWireTy());
                 }
                 ty.writeMessage(TY_UNION, un.toByteArray());
+            }
+            case TUPLE -> {
+                WireWriter tup = new WireWriter();
+                for (BamlType item : children) {
+                    tup.writeMessage(TUPLE_ITEMS, item.toWireTy());
+                }
+                ty.writeMessage(TY_TUPLE, tup.toByteArray());
             }
             case LITERAL -> ty.writeMessage(TY_LITERAL, literalToWire());
             case TYPE_ALIAS -> {
@@ -822,6 +859,7 @@ public final class BamlType implements Comparable<BamlType> {
                 case TY_MAP -> result = mapFromWire(r.readMessage(), position);
                 case TY_OPTIONAL -> result = optionalFromWire(r.readMessage(), position);
                 case TY_UNION -> result = unionFromWire(r.readMessage(), position);
+                case TY_TUPLE -> result = tupleFromWire(r.readMessage(), position);
                 case TY_LITERAL -> result = literalFromWire(r.readMessage());
                 case TY_TYPE_ALIAS -> result = withArgsFromWire(
                         Kind.TYPE_ALIAS, r.readMessage(), TYPE_ALIAS_NAME, TYPE_ALIAS_LIVE,
@@ -1093,6 +1131,32 @@ public final class BamlType implements Comparable<BamlType> {
         return new BamlType(Kind.UNION, 0, null, List.copyOf(options), 0, null);
     }
 
+    private static BamlType tupleFromWire(WireReader msg, Position position) {
+        List<BamlType> items = new ArrayList<>();
+        boolean itemOutOfGrammar = false;
+        while (msg.hasRemaining()) {
+            int tag = msg.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            if (field == TUPLE_ITEMS) {
+                BamlType item = read(msg.readMessage(), position);
+                if (item == null) {
+                    itemOutOfGrammar = true;
+                } else {
+                    items.add(item);
+                }
+            } else {
+                msg.skipField(wire);
+            }
+        }
+        // A slot the grammar cannot spell would misalign every later position,
+        // and a tuple with no slots is no BAML type.
+        if (itemOutOfGrammar || items.isEmpty()) {
+            return null;
+        }
+        return new BamlType(Kind.TUPLE, 0, null, List.copyOf(items), 0, null);
+    }
+
     /** Read the sole {@code BamlTy} sub-field {@code fieldNumber} of a wrapper message. */
     private static BamlType readSingleChild(WireReader msg, int fieldNumber, Position position) {
         BamlType child = null;
@@ -1316,6 +1380,12 @@ public final class BamlType implements Comparable<BamlType> {
             case UNION -> children.stream()
                     .map(BamlType::toString)
                     .collect(Collectors.joining(" | "));
+            // A one-slot tuple keeps its trailing comma, as BAML spells it.
+            case TUPLE -> children.size() == 1
+                    ? "(" + children.get(0) + ",)"
+                    : children.stream()
+                            .map(BamlType::toString)
+                            .collect(Collectors.joining(", ", "(", ")"));
             case LITERAL -> literalArm == LIT_STRING
                     ? "\"" + literalValue + "\""
                     : String.valueOf(literalValue);
@@ -1433,6 +1503,11 @@ public final class BamlType implements Comparable<BamlType> {
         return children;
     }
 
+    /** The slot tokens of a {@link Kind#TUPLE}, in position order. */
+    public List<BamlType> tupleItems() {
+        return children;
+    }
+
     /** The type arguments of a {@link Kind#CLASS} or {@link Kind#INTERFACE} type, in order. */
     public List<BamlType> classTypeArgs() {
         return children;
@@ -1521,6 +1596,10 @@ public final class BamlType implements Comparable<BamlType> {
                     && literalArm == wire.literalArm
                     && Objects.equals(literalValue, wire.literalValue);
             case UNION -> children.stream().anyMatch(opt -> opt.matchesStructural(wire));
+            case TUPLE -> wire.kind == Kind.TUPLE
+                    && children.size() == wire.children.size()
+                    && java.util.stream.IntStream.range(0, children.size())
+                            .allMatch(i -> children.get(i).matchesStructural(wire.children.get(i)));
             default -> false;
         };
     }

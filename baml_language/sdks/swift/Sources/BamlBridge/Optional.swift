@@ -25,7 +25,7 @@ extension BamlOptional: ExpressibleByNilLiteral {
     }
 }
 
-extension BamlOptional where Wrapped: BamlEncodable {
+extension BamlOptional {
     /// Append this slot to a kwargs array unless it is `.unset` —
     /// the Swift spelling of Python's "`_build_kwargs` drops UNSET".
     /// `slot` is the declared type without its null, which `.null` covers.

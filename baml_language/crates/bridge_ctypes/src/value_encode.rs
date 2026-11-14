@@ -74,6 +74,23 @@ pub fn external_to_outbound(
                 items: values?,
             }))
         }
+        BexExternalValue::Tuple {
+            items,
+            element_types,
+        } => {
+            let values: Result<Vec<BamlOutboundValue>, CtypesError> = items
+                .iter()
+                .map(|v| external_to_outbound(v, options))
+                .collect();
+            Some(BamlValueVariant::TupleValue(
+                crate::baml_bridge::cffi::BamlValueTuple {
+                    items: values?,
+                    tuple_type: Some(annotation(&WireTy::Tuple(
+                        element_types.clone().into_boxed_slice(),
+                    ))?),
+                },
+            ))
+        }
         BexExternalValue::Map {
             entries,
             key_type,
@@ -270,6 +287,18 @@ pub(crate) fn artifact_safe_external_to_outbound(
                 .map(artifact_safe_external_to_outbound)
                 .collect::<Result<_, _>>()?,
         })),
+        BexExternalValue::Tuple {
+            items,
+            element_types,
+        } => Some(BamlValueVariant::TupleValue(
+            crate::baml_bridge::cffi::BamlValueTuple {
+                items: items
+                    .iter()
+                    .map(artifact_safe_external_to_outbound)
+                    .collect::<Result<_, _>>()?,
+                tuple_type: Some(ty(&WireTy::Tuple(element_types.clone().into_boxed_slice()))),
+            },
+        )),
         BexExternalValue::Map {
             entries,
             key_type,
@@ -747,6 +776,35 @@ mod tests {
         );
 
         assert_eq!(encoded.selected_option_index, Some(0));
+    }
+
+    #[test]
+    fn outbound_tuple_carries_its_own_slot_types() {
+        // The carried slot types ride beside the items, wider than the items
+        // that happen to fill them, in both encoders.
+        let slots = vec![
+            WireTy::Union(Box::new([WireTy::int(), WireTy::string()])),
+            WireTy::Bool,
+        ];
+        let value = BexExternalValue::Tuple {
+            element_types: slots.clone(),
+            items: vec![BexExternalValue::Int(1), BexExternalValue::Bool(true)],
+        };
+        let expected = annotation(&WireTy::Tuple(slots.into_boxed_slice())).unwrap();
+        assert!(matches!(
+            expected.ty,
+            Some(crate::baml_bridge::cffi::baml_ty::Ty::Tuple(_))
+        ));
+        for encoded in [
+            external_to_outbound(&value, &CffiHandleTableOptions::for_in_process()).unwrap(),
+            artifact_safe_external_to_outbound(&value).unwrap(),
+        ] {
+            let Some(BamlValueVariant::TupleValue(tuple)) = encoded.value else {
+                panic!("expected TupleValue, got {encoded:?}");
+            };
+            assert_eq!(tuple.items.len(), 2);
+            assert_eq!(tuple.tuple_type.as_ref(), Some(&expected));
+        }
     }
 
     #[test]

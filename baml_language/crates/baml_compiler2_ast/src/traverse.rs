@@ -111,7 +111,7 @@ impl ExprBody {
                 out.extend(fields.iter().map(|field| BodyNode::Expr(field.value)));
                 out.extend(spreads.iter().map(|s| BodyNode::Expr(s.expr)));
             }
-            Expr::Array { elements } => {
+            Expr::Array { elements } | Expr::Tuple { elements } => {
                 out.extend(elements.iter().copied().map(BodyNode::Expr));
             }
             Expr::Map { entries } => {

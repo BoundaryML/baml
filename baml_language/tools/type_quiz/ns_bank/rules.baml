@@ -333,6 +333,18 @@ function unguarded_cycle_rejected() -> root.engine.Rule throws never {
     )
 }
 
+/// The other half of the per-SCC check, and what the unguarded cycle's near
+/// miss turns on: a cycle that passes through a list or a map anywhere is
+/// legal, however unguarded the rest of it is.
+function guarded_cycle_legal() -> root.engine.Rule throws never {
+    composite(
+        "aliases/guarded-cycle-legal",
+        section("Productivity"),
+        "a cycle group needs at least one list/map edge",
+        ["so types like `A` above are legal"],
+    )
+}
+
 /// Every rule in the bank.
 function rules() -> root.engine.Rule[] throws never {
     [
@@ -365,6 +377,7 @@ function rules() -> root.engine.Rule[] throws never {
         partial_unfolding(),
         unguarded_member_vacuous(),
         unguarded_cycle_rejected(),
+        guarded_cycle_legal(),
         implementor_below_existential(),
         requires_widens_existential(),
         typevar_below_bound(),

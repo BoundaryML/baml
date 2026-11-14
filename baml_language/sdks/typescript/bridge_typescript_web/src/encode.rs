@@ -669,6 +669,23 @@ impl JsView for View<'_> {
             .map(Some)
     }
 
+    fn tuple_slots(&self) -> Result<Option<Vec<StatedTy>>, JsValue> {
+        let found = self.cx.adapter_call("tupleTypeOf", &self.value)?;
+        if found.is_null_or_undefined() {
+            return Ok(None);
+        }
+        let ty = BamlTy::decode(Uint8Array::new(&found).to_vec().as_slice())
+            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        match bridge_ctypes::proto_ty_to_stated(&ty, &HANDLE_TABLE)
+            .map_err(|error| JsValue::from_str(&error.to_string()))?
+        {
+            StatedTy::Tuple(slots) => Ok(Some(slots.into_vec())),
+            _ => Err(JsValue::from_str(
+                "tupleTypeOf gave a type that is not a tuple",
+            )),
+        }
+    }
+
     fn text(&self) -> Result<Cow<'_, str>, JsValue> {
         well_formed(&self.value).map(Cow::Owned)
     }

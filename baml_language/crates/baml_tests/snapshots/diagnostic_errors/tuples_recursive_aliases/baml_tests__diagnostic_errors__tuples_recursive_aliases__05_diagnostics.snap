@@ -1,0 +1,43 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0068
+
+  × recursive type alias cycle: Endless
+    ╭─[recursive_aliases.baml:13:6]
+ 13 │ type Endless = (int, Endless)
+    ·      ───────
+    ╰────
+
+  [type] E0068
+
+  × recursive type alias cycle: Bad
+    ╭─[recursive_aliases.baml:16:6]
+ 16 │ type Bad = (Bad, int?)
+    ·      ───
+    ╰────
+
+  [type] E0068
+
+  × recursive type alias cycle: HeadFirst
+    ╭─[recursive_aliases.baml:19:6]
+ 19 │ type HeadFirst = (HeadFirst, HeadFirst[])
+    ·      ─────────
+    ╰────
+
+  [type] E0068
+
+  × recursive type alias cycle: Ping
+    ╭─[recursive_aliases.baml:22:6]
+ 22 │ type Ping = (int, Pong)
+    ·      ────
+    ╰────
+
+  [type] E0068
+
+  × recursive type alias cycle: Pong
+    ╭─[recursive_aliases.baml:23:6]
+ 23 │ type Pong = (Ping, string)
+    ·      ────
+    ╰────

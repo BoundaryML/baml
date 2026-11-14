@@ -41,6 +41,8 @@ pub enum AnyExpr {
     Break(Id<BreakExpr>),
     Continue(Id<ContinueExpr>),
     Paren(Id<ParenExpr>),
+    Tuple(Id<TupleExpr>),
+    TupleField(Id<TupleFieldExpr>),
     Block(Id<Block>),
     If(Id<IfExpr>),
     IfLet(Id<IfLetExpr>),
@@ -481,4 +483,18 @@ pub struct SpreadElement {
     pub dots: Token!["..."],
     pub value: Result<AnyExpr, Missing>,
     pub comma: Option<Token![","]>,
+}
+
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TupleExpr {
+    pub l: Token!["("],
+    pub elements: Sep<AnyExpr, punct::Comma>,
+    pub r: Result<Token![")"], Missing>,
+}
+
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TupleFieldExpr {
+    pub base: AnyExpr,
+    pub dot: Token![TupleDot],
+    pub slot: Token![LiteralExprToken],
 }

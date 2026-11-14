@@ -205,6 +205,11 @@ pub(crate) fn live_keys(ty: &BamlTy, f: &mut impl FnMut(TableKey)) {
                 live_keys(option, f);
             }
         }
+        TyVariant::Tuple(t) => {
+            for item in &t.items {
+                live_keys(item, f);
+            }
+        }
         TyVariant::Function(func) => {
             for param in &func.params {
                 if let Some(ty) = &param.ty {
@@ -275,6 +280,20 @@ pub fn proto_ty_to_wire_ty(ty: &BamlTy) -> Result<ParsedTy, CtypesError> {
                 .map(proto_ty_to_wire_ty)
                 .collect::<Result<_, _>>()?,
         ),
+        TyVariant::Tuple(t) => {
+            if t.items.is_empty() {
+                return Err(CtypesError::InternalError(
+                    "tuple type has no elements".to_string(),
+                ));
+            }
+            RealizedTy::Tuple(
+                t.items
+                    .iter()
+                    .map(proto_ty_to_wire_ty)
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into(),
+            )
+        }
         TyVariant::Literal(lit) => literal_to_runtime_ty(lit.literal.as_ref())?,
         // A type alias is not generic at run time, and a function type
         // carries no type parameters of its own: a value in either field

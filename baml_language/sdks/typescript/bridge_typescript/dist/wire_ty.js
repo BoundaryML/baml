@@ -59,6 +59,7 @@ export function liveKeys(ty) {
         visit(node.map?.value);
         visit(node.optional?.inner);
         node.union?.options?.forEach(visit);
+        node.tuple?.items?.forEach(visit);
         node.function?.params?.forEach((param) => visit(param.ty));
         visit(node.function?.ret);
         visit(node.function?.throws);
@@ -196,6 +197,12 @@ export function lowerTypeToWireTy(token) {
                 return unsupported(token);
             return { union: { options: shape.union.map(lowerTypeToWireTy) } };
         }
+        if ('tuple' in shape) {
+            // Slots keep their order and repeats; a tuple has at least one.
+            if (!Array.isArray(shape.tuple) || shape.tuple.length === 0)
+                return unsupported(token);
+            return { tuple: { items: shape.tuple.map(lowerTypeToWireTy) } };
+        }
         const fqn = getTypeMap().jsTypeToBamlType(token);
         if (fqn)
             return { enum: { name: fqn } };
@@ -229,6 +236,12 @@ export function outboundTyToBamlTypeToken(ty) {
     if (ty.optional) {
         const inner = outboundTyToBamlTypeToken(ty.optional.inner);
         return inner === undefined ? undefined : { optional: inner };
+    }
+    if (ty.tuple) {
+        const items = (ty.tuple.items ?? []).map(outboundTyToBamlTypeToken);
+        if (items.length === 0 || items.some((item) => item === undefined))
+            return undefined;
+        return { tuple: items };
     }
     if (ty.classTy) {
         const token = resolveNamedToken(ty.classTy.name ?? '');

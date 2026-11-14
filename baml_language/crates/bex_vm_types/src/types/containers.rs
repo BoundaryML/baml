@@ -427,6 +427,86 @@ impl Array {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Tuple {
+    pub element_tys: Box<[crate::RealizedTy]>,
+    slots: Box<[Value]>,
+}
+
+/// A tuple built with a different number of slot types than elements.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TupleShapeMismatch {
+    pub types: usize,
+    pub values: usize,
+}
+
+impl std::fmt::Display for TupleShapeMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "tuple of {} slot types given {} elements",
+            self.types, self.values
+        )
+    }
+}
+
+impl std::error::Error for TupleShapeMismatch {}
+
+impl Tuple {
+    /// Pair `element_tys` with `data`, which must agree in length.
+    pub fn new(
+        element_tys: impl Into<Box<[crate::RealizedTy]>>,
+        data: impl IntoIterator<Item = Value>,
+    ) -> Result<Self, TupleShapeMismatch> {
+        let element_tys = element_tys.into();
+        let slots: Box<[Value]> = data.into_iter().collect();
+        if element_tys.len() != slots.len() {
+            return Err(TupleShapeMismatch {
+                types: element_tys.len(),
+                values: slots.len(),
+            });
+        }
+        Ok(Self { element_tys, slots })
+    }
+
+    /// The tuple's arity.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    /// Whether this is the zero-arity tuple.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
+    /// The value in slot `idx`, or `None` if out of bounds.
+    #[inline]
+    pub fn try_load_slot(&self, idx: usize) -> Option<Value> {
+        self.slots.get(idx).copied()
+    }
+
+    /// The value in slot `idx`. Panics if out of bounds.
+    #[inline]
+    pub fn load_slot(&self, idx: usize) -> Value {
+        self.slots[idx]
+    }
+
+    pub fn values_mut(&mut self) -> &mut [Value] {
+        &mut self.slots
+    }
+
+    pub fn slot_values(&self) -> impl ExactSizeIterator<Item = Value> + '_ {
+        self.slots.iter().copied()
+    }
+
+    /// The tuple's own type: `(T0, T1, ...)` over its carried slot types.
+    pub fn ty(&self) -> crate::RealizedTy {
+        crate::RealizedTy::Tuple(self.element_tys.clone())
+    }
+}
+
 /// Heap-mutable array container.
 ///
 /// Held inline by `Object::Array`. Size: 24 (Vec) + 1 (mutex) + padding = 32 bytes.

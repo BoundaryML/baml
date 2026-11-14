@@ -121,6 +121,15 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
         return BamlTypeDescriptor(ty)
     }
 
+    /// A fixed-arity tuple, one type per slot in slot order.
+    public static func tuple(_ items: [BamlTypeDescriptor]) -> BamlTypeDescriptor {
+        var tuple = BamlBridge_Cffi_V1_BamlTyTuple()
+        tuple.items = items.map(\.raw)
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.tuple = tuple
+        return BamlTypeDescriptor(ty)
+    }
+
     public static func map(
         key: BamlTypeDescriptor,
         value: BamlTypeDescriptor
@@ -277,6 +286,16 @@ public struct BamlSlot<Value>: @unchecked Sendable {
 struct BamlSlotNode: @unchecked Sendable {
     let type: BamlTypeDescriptor
     let shape: Shape
+    /// How the values filling this slot cross, where their Swift type cannot
+    /// say so itself (see [`BamlSlotCodec`]); `nil` where it conforms to
+    /// `BamlEncodable` and `BamlDecodable`.
+    let codec: BamlSlotCodec?
+
+    init(type: BamlTypeDescriptor, shape: Shape, codec: BamlSlotCodec? = nil) {
+        self.type = type
+        self.shape = shape
+        self.codec = codec
+    }
 
     indirect enum Shape {
         /// The value's node implies its type, or (a recursive alias) the
@@ -289,6 +308,9 @@ struct BamlSlotNode: @unchecked Sendable {
         case optional(wrapped: BamlSlotNode)
         /// A `BamlUnionN`: one arm per case, in case order.
         case union(arms: [BamlSlotNode])
+        /// A tuple (a native Swift tuple, or a `Tuple1`): one slot per tuple
+        /// slot, in slot order.
+        case tuple(items: [BamlSlotNode])
     }
 
     /// The single shape-mismatch exit. Slots are built only through typed
@@ -296,6 +318,75 @@ struct BamlSlotNode: @unchecked Sendable {
     /// generator, never a property of a user's value.
     func mismatch(_ expected: String) -> Never {
         preconditionFailure("BamlSlot for \(expected) has shape \(shape)")
+    }
+}
+
+/// How the values of one slot cross the boundary and compare, for a Swift type
+/// that conforms to none of the bridge's protocols: a native Swift tuple
+/// conforms to no protocol at all, so it cannot cross through `BamlEncodable`
+/// and `BamlDecodable` as every other value does, and neither can an array,
+/// dictionary, optional, union or `Tuple1` holding one, whose conformances
+/// require their contents' own.
+///
+/// The slot constructor of a tuple knows its slot types statically (a
+/// variadic generic function, `BamlSlots.tuple`), so it builds the codec there,
+/// out of its slots' own; a container constructor whose contents' slot has a
+/// codec builds one the same way. Every crossing goes through its position's
+/// slot (`BamlSlot._bamlEncode(_:)`, `_bamlDecode(_:)`), which takes the codec
+/// where there is one and the conformance everywhere else, so a tuple crosses
+/// at any depth with no conformance of its own.
+///
+/// The closures are type-erased because a node is: each takes and returns
+/// exactly the slot's Swift type.
+struct BamlSlotCodec {
+    let encode: (Any) throws -> BamlInboundValue
+    let decode: (BamlOutboundValue) throws -> Any
+    /// Value equality, which a generated struct holding a tuple spells its
+    /// `==` in: a tuple is not `Equatable` either.
+    let equal: (Any, Any) -> Bool
+}
+
+extension BamlSlot {
+    /// `value` as a node of this slot: through the slot's codec where `Value`
+    /// has no conformance of its own (a native tuple, or a container or union
+    /// holding one), else through `Value`'s `BamlEncodable` conformance. Every
+    /// value generated code sends crosses here, so a caller needs no
+    /// conformance of `Value`, only its slot.
+    public func _bamlEncode(_ value: Value) throws -> BamlInboundValue {
+        if let codec = node.codec { return try codec.encode(value) }
+        guard let encodable = Value.self as? any BamlEncodable.Type else {
+            node.mismatch("a \(Value.self) that is BamlEncodable")
+        }
+        func encode<E: BamlEncodable>(_: E.Type) throws -> BamlInboundValue {
+            try (value as! E)._bamlEncode(as: BamlSlot<E>(node))
+        }
+        return try encode(encodable)
+    }
+
+    /// `value` decoded as a node of this slot: through the slot's codec where
+    /// `Value` has no conformance of its own, else through `Value`'s
+    /// `BamlDecodable` conformance.
+    public func _bamlDecode(_ value: BamlOutboundValue) throws -> Value {
+        if let codec = node.codec { return try codec.decode(value) as! Value }
+        guard let decodable = Value.self as? any BamlDecodable.Type else {
+            node.mismatch("a \(Value.self) that is BamlDecodable")
+        }
+        func decode<D: BamlDecodable>(_: D.Type) throws -> Value {
+            try D._bamlDecode(value, as: BamlSlot<D>(node)) as! Value
+        }
+        return try decode(decodable)
+    }
+
+    /// Whether `lhs` and `rhs` are equal values of this slot: through the
+    /// slot's codec where `Value` has no conformance of its own, else through
+    /// `Value`'s `Equatable` conformance.
+    public func _bamlEqual(_ lhs: Value, _ rhs: Value) -> Bool {
+        if let codec = node.codec { return codec.equal(lhs, rhs) }
+        guard let equatable = Value.self as? any Equatable.Type else {
+            node.mismatch("a \(Value.self) that is Equatable")
+        }
+        func equal<E: Equatable>(_: E.Type) -> Bool { (lhs as! E) == (rhs as! E) }
+        return equal(equatable)
     }
 }
 
@@ -381,30 +472,80 @@ extension BamlSlot {
 
 /// Constructors of the structural slots. Each result's Swift type follows
 /// from its arguments, so generated slot expressions need no annotations.
+///
+/// A container whose contents' slot carries a codec (a tuple, or something
+/// holding one) carries one too, built from that slot's, so its contents
+/// cross with no conformance of their own (see [`BamlSlotCodec`]).
 public enum BamlSlots {
     public static func list<Element>(_ item: BamlSlot<Element>) -> BamlSlot<[Element]> {
-        BamlSlot(BamlSlotNode(type: .list(item.type), shape: .list(item: item.node)))
+        let type = BamlTypeDescriptor.list(item.type)
+        let codec = item.node.codec.map { _ in
+            BamlSlotCodec(
+                encode: { try BamlInboundValue.listNode($0 as! [Element], stating: type, item._bamlEncode) },
+                decode: { try listItems($0).map { try item._bamlDecode(BamlOutboundValue($0)) } },
+                equal: { lhs, rhs in
+                    let lhs = lhs as! [Element], rhs = rhs as! [Element]
+                    return lhs.count == rhs.count && zip(lhs, rhs).allSatisfy(item._bamlEqual)
+                }
+            )
+        }
+        return BamlSlot(BamlSlotNode(type: type, shape: .list(item: item.node), codec: codec))
     }
 
     public static func map<Value>(_ value: BamlSlot<Value>) -> BamlSlot<[String: Value]> {
-        BamlSlot(BamlSlotNode(
-            type: .map(key: .string, value: value.type),
-            shape: .map(value: value.node)
-        ))
+        let type = BamlTypeDescriptor.map(key: .string, value: value.type)
+        let codec = value.node.codec.map { _ in
+            BamlSlotCodec(
+                encode: { try BamlInboundValue.mapNode($0 as! [String: Value], stating: type, value._bamlEncode) },
+                decode: { try decodeMap($0, value._bamlDecode) },
+                equal: { lhs, rhs in
+                    let lhs = lhs as! [String: Value], rhs = rhs as! [String: Value]
+                    return lhs.count == rhs.count && lhs.allSatisfy { key, item in
+                        rhs[key].map { value._bamlEqual(item, $0) } ?? false
+                    }
+                }
+            )
+        }
+        return BamlSlot(BamlSlotNode(type: type, shape: .map(value: value.node), codec: codec))
     }
 
     /// `Wrapped | null`, filled by a Swift `Optional`.
     public static func optional<Wrapped>(_ wrapped: BamlSlot<Wrapped>) -> BamlSlot<Wrapped?> {
         BamlSlot(BamlSlotNode(
             type: .optional(wrapped.type),
-            shape: .optional(wrapped: wrapped.node)
+            shape: .optional(wrapped: wrapped.node),
+            codec: optionalCodec(wrapped)
         ))
     }
 
     /// A type that already admits null (the stdlib `json` alias), filled by a
     /// Swift `Optional` whose `nil` is that null: the type stays as it is.
     public static func nullable<Wrapped>(_ wrapped: BamlSlot<Wrapped>) -> BamlSlot<Wrapped?> {
-        BamlSlot(BamlSlotNode(type: wrapped.type, shape: .optional(wrapped: wrapped.node)))
+        BamlSlot(BamlSlotNode(
+            type: wrapped.type,
+            shape: .optional(wrapped: wrapped.node),
+            codec: optionalCodec(wrapped)
+        ))
+    }
+
+    /// The codec of a Swift `Optional` whose wrapped slot has one.
+    private static func optionalCodec<Wrapped>(_ wrapped: BamlSlot<Wrapped>) -> BamlSlotCodec? {
+        wrapped.node.codec.map { _ in
+            BamlSlotCodec(
+                encode: { value in
+                    guard let value = value as! Wrapped? else { return BamlInboundValue() }
+                    return try wrapped._bamlEncode(value)
+                },
+                decode: { try decodeOptional($0, wrapped._bamlDecode) as Any },
+                equal: { lhs, rhs in
+                    switch (lhs as! Wrapped?, rhs as! Wrapped?) {
+                    case (nil, nil): return true
+                    case (let lhs?, let rhs?): return wrapped._bamlEqual(lhs, rhs)
+                    default: return false
+                    }
+                }
+            )
+        }
     }
 
     /// The type of a union slot. A merged leaf arm (`"a" | "b"`) is itself a
@@ -425,9 +566,20 @@ public enum BamlSlots {
         return BamlTypeDescriptor(ty)
     }
 
-    /// The slot of a `BamlUnionN`: one arm per case, in case order.
-    static func union<Value>(_ arms: [BamlSlotNode]) -> BamlSlot<Value> {
-        BamlSlot(BamlSlotNode(type: unionType(arms), shape: .union(arms: arms)))
+    /// The slot of a `BamlUnionN`: one arm per case, in case order. When an
+    /// arm's slot carries a codec, so does the union's (see `unionCodec`),
+    /// built from `arms`, `split` (a value's case index and payload) and
+    /// `join` (the case of a payload).
+    static func union<Value>(
+        _ nodes: [BamlSlotNode],
+        arms: () -> [BamlUnionArm],
+        split: @escaping (Value) -> (Int, Any),
+        join: @escaping (Int, Any) -> Value
+    ) -> BamlSlot<Value> {
+        let codec = nodes.contains { $0.codec != nil }
+            ? unionCodec(arms(), split: split, join: join)
+            : nil
+        return BamlSlot(BamlSlotNode(type: unionType(nodes), shape: .union(arms: nodes), codec: codec))
     }
 }
 
@@ -465,9 +617,11 @@ public protocol BamlEncodable {
 /// one within the bound crosses is [`BamlWireDepth`]'s exact measure, taken
 /// once the value is built.
 ///
-/// Only a list, map or class adds a wire level, and only the three encoders
-/// here build one (`BamlInboundValue` is opaque outside this module), so no
-/// other encoder can nest without being counted. Encoding is synchronous, so
+/// Only a list, map or class adds a wire level, and only the list, map and
+/// class encoders here (`BamlInboundValue.listNode`, `mapNode` and
+/// `classValue`) and the tuple encoder (`BamlInboundValue.tupleNode`, a list)
+/// build one (`BamlInboundValue` is opaque outside this module), so no other
+/// encoder can nest without being counted. Encoding is synchronous, so
 /// one value's levels are all entered and left on one thread: the count is
 /// per thread, and costs no frame of its own on the recursion.
 enum BamlValueNesting {
@@ -589,6 +743,8 @@ enum BamlWireDepth {
             return 1 + (optional.hasInner ? nested(optional.inner) : 0)
         case .union(let union):
             return 1 + deepest(union.options)
+        case .tuple(let tuple):
+            return 1 + deepest(tuple.items)
         case .interface(let interface):
             let bindings = interface.bindings.map { 1 + ($0.hasTy ? nested($0.ty) : 0) }.max() ?? 0
             return 1 + max(deepest(interface.typeArgs), bindings)
@@ -658,15 +814,6 @@ func releaseInbound(_ value: BamlBridge_Cffi_V1_InboundValue) {
     case nil, .stringValue, .intValue, .floatValue, .boolValue, .enumValue, .uint8ArrayValue,
         .bigintValue, .tyValue, .mediaValue, .promptAstValue, .jsNumberValue:
         break
-    }
-}
-
-extension BamlSlot where Value: BamlEncodable {
-    /// `value` as a node of this slot, through `Value`'s conformance: a
-    /// caller that knows `Value` concretely calls a leaf, which is never
-    /// refused, and a container, which may be, alike.
-    public func _bamlEncode(_ value: Value) throws -> BamlInboundValue {
-        try value._bamlEncode(as: self)
     }
 }
 
@@ -796,21 +943,7 @@ extension Array: BamlEncodable where Element: BamlEncodable {
     public func _bamlEncode(as slot: BamlSlot<[Element]>) throws -> BamlInboundValue {
         guard case .list(let item) = slot.node.shape else { slot.node.mismatch("a list") }
         let itemSlot = BamlSlot<Element>(item)
-        try BamlValueNesting.enter()
-        defer { BamlValueNesting.leave() }
-        // The descent keeps no wire message in this frame: the list is
-        // assembled once every item is encoded.
-        var items: [BamlInboundValue] = []
-        items.reserveCapacity(count)
-        do {
-            for element in self {
-                items.append(try element._bamlEncode(as: itemSlot))
-            }
-        } catch {
-            for item in items { releaseInbound(item.raw) }
-            throw error
-        }
-        return .listNode(items, stating: slot.type)
+        return try .listNode(self, stating: slot.type) { try $0._bamlEncode(as: itemSlot) }
     }
 }
 
@@ -822,19 +955,7 @@ extension Dictionary: BamlEncodable where Key == String, Value: BamlEncodable {
     public func _bamlEncode(as slot: BamlSlot<[String: Value]>) throws -> BamlInboundValue {
         guard case .map(let value) = slot.node.shape else { slot.node.mismatch("a map") }
         let valueSlot = BamlSlot<Value>(value)
-        try BamlValueNesting.enter()
-        defer { BamlValueNesting.leave() }
-        var entries: [(key: String, value: BamlInboundValue)] = []
-        entries.reserveCapacity(count)
-        do {
-            for (key, value) in self {
-                entries.append((key, try value._bamlEncode(as: valueSlot)))
-            }
-        } catch {
-            for entry in entries { releaseInbound(entry.value.raw) }
-            throw error
-        }
-        return .mapNode(entries, stating: slot.type)
+        return try .mapNode(self, stating: slot.type) { try $0._bamlEncode(as: valueSlot) }
     }
 }
 
@@ -847,9 +968,9 @@ public struct BamlField {
     let name: String
     let encode: () throws -> BamlInboundValue
 
-    public init<Value: BamlEncodable>(_ name: String, _ value: Value, as slot: BamlSlot<Value>) {
+    public init<Value>(_ name: String, _ value: Value, as slot: BamlSlot<Value>) {
         self.name = name
-        self.encode = { try value._bamlEncode(as: slot) }
+        self.encode = { try slot._bamlEncode(value) }
     }
 
     /// A prebuilt node, for runtime-owned values with no Swift model.
@@ -897,6 +1018,52 @@ extension BamlInboundValue {
         v.valueType = type.raw
         v.classValue = cls
         return BamlInboundValue(v)
+    }
+
+    /// A list node of `values`, each encoded by `encode`. A value that cannot
+    /// be encoded releases the items encoded before it.
+    static func listNode<Element>(
+        _ values: [Element],
+        stating type: BamlTypeDescriptor,
+        _ encode: (Element) throws -> BamlInboundValue
+    ) throws -> BamlInboundValue {
+        try BamlValueNesting.enter()
+        defer { BamlValueNesting.leave() }
+        // The descent keeps no wire message in this frame: the list is
+        // assembled once every item is encoded.
+        var items: [BamlInboundValue] = []
+        items.reserveCapacity(values.count)
+        do {
+            for value in values {
+                items.append(try encode(value))
+            }
+        } catch {
+            for item in items { releaseInbound(item.raw) }
+            throw error
+        }
+        return .listNode(items, stating: type)
+    }
+
+    /// A map node of `values`, each encoded by `encode`. A value that cannot
+    /// be encoded releases the entries encoded before it.
+    static func mapNode<Value>(
+        _ values: [String: Value],
+        stating type: BamlTypeDescriptor,
+        _ encode: (Value) throws -> BamlInboundValue
+    ) throws -> BamlInboundValue {
+        try BamlValueNesting.enter()
+        defer { BamlValueNesting.leave() }
+        var entries: [(key: String, value: BamlInboundValue)] = []
+        entries.reserveCapacity(values.count)
+        do {
+            for (key, value) in values {
+                entries.append((key, try encode(value)))
+            }
+        } catch {
+            for entry in entries { releaseInbound(entry.value.raw) }
+            throw error
+        }
+        return .mapNode(entries, stating: type)
     }
 
     /// A list node, assembled from its encoded items.
@@ -966,8 +1133,8 @@ public struct BamlArgument {
     }
 
     /// `value` as a node of its declared parameter type.
-    public init<Value: BamlEncodable>(_ name: String, _ value: Value, as slot: BamlSlot<Value>) {
-        self.init(name: name) { try value._bamlEncode(as: slot) }
+    public init<Value>(_ name: String, _ value: Value, as slot: BamlSlot<Value>) {
+        self.init(name: name) { try slot._bamlEncode(value) }
     }
 
     /// `value` under its own Swift type's slot, for a parameter whose

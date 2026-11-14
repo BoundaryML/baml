@@ -310,6 +310,7 @@ fn collect(
 fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
     match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
+        Object::Tuple(tuple) => tuple.slot_values().collect(),
         Object::Map(map) => map
             .snapshot_entries()
             .into_iter()
@@ -669,6 +670,8 @@ impl Walker<'_, '_> {
             Object::String(_) => Shape::String,
             Object::Bigint(_) => Shape::Bigint,
             Object::Array(values) => Shape::Array(values.to_vec()),
+            // A tuple is a JSON array, in element order.
+            Object::Tuple(tuple) => Shape::Array(tuple.slot_values().collect()),
             Object::Map(_) => Shape::Map,
             Object::Instance(instance) => Shape::Instance(instance.class),
             Object::Variant(variant) => Shape::Variant(variant.enm, variant.index),
@@ -775,6 +778,7 @@ impl Walker<'_, '_> {
             Object::String(_) => JsonShape::String,
             Object::Bigint(_) => JsonShape::Bigint,
             Object::Array(values) => JsonShape::Array(values.to_vec()),
+            Object::Tuple(tuple) => JsonShape::Array(tuple.slot_values().collect()),
             Object::Map(_) => JsonShape::Map,
             Object::Variant(variant) => JsonShape::Variant(match vm.get_object(variant.enm) {
                 Object::Enum(e) => e.variants.get(variant.index).map(|v| v.name.clone()),
