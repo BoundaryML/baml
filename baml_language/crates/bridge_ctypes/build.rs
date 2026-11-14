@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 fn main() -> std::io::Result<()> {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=types");
 
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let proto_dir = manifest_dir.join("types");

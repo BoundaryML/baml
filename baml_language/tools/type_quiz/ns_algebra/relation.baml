@@ -123,7 +123,7 @@ function judgments(d: Derivation, model: Model?) -> Judged[] throws never {
     d.rest.reduce(
         (acc, t) -> {
             let current = acc.at(-1)?.after ?? first;
-            let after = transferred(model, t, current) ?? t.transfer(current);
+            let after = transferred(model, t, current) ?? (t.transfer)(current);
             acc.concat([Judged { step: t, after }])
         },
         start,
