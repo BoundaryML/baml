@@ -3506,6 +3506,7 @@ impl BexVm {
     }
 
     /// The class of the instance `value` names, if it names one.
+    #[inline]
     pub fn instance_class(&self, value: Value) -> Option<HeapPtr> {
         let instance = self.get_instance(value.as_object_ptr()?)?;
         Some(instance.class())
