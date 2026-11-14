@@ -1,0 +1,1478 @@
+diff --git a/baml_language/Cargo.lock b/baml_language/Cargo.lock
+index a32cf386c0..16b33744c8 100644
+--- a/baml_language/Cargo.lock
++++ b/baml_language/Cargo.lock
+@@ -935,6 +935,7 @@ dependencies = [
+  "baml_tests",
+  "baml_type",
+  "bex_engine",
++ "bex_vm",
+  "bex_vm_types",
+  "borsh",
+  "clap",
+diff --git a/baml_language/crates/baml/Cargo.toml b/baml_language/crates/baml/Cargo.toml
+index 1f890e08fe..37c641c626 100644
+--- a/baml_language/crates/baml/Cargo.toml
++++ b/baml_language/crates/baml/Cargo.toml
+@@ -24,6 +24,7 @@ workspace = true
+ default = [ "self-update" ]
+ self-update = [  ]
+ no-self-update = [  ]
++startup-experiment = [ "baml_artifact/startup-experiment", "baml_pack_host/startup-experiment", "baml_exec/startup-experiment" ]
+
+ [dependencies]
+ baml_artifact = { workspace = true }
+diff --git a/baml_language/crates/baml/build.rs b/baml_language/crates/baml/build.rs
+index 2a3d1f18ce..2936fe252a 100644
+--- a/baml_language/crates/baml/build.rs
++++ b/baml_language/crates/baml/build.rs
+@@ -45,6 +45,12 @@ fn main() {
+         .find(|name| name.as_str() == target || name.ends_with(&format!(".{target}")))
+         .unwrap_or_else(|| panic!("missing wrapper entry point {target}"))
+         .clone();
++    #[cfg(feature = "startup-experiment")]
++    let program = {
++        let mut program = program;
++        baml_exec::prepare_startup_experiment(&mut program);
++        program
++    };
+     let envelope = baml_exec::PackEnvelope {
+         program,
+         mode: baml_exec::PackMode::Single,
+diff --git a/baml_language/crates/baml_artifact/Cargo.toml b/baml_language/crates/baml_artifact/Cargo.toml
+index 5b0faf8d35..a9839d77be 100644
+--- a/baml_language/crates/baml_artifact/Cargo.toml
++++ b/baml_language/crates/baml_artifact/Cargo.toml
+@@ -17,6 +17,7 @@ doctest = false
+
+ [features]
+ test-support = [  ]
++startup-experiment = [  ]
+
+ [lints]
+ workspace = true
+diff --git a/baml_language/crates/baml_artifact/src/lib.rs b/baml_language/crates/baml_artifact/src/lib.rs
+index c51303a9b1..fe3105f537 100644
+--- a/baml_language/crates/baml_artifact/src/lib.rs
++++ b/baml_language/crates/baml_artifact/src/lib.rs
+@@ -71,7 +71,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
+ /// the executable is its position; its name is display metadata), so every
+ /// serialized program changed shape. The identity-keyed unit format that
+ /// produces them (`baml_linker_types`) rides the same version.
++#[cfg(not(feature = "startup-experiment"))]
+ pub const FORMAT_VERSION: u32 = 12;
++// Keep prototype artifacts out of the release format, including stable builds.
++#[cfg(feature = "startup-experiment")]
++pub const FORMAT_VERSION: u32 = 0x8000_000C;
+
+ /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
+ /// HEAD), or empty when neither was available.
+diff --git a/baml_language/crates/baml_cli/Cargo.toml b/baml_language/crates/baml_cli/Cargo.toml
+index 70fa92a5ca..6ceda99971 100644
+--- a/baml_language/crates/baml_cli/Cargo.toml
++++ b/baml_language/crates/baml_cli/Cargo.toml
+@@ -73,6 +73,7 @@ uuid = { workspace = true }
+ webbrowser = { workspace = true }
+
+ [features]
++startup-experiment = [ "baml_exec/startup-experiment", "baml_artifact/startup-experiment" ]
+ default = [ "aws-crypto" ]
+ aws-crypto = [ "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
+ ring-crypto = [ "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
+diff --git a/baml_language/crates/baml_cli/src/pack_command.rs b/baml_language/crates/baml_cli/src/pack_command.rs
+index 405d285d2d..aa236caff2 100644
+--- a/baml_language/crates/baml_cli/src/pack_command.rs
++++ b/baml_language/crates/baml_cli/src/pack_command.rs
+@@ -174,6 +174,12 @@ impl PackArgs {
+         let label = label_for(&targets);
+         reporter.spin("Packaging", &label);
+
++        #[cfg(feature = "startup-experiment")]
++        let program = {
++            let mut program = program;
++            baml_exec::prepare_startup_experiment(&mut program);
++            program
++        };
+         let envelope = PackEnvelope {
+             program,
+             mode: mode.clone(),
+diff --git a/baml_language/crates/baml_exec/Cargo.toml b/baml_language/crates/baml_exec/Cargo.toml
+index 389e114e30..94bb0cee02 100644
+--- a/baml_language/crates/baml_exec/Cargo.toml
++++ b/baml_language/crates/baml_exec/Cargo.toml
+@@ -21,6 +21,7 @@ workspace = true
+ baml_type = { workspace = true }
+ bex_engine = { workspace = true }
+ bex_vm_types = { workspace = true }
++bex_vm = { workspace = true, optional = true }
+ anyhow = { workspace = true }
+ borsh = { workspace = true }
+ clap = { workspace = true }
+@@ -33,3 +34,6 @@ baml_tests = { workspace = true }
+ sys_native = { workspace = true }
+ tempfile = { workspace = true }
+ tokio = { workspace = true, features = [ "rt", "macros" ] }
++
++[features]
++startup-experiment = [ "dep:bex_vm", "bex_vm/startup-experiment", "bex_engine/startup-experiment", "bex_vm_types/startup-experiment" ]
+diff --git a/baml_language/crates/baml_exec/src/lib.rs b/baml_language/crates/baml_exec/src/lib.rs
+index e13ea1efea..84e49ec11f 100644
+--- a/baml_language/crates/baml_exec/src/lib.rs
++++ b/baml_language/crates/baml_exec/src/lib.rs
+@@ -40,3 +40,40 @@ pub use dispatch::{
+ pub use envelope::{PACK_SECTION_NAME, PackEnvelope, PackMode, TargetEntry};
+ pub use json_coerce::load_json_source;
+ pub use output::{OutputFormat, format_value, write_output, write_output_with_context};
++
++/// Measurement-only prototype of an execution-ready artifact. Not a supported
++/// artifact format: loading serialized compact code still needs a verifier,
++/// and original disassembly metadata needs a separate deferred section.
++#[cfg(feature = "startup-experiment")]
++pub fn prepare_startup_experiment(program: &mut bex_vm_types::Program) {
++    use bex_vm_types::{ConstValue, Object, ObjectIndex};
++    program.validate().expect("compiler-produced program");
++    let floats =
++        bex_vm_types::types::box_compile_time_floats(&mut program.objects, &program.globals);
++    for global in &mut program.globals {
++        if let ConstValue::Float(value) = global {
++            *global = ConstValue::Object(ObjectIndex::from_raw(floats[&value.to_bits()]));
++        }
++    }
++    bex_vm::prepare_compact_code(&mut program.objects, &program.globals);
++    for object in &mut program.objects {
++        if let Object::Function(function) = object {
++            function
++                .bytecode
++                .compact
++                .as_mut()
++                .unwrap()
++                .defer_source_map();
++            // The executable image carries final PCs and code, so these
++            // compiler representations are unnecessary for this measurement.
++            function.bytecode.instructions.clear();
++            function.bytecode.meta.clear();
++            function.bytecode.line_table.clear();
++            function.bytecode.call_layouts.clear();
++            function.bytecode.jump_tables.clear();
++            function.bytecode.exception_table.clear();
++            function.bytecode.handler_context_table.clear();
++            function.bytecode.shield_table.clear();
++        }
++    }
++}
+diff --git a/baml_language/crates/baml_pack_host/Cargo.toml b/baml_language/crates/baml_pack_host/Cargo.toml
+index e4440f48f5..eca5108c23 100644
+--- a/baml_language/crates/baml_pack_host/Cargo.toml
++++ b/baml_language/crates/baml_pack_host/Cargo.toml
+@@ -27,6 +27,7 @@ tokio = { workspace = true, features = [ "rt" ] }
+
+ [features]
+ default = [  ]
++startup-experiment = [ "baml_artifact/startup-experiment", "baml_exec/startup-experiment", "bex_engine/startup-experiment" ]
+ native-tls = [ "sys_native/native-tls" ]
+
+ [[bin]]
+diff --git a/baml_language/crates/bex_engine/Cargo.toml b/baml_language/crates/bex_engine/Cargo.toml
+index abf0b712a3..9e26e5e631 100644
+--- a/baml_language/crates/bex_engine/Cargo.toml
++++ b/baml_language/crates/bex_engine/Cargo.toml
+@@ -75,6 +75,7 @@ workspace = true
+
+ [features]
+ default = [ "aws-crypto" ]
++startup-experiment = [ "bex_vm/startup-experiment", "bex_vm_types/startup-experiment" ]
+ gc_profiling = [ "bex_heap/gc_profiling" ]
+ # `sys_native` is a dev-dependency only, so feature propagation here would
+ # be a no-op for downstream consumers; its crypto feature is set directly
+diff --git a/baml_language/crates/bex_engine/src/conversion.rs b/baml_language/crates/bex_engine/src/conversion.rs
+index 40cd241bb9..90f8471488 100644
+--- a/baml_language/crates/bex_engine/src/conversion.rs
++++ b/baml_language/crates/bex_engine/src/conversion.rs
+@@ -3041,8 +3041,8 @@ fn described_value_type(value: &BexExternalValue) -> String {
+ fn find_unannotated_inbound_member_with_aliases(
+     value: &BexExternalValue,
+     members: &[RuntimeTy],
+-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
++    aliases: &dyn WireLookup<RuntimeTy>,
++    classes: &dyn WireLookup<WireClassDefinition>,
+     ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
+ ) -> Result<RuntimeTy, EngineError> {
+     let mut matching: Vec<&RuntimeTy> = Vec::new();
+@@ -3113,8 +3113,10 @@ fn find_unannotated_inbound_member_with_aliases(
+
+ fn runtime_ty_resolves_to_exact_null<'a>(
+     mut ty: &'a RuntimeTy,
+-    aliases: &'a indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
++    aliases: &'a dyn WireLookup<RuntimeTy>,
+ ) -> bool {
++    if matches!(ty, RuntimeTy::Null) { return true; }
++    if !matches!(ty, RuntimeTy::TypeAlias(_)) { return false; }
+     // A productive alias chain cannot contain more distinct aliases than the
+     // registry. The bound also makes this defensive against an invalid cycle.
+     for _ in 0..=aliases.len() {
+@@ -3176,7 +3178,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
+ /// — and declared names are program-unique, so the old "scan for a unique
+ /// matching `display_name`" fallback had nothing left to find that this misses.
+ fn find_inbound_class_definition<'a>(
+-    classes: &'a indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
++    classes: &'a dyn WireLookup<WireClassDefinition>,
+     type_name: &baml_type::TypeName,
+ ) -> Option<&'a WireClassDefinition> {
+     classes.get(type_name)
+@@ -3185,8 +3187,8 @@ fn find_inbound_class_definition<'a>(
+ fn map_matches_class_shape(
+     entries: &indexmap::IndexMap<String, BexExternalValue>,
+     type_name: &baml_type::TypeName,
+-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
++    aliases: &dyn WireLookup<RuntimeTy>,
++    classes: &dyn WireLookup<WireClassDefinition>,
+ ) -> bool {
+     let Some(definition) = find_inbound_class_definition(classes, type_name) else {
+         // Shape-only fallback. Reached by unit-level callers with no loaded
+@@ -3234,8 +3236,8 @@ fn map_matches_class_shape(
+ fn value_matches_type_with_definitions(
+     value: &BexExternalValue,
+     ty: &RuntimeTy,
+-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
++    aliases: &dyn WireLookup<RuntimeTy>,
++    classes: &dyn WireLookup<WireClassDefinition>,
+ ) -> bool {
+     if let RuntimeTy::TypeAlias(name) = ty
+         && !is_canonical_json_alias(name)
+@@ -4120,16 +4122,77 @@ impl BexEngine {
+         value: BexExternalValue,
+         ty: &RuntimeTy,
+     ) -> Result<BexExternalValue, EngineError> {
++        let definitions = DeferredInboundDefinitions {
++            views: &self.inbound_views,
++            aliases: &self.inbound_alias_cache,
++            context: &self.sys_op_ctx,
++        };
+         coerce_arg_to_declared_type_with_aliases(
+             value,
+             ty,
+-            &self.inbound_alias_view,
+-            &self.inbound_class_view,
++            &definitions,
++            &definitions,
+             crate::inbound_config::inbound_union_ambiguity_policy(),
+         )
+     }
+ }
+
++/// Diagnostic experiment: passing a registry to coercion does not initialize
++/// it. Primitive coercions never look up a class or recursive alias.
++trait WireLookup<T> {
++    fn get(&self, name: &baml_type::TypeName) -> Option<&T>;
++    fn len(&self) -> usize;
++}
++
++impl<T> WireLookup<T> for indexmap::IndexMap<baml_type::TypeName, T> {
++    fn get(&self, name: &baml_type::TypeName) -> Option<&T> {
++        indexmap::IndexMap::get(self, name)
++    }
++    fn len(&self) -> usize { indexmap::IndexMap::len(self) }
++}
++
++struct DeferredInboundDefinitions<'a> {
++    views: &'a std::sync::OnceLock<(
++        indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
++        indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
++    )>,
++    aliases: &'a std::sync::OnceLock<indexmap::IndexMap<baml_type::TypeName, RuntimeTy>>,
++    context: &'a sys_types::EngineSysOpContext,
++}
++
++impl DeferredInboundDefinitions<'_> {
++    fn aliases(&self) -> &indexmap::IndexMap<baml_type::TypeName, RuntimeTy> {
++        if let Some(views) = self.views.get() { return &views.0; }
++        self.aliases.get_or_init(|| wire_definition_views(
++            self.context.type_alias_definitions.as_ref(),
++            &indexmap::IndexMap::new(),
++        ).0)
++    }
++    fn views(&self) -> &(
++        indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
++        indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
++    ) {
++        self.views.get_or_init(|| wire_definition_views(
++            self.context.type_alias_definitions.as_ref(),
++            self.context.class_definitions.as_ref(),
++        ))
++    }
++}
++
++impl WireLookup<RuntimeTy> for DeferredInboundDefinitions<'_> {
++    fn get(&self, name: &baml_type::TypeName) -> Option<&RuntimeTy> {
++        self.aliases().get(name)
++    }
++    fn len(&self) -> usize { self.aliases().len() }
++}
++
++impl WireLookup<WireClassDefinition> for DeferredInboundDefinitions<'_> {
++    fn get(&self, name: &baml_type::TypeName) -> Option<&WireClassDefinition> {
++        self.views().1.get(name)
++    }
++    fn len(&self) -> usize { self.views().1.len() }
++}
++
+ /// A class definition as the inbound matcher reads it: name-headed, because it
+ /// is matched against wire values that carry only names.
+ #[derive(Clone, Debug)]
+@@ -4202,7 +4265,7 @@ pub(crate) fn wire_definition_views(
+ fn runtime_ty_assignable_with_aliases(
+     actual: &RuntimeTy,
+     expected: &RuntimeTy,
+-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
++    aliases: &dyn WireLookup<RuntimeTy>,
+ ) -> bool {
+     if runtime_ty_structurally_equal(actual, expected) {
+         return true;
+@@ -4271,7 +4334,7 @@ fn stdlib_media_wrapper_kind(annotation: &RuntimeTy) -> Option<baml_type::MediaK
+
+ fn resolve_runtime_alias<'a>(
+     mut ty: &'a RuntimeTy,
+-    aliases: &'a indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
++    aliases: &'a dyn WireLookup<RuntimeTy>,
+ ) -> Option<&'a RuntimeTy> {
+     let mut visited = std::collections::HashSet::new();
+     while let RuntimeTy::TypeAlias(name) = ty {
+@@ -4286,7 +4349,7 @@ fn resolve_runtime_alias<'a>(
+ fn stdlib_media_wrapper_matches(
+     annotation: &RuntimeTy,
+     contextual: &RuntimeTy,
+-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
++    aliases: &dyn WireLookup<RuntimeTy>,
+     allow_generic: bool,
+ ) -> bool {
+     let Some(wrapper_kind) = stdlib_media_wrapper_kind(annotation) else {
+@@ -4309,7 +4372,7 @@ fn stdlib_media_wrapper_matches(
+ fn stdlib_media_wrapper_payload_type(
+     annotation: &RuntimeTy,
+     contextual: &RuntimeTy,
+-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
++    aliases: &dyn WireLookup<RuntimeTy>,
+ ) -> Option<RuntimeTy> {
+     let wrapper_kind = stdlib_media_wrapper_kind(annotation)?;
+     let RuntimeTy::Media(contextual_kind) = resolve_runtime_alias(contextual, aliases)? else {
+@@ -4344,7 +4407,7 @@ fn refine_class_annotation_args(
+ /// cannot see program-local alias definitions.
+ fn inbound_annotation_resolves_to_root_union(
+     annotation: &RuntimeTy,
+-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
++    aliases: &dyn WireLookup<RuntimeTy>,
+ ) -> bool {
+     let mut current = annotation;
+     let mut visited = std::collections::HashSet::new();
+@@ -4394,8 +4457,8 @@ fn coerce_arg_to_declared_type_with_policy(
+ fn coerce_arg_to_declared_type_with_aliases(
+     value: BexExternalValue,
+     ty: &RuntimeTy,
+-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
++    aliases: &dyn WireLookup<RuntimeTy>,
++    classes: &dyn WireLookup<WireClassDefinition>,
+     ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
+ ) -> Result<BexExternalValue, EngineError> {
+     // Defense in depth for internally constructed values and aliases. Wire
+@@ -4931,8 +4994,8 @@ fn js_number_to_vm_int(value: f64) -> Option<i64> {
+ fn resolve_js_number_for_union(
+     value: f64,
+     members: &[RuntimeTy],
+-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
++    aliases: &dyn WireLookup<RuntimeTy>,
++    classes: &dyn WireLookup<WireClassDefinition>,
+ ) -> (BexExternalValue, Option<RuntimeTy>) {
+     if let Some(integer) = js_number_to_vm_int(value) {
+         let integer_value = BexExternalValue::Int(integer);
+@@ -4995,8 +5058,8 @@ fn member_admits_numeric_arm(
+     member: &RuntimeTy,
+     value: &BexExternalValue,
+     is_numeric_arm: fn(&RuntimeTy) -> bool,
+-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
++    aliases: &dyn WireLookup<RuntimeTy>,
++    classes: &dyn WireLookup<WireClassDefinition>,
+     visited_aliases: &mut std::collections::HashSet<baml_type::TypeName>,
+ ) -> bool {
+     match member {
+diff --git a/baml_language/crates/bex_engine/src/lib.rs b/baml_language/crates/bex_engine/src/lib.rs
+index 9160af2e0f..de2dad53d7 100644
+--- a/baml_language/crates/bex_engine/src/lib.rs
++++ b/baml_language/crates/bex_engine/src/lib.rs
+@@ -990,7 +990,7 @@ pub struct BexEngine {
+     /// frozen globals pool.
+     _globals_permit: bex_heap::InactiveHeapPermit<SharedGlobals>,
+     /// Resolved function/class/enum names for lookup
+-    resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
++    resolved_function_names: Arc<HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>>,
+     /// The world's root package — the one the program was compiled for:
+     /// whose tests a run collects.
+     root_package: HeapPtr,
+@@ -998,9 +998,9 @@ pub struct BexEngine {
+     /// tables: what tells a callee's class-generic prefix from its own.
+     method_owners: HashMap<HeapPtr, HeapPtr>,
+     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
+-    resolved_class_names: indexmap::IndexMap<String, HeapPtr>,
++    resolved_class_names: Arc<indexmap::IndexMap<String, HeapPtr>>,
+     /// Resolved enum names for variant allocation (`IndexMap` preserves definition order)
+-    resolved_enum_names: indexmap::IndexMap<String, HeapPtr>,
++    resolved_enum_names: Arc<indexmap::IndexMap<String, HeapPtr>>,
+     /// System operations provider.
+     sys_ops: std::sync::Arc<sys_ops::SysOps>,
+     runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
+@@ -1012,9 +1012,11 @@ pub struct BexEngine {
+     /// engine construction. Rebuilding them per coercion would walk every
+     /// compiled class on every inbound argument, and `coerce_inbound_arg`
+     /// recurses over argument trees.
+-    inbound_alias_view: indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+-    inbound_class_view:
++    inbound_views: std::sync::OnceLock<(
++        indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+         indexmap::IndexMap<baml_type::TypeName, crate::conversion::WireClassDefinition>,
++    )>,
++    inbound_alias_cache: std::sync::OnceLock<indexmap::IndexMap<baml_type::TypeName, RuntimeTy>>,
+     /// Process argv passed in at engine creation. Exposed to BAML via
+     /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
+     argv: Arc<[String]>,
+@@ -1728,6 +1730,7 @@ impl BexEngine {
+         argv: Vec<String>,
+         config: EngineConfig,
+     ) -> Result<Self, EngineError> {
++        bex_heap::startup_profile::mark(0);
+         let EngineConfig {
+             launch_context,
+             runtime_compiler,
+@@ -1755,13 +1758,16 @@ impl BexEngine {
+         // The init order, before the executable is consumed.
+         let init_order = bytecode_program.init_order.clone();
+
++        bex_heap::startup_profile::mark(1);
+         // Convert the pure bytecode to a VM-ready program with native functions attached
+         let bytecode =
+             bex_vm::convert_program(bytecode_program).map_err(EngineError::VmInternalError)?;
+
++        bex_heap::startup_profile::mark(7);
+         // Extract compile-time objects for the heap
+         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
+
++        bex_heap::startup_profile::mark(8);
+         // Box every reachable `ConstValue::Float` into a compile-time
+         // `Object::Float` (floats can no longer live inline in `Value`).
+         // `bytecode.globals` are rewritten further down, during the
+@@ -1771,10 +1777,20 @@ impl BexEngine {
+             &bytecode.globals,
+         );
+
++        bex_heap::startup_profile::mark(9);
+         // Boxing changes constant kinds, so rebuild compact code and select
+         // exact calls together. Plain lowering here would erase specialization.
+-        bex_vm::prepare_compact_code(&mut compile_time_objects, &bytecode.globals);
++        #[cfg(feature = "startup-experiment")]
++        let prepared = float_indices.is_empty() && compile_time_objects.iter().all(|object| {
++            !matches!(object, Object::Function(function) if function.bytecode.compact.is_none())
++        });
++        #[cfg(not(feature = "startup-experiment"))]
++        let prepared = false;
++        if !prepared {
++            bex_vm::prepare_compact_code(&mut compile_time_objects, &bytecode.globals);
++        }
+
++        bex_heap::startup_profile::mark(10);
+         // Pre-compute class and enum indices before moving objects to heap.
+         // This is used for allocating instances/variants from sys-op results.
+         let class_indices: Vec<(String, usize)> = compile_time_objects
+@@ -1801,6 +1817,7 @@ impl BexEngine {
+             })
+             .collect();
+
++        bex_heap::startup_profile::mark(11);
+         // Create the unified heap with compile-time objects, additionally
+         // allocating the per-package `Object::Package` / `Object::ImplRule`
+         // objects and the `vm.packages` index.
+@@ -1809,6 +1826,7 @@ impl BexEngine {
+             &bytecode.packages,
+             bytecode.root,
+         );
++        bex_heap::startup_profile::mark(19);
+         // Shared with every VM so spawned workers see the same package index
+         // without re-resolving it.
+         let packages = Arc::new(package_index);
+@@ -1841,30 +1859,32 @@ impl BexEngine {
+         let panic_class_ptrs = bex_vm::vm::resolve_panic_class_ptrs(&packages);
+         let stdlib_heads = Arc::new(bex_vm::package_load::StdlibHeads::resolve(&packages));
+
++        bex_heap::startup_profile::mark(20);
+         // Convert ObjectIndex -> HeapPtr for function lookup table.
+         // Now that the heap exists, we can get stable pointers to compile-time objects.
+-        let resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)> =
+-            bytecode
++        let resolved_function_names: Arc<HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>> =
++            Arc::new(bytecode
+                 .resolved_function_names
+                 .into_iter()
+                 .map(|(name, (idx, kind))| {
+                     let ptr = heap.compile_time_ptr(idx.into_raw());
+                     (name, (ptr, kind))
+                 })
+-                .collect();
++                .collect());
+
+         // Build class name lookup table from pre-computed indices.
+-        let resolved_class_names: indexmap::IndexMap<String, HeapPtr> = class_indices
++        let resolved_class_names: Arc<indexmap::IndexMap<String, HeapPtr>> = Arc::new(class_indices
+             .into_iter()
+             .map(|(name, idx)| (name, heap.compile_time_ptr(idx)))
+-            .collect();
++            .collect());
+
+         // Build enum name lookup table from pre-computed indices.
+-        let resolved_enum_names: indexmap::IndexMap<String, HeapPtr> = enum_indices
++        let resolved_enum_names: Arc<indexmap::IndexMap<String, HeapPtr>> = Arc::new(enum_indices
+             .into_iter()
+             .map(|(name, idx)| (name, heap.compile_time_ptr(idx)))
+-            .collect();
++            .collect());
+
++        bex_heap::startup_profile::mark(21);
+         // Convert compile-time globals (ConstValue) to runtime globals (Value).
+         // Object references are converted from ObjectIndex to HeapPtr.
+         // Float globals were redirected to compile-time Object::Float entries
+@@ -1887,6 +1907,7 @@ impl BexEngine {
+         #[cfg(not(target_arch = "wasm32"))]
+         let park_requested = Arc::new(AtomicBool::new(false));
+
++        bex_heap::startup_profile::mark(22);
+         let telemetry = auto_telemetry_level
+             .map(|auto_level| {
+                 let clock = Arc::new(btel_clock::ClockRuntime::new(clock_mode));
+@@ -1930,6 +1951,7 @@ impl BexEngine {
+             })
+             .transpose()?;
+
++        bex_heap::startup_profile::mark(23);
+         // Run $init for each package in dependency order.
+         // $init evaluates top-level let-binding initializers and stores their
+         // results into the global slots via StoreGlobal instructions.
+@@ -2014,14 +2036,43 @@ impl BexEngine {
+         // `VmInternalError::StoreGlobalAfterInit`.
+         let globals = SharedGlobals::from_vec(globals_pool.0);
+
++        bex_heap::startup_profile::mark(24);
+         // Build SysOpContext by pre-extracting LLM function metadata from the heap.
+         // This avoids passing raw HeapPtrs to sys_ops.
+-        let llm_functions = Self::extract_llm_function_info(&resolved_function_names);
++        let lazy_schemas = std::env::var_os("BAML_LAZY_SCHEMAS").is_some();
++        let llm_functions = {
++            let table = Arc::clone(&resolved_function_names);
++            let heap = Arc::clone(&heap);
++            sys_types::Deferred::new(move || {
++                let _keep_heap_alive = &heap;
++                Self::extract_llm_function_info(&table)
++            })
++        };
++        if !lazy_schemas { let _ = llm_functions.as_ref(); }
+
++        bex_heap::startup_profile::mark(25);
+         // Extract class and enum definitions for output format rendering.
+-        let class_definitions = Self::extract_class_definitions(&resolved_class_names);
+-        let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
++        let class_definitions = {
++            let table = Arc::clone(&resolved_class_names);
++            let heap = Arc::clone(&heap);
++            sys_types::Deferred::new(move || {
++                let _keep_heap_alive = &heap;
++                Self::extract_class_definitions(&table)
++            })
++        };
++        if !lazy_schemas { let _ = class_definitions.as_ref(); }
++        bex_heap::startup_profile::mark(26);
++        let enum_definitions = {
++            let table = Arc::clone(&resolved_enum_names);
++            let heap = Arc::clone(&heap);
++            sys_types::Deferred::new(move || {
++                let _keep_heap_alive = &heap;
++                Self::extract_enum_definitions(&table)
++            })
++        };
++        if !lazy_schemas { let _ = enum_definitions.as_ref(); }
+
++        bex_heap::startup_profile::mark(27);
+         let bex_work = bex_work::BexWork::new(&heap);
+         let heap_permit_manager = Arc::new(HeapPermitManager::new());
+         // We just created the permit manager so `new_permit` will not block:
+@@ -2053,6 +2104,7 @@ impl BexEngine {
+             ),
+         ));
+
++        bex_heap::startup_profile::mark(28);
+         // Build a default RuntimeIo from the SysOps table with an empty context.
+         // This is replaced per-call in execute_sys_op with a live context that
+         // carries the correct cancellation token and spawner.
+@@ -2063,11 +2115,16 @@ impl BexEngine {
+             &sys_types::SysOpContext::empty(),
+         );
+
++        bex_heap::startup_profile::mark(29);
+         let sys_op_ctx = sys_types::EngineSysOpContext {
+-            llm_functions: Arc::new(llm_functions),
+-            class_definitions: Arc::new(class_definitions),
+-            enum_definitions: Arc::new(enum_definitions),
+-            type_alias_definitions: Arc::new(
++            llm_functions,
++            class_definitions,
++            enum_definitions,
++            type_alias_definitions: {
++                let packages = Arc::clone(&packages);
++                let heap = Arc::clone(&heap);
++                let aliases: sys_types::Deferred<indexmap::IndexMap<sys_types::DefKey, sys_types::SapTy>> = sys_types::Deferred::new(move || {
++                    let _keep_heap_alive = &heap;
+                 bex_vm::package_load::all_recursive_type_aliases(&packages)
+                     .into_iter()
+                     .filter_map(|(head, ty)| {
+@@ -2076,18 +2133,26 @@ impl BexEngine {
+                             .ok()
+                             .map(|ty| (head, ty))
+                     })
+-                    .collect(),
+-            ),
++                    .collect()
++                });
++                if !lazy_schemas { let _ = aliases.as_ref(); }
++                aliases
++            },
+             runtime_io,
+         };
+
++        bex_heap::startup_profile::mark(30);
+         // Project the inbound matcher's views once; the tables they mirror do
+         // not change after this point.
+-        let (inbound_alias_view, inbound_class_view) = crate::conversion::wire_definition_views(
+-            sys_op_ctx.type_alias_definitions.as_ref(),
+-            sys_op_ctx.class_definitions.as_ref(),
+-        );
++        let inbound_views = std::sync::OnceLock::new();
++        if !lazy_schemas {
++            let _ = inbound_views.set(crate::conversion::wire_definition_views(
++                sys_op_ctx.type_alias_definitions.as_ref(),
++                sys_op_ctx.class_definitions.as_ref(),
++            ));
++        }
+
++        bex_heap::startup_profile::mark(31);
+         Ok(Self {
+             #[cfg(test)]
+             completed_threads: std::sync::Mutex::new(Vec::new()),
+@@ -2115,8 +2180,8 @@ impl BexEngine {
+             resolved_enum_names,
+             sys_ops,
+             runtime_compiler,
+-            inbound_alias_view,
+-            inbound_class_view,
++            inbound_views,
++            inbound_alias_cache: std::sync::OnceLock::new(),
+             sys_op_ctx,
+             argv,
+             heap_permit_manager,
+@@ -6400,20 +6465,20 @@ impl BexEngine {
+         if let Some(runtime_schema) = runtime_schema {
+             let mut classes = ctx.class_definitions.as_ref().clone();
+             classes.extend(runtime_schema.classes.clone());
+-            ctx.class_definitions = Arc::new(classes);
++            ctx.class_definitions = Arc::new(classes).into();
+             let mut enums = ctx.enum_definitions.as_ref().clone();
+             enums.extend(runtime_schema.enums.clone());
+-            ctx.enum_definitions = Arc::new(enums);
++            ctx.enum_definitions = Arc::new(enums).into();
+         }
+         if !runtime_type_overlay.class_definitions.is_empty() {
+             let mut classes = ctx.class_definitions.as_ref().clone();
+             classes.extend(runtime_type_overlay.class_definitions.clone());
+-            ctx.class_definitions = Arc::new(classes);
++            ctx.class_definitions = Arc::new(classes).into();
+         }
+         if !runtime_type_overlay.enum_definitions.is_empty() {
+             let mut enums = ctx.enum_definitions.as_ref().clone();
+             enums.extend(runtime_type_overlay.enum_definitions.clone());
+-            ctx.enum_definitions = Arc::new(enums);
++            ctx.enum_definitions = Arc::new(enums).into();
+         }
+         // Rebuild RuntimeIo with the live per-call context so IO calls
+         // (media resolution, auth) use the correct cancellation token.
+@@ -7841,3 +7906,6 @@ mod type_identity_tests {
+
+ #[cfg(test)]
+ mod completion_tests;
++
++#[doc(hidden)]
++pub fn emit_loading_profile() { bex_heap::startup_profile::emit(); }
+diff --git a/baml_language/crates/bex_heap/src/heap.rs b/baml_language/crates/bex_heap/src/heap.rs
+index dced80e7ce..4b8441ce44 100644
+--- a/baml_language/crates/bex_heap/src/heap.rs
++++ b/baml_language/crates/bex_heap/src/heap.rs
+@@ -340,6 +340,7 @@ impl BexHeap {
+         // Resolve bytecode constants for all Function objects before sealing.
+         // This converts ConstValue (with ObjectIndex) to Value (with HeapPtr).
+         Self::resolve_function_constants(&mut compile_time_objects);
++        crate::startup_profile::mark(13);
+
+         // BEP-042: precompute whether any class opts into a `cleanup` finalizer,
+         // so the per-collection finalizer scan can be skipped when none do.
+@@ -400,6 +401,7 @@ impl BexHeap {
+                 );
+             }
+         }
++        crate::startup_profile::mark(18);
+         Arc::new(self)
+     }
+
+diff --git a/baml_language/crates/bex_heap/src/lib.rs b/baml_language/crates/bex_heap/src/lib.rs
+index f26e683031..728d71db3c 100644
+--- a/baml_language/crates/bex_heap/src/lib.rs
++++ b/baml_language/crates/bex_heap/src/lib.rs
+@@ -86,3 +86,6 @@ pub use heap_guard::{
+     ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit,
+ };
+ pub use tlab::{Tlab, TlabHolder};
++
++#[doc(hidden)]
++pub mod startup_profile;
+diff --git a/baml_language/crates/bex_vm/Cargo.toml b/baml_language/crates/bex_vm/Cargo.toml
+index 0c2d10ff84..10f3937722 100644
+--- a/baml_language/crates/bex_vm/Cargo.toml
++++ b/baml_language/crates/bex_vm/Cargo.toml
+@@ -83,6 +83,7 @@ indexmap = { workspace = true }
+
+ [features]
+ default = [  ]
++startup-experiment = [ "bex_vm_types/startup-experiment", "baml_artifact/startup-experiment" ]
+ heap_debug = [ "bex_heap/heap_debug", "bex_vm_types/heap_debug" ]
+ # Enables the per-op VM counter for the `kperf` profiler's instructions/op
+ # breakdown. Off by default — pure measurement scaffolding on the hot path.
+diff --git a/baml_language/crates/bex_vm/src/package_load.rs b/baml_language/crates/bex_vm/src/package_load.rs
+index 750669852f..49837a82df 100644
+--- a/baml_language/crates/bex_vm/src/package_load.rs
++++ b/baml_language/crates/bex_vm/src/package_load.rs
+@@ -754,13 +754,18 @@ pub fn build_heap_with_packages(
+     root: u32,
+ ) -> (Arc<BexHeap>, PackageIndex) {
+     let layout = reserve_package_slots(&mut compile_time_objects, packages);
++    bex_heap::startup_profile::mark(12);
+     let mut heap = BexHeap::build_unsealed_default(compile_time_objects);
++    bex_heap::startup_profile::mark(14);
+     let index = fill_package_slots(&mut heap, packages, root, &layout);
++    bex_heap::startup_profile::mark(15);
+     // Every slot is now real (impl rules carry heads in their patterns), so
+     // this is the one point where the whole image can bind — and prove it
+     // bound — before anything can dereference a head.
+     heap.bind_type_heads();
++    bex_heap::startup_profile::mark(16);
+     heap.assert_switch_tables_dispatch();
++    bex_heap::startup_profile::mark(17);
+     (heap.seal(), index)
+ }
+
+diff --git a/baml_language/crates/bex_vm/src/vm.rs b/baml_language/crates/bex_vm/src/vm.rs
+index 54f760c588..3b98f4bbfe 100644
+--- a/baml_language/crates/bex_vm/src/vm.rs
++++ b/baml_language/crates/bex_vm/src/vm.rs
+@@ -1813,8 +1813,14 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
+     // The one road from an executable into a VM: a decoded program is
+     // checked against the format's laws here, and everything after — the
+     // rendered views, the loader — indexes into a program that keeps them.
+-    program.validate()?;
++    if std::env::var_os("BAML_LAZY_DIAGNOSTICS").is_some() {
++        program.validate_lazy_diagnostics()?;
++    } else {
++        program.validate()?;
++    }
++    bex_heap::startup_profile::mark(2);
+     let callables = program.rendered_callables();
++    bex_heap::startup_profile::mark(3);
+     // Convert objects, attaching native functions
+     let mut objects: Vec<Object> = program
+         .objects
+@@ -1822,8 +1828,18 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
+         .map(crate::package_baml::attach_builtins)
+         .collect::<Result<Vec<_>, _>>()?;
+
+-    prepare_compact_code(&mut objects, &program.globals);
++    bex_heap::startup_profile::mark(4);
++    #[cfg(feature = "startup-experiment")]
++    let prepared = objects.iter().all(|object| {
++        !matches!(object, Object::Function(function) if function.bytecode.compact.is_none())
++    });
++    #[cfg(not(feature = "startup-experiment"))]
++    let prepared = false;
++    if !prepared {
++        prepare_compact_code(&mut objects, &program.globals);
++    }
+
++    bex_heap::startup_profile::mark(5);
+     // The by-name view of the executable's callables, from the package
+     // tables: declared functions and class methods only. Lambdas, helpers,
+     // and interface bodies own no name a host can start from.
+@@ -1837,6 +1853,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
+         })
+         .collect();
+
++    bex_heap::startup_profile::mark(6);
+     Ok(BytecodeProgram {
+         objects: ObjectPool::from_vec(objects),
+         globals: program.globals,
+diff --git a/baml_language/crates/bex_vm_types/Cargo.toml b/baml_language/crates/bex_vm_types/Cargo.toml
+index 918d206864..124071aa82 100644
+--- a/baml_language/crates/bex_vm_types/Cargo.toml
++++ b/baml_language/crates/bex_vm_types/Cargo.toml
+@@ -43,4 +43,5 @@ indexmap = { workspace = true }
+
+ [features]
+ default = [  ]
++startup-experiment = [  ]
+ heap_debug = [  ]
+diff --git a/baml_language/crates/bex_vm_types/src/bytecode.rs b/baml_language/crates/bex_vm_types/src/bytecode.rs
+index 72de0f0b95..08637954e7 100644
+--- a/baml_language/crates/bex_vm_types/src/bytecode.rs
++++ b/baml_language/crates/bex_vm_types/src/bytecode.rs
+@@ -2160,7 +2160,13 @@ pub struct CompactCode {
+     /// `Bytecode::call_layouts` keyed by byte-offset PC.
+     pub call_layouts: BTreeMap<usize, baml_type::CallLayout>,
+     /// Line table with PCs translated to byte offsets.
++    #[cfg_attr(feature = "startup-experiment", borsh(skip))]
+     pub line_table: Vec<LineTableEntry>,
++    #[cfg(feature = "startup-experiment")]
++    pub encoded_line_table: Vec<u8>,
++    #[cfg(feature = "startup-experiment")]
++    #[borsh(skip)]
++    pub decoded_line_table: std::sync::OnceLock<Vec<LineTableEntry>>,
+     /// Exception table with PCs translated to byte offsets.
+     pub exception_table: Vec<ExceptionTableEntry>,
+     /// Handler-body ranges (BEP-042 cause chain) with PCs translated to byte
+@@ -2175,13 +2181,30 @@ pub struct CompactCode {
+ }
+
+ impl CompactCode {
++    #[cfg(feature = "startup-experiment")]
++    pub fn defer_source_map(&mut self) {
++        self.encoded_line_table = borsh::to_vec(&self.line_table).expect("source map encoding");
++        self.line_table.clear();
++    }
++
++    fn source_map(&self) -> &[LineTableEntry] {
++        #[cfg(feature = "startup-experiment")]
++        if !self.encoded_line_table.is_empty() {
++            return self.decoded_line_table.get_or_init(|| {
++                borsh::from_slice(&self.encoded_line_table).expect("prototype source map decoding")
++            });
++        }
++        &self.line_table
++    }
++
+     /// Get the source mapping entry for a byte-offset PC.
+     pub fn line_entry_for_pc(&self, pc: usize) -> Option<&LineTableEntry> {
+-        if self.line_table.is_empty() {
++        let source_map = self.source_map();
++        if source_map.is_empty() {
+             return None;
+         }
+-        let idx = self.line_table.partition_point(|entry| entry.pc <= pc);
+-        (idx > 0).then(|| &self.line_table[idx - 1])
++        let idx = source_map.partition_point(|entry| entry.pc <= pc);
++        (idx > 0).then(|| &source_map[idx - 1])
+     }
+
+     /// Get the 1-indexed source line for a byte-offset PC.
+@@ -2288,7 +2311,7 @@ pub struct Bytecode {
+
+     /// Compact bytecode encoding. Populated at engine load time by
+     /// `lower_to_compact()`. `None` until lowering runs.
+-    #[borsh(skip)]
++    #[cfg_attr(not(feature = "startup-experiment"), borsh(skip))]
+     pub compact: Option<CompactCode>,
+ }
+
+@@ -2789,6 +2812,10 @@ impl Bytecode {
+                 .map(|(index, layout)| (index_to_offset[*index], layout.clone()))
+                 .collect(),
+             line_table,
++            #[cfg(feature = "startup-experiment")]
++            encoded_line_table: Vec::new(),
++            #[cfg(feature = "startup-experiment")]
++            decoded_line_table: std::sync::OnceLock::new(),
+             exception_table,
+             handler_context_table,
+             shield_table,
+diff --git a/baml_language/crates/bex_vm_types/src/types.rs b/baml_language/crates/bex_vm_types/src/types.rs
+index 0d8baa8132..e14cec7fdb 100644
+--- a/baml_language/crates/bex_vm_types/src/types.rs
++++ b/baml_language/crates/bex_vm_types/src/types.rs
+@@ -461,6 +461,297 @@ impl Program {
+         Ok(())
+     }
+
++    /// Diagnostic experiment: same validation, format errors only on failure.
++    pub fn validate_lazy_diagnostics(&self) -> Result<(), InvalidProgram> {
++        let invalid = |message: String| InvalidProgram(message);
++        let object_count = self.objects.len();
++        let object = |index: ObjectIndex, role: &dyn Fn() -> String| -> Result<&Object, InvalidProgram> {
++            self.objects.get(index.raw()).ok_or_else(|| {
++                invalid(format!(
++                    "{} names object {} of {object_count}",
++                    role(), index.raw()
++                ))
++            })
++        };
++        let function =
++            |index: ObjectIndex, role: &dyn Fn() -> String, is_body: bool| -> Result<(), InvalidProgram> {
++                match object(index, role)? {
++                    Object::Function(function) if function.is_interface_body == is_body => Ok(()),
++                    other => Err(invalid(format!(
++                        "{} names a {:?} object where {} is required",
++                        role(), ObjectType::of(other),
++                        if is_body {
++                            "an interface body"
++                        } else {
++                            "a function"
++                        }
++                    ))),
++                }
++            };
++
++        let package_count = self.packages.len();
++        if self.root as usize >= package_count {
++            return Err(invalid(format!(
++                "the root is package {} of {package_count}",
++                self.root
++            )));
++        }
++        for package in &self.packages {
++            let name = &package.name;
++            let mut edge_names = HashSet::new();
++            for edge in &package.edges {
++                if edge.target as usize >= package_count {
++                    return Err(invalid(format!(
++                        "package `{name}` edge `{}` names package {} of {package_count}",
++                        edge.name, edge.target
++                    )));
++                }
++                if !edge_names.insert(&edge.name) {
++                    return Err(invalid(format!(
++                        "package `{name}` reaches two packages as `{}`",
++                        edge.name
++                    )));
++                }
++            }
++            let declarations = |kind: &str,
++                                table: &IndexMap<LocalName, ObjectIndex>,
++                                holds: fn(&Object) -> bool|
++             -> Result<(), InvalidProgram> {
++                for (item, &index) in table {
++                    let role = || format!("package `{name}` {kind} `{item}`");
++                    let pooled = object(index, &role)?;
++                    if !holds(pooled) {
++                        return Err(invalid(format!(
++                            "{} names a {:?} object",
++                            role(), ObjectType::of(pooled)
++                        )));
++                    }
++                }
++                Ok(())
++            };
++            declarations("class", &package.classes, |object| {
++                matches!(object, Object::Class(_))
++            })?;
++            declarations("enum", &package.enums, |object| {
++                matches!(object, Object::Enum(_))
++            })?;
++            declarations("interface", &package.interfaces, |object| {
++                matches!(object, Object::Interface(_))
++            })?;
++            declarations("type alias", &package.type_aliases, |object| {
++                matches!(object, Object::TypeAlias(_))
++            })?;
++            for (&interface, rules) in &package.impl_rules {
++                let role = || format!("package `{name}` implements object {}", interface.raw());
++                if !matches!(object(interface, &role)?, Object::Interface(_)) {
++                    return Err(invalid(format!("{}, which is not an interface", role())));
++                }
++                for rule in rules {
++                    if rule.interface_head != interface {
++                        return Err(invalid(format!(
++                            "{} with a rule whose head is object {}",
++                            role(), rule.interface_head.raw()
++                        )));
++                    }
++                    for (method, body) in &rule.methods {
++                        function(body.fqn, &|| format!("{}, method `{method}`,", role()), true)?;
++                    }
++                }
++            }
++            if let Some(init) = package.init {
++                function(init, &|| format!("package `{name}` `$init`"), false)?;
++            }
++            if let Some(test_init) = package.test_init {
++                function(test_init, &|| format!("package `{name}` `$init_test`"), false)?;
++            }
++            for (path, &ordinal) in &package.globals {
++                if !path.owns_global_slot() {
++                    return Err(invalid(format!(
++                        "package `{name}` slots {path}, which owns no cell"
++                    )));
++                }
++                let slot = package.slot_base.raw() + ordinal as usize;
++                let Some(cell) = self.globals.get(slot) else {
++                    return Err(invalid(format!(
++                        "package `{name}` slots {path} at cell {slot} of {}",
++                        self.globals.len()
++                    )));
++                };
++                match path {
++                    DeclPath::Function(_) | DeclPath::InterfaceBody(_) => {
++                        let ConstValue::Object(index) = cell else {
++                            return Err(invalid(format!(
++                                "package `{name}` cell for {path} holds no object"
++                            )));
++                        };
++                        function(
++                            *index,
++                            &|| format!("package `{name}` cell for {path}"),
++                            matches!(path, DeclPath::InterfaceBody(_)),
++                        )?;
++                    }
++                    DeclPath::Let(_) => {}
++                    DeclPath::Class(_)
++                    | DeclPath::Enum(_)
++                    | DeclPath::Interface(_)
++                    | DeclPath::TypeAlias(_) => {
++                        unreachable!("a type owns no cell: checked above")
++                    }
++                }
++            }
++        }
++
++        let with_init: BTreeSet<usize> = self
++            .packages
++            .iter()
++            .enumerate()
++            .filter(|(_, package)| package.init.is_some())
++            .map(|(ordinal, _)| ordinal)
++            .collect();
++        let mut ordered = BTreeSet::new();
++        for &ordinal in &self.init_order {
++            let ordinal = ordinal as usize;
++            if ordinal >= package_count {
++                return Err(invalid(format!(
++                    "the init order names package {ordinal} of {package_count}"
++                )));
++            }
++            if !ordered.insert(ordinal) {
++                return Err(invalid(format!(
++                    "the init order names package {ordinal} twice"
++                )));
++            }
++        }
++        if ordered != with_init {
++            return Err(invalid(
++                "the init order is not exactly the packages with an `$init`".to_string(),
++            ));
++        }
++
++        for (slot, cell) in self.globals.iter().enumerate() {
++            if let ConstValue::Object(index) = cell {
++                object(*index, &|| format!("cell {slot}"))?;
++            }
++        }
++
++        for (index, pooled) in self.objects.iter().enumerate() {
++            let role = || format!("object {index}");
++            let mut failure = None;
++            crate::head_walk::visit_object_heads(pooled, &mut |head| {
++                if failure.is_some() {
++                    return;
++                }
++                let tag = head.tag();
++                let bound = tag
++                    .static_index()
++                    .and_then(|declaration| self.objects.get(declaration))
++                    .is_some_and(|declaration| declaration.declaration_tag() == Some(tag));
++                if !bound {
++                    failure = Some(invalid(format!(
++                        "{} carries a head with tag {tag:?}, which names no declaration", role()
++                    )));
++                }
++            });
++            if let Some(failure) = failure {
++                return Err(failure);
++            }
++            match pooled {
++                Object::Function(function) => {
++                    crate::relink::visit_index_operands_ref(function, |operand| {
++                        if failure.is_some() {
++                            return;
++                        }
++                        let in_range = match operand {
++                            crate::relink::IndexOperandRef::Object(index) => {
++                                index.raw() < object_count
++                            }
++                            crate::relink::IndexOperandRef::Global(slot) => {
++                                slot.raw() < self.globals.len()
++                            }
++                        };
++                        if !in_range {
++                            failure = Some(invalid(format!(
++                                "{} (function `{}`) references an operand outside the program",
++                                role(), function.name
++                            )));
++                        }
++                    });
++                    if let Some(failure) = failure {
++                        return Err(failure);
++                    }
++                    for instruction in &function.bytecode.instructions {
++                        match instruction {
++                            crate::bytecode::Instruction::LoadCurrentPackage(package)
++                                if *package >= package_count =>
++                            {
++                                return Err(invalid(format!(
++                                    "{} (function `{}`) loads package {package} of \
++                                     {package_count}",
++                                    role(), function.name
++                                )));
++                            }
++                            // The VM reads the dispatch value at `args_offset +
++                            // self_arg`; past `nargs` that is past the stack.
++                            crate::bytecode::Instruction::VirtualCall {
++                                nargs, self_arg, ..
++                            } if self_arg >= nargs => {
++                                return Err(invalid(format!(
++                                    "{} (function `{}`) dispatches a virtual call on \
++                                     argument {self_arg} of {nargs}",
++                                    role(), function.name
++                                )));
++                            }
++                            _ => {}
++                        }
++                    }
++                    if let Some((table, _)) = function
++                        .bytecode
++                        .switch_tables
++                        .iter()
++                        .enumerate()
++                        .find(|(_, table)| !table.dispatch.is_dispatchable())
++                    {
++                        return Err(invalid(format!(
++                            "{} (function `{}`) switch table {table} is not solved",
++                            role(), function.name
++                        )));
++                    }
++                }
++                Object::Interface(interface) => {
++                    for method in &interface.methods {
++                        if let Some(default) = method.default {
++                            function(
++                                default,
++                                &|| format!("{} (interface) default of `{}`", role(), method.name),
++                                true,
++                            )?;
++                        }
++                    }
++                }
++                Object::Class(class) => {
++                    for (name, method) in &class.methods {
++                        function(
++                            method.function,
++                            &|| format!("{} (class) method `{name}`", role()),
++                            false,
++                        )?;
++                    }
++                }
++                Object::GenericFunction(generic)
++                    if generic.function.raw() >= self.globals.len() =>
++                {
++                    return Err(invalid(format!(
++                        "{} (generic value) references cell {} of {}",
++                        role(), generic.function.raw(),
++                        self.globals.len()
++                    )));
++                }
++                _ => {}
++            }
++        }
++        Ok(())
++    }
++
+     /// Add an object to the pool and return its index.
+     pub fn add_object(&mut self, object: Object) -> usize {
+         let idx = self.objects.len();
+diff --git a/baml_language/crates/sys_ops/src/lib.rs b/baml_language/crates/sys_ops/src/lib.rs
+index 929d2122c0..d7feb66bf5 100644
+--- a/baml_language/crates/sys_ops/src/lib.rs
++++ b/baml_language/crates/sys_ops/src/lib.rs
+@@ -566,7 +566,7 @@ mod schema {
+                 ),
+             );
+             let mut ctx = SysOpContext::empty();
+-            ctx.class_definitions = Arc::new(classes);
++            ctx.class_definitions = Arc::new(classes).into();
+
+             let schema = json_schema(&class_ty(&node), &ctx).expect("schema should lower");
+             assert_eq!(schema["type"], "object");
+@@ -591,7 +591,7 @@ mod schema {
+                 class_definition(&b, vec![field("a", RuntimeTy::optional(class_ty(&a)))]),
+             );
+             let mut ctx = SysOpContext::empty();
+-            ctx.class_definitions = Arc::new(classes);
++            ctx.class_definitions = Arc::new(classes).into();
+
+             let schema = json_schema(&class_ty(&a), &ctx).expect("schema should lower");
+             assert_eq!(schema["properties"]["b"]["$ref"], "#/$defs/pkg.B");
+@@ -626,7 +626,7 @@ mod schema {
+                 class_definition(&escaped, vec![field("value", RuntimeTy::int())]),
+             );
+             let mut ctx = SysOpContext::empty();
+-            ctx.class_definitions = Arc::new(classes);
++            ctx.class_definitions = Arc::new(classes).into();
+
+             let schema = json_schema(&class_ty(&holder), &ctx).expect("schema should lower");
+             assert_eq!(schema["properties"]["value"]["$ref"], "#/$defs/pkg.A~1B~0C");
+@@ -661,7 +661,7 @@ mod schema {
+                 },
+             );
+             let mut ctx = SysOpContext::empty();
+-            ctx.enum_definitions = Arc::new(enums);
++            ctx.enum_definitions = Arc::new(enums).into();
+
+             let schema =
+                 json_schema(&RuntimeTy::Enum(key(&status)), &ctx).expect("schema should lower");
+@@ -687,7 +687,7 @@ mod schema {
+             let mut aliases = indexmap::IndexMap::new();
+             aliases.insert(key(&json_name), target);
+             let mut ctx = SysOpContext::empty();
+-            ctx.type_alias_definitions = Arc::new(aliases);
++            ctx.type_alias_definitions = Arc::new(aliases).into();
+
+             let schema = json_schema(&json_alias, &ctx).expect("schema should lower");
+             assert_eq!(schema["$ref"], "#/$defs/baml.json.json");
+diff --git a/baml_language/crates/sys_ops/src/output_format.rs b/baml_language/crates/sys_ops/src/output_format.rs
+index 3d875449d3..b06776ec12 100644
+--- a/baml_language/crates/sys_ops/src/output_format.rs
++++ b/baml_language/crates/sys_ops/src/output_format.rs
+@@ -1444,7 +1444,7 @@ mod tests {
+         enums.insert(first, definition("Choice"));
+         enums.insert(second, definition("Choice_2"));
+         let mut ctx = sys_types::SysOpContext::empty();
+-        ctx.enum_definitions = Arc::new(enums);
++        ctx.enum_definitions = Arc::new(enums).into();
+
+         let content = build_output_format_content(&target, &ctx);
+         let error = content
+@@ -1495,8 +1495,8 @@ mod tests {
+             },
+         );
+         let mut ctx = sys_types::SysOpContext::empty();
+-        ctx.class_definitions = Arc::new(classes);
+-        ctx.enum_definitions = Arc::new(enums);
++        ctx.class_definitions = Arc::new(classes).into();
++        ctx.enum_definitions = Arc::new(enums).into();
+
+         let content = build_output_format_content(&target, &ctx);
+         let error = content
+@@ -1553,7 +1553,7 @@ mod tests {
+         aliases.insert(first, ty_string());
+         aliases.insert(second, ty_int());
+         let mut ctx = sys_types::SysOpContext::empty();
+-        ctx.type_alias_definitions = Arc::new(aliases);
++        ctx.type_alias_definitions = Arc::new(aliases).into();
+
+         let error = build_output_format_content(&target, &ctx)
+             .render(&RenderOptions::default())
+@@ -1580,7 +1580,7 @@ mod tests {
+         aliases.insert(first, ty_string());
+         aliases.insert(second, ty_string());
+         let mut ctx = sys_types::SysOpContext::empty();
+-        ctx.type_alias_definitions = Arc::new(aliases);
++        ctx.type_alias_definitions = Arc::new(aliases).into();
+
+         let content = build_output_format_content(&target, &ctx);
+         assert_eq!(content.recursive_type_aliases.len(), 1);
+@@ -2254,7 +2254,7 @@ mod tests {
+         enums.insert(first, definition("Choice"));
+         enums.insert(second, definition("Choice_2"));
+         let mut ctx = sys_types::SysOpContext::empty();
+-        ctx.enum_definitions = Arc::new(enums);
++        ctx.enum_definitions = Arc::new(enums).into();
+
+         let content = build_output_format_content(&target, &ctx);
+         let error = content
+@@ -4083,7 +4083,7 @@ Answer in JSON using this type: A"#
+         );
+
+         let mut ctx = sys_types::SysOpContext::empty();
+-        ctx.class_definitions = Arc::new(classes);
++        ctx.class_definitions = Arc::new(classes).into();
+
+         let content = build_output_format_content(&target, &ctx);
+         let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+@@ -4110,7 +4110,7 @@ Answer in JSON using this type: A"#
+         );
+
+         let mut ctx = sys_types::SysOpContext::empty();
+-        ctx.class_definitions = Arc::new(classes);
++        ctx.class_definitions = Arc::new(classes).into();
+
+         let content = build_output_format_content(&target, &ctx);
+         assert!(content.classes.contains_key("Box<Box<int>>"));
+@@ -4142,7 +4142,7 @@ Answer in JSON using this type: A"#
+         );
+
+         let mut ctx = sys_types::SysOpContext::empty();
+-        ctx.class_definitions = Arc::new(classes);
++        ctx.class_definitions = Arc::new(classes).into();
+
+         let content = build_output_format_content(&target, &ctx);
+         assert!(content.classes.contains_key("Step<string, bool>"));
+@@ -4177,7 +4177,7 @@ Answer in JSON using this type: A"#
+         );
+
+         let mut ctx = sys_types::SysOpContext::empty();
+-        ctx.class_definitions = Arc::new(classes);
++        ctx.class_definitions = Arc::new(classes).into();
+
+         let content = build_output_format_content(&target, &ctx);
+         let error = render_output_format_content(&content, &RenderOptions::default()).unwrap_err();
+@@ -4238,7 +4238,7 @@ Answer in JSON using this type: A"#
+         );
+
+         let mut ctx = sys_types::SysOpContext::empty();
+-        ctx.class_definitions = Arc::new(classes);
++        ctx.class_definitions = Arc::new(classes).into();
+
+         let content = build_output_format_content(&target, &ctx);
+         let error = content.render(&RenderOptions::default()).unwrap_err();
+diff --git a/baml_language/crates/sys_types/src/lib.rs b/baml_language/crates/sys_types/src/lib.rs
+index d232222c18..a9d4da92e6 100644
+--- a/baml_language/crates/sys_types/src/lib.rs
++++ b/baml_language/crates/sys_types/src/lib.rs
+@@ -615,7 +615,7 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
+ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>> {
+     /// Pre-extracted LLM function metadata, keyed by function name.
+     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
+-    pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
++    pub llm_functions: Deferred<std::collections::HashMap<String, LlmFunctionInfo>>,
+
+     /// Per-call cancellation token.
+     ///
+@@ -625,16 +625,16 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
+
+     /// Pre-extracted class definitions for output format rendering.
+     /// Keyed by declaration identity.
+-    pub class_definitions: Arc<indexmap::IndexMap<DefKey, ClassDefinition>>,
++    pub class_definitions: Deferred<indexmap::IndexMap<DefKey, ClassDefinition>>,
+
+     /// Pre-extracted enum definitions for output format rendering.
+     /// Keyed by declaration identity.
+-    pub enum_definitions: Arc<indexmap::IndexMap<DefKey, EnumDefinition>>,
++    pub enum_definitions: Deferred<indexmap::IndexMap<DefKey, EnumDefinition>>,
+
+     /// Recursive type alias definitions for output format rendering.
+     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
+     /// Maps alias identity → target type.
+-    pub type_alias_definitions: Arc<indexmap::IndexMap<DefKey, SapTy>>,
++    pub type_alias_definitions: Deferred<indexmap::IndexMap<DefKey, SapTy>>,
+
+     /// Can be used to spawn new VMs.
+     pub spawner: Arc<dyn VmSpawner<E>>,
+@@ -669,20 +669,20 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
+ pub struct EngineSysOpContext {
+     /// Pre-extracted LLM function metadata, keyed by function name.
+     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
+-    pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
++    pub llm_functions: Deferred<std::collections::HashMap<String, LlmFunctionInfo>>,
+
+     /// Pre-extracted class definitions for output format rendering.
+     /// Keyed by declaration identity.
+-    pub class_definitions: Arc<indexmap::IndexMap<DefKey, ClassDefinition>>,
++    pub class_definitions: Deferred<indexmap::IndexMap<DefKey, ClassDefinition>>,
+
+     /// Pre-extracted enum definitions for output format rendering.
+     /// Keyed by declaration identity.
+-    pub enum_definitions: Arc<indexmap::IndexMap<DefKey, EnumDefinition>>,
++    pub enum_definitions: Deferred<indexmap::IndexMap<DefKey, EnumDefinition>>,
+
+     /// Recursive type alias definitions for output format rendering.
+     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
+     /// Maps alias identity → target type.
+-    pub type_alias_definitions: Arc<indexmap::IndexMap<DefKey, SapTy>>,
++    pub type_alias_definitions: Deferred<indexmap::IndexMap<DefKey, SapTy>>,
+
+     /// Typed async IO interface, built from the `SysOps` table at engine init.
+     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
+@@ -832,11 +832,11 @@ impl SysOpContext {
+             }
+         }
+         Self {
+-            llm_functions: Arc::new(std::collections::HashMap::new()),
++            llm_functions: Arc::new(std::collections::HashMap::new()).into(),
+             cancel: CancellationToken::new(),
+-            class_definitions: Arc::new(indexmap::IndexMap::<DefKey, ClassDefinition>::new()),
+-            enum_definitions: Arc::new(indexmap::IndexMap::<DefKey, EnumDefinition>::new()),
+-            type_alias_definitions: Arc::new(indexmap::IndexMap::<DefKey, SapTy>::new()),
++            class_definitions: Arc::new(indexmap::IndexMap::<DefKey, ClassDefinition>::new()).into(),
++            enum_definitions: Arc::new(indexmap::IndexMap::<DefKey, EnumDefinition>::new()).into(),
++            type_alias_definitions: Arc::new(indexmap::IndexMap::<DefKey, SapTy>::new()).into(),
+             spawner: Arc::new(NeverSpawner),
+             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
+             network: None,
+@@ -1193,3 +1193,24 @@ mod tests {
+         }
+     }
+ }
++
++/// Diagnostic experiment: defer owned schema views without deferring shutdown.
++pub struct Deferred<T>(Arc<std::sync::LazyLock<T, Box<dyn FnOnce() -> T + Send + Sync>>>);
++impl<T> Deferred<T> {
++    pub fn new(build: impl FnOnce() -> T + Send + Sync + 'static) -> Self {
++        Self(Arc::new(std::sync::LazyLock::new(Box::new(build))))
++    }
++    pub fn as_ref(&self) -> &T { &self.0 }
++}
++impl<T> Clone for Deferred<T> {
++    fn clone(&self) -> Self { Self(Arc::clone(&self.0)) }
++}
++impl<T> std::ops::Deref for Deferred<T> {
++    type Target=T;
++    fn deref(&self) -> &T { self.as_ref() }
++}
++impl<T: Send + Sync + 'static> From<Arc<T>> for Deferred<T> {
++    fn from(value: Arc<T>) -> Self {
++        Self::new(move || Arc::try_unwrap(value).unwrap_or_else(|_| panic!("diagnostic eager schema must have one owner")))
++    }
++}
+diff --git a/baml_language/crates/bex_heap/src/startup_profile.rs b/baml_language/crates/bex_heap/src/startup_profile.rs
+new file mode 100644
+--- /dev/null
++++ b/baml_language/crates/bex_heap/src/startup_profile.rs
+@@ -0,0 +1,19 @@
++//! Temporary diagnostic instrumentation; not a supported runtime API.
++use std::sync::{OnceLock, atomic::{AtomicU64, Ordering}};
++use std::time::Instant;
++const LABELS: [&str; 32] = ["engine_start", "engine_configuration", "program_validated", "callables_rendered", "builtins_attached", "compact_prepared", "functions_indexed", "program_converted", "objects_extracted", "floats_boxed", "engine_compact_prepared", "nominal_indices", "package_slots_reserved", "constants_resolved", "unsealed_heap_built", "packages_filled", "type_heads_bound", "switch_tables_verified", "functions_registered", "heap_built", "dispatch_tables", "name_maps", "globals", "telemetry_started", "package_initializers", "llm_definitions", "class_definitions", "enum_definitions", "permits", "runtime_io", "alias_definitions", "inbound_views"];
++static STAMPS: [AtomicU64; 32] = [const { AtomicU64::new(0) }; 32];
++static ORIGIN: OnceLock<Instant> = OnceLock::new();
++static ENABLED: OnceLock<bool> = OnceLock::new();
++pub fn mark(id: usize) {
++    if !*ENABLED.get_or_init(|| std::env::var_os("BAML_PROFILE_LOADING").is_some()) { return; }
++    STAMPS[id].store(ORIGIN.get_or_init(Instant::now).elapsed().as_nanos() as u64 + 1, Ordering::Relaxed);
++}
++pub fn emit() {
++    if !*ENABLED.get_or_init(|| false) { return; }
++    let values = STAMPS.iter().enumerate().filter_map(|(i,t)| {
++        let n=t.load(Ordering::Relaxed);
++        (n!=0).then(|| format!("\"{}\":{}", LABELS[i], n-1))
++    }).collect::<Vec<_>>();
++    eprintln!("BAML_LOADING_PROFILE:{{{}}}", values.join(","));
++}
