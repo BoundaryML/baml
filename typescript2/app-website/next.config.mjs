@@ -197,6 +197,7 @@ const nextConfig = {
     ],
   },
   experimental: {
+    webpackMemoryOptimizations: true,
     optimizeCss: false,
     mdxRs: false,
     // Forward browser logs to the terminal for easier debugging
