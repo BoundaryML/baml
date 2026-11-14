@@ -47,13 +47,7 @@ fn unshared_heap_bytes_counts_each_handle_in_full() {
     let rope = BexStr::concat(flat.clone(), BexStr::from("y".repeat(100)));
     assert!(matches!(rope, BexStr::Concat(_)));
     assert!(rope.unshared_heap_bytes() > rope.byte_len());
-    assert!(matches!(
-        &rope,
-        BexStr::Concat(node) if matches!(
-            &*node.state.lock().unwrap(),
-            super::bex_str::ConcatState::Deferred { .. }
-        )
-    ));
+    assert!(matches!(&rope, BexStr::Concat(node) if !node.is_flattened()));
 }
 
 #[test]
@@ -518,23 +512,16 @@ fn occurrence_index_ops_match_std_oracle() {
 
 #[test]
 fn content_hash_is_independent_of_representation_and_reused_by_clones() {
-    use crate::bex_str::ConcatState;
     let text = "a string longer than the inline capacity, with some unicode: λ🦀";
     let flat = BexStr::from(text);
     let rope = BexStr::concat(BexStr::from(&text[..20]), BexStr::from(&text[20..]));
     let BexStr::Concat(node) = &rope else {
         panic!("expected rope")
     };
-    assert!(matches!(
-        *node.state.lock().unwrap(),
-        ConcatState::Deferred { .. }
-    ));
+    assert!(!node.is_flattened());
     let expected = xxhash_rust::xxh3::xxh3_128(text.as_bytes());
     assert_eq!(rope.content_hash(), expected);
-    assert!(matches!(
-        *node.state.lock().unwrap(),
-        ConcatState::Flattened(_)
-    ));
+    assert!(node.is_flattened());
     assert_eq!(flat.content_hash(), expected);
     let clone = flat.clone();
     let (BexStr::Flat(a), BexStr::Flat(b)) = (&flat, &clone) else {
@@ -575,6 +562,47 @@ fn content_hash_can_be_published_concurrently() {
             });
         }
     });
+}
+
+#[test]
+fn shared_ropes_flatten_concurrently_to_one_published_buffer() {
+    // A chain of ropes in which each one is the next one's left child. Each
+    // thread reads them in a different order, so parents race their children
+    // to flatten them.
+    let parts: Vec<String> = (0..64)
+        .map(|i| format!("{i:02}-{}", "é".repeat(30)))
+        .collect();
+    let mut ropes = vec![BexStr::from(parts[0].as_str())];
+    for part in &parts[1..] {
+        let next = BexStr::concat(ropes.last().unwrap().clone(), BexStr::from(part.as_str()));
+        ropes.push(next);
+    }
+    let want: Vec<String> = (1..=parts.len()).map(|k| parts[..k].concat()).collect();
+    let seen: Vec<Vec<usize>> = std::thread::scope(|scope| {
+        let threads: Vec<_> = (0..8)
+            .map(|t| {
+                let (ropes, want) = (&ropes, &want);
+                scope.spawn(move || {
+                    let mut order: Vec<usize> = (0..ropes.len()).collect();
+                    if t % 2 == 1 {
+                        order.reverse();
+                    }
+                    order.rotate_left(t * 7 % ropes.len());
+                    let mut buffers = vec![0; ropes.len()];
+                    for i in order {
+                        assert_eq!(ropes[i].as_str(), want[i]);
+                        buffers[i] = ropes[i].as_bytes().as_ptr() as usize;
+                    }
+                    buffers
+                })
+            })
+            .collect();
+        threads.into_iter().map(|t| t.join().unwrap()).collect()
+    });
+    // Every thread borrowed the same published buffer for each rope.
+    for buffers in &seen[1..] {
+        assert_eq!(buffers, &seen[0]);
+    }
 }
 
 #[test]
@@ -737,7 +765,6 @@ fn assert_ascii_prefix_exact(bex: &BexStr, what: &str) {
 
 #[test]
 fn ascii_prefix_matches_oracle_on_every_representation() {
-    use crate::bex_str::ConcatState;
     let ascii = "0123456789abcdef".repeat(8); // 128 B
     let mixed = format!("{ascii}é{ascii}🪙{ascii}"); // non-ASCII at 128 and 258
     let leading = format!("é{ascii}"); // non-ASCII at 0
@@ -843,10 +870,7 @@ fn ascii_prefix_matches_oracle_on_every_representation() {
         let BexStr::Concat(node) = &rope else {
             panic!("{name}: expected a rope")
         };
-        assert!(matches!(
-            *node.state.lock().unwrap(),
-            ConcatState::Deferred { .. }
-        ));
+        assert!(!node.is_flattened());
         // Checked before any flatten (cached on the node) ...
         assert_eq!(
             rope.ascii_prefix_len(),
@@ -895,10 +919,7 @@ fn ascii_prefix_of_deep_rope_does_not_recurse() {
             let BexStr::Concat(node) = &s else {
                 panic!("expected a rope")
             };
-            assert!(matches!(
-                *node.state.lock().unwrap(),
-                crate::bex_str::ConcatState::Deferred { .. }
-            ));
+            assert!(!node.is_flattened());
             assert_eq!(s.char_to_byte(60 + n + 1), 60 + n + 4);
         })
         .unwrap()
