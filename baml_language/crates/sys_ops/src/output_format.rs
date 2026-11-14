@@ -5058,6 +5058,7 @@ Answer in JSON using this type: A"#
                         docstring: None,
                         alias: None,
                         skip: false,
+                        json_rename: None,
                     })
                     .collect(),
             },

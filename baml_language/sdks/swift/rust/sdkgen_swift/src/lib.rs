@@ -1816,12 +1816,16 @@ mod tests {
                     name: name.into(),
                     docstring: None,
                     ty,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 })
                 .collect(),
             static_methods: Vec::new(),
             instance_methods: Vec::new(),
             crossing: baml_sdkgen_types::ClassCrossing::Fields,
             origin: origin(),
+            json_omit_nulls: false,
         })
     }
 
@@ -1849,7 +1853,7 @@ mod tests {
         assert!(
             emitted.contains(
                 "public static func pair(t: (Swift.Int, Swift.String), baml: Baml.BamlOptions = .init()) \
-                 throws -> (Swift.Int, Swift.String)"
+                 async throws -> (Swift.Int, Swift.String)"
             ),
             "{emitted}"
         );
@@ -1863,7 +1867,7 @@ mod tests {
         assert!(
             emitted.contains(
                 "public static func single(t: BamlBridge.Tuple1<Swift.String>, baml: \
-                 Baml.BamlOptions = .init()) throws -> BamlBridge.Tuple1<Swift.String>"
+                 Baml.BamlOptions = .init()) async throws -> BamlBridge.Tuple1<Swift.String>"
             ),
             "{emitted}"
         );

@@ -638,7 +638,7 @@ mod tests {
         let ty = Ty::Tuple(vec![callable(Vec::new(), boxed(Ty::Int)), Ty::String].into());
         let translated = translate_return_ty(&ty, &ctx(&[]));
         assert!(translated.expr.starts_with("[{ ("));
-        assert!(translated.expr.contains("callAsync("));
+        assert!(translated.expr.contains("): Promise<number>; callSync("));
         assert!(translated.expr.ends_with(", string]"));
     }
 
