@@ -262,6 +262,12 @@ impl Respond for Fake {
                     "holdSeconds": 1,
                 }))
             }
+            ("POST", ["v1", "processes", process, "notifications", "wait"])
+                if !state.processes.contains(*process) =>
+            {
+                ResponseTemplate::new(404)
+                    .set_body_json(json!({"code": "NOT_FOUND", "retryable": false}))
+            }
             ("POST", ["v1", "processes", process, "notifications", "wait"]) => {
                 let notifications = state.notifications(process);
                 let installed: BTreeSet<(String, u64)> = body["installed"]
@@ -764,4 +770,45 @@ async fn no_hotswap_keeps_a_process_from_registering() {
     let output = run(&["run", "main"]).await.unwrap();
     assert_eq!(text(&output).0.trim(), "2", "{:?}", text(&output));
     assert_eq!(registered(&state), 1);
+}
+
+/// A process registers again once BCS no longer knows it, such as after its
+/// database was reset.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_forgotten_process_registers_again() {
+    let server = wiremock::MockServer::start().await;
+    let state = Arc::new(Mutex::new(State {
+        base: server.uri(),
+        ..State::default()
+    }));
+    wiremock::Mock::given(wiremock::matchers::any())
+        .respond_with(Fake(Arc::clone(&state)))
+        .mount(&server)
+        .await;
+    let url = server.uri();
+    let (_engine, agent) = tokio::task::spawn_blocking(move || {
+        process(&url, "3f2a91c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6")
+    })
+    .await
+    .unwrap();
+    let registrations = |state: &Arc<Mutex<State>>| {
+        state
+            .lock()
+            .unwrap()
+            .requests
+            .iter()
+            .filter(|request| *request == "POST /v1/processes")
+            .count()
+    };
+    assert_eq!(registrations(&state), 1);
+    state.lock().unwrap().processes.clear();
+    for _ in 0..100 {
+        if registrations(&state) == 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(registrations(&state), 2);
+    assert!(state.lock().unwrap().processes.contains("p_91"));
+    tokio::task::spawn_blocking(move || agent.stop()).await.unwrap();
 }

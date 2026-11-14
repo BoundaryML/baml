@@ -165,12 +165,23 @@ impl Loop {
     }
 
     fn run(mut self) {
-        let mut hold = DEFAULT_HOLD;
-        // Register until BCS answers; a process serves meanwhile.
-        let mut delivery = loop {
+        // A process registers again whenever BCS no longer knows it, such as after its
+        // database was reset.
+        while !self.stop.load(Ordering::Relaxed) {
+            let Some(delivery) = self.register() else {
+                break;
+            };
+            self.serve(delivery);
+        }
+        signal(&self.ready);
+    }
+
+    /// Register until BCS answers; a process serves as built meanwhile. `None`
+    /// once the agent is stopped.
+    fn register(&mut self) -> Option<Delivery> {
+        loop {
             if self.stop.load(Ordering::Relaxed) {
-                signal(&self.ready);
-                return;
+                return None;
             }
             let request = RegisterProcess {
                 process_id: self.options.process_id.clone(),
@@ -184,15 +195,20 @@ impl Loop {
                 .client
                 .register_process(&self.link.authorization, &request)
             {
-                Ok(delivery) => break delivery,
+                Ok(delivery) => return Some(delivery),
                 Err(error) => {
                     tracing::debug!(%error, "hot swap registration failed; retrying");
-                    // A process that cannot reach BCS serves as built.
                     signal(&self.ready);
                     std::thread::sleep(self.retry());
                 }
             }
-        };
+        }
+    }
+
+    /// Act on deliveries and hold the connection for more, until stopped or
+    /// until BCS answers that it does not know the process.
+    fn serve(&mut self, mut delivery: Delivery) {
+        let mut hold = DEFAULT_HOLD;
         let mut first = true;
         while !self.stop.load(Ordering::Relaxed) {
             if let Some(seconds) = delivery.hold_seconds {
@@ -206,7 +222,7 @@ impl Loop {
             self.lapse();
             self.flush();
             if self.stop.load(Ordering::Relaxed) {
-                break;
+                return;
             }
             delivery = match self.link.client.wait_for_notifications(
                 &self.link.authorization,
@@ -215,6 +231,7 @@ impl Loop {
                 hold,
             ) {
                 Ok(delivery) => delivery,
+                Err(error) if unknown_process(&error) => return,
                 Err(error) => {
                     tracing::debug!(%error, "hot swap notifications failed; retrying");
                     std::thread::sleep(self.retry());
@@ -312,15 +329,18 @@ impl Loop {
                 .into_iter()
                 .find(|installed| installed.id == id)
                 .map_or(0, |installed| installed.revision);
-            let result = self.runtime.block_on(self.swapper.remove(&id, "lapsed"));
-            self.pending.push((
-                id,
-                SwapOutcome {
-                    revision,
-                    status: "lapsed".into(),
-                    reason: result.err().map(|error| error.0),
-                },
-            ));
+            // A failed removal leaves the swap running; the next pass tries again.
+            match self.runtime.block_on(self.swapper.remove(&id, "lapsed")) {
+                Ok(()) => self.pending.push((
+                    id,
+                    SwapOutcome {
+                        revision,
+                        status: "lapsed".into(),
+                        reason: None,
+                    },
+                )),
+                Err(error) => tracing::warn!(%error, hotswap = id, "a lapsed swap was not removed"),
+            }
         }
     }
 
@@ -348,4 +368,11 @@ impl Loop {
             }
         }
     }
+}
+
+/// Whether BCS answered that it does not know the process.
+fn unknown_process(error: &bcs_api::Error) -> bool {
+    error
+        .http_failure()
+        .is_some_and(|failure| failure.status.as_u16() == 404)
 }

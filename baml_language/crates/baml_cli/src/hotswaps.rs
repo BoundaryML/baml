@@ -480,6 +480,8 @@ fn git_text(dir: &Path, args: &[&str]) -> anyhow::Result<String> {
 /// functions and the changed files to upload.
 struct LocalChange {
     functions: Vec<SwapFunction>,
+    /// Functions changed only through a changed client.
+    affects: Vec<String>,
     files: Vec<(SourceFile, Vec<u8>)>,
 }
 
@@ -610,10 +612,14 @@ fn local_change(root: &Path, baseline: &str) -> anyhow::Result<LocalChange> {
         });
     }
     // Every function a changed client reaches must be swappable too.
+    let mut affects = Vec::new();
     for name in bex_hotswap::hotswap_changes(&old_fingerprints, &new_fingerprints) {
         let marked = old.keys().any(|key| label(key) == name && swappable(key));
         if !marked {
             bail!("`{name}` changed, and only swappable functions can change without a deploy");
+        }
+        if functions.iter().all(|function| function.name != name) {
+            affects.push(name);
         }
     }
     if functions.is_empty() {
@@ -631,7 +637,11 @@ fn local_change(root: &Path, baseline: &str) -> anyhow::Result<LocalChange> {
             (SourceFile { path, sha256, size }, bytes)
         })
         .collect();
-    Ok(LocalChange { functions, files })
+    Ok(LocalChange {
+        functions,
+        affects,
+        files,
+    })
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -805,6 +815,7 @@ fn create(
         &HotswapPayload {
             functions: change.functions,
             files: sources,
+            affects: change.affects,
         },
     )?;
     if let Some(rejection) = &submitted.rejection {

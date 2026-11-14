@@ -142,6 +142,12 @@ impl Swapper {
     /// it changes. A swap that `replaces` another retires it in the same
     /// install; a newer revision of an installed swap replaces it too.
     pub async fn install(&mut self, swap: &Swap) -> Result<BTreeSet<String>, SwapperError> {
+        // Offered again at a revision it runs: nothing installs, and nothing is recorded.
+        if let Some(installed) = self.installed.get(&swap.id)
+            && installed.swap.revision >= swap.revision
+        {
+            return Ok(installed.changes.clone());
+        }
         let result = self.check_and_install(swap).await;
         let (event, reason) = match &result {
             Ok(_) => ("hotswap.installed", None),
@@ -152,11 +158,6 @@ impl Swapper {
     }
 
     async fn check_and_install(&mut self, swap: &Swap) -> Result<BTreeSet<String>, SwapperError> {
-        if let Some(installed) = self.installed.get(&swap.id)
-            && installed.swap.revision >= swap.revision
-        {
-            return Ok(installed.changes.clone());
-        }
         match &self.build.commit {
             Some(commit) if same_commit(commit, &swap.baseline) => {}
             Some(commit) => {
@@ -175,19 +176,6 @@ impl Swapper {
             .chain(swap.replaces.as_deref())
             .collect();
         for function in &swap.functions {
-            if let Some((id, _)) = self.installed.iter().find(|(id, installed)| {
-                !retiring.contains(id.as_str())
-                    && installed
-                        .swap
-                        .functions
-                        .iter()
-                        .any(|other| other.name == function.name)
-            }) {
-                return reject(format!(
-                    "`{}` already has swap {id}: merge its change, then pass --replace {id}",
-                    function.name
-                ));
-            }
             let built = self
                 .build
                 .sources
@@ -227,6 +215,18 @@ impl Swapper {
                     .to_string()
             })
             .collect();
+        // One swap per function: those it lists, and those it changes through
+        // a client.
+        let listed = swap.functions.iter().map(|function| &function.name);
+        for name in listed.chain(&changes) {
+            if let Some((id, _)) = self.installed.iter().find(|(id, installed)| {
+                !retiring.contains(id.as_str()) && installed.changes.contains(name)
+            }) {
+                return reject(format!(
+                    "`{name}` already has swap {id}: merge its change, then pass --replace {id}"
+                ));
+            }
+        }
         let mut problems = Vec::new();
         for name in &changes {
             if let Err(problem) =
@@ -367,10 +367,11 @@ impl Swapper {
             .await
             .map(|_| ())
             .map_err(|error| SwapperError(error.to_string()));
+        // A failed removal leaves the swap running, so only a removal is recorded.
         if result.is_ok() {
             self.installed.remove(id);
+            self.audit("hotswap.removed", &removed, Some(reason));
         }
-        self.audit("hotswap.removed", &removed, Some(reason));
         result
     }
 

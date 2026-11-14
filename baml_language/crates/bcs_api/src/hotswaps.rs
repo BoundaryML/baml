@@ -176,6 +176,10 @@ pub struct HotswapPayload {
     pub functions: Vec<SwapFunction>,
     /// The changed files uploaded, which BCS keeps under the swap.
     pub files: Vec<SourceFile>,
+    /// Functions the swap changes through a changed client, beside those in
+    /// `functions`, so no other swap may change them either.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub affects: Vec<String>,
 }
 
 /// An installed swap, as every request a process makes lists it.
@@ -261,6 +265,16 @@ fn checked_id(id: &str) -> Result<&str> {
         Ok(id)
     } else {
         Err(Error::Protocol("Invalid hot swap or process ID"))
+    }
+}
+
+/// Whether `url` is on `endpoint`'s scheme, host and port, so a credential sent
+/// to it goes nowhere else. A string prefix is not enough:
+/// `https://api.example.com.evil.example` starts with `https://api.example.com`.
+fn same_origin(url: &str, endpoint: &str) -> bool {
+    match (url::Url::parse(url), url::Url::parse(endpoint)) {
+        (Ok(url), Ok(endpoint)) => url.origin() == endpoint.origin(),
+        _ => false,
     }
 }
 
@@ -421,7 +435,7 @@ impl Client {
             url.to_string()
         };
         require(
-            url.starts_with(self.endpoint.as_str()),
+            same_origin(&url, self.endpoint.as_str()),
             "Boundary named an upload outside its endpoint",
         )?;
         self.send_authorized(authorization, || {
@@ -547,5 +561,26 @@ impl Client {
             json!({ "installed": installed }),
             Some(hold + Duration::from_secs(30)),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::same_origin;
+
+    #[test]
+    fn an_upload_must_be_on_the_endpoints_origin() {
+        let endpoint = "https://api.example.com";
+        assert!(same_origin(
+            "https://api.example.com/v1/hotswaps/x/sources/y",
+            endpoint
+        ));
+        assert!(!same_origin(
+            "https://api.example.com.evil.example/x",
+            endpoint
+        ));
+        assert!(!same_origin("http://api.example.com/x", endpoint));
+        assert!(!same_origin("https://api.example.com:8443/x", endpoint));
+        assert!(!same_origin("not a url", endpoint));
     }
 }
