@@ -7104,6 +7104,7 @@ mod tests {
             name: class_name.clone(),
             generic_params: vec![parameter_t.clone()],
             docstring: None,
+            json_omit_nulls: false,
             properties: vec![ClassProperty {
                 name: BaseName::new("t"),
                 docstring: None,
@@ -7111,6 +7112,9 @@ mod tests {
                     Ty::TypeVar(ParamTy::new(0, parameter_t)),
                     string_literal("a"),
                 ])),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             static_methods: vec![],
             instance_methods: vec![],
