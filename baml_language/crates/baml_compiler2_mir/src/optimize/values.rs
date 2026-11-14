@@ -739,7 +739,7 @@ mod tests {
             );
             assert_eq!(defs[2], 1, "unnamed temporary at {opt:?}");
             if opt == OptLevel::Zero {
-                super::super::optimize_body(&mut body, 0, opt);
+                super::super::optimize_body(&mut body, 0, opt, None);
                 let named = body
                     .locals
                     .iter()

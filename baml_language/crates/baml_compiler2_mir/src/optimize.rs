@@ -18,6 +18,7 @@ use crate::{
 
 mod effects;
 pub(crate) mod inline;
+mod scalar_replace;
 mod values;
 
 pub use values::live_in_precise;
@@ -31,7 +32,9 @@ pub(crate) fn optimize_function(
     let MirFunctionKind::Bytecode(body) = &mut func.kind else {
         return; // nothing to clean up on builtins
     };
-    optimize_body(body, func.arity, opt);
+    let scope =
+        (opt >= crate::OptLevel::Two).then(|| scalar_replace::Scope::of(db, &func.identity));
+    optimize_body(body, func.arity, opt, scope.as_ref());
 
     // `cfg!`, not `#[cfg]`: the verifier stays type-checked in every
     // profile and the call folds away in release.
@@ -62,14 +65,20 @@ pub(crate) fn optimize_function_body(
     body: &mut MirFunctionBody,
     opt: crate::OptLevel,
 ) {
-    optimize_body(body, 0, opt);
+    // An initializer has no owning function to read class layouts as.
+    optimize_body(body, 0, opt, None);
 
     if cfg!(debug_assertions) {
         verify_mir(db, body, 0, &"$init_let._");
     }
 }
 
-fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel) {
+fn optimize_body(
+    body: &mut MirFunctionBody,
+    arity: usize,
+    opt: crate::OptLevel,
+    scope: Option<&scalar_replace::Scope<'_>>,
+) {
     loop {
         let size = |body: &MirFunctionBody| {
             (
@@ -87,6 +96,9 @@ fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel)
         if opt >= crate::OptLevel::Two {
             values::fold_constants(body, arity);
             eliminate_dead_blocks(body);
+            if let Some(scope) = scope {
+                scalar_replace::run(scope, body, arity);
+            }
         }
         effects::remove_trivial_drops(body);
         values::eliminate_dead_stores(body, arity, opt);
