@@ -61,10 +61,13 @@ function consume(it: baml.iter.Iterator<Item = int, Error = never>) -> int {
 
 /// `(local name, thread-local)` for each named local of `function`, in
 /// declaration order. A shadowed name reports its first declaration.
+///
+/// Lowered at `OptLevel::One`: at `Two` an instance that stays in its
+/// function is replaced by locals, which leaves no object to classify.
 fn classify(source: &str, function: &str) -> Vec<(String, bool)> {
     let mut db = make_db();
     let file = db.file("test.baml", source);
-    classify_file(&db, file, function)
+    classify_file_at_opt(&db, file, function, OptLevel::One)
 }
 
 fn classify_file(
@@ -1286,11 +1289,11 @@ fn bytecode_takes_relaxed_field_paths_for_thread_local_instances() {
 class Counter {
   n: int
 }
-function build(k: int) -> int {
+function build(k: int) -> Counter {
   let c = Counter { n: 0 };
   let i = 0;
   while (i < k) { c.n = c.n + i; i += 1; }
-  c.n
+  c
 }
 function bump(c: Counter) -> int {
   c.n = c.n + 1;

@@ -16,22 +16,16 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     load_type string
     load_type int
     alloc_map 0
-    store_var _4
-    load_var _4
+    store_var _3
+    load_var _3
     load_const "a"
     load_const 1
     call_local baml.Map.set
     pop 1
     load_type int
     alloc_array 0
-    load_var _4
-    init_instance user.fixtures.short_circuit_locals.ShortCircuitBox .items, .tags
-    store_var box
-    load_var box
-    load_field_local .items
     store_var items
-    load_var box
-    load_field_local .tags
+    load_var _3
     store_var tags
     load_var items
     load_const null
@@ -49,12 +43,12 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     jump L3
 
   L2:
-    store_var _10
+    store_var _9
     jump L4
 
   L3:
     load_const -1
-    store_var _10
+    store_var _9
 
   L4:
     load_var tags
@@ -73,19 +67,19 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     jump L8
 
   L7:
-    store_var _17
+    store_var _16
     jump L9
 
   L8:
     load_const 0
-    store_var _17
+    store_var _16
 
   L9:
-    load_var _10
+    load_var _9
     load_const 0
     cmp_int_op ==
     jump_if_false_or_pop L10
-    load_var _17
+    load_var _16
     load_const 1
     cmp_int_op ==
 
