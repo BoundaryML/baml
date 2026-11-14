@@ -1272,7 +1272,7 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
 fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &NativeBuiltin) {
     let mut body = String::new();
     emit_glue_body(&mut body, trait_name, method_name, b);
-    out.push_str(&entry_from_glue_body(&body, method_name, "", b));
+    out.push_str(&entry_from_glue_body(&body, trait_name, method_name, "", b));
     emit_glue_adapter(out, trait_name, method_name, "", b);
 }
 
@@ -1333,7 +1333,7 @@ fn emit_thread_local_twin(
     out.push_str(
         "    // SAFETY: selected only for a receiver escape analysis proved thread-local.\n    #[allow(unsafe_code)]\n",
     );
-    out.push_str(&entry_from_glue_body(&body, method_name, "__local", b));
+    out.push_str(&entry_from_glue_body(&body, trait_name, method_name, "__local", b));
     emit_glue_adapter(out, trait_name, method_name, "__local", b);
 }
 
@@ -1345,25 +1345,52 @@ fn entry_signature(b: &NativeBuiltin) -> String {
     })
 }
 
-/// Turn a body from [`emit_glue_body`], which reads `args`, into the entry
-/// `__entry_{method_name}{suffix}`, which takes the arguments as parameters
-/// and gathers them back into a local `args` the body reads unchanged.
-fn entry_from_glue_body(body: &str, method_name: &str, suffix: &str, b: &NativeBuiltin) -> String {
+/// Turn a body from [`emit_glue_body`] into a builtin's entry point. The
+/// glue body wraps its work in a closure so `?` works; here that work
+/// becomes `__body_{method_name}{suffix}`, an `#[inline(always)]` method
+/// taking the arguments as an array the body reads unchanged, and the entry
+/// `__entry_{method_name}{suffix}` takes them as parameters and converts the
+/// body's result. A closure is not reliably inlined; a method so marked is.
+fn entry_from_glue_body(
+    body: &str,
+    trait_name: &str,
+    method_name: &str,
+    suffix: &str,
+    b: &NativeBuiltin,
+) -> String {
     let header =
         format!("    fn __glue_{method_name}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n");
+    let rest = body.strip_prefix(&header).unwrap_or_else(|| {
+        panic!("baml codegen error: {} glue body has an unexpected header", b.path)
+    });
+    let (result_ty, ok) = if b.may_yield {
+        ("Result<NativeCallResult, VmRustFnError>", "r")
+    } else {
+        ("NativeFunctionResult", "NativeCallResult::Done(r)")
+    };
+    let opening = format!("        let __result: {result_ty} = (|| {{\n");
+    let rest = rest.strip_prefix(&opening).unwrap_or_else(|| {
+        panic!("baml codegen error: {} glue body has no result closure", b.path)
+    });
+    let (work, _) = rest.split_once("        })();\n").unwrap_or_else(|| {
+        panic!("baml codegen error: {} glue body's closure does not close", b.path)
+    });
     let params = entry_params(b);
-    let entry = format!(
-        "    #[inline]\n    #[allow(unused_variables)]\n    fn __entry_{method_name}{suffix}(vm: &mut BexVm{}) -> NativeCallResult {{\n        let args: [Value; {}] = [{}];\n",
-        entry_signature(b),
-        params.len(),
-        params.join(", "),
-    );
-    assert!(
-        body.starts_with(&header),
-        "baml codegen error: {} glue body has an unexpected header",
-        b.path
-    );
-    body.replacen(&header, &entry, 1)
+    let n = params.len();
+    format!(
+        "    #[inline(always)]\n    #[allow(unused_variables, clippy::inline_always)]\n    \
+         fn __body_{method_name}{suffix}(vm: &mut BexVm, args: [Value; {n}]) -> {result_ty} {{\n\
+         {work}    }}\n\
+         \x20   #[inline]\n    \
+         fn __entry_{method_name}{suffix}(vm: &mut BexVm{sig}) -> NativeCallResult {{\n        \
+         match <Self as {trait_name}>::__body_{method_name}{suffix}(vm, [{args}]) {{\n            \
+         Ok(r) => {ok},\n            \
+         Err(e) => NativeCallResult::Error(e),\n        \
+         }}\n    \
+         }}\n",
+        sig = entry_signature(b),
+        args = params.join(", "),
+    )
 }
 
 /// `__glue_{method_name}{suffix}`: the interpreter's adapter, unpacking the
