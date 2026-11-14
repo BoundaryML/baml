@@ -186,9 +186,15 @@ export default function SignupForm({
     };
   }, [previewZone]);
   const now = localTime?.now.getTime();
-  const sessions = availableSessions.filter(
+  const openSessions = availableSessions.filter(
     (event) => now === undefined || Date.parse(event.end_at) > now,
   );
+  const sessions = openSessions.slice(0, 3);
+  // Keep a session opened from a direct link visible even if it is farther out.
+  const linkedSession = openSessions.find(({ id }) => id === initialSessionId);
+  if (linkedSession && !sessions.includes(linkedSession)) {
+    sessions.splice(2, 1, linkedSession);
+  }
   const onboarding = signupType === 'onboarding';
   const session = sessions.find(({ id }) => id === eventId);
   const selectedTiming =
@@ -211,7 +217,7 @@ export default function SignupForm({
       </h1>
       <p className="mt-5 max-w-[34rem] v4-body text-ink-2">
         Build a feedback loop with BAML in a live walkthrough, or bring your
-        stack to a private session with our engineers.
+        stack to an engineering session with our team.
       </p>
       <form
         action={action}
@@ -348,7 +354,7 @@ export default function SignupForm({
                   onClick={() => setSignupType('access')}
                   type="button"
                 >
-                  Request a private session
+                  Request an engineering session
                 </button>
               </div>
             )}
@@ -500,7 +506,7 @@ export default function SignupForm({
                       ? selectedTiming === 'live' || selectedTiming === 'soon'
                         ? 'Sign up to join'
                         : 'Sign up for live onboarding'
-                      : 'Request a private session'}
+                      : 'Request an engineering session'}
                   <ArrowRight aria-hidden="true" size={17} />
                 </button>
               </div>

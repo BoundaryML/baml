@@ -57,7 +57,7 @@ interface LumaListResponse {
 
 async function lumaFetch(
   path: string,
-  fresh = false,
+  revalidate: number | false = 3600,
 ): Promise<Response | null> {
   const lumaApiKey = env.LUMA_API_KEY;
   if (!lumaApiKey) {
@@ -72,10 +72,9 @@ async function lumaFetch(
         'x-luma-api-key': lumaApiKey,
       },
       method: 'GET',
-      // Cache for 60 minutes so we don't hammer the API on every render.
-      ...(fresh
+      ...(revalidate === false
         ? { cache: 'no-store' as const }
-        : { next: { revalidate: 3600 } }),
+        : { next: { revalidate } }),
       // Hard timeout so a stalled connection can't hang a build/render.
       signal: AbortSignal.timeout(8000),
     });
@@ -117,7 +116,8 @@ export async function getEapEvents(): Promise<EapEvent[]> {
   });
   const sessions: EapEvent[] = [];
   while (true) {
-    const response = await lumaFetch(`/v1/calendars/events/list?${params}`);
+    // The banner and picker should reflect rescheduled sessions quickly.
+    const response = await lumaFetch(`/v1/calendars/events/list?${params}`, 60);
     if (!response) break;
     const data = (await response.json()) as LumaListResponse;
     for (const event of data.entries ?? []) {
@@ -165,7 +165,7 @@ export async function getOnboardingSession(
   if (!/^evt-[a-zA-Z0-9]+$/.test(eventId)) return null;
   const response = await lumaFetch(
     `/v1/events/get?event_id=${encodeURIComponent(eventId)}`,
-    true,
+    false,
   );
   if (!response) return null;
   const event = (await response.json()) as LumaEvent & {
