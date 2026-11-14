@@ -592,6 +592,27 @@ impl MapData {
             .map(|entry| entry.value)
     }
 
+    /// Set the value of the entry [`Self::get_hashed`] would find, or insert
+    /// `key` when there is none. Returns the value replaced.
+    pub fn set_hashed(
+        &mut self,
+        hash: u64,
+        mut matches: impl FnMut(&Value) -> bool,
+        key: Value,
+        value: Value,
+    ) -> Option<Value> {
+        let found = self
+            .buckets
+            .get(&hash)
+            .and_then(|bucket| bucket.iter().find(|id| matches(&self.entries[*id].key)))
+            .copied();
+        let Some(id) = found else {
+            self.insert_hashed(hash, key, value);
+            return None;
+        };
+        Some(std::mem::replace(&mut self.entries[&id].value, value))
+    }
+
     fn advance_epoch(&mut self) {
         self.epoch = self.epoch.checked_add(1).expect("map epoch exhausted");
     }
@@ -878,6 +899,33 @@ mod map_tests {
         map.set_if_epoch(epoch, Some(id), 0, Value::TRUE, Value::NULL)
             .unwrap();
         assert_eq!(map.get_if_epoch(epoch, Some(id)), Ok(Some(Value::NULL)));
+    }
+
+    /// Within a bucket, `matches` picks the entry: a match is replaced in
+    /// place, keeping its position and the epoch; a miss inserts at the end.
+    #[test]
+    fn set_hashed_replaces_the_match_or_inserts() {
+        let mut map = MapData::new();
+        map.insert_hashed(7, Value::int(1), Value::int(10));
+        map.insert_hashed(7, Value::int(2), Value::int(20));
+        let epoch = map.epoch();
+        let is_two = |key: &Value| *key == Value::int(2);
+        assert_eq!(
+            map.set_hashed(7, is_two, Value::int(2), Value::int(21)),
+            Some(Value::int(20))
+        );
+        assert_eq!(map.epoch(), epoch, "a value update is no membership change");
+        assert_eq!(map.get_hashed(7, is_two), Some(Value::int(21)));
+        let is_three = |key: &Value| *key == Value::int(3);
+        assert_eq!(
+            map.set_hashed(7, is_three, Value::int(3), Value::int(30)),
+            None
+        );
+        assert_ne!(map.epoch(), epoch);
+        assert_eq!(
+            map.values().copied().collect::<Vec<_>>(),
+            vec![Value::int(10), Value::int(21), Value::int(30)]
+        );
     }
 
     #[test]
