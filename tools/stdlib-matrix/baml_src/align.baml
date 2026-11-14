@@ -1040,7 +1040,7 @@ function run_sessions(
     limit: int,
     baml_names: map<string, string>,
 ) -> SessionResult[] {
-    let session_limit = baml.spawn.Limit.new(limit) catch (e) {
+    let session_limit = baml.sync.Semaphore.new(limit) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic(`session limit must be positive, got ${limit}`),
     };
     let pending = requests.map((request) -> {
