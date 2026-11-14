@@ -21,7 +21,7 @@ Usage:
     ./bep bcs new "T" f.html  # Team only: a new BCS proposal from an HTML page
     ./bep bcs push <number> # Team only: a new version of a BCS proposal
     ./bep bcs comments <n>  # Team only: a BCS proposal's open comment threads
-    ./bep bcs reply <n> <comment-id> "text"  # Team only: reply to a thread
+    ./bep bcs reply <n> <comment-id> "text"  # Team only: reply to a thread (--agent claude when an agent writes it)
 """
 
 import argparse
@@ -1149,8 +1149,13 @@ def cmd_bcs_reply(args: argparse.Namespace) -> int:
     if number is None:
         print(f"Error: {args.ref} is not a BCS number", file=sys.stderr)
         return 1
-    replied = bcs_call("POST", f"/{number}/comments/reply", {"commentId": args.comment_id, "body": args.content})
-    print(f"Replied on {format_bcs_number(number)}: {replied['url']}")
+    body = {"commentId": args.comment_id, "body": args.content}
+    agent = args.agent or os.environ.get("BCS_AGENT", "").strip()
+    if agent:
+        body["agent"] = agent
+    replied = bcs_call("POST", f"/{number}/comments/reply", body)
+    via = f" as your agent {agent}" if agent else ""
+    print(f"Replied on {format_bcs_number(number)}{via}: {replied['url']}")
     return 0
 
 
@@ -1247,6 +1252,7 @@ def main():
     bcs_reply.add_argument("ref", help="BCS number")
     bcs_reply.add_argument("comment_id", help="ID of the thread or reply to answer (from bep bcs comments)")
     bcs_reply.add_argument("content", help="Reply, in Markdown")
+    bcs_reply.add_argument("--agent", help="The coding agent writing it for you, such as claude or codex (default: BCS_AGENT); shown with your name")
 
     args = parser.parse_args()
 

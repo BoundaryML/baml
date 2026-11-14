@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { api } from "../../../../../../../convex/_generated/api";
 import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
 import { renderBcsPage } from "@/lib/bcs-render";
+import { agentName } from "../../../../../../../convex/bcsAgents";
 import { authenticate, json, refused } from "../../shared";
 
 export const runtime = "nodejs";
@@ -12,12 +13,22 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ number: string }> };
 
-type Reply = { id: string; author: string; createdAt: string; editedAt?: string; body: string };
+type Reply = {
+  id: string;
+  author: string;
+  /** The coding agent that wrote it for the author, when one said so. */
+  agent?: string;
+  createdAt: string;
+  editedAt?: string;
+  body: string;
+};
 
 type AgentThread = {
   id: string;
   type: "discussion" | "concern" | "question";
   author: string;
+  /** The coding agent that wrote it for the author, when one said so. */
+  agent?: string;
   createdAt: string;
   editedAt?: string;
   /** Its first comment was deleted; its replies stay. */
@@ -78,6 +89,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       id: thread.id,
       type: thread.type,
       author: thread.author,
+      agent: thread.agent,
       createdAt: iso(thread.createdAt)!,
       editedAt: iso(thread.editedAt),
       deleted: thread.deleted,
@@ -97,6 +109,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       replies: thread.replies.map((reply) => ({
         id: reply.id,
         author: reply.author,
+        agent: reply.agent,
         createdAt: iso(reply.createdAt)!,
         editedAt: iso(reply.editedAt),
         body: reply.deleted ? "" : reply.body,
@@ -123,7 +136,11 @@ export async function GET(request: NextRequest, { params }: Params) {
     comments,
     usage: {
       reply: `POST ${origin}/api/agent/bcs/${number}/comments/reply`,
-      replyBody: { commentId: "<comment or reply id>", body: "<your reply, Markdown>" },
+      replyBody: {
+        commentId: "<comment or reply id>",
+        body: "<your reply, Markdown>",
+        agent: "<optional: the agent writing for you, such as claude or codex>",
+      },
     },
   });
 }
@@ -163,10 +180,15 @@ function quoted(text: string): string {
     .join("\n");
 }
 
+/** Who wrote a comment: the member, or their agent. */
+function byline(comment: { author: string; agent?: string }): string {
+  return comment.agent ? `${comment.author}'s agent ${agentName(comment.agent)}` : comment.author;
+}
+
 function threadMarkdown(thread: AgentThread): string[] {
   const where = thread.page.slug === "" ? "the main page" : `page "${thread.page.title}" (${thread.page.slug})`;
   const lines = [
-    `### ${thread.deleted ? "(deleted)" : thread.author}, on ${where}`,
+    `### ${thread.deleted ? "(deleted)" : byline(thread)}, on ${where}`,
     "",
     `- ID: \`${thread.id}\``,
     `- Kind: ${thread.type}${thread.resolved ? `, resolved by ${thread.resolvedBy ?? "someone"}` : ", open"}`,
@@ -187,7 +209,7 @@ function threadMarkdown(thread: AgentThread): string[] {
   lines.push(thread.deleted ? "(The first comment was deleted.)" : thread.body, "");
   for (const reply of thread.replies) {
     lines.push(
-      `**${reply.author}** replied (${reply.createdAt}, ID \`${reply.id}\`):`,
+      `**${byline(reply)}** replied (${reply.createdAt}, ID \`${reply.id}\`):`,
       "",
       quoted(reply.body || "(deleted)"),
       ""

@@ -651,6 +651,7 @@ export const slackView = internalQuery({
               threadAuthor: thread.author,
               threadBody: thread.body,
               type: thread.type,
+              agent: comment.agent,
             }
           : undefined,
     };

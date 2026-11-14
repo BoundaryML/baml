@@ -6,11 +6,20 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { byNumber, fail, outlineOf, tellSlack, versionRow } from "./bcs";
+import { AGENT_ID } from "./bcsAgents";
 import { commentType } from "./schema";
 import { requireServerSecret } from "./serverSecret";
 
 /** The longest comment, which keeps a thread readable and a Slack reply within its limits. */
 export const MAX_COMMENT_CHARS = 10_000;
+
+/** An agent's id, lowercased, or a refusal when it is not one an id can be. */
+function checkAgent(agent: string | undefined): string | undefined {
+  if (agent === undefined) return undefined;
+  const id = agent.trim().toLowerCase();
+  if (!AGENT_ID.test(id)) fail("invalid", "An agent is named by 1 to 32 letters, digits or hyphens, such as claude.");
+  return id;
+}
 
 function checkBody(body: string): string {
   const trimmed = body.trim();
@@ -26,6 +35,7 @@ function shown(comment: Doc<"bcsComments">) {
     version: comment.version,
     anchor: comment.anchor,
     author: comment.author,
+    agent: comment.agent,
     body: comment.deleted ? "" : comment.body,
     type: comment.type ?? "discussion",
     reactions: comment.reactions ?? {},
@@ -162,6 +172,8 @@ export const add = mutation({
     body: v.string(),
     author: v.string(),
     authorGithubId: v.optional(v.string()),
+    /** The coding agent writing it for the author, from the agent routes only. */
+    agent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     requireServerSecret(args.secret);
@@ -183,6 +195,7 @@ export const add = mutation({
       anchor,
       type: args.type ?? "discussion",
       author: args.author,
+      agent: checkAgent(args.agent),
       body,
       resolved: false,
       createdAt: Date.now(),
@@ -206,6 +219,8 @@ export const reply = mutation({
     body: v.string(),
     author: v.string(),
     authorGithubId: v.optional(v.string()),
+    /** The coding agent writing it for the author, from the agent routes only. */
+    agent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     requireServerSecret(args.secret);
@@ -226,6 +241,7 @@ export const reply = mutation({
       version,
       parentId: thread._id,
       author: args.author,
+      agent: checkAgent(args.agent),
       body,
       resolved: false,
       createdAt: Date.now(),
