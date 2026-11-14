@@ -357,6 +357,7 @@ type BamlOutboundValue struct {
 	//	*BamlOutboundValue_Uint8ArrayValue
 	//	*BamlOutboundValue_BigintValue
 	//	*BamlOutboundValue_TyValue
+	//	*BamlOutboundValue_TupleValue
 	Value isBamlOutboundValue_Value `protobuf_oneof:"value"`
 }
 
@@ -601,6 +602,8 @@ type BamlOutboundValue_TyValue struct {
 }
 
 type BamlOutboundValue_TupleValue struct {
+	// A tuple value, carrying its instantiated tuple type. Positions also
+	// carry their own union envelopes where their slot is a union.
 	TupleValue *BamlValueTuple `protobuf:"bytes,23,opt,name=tuple_value,json=tupleValue,proto3,oneof"`
 }
 
@@ -802,12 +805,19 @@ func (x *BamlValueList) GetItems() []*BamlOutboundValue {
 	return nil
 }
 
+// A tuple value: exactly as many items as the tuple's arity (at least one).
+// Hosts send tuples inbound as a list; the declared type makes it a tuple.
 type BamlValueTuple struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
 	Items []*BamlOutboundValue `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	// The tuple's carried (instantiated) type, always the `tuple` arm of
+	// `BamlTy` with one slot type per item, in order. It is the value's own
+	// identity, not one recovered from its items or the declared type, so a
+	// host can look up its tuple representation (and restate the tuple when
+	// sending it back) without a declared signature.
 	TupleType *BamlTy `protobuf:"bytes,2,opt,name=tuple_type,json=tupleType,proto3" json:"tuple_type,omitempty"`
 }
 
@@ -838,6 +848,7 @@ func (x *BamlValueTuple) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
+// Deprecated: Use BamlValueTuple.ProtoReflect.Descriptor instead.
 func (*BamlValueTuple) Descriptor() ([]byte, []int) {
 	return file_baml_bridge_cffi_v1_baml_outbound_proto_rawDescGZIP(), []int{7}
 }

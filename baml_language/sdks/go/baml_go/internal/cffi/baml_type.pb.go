@@ -231,6 +231,7 @@ type BamlTy struct {
 	//	*BamlTy_TypeVar
 	//	*BamlTy_AssociatedTypeProjection
 	//	*BamlTy_Never
+	//	*BamlTy_Tuple
 	Ty isBamlTy_Ty `protobuf_oneof:"ty"`
 }
 
@@ -1127,6 +1128,7 @@ func (x *BamlTyUnion) GetOptions() []*BamlTy {
 	return nil
 }
 
+// A fixed-arity tuple `(A, B)`: one type per position, at least one.
 type BamlTyTuple struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -1162,6 +1164,7 @@ func (x *BamlTyTuple) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
+// Deprecated: Use BamlTyTuple.ProtoReflect.Descriptor instead.
 func (*BamlTyTuple) Descriptor() ([]byte, []int) {
 	return file_baml_bridge_cffi_v1_baml_type_proto_rawDescGZIP(), []int{9}
 }
