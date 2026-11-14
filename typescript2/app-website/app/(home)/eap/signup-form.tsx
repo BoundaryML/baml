@@ -186,9 +186,15 @@ export default function SignupForm({
     };
   }, [previewZone]);
   const now = localTime?.now.getTime();
-  const sessions = availableSessions.filter(
+  const openSessions = availableSessions.filter(
     (event) => now === undefined || Date.parse(event.end_at) > now,
   );
+  const sessions = openSessions.slice(0, 3);
+  // Keep a session opened from a direct link visible even if it is farther out.
+  const linkedSession = openSessions.find(({ id }) => id === initialSessionId);
+  if (linkedSession && !sessions.includes(linkedSession)) {
+    sessions.splice(2, 1, linkedSession);
+  }
   const onboarding = signupType === 'onboarding';
   const session = sessions.find(({ id }) => id === eventId);
   const selectedTiming =
