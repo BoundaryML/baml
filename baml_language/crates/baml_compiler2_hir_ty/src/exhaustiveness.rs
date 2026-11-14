@@ -188,18 +188,26 @@ impl Ctor {
     }
 
     /// Does `self` cover `other` — i.e. is every value matched by `other` also
-    /// matched by `self`? Equality for most ctors; slice variable-length covers
-    /// fixed slices of compatible length; wildcard covers anything. `Or` is
-    /// not handled here — Or rows are handled by matrix-level expansion
-    /// before any normal cover check runs.
-    pub fn covers(&self, other: &Ctor) -> bool {
+    /// matched by `self`? Equality for most ctors; a type test covers the
+    /// tests of its provable subtypes (`int` covers `1`); slice
+    /// variable-length covers fixed slices of compatible length; wildcard
+    /// covers anything. `Or` is not handled here — Or rows are handled by
+    /// matrix-level expansion before any normal cover check runs.
+    ///
+    /// Inclusion rather than equality is rustc's `is_covered_by` rule for
+    /// grouped constructors (its float ranges are the closest analogue: an
+    /// unlistable type whose column ctors are used as-is and joined by
+    /// inclusion). A branch for `Type(T)` therefore stands for the values of
+    /// `T` outside every narrower test in the column; an inclusion the type
+    /// system cannot prove only leaves a dead arm unreported.
+    pub fn covers(&self, other: &Ctor, cx: &dyn PatCtx) -> bool {
         use Ctor::{
             Class, Interface, Missing, NonExhaustive, Or, Slice, Type, UnionMember, Wildcard,
         };
         match (self, other) {
             (Wildcard, _) => true,
             (_, Wildcard) => false,
-            (Type(a), Type(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
+            (Type(a), Type(b)) => ty_ctor_identity(a) == ty_ctor_identity(b) || cx.is_subtype(b, a),
             // Arg-sensitive, but only where decidable: a ctor pair is
             // non-covering only when the args *provably* differ. An arity
             // mismatch (a bare `Box` pattern missing its required type args)
@@ -872,6 +880,15 @@ pub trait PatCtx {
         vec![elem; shape.arity()]
     }
 
+    /// Whether every value of `sub` is provably a value of `sup`. Decides
+    /// which type tests cover which ([`Ctor::covers`]); it must answer
+    /// `false` for anything undecidable, error-carrying types included.
+    /// Test contexts that do not model subtyping can decline, which leaves
+    /// type tests related by identity alone.
+    fn is_subtype(&self, _sub: &Ty, _sup: &Ty) -> bool {
+        false
+    }
+
     /// The element type of an array/list type. Helper for default
     /// [`PatCtx::slice_field_types`].
     fn list_element_type(&self, ty: &Ty) -> Ty;
@@ -1041,7 +1058,7 @@ impl<'p> Matrix<'p> {
                         }
                         _ => None,
                     };
-                    if !head.ctor.covers(ctor) && interface_projection.is_none() {
+                    if !head.ctor.covers(ctor, cx) && interface_projection.is_none() {
                         // Row's pattern doesn't accept any value of shape
                         // `ctor`. Skip — this row can't contribute to this
                         // specialization.
@@ -1469,7 +1486,7 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> CtorSplit {
             return CtorSplit::alphabet(present_no_wild, vec![]);
         }
         // Infinite alphabet (raw int/string/float, generics, opaque types).
-        let mut split: Vec<Ctor> = present_no_wild;
+        let mut split: Vec<Ctor> = dedup_equivalent_type_tests(cx, present_no_wild);
         let missing = vec![Ctor::NonExhaustive];
         if has_wildcard {
             // Wildcard rows must be specialized through. NonExhaustive as a
@@ -1504,7 +1521,7 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> CtorSplit {
         // resurface the ctor as missing.
         let missing: Vec<Ctor> = all
             .iter()
-            .filter(|c| !present_no_wild.iter().any(|p| p.covers(c)))
+            .filter(|c| !present_no_wild.iter().any(|p| p.covers(c, cx)))
             .cloned()
             .collect();
         // Possible-but-not-covering rows — a rigid `Type` (`let t: T` in a
@@ -1663,6 +1680,25 @@ fn dedup_ctors(ctors: Vec<Ctor>) -> Vec<Ctor> {
         .into_iter()
         .filter(|c| seen.insert(c.clone()))
         .collect()
+}
+
+/// Keep one type test per set of mutually covering ones (`int` beside an
+/// alias of `int`). Each would otherwise be its own branch over the same
+/// values and rows, reporting every witness of that branch once per spelling.
+fn dedup_equivalent_type_tests(cx: &dyn PatCtx, ctors: Vec<Ctor>) -> Vec<Ctor> {
+    let mut kept: Vec<Ctor> = Vec::with_capacity(ctors.len());
+    for ctor in ctors {
+        let duplicate = matches!(ctor, Ctor::Type(_))
+            && kept.iter().any(|earlier| {
+                matches!(earlier, Ctor::Type(_))
+                    && earlier.covers(&ctor, cx)
+                    && ctor.covers(earlier, cx)
+            });
+        if !duplicate {
+            kept.push(ctor);
+        }
+    }
+    kept
 }
 
 fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col_ty: &Ty) -> Vec<Ty> {

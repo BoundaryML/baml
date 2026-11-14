@@ -2266,6 +2266,14 @@ impl PatCtx for HirPatCtx<'_, '_> {
             .collect()
     }
 
+    fn is_subtype(&self, sub: &baml_type::Ty, sup: &baml_type::Ty) -> bool {
+        // Error is compatible with everything in the subtype relation; here
+        // it must prove nothing (the `dpat_ty` suppression discipline).
+        !baml_type::contains_error(sub)
+            && !baml_type::contains_error(sup)
+            && baml_type::normalize::is_subtype(sub, sup, &self.infer.facts)
+    }
+
     fn list_element_type(&self, ty: &baml_type::Ty) -> baml_type::Ty {
         match self.peel_aliases(ty.clone(), 8) {
             baml_type::Ty::List(element) => *element,
