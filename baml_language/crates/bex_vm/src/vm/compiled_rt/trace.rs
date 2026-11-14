@@ -29,8 +29,9 @@ impl TraceHookMode {
         };
         let (inputs, output, error) = match self {
             Self::EmptySpan => (Some(false), Some(false), Some(false)),
-            Self::Rich => (Some(true), Some(true), Some(true)),
-            Self::Span => (None, Some(true), Some(true)),
+            // `trace.span`'s own defaults: a span asked for by name records
+            // what went in and what came out.
+            Self::Rich | Self::Span => (Some(true), Some(true), Some(true)),
             Self::Hidden | Self::Timing => (None, None, None),
         };
         TraceConfig {

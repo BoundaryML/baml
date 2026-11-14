@@ -2828,11 +2828,17 @@ impl BexVm {
         Ok(())
     }
 
+    /// The context the invocation runs under. Telemetry takes it at once: a
+    /// thread marked running before its entry frame announces itself with
+    /// the context it has then.
     pub fn set_root_context(&mut self, context: Context) {
         assert!(
             self.frames.is_empty(),
             "root context must precede invocation entry"
         );
+        if let Some(telemetry) = &mut self.telemetry {
+            telemetry.set_context(context.clone());
+        }
         self.root_context = context;
     }
 
@@ -10120,10 +10126,14 @@ impl BexVm {
                                             }
                                             _ => btel_types::InvocationMode::Span,
                                         }),
+                                        // `trace.span`'s own defaults, as in
+                                        // `TraceHookMode::config`.
                                         inputs: if op == OpCode::TraceHookEmptySpan {
                                             Some(false)
                                         } else {
-                                            (op == OpCode::TraceHookRich).then_some(true)
+                                            (op == OpCode::TraceHookRich
+                                                || op == OpCode::TraceHookSpan)
+                                                .then_some(true)
                                         },
                                         output: if op == OpCode::TraceHookEmptySpan {
                                             Some(false)

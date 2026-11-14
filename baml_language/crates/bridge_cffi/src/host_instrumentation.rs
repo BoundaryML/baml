@@ -13,7 +13,8 @@ fn invalid(message: &str) -> BridgeError {
 /// Validate marker configuration without capturing a runtime or ambient parent.
 pub fn options(key: u64) -> Result<TraceOptionsData, BridgeError> {
     let Some(key) = TableKey::new(key) else {
-        // Bare Python/Node instrumentation uses the same capture defaults as span().
+        // Bare Python/Node instrumentation requests outputs and errors. Unlike
+        // `trace.span()`, it requests inputs only when the options ask.
         return Ok(TraceOptionsData {
             output: Some(true),
             error: Some(true),
