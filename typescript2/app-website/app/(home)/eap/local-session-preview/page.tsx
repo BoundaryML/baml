@@ -1,11 +1,11 @@
 import Image from 'next/image';
+import { notFound } from 'next/navigation';
 import { createMetadata } from '@/app/_lib/metadata';
 import { section } from '@/components/home/analytics';
 import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { getEapEvents } from '@/lib/luma';
-import { notFound } from 'next/navigation';
-import { submitSignup } from './action';
 import SignupForm from '../signup-form';
+import { submitSignup } from './action';
 
 export const metadata = createMetadata({
   description:
@@ -30,18 +30,18 @@ export default async function EapPage({
   const sessions =
     state === 'join'
       ? [
-          { id: 'preview-live', startsIn: -10, endsIn: 50 },
-          { id: 'preview-soon', startsIn: 10, endsIn: 70 },
-          { id: 'preview-later', startsIn: 10_080, endsIn: 10_140 },
+          { endsIn: 50, id: 'preview-live', startsIn: -10 },
+          { endsIn: 70, id: 'preview-soon', startsIn: 10 },
+          { endsIn: 10_140, id: 'preview-later', startsIn: 10_080 },
         ].map(({ id, startsIn, endsIn }) => ({
+          end_at: new Date(now + endsIn * 60_000).toISOString(),
+          goingCount: null,
           id,
           name: 'Boundary onboarding preview',
+          registrationQuestions: [],
           start_at: new Date(now + startsIn * 60_000).toISOString(),
-          end_at: new Date(now + endsIn * 60_000).toISOString(),
           timezone: 'America/Los_Angeles',
           url: '/eap/local-session-preview?state=join',
-          goingCount: null,
-          registrationQuestions: [],
         }))
       : !live || state === 'empty'
         ? []
@@ -49,12 +49,12 @@ export default async function EapPage({
             live,
             ...[7, 14].map((days) => ({
               ...live,
+              end_at: new Date(
+                Date.parse(live.end_at) + days * 86400000,
+              ).toISOString(),
               id: 'preview-' + days,
               start_at: new Date(
                 Date.parse(live.start_at) + days * 86400000,
-              ).toISOString(),
-              end_at: new Date(
-                Date.parse(live.end_at) + days * 86400000,
               ).toISOString(),
             })),
           ];
@@ -81,8 +81,6 @@ export default async function EapPage({
         <div className={`${PAGE_WRAP} py-12 md:py-20`}>
           <div className="mx-auto max-w-[52rem]">
             <SignupForm
-              signupAction={submitSignup}
-              sessions={sessions}
               previewZone={
                 zone === 'tokyo'
                   ? 'Asia/Tokyo'
@@ -90,6 +88,8 @@ export default async function EapPage({
                     ? 'America/New_York'
                     : undefined
               }
+              sessions={sessions}
+              signupAction={submitSignup}
             />
           </div>
         </div>

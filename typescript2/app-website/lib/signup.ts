@@ -1,16 +1,16 @@
 export const SIGNUP_TYPES = [
   {
-    id: 'onboarding',
-    label: 'Weekly live onboarding',
     description:
       'Join us Thursday for a live overview of BAML and Boundary. See how code, tests, and traces fit together, ask questions, and get help setting up.',
+    id: 'onboarding',
+    label: 'Weekly live onboarding',
   },
   {
-    id: 'access',
-    label: 'Request a private session',
     description:
       'Bring your engineers to a private working session with ours. Walk through your architecture, data flows, and security or compliance requirements. We’ll work through what it would take to run Boundary in your environment.',
     heading: 'Private engineering session',
+    id: 'access',
+    label: 'Request a private session',
   },
 ] as const;
 

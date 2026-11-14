@@ -40,8 +40,8 @@ type SignupState =
 
 function richText(value: string) {
   return (value.match(/[\s\S]{1,1000}/gu) ?? []).map((content) => ({
-    type: 'text',
     text: { content },
+    type: 'text',
   }));
 }
 
@@ -50,8 +50,8 @@ async function subscribeToNewsletter(email: string) {
     const response = await fetch(
       'https://app.loops.so/api/newsletter-form/cm3d7widq01su6gng1mc5iuvz',
       {
+        body: new URLSearchParams({ email, mailingLists: '', userGroup: '' }),
         method: 'POST',
-        body: new URLSearchParams({ email, userGroup: '', mailingLists: '' }),
         signal: AbortSignal.timeout(5000),
       },
     );
@@ -72,11 +72,11 @@ export async function submitSignup(
   );
   if (!signupType)
     return {
-      status: 'error',
       message: 'Choose how you’d like to get started.',
+      status: 'error',
     };
 
-  const success = { status: 'success', signupType: signupType.id } as const;
+  const success = { signupType: signupType.id, status: 'success' } as const;
   if (form.get('website')) return success;
 
   const email = String(form.get('email') ?? '')
@@ -98,24 +98,24 @@ export async function submitSignup(
   );
 
   if (!isSignupEmail(email)) {
-    return { status: 'error', message: 'Enter a valid email address.' };
+    return { message: 'Enter a valid email address.', status: 'error' };
   }
   const invalidTeammate = teammateEmails.find(
     (address) => !isSignupEmail(address),
   );
   if (invalidTeammate) {
     return {
-      status: 'error',
       message: `Check the teammate email “${invalidTeammate.slice(0, 100)}”.`,
+      status: 'error',
     };
   }
   if (teammateInput.length > SIGNUP_TEAMMATE_EMAILS_MAX) {
-    return { status: 'error', message: 'The teammate email list is too long.' };
+    return { message: 'The teammate email list is too long.', status: 'error' };
   }
   if (!name || !company || !stage) {
     return {
-      status: 'error',
       message: 'Enter your name, company or team, and project stage.',
+      status: 'error',
     };
   }
   if (
@@ -124,33 +124,33 @@ export async function submitSignup(
     project.length > SIGNUP_PROJECT_MAX
   ) {
     return {
-      status: 'error',
       message: 'Shorten your name, company, or project description.',
+      status: 'error',
     };
   }
   if (signupType.id === 'onboarding' && !eventId) {
-    return { status: 'error', message: 'Choose a live onboarding session.' };
+    return { message: 'Choose a live onboarding session.', status: 'error' };
   }
 
   const token = process.env.NOTION_EAP_TOKEN;
   const dataSourceId = process.env.NOTION_EAP_DATA_SOURCE_ID;
   const unavailable = 'We couldn’t save your request. Please try again later.';
-  if (!token || !dataSourceId) return { status: 'error', message: unavailable };
+  if (!token || !dataSourceId) return { message: unavailable, status: 'error' };
 
   const earlier = previous.status === 'error' ? previous.retry : undefined;
   const retry =
     earlier?.email === email && earlier.eventId === eventId
       ? earlier
-      : { id: randomUUID(), email, eventId };
+      : { email, eventId, id: randomUUID() };
   const notion = (path: string, method: 'POST' | 'PATCH', body: object) =>
     fetch(`https://api.notion.com/v1/${path}`, {
-      method,
+      body: JSON.stringify(body),
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         'Notion-Version': '2026-03-11',
       },
-      body: JSON.stringify(body),
+      method,
       signal: AbortSignal.timeout(8000),
     });
 
@@ -158,9 +158,9 @@ export async function submitSignup(
     const session = eventId ? await getOnboardingSession(eventId) : null;
     if (eventId && !session) {
       return {
-        status: 'error',
         message:
           'This session is unavailable. Choose another session or request a private session.',
+        status: 'error',
       };
     }
     const registration = readRegistrationAnswers(
@@ -169,27 +169,27 @@ export async function submitSignup(
       company,
     );
     if ('message' in registration)
-      return { status: 'error', message: registration.message, retry };
+      return { message: registration.message, retry, status: 'error' };
 
     const properties = {
-      Request: { title: richText(company) },
-      Name: { rich_text: richText(name) },
-      Email: { email },
       'Company or team': { rich_text: richText(company) },
-      'Signup type': { select: { name: signupType.label } },
+      Email: { email },
+      Name: { rich_text: richText(name) },
       'Project stage': { select: { name: stage[1] } },
+      Request: { title: richText(company) },
+      'Signup type': { select: { name: signupType.label } },
       'Use case': { rich_text: richText(project) },
       ...(signupType.id === 'access' && {
         'Teammate emails': { rich_text: richText(teammateEmails.join(', ')) },
       }),
-      'Tools in use': { rich_text: richText(tools.join(', ')) },
       'Newsletter opt-in': { checkbox: true },
       'Submission ID': { rich_text: richText(retry.id) },
+      'Tools in use': { rich_text: richText(tools.join(', ')) },
       ...(session && {
+        'Luma answers': { rich_text: richText(registration.notes.join('\n')) },
         'Luma event ID': { rich_text: richText(session.id) },
         'Luma session': { url: session.url },
         'Session starts': { date: { start: session.start_at } },
-        'Luma answers': { rich_text: richText(registration.notes.join('\n')) },
       }),
     };
 
@@ -218,7 +218,7 @@ export async function submitSignup(
     const response = saved
       ? await notion(`pages/${saved.id}`, 'PATCH', { properties })
       : await notion('pages', 'POST', {
-          parent: { type: 'data_source_id', data_source_id: dataSourceId },
+          parent: { data_source_id: dataSourceId, type: 'data_source_id' },
           properties: {
             ...properties,
             'Follow-up': { select: { name: 'New' } },
@@ -234,9 +234,9 @@ export async function submitSignup(
         ...success,
         newsletterFailed,
         session: {
-          url: session.url,
-          startAt: session.start_at,
           endAt: session.end_at,
+          startAt: session.start_at,
+          url: session.url,
           zoomUrl:
             timing === 'soon' || timing === 'live'
               ? zoomAttendeeUrl(session.meeting_url)
@@ -257,9 +257,9 @@ export async function submitSignup(
     });
     if (!result.ok) {
       return {
-        status: 'error',
         message: `We saved your details. ${result.error ?? 'Session registration is unavailable.'}`,
         retry,
+        status: 'error',
       };
     }
 
@@ -282,6 +282,6 @@ export async function submitSignup(
     return confirmation;
   } catch {
     console.error('Early access request could not be completed.');
-    return { status: 'error', message: unavailable, retry };
+    return { message: unavailable, retry, status: 'error' };
   }
 }

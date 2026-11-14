@@ -2,22 +2,22 @@
 
 import { ArrowRight, CalendarDays, Check, Plus, Video } from 'lucide-react';
 import { useActionState, useEffect, useRef, useState } from 'react';
+import { submitSignup } from '@/app/actions/signup';
 import type { EapEvent } from '@/lib/luma';
 import { dateLabel, daysUntil, timeLabel } from '@/lib/session-time';
-import styles from './form-controls.module.css';
-import SessionQuestion from './session-questions';
-import TeammateEmails from './teammate-emails';
-import { submitSignup } from '@/app/actions/signup';
 import {
   PROJECT_STAGES,
   SIGNUP_COMPANY_MAX,
   SIGNUP_EMAIL_MAX,
-  SIGNUP_PROJECT_MAX,
   SIGNUP_NAME_MAX,
-  SIGNUP_TYPES,
+  SIGNUP_PROJECT_MAX,
   SIGNUP_TOOLS,
+  SIGNUP_TYPES,
   sessionTiming,
 } from '@/lib/signup';
+import styles from './form-controls.module.css';
+import SessionQuestion from './session-questions';
+import TeammateEmails from './teammate-emails';
 
 const INPUT =
   'focus-ring mt-2 block w-full rounded-lg bg-raised px-3.5 py-3 text-head placeholder:text-muted';
@@ -176,7 +176,7 @@ export default function SignupForm({
   useEffect(() => {
     const zone =
       previewZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const updateTime = () => setLocalTime({ zone, now: new Date() });
+    const updateTime = () => setLocalTime({ now: new Date(), zone });
     updateTime();
     const interval = window.setInterval(updateTime, 15_000);
     window.addEventListener('focus', updateTime);
@@ -340,7 +340,9 @@ export default function SignupForm({
             )}
             {onboarding && sessions.length === 0 && (
               <div className="space-y-3 text-sm text-ink-2">
-                <p role="status">No live sessions are available right now.</p>
+                <output className="block">
+                  No live sessions are available right now.
+                </output>
                 <button
                   className="focus-ring text-clover underline"
                   onClick={() => setSignupType('access')}
@@ -393,8 +395,8 @@ export default function SignupForm({
                       maxLength={SIGNUP_COMPANY_MAX}
                       name="company"
                       onChange={(event) => setCompany(event.target.value)}
-                      required
                       placeholder="Independent if you’re working on your own"
+                      required
                       value={company}
                     />
                   </label>

@@ -123,18 +123,18 @@ export async function getEapEvents(): Promise<EapEvent[]> {
     for (const event of data.entries ?? []) {
       if (event.visibility !== 'public' || !isEapEvent(event)) continue;
       const session = {
+        end_at: event.end_at,
+        goingCount: null,
         id: event.id,
         name: event.name,
-        start_at: event.start_at,
-        end_at: event.end_at,
-        timezone: event.timezone,
-        url: event.url,
         registration_open: event.registration_open,
-        waitlist_status: event.waitlist_status,
-        goingCount: null,
         registrationQuestions: (event.registration_questions ?? []).filter(
           (question) => question.question_type !== 'terms' || question.required,
         ),
+        start_at: event.start_at,
+        timezone: event.timezone,
+        url: event.url,
+        waitlist_status: event.waitlist_status,
       };
       if (canRegisterForOnboarding(session)) sessions.push(session);
     }

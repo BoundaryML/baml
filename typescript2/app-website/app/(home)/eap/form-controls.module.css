@@ -1,15 +1,15 @@
 .choice {
   display: inline-grid;
   flex: none;
+  place-content: center;
   width: 1rem;
   height: 1rem;
   margin: 0;
-  place-content: center;
   appearance: none;
+  cursor: pointer;
+  background: var(--ground);
   border: 1px solid color-mix(in srgb, var(--ink) 36%, transparent);
   border-radius: 0.25rem;
-  background: var(--ground);
-  cursor: pointer;
   transition:
     background-color 150ms,
     border-color 150ms;
@@ -20,25 +20,25 @@
 }
 
 .choice:checked {
-  border-color: var(--accent);
   background: var(--accent);
+  border-color: var(--accent);
 }
 
 .choice:checked::before {
   width: 0.5rem;
   height: 0.3rem;
+  content: "";
   border: solid var(--on-accent);
   border-width: 0 0 2px 2px;
-  content: "";
   transform: translateY(-0.05rem) rotate(-45deg);
 }
 
 .choice[type="radio"]:checked::before {
   width: 0.375rem;
   height: 0.375rem;
+  background: var(--on-accent);
   border: 0;
   border-radius: 50%;
-  background: var(--on-accent);
   transform: none;
 }
 
@@ -48,8 +48,8 @@
 }
 
 .choice:disabled {
-  opacity: 0.55;
   cursor: default;
+  opacity: 0.55;
 }
 
 @media (forced-colors: active) {

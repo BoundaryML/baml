@@ -10,9 +10,9 @@ import { WRAP } from './ui';
 export default async function Nav(_: { current?: 'blog' }) {
   const sessions = (await getEapEvents()).map(
     ({ id, start_at, end_at, timezone }) => ({
+      end_at,
       id,
       start_at,
-      end_at,
       timezone,
     }),
   );

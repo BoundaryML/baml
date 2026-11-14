@@ -92,18 +92,17 @@ export default function NewsletterForm() {
       },
       method: 'POST',
     })
-      .then((res: any) => [res.ok, res.json(), res])
-      .then(([ok, dataPromise, res]) => {
-        if (ok) {
+      .then(async (response) => {
+        if (response.ok) {
           resetForm();
           setFormState(SUCCESS);
-        } else {
-          dataPromise.then((data: any) => {
-            setFormState(ERROR);
-            setErrorMessage(data.message || res.statusText);
-            localStorage.setItem('loops-form-timestamp', '');
-          });
+          return;
         }
+
+        const data: { message?: string } = await response.json();
+        setFormState(ERROR);
+        setErrorMessage(data.message || response.statusText);
+        localStorage.setItem('loops-form-timestamp', '');
       })
       .catch((error) => {
         setFormState(ERROR);
@@ -222,9 +221,11 @@ export default function NewsletterForm() {
 
     return (
       <button
+        onBlur={() => setIsHovered(false)}
         onClick={resetForm}
-        onMouseOut={() => setIsHovered(false)}
-        onMouseOver={() => setIsHovered(true)}
+        onFocus={() => setIsHovered(true)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         style={{
           background: 'transparent',
           border: 'none',
@@ -236,6 +237,7 @@ export default function NewsletterForm() {
           textAlign: 'center',
           textDecoration: isHovered ? 'underline' : 'none',
         }}
+        type="button"
       >
         &larr; Back
       </button>
@@ -275,6 +277,6 @@ export default function NewsletterForm() {
   }
 }
 
-function isValidEmail(email: any) {
+function isValidEmail(email: string) {
   return /.+@.+/.test(email);
 }

@@ -22,18 +22,18 @@ export async function submitSignup(
   ) {
     const now = Date.now();
     return {
-      status: 'success',
-      signupType: 'onboarding',
       session: {
-        url: '/eap/local-session-preview?state=join',
-        startAt: new Date(now + startsIn * 60_000).toISOString(),
         endAt: new Date(now + (startsIn + 60) * 60_000).toISOString(),
+        startAt: new Date(now + startsIn * 60_000).toISOString(),
+        url: '/eap/local-session-preview?state=join',
         zoomUrl: startsIn <= 15 ? 'https://zoom.us/test' : undefined,
       },
+      signupType: 'onboarding',
+      status: 'success',
     };
   }
   return {
-    status: 'error',
     message: 'This is a local preview. No registration was sent.',
+    status: 'error',
   };
 }
