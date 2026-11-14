@@ -53,6 +53,7 @@ const PROBES: &[&str] = &[
     "Containers",
     "Tuples",
     "TupleAccess",
+    "DirectContainerOps",
     "Shapes",
     "Closures",
     "Interfaces",
