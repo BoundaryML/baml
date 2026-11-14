@@ -30,6 +30,7 @@ from speedtest.storage import build_run_data, results_dir, save_baseline, save_r
 
 DRIVER = rowmod.DRIVERS / "bench_driver.baml"
 SETUP_DRIVER = rowmod.DRIVERS / "bench_driver_setup.baml"
+GO_DRIVERS = rowmod.DRIVERS / "go"
 
 
 def _has_setup(baml):
@@ -76,6 +77,28 @@ def build_baml(cli, workload, stage):
     if r.returncode != 0 or not out.exists():
         lines = [l for l in r.stderr.strip().splitlines() if l.strip() and not l.startswith("warning:")]
         return {"status": "failed", "error": (lines[-1] if lines else f"exit {r.returncode}")[:400]}
+    return {"status": "ok", "artifact": str(out), "seconds": seconds, "bytes": out.stat().st_size}
+
+
+def build_go(workload, stage):
+    """Build main.go plus the Go driver into one executable. Returns a build record."""
+    if "go" not in workload["files"]:
+        return {"status": "missing", "error": "no main.go"}
+    project = stage / "go" / workload["id"].replace("/", "__")
+    project.mkdir(parents=True)
+    (project / "go.mod").write_text("module workload\n\ngo 1.22\n")
+    shutil.copy(workload["files"]["go"], project / "main.go")
+    has_setup = bool(re.search(r"^func Setup\(", workload["go"], re.M) and re.search(r"^func Run\(", workload["go"], re.M))
+    shutil.copy(GO_DRIVERS / "report.go", project / "report.go")
+    shutil.copy(GO_DRIVERS / ("entry_setup.go" if has_setup else "entry_main.go"), project / "entry.go")
+    out = project / "workload"
+    start = time.perf_counter()
+    r = subprocess.run(["go", "build", "-o", str(out), "."], cwd=project, capture_output=True, text=True,
+                       env=rowmod.go_env(), stdin=subprocess.DEVNULL)
+    seconds = time.perf_counter() - start
+    if r.returncode != 0 or not out.exists():
+        lines = [l for l in r.stderr.strip().splitlines() if l.strip() and not l.startswith("#")]
+        return {"status": "failed", "error": (lines[0] if lines else f"exit {r.returncode}")[:400]}
     return {"status": "ok", "artifact": str(out), "seconds": seconds, "bytes": out.stat().st_size}
 
 
@@ -155,7 +178,7 @@ def print_table(workloads, row_list, cells):
         print("  ".join(str(c).ljust(widths[j]) if j == 0 else str(c).rjust(widths[j]) for j, c in enumerate(row)))
         if i == 0:
             print("  ".join("-" * w for w in widths))
-    print(f"\nper-job time, median of trials; 'vs X' is {primary.label} time over X's (above 1x: BAML is slower).")
+    print(f"\nper-job time, median of trials; 'vs X' is {primary.label} time over X's (above 1x: {primary.label} is slower).")
 
 
 def _machine():
@@ -181,9 +204,6 @@ def cmd_run(args):
         _log(f"$ {' '.join(cmd)}")
         if subprocess.run(cmd, cwd=repo).returncode != 0:
             sys.exit(1)
-    if not cli.is_file():
-        sys.exit(f"no baml-cli at {cli}; build it with `cargo build --release -p baml_cli -p baml_pack_host` or pass --build")
-
     workloads = load_workloads()
     missing = sorted(kpis.workload_names() - {w["name"] for w in workloads})
     if missing:
@@ -196,6 +216,10 @@ def cmd_run(args):
         sys.exit(f"no workloads match {args.filter}")
 
     row_list = rowmod.resolve(args.rows.split(",") if args.rows else None, telemetry=args.telemetry or args.kpi)
+    # A run of reference rows only packs nothing, so it needs no baml-cli.
+    want_baml = any(r.is_baml for r in row_list)
+    if want_baml and not cli.is_file():
+        sys.exit(f"no baml-cli at {cli}; build it with `cargo build --release -p baml_cli -p baml_pack_host` or pass --build")
     versions = {}
     for r in row_list:
         if not r.is_baml and r.kind not in versions:
@@ -204,18 +228,29 @@ def cmd_run(args):
 
     stage = Path(tempfile.mkdtemp(prefix="speedtest-"))
     cells = {(w["id"], r.key): Cell(w, r) for w in workloads for r in row_list}
-    builds = {}
+    builds, go_builds = {}, {}
+    want_go = any(r.kind == "go" for r in row_list) and versions.get("go") is not None
+
+    def artifact(cell):
+        return (go_builds if cell.row.kind == "go" else builds)[cell.workload["id"]].get("artifact")
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     load_start = os.getloadavg()
     if load_start[0] > (os.cpu_count() or 1) / 4:
         _log(f"warning: load average {load_start[0]:.1f} on {os.cpu_count()} cores; results will be noisy")
     try:
-        _log(f"building {len(workloads)} workloads with {cli}")
+        if want_baml:
+            _log(f"building {len(workloads)} workloads with {cli}")
         for w in workloads:
-            builds[w["id"]] = build_baml(cli, w, stage)
+            builds[w["id"]] = build_baml(cli, w, stage) if want_baml else {"status": "skipped"}
             b = builds[w["id"]]
-            if b["status"] != "ok":
+            if b["status"] == "failed":
                 _log(f"  {w['name']}: pack failed: {b['error']}")
+        if want_go:
+            _log(f"building {sum('go' in w['files'] for w in workloads)} Go ports with {versions['go']}")
+            for w in workloads:
+                go_builds[w["id"]] = build_go(w, stage)
+                if go_builds[w["id"]]["status"] == "failed":
+                    _log(f"  {w['name']}: go build failed: {go_builds[w['id']]['error']}")
 
         _log(f"verifying {len(cells)} (workload, row) pairs")
         for (wid, _), cell in cells.items():
@@ -225,7 +260,13 @@ def cmd_run(args):
             if cell.row.is_baml and builds[wid]["status"] != "ok":
                 cell.fail(f"pack failed: {builds[wid]['error']}")
                 continue
-            t = _trial(cell, builds[wid].get("artifact"), 1, 0, stage, args.cpu)
+            if cell.row.kind == "go" and go_builds[wid]["status"] == "missing":
+                cell.status, cell.reason = "unavailable", "no Go port (main.go)"
+                continue
+            if cell.row.kind == "go" and go_builds[wid]["status"] != "ok":
+                cell.fail(f"go build failed: {go_builds[wid]['error']}")
+                continue
+            t = _trial(cell, artifact(cell), 1, 0, stage, args.cpu)
             if t.ok:
                 cell.status = "ok"
             else:
@@ -241,7 +282,7 @@ def cmd_run(args):
             for cell in order:
                 w = cell.workload
                 jobs = args.jobs or w["jobs"]
-                t = _trial(cell, builds[w["id"]].get("artifact"), jobs, w["warmup"], stage, args.cpu)
+                t = _trial(cell, artifact(cell), jobs, w["warmup"], stage, args.cpu)
                 cell.trials.append(t)
                 if not t.ok:
                     _log(f"  trial {i + 1}: {w['name']} [{cell.row.key}]: {t.error}")
@@ -254,7 +295,7 @@ def cmd_run(args):
 
     print()
     print_table(workloads, row_list, cells)
-    _save(args, cli, workloads, row_list, cells, builds, versions, trials_n,
+    _save(args, cli, workloads, row_list, cells, builds, go_builds, versions, trials_n,
           {"started": started, "finished": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "loadavg_start": load_start, "loadavg_end": os.getloadavg()})
 
@@ -273,7 +314,7 @@ def _profile(args, cli, workloads, stage):
     args._profile_files = sorted(str(p) for p in out.glob("*.json"))
 
 
-def _save(args, cli, workloads, row_list, cells, builds, versions, trials_n, timing):
+def _save(args, cli, workloads, row_list, cells, builds, go_builds, versions, trials_n, timing):
     summaries = {w["id"]: {r.key: cells[(w["id"], r.key)].summary() for r in row_list} for w in workloads}
 
     # meta.json keeps the shape baselines, `compare` and the UI read: per
@@ -292,7 +333,8 @@ def _save(args, cli, workloads, row_list, cells, builds, versions, trials_n, tim
     args.runs, args.measurement_time = trials_n, 0
     data = build_run_data(args, results, [legacy[r.key] for r in row_list if r.key in legacy], baml_cli=str(cli))
     data.update(protocol="speedtest-2", trials=trials_n, seed=args.seed, cpu=args.cpu, machine=_machine(),
-                toolchains=versions, rows=[r.key for r in row_list], builds=builds, summary=summaries, **timing)
+                toolchains=versions, rows=[r.key for r in row_list], builds=builds, go_builds=go_builds, summary=summaries,
+                **timing)
 
     rdir = results_dir(args)
     run_path = save_run(rdir, data, getattr(args, "_profile_files", None))

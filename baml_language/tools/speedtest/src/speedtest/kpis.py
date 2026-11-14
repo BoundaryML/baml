@@ -41,17 +41,17 @@ def _scaled(stats, f):
 def _value(metric, cell, build, row):
     """One bar: a measured value, a note saying why there is none, or None (row-level reason)."""
     if metric == "binary_kib":
-        if not row.is_baml:
+        if not row.is_compiled:
             return NO_BINARY
-        if row.key != PRIMARY:
+        if row.is_baml and row.key != PRIMARY:
             return SAME_AS_OFF
-        return {"median": build["bytes"] / 1024} if build.get("status") == "ok" else {"note": "pack failed"}
+        return {"median": build["bytes"] / 1024} if build.get("status") == "ok" else {"note": "build failed"}
     if metric == "build_s":
-        if not row.is_baml:
+        if not row.is_compiled:
             return NO_BUILD
-        if row.key != PRIMARY:
+        if row.is_baml and row.key != PRIMARY:
             return SAME_AS_OFF
-        return {"median": build["seconds"]} if build.get("status") == "ok" else {"note": "pack failed"}
+        return {"median": build["seconds"]} if build.get("status") == "ok" else {"note": "build failed"}
     if cell["status"] == "failed":
         return {"note": "failed: " + (cell.get("reason") or "?")[:120]}
     if cell["status"] != "ok" or not cell.get("per_job_ns"):
@@ -68,7 +68,7 @@ def _value(metric, cell, build, row):
 
 def build(data, workloads, row_list):
     by_name = {w["name"]: w for w in workloads}
-    summary, builds = data["summary"], data["builds"]
+    summary, builds, go_builds = data["summary"], data["builds"], data.get("go_builds", {})
     present = [r for r in row_list]
     refs = [r.key for r in present if not r.is_baml]
     out_kpis = []
@@ -80,7 +80,8 @@ def build(data, workloads, row_list):
             if not w:
                 continue
             cells, b = summary[w["id"]], builds.get(w["id"], {})
-            values = {r.key: _value(k["metric"], cells[r.key], b, r) for r in present}
+            gb = go_builds.get(w["id"], {})
+            values = {r.key: _value(k["metric"], cells[r.key], gb if r.kind == "go" else b, r) for r in present}
             p = values.get(PRIMARY) or {}
             headline = {}
             for ref in refs:
@@ -113,7 +114,7 @@ def build(data, workloads, row_list):
     return {
         "schema": 3,
         "primary": PRIMARY,
-        "compare": [r for r in ("node", "python", "bun") if r in refs][:2],
+        "compare": [r for r in ("go", "node", "python", "bun") if r in refs][:2],
         "candidate": {"sha": vcs.get("commit"), "branch": vcs.get("branch") or vcs.get("bookmark"),
                       "subject": vcs.get("message"), "cli": (data.get("cli") or {}).get("version")},
         "machine": {**data.get("machine", {}), "toolchains": data.get("toolchains", {})},

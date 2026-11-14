@@ -6,6 +6,8 @@ measurement is visible rather than silently absent. Adding an implementation
 runner knows how to build and invoke.
 """
 
+import functools
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -20,16 +22,24 @@ class Row:
     key: str
     label: str
     family: str
-    kind: str                       # "baml" | "python" | "node" | "bun"
+    kind: str                       # "baml" | "python" | "node" | "bun" | "go"
     telemetry: str | None = None    # BAML_TELEMETRY for BAML rows
 
     @property
     def is_baml(self):
         return self.kind == "baml"
 
+    @property
+    def is_compiled(self):
+        """Whether the row runs an executable the runner builds per workload."""
+        return self.kind in ("baml", "go")
+
     def command(self, workload, artifact, jobs, warmup):
         if self.is_baml:
-            return [str(artifact), "--jobs", str(jobs), "--warmup", str(warmup)]
+            # A packed program prints a human-readable value unless asked for JSON.
+            return [str(artifact), "--output-format", "json", "--jobs", str(jobs), "--warmup", str(warmup)]
+        if self.kind == "go":
+            return [str(artifact), str(jobs), str(warmup)]
         if self.kind == "python":
             return ["python3", "-S", str(DRIVERS / "driver.py"), str(workload["files"]["python"]), str(jobs), str(warmup)]
         return [self.kind, str(DRIVERS / "driver.js"), str(workload["files"]["js"]), str(jobs), str(warmup)]
@@ -46,17 +56,42 @@ class Row:
 
 ROWS = [Row(f"vm-{lvl}", f"VM({lvl})", "BAML VM", "baml", lvl)
         for lvl in TELEMETRY_LEVELS] + [
+    Row("go", "Go", "references", "go"),
     Row("node", "Node", "references", "node"),
     Row("bun", "Bun", "references", "bun"),
     Row("python", "Python", "references", "python"),
 ]
 BY_KEY = {r.key: r for r in ROWS}
-DEFAULT = ["vm-off", "node", "bun", "python"]
+DEFAULT = ["vm-off", "go", "node", "bun", "python"]
 PRIMARY = "vm-off"
+
+
+@functools.cache
+def go_env():
+    """Environment that runs the installed Go from any directory, or None without Go.
+
+    A version manager's `go` shim picks a toolchain by working directory, and a
+    build runs in a temporary one; pinning GOROOT and PATH to the toolchain
+    found here keeps the `go` command and its compiler the same version.
+    GOTOOLCHAIN=local builds with that Go and never downloads another.
+    """
+    if not shutil.which("go"):
+        return None
+    r = subprocess.run(["go", "env", "GOROOT"], capture_output=True, text=True,
+                       env={k: v for k, v in os.environ.items() if k != "GOROOT"})
+    root = r.stdout.strip()
+    if r.returncode != 0 or not root:
+        return None
+    return {**os.environ, "GOROOT": root, "PATH": f"{root}/bin{os.pathsep}{os.environ.get('PATH', '')}",
+            "GOTOOLCHAIN": "local", "GOFLAGS": "-mod=mod"}
 
 
 def toolchain_version(kind):
     """Version string of a reference toolchain, or None when it is not installed."""
+    if kind == "go":
+        env = go_env()
+        r = subprocess.run(["go", "version"], capture_output=True, text=True, env=env) if env else None
+        return r.stdout.strip() if r and r.returncode == 0 else None
     exe = {"python": "python3"}.get(kind, kind)
     if not shutil.which(exe):
         return None
