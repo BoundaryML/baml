@@ -1,0 +1,5 @@
+name = "request handler 2k"
+description = "an API service over 2,000 requests: routing, typed JSON bodies, a map of accounts, JSON responses"
+expect = "820876056"
+jobs = 60
+warmup = 2

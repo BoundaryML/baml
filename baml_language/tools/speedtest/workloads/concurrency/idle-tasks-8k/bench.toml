@@ -1,0 +1,5 @@
+name = "idle tasks 8k"
+description = "8,192 tasks asleep at once for 100 ms under 8,191 parked parents; read its peak memory"
+expect = "16383"
+jobs = 2
+warmup = 1
