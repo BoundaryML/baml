@@ -47,6 +47,7 @@ impl std::fmt::Display for Name {
 #[derive(Debug)]
 pub struct Enum {
     pub name: Name,
+    pub description: Option<String>,
     // name and description
     pub values: Vec<(Name, Option<String>)>,
     pub constraints: Vec<Constraint>,
@@ -318,7 +319,7 @@ struct Attribute {
 }
 
 struct EnumRender {
-    name: String,
+    name: Attribute,
     delimiter: String,
     values: Vec<Attribute>,
 }
@@ -533,7 +534,10 @@ impl OutputFormatContent {
 
     fn enum_to_string(&self, enm: &Enum, options: &RenderOptions) -> String {
         EnumRender {
-            name: enm.name.rendered_name().to_string(),
+            name: Attribute {
+                name: enm.name.rendered_name().to_string(),
+                description: enm.description.clone(),
+            },
             delimiter: "----".into(),
             values: enm
                 .values
@@ -1168,6 +1172,7 @@ mod tests {
     fn render_enum() {
         let enums = vec![Enum {
             name: Name::new("Color".to_string()),
+            description: None,
             values: vec![
                 (Name::new("Red".to_string()), None),
                 (Name::new("Green".to_string()), None),
@@ -1191,6 +1196,90 @@ Color
 - Blue"
             ))
         );
+    }
+
+    #[test]
+    fn render_enum_block_description_heading() {
+        for description in [
+            None,
+            Some("Sentiment block"),
+            Some("Sentiment block\nSecond line"),
+        ] {
+            let content = OutputFormatContent::target(TypeIR::r#enum("Sentiment"))
+                .enums(vec![Enum {
+                    name: Name::new_with_alias("Sentiment".to_string(), Some("Mood".to_string())),
+                    description: description.map(str::to_string),
+                    values: vec![
+                        (
+                            Name::new_with_alias("HAPPY".to_string(), Some("joy".to_string())),
+                            Some("Happy variant".to_string()),
+                        ),
+                        (Name::new("SAD".to_string()), None),
+                    ],
+                    constraints: Vec::new(),
+                }])
+                .build();
+            let options =
+                RenderOptions::new(Some(None), None, None, None, None, None, None, None, None);
+            let rendered = content.render(options).unwrap().unwrap();
+            let heading = match description {
+                Some(description) => format!("Mood: {}", description.replace('\n', "\n  ")),
+                None => "Mood".to_string(),
+            };
+            assert_eq!(
+                rendered,
+                format!("{heading}\n----\n- joy: Happy variant\n- SAD")
+            );
+            assert_eq!(
+                rendered.matches("Sentiment block").count(),
+                usize::from(description.is_some())
+            );
+        }
+    }
+
+    #[test]
+    fn enum_block_description_preserves_hoisting_options() {
+        let content = OutputFormatContent::target(TypeIR::class("Result"))
+            .enums(vec![Enum {
+                name: Name::new("Sentiment".to_string()),
+                description: Some("Sentiment block".to_string()),
+                values: vec![
+                    (Name::new("HAPPY".to_string()), None),
+                    (Name::new("SAD".to_string()), None),
+                ],
+                constraints: Vec::new(),
+            }])
+            .classes(vec![Class {
+                name: Name::new("Result".to_string()),
+                description: None,
+                namespace: baml_types::StreamingMode::NonStreaming,
+                fields: vec![(
+                    Name::new("sentiment".to_string()),
+                    TypeIR::r#enum("Sentiment"),
+                    None,
+                    false,
+                )],
+                constraints: Vec::new(),
+                streaming_behavior: Default::default(),
+            }])
+            .build();
+        for hoist in [None, Some(false), Some(true)] {
+            let options = RenderOptions::new(None, None, None, hoist, None, None, None, None, None);
+            let rendered = content.render(options).unwrap().unwrap();
+            if hoist == Some(true) {
+                assert_eq!(
+                    rendered.matches("Sentiment: Sentiment block\n----").count(),
+                    1
+                );
+                assert!(rendered.contains("sentiment: Sentiment"), "{rendered}");
+            } else {
+                assert!(!rendered.contains("Sentiment block"), "{rendered}");
+                assert!(
+                    rendered.contains("sentiment: 'HAPPY' or 'SAD'"),
+                    "{rendered}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -1414,6 +1503,7 @@ Color
     fn hoist_enum_if_more_than_max_values() {
         let enums = vec![Enum {
             name: Name::new("Enm".to_string()),
+            description: None,
             values: vec![
                 (Name::new("A".to_string()), None),
                 (Name::new("B".to_string()), None),
@@ -1470,6 +1560,7 @@ Answer in JSON using this schema:
     fn hoist_enum_if_variant_has_description() {
         let enums = vec![Enum {
             name: Name::new("Enm".to_string()),
+            description: None,
             values: vec![
                 (
                     Name::new("A".to_string()),
@@ -1527,6 +1618,7 @@ Answer in JSON using this schema:
     fn hoist_enum_if_setting_always_hoist_enum() {
         let enums = vec![Enum {
             name: Name::new("Enm".to_string()),
+            description: None,
             values: vec![
                 (Name::new("A".to_string()), None),
                 (Name::new("B".to_string()), None),
@@ -3527,6 +3619,7 @@ Answer in JSON using this schema: Ret"#
         // would be rendered twice - once as hoisted enum and once as target
         let enums = vec![Enum {
             name: Name::new("EnumOutput".to_string()),
+            description: None,
             values: vec![
                 (
                     Name::new("ONE".to_string()),
@@ -3589,6 +3682,7 @@ Answer in JSON using this schema: Ret"#
         // the default prefix appears before the hoisted enum definition
         let enums = vec![Enum {
             name: Name::new_with_alias("EnumOutput".to_string(), Some("VALUE_ENUM".to_string())),
+            description: None,
             values: vec![
                 (
                     Name::new("ONE".to_string()),
