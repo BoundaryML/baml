@@ -116,7 +116,7 @@ impl BexVm {
                 .is_some_and(bex_vm_types::types::CompiledBody::framed)
         {
             return self
-                .call_record_dispatched(caller, callee, body, Vec::new(), args, pc)
+                .call_record_dispatched(caller, callee, body, args, pc)
                 .map(Some);
         }
         self.call_compiled(caller, callee, body, &[], args, pc)

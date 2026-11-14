@@ -65,6 +65,7 @@ impl EvalStack {
     }
 
     /// Initialize real-local slots after fallibly reserving their backing array.
+    #[inline]
     pub(crate) fn try_resize(&mut self, len: usize, value: Value) -> Result<(), VmPanic> {
         self.try_reserve(len.saturating_sub(self.len()))?;
         self.values.resize(len, value);

@@ -73,9 +73,24 @@ impl BexVm {
         result
     }
 
+    #[inline]
     pub fn reserve_slots(&mut self, frame: &FrameRecord, slots: usize) -> Result<(), Box<VmError>> {
         let end = frame.base() + slots;
-        self.resize_stack(end, Value::NULL).map_err(Box::new)
+        match self.stack.try_resize(end, Value::NULL) {
+            Ok(()) => Ok(()),
+            Err(panic) => Err(self.slots_refused(panic)),
+        }
+    }
+
+    /// Out of line: every compiled body with slots reserves them on entry.
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "boxing out of line keeps the allocation off the inlined fast path"
+    )]
+    #[cold]
+    #[inline(never)]
+    fn slots_refused(&mut self, panic: VmPanic) -> Box<VmError> {
+        Box::new(VmError::thrown_fresh(self.panic_to_exception_value(panic)))
     }
 
     #[inline]
@@ -110,14 +125,16 @@ impl BexVm {
     /// Tick the interpreter's call countdown; GC stress yields whenever it expires.
     #[inline]
     pub fn should_yield_at_call(&mut self) -> bool {
-        self.yield_at_call(super::gc_stress())
+        self.yield_at_call(super::gc_stress)
     }
 
     /// Poll before forcing the stress yield: the poll is what restarts the
     /// countdown, and a countdown left at zero underflows on the next tick.
+    /// `stress` is read only when the countdown expires: `gc_stress` is an
+    /// acquire load, which on every call would wait behind the record's stores.
     #[inline]
-    pub(super) fn yield_at_call(&mut self, stress: bool) -> bool {
-        self.early_yield.tick() && (self.poll_for_yield() || stress)
+    pub(super) fn yield_at_call(&mut self, stress: impl FnOnce() -> bool) -> bool {
+        self.early_yield.tick() && (self.poll_for_yield() || stress())
     }
 
     /// Return the caught value and its `baml.errors.Context`, propagating internal errors.
@@ -254,8 +271,7 @@ impl BexVm {
                     .all(crate::reachable::is_statically_declared)
                 && !Self::body_is_framed(function)
             {
-                let type_args = type_args.to_vec();
-                return self.call_record_dispatched(caller, callee, body, type_args, args, pc);
+                return self.call_record_dispatched(caller, callee, body, args, pc);
             }
         }
         caller.note_pc(pc);
