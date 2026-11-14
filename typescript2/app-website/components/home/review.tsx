@@ -186,9 +186,7 @@ E0001
     ·                               ╰── expected \`string\`, found \`int\`
     ╰────`;
 
-/** Box-drawing lines only join up in a font drawn for them, so this one doesn't use the site's mono. */
-const TERMINAL_FONT =
-  "Menlo, Monaco, 'SF Mono', Consolas, 'DejaVu Sans Mono', monospace";
+const TERMINAL_FONT = 'var(--font-mono)';
 
 function lineColor(line: string) {
   if (/^E\d{4}/.test(line) || line.trim().startsWith('×')) return ERROR_RED;
@@ -730,94 +728,7 @@ const PUSHES: { changes: Change[]; summary: string }[] = [
 
 const CHECKS = ['check', 'fmt', 'test', 'code health'];
 
-// What the agent's first push changed: the legacy router out, the routing it fed rewritten. It adds
-// up to the comment's count, 1,240 lines to 1,556.
-const FILES = [
-  { add: 188, del: 12, name: 'routing.baml' },
-  { add: 161, del: 9, name: 'prompts.baml' },
-  { add: 63, del: 0, name: 'legacy_router_shim.baml' },
-  { add: 0, del: 75, name: 'keyword_router.baml' },
-];
-
-/** GitHub's five-square diffstat: green for added lines, red for removed, by share. */
-function Diffstat({ add, del }: { add: number; del: number }) {
-  const green = Math.round((add / (add + del)) * 5);
-  return (
-    <span className="flex gap-[2px]">
-      {[0, 1, 2, 3, 4].map((k) => (
-        <span
-          className="size-[7px] rounded-[1px]"
-          key={k}
-          style={{ background: k < green ? '#3fb950' : '#f85149' }}
-        />
-      ))}
-    </span>
-  );
-}
-
-// The pull request as the agent opens it, one row at a time.
-const OPENED: { key: string; node: ReactNode }[] = [
-  {
-    key: 'state',
-    node: (
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="rounded-full bg-[#238636] px-2.5 py-0.5 text-[12px] font-semibold text-white">
-          Open
-        </span>
-        <span style={{ color: GH.muted }}>
-          <b className="text-[#e6edf3]">your agent</b> wants to merge 1 commit
-          into
-        </span>
-        <code className="rounded-md bg-[#388bfd26] px-1.5 font-mono text-[12px] text-[#58a6ff]">
-          main
-        </code>
-        <span style={{ color: GH.muted }}>from</span>
-        <code className="rounded-md bg-[#388bfd26] px-1.5 font-mono text-[12px] text-[#58a6ff]">
-          remove-keyword-router
-        </code>
-      </p>
-    ),
-  },
-  {
-    key: 'commit',
-    node: (
-      <p className="mt-4 flex items-center gap-2 font-mono text-[13px]">
-        <span className="size-2.5 shrink-0 rounded-full border-2 border-[#8b949e]" />
-        <span style={{ color: '#58a6ff' }}>7c2e019</span>
-        <span className="truncate">Remove the legacy keyword router</span>
-      </p>
-    ),
-  },
-  ...FILES.map((f, i) => ({
-    key: f.name,
-    node: (
-      <p
-        className={`${i ? 'mt-2' : 'mt-4'} flex items-center gap-3 border-t pt-2 font-mono text-[13px]`}
-        style={{ borderColor: GH.border }}
-      >
-        <span className="min-w-0 flex-1 truncate">{f.name}</span>
-        <span className="text-[#3fb950]">+{f.add}</span>
-        <span className="text-[#f85149]">−{f.del}</span>
-        <Diffstat add={f.add} del={f.del} />
-      </p>
-    ),
-  })),
-  {
-    key: 'checks',
-    node: (
-      <p
-        className="mt-4 flex items-center gap-2 text-[13px]"
-        style={{ color: GH.muted }}
-      >
-        <span className="size-3 shrink-0 animate-spin rounded-full border-2 border-[#d29922] border-t-transparent" />
-        BAML checks are running
-      </p>
-    ),
-  },
-];
-
-// The agent at work on the third step, one line at a time: it runs `baml codequality`, fixes what
-// it found, checks its work, measures again, and pushes. The names match the comment on either side of it.
+// The agent measures the problem, fixes it, checks its work, and pushes.
 const WORK: { key: string; node: ReactNode }[] = [
   {
     key: 'who',
@@ -969,20 +880,13 @@ function Swatch({ color, label }: { color: string; label: string }) {
 
 // The PR story's stages, as points along `Comment`'s progress. It steps through them on its own once
 // in view; clicking a stage goes straight to it and stops the stepping.
-// Each step's point in the comment's timeline, how long the loop stays on it, and what it says under
-// the steps. The agent's two pushes are quick beats; the two comments are what to read.
+// Each step sets the comment animation, the time it stays on screen, and its caption.
 const STAGES: {
   at: number;
   label: string;
   ms: number;
   says: ReactNode;
 }[] = [
-  {
-    at: 0,
-    label: 'Your agent opens a PR',
-    ms: 3600,
-    says: 'Your agent removes a feature and opens a pull request.',
-  },
   {
     at: 0.31,
     label: 'Bad code is flagged',
@@ -1067,7 +971,7 @@ function Story() {
   const p = useTween(0.04 + STAGES[stage].at * 0.9, 1200, stage === 0);
   const steps = (
     <div className="mt-5">
-      <ol className="grid grid-cols-4 gap-2">
+      <ol className="grid grid-cols-3 gap-2">
         {STAGES.map((s, i) => {
           const on = i === stage;
           return (
@@ -1087,7 +991,7 @@ function Story() {
                   {i + 1}
                 </span>
                 <span
-                  className={`hidden pt-1 text-[14px] leading-snug transition-colors md:block ${on ? 'text-white' : 'text-white/50'}`}
+                  className={`sr-only text-[14px] leading-snug transition-colors md:not-sr-only md:pt-1 ${on ? 'text-white' : 'text-white/50'}`}
                 >
                   {s.label}
                 </span>
@@ -1131,43 +1035,22 @@ function Story() {
       }}
       ref={ref}
     >
-      <Comment
-        fixing={seen && stage === 2}
-        opening={seen && stage === 0}
-        p={p}
-        steps={steps}
-      />
+      <Comment fixing={seen && stage === 1} p={p} steps={steps} />
     </div>
   );
 }
 
 function Comment({
   fixing,
-  opening,
   p,
   steps,
 }: {
-  // The third step: the agent reads the comment and works through the fix, before it pushes.
+  // The agent works through the fix before it pushes.
   fixing: boolean;
-  // The first step: the agent pushes its branch and opens the PR, before any comment.
-  opening: boolean;
   p: number;
   steps: ReactNode;
 }) {
   const s = sweep(p);
-  // The bot's comment arrives as the loop leaves the first step.
-  const open = ramp(s, 0.01, 0.12);
-  // Plays the push each time the loop comes back to the first step.
-  const [typed, setTyped] = useState(false);
-  useEffect(() => {
-    if (!opening) {
-      setTyped(false);
-      return;
-    }
-    const frame = requestAnimationFrame(() => setTyped(true));
-    return () => cancelAnimationFrame(frame);
-  }, [opening]);
-  // Plays the agent's work each time the loop reaches the third step.
   const [working, setWorking] = useState(false);
   useEffect(() => {
     if (!fixing) {
@@ -1177,13 +1060,12 @@ function Comment({
     const frame = requestAnimationFrame(() => setWorking(true));
     return () => cancelAnimationFrame(frame);
   }, [fixing]);
-  // Worse, hold while the reader takes it in, a commit arrives, then better.
-  const shrink = ramp(s, 0.03, 0.18);
+  // Start with the flagged metrics, then animate to the fixed metrics after the push.
   const commit = ramp(s, 0.5, 0.58);
   const fix = ramp(s, 0.6, 0.8);
   const pushed = fix > 0.5;
   const push = PUSHES[pushed ? 1 : 0];
-  const now = FIRST.map((v, i) => 1 + (v - 1) * shrink + (SECOND[i] - v) * fix);
+  const now = FIRST.map((v, i) => v + (SECOND[i] - v) * fix);
   return (
     // A box like the others in this section, so the story reads as one of them.
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
@@ -1215,9 +1097,7 @@ function Comment({
             {CHECKS.map((name) => {
               const health = name === 'code health';
               const warn = health && !pushed;
-              // Queued until the checks have run, as the comment arrives.
-              const queued = open < 0.5;
-              const color = queued ? GH.muted : warn ? '#d29922' : '#3fb950';
+              const color = warn ? '#d29922' : '#3fb950';
               return (
                 <span
                   className={`flex items-center gap-1.5 ${health ? 'rounded-full border px-2.5 py-0.5 font-semibold' : ''}`}
@@ -1232,9 +1112,7 @@ function Comment({
                       : undefined
                   }
                 >
-                  <span style={{ color }}>
-                    {queued ? '•' : warn ? '⚠' : '✓'}
-                  </span>
+                  <span style={{ color }}>{warn ? '⚠' : '✓'}</span>
                   <span style={{ color: health ? color : GH.muted }}>
                     BAML / {name}
                   </span>
@@ -1264,27 +1142,7 @@ function Comment({
           </span>
         </div>
         <div className="relative">
-          {/* The first step: the agent opens the pull request, where the comment will be. */}
-          <div
-            aria-hidden={!opening}
-            className="absolute inset-x-0 -top-9 bottom-0 z-10 px-4 pt-4 will-change-[opacity]"
-            style={{ background: GH.canvas, opacity: 1 - open }}
-          >
-            {OPENED.map((row, i) => (
-              <div
-                className="transition-[opacity,transform] duration-300 ease-out"
-                key={row.key}
-                style={{
-                  opacity: typed ? 1 : 0,
-                  transform: `translate3d(0, ${typed ? 0 : 8}px, 0)`,
-                  transitionDelay: `${typed ? i * 140 : 0}ms`,
-                }}
-              >
-                {row.node}
-              </div>
-            ))}
-          </div>
-          {/* The third step: the agent at work, over the comment it is answering. */}
+          {/* The agent works over the comment it is answering. */}
           <div
             aria-hidden={!fixing}
             className="absolute inset-x-0 -top-9 bottom-0 z-10 px-4 pt-4 transition-opacity duration-300 will-change-[opacity]"

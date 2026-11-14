@@ -3,7 +3,7 @@
 import posthog, { type CaptureOptions } from 'posthog-js';
 import { useEffect } from 'react';
 import { SECTION_ATTR } from './analytics';
-import { BOOK } from './links';
+import { SIGNUP } from './links';
 
 // Named PostHog events for the homepage and blog, on top of autocapture, pageviews and page-leave
 // scroll depth (all on by default, see instrumentation-client.ts). Every event is prefixed
@@ -47,23 +47,20 @@ export function SectionViews() {
   return null;
 }
 
-/**
- * Sends `boundary_cta_clicked` when a visitor clicks a link to the booking page (BOOK), from any
- * section: the nav, the hero, the booking band, or the footer. It carries the link's `section` and
- * `label`. The link opens the booking page in the same tab, so the event goes out by sendBeacon,
- * which the browser still delivers after the page unloads. A middle click (auxclick) counts too.
- */
+/** Tracks clicks on links to the early access page. */
 export function CtaClicks() {
   useEffect(() => {
+    const signupUrl = new URL(SIGNUP, window.location.origin).href;
     const onClick = (e: MouseEvent) => {
       if (e.type === 'auxclick' && e.button !== 1) return;
       const link =
         e.target instanceof Element ? e.target.closest('a[href]') : null;
-      if (!(link instanceof HTMLAnchorElement) || link.href !== BOOK) return;
+      if (!(link instanceof HTMLAnchorElement) || link.href !== signupUrl)
+        return;
       track(
         'cta_clicked',
         {
-          href: BOOK,
+          href: `${link.pathname}${link.hash}`,
           label: link.textContent?.trim(),
           section: sectionOf(link),
         },

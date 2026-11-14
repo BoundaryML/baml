@@ -1,87 +1,58 @@
+import Image from 'next/image';
 import { createMetadata } from '@/app/_lib/metadata';
-import { DiscordCard } from '@/components/community-cards';
 import { section } from '@/components/home/analytics';
 import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { getEapEvents } from '@/lib/luma';
-import './eap.css';
-import { EapSchedule } from './eap-schedule';
+import SignupForm from './signup-form';
 
-// Pull the live EAP onboarding sessions from Luma. Revalidated on the same
-// cadence as the underlying fetch (see lib/luma.ts).
 export const metadata = createMetadata({
-  description: 'Book a live BAML early access onboarding session.',
-  ogTitle: 'Get BAML early',
+  description:
+    'Join weekly live onboarding or request a private session for your team.',
+  ogTitle: 'Get started with Boundary',
   path: '/eap',
-  title: 'Early Access Sign Up',
+  title: 'Early Access',
 });
 
-// The public Luma calendar, so people can browse everything if nothing is listed.
-const LUMA_CALENDAR_URL = 'https://luma.com/baml';
+export const revalidate = 3600;
 
-/** The early access sign-up page, in the homepage's BAML lane. It isn't linked from the nav or the
- *  footer. */
-export default async function EapPage() {
-  const events = await getEapEvents();
-
-  // Secondary CTA. Rendered inside the schedule's primary column (under the
-  // featured session) so it fills the space there rather than sitting below
-  // the whole list. Passed as a slot because the schedule is a client component.
-  const discordCta = (
-    <div className="mt-5">
-      <DiscordCard />
-    </div>
-  );
-
+export default async function EapPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ session?: string }>;
+}) {
+  const [{ session }, sessions] = await Promise.all([
+    searchParams,
+    getEapEvents(),
+  ]);
+  const initialSessionId = sessions.find(({ id }) => id === session)?.id;
   return (
     <PageShell>
       <section
-        {...section('eap_schedule')}
-        className={`eap ${PAGE_WRAP} pt-14 md:pt-20 pb-16 md:pb-24`}
+        {...section('eap_request')}
+        aria-labelledby="request-access"
+        className="relative isolate overflow-hidden"
       >
-        <div className="max-w-[60rem]">
-          <h1 className="v4-h1">Early access sign up</h1>
-          <p className="mt-6 md:mt-8 max-w-[42rem] v4-body text-ink-2">
-            Get started with BAML.{' '}
-            <a className="eap-link" href="/quickstart">
-              Explore on your own
-            </a>
-            , or join a live session to go deeper with us in real time: ask
-            questions, see the latest features, and work through your actual use
-            case together.{' '}
-            <span className="text-muted">About 45 minutes on Zoom.</span>
-          </p>
-
-          {events.length > 0 ? (
-            <EapSchedule discord={discordCta} events={events} />
-          ) : (
-            <div className="max-w-[440px]">
-              <div className="eap-empty">
-                No sessions are scheduled right now. Browse the{' '}
-                <a
-                  href={LUMA_CALENDAR_URL}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  BAML calendar
-                </a>{' '}
-                for upcoming events.
-              </div>
-              {discordCta}
-            </div>
-          )}
-
-          <p className="mt-12 pt-6 border-t border-rule text-[15px] text-body">
-            See every session on the{' '}
-            <a
-              className="eap-link"
-              href={LUMA_CALENDAR_URL}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              BAML Luma calendar
-            </a>
-            .
-          </p>
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-0 -z-10 h-[34rem] overflow-hidden"
+        >
+          <Image
+            alt=""
+            className="object-cover object-[center_65%] opacity-55"
+            fill
+            sizes="100vw"
+            src="/paint/baml-dusk-field.jpg"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-ground/45 via-ground/55 to-ground" />
+        </div>
+        <div className={`${PAGE_WRAP} py-12 md:py-20`}>
+          <div className="mx-auto max-w-[52rem]">
+            <SignupForm
+              initialSessionId={initialSessionId}
+              key={initialSessionId ?? 'signup'}
+              sessions={sessions}
+            />
+          </div>
         </div>
       </section>
     </PageShell>

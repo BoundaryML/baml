@@ -110,7 +110,6 @@
   --radius-lg: 3px;
   --radius-xl: 4px;
   --radius-2xl: 6px;
-  --font-lexend: var(--font-instrument-serif), ui-serif, Georgia, serif;
 }
 
 /* Bold outline: thick outlines, hard offset shadows in clover, and pixel numbers. */

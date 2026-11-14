@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { BoundaryMark } from './boundary-logo';
-import { BOOK } from './links';
+import { SIGNUP } from './links';
 import { MarkTile } from './mark';
 import { MARKS } from './marks';
 import { Phase } from './phase';
@@ -377,7 +377,7 @@ export default function Deploy() {
     >
       {/* The page's main action again, under the intro, since this is where the data lake is introduced. */}
       <div className="-mt-4 md:-mt-6 mb-10 md:mb-14">
-        <Button href={BOOK}>Get early access</Button>
+        <Button href={SIGNUP}>Get early access</Button>
       </div>
       <div className="deploy-fig flex flex-col xl:grid xl:grid-cols-[7rem_2rem_minmax(0,1fr)_2rem_10.5rem_5rem_14rem] xl:grid-rows-[repeat(3,minmax(0,1fr))] xl:gap-y-3">
         <div
