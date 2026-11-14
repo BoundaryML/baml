@@ -217,7 +217,7 @@ export default function SignupForm({
       </h1>
       <p className="mt-5 max-w-[34rem] v4-body text-ink-2">
         Build a feedback loop with BAML in a live walkthrough, or bring your
-        stack to a private session with our engineers.
+        stack to an engineering session with our team.
       </p>
       <form
         action={action}
@@ -354,7 +354,7 @@ export default function SignupForm({
                   onClick={() => setSignupType('access')}
                   type="button"
                 >
-                  Request a private session
+                  Request an engineering session
                 </button>
               </div>
             )}
@@ -506,7 +506,7 @@ export default function SignupForm({
                       ? selectedTiming === 'live' || selectedTiming === 'soon'
                         ? 'Sign up to join'
                         : 'Sign up for live onboarding'
-                      : 'Request a private session'}
+                      : 'Request an engineering session'}
                   <ArrowRight aria-hidden="true" size={17} />
                 </button>
               </div>

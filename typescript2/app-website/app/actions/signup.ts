@@ -159,7 +159,7 @@ export async function submitSignup(
     if (eventId && !session) {
       return {
         message:
-          'This session is unavailable. Choose another session or request a private session.',
+          'This session is unavailable. Choose another session or request an engineering session.',
         status: 'error',
       };
     }

@@ -7,7 +7,7 @@ import SignupForm from './signup-form';
 
 export const metadata = createMetadata({
   description:
-    'Join weekly live onboarding or request a private session for your team.',
+    'Join weekly live onboarding or request an engineering session for your team.',
   ogTitle: 'Get started with Boundary',
   path: '/eap',
   title: 'Early Access',

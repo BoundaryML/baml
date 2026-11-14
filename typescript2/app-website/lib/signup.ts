@@ -7,9 +7,10 @@ export const SIGNUP_TYPES = [
   },
   {
     description:
-      'Bring your engineers to a private working session with ours. Walk through your architecture, data flows, and security or compliance requirements. We’ll work through what it would take to run Boundary in your environment.',
+      'Bring your engineers to a working session with ours. Walk through your architecture, data flows, and security or compliance requirements. We’ll work through what it would take to run Boundary in your environment.',
     heading: 'Private engineering session',
     id: 'access',
+    // Keep the existing Notion select value for reporting and follow-up.
     label: 'Request a private session',
   },
 ] as const;
