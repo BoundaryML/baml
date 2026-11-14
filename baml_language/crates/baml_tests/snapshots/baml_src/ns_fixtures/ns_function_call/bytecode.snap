@@ -16,8 +16,6 @@ function fixtures.function_call.Foo(x: int) -> int {
 function fixtures.function_call.GreetBaz(n: string) -> string {
     load_const "Hello, "
     load_var n
-    init_instance user.fixtures.function_call.Baz .name
-    load_field_local .name
     load_const "!"
     concat_strings 3
     return

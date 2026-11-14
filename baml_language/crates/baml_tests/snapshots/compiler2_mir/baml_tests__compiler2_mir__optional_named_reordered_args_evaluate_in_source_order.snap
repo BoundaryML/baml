@@ -61,40 +61,30 @@ fn user.score(query: string, max_results: int, filter: string) -> int {
 fn user.main() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int
-    let _2: int // max_results
-    let _3: bool
+    let _1: int // max_results
+    let _2: bool
 
     bb0: {
         goto -> bb1;
     }
 
     bb1: {
-        _2 = const 3_i64;
+        _1 = const 3_i64;
         goto -> bb2;
     }
 
     bb2 [inlined user.score]: {
-        _3 = copy _2 == const <omitted>;
-        branch copy _3 -> [bb3, bb4];
+        _2 = copy _1 == const <omitted>;
+        branch copy _2 -> [bb3, bb4];
     }
 
     bb3 [inlined user.score]: {
-        _2 = const 10_i64;
+        _1 = const 10_i64;
         goto -> bb4;
     }
 
     bb4 [inlined user.score]: {
-        _1 = copy _2;
-        goto -> bb5;
-    }
-
-    bb5 [inlined user.score]: {
         _0 = copy _1;
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }

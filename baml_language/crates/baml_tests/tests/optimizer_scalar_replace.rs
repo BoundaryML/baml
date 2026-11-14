@@ -95,8 +95,16 @@ function panic_in_rebuild(xs: int[]) -> int {
     } catch (e) { baml.panics.IndexOutOfBounds => p.x * 1000 + p.y }
 }
 
-function read_x(p: Point) -> int { p.x }
-function read_from_y(s: Segment) -> int { s.from.y }
+// Each calls itself on a path never taken, which keeps its calls from being
+// inlined: an instance handed to a real call is the subject below.
+function read_x(p: Point, again: bool = false) -> int {
+    if (again) { return read_x(p) }
+    p.x
+}
+function read_from_y(s: Segment, again: bool = false) -> int {
+    if (again) { return read_from_y(s) }
+    s.from.y
+}
 function passed(n: int) -> int {
     let p = Point { x: n, y: 1 }
     read_x(p) + p.y

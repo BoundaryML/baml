@@ -10,8 +10,7 @@ fn user.fixtures.json_to_from_string_concrete.serialize_user(u: user.fixtures.js
     let _3: unknown // value
     let _4: baml.json.Naming // naming
     let _5: bool
-    let _6: bool
-    let _7: int
+    let _6: int
 
     bb0: {
         _3 = copy _1;
@@ -24,8 +23,8 @@ fn user.fixtures.json_to_from_string_concrete.serialize_user(u: user.fixtures.js
     }
 
     bb2 [inlined baml.json.stringify > baml.json._aliased]: {
-        _7 = discriminant(_4);
-        switch copy _7 [Naming.Aliased: bb5, Naming.Declared: bb4, otherwise: bb3] (exhaustive);
+        _6 = discriminant(_4);
+        switch copy _6 [Naming.Aliased: bb5, Naming.Declared: bb4, otherwise: bb3] (exhaustive);
     }
 
     bb3 [inlined baml.json.stringify > baml.json._aliased]: {
@@ -33,30 +32,21 @@ fn user.fixtures.json_to_from_string_concrete.serialize_user(u: user.fixtures.js
     }
 
     bb4 [inlined baml.json.stringify > baml.json._aliased]: {
-        _6 = const false;
+        _5 = const false;
         goto -> bb6;
     }
 
     bb5 [inlined baml.json.stringify > baml.json._aliased]: {
-        _6 = const true;
+        _5 = const true;
         goto -> bb6;
     }
 
-    bb6 [inlined baml.json.stringify > baml.json._aliased]: {
-        _5 = copy _6;
-        goto -> bb7;
+    bb6 [inlined baml.json.stringify]: {
+        _2 = call const fn baml.json._stringify(copy _3, copy _5, const 0_i64, const false) -> [bb7];
     }
 
     bb7 [inlined baml.json.stringify]: {
-        _2 = call const fn baml.json._stringify(copy _3, copy _5, const 0_i64, const false) -> [bb8];
-    }
-
-    bb8 [inlined baml.json.stringify]: {
         _0 = copy _2;
-        goto -> bb9;
-    }
-
-    bb9: {
         return;
     }
 }

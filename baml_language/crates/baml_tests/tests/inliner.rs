@@ -531,3 +531,66 @@ function main() -> int {
         .expect("the program finishes");
     assert_eq!(outcome, Ok(BexExternalValue::Int(1111)));
 }
+
+#[tokio::test]
+async fn a_callee_loop_is_copied_as_it_is() {
+    // `count_up` reaches the caller with its loop already rotated: the test
+    // once at the top and once at the bottom. Cleaning up the caller must
+    // not rotate it again, and both copies of the test stay inside the
+    // inlined call.
+    let source = r#"
+function count_up(n: int) -> int {
+  let total = 0
+  let i = 0
+  while (i < n) {
+    total += i
+    i += 1
+  }
+  total
+}
+function entry(n: int) -> int { count_up(n) + 1 }
+function main() -> int { entry(5) }
+"#;
+    let tests = |mir: &str| mir.lines().filter(|line| line.contains(" < ")).count();
+    let (callee, _) = lowered(source, "count_up", OptLevel::Two);
+    let (caller, calls) = lowered(source, "entry", OptLevel::Two);
+    assert_eq!(calls, 0, "{caller}");
+    assert_eq!(tests(&callee), 2, "{callee}");
+    assert_eq!(tests(&caller), 2, "{caller}");
+    let mut header = "";
+    for line in caller.lines() {
+        if line.trim_start().starts_with("bb") {
+            header = line;
+        }
+        if line.contains(" < ") {
+            assert!(header.contains("[inlined user.count_up]"), "{caller}");
+        }
+    }
+    assert_eq!(run(source).await, Ok(BexExternalValue::Int(11)));
+}
+
+#[tokio::test]
+async fn an_instance_passed_to_an_inlined_method_is_never_built() {
+    // The shape of the `method-call-100k` workload.
+    let source = r#"
+class Vec {
+  x: int
+  y: int
+  function norm2(self) -> int {
+    return self.x * self.x + self.y * self.y
+  }
+}
+function main() -> int {
+  let acc = 0;
+  for (let i = 0; i < 10; i += 1) {
+    let v = Vec { x: i, y: i + 1 };
+    acc += v.norm2();
+  };
+  return acc;
+}
+"#;
+    let (mir, calls) = lowered(source, "main", OptLevel::Two);
+    assert_eq!(calls, 0, "{mir}");
+    assert!(!mir.contains("user.Vec {"), "{mir}");
+    assert_eq!(run(source).await, Ok(BexExternalValue::Int(670)));
+}

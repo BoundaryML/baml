@@ -15,12 +15,12 @@ function fixtures.json_parse_stringify_intrinsics.parse_and_roundtrip(s: string)
 
   L0:
     load_const false
-    store_var _8
+    store_var _7
     jump L2
 
   L1:
     load_const true
-    store_var _8
+    store_var _7
 
   L2:
     load_var2 2 3

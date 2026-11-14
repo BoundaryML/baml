@@ -396,6 +396,7 @@ fn splice<'db>(
         }
     }
     let return_local = local_map[0].unwrap_or_else(|| unreachable!("the return place is mapped"));
+    let return_is_read = super::count_local_uses(callee_body)[0] > 0;
 
     let base = body.blocks.len();
     let block_map: Vec<Option<BlockId>> = (0..callee_body.blocks.len())
@@ -414,13 +415,31 @@ fn splice<'db>(
         }
         match block.terminator.as_mut() {
             Some(Terminator::Return) => {
-                block.statements.push(Statement {
-                    kind: StatementKind::Assign {
-                        destination: destination.clone(),
-                        value: Rvalue::Use(Operand::Copy(Place::Local(return_local))),
-                    },
-                    span: source.terminator_span,
-                });
+                // A value computed just before the return is computed into
+                // the call's destination. Nothing runs between the two, so
+                // the destination is written exactly when the call's result
+                // would have been.
+                if !return_is_read
+                    && let Some(Statement {
+                        kind:
+                            StatementKind::Assign {
+                                destination: computed,
+                                ..
+                            },
+                        ..
+                    }) = block.statements.last_mut()
+                    && *computed == Place::Local(return_local)
+                {
+                    *computed = destination.clone();
+                } else {
+                    block.statements.push(Statement {
+                        kind: StatementKind::Assign {
+                            destination: destination.clone(),
+                            value: Rvalue::Use(Operand::Copy(Place::Local(return_local))),
+                        },
+                        span: source.terminator_span,
+                    });
+                }
                 block.terminator = Some(Terminator::Goto { target });
             }
             Some(terminator) => {

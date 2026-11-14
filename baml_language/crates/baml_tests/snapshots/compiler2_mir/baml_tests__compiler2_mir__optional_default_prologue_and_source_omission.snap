@@ -34,10 +34,6 @@ fn user.main() -> int {
 
     bb1 [inlined user.add]: {
         _0 = const 12_i64;
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

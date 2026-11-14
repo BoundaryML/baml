@@ -644,9 +644,9 @@ fn entry_points_prune_admission_to_what_they_reach() {
     #[rustfmt::skip]
     let cases: &[(&str, &[&str], &[&str])] = &[
         ("fib", &["fib"], &["sum", "main", "uses_closure"]),
-        // `sum` and `mean` are inlined into `main`, which leaves
+        // `sum`, `manhattan` and `mean` are inlined into `main`, which leaves
         // nothing reaching them.
-        ("main", &["main", "fib", "manhattan", "safe_div"], &["build", "sum", "mean"]),
+        ("main", &["main", "fib", "safe_div"], &["build", "sum", "manhattan", "mean"]),
     ];
     for (entry, admitted, unreached) in cases {
         let entries = [callables[&format!("user.{entry}")].object.raw()];

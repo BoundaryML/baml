@@ -117,15 +117,17 @@ fn find_rotation(body: &MirFunctionBody<'_>) -> Option<Rotation> {
             match &last.terminator {
                 Some(Terminator::Goto { target }) => {
                     let next = &body.blocks[target.0];
-                    // The copy runs as one block under the header's handler,
-                    // so every block of the test must already run under it,
-                    // and none may be entered from elsewhere.
+                    // The copy runs as one block under the header's handler
+                    // and inside the header's inlined call, so every block of
+                    // the test must already run under both, and none may be
+                    // entered from elsewhere.
                     if test.contains(&target.0)
                         || preds[target.0].len() != 1
                         || next.landing.is_some()
                         || next.unwind != head.unwind
                         || next.handling != head.handling
                         || next.shielded != head.shielded
+                        || next.inline != head.inline
                     {
                         return None;
                     }
@@ -177,6 +179,7 @@ fn rotate(body: &mut MirFunctionBody<'_>, arity: usize, rotation: &Rotation) {
     copy.unwind = head.unwind;
     copy.handling = head.handling;
     copy.shielded = head.shielded;
+    copy.inline.clone_from(&head.inline);
     for &block in &rotation.test {
         copy.statements
             .extend(body.blocks[block].statements.iter().cloned());
@@ -336,6 +339,25 @@ mod tests {
             ],
             4,
         )
+    }
+
+    /// A body the inliner changed goes through the whole cleanup again, and
+    /// a copied callee has been through it once already.
+    #[test]
+    fn cleaning_up_a_cleaned_up_body_changes_nothing() {
+        let mut body = counting_loop();
+        super::super::optimize_body(&mut body, 1, crate::OptLevel::Two, None);
+        let once = format!("{body:?}");
+        assert_eq!(
+            body.blocks
+                .iter()
+                .filter(|block| matches!(block.terminator, Some(Terminator::Branch { .. })))
+                .count(),
+            2,
+            "the loop is rotated: {once}"
+        );
+        super::super::optimize_body(&mut body, 1, crate::OptLevel::Two, None);
+        assert_eq!(once, format!("{body:?}"));
     }
 
     #[test]
