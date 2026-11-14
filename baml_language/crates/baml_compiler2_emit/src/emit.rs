@@ -3766,6 +3766,7 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
             baml_type::typetag::LIST => "_[]".to_string(),
             baml_type::typetag::MAP => "map<_, _>".to_string(),
             baml_type::typetag::PANIC => "baml.panics.Panic".to_string(),
+            baml_type::typetag::NULL => "null".to_string(),
             other => format!("type tag {other}"),
         };
         self.set_operand(inst, OperandMeta::Const(meta));

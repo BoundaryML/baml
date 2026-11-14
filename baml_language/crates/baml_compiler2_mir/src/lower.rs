@@ -7208,9 +7208,40 @@ impl<'db> LoweringContext<'db> {
         let structural = lhs_ty
             .filter(|lhs_ty| Some(*lhs_ty) == rhs_ty)
             .and_then(|ty| self.structural_witness(ty, &self.baml_decl("ops", "Equals")));
+        let bool_ty = RuntimeTy::Bool;
+        // Against the `null` literal the driver has one answer: whether the
+        // other operand is null. No `Equals` impl is consulted for operands of
+        // different runtime kinds, so the tag test is the whole comparison and
+        // needs no call.
+        let is_null_literal = |expr: AstExprId| matches!(self.body.exprs[expr], AstExpr::Null);
+        if self.opt >= crate::OptLevel::Two
+            && let Some(value) = match (is_null_literal(lhs), is_null_literal(rhs)) {
+                (false, true) => Some(lhs),
+                (true, false) => Some(rhs),
+                _ => None,
+            }
+        {
+            let is_null = Rvalue::IsTypeTag {
+                operand: self.lower_to_operand(value)?,
+                tag: baml_type::typetag::NULL,
+            };
+            if matches!(op, AstBinaryOp::Eq) {
+                self.builder.assign(dest, is_null);
+            } else {
+                let result = Place::local(self.builder.temp(bool_ty));
+                self.builder.assign(result.clone(), is_null);
+                self.builder.assign(
+                    dest,
+                    Rvalue::UnaryOp {
+                        op: crate::UnaryOp::Not,
+                        operand: Operand::Copy(result),
+                    },
+                );
+            }
+            return Ok(());
+        }
         let lhs_op = self.lower_to_operand(lhs)?;
         let rhs_op = self.lower_to_operand(rhs)?;
-        let bool_ty = RuntimeTy::Bool;
         if let Some(kind) = structural {
             let result = if matches!(op, AstBinaryOp::Eq) {
                 dest.clone()
