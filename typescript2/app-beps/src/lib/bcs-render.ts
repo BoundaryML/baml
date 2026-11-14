@@ -191,6 +191,8 @@ function adjust(
           tagName: "pre",
           properties: { className: ["mermaid"] },
           children: [{ type: "text", value: text(code) }],
+          // Where the fence is in the Markdown, so a comment on the diagram finds its source.
+          position: child.position,
         };
         node.children[index] = diagram;
         return;

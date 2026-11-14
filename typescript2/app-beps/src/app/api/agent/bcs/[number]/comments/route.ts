@@ -3,7 +3,7 @@
 // block's Markdown source in the current version, so an agent can find what to change.
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "../../../../../../../convex/_generated/api";
-import { bcsCall } from "@/lib/bcs-convex";
+import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
 import { renderBcsPage } from "@/lib/bcs-render";
 import { authenticate, json, refused } from "../../shared";
 
@@ -36,10 +36,6 @@ type AgentThread = {
   replies: Reply[];
 };
 
-function bcsId(number: number): string {
-  return `BCS-${String(number).padStart(3, "0")}`;
-}
-
 function iso(time: number | undefined): string | undefined {
   return time === undefined ? undefined : new Date(time).toISOString();
 }
@@ -63,11 +59,15 @@ export async function GET(request: NextRequest, { params }: Params) {
   const { proposal, threads } = found.value;
   if (!proposal || !threads) return json({ error: "No such proposal." }, 404);
 
-  // Each Markdown page's blocks, rendered as the reader renders them, so block ids match.
+  // Each Markdown page's blocks, rendered as the reader renders the current version (its links
+  // included, which name a block with no text), so block ids match.
   const sources = new Map<string, Record<string, string>>();
   for (const page of proposal.pages) {
     if (page.format !== "markdown") continue;
-    const rendered = await renderBcsPage({ ...page, pageHref: () => "#" });
+    const rendered = await renderBcsPage({
+      ...page,
+      pageHref: (slug) => bcsPagePath(number, slug),
+    });
     sources.set(page.slug, rendered.sources);
   }
   const titles = new Map(proposal.pages.map((page) => [page.slug, page.title]));
