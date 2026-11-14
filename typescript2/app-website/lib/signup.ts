@@ -1,7 +1,7 @@
 export const SIGNUP_TYPES = [
   {
     description:
-      'Join us Thursday for a live overview of BAML and Boundary. See how code, tests, and traces fit together, ask questions, and get help setting up.',
+      'Pick an upcoming session for a live overview of BAML and Boundary. See how code, tests, and traces fit together, ask questions, and get help setting up.',
     id: 'onboarding',
     label: 'Weekly live onboarding',
   },

@@ -13,8 +13,6 @@ export const metadata = createMetadata({
   title: 'Early Access',
 });
 
-export const revalidate = 3600;
-
 export default async function EapPage({
   searchParams,
 }: {
