@@ -21,7 +21,12 @@ pub enum {{ enum_.name }} {
 {% if let Some(docstring) = docstring -%}
     {{ crate::utils::prefix_lines(docstring, "/// ") }}
 {%- endif %}
-    {{ value }},
+{% let ident = crate::utils::escape_keyword(value) %}
+{% if ident != *value %}
+    #[baml(name = "{{ value }}")]
+    #[serde(rename = "{{ value }}")]
+{% endif %}
+    {{ ident }},
 {% endfor %}
 {% if enum_.dynamic %}
     /// Dynamic variant for runtime-added enum values.
@@ -38,7 +43,7 @@ impl ::std::default::Default for {{ enum_.name }} {
         // But as a temporary solution, we will panic if the enum has no values
         panic!("{{ enum_.name }} has no values")
         {% else %}
-        Self::{{ enum_.first_value() }}
+        Self::{{ crate::utils::escape_keyword(enum_.first_value()) }}
         {% endif %}
     }
 }
@@ -47,7 +52,7 @@ impl ::std::fmt::Display for {{ enum_.name }} {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
 {% for (value, _) in enum_.values %}
-            Self::{{ value }} => write!(f, "{{ value }}"),
+            Self::{{ crate::utils::escape_keyword(value) }} => write!(f, "{{ value }}"),
 {% endfor %}
 {% if enum_.dynamic %}
             Self::_Dynamic(s) => write!(f, "{}", s),
@@ -62,7 +67,7 @@ impl ::std::str::FromStr for {{ enum_.name }} {
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
 {% for (value, _) in enum_.values %}
-            "{{ value }}" => ::std::result::Result::Ok(Self::{{ value }}),
+            "{{ value }}" => ::std::result::Result::Ok(Self::{{ crate::utils::escape_keyword(value) }}),
 {% endfor %}
 {% if enum_.dynamic %}
             other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
