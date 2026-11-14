@@ -333,7 +333,7 @@ The client translates the prompt, sends the request, and returns the model's tex
 
 </details>
 
-- **Keep your prompt and return type.** `input.prompt(...)` renders the system instructions, output schema, user text, and image. BAML parses the returned text into `Receipt`.
+- **Keep your prompt and return type.** `(input.prompt)(...)` renders the system instructions, output schema, user text, and image. BAML parses the returned text into `Receipt`.
 - **Translate the image.** `build_request` preserves message roles and puts the image in Cloudflare's separate field. During a call, `resolve_media` downloads URL images and produces base64 data.
 - **Preview without I/O.** `render` requires a base64 image and redacts the token. It does not fetch URLs.
 - **Handle HTTP failures.** `send_as` checks the status and decodes the JSON envelope; the request carries a 60-second timeout. `to_turn` checks the envelope's `success` field before returning text.

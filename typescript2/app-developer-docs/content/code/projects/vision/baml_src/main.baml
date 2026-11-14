@@ -327,7 +327,7 @@ class CloudflareVisionClient {
         if (!input.toolbox.is_empty() || has_history) {
             throw self.invalid_request("This example supports single-turn prompts without tools.");
         }
-        let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
+        let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
         let messages: CloudflareMessage[] = [];
         let image_data: string? = null;
         for (let message in prompt.messages()) {

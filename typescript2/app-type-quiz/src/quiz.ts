@@ -15,16 +15,16 @@
 
 import {
   type Answered,
-  adaptive_json,
-  answer_case,
-  describe_model,
+  adaptive_json_sync as adaptive_json,
+  answer_case_sync as answer_case,
+  describe_model_sync as describe_model,
   engine,
-  fresh_profile,
+  fresh_profile_sync as fresh_profile,
   type Given,
   Given as GivenClass,
   type Next,
-  next_prompt,
-  replay as replayAnswers,
+  next_prompt_sync as next_prompt,
+  replay_sync as replayAnswers,
   type Taken,
   Taken as TakenClass,
 } from '@quiz/sdk';
@@ -100,7 +100,7 @@ export function taken(item: string, seed: bigint, said: Given): Taken {
 export type KnobValues = ConstructorParameters<typeof engine.Knobs>[0];
 
 export function defaultKnobs(): Knobs {
-  return engine.default_knobs();
+  return engine.default_knobs_sync();
 }
 
 /**
@@ -110,7 +110,7 @@ export function defaultKnobs(): Knobs {
  * that panics outside them.
  */
 export function knobsFault(values: KnobValues): string | null {
-  return engine.knobs_fault(knobsFrom(values));
+  return engine.knobs_fault_sync(knobsFrom(values));
 }
 
 export function knobsFrom(values: KnobValues): Knobs {
@@ -124,7 +124,7 @@ export function knobValues(knobs: Knobs): KnobValues {
 
 /** What an answer is worth under `knobs`: right, wrong, and not sure. */
 export function pointsOf(knobs: Knobs): Points {
-  return engine.points(knobs);
+  return engine.points_sync(knobs);
 }
 
 export function freshProfile(): Profile {
@@ -138,7 +138,7 @@ export function replay(knobs: Knobs, history: Taken[]): Profile {
 
 /** Where a sitting stands: whether it is over and why, and what is known. */
 export function standingOf(profile: Profile, knobs: Knobs): Standing {
-  return engine.standing(profile, knobs);
+  return engine.standing_sync(profile, knobs);
 }
 
 /** The case the model would ask next, or `null` when the bank has nothing. */
