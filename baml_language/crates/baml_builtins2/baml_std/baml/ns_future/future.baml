@@ -68,6 +68,46 @@ class Future<T, E> {
     function state(self) -> State throws never {
         $rust_function
     }
+
+    /// Where the task settling this future is right now: its stack, outermost
+    /// frame first, standard-library frames left out. `null` once the future
+    /// has settled, or when no task settles it.
+    ///
+    /// Every task pauses for the moment this takes, so it suits finding out
+    /// why a wait is taking too long, not a hot loop.
+    ///
+    /// # Examples
+    ///
+    /// ```baml
+    /// let work = spawn { transfer(alice, bob, 10) };
+    /// root.sys.sleep(root.time.Duration.from_seconds(5));
+    /// if let trace: root.errors.StackTrace = work.stack_trace() {
+    ///     root.io.println("still running:\n" + trace.to_string());
+    ///     let _ = work.cancel();
+    /// }
+    /// ```
+    function stack_trace(self) -> root.errors.StackTrace? throws never {
+        _task_stack(self._id())
+    }
+
+    /// (internal) The id the engine knows this future's task by.
+    function _id(self) -> int throws never {
+        $rust_function
+    }
+}
+
+/// (internal) What holds up the task settling future `future_id`: that
+/// task, every task it waits on, directly or through others, and any deadlock
+/// among them, as the stuck-task report prints them. Empty when no task
+/// settles it. The engine answers it, pausing every task to read it.
+function _task_report(future_id: int) -> string throws never {
+    $rust_io_function
+}
+
+/// (internal) The stack of the task settling future `future_id`, or `null`
+/// when no task does. The engine answers it, pausing every task to read it.
+function _task_stack(future_id: int) -> root.errors.StackTrace? throws never {
+    $rust_io_function
 }
 
 // BEP-034 combinators over a homogeneous array of futures (all sharing value

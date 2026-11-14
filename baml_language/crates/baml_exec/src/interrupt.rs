@@ -6,6 +6,10 @@
 // cancelled, the host finishes engine shutdown and then dies by the same
 // signal, so the parent sees an ordinary signal death (shell status 128+n).
 //
+// Before cancelling, the first signal runs the host's report hook, if it
+// installed one (`baml run` prints where every task is stuck), so the report
+// shows the program as it was, not as it unwinds.
+//
 // A second signal, or any signal once the root call has finished (the
 // engine shutdown wait), terminates immediately. Once installed the
 // handlers stay for the life of the process: the runtime cannot hand the
@@ -21,6 +25,10 @@ use std::sync::{
 };
 
 use bex_engine::CancellationToken;
+
+/// What the first signal runs before it cancels the root call.
+pub type InterruptReport =
+    Box<dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>;
 
 /// A termination signal the host received.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,6 +60,13 @@ impl Interrupts {
     /// Install the handlers. Must be called inside a Tokio runtime with the
     /// IO driver enabled.
     pub fn install() -> std::io::Result<Self> {
+        Self::install_with_report(None)
+    }
+
+    /// [`Self::install`], running `report` on the first signal before it
+    /// cancels the root call. A second signal while `report` runs still
+    /// terminates at once.
+    pub fn install_with_report(report: Option<InterruptReport>) -> std::io::Result<Self> {
         let token = CancellationToken::new();
         let state = Arc::new(State {
             received: AtomicI32::new(0),
@@ -70,6 +85,12 @@ impl Interrupts {
                         .is_ok();
                 if !first {
                     Interrupt(signal).terminate();
+                }
+                if let Some(report) = &report {
+                    tokio::select! {
+                        () = report() => {}
+                        second = signals.recv() => Interrupt(second).terminate(),
+                    }
                 }
                 listener_token.cancel();
             }

@@ -64,6 +64,8 @@ pub(crate) type PendingJoinHandle = Arc<SetOnce<Result<(), FutureInternalError>>
 #[derive(Debug, Clone)]
 pub struct LeakedFuture {
     pub origin: Arc<str>,
+    /// Where its task was when the deadline passed, if it had started.
+    pub task: Option<crate::StuckTask>,
 }
 
 /// Manages all futures for the Bex engine.
@@ -129,11 +131,17 @@ impl FutureManager {
     /// [`LeakedFuture`] per fired token. First phase of the shutdown
     /// deadline: cooperative — producers observing their token unwind and
     /// settle on their own.
-    pub async fn cancel_pending_futures(&self, mgr: &HeapPermitManager) -> Vec<LeakedFuture> {
+    /// Each [`LeakedFuture`] carries its task from `report`, when the report
+    /// found it.
+    pub async fn cancel_pending_futures(
+        &self,
+        mgr: &HeapPermitManager,
+        report: &crate::TaskReport,
+    ) -> Vec<LeakedFuture> {
         let inactive = mgr.new_permit(()).await;
         let active = inactive.acquire().await;
         let mut guard = self.acquire(active.proof()).await;
-        guard.cancel_pending_futures()
+        guard.cancel_pending_futures(report)
     }
 
     /// Force-settle every still-`Pending` future to `Cancelled` (the same CAS
@@ -475,11 +483,14 @@ impl FutureManagerGuard<'_> {
     }
 
     /// Snapshot every pending future for the explicit engine shutdown wait.
-    pub(crate) fn cancel_pending_futures(&mut self) -> Vec<LeakedFuture> {
+    pub(crate) fn cancel_pending_futures(
+        &mut self,
+        report: &crate::TaskReport,
+    ) -> Vec<LeakedFuture> {
         self.holder()
             .active_futures
-            .values()
-            .filter_map(|state| {
+            .iter()
+            .filter_map(|(id, state)| {
                 // SAFETY: caller holds the heap permit via `self.proof`.
                 let fut = unsafe { state.future_ref() }.ok()?;
                 if !matches!(fut.read(), FutureRead::Pending(_)) {
@@ -488,6 +499,7 @@ impl FutureManagerGuard<'_> {
                 fut.cancel.cancel();
                 Some(LeakedFuture {
                     origin: std::sync::Arc::clone(&state.origin),
+                    task: report.task_settling(*id).cloned(),
                 })
             })
             .collect()
@@ -594,6 +606,16 @@ impl FutureManagerInner {
         self.active_futures.len()
     }
 }
+impl FutureManagerInner {
+    /// Where each pending future's task was spawned, for the stuck-task
+    /// report.
+    pub(crate) fn origins(&self) -> impl Iterator<Item = (FutureId, Arc<str>)> + '_ {
+        self.active_futures
+            .iter()
+            .map(|(id, work)| (*id, Arc::clone(&work.origin)))
+    }
+}
+
 impl RootHaver for FutureManagerInner {
     fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
         let Self {
@@ -613,6 +635,10 @@ impl RootHaver for FutureManagerInner {
         // hand out as a fresh chunk. The next `alloc_future` must refill
         // from the post-GC cursor. Mirrors `BexVm::relocated`.
         self.tlab.invalidate();
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 }
 impl TlabHolder for FutureManagerInner {

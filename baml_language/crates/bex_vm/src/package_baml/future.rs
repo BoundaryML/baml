@@ -34,12 +34,18 @@ fn as_future(value: &Value) -> Option<&bex_vm_types::Future> {
     }
 }
 
+#[allow(clippy::used_underscore_items)]
 impl BamlClassFutureFuture for PackageBamlImpl {
     fn cancel(future: &Value) -> bool {
         let Some(fut) = as_future(future) else {
             return false;
         };
         fut.request_cancel()
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    fn _id(future: &Value) -> i64 {
+        as_future(future).map_or(-1, |fut| fut.id().as_usize() as i64)
     }
 
     fn is_settled(future: &Value) -> bool {

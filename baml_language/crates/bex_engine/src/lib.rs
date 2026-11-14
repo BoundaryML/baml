@@ -104,6 +104,8 @@ pub use btel_types::ProcessStatus;
 pub use telemetry::TelemetryRecording;
 #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry_diagnostics"))]
 pub use telemetry::append_diagnostics_line;
+mod task_report;
+pub use task_report::{StuckTask, TaskReport, Waiting, WaitsOn};
 mod telemetry_network;
 mod telemetry_state;
 pub mod trace_heap;
@@ -2965,12 +2967,15 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             {
                 if past_deadline() {
-                    // Deadline reached: cancel cooperatively, give producers
-                    // one bounded window to settle, then force-settle the
-                    // rest so the drain below empties and shutdown completes.
+                    // Deadline reached: note where each task is while it
+                    // still is there, then cancel cooperatively, give
+                    // producers one bounded window to settle, and force-settle
+                    // the rest so the drain below empties and shutdown
+                    // completes.
+                    let report = self.task_report().await;
                     let leaks = self
                         .futures
-                        .cancel_pending_futures(&self.heap_permit_manager)
+                        .cancel_pending_futures(&self.heap_permit_manager, &report)
                         .await;
                     let _ = tokio::time::timeout(CANCEL_SETTLE_GRACE, wait).await;
                     let forced = self
@@ -3206,6 +3211,64 @@ impl BexEngine {
     /// Statistics about the collection (live count, collected count, etc.)
     pub async fn collect_garbage(self: &Arc<Self>) -> bex_heap::GcStats {
         self.collect_garbage_with_reason("explicit").await
+    }
+
+    /// Every unfinished task: its stack, what it waits for, and each cycle of
+    /// tasks waiting on each other. Stops every task for the moment it takes,
+    /// as a collection does, so call it from outside a task: a caller holding
+    /// a heap permit would wait for itself.
+    pub async fn task_report(self: &Arc<Self>) -> TaskReport {
+        #[cfg(not(target_arch = "wasm32"))]
+        let park_request_guard = ParkRequestGuard::new(Arc::clone(&self.park_requested));
+        let mut heap_guard = self.heap_permit_manager.request_park().await;
+        #[cfg(not(target_arch = "wasm32"))]
+        drop(park_request_guard);
+        let mut seen = Vec::new();
+        let mut origins = HashMap::new();
+        heap_guard.for_each_holder(|holder| {
+            let Some(holder) = holder.as_any_mut() else {
+                return;
+            };
+            if let Some(thread) = holder.downcast_mut::<BexThread>() {
+                seen.push(task_report::SeenTask {
+                    id: thread.vm.thread_id,
+                    settles: thread.settles_future,
+                    parked: thread.parked.clone(),
+                    frames: thread.vm.stack_trace(),
+                });
+            } else if let Some(futures) = holder.downcast_mut::<future::FutureManagerInner>() {
+                origins.extend(futures.origins());
+            }
+        });
+        let blocked_by = self.monitors.blocked_by();
+        drop(heap_guard);
+        TaskReport::build(seen, &origins, &blocked_by)
+    }
+
+    /// `baml.future._task_stack` and `_task_report`: where the task settling
+    /// a future is, and what holds it up. Reading other tasks pauses every
+    /// task, which the caller's own permit would prevent, so it is answered
+    /// as an async operation: the event loop releases that permit first.
+    fn answer_task_query(self: &Arc<Self>, op: SysOp, args: &[BexExternalValue]) -> SysOpResult {
+        let future = match args.first() {
+            Some(BexExternalValue::Int(id)) => usize::try_from(*id).ok().map(FutureId::from_usize),
+            _ => None,
+        };
+        let engine = Arc::clone(self);
+        SysOpResult::Async(Box::pin(async move {
+            let report = match future {
+                Some(_) => engine.task_report().await,
+                None => TaskReport::default(),
+            };
+            Ok(if op == SysOp::BamlFutureTaskStack {
+                future
+                    .and_then(|future| report.task_settling(future))
+                    .map_or(BexExternalValue::Null, StuckTask::stack_trace_value)
+            } else {
+                let held_up = future.map(|future| report.holding_up(future));
+                BexExternalValue::String(held_up.unwrap_or_default().to_string().into())
+            })
+        }))
     }
 
     async fn collect_garbage_with_reason(
@@ -5576,6 +5639,7 @@ impl BexEngine {
         self: &Arc<Self>,
         active: &mut Option<ActiveHeapPermit<BexThread>>,
         cancel: &TaskCancel,
+        reason: task_report::Parked,
         wait: impl std::future::Future<Output = T>,
     ) -> (Park<T>, Option<bex_vm::telemetry::ClockDuration>) {
         use bex_vm::telemetry::{ClockDuration, ClockInstant};
@@ -5589,6 +5653,7 @@ impl BexEngine {
         }
 
         let mut thread = active.take().expect("active execution permit");
+        thread.parked = Some(reason);
         let fired_at_park = cancel.is_cancelled();
         let shielded_at_park = fired_at_park && thread.vm_thread_is_shielded();
         let telemetry_wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
@@ -5632,6 +5697,7 @@ impl BexEngine {
             }
         };
         let thread = active.insert(thread);
+        thread.parked = None;
         let observed = telemetry_wait.is_some().then_some(elapsed);
         thread
             .vm
@@ -6012,6 +6078,7 @@ impl BexEngine {
                 return;
             };
             // Admitted: the body runs from here, not from the spawn.
+            permit.parked = None;
             permit.vm.mark_telemetry_running();
 
             match engine
@@ -6472,7 +6539,14 @@ impl BexEngine {
                                 // before touching VM state.
 
                                 thread.vm.begin_sys_op_telemetry_wait();
-                                let (parked, waited) = self.park(&mut active, cancel, fut).await;
+                                let (parked, waited) = self
+                                    .park(
+                                        &mut active,
+                                        cancel,
+                                        task_report::Parked::SysOp(operation),
+                                        fut,
+                                    )
+                                    .await;
                                 thread = active.as_mut().expect("active execution permit");
                                 if let Some(waited) = waited {
                                     thread.vm.record_sysop_time(waited);
@@ -6710,7 +6784,14 @@ impl BexEngine {
                         // itself is cancelled (cascade only saves us when the
                         // awaited future is a descendant whose token derives
                         // from ours).
-                        let (parked, _) = self.park(&mut active, cancel, future).await;
+                        let (parked, _) = self
+                            .park(
+                                &mut active,
+                                cancel,
+                                task_report::Parked::Await(future_id),
+                                future,
+                            )
+                            .await;
                         thread = active.as_mut().expect("active execution permit");
                         match parked {
                             Park::Cancelled => {
@@ -6791,7 +6872,14 @@ impl BexEngine {
                                 r
                             })
                         };
-                        let (parked, _) = self.park(&mut active, cancel, first_settled).await;
+                        let (parked, _) = self
+                            .park(
+                                &mut active,
+                                cancel,
+                                task_report::Parked::AwaitAny(future_ids),
+                                first_settled,
+                            )
+                            .await;
                         thread = active.as_mut().expect("active execution permit");
                         match parked {
                             Park::Cancelled => {
@@ -6929,6 +7017,9 @@ impl BexEngine {
         runtime_schema: Option<&RuntimeSchemaOverlay>,
         network: Option<sys_types::network::NetworkContext>,
     ) -> SysOpResult {
+        if matches!(op, SysOp::BamlFutureTaskStack | SysOp::BamlFutureTaskReport) {
+            return self.answer_task_query(op, args);
+        }
         if op == SysOp::BamlSysCollectGarbage {
             // A collection cannot run while this VM holds its active heap
             // permit. Returning an async operation makes the event loop release
