@@ -7,7 +7,7 @@ import {
   SDK_LANGS,
   usePinnedLang,
 } from '@/components/home/lang-pick';
-import { BOOK } from '@/components/home/links';
+import { SIGNUP } from '@/components/home/links';
 import { useReducedMotion } from '@/components/home/pinned';
 import { type SceneDef, ScenePlayer } from '@/components/home/scene-player';
 import { Button, LINKS } from '@/components/home/ui';
@@ -2128,7 +2128,7 @@ export function ArchitecturePage({ embedded }: { embedded?: boolean }) {
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Button href={EMAIL_ME}>vbv@boundaryml.com</Button>
-              <Button href={BOOK} variant="secondary">
+              <Button href={SIGNUP} variant="secondary">
                 Get on a call
               </Button>
               <Button href={LINKS.discord} variant="secondary">

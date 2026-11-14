@@ -2,7 +2,7 @@
 import { Check, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { section } from '@/components/home/analytics';
-import { BOOK } from '@/components/home/links';
+import { SIGNUP } from '@/components/home/links';
 import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { Button, LINKS } from '@/components/home/ui';
 import { Meter } from '@/components/pricing/meter';
@@ -331,7 +331,7 @@ export default function PricingPage() {
                 </p>
                 <p className="mt-1 text-[12px] text-muted">{p.unit}</p>
                 <div className="mt-6">
-                  <Button href={BOOK} variant={p.lit ? 'primary' : 'secondary'}>
+                  <Button href={SIGNUP} variant={p.lit ? 'primary' : 'secondary'}>
                     Get early access
                   </Button>
                 </div>

@@ -1633,7 +1633,7 @@ function Rotating() {
 
 // ---------- the section ----------
 
-export default function Hyperobs() {
+export default function Hyperobs({ children }: { children: ReactNode }) {
   return (
     <section
       {...section('hyperobservability')}
@@ -1662,6 +1662,7 @@ export default function Hyperobs() {
         <div className="mt-10 md:mt-12">
           <Threads />
         </div>
+        {children}
       </div>
     </section>
   );

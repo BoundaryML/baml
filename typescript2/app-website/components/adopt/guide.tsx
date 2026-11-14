@@ -7,7 +7,7 @@ import {
   LangPicker,
   usePinnedLang,
 } from '@/components/home/lang-pick';
-import { BOOK } from '@/components/home/links';
+import { SIGNUP } from '@/components/home/links';
 import { LANGS, SAMPLES } from './code';
 import { Start } from './start';
 
@@ -140,7 +140,7 @@ function EarlyAccess({ children }: { children: ReactNode }) {
   return (
     <a
       className="text-clover underline underline-offset-2 hover:text-head"
-      href={BOOK}
+      href={SIGNUP}
       rel="noopener"
       target="_blank"
     >

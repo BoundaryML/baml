@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BOOK } from '@/components/home/links';
+import { SIGNUP } from '@/components/home/links';
 
 // The top of /adopt: getting in touch, the primary action, then one install command and a button
 // that copies a setup prompt for an agent. No login
@@ -48,7 +48,7 @@ export function Start() {
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <a
           className="focus-ring inline-flex h-[46px] items-center rounded-lg bg-accent px-5 text-[15px] font-medium text-on-accent transition hover:bg-accent-hover active:translate-y-px"
-          href={BOOK}
+          href={SIGNUP}
           rel="noopener"
           target="_blank"
         >

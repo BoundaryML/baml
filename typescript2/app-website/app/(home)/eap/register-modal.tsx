@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useState } from 'react';
 import type { EapEvent, RegistrationQuestion } from '@/lib/luma';
+import { questionOptions } from '@/lib/luma-answers';
 
 type Status = 'error' | 'idle' | 'submitting' | 'success';
 
@@ -26,9 +27,9 @@ function QuestionField({ question }: { question: RegistrationQuestion }) {
           <option disabled value="">
             Select…
           </option>
-          {question.options.map((option) => (
-            <option key={option.label} value={option.label}>
-              {option.label}
+          {questionOptions(question).map((option) => (
+            <option key={option} value={option}>
+              {option}
             </option>
           ))}
         </select>

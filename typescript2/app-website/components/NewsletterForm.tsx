@@ -9,18 +9,15 @@ const SUCCESS = 'SUCCESS';
 const formStates = [INIT, SUBMITTING, ERROR, SUCCESS] as const;
 const formStyles = {
   buttonColor: '#4a11a6',
-  buttonFont: 'Inter',
   buttonFontColor: '#ffffff',
   buttonFontSizePx: 14,
   buttonText: 'Sign Up',
-  formFont: 'Inter',
   formFontColor: '#000000',
   formFontSizePx: 14,
   formStyle: 'buttonBelow',
   id: 'cm3d7widq01su6gng1mc5iuvz',
   name: 'Default',
   placeholderText: 'Enter your email',
-  successFont: 'Inter',
   successFontColor: '#000000',
   successFontSizePx: 16,
   successMessage: 'Get hyped for the latest BAML news!',
@@ -137,7 +134,7 @@ export default function NewsletterForm() {
           <p
             style={{
               color: formStyles.successFontColor,
-              fontFamily: `'${formStyles.successFont}', sans-serif`,
+              fontFamily: 'var(--font-sans)',
               fontSize: `${formStyles.successFontSizePx}px`,
             }}
           >
@@ -177,7 +174,7 @@ export default function NewsletterForm() {
                 boxShadow: 'rgba(0, 0, 0, 0.05) 0px 1px 2px',
                 boxSizing: 'border-box',
                 color: formStyles.formFontColor,
-                fontFamily: `'${formStyles.formFont}', sans-serif`,
+                fontFamily: 'var(--font-sans)',
                 fontSize: `${formStyles.formFontSizePx}px`,
                 margin: isInline ? '0px 10px 0px 0px' : '0px 0px 10px',
                 maxWidth: '300px',
@@ -210,7 +207,7 @@ export default function NewsletterForm() {
         <p
           style={{
             color: 'rgb(185, 28, 28)',
-            fontFamily: 'Inter, sans-serif',
+            fontFamily: 'var(--font-sans)',
             fontSize: '14px',
           }}
         >
@@ -233,7 +230,8 @@ export default function NewsletterForm() {
           border: 'none',
           color: '#6b7280',
           cursor: 'pointer',
-          font: '14px, Inter, sans-serif',
+          fontFamily: 'var(--font-sans)',
+          fontSize: '14px',
           margin: '10px auto',
           textAlign: 'center',
           textDecoration: isHovered ? 'underline' : 'none',
@@ -256,7 +254,7 @@ export default function NewsletterForm() {
           color: formStyles.buttonFontColor,
           cursor: 'pointer',
           flexDirection: 'row',
-          fontFamily: `'${formStyles.buttonFont}', sans-serif`,
+          fontFamily: 'var(--font-sans)',
           fontSize: `${formStyles.buttonFontSizePx}px`,
           fontStyle: 'normal',
           fontWeight: 500,
