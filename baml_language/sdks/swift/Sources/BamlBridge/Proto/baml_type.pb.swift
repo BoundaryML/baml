@@ -646,11 +646,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyUnion: Sendable {
   init() {}
 }
 
-/// A fixed-arity tuple `(A, B)`: one type per position, at least one.
 nonisolated struct BamlBridge_Cffi_V1_BamlTyTuple: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
 
   var items: [BamlBridge_Cffi_V1_BamlTy] = []
 
@@ -2064,9 +2060,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyTuple: SwiftProtobuf.Message, Swi
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.items) }()
       default: break

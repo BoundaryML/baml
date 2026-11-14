@@ -1,4 +1,3 @@
-// Tuples are not valid map keys, even when every element is hashable.
 
 type ByPair = map<(int, int), string>
 
@@ -15,7 +14,6 @@ function local_map() -> int {
     0
 }
 
-// A tuple does not satisfy a `Hash` bound.
 function hash_of<T extends baml.Hash>(x: T) -> int {
     0
 }

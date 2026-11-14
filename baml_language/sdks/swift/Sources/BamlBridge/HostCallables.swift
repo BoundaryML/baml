@@ -126,11 +126,6 @@ public struct BamlHostArgs: Sendable {
 /// `throws` contract) — the Swift analog of Python raising
 /// `BamlError(SomeGeneratedModel(...))` inside a callback.
 public struct BamlThrownValue: Error {
-    // `Error` implies `Sendable`, so the stored payload must be too. Every
-    // realistic value already is: generated models are Sendable value
-    // types, and so is a native tuple of them. A value that is not
-    // `BamlTyped` (a native tuple) crosses only under a declared throws slot
-    // of its Swift type.
     public let value: any Sendable
 
     public init<Value: Sendable>(_ value: Value) {
@@ -507,10 +502,6 @@ func rehydrateHostError(_ payload: BamlBridge_Cffi_V1_BamlOutboundValue) -> (any
 }
 
 /// `value`, received from the engine, restated as the host sends a value:
-/// each list, tuple, map and class states the exact type the engine gave
-/// it, a union selection is its selected value, and each engine handle is a
-/// fresh clone (the received key stays with the error that carried it,
-/// which may be forwarded again). A value that cannot be restated (a runtime
 /// declaration, whose rows went back on arrival, or a map keyed by other
 /// than strings) is refused, its clones released.
 func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault) -> BamlBridge_Cffi_V1_InboundValue {
@@ -579,8 +570,6 @@ func restate(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) throws(BamlHostFault
         restated.valueType = BamlTypeDescriptor.list(BamlTypeDescriptor(list.itemType)).raw
         restated.listValue.values = items
     case .tupleValue(let tuple):
-        // A tuple goes back as a list stating the tuple type it carries, so
-        // it keeps its slot types (never ones read back off its elements).
         guard tuple.hasTupleType,
             case .tuple(let slots)? = tuple.tupleType.ty,
             slots.items.count == tuple.items.count

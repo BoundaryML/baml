@@ -995,8 +995,6 @@ impl<H: Head> NormalTy<H> {
                 v1.arg_forces_disjoint(v2) || e1.arg_forces_disjoint(e2)
             }
 
-            // Tuples compare elementwise, so two tuples can be `==` only at the
-            // same arity with every element pair possibly equal.
             (NormalTy::Tuple(xa), NormalTy::Tuple(xb)) => {
                 xa.len() != xb.len() || xa.iter().zip(xb).any(|(x, y)| x.is_disjoint_from(y))
             }
@@ -1078,8 +1076,6 @@ macro_rules! family_head_category {
             $($member)::+::Enum(_) | $($member)::+::EnumVariant(..) => Category::Enum,
             $($member)::+::Function { .. } => Category::Function,
             $($member)::+::Future(..) => Category::Future,
-            // A tuple holding `never` canonicalizes to `never`, so a tuple
-            // head can change kind.
             $($member)::+::Interface(..)
             | $($member)::+::Tuple(_)
             | $($member)::+::Union(_)
@@ -1206,7 +1202,6 @@ enum NormalTy<H: Head = DeclName, P: MuPhase<H> = Canonical> {
         value: Box<NormalTy<H, P>>,
     },
     Union(Vec<NormalTy<H, P>>),
-    /// Tuple — invariant elementwise, fixed arity.
     Tuple(Vec<NormalTy<H, P>>),
     Function {
         params: Vec<NormalParam<H, P>>,
@@ -1857,7 +1852,6 @@ impl<H: Head> NormalTy<H> {
                     .into_iter()
                     .map(|e| e.canonicalize(ctx, saw_mu, assumptions))
                     .collect();
-                // A tuple with an uninhabited element has no values.
                 if elements.iter().any(|e| matches!(e, NormalTy::Never)) {
                     NormalTy::Never
                 } else {
@@ -2205,11 +2199,6 @@ impl<H: Head> NormalTy<H> {
                     && v1.invariant_compatible(v2, ctx, assumptions)
             }
 
-            // Tuples are invariant elementwise at equal arity: their slots are
-            // writable, so the invariance argument above (a write through the
-            // wider view) applies to every slot. A product never relates to a
-            // union of products: `(int | string, bool)` and
-            // `(int, bool) | (string, bool)` are distinct, unrelated types.
             (NormalTy::Tuple(a), NormalTy::Tuple(b)) => {
                 a.len() == b.len()
                     && a.iter()

@@ -128,7 +128,6 @@ def test_tuples_make_swap_and_index():
     assert make_pair(n=1, s="a") == (1, "a")
     assert swap_pair(t=(1, "a")) == ("a", 1)
     assert pair_first(t=(7, "a")) == 7
-    # A tuple BAML made goes back as the tuple it is.
     assert round_trip_pair(t=make_pair(n=2, s="b")) == (2, "b")
 
 
@@ -170,10 +169,8 @@ def test_tuples_thrown_value():
 def test_tuples_dynamic_value_keeps_carried_type():
     received = tuple_as_unknown(t=(1, True))
     assert received == (1, True)
-    # `(1, True)` alone would state `(int, bool)`; the carried type is kept.
     assert unknown_has_carried_tuple_type(v=received) is True
     assert unknown_has_carried_tuple_type(v=(1, True)) is False
-    # A callback at an open slot echoing what it received keeps it too.
     assert call_unknown_tuple_callback(callback=lambda v: v, t=(1, True)) is True
 
 
@@ -192,11 +189,9 @@ def test_tuples_reflected_type_token():
 # SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 async def test_tuples_method_round_trip():
     box = TuplePairBox(a=1, b="a")
-    # An instance method returning a tuple, and one taking a tuple.
     assert box.as_pair() == (1, "a")
     assert isinstance(box.as_pair(), tuple)
     assert box.with_pair((2, "b")) == TuplePairBox(a=2, b="b")
-    # A static method taking a tuple.
     assert TuplePairBox.from_pair((3, "c")) == TuplePairBox(a=3, b="c")
     assert await box.as_pair_async() == (1, "a")
     assert await box.with_pair_async((4, "d")) == TuplePairBox(a=4, b="d")
@@ -205,7 +200,6 @@ async def test_tuples_method_round_trip():
 
 # SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
 def test_tuples_function_handle_round_trip():
-    # A BAML closure returned to the host: its handle takes and returns tuples.
     swap = make_tuple_swapper()
     assert callable(swap)
     result = swap((1, "a"))

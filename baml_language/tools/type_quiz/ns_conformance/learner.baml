@@ -186,7 +186,6 @@ function sit_from(
 ///
 /// Over twelve sittings, not one, and asked as two tests of six. What it
 /// costs varies enormously with the draw — the spread runs from the low
-/// seventies to the budget, and three of the twelve do not finish inside it —
 /// so a single session measures the luck of that session, and the version of
 /// this test that asked one certified by chance. Splitting the twelve is for
 /// the clock rather than the measurement: driving them is the slowest thing
@@ -475,7 +474,6 @@ function beginner_report() -> string throws never {
 }
 
 test "learner: certifying a perfect learner costs 76 to 132 questions over sessions 1 to 6, and one does not finish" {
-    // The three that do not finish across the twelve are the measurement, not a
     // fluke to be tuned away: at this budget a learner who answers everything
     // right is still sometimes left uncertified, and three models that sat the
     // quiz said independently that it should have had their measure by about
@@ -489,12 +487,6 @@ test "learner: certifying a perfect learner costs 76 to 132 questions over sessi
     // question, and two sittings run out of budget rather than one. The
     // evidence those cases used to give was never earned: the learner could
     // answer them without knowing the wrap was invariant.
-    //
-    // It became three when the unguarded cycle was promoted from a
-    // divergence. Its item is a shape whose two members turn on two rules
-    // of their own, each evidenced only by the half of its draws that is
-    // that member, so a sitting has two more rules to certify on evidence
-    // that comes in at half the rate.
     assert.equal(
         expert_report_over([1, 2, 3, 4, 5, 6]),
         `certified=5 of 6 steps=["Mastered:132", "Budget:140", "Mastered:76", "Mastered:108", "Mastered:124", "Mastered:115"] withheld=0.0 suspected=none`,
@@ -786,8 +778,6 @@ test "profile: the same session seed serves the same cases" {
 
 /// Every rule a verified item can conclude has an order. The two site rules
 /// are not among them — a site is the frame a case stands in rather than
-/// something to master. The three carrying variance rules reach five: an
-/// axiom under four wraps, which is as deep as the bank goes today.
 function orders_report() -> string throws never {
     let orders = root.bank.rule_orders(4);
     let counted = [1, 2, 3, 4, 5].map((order) -> {
@@ -934,16 +924,8 @@ class Sitting {
 test "sitting: nothing well enough seen in a sitting leans more than fifteen points" {
     // WHAT THIS DOES NOT COVER. `served_surface` now reads the whole surface,
     // the same `surface_of` the bank sweep uses, so the pair features are in
-    // the vocabulary here — but 220 questions do not see them often enough to
-    // hold them to anything. Measured with the support floor dropped to one,
-    // the features seen at least eight times:
     //
-    //   pair:same-spelling          100% of 9
-    //   kind:alias                   79% of 14
-    //   pair:source-within-target    75% of 20
-    //   site:two `implements` blocks 38% of 8
     //
-    // The first is the bank's recorded debt showing through, and nine cases
     // is no evidence either way: the standard error at that count is about
     // fifteen points, the width of the whole bar. Lowering the floor would
     // buy noise, not coverage. What would buy coverage is more sittings, and

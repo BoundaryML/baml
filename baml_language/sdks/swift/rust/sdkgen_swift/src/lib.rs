@@ -327,9 +327,6 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
     }
 }
 
-/// Direct (non-heap) class targets of a field type: bare class refs,
-/// refs behind Optional (null-unions) and tuple slots store inline in a
-/// Swift struct; List/Map contents are already heap-allocated and never
 /// force boxing. Aliases resolve through (they're non-recursive here).
 fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
     match ty {
@@ -346,8 +343,6 @@ fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
                 direct_class_targets(&non_null[0], pool, out);
             }
         }
-        // A native tuple and a `Tuple1` store their slots inline, like
-        // fields of their own.
         Ty::Tuple(items) => {
             for item in items {
                 direct_class_targets(item, pool, out);
@@ -1678,8 +1673,6 @@ mod tests {
         );
         // map with non-string key — not yet
         assert_eq!(t(&map(int(), int())), None);
-        // Tuples of two or more slots are native Swift tuples at every arity,
-        // slot order and repeats kept; one slot is the runtime's `Tuple1`.
         let tuple = Ty::Tuple(Box::new([int(), string()]));
         assert_eq!(t(&tuple).as_deref(), Some("(Swift.Int, Swift.String)"));
         assert_eq!(
@@ -1719,8 +1712,6 @@ mod tests {
             t(&wide).as_deref(),
             Some(format!("({})", vec!["Swift.Int"; 14].join(", ")).as_str())
         );
-        // A stream of tuples is the runtime's stream, which needs no
-        // conformance of its values.
         let tuple_stream = Ty::Class(
             Name::new(
                 baml_base::Name::new("ai"),
@@ -1733,9 +1724,6 @@ mod tests {
             t(&tuple_stream).as_deref(),
             Some("BamlStream<(Swift.Int, Swift.String)>")
         );
-        // A slot with no Swift type leaves the tuple unsupported, as it does
-        // any other type holding it: `unknown`, and media with no struct of
-        // its own, have none.
         assert_eq!(t(&Ty::Tuple(Box::new([int(), map(int(), int())]))), None);
         assert_eq!(t(&Ty::Unknown), None);
         assert_eq!(t(&Ty::Tuple(Box::new([int(), Ty::Unknown]))), None);
@@ -1758,8 +1746,6 @@ mod tests {
             class_names: BTreeMap::new(),
         };
         let slot = |ty: &Ty| slot_expr(ty, &ctx, &translate_ty::generic_param_slot);
-        // A media slot is spelled by the class crossing as that media, as
-        // media is everywhere else.
         let image_class = Name::new(
             baml_base::Name::new("baml"),
             vec![baml_base::Name::new("media")],
@@ -1886,7 +1872,6 @@ mod tests {
             emitted.contains(&format!("public static func wide(t: ({ints}), ")),
             "{emitted}"
         );
-        // No generated tuple types, and nothing skipped.
         assert!(!files.contains_key(&PathBuf::from("_BamlTuples.swift")));
         assert!(!emitted.contains("struct Tuple"), "{emitted}");
         let manifest = &files[&PathBuf::from("_BamlSkipped.swift")];
@@ -1917,8 +1902,6 @@ mod tests {
             ),
         ]);
         let emitted = emit(&pool);
-        // `Equatable` stays declared, its `==` written through each tuple
-        // field's slot.
         for expected in [
             "public struct Holder: Equatable, Sendable, BamlTyped, BamlDecodable {",
             "public nonisolated static func == (lhs: Self, rhs: Self) -> Swift.Bool {",
@@ -1930,7 +1913,6 @@ mod tests {
         ] {
             assert!(emitted.contains(expected), "{expected}\n{emitted}");
         }
-        // A `Tuple1` of an `Equatable` slot is `Equatable` itself.
         let single = emitted
             .split_once("public struct Single:")
             .map(|(_, rest)| rest)
@@ -1962,11 +1944,8 @@ mod tests {
         ]);
         let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
         let emitted: String = files.values().map(String::as_str).collect();
-        // A native tuple fills no `BamlCodableValue` parameter: the function
-        // is skipped like any other with an unrepresentable type...
         let manifest = &files[&PathBuf::from("_BamlSkipped.swift")];
         assert!(manifest.contains("`user.boxed_pair`"), "{manifest}");
-        // ...while a `Tuple1` of a conforming slot is one.
         assert!(
             emitted.contains("b: Baml.Box<BamlBridge.Tuple1<Swift.Int>>"),
             "{emitted}"

@@ -4,9 +4,6 @@ import CBamlBridge
 
 @testable import BamlBridge
 
-/// Tuples at the wire: a native Swift tuple (two or more slots) or a
-/// `Tuple1` (one slot) crosses through its slot's codec, with no conformance
-/// of its own, at any arity and inside any container or union.
 final class TupleCodecTests: XCTestCase {
     private typealias Pair = (Int, String)
 
@@ -50,8 +47,6 @@ final class TupleCodecTests: XCTestCase {
         return out
     }
 
-    /// The inbound wire value `value` encodes to: an outbound value of the
-    /// same shape, as the engine would send it back.
     private func echoed(_ value: BamlInboundValue) -> BamlOutboundValue {
         func echo(_ value: BamlBridge_Cffi_V1_InboundValue) -> BamlBridge_Cffi_V1_BamlOutboundValue {
             var out = BamlBridge_Cffi_V1_BamlOutboundValue()
@@ -82,9 +77,7 @@ final class TupleCodecTests: XCTestCase {
         return BamlOutboundValue(echo(value.raw))
     }
 
-    // MARK: - Native tuples
 
-    /// A tuple goes inbound as a list stating the tuple type, slots in order.
     func testTupleStatesItsSlotTypesInOrder() throws {
         let encoded = try pair._bamlEncode((1, "a")).raw
         guard case .tuple(let tuple)? = encoded.valueType.ty else {
@@ -97,12 +90,9 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertEqual(list.values.count, 2)
         XCTAssertEqual(list.values[0].intValue, 1)
         XCTAssertEqual(list.values[1].stringValue, "a")
-        // `(int, string)` and `(string, int)` are distinct types.
         XCTAssertNotEqual(pair.type, BamlSlots.tuple(BamlSlot<String>.own, BamlSlot<Int>.own).type)
     }
 
-    /// A slot states its declared type, not one read back off the Swift
-    /// value: `("a", int)` states the literal slot.
     func testTupleSlotStatesItsDeclaredType() throws {
         let slot = BamlSlots.tuple(BamlSlot<String>.literal("a"), BamlSlot<Int>.own)
         let encoded = try slot._bamlEncode(("a", 1)).raw
@@ -127,15 +117,12 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertThrowsError(try BamlSlots.tuple(BamlSlot<Int>.own)._bamlDecode(outbound([int(1), string("a")])))
     }
 
-    /// A list is never a tuple, whatever its length, and a tuple never a list.
     func testListAndTupleDoNotStandForEachOther() {
         XCTAssertThrowsError(try pair._bamlDecode(list([int(1), string("a")])))
         XCTAssertThrowsError(try BamlSlots.tuple(BamlSlot<Int>.own)._bamlDecode(list([int(1)])))
         XCTAssertThrowsError(try [Int]._bamlDecode(outbound([int(1), int(2)])))
     }
 
-    /// A tuple wider than any fixed family (Rust's and the old `BamlTuple12`
-    /// stopped at twelve) is a native tuple all the same.
     func testWideTupleRoundTrips() throws {
         let slot = BamlSlots.tuple(
             BamlSlot<Int>.own, BamlSlot<String>.own, BamlSlot<Int>.own, BamlSlot<String>.own,
@@ -154,10 +141,7 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertThrowsError(try slot._bamlDecode(outbound(Array(repeating: int(1), count: 13))))
     }
 
-    /// Tuples nest in tuples and in every container, each level carrying its
-    /// codec, and come back as they went.
     func testNestedTuplesAndContainersRoundTrip() throws {
-        // ((int, string), bool)
         let nested = BamlSlots.tuple(pair, BamlSlot<Bool>.own)
         let value = ((1, "a"), true)
         let encoded = try nested._bamlEncode(value)
@@ -168,20 +152,17 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertTrue(nested._bamlEqual(try nested._bamlDecode(echoed(encoded)), value))
         XCTAssertFalse(nested._bamlEqual(value, ((1, "a"), false)))
 
-        // (string, int)[]
         let pairs = BamlSlots.list(BamlSlots.tuple(BamlSlot<String>.own, BamlSlot<Int>.own))
         let xs = [("a", 1), ("b", 2)]
         XCTAssertTrue(pairs._bamlEqual(try pairs._bamlDecode(echoed(try pairs._bamlEncode(xs))), xs))
         XCTAssertTrue(pairs._bamlEqual(try pairs._bamlDecode(echoed(try pairs._bamlEncode([]))), []))
         XCTAssertFalse(pairs._bamlEqual(xs, [("a", 1)]))
 
-        // map<string, (int, bool)>
         let map = BamlSlots.map(BamlSlots.tuple(BamlSlot<Int>.own, BamlSlot<Bool>.own))
         let m = ["k": (1, true), "j": (2, false)]
         XCTAssertTrue(map._bamlEqual(try map._bamlDecode(echoed(try map._bamlEncode(m))), m))
         XCTAssertFalse(map._bamlEqual(m, ["k": (1, true), "j": (2, true)]))
 
-        // (int, string?)?
         let optional = BamlSlots.optional(
             BamlSlots.tuple(BamlSlot<Int>.own, BamlSlots.optional(BamlSlot<String>.own))
         )
@@ -190,7 +171,6 @@ final class TupleCodecTests: XCTestCase {
             XCTAssertTrue(optional._bamlEqual(decoded, value), "\(String(describing: value))")
         }
 
-        // ((int, string),): a `Tuple1` of a value with no conformance.
         let single = BamlSlots.tuple(pair)
         let wrapped = Tuple1((3, "c"))
         let roundTripped = try single._bamlDecode(echoed(try single._bamlEncode(wrapped)))
@@ -198,7 +178,6 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertEqual(roundTripped.item0.1, "c")
     }
 
-    /// A tuple level counts toward the nesting bound like a list's.
     func testTupleNestingCountsTowardTheWireBound() throws {
         func nested(_ depth: Int) -> () throws -> BamlInboundValue {
             var type = BamlTypeDescriptor.int
@@ -215,9 +194,6 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertThrowsError(try nested(BamlValueNesting.maxDepth + 1)())
     }
 
-    /// A tuple crosses by copy: the wire value is built from the Swift value's
-    /// slots, so changing the Swift tuple afterwards changes nothing sent,
-    /// and a decoded tuple is a Swift value of its own.
     func testTupleCrossesByCopy() throws {
         var value: Pair = (1, "a")
         let encoded = try pair._bamlEncode(value)
@@ -229,13 +205,11 @@ final class TupleCodecTests: XCTestCase {
         let received = outbound([int(1), string("a")])
         var decoded = try pair._bamlDecode(received)
         decoded.0 = 9
+        XCTAssertEqual(decoded.0, 9)
         XCTAssertEqual(try pair._bamlDecode(received).0, 1)
     }
 
-    // MARK: - `Tuple1`
 
-    /// `(A,)` is `Tuple1<A>`: a one-slot tuple, distinct from `A`, with a
-    /// mutable `item0` and `A`'s conformances.
     func testTuple1IsAOneSlotTuple() throws {
         let slot = BamlSlots.tuple(BamlSlot<String>.own)
         XCTAssertEqual(slot.type, .tuple([.string]))
@@ -261,10 +235,7 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertEqual(Tuple1(1).description, "(1,)")
     }
 
-    // MARK: - Unions
 
-    /// A union with a tuple arm crosses through its slot's codec: the case's
-    /// payload is the native tuple.
     func testUnionWithATupleArmRoundTrips() throws {
         let slot = BamlSlots.union(pair, BamlSlot<String>.own)
         let tuple: BamlUnion2<Pair, String> = .t0((1, "a"))
@@ -278,10 +249,6 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertEqual(try slot._bamlEncode(tuple).raw.valueType, pair.type.raw)
     }
 
-    /// Without a selection on the value, a union picks the tuple arm whose
-    /// type the tuple carries, ahead of the structural try-order: an
-    /// `(int, string?)` holding `(1, "a")` is that arm, not the earlier
-    /// `(int, string)` arm it also fits.
     func testUnionPicksTheTupleArmByCarriedType() throws {
         let slot = BamlSlots.union(
             pair,
@@ -293,21 +260,17 @@ final class TupleCodecTests: XCTestCase {
         }
         XCTAssertEqual(picked.0, 1)
         XCTAssertEqual(picked.1, "a")
-        // Without a carried type, the structural try-order still decides.
         guard case .t0 = try slot._bamlDecode(outbound([int(1), string("a")])) else {
             return XCTFail("expected the first arm that fits")
         }
         XCTAssertNil(outbound([int(1)]).carriedTupleType())
 
-        // A `Tuple1` arm conforms, so the union does too, and picks it the
-        // same way.
         typealias Singles = BamlUnion2<Tuple1<Int>, Tuple1<Int?>>
         let single = outbound([int(1)], carrying: .tuple([.optional(.int)]))
         XCTAssertEqual(try Singles._bamlDecode(single), .t1(Tuple1(1)))
         XCTAssertEqual(try Singles._bamlDecode(single, as: Singles._bamlSlot), .t1(Tuple1(1)))
     }
 
-    /// The engine's selected member picks the tuple arm.
     func testUnionPicksTheSelectedTupleArm() throws {
         let swapped = BamlSlots.tuple(BamlSlot<String>.own, BamlSlot<Int>.own)
         let slot = BamlSlots.union(pair, swapped)
@@ -323,10 +286,7 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertEqual(picked.0, "a")
     }
 
-    // MARK: - Thrown values
 
-    /// A host callable throws a tuple under the declared throws slot of its
-    /// Swift type; one of another Swift type fills no slot.
     func testThrownTupleFillsItsDeclaredSlot() throws {
         let thrown = BamlThrownSlot(pair)
         let encoded = try XCTUnwrap(try thrown.encode((7, "boom")))
@@ -334,12 +294,7 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertNil(try thrown.encode(("boom", 7)))
     }
 
-    // MARK: - Restating received tuples
 
-    /// Restating a received tuple (a thrown value a host forwards) sends it
-    /// back as a list stating the tuple type it carries, not one read off
-    /// its items: `(int | string, bool)` holding `(1, true)` keeps its union
-    /// slot.
     func testReceivedTupleIsRestatedWithItsCarriedType() throws {
         let carried = BamlTypeDescriptor.tuple([.union([.int, .string]), .bool])
         let restated = try restate(outbound([int(1), bool(true)], carrying: carried).raw)
@@ -349,8 +304,6 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertEqual(restated.listValue.values[1].boolValue, true)
     }
 
-    /// A tuple without its type, or whose type does not match its items,
-    /// cannot be restated: no slot is ever stated `unknown`.
     func testReceivedTupleWithoutItsTypeIsRefused() {
         XCTAssertThrowsError(try restate(outbound([int(1), string("a")]).raw))
         XCTAssertThrowsError(
@@ -361,8 +314,6 @@ final class TupleCodecTests: XCTestCase {
         )
     }
 
-    /// A carried type naming a runtime declaration by its row cannot be
-    /// stated back.
     func testReceivedTupleNamingALiveDeclarationIsRefused() {
         var cls = BamlBridge_Cffi_V1_BamlTyClass()
         cls.live = 7
@@ -372,7 +323,6 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertThrowsError(try restate(outbound([int(1)], carrying: carried).raw))
     }
 
-    /// Type values nested in a tuple are released with the rest of a value.
     func testLiveKeysUnderATupleTypeAreFound() {
         var cls = BamlBridge_Cffi_V1_BamlTyClass()
         cls.live = 7
@@ -385,11 +335,7 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertEqual(liveKeys(ty), [7, 7])
     }
 
-    // MARK: - Ownership after a partial failure
 
-    /// A tuple whose later slot fails to decode decodes each earlier slot
-    /// once and keeps nothing: what they decoded is released with the
-    /// failure.
     func testTupleDecodeFailingPartWayDecodesEachSlotOnceAndKeepsNothing() {
         Tracked.reset()
         let slot = BamlSlots.tuple(Tracked.slot, Tracked.slot, BamlSlot<Int>.own)
@@ -400,8 +346,6 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertEqual(Tracked.live, 0)
     }
 
-    /// A fresh engine handle key no Swift value owns, as a wire slot: a
-    /// clone of a media handle the engine minted.
     private func unownedHandle() throws -> (key: UInt64, value: BamlBridge_Cffi_V1_BamlOutboundValue) {
         let media = try BamlMedia.fromBase64(.image, "aGk=", mimeType: "image/png")
         var key: UInt64 = 0
@@ -414,7 +358,6 @@ final class TupleCodecTests: XCTestCase {
         return (key, value)
     }
 
-    /// Whether the engine still holds `key`: only a live key clones.
     private func isLive(_ key: UInt64) -> Bool {
         var clone: UInt64 = 0
         guard BamlApi.handleClone(key, &clone) == BAML_CFFI_STATUS_OK.rawValue else { return false }
@@ -426,9 +369,6 @@ final class TupleCodecTests: XCTestCase {
         BamlSlot(BamlSlotNode(type: .rustType, shape: .leaf))
     }
 
-    /// A tuple whose slot fails to decode releases the engine handles of the
-    /// slots after it, nested ones included: no value adopted them, and the
-    /// wire value that carried them has no destructor.
     func testTupleDecodeFailureReleasesTheHandlesOfLaterSlots() throws {
         let later = try unownedHandle()
         let nested = try unownedHandle()
@@ -441,7 +381,6 @@ final class TupleCodecTests: XCTestCase {
         XCTAssertFalse(isLive(later.key))
         XCTAssertFalse(isLive(nested.key))
 
-        // A one-slot tuple's sole slot answers for its own handle.
         let single = try unownedHandle()
         XCTAssertThrowsError(
             try BamlSlots.tuple(BamlSlot<Int>.own)._bamlDecode(outbound([single.value]))
@@ -449,9 +388,6 @@ final class TupleCodecTests: XCTestCase {
         _ = BamlApi.handleRelease(single.key)
     }
 
-    /// A slot decoded before the failing one keeps its own handle, given back
-    /// once when the decoded value is dropped; a successful decode keeps
-    /// every slot's handle.
     func testTupleDecodeKeepsTheHandlesItsSlotsAdopted() throws {
         let earlier = try unownedHandle()
         XCTAssertThrowsError(
@@ -465,8 +401,6 @@ final class TupleCodecTests: XCTestCase {
         withExtendedLifetime(decoded) {}
     }
 
-    /// A tuple whose later slot fails to encode encodes each earlier slot
-    /// once and surfaces that slot's own error.
     func testTupleEncodeFailingPartWayEncodesEachSlotOnce() {
         Probe.encoded = 0
         let slot = BamlSlots.tuple(BamlSlot<Probe>.own, BamlSlot<Probe>.own, BamlSlot<Failing>.own)
@@ -477,7 +411,6 @@ final class TupleCodecTests: XCTestCase {
     }
 }
 
-/// A decoded value that counts its decodes and its live instances.
 private final class Tracked: BamlDecodable {
     nonisolated(unsafe) static var decoded = 0
     nonisolated(unsafe) static var live = 0
@@ -499,7 +432,6 @@ private final class Tracked: BamlDecodable {
     }
 }
 
-/// A leaf that counts its encodes.
 private struct Probe: BamlLeafEncodable {
     nonisolated(unsafe) static var encoded = 0
 
@@ -513,7 +445,6 @@ extension BamlSlot where Value == Probe {
     fileprivate static var own: BamlSlot<Probe> { ._leaf(.int) }
 }
 
-/// A leaf that cannot be encoded.
 private struct Failing: BamlLeafEncodable {
     struct Failure: Error {}
 

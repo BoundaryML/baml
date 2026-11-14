@@ -7,10 +7,6 @@ import Foundation
 /// ordinary method on this proxy; no synthetic `$parse`, `$render_prompt`,
 /// or `$build_request` function is involved. Streaming remains a separate
 /// `Fn_stream(...)` projection because it carries the partial type.
-///
-/// The final output decodes as the spec's declared final type: the spec keeps
-/// the slot it was decoded under, so a final type with no `BamlDecodable`
-/// conformance (a native tuple) decodes too.
 public final class BamlFunctionSpec<Final>: @unchecked Sendable {
     private let handle: BamlHandle
     private let decodeFinal: (BamlOutboundValue) throws -> Final
@@ -120,9 +116,6 @@ extension BamlFunctionSpec: BamlTyped where Final: BamlTyped {
 }
 
 extension BamlSlots {
-    /// The slot of the function spec class `fqn` with final type `final`. A
-    /// spec rides as its handle, so the slot states only its type, and
-    /// decodes a spec whose final output decodes under `final`.
     public static func functionSpec<Final>(
         _ fqn: String,
         _ final: BamlSlot<Final>
@@ -138,8 +131,6 @@ extension BamlSlots {
 }
 
 extension BamlFunctionSpec: BamlDecodable {
-    /// A spec decoded with no declared slot decodes its final output through
-    /// its own `BamlDecodable` conformance.
     public static func _bamlDecode(
         _ value: BamlOutboundValue
     ) throws -> BamlFunctionSpec<Final> {

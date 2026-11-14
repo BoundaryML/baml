@@ -490,9 +490,6 @@ impl EqualsDriver {
             }
             (Object::Array(_), _) => Cmp::NotEqual,
 
-            // Elementwise at equal arity, like lists ignoring the carried
-            // slot types. Each slot is loaded like an instance field; there is
-            // no tuple lock. A tuple never equals a list (`(1, 2) != [1, 2]`).
             (Object::Tuple(x), Object::Tuple(y)) => {
                 if x.len() != y.len() {
                     return Cmp::NotEqual;
@@ -832,40 +829,16 @@ pub(super) fn ordering_from_value(vm: &BexVm, value: Value) -> Option<std::cmp::
     }
 }
 
-// ── Compare (structural tuple default) ─────────────────────────────────────
-
-/// One pending step of a [`CompareDriver`] walk.
 enum CompareStep {
-    /// Corresponding slots still to be ordered.
     Pair(Value, Value),
-    /// A decided ordering, consulted once every pair pushed before it is
-    /// `Equal` (a tuple's arity tie-break; equal arities push `Equal`).
     Decided(std::cmp::Ordering),
 }
 
-/// The structural `Compare.cmp` for tuples: corresponding slots
-/// lexicographically, left to right, returning the first non-`Equal`
-/// ordering. A nested tuple's slots are spliced in place, which orders it
-/// lexicographically at its position. Primitive slots are ordered natively,
-/// exactly as their `comparison.baml` implementations order them; every other
-/// slot dispatches its own `Compare.cmp` (a custom implementation), yielding
-/// back into the VM.
-///
-/// Tuples are mutable, so one can reach itself (`t.0 = t` when the slot type
-/// admits it). The walk keeps the `(left, right)` tuple pairs it has descended
-/// in `visited`, as the `Equals` driver does, and a pair reached again orders
-/// `Equal`: either it is still being compared higher up the walk (a cyclic
-/// back-edge), or it already finished, which it can only have done as `Equal`
-/// since any other result ends the walk. So `Compare` and `Equals` agree on
-/// cyclic values.
 struct CompareDriver {
-    /// Pending steps, the next on top.
     stack: Vec<CompareStep>,
-    /// Tuple pairs already descended, keyed by `(left, right)` heap pointers.
     visited: HashSet<(HeapPtr, HeapPtr)>,
 }
 
-/// What ordering one pair of slots needs.
 enum SlotOrder {
     Decided(std::cmp::Ordering),
     Tuple(Vec<Value>, Vec<Value>),
@@ -916,7 +889,6 @@ impl CompareDriver {
     }
 }
 
-/// Order one pair of corresponding slots, or name the `cmp` that does.
 fn order_slots(
     vm: &BexVm,
     a: Value,
@@ -952,8 +924,6 @@ fn order_slots(
         }
         _ => {}
     }
-    // Any other slot orders through its own implementation, resolved from the
-    // receiver's concrete runtime type.
     let compare = vm
         .lang_head(crate::lang_items::BAML_OPS_COMPARE)
         .ok_or_else(|| unresolved_op(crate::lang_items::BAML_OPS_COMPARE, "cmp"))?;
@@ -973,15 +943,12 @@ fn order_slots(
     })
 }
 
-/// The `baml.ops.Ordering` variant for `ordering`, as the native's result.
 fn ordering_result(vm: &mut BexVm, ordering: std::cmp::Ordering) -> NativeCallResult {
     let name = match ordering {
         std::cmp::Ordering::Less => "Less",
         std::cmp::Ordering::Equal => "Equal",
         std::cmp::Ordering::Greater => "Greater",
     };
-    // `baml.ops.Ordering` is the stdlib's own; a miss is the stdlib and the
-    // runtime out of step.
     let enm = vm.lang_object(crate::lang_items::BAML_OPS_ORDERING);
     let index = match vm.get_object(enm) {
         Object::Enum(e) => e.variants.iter().position(|v| v.name == name),
@@ -999,9 +966,6 @@ impl RootHaver for CompareDriver {
                 b.visit_roots(visitor);
             }
         }
-        // The cycle set is keyed by the pointers themselves: forward each pair
-        // and rebuild the set, so a pair reached after a collection still
-        // matches.
         let mut pairs: Vec<_> = self.visited.drain().collect();
         for pair in &mut pairs {
             pair.visit_roots(visitor);
@@ -1015,8 +979,6 @@ impl Continuation for CompareDriver {
         match ordering_from_value(vm, value) {
             Some(std::cmp::Ordering::Equal) => self.drive(vm),
             Some(ordering) => ordering_result(vm, ordering),
-            // `cmp` is typed `-> Ordering throws never`, so anything else is a
-            // compiler/VM invariant break.
             None => NativeCallResult::from(VmInternalError::TypeError {
                 expected: Type::Object(bex_vm_types::ObjectType::Variant),
                 got: vm.type_of(&value),

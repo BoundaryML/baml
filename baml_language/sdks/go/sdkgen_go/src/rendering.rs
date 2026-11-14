@@ -81,8 +81,6 @@ pub(crate) struct UnionCodecIdent {
     index: usize,
 }
 
-/// A generator-owned named-tuple codec name. Stable indexes come from the
-/// sorted tuple identities a package's codecs register.
 pub(crate) struct TupleCodecIdent {
     direction: UnionCodecDirection,
     index: usize,
@@ -104,8 +102,6 @@ impl fmt::Display for TupleCodecIdent {
     }
 }
 
-/// The field of a named tuple struct holding slot `index`, numbered like
-/// BAML's `t.0`.
 pub(crate) struct TupleSlotField {
     index: usize,
 }
@@ -122,8 +118,6 @@ impl fmt::Display for TupleSlotField {
     }
 }
 
-/// The local holding slot `index` of a tuple-valued result that a generated
-/// function returns as separate results.
 pub(crate) struct TupleSlotLocal {
     index: usize,
 }

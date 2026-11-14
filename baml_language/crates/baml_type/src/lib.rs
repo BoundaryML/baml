@@ -265,8 +265,6 @@ impl<N: Clone + PartialEq> Ty<N> {
             | Ty::Never
             | Ty::TypeVar(..)
             | Ty::AssociatedTypeProjection { .. } => true,
-            // Tuples: no interface implementations in v1 (structural, no
-            // impl lookup for them yet).
             Ty::Tuple(..)
             | Ty::Literal(..)
             | Ty::EnumVariant(..)
@@ -284,7 +282,6 @@ impl<N: Clone + PartialEq> Ty<N> {
     /// Whether this is a **concrete** type per the TYPE_SYSTEM.md taxonomy: a type
     /// every value of which has exactly one run-time representation that method
     /// dispatch can key on. The concrete category is the primitives, `Media`, classes,
-    /// enums, the containers `T[]` / `map<K, V>` / tuples, function types, `Future`, the
     /// builtin handles `Type` / `Resource` /
     /// `PromptAst`, and the native `RustType`.
     ///
@@ -324,10 +321,6 @@ impl<N: Clone + PartialEq> Ty<N> {
             | Ty::Enum(..)
             | Ty::List(..)
             | Ty::Map { .. }
-            // A tuple carries its slot types, as a list carries its element
-            // type, so `(int | string, int)` is concrete just as
-            // `(int | string)[]` is: its values are tuples of exactly that
-            // instantiation, whatever elements they hold.
             | Ty::Tuple(..)
             | Ty::Function { .. }
             | Ty::Future(..)
@@ -509,7 +502,6 @@ impl<N: Clone + PartialEq> Ty<N> {
         Ty::List(Box::new(inner))
     }
 
-    /// `(A, B, ...)` (tuple) with default attributes.
     pub fn tuple(elements: impl IntoIterator<Item = Ty<N>>) -> Self {
         Ty::Tuple(elements.into_iter().collect())
     }
@@ -752,9 +744,6 @@ impl<N: Clone + HeadDisplay> LoweringTy<N> {
     }
 }
 
-/// `(a, b)`, or `(a,)` for a 1-tuple, from already-rendered elements. A tuple
-/// closes its own parentheses, so it never needs extra grouping as a postfix
-/// base (`(int, string)[]`) or union member.
 pub fn render_tuple(elements: &[String]) -> String {
     if elements.len() == 1 {
         format!("({},)", elements[0])
@@ -1350,8 +1339,6 @@ mod tests {
                 key: boxed(ty_string()),
                 value: boxed(ty_int()),
             },
-            // A tuple carries its slot types, so literal and union slots stay
-            // concrete, as a list's element type does.
             Ty::Tuple(Box::new([ty_int(), ty_string()])),
             Ty::Tuple(Box::new([
                 Ty::union([ty_int(), ty_string()]),

@@ -493,8 +493,6 @@ mod schema {
                     JsonStatus::Empty => json!({ "type": "array", "maxItems": 0 }),
                     JsonStatus::NoJson => unreachable!("a list of `NoJson` is `NoJson`"),
                 }),
-                // A fixed-length array: one schema per position, nothing after.
-                // A `Json` tuple has only `Json` elements.
                 SapTy::Tuple(elements) => {
                     let prefix_items = elements
                         .iter()

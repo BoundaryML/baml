@@ -28,7 +28,7 @@ function csr_generic_spread() -> bool {
         ...csr_defaults<int>(1, (value: int) -> int { value + 1 }),
         value: 41,
     };
-    task.transform(task.value) == 42 && task.events == ["created"]
+    (task.transform)(task.value) == 42 && task.events == ["created"]
 }
 
 test "generic_spread_preserves_callable_and_last_field" {
@@ -84,7 +84,7 @@ function csr_spread_with_omitted_defaults() -> bool {
         budget: 1,
     };
     options.budget == 1 &&
-        options.dispatch([1]).length() == 1 &&
+        (options.dispatch)([1]).length() == 1 &&
         options.registry == null &&
         options.hook == null
 }

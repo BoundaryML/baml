@@ -1098,8 +1098,6 @@ impl RenderContext<'_> {
     }
 }
 
-/// The type the wire states for `ty`: non-recursive aliases resolved and
-/// unions normalized, recursively. Tuple slots keep their positions.
 fn wire_type_in(model: &CodegenModel, ty: &Ty) -> Ty {
     match ty {
         Ty::TypeAlias(name) => wire_type_in(model, model_alias_target(model, name)),
@@ -1149,8 +1147,6 @@ fn model_alias_target<'a>(model: &'a CodegenModel, name: &Name) -> &'a Ty {
     &alias.resolves_to
 }
 
-/// Whether `ty` projects to a C# value type, which nullability wraps in
-/// `System.Nullable<T>` rather than annotating.
 fn is_value_projection_in(model: &CodegenModel, ty: &Ty) -> bool {
     match ty {
         Ty::TypeAlias(name) => is_value_projection_in(model, model_alias_target(model, name)),
@@ -1164,7 +1160,6 @@ fn is_value_projection_in(model: &CodegenModel, ty: &Ty) -> bool {
         Ty::Literal(Literal::String(_), ..) => false,
         Ty::Literal(..) => true,
         Ty::Union(members) => !members.iter().any(|member| matches!(member, Ty::Null)),
-        // A tuple is a native `System.ValueTuple`.
         Ty::Tuple(..) => true,
         Ty::String
         | Ty::Null
@@ -1179,15 +1174,8 @@ fn is_value_projection_in(model: &CodegenModel, ty: &Ty) -> bool {
     }
 }
 
-/// The most slots a native C# tuple holds without nesting a `TRest` tuple.
-/// A wider BAML tuple is an unsupported type.
 const NATIVE_TUPLE_MAX_ARITY: usize = 7;
 
-/// A tuple's C# type: a native tuple, `(long, string)`, or
-/// `System.ValueTuple<long>` for one slot. Each slot projects as its type
-/// does anywhere else, so slots whose BAML types erase in C# erase here too:
-/// `("a", int)` and `(string, int)` are both `(string, long)`, and the codec
-/// of the position, not the CLR type, states which tuple crosses.
 fn tuple_source(items: &[Ty], project: impl FnMut(&Ty) -> String) -> String {
     let slots = items.iter().map(project).collect::<Vec<_>>();
     if let [single] = slots.as_slice() {
@@ -2431,8 +2419,6 @@ fn collect_type_closure(
 ) -> Result<(), CSharpGenerationError> {
     require_supported_type(ty, model, "reachable type graph")?;
     if contains_type_var(ty) {
-        // A tuple over a type variable is built from its slots' tokens, so
-        // the slots without one are registered types.
         if let Ty::Tuple(items) = ty {
             for item in items {
                 collect_type_closure(item, model, types)?;
@@ -2830,9 +2816,6 @@ fn render_generic_type_token(
     )
 }
 
-/// Where a type token is emitted: the generic parameters in scope, the
-/// registry expression, and how a type variable, a resolved type's position
-/// and a registered (type-variable-free) type are spelled there.
 struct TokenScope<'s, 'a> {
     render: &'s RenderContext<'a>,
     parameters: &'s [GenericParamSpec<'a>],
@@ -2842,11 +2825,6 @@ struct TokenScope<'s, 'a> {
     registered: &'s dyn Fn(&Ty) -> String,
 }
 
-/// The `BamlGeneratedType<…>` token of `ty` in a generic scope. A type
-/// variable is its bound local and a type without one its registered token.
-/// A tuple over a type variable is built from its slots' tokens
-/// ([`render_slot_tuple_token`]); any other type over one resolves from its
-/// CLR type.
 fn render_type_token(scope: &TokenScope<'_, '_>, ty: &Ty, depth: usize) -> String {
     match ty {
         Ty::TypeVar(..) => (scope.type_var)(ty),
@@ -2863,11 +2841,6 @@ fn render_type_token(scope: &TokenScope<'_, '_>, ty: &Ty, depth: usize) -> Strin
     }
 }
 
-/// The token of a tuple over a type variable, stated as the tuple of its
-/// slots' tokens once the call binds them (`Registry.ResolveTupleType`). The
-/// slot tokens are bound once, as the arguments of a `System.Func` whose
-/// body resolves the tuple and converts between its C# value and one carrier
-/// per slot.
 fn render_slot_tuple_token(
     scope: &TokenScope<'_, '_>,
     ty: &Ty,
@@ -4740,10 +4713,6 @@ fn render_union_codec(render: &RenderContext<'_>, ty: &Ty, members: &[Ty]) -> (S
     (encode, decode)
 }
 
-/// A tuple's codec. Both directions go through the tuple carrier: encoding
-/// states the tuple's own type (inbound tuples cross as a list stating a
-/// tuple type), and decoding checks the arity before each slot decodes
-/// through its own slot codec.
 fn render_tuple_codec(render: &RenderContext<'_>, ty: &Ty, items: &[Ty]) -> (String, String) {
     let source = render.type_source(ty);
     let metadata = byte_array_source(&render.wire_metadata(ty));
@@ -6878,13 +6847,10 @@ mod tests {
         );
     }
 
-    /// The generated sources of one free function `Echo(value: ty) -> ty`.
     fn echo_function_source(ty: Ty) -> String {
         echo_function_generation(vec![], ty.clone(), ty).expect("tuples should generate")
     }
 
-    /// Generate one free function
-    /// `Echo<generic_params…>(value: argument) -> return_type`.
     fn echo_function_generation(
         generic_params: Vec<BaseName>,
         argument: Ty,
@@ -6992,7 +6958,6 @@ mod tests {
                 "{error}"
             );
         }
-        // A generic tuple too: it binds a native tuple over its slots.
         let parameter_t = BaseName::new("T");
         let wide = Ty::Tuple(
             std::iter::once(Ty::TypeVar(ParamTy::new(0, parameter_t.clone())))
@@ -7008,13 +6973,10 @@ mod tests {
 
     #[test]
     fn erasing_slots_project_as_they_do_anywhere_else() {
-        // A literal slot erases to its base type, a nullable reference to its
-        // reference type: each is still a native tuple.
         let literal = Ty::Tuple(Box::new([string_literal("draft"), Ty::Int]));
         let source = echo_function_source(literal);
         assert!(source.contains("(string, long) Echo("), "{source}");
         assert!(!source.contains("record Tuple"), "{source}");
-        // The codec states the declared tuple, so the literal slot is checked.
         assert!(source.contains(r#"\"draft\""#), "{source}");
         let nullable = Ty::Tuple(Box::new([
             Ty::Union(Box::new([Ty::String, Ty::Null])),
@@ -7027,7 +6989,6 @@ mod tests {
             Ty::String,
         ])));
         assert!(source.contains("(long?, string) Echo("), "{source}");
-        // Two tuples erasing to one C# type keep one codec each.
         let source = echo_function_generation(
             vec![],
             Ty::Tuple(Box::new([string_literal("a"), Ty::Int])),
@@ -7079,9 +7040,6 @@ mod tests {
 
     #[test]
     fn generic_tuples_with_erasing_slots_stay_native() {
-        // `(T, "a")` is the native `(T, string)`, built from its slots' tokens
-        // once the call binds `T`: the literal slot's token is its registered
-        // type, so the tuple still crosses as `(T, "a")`.
         let parameter_t = BaseName::new("T");
         let type_t = Ty::TypeVar(ParamTy::new(0, parameter_t.clone()));
         let tuple = Ty::Tuple(Box::new([type_t.clone(), string_literal("a")]));
@@ -7100,7 +7058,6 @@ mod tests {
             source.contains(".Encode<string>(bamlTupleSlot0_1, bamlTupleValue0.Item2)"),
             "{source}"
         );
-        // Nullable and union slots project as they do anywhere else.
         let tuple = Ty::Tuple(Box::new([
             type_t.clone(),
             Ty::Union(Box::new([Ty::String, Ty::Null])),
@@ -7112,7 +7069,6 @@ mod tests {
             source.contains("(T, string?, global::Baml.BamlUnion<long, string>) @value"),
             "{source}"
         );
-        // A tuple nested in a generic tuple is native in either direction.
         let inner = Ty::Tuple(Box::new([type_t.clone(), string_literal("a")]));
         let outer = Ty::Tuple(Box::new([inner, Ty::Int]));
         let source = echo_function_generation(vec![parameter_t], outer, type_t)
@@ -7123,8 +7079,6 @@ mod tests {
 
     #[test]
     fn generic_containers_of_erasing_tuples_follow_the_container_rules() {
-        // A list over a type variable resolves from its CLR type, as it does
-        // for any other element whose slots erase.
         let model = CodegenModel {
             symbols: HashMap::new(),
             callables: HashMap::new(),
@@ -7139,8 +7093,6 @@ mod tests {
 
     #[test]
     fn generic_class_properties_hold_native_tuples_with_erasing_slots() {
-        // The generic class's property and a closed instantiation's codec
-        // both spell the tuple natively, so they agree.
         let parameter_t = BaseName::new("T");
         let class_name = Name::new(
             BaseName::new("user"),

@@ -457,9 +457,6 @@ impl Builder {
             original_len,
         }
     }
-    /// A tuple carrying `element_types`, of what `convert` makes of each
-    /// element of `source`. A value limit can cut the elements, never the
-    /// slot types: there is one for every slot of the original tuple.
     pub fn tuple<T>(
         &mut self,
         element_types: impl IntoIterator<Item = OwnedType>,
@@ -472,8 +469,6 @@ impl Builder {
         });
         self.described_tuple(element_types, source, convert)
     }
-    /// [`Self::tuple`] for a caller that knows, of each slot type, whether a
-    /// head names a definition (as [`Leaves::described`]).
     pub fn described_tuple<T>(
         &mut self,
         element_types: impl IntoIterator<Item = (OwnedType, bool)>,

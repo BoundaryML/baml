@@ -515,8 +515,6 @@ fn collect<N: Head>(
             collect(fr, ar, variance, vars, opts, ctx);
             collect(fth, ath, variance, vars, opts, ctx);
         }
-        // Tuples are invariant elementwise (their slots are writable), like
-        // class arguments.
         (Ty::Tuple(f_elems), Ty::Tuple(a_elems)) if f_elems.len() == a_elems.len() => {
             let inv = variance.compose(Variance::Invariant);
             for (ft, at) in f_elems.iter().zip(a_elems.iter()) {
@@ -957,8 +955,6 @@ mod tests {
 
     #[test]
     fn tuple_slots_are_invariant_positions() {
-        // `(T, T)` vs `(int, string)`: each slot is an equality constraint, so
-        // `T` cannot be both, where covariant slots would join them.
         let tuple = |a, b| Ty::Tuple(Box::new([a, b]));
         let mut cons = InferenceConstraints::new();
         cons.record(&tuple(tv("T"), tv("T")), &tuple(int(), string()), &NoFacts);

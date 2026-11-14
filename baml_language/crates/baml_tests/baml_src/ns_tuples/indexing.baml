@@ -45,3 +45,12 @@ test "tuple_dot_access" {
     assert.equal(tpi_narrow_union((1, "a")), "a")
     assert.equal(tpi_fields_from_tuple((1, "a")), TpiFields { first: 1, second: "a" })
 }
+
+class TpiCallback { f: (int) -> int throws never }
+function tpi_function_slot(t: ((int) -> int throws never,)) -> int { (t.0)(3) }
+function tpi_function_field(value: TpiCallback) -> int { (value.f)(3) }
+function tpi_increment(x: int) -> int { x + 1 }
+test "tuple_function_slot_call" {
+    assert.equal(tpi_function_slot((tpi_increment,)), 4)
+    assert.equal(tpi_function_field(TpiCallback { f: tpi_increment }), 4)
+}

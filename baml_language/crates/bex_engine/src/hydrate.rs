@@ -473,8 +473,6 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         .alloc_array(element, values),
                 )
             }
-            // A tuple carries its stated slot types, as a list carries its
-            // element type: each item must be a member of its slot.
             BexExternalValue::Tuple {
                 element_types,
                 items,

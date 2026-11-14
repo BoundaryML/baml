@@ -334,8 +334,6 @@ func equalBAMLType(left, right *cffi.BamlTy, allowTopLevelOptional bool) bool {
 		return ok && leftValue.Map != nil && rightValue.Map != nil &&
 			equalBAMLType(leftValue.Map.Key, rightValue.Map.Key, false) && equalBAMLType(leftValue.Map.Value, rightValue.Map.Value, false)
 	case *cffi.BamlTy_Tuple:
-		// Slots compare in order; a union inside a slot still compares
-		// independently of its member order.
 		rightValue, ok := right.Ty.(*cffi.BamlTy_Tuple)
 		if !ok || leftValue.Tuple == nil || rightValue.Tuple == nil || len(leftValue.Tuple.Items) != len(rightValue.Tuple.Items) {
 			return false

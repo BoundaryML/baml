@@ -480,17 +480,9 @@ class Array<T> {
     /// Returns `true` if the array contains an element equal to `item`. Scans
     /// left to right, stopping at the first match; `O(n)`.
     ///
-    /// Equality is the `==` operator: deep and structural for arrays, maps,
-    /// tuples and class instances, honoring custom `baml.ops.Equals`
-    /// implementations at every depth, and terminating on cyclic data. `float`
-    /// equality is reflexive, so a `NaN` needle finds a `NaN` element.
     ///
     /// # Examples
     /// ```baml
-    /// [1, 2, 3].includes(2)       // true
-    /// ["a", "b"].includes("b")    // true
-    /// [[1]].includes([1])         // true
-    /// [(1, 2)].includes((1, 2))   // true
     /// ```
     function includes(self, item: T) -> bool throws never {
         for (let element in self) {
@@ -504,8 +496,6 @@ class Array<T> {
     /// Returns the index of the first element equal to `item`, or `null` if
     /// there is none. `O(n)`.
     ///
-    /// Equality is the `==` operator, as described on `includes`.
-    /// JavaScript's `indexOf`, but a miss is `null` rather than `-1`.
     ///
     /// # Examples
     /// ```baml
@@ -526,8 +516,6 @@ class Array<T> {
     /// Returns the index of the last element equal to `item`, or `null` if
     /// there is none.
     ///
-    /// Equality is the `==` operator, as described on `includes`. Scans right
-    /// to left, so it stops early on a match near the end but is `O(n)` in the
     /// worst case.
     ///
     /// # Examples
@@ -538,7 +526,6 @@ class Array<T> {
     function last_index_of(self, item: T) -> int? throws never {
         let index = self.length() - 1;
         while (index >= 0) {
-            // A custom `eq` may shrink `self` mid-scan.
             if (index < self.length() && self[index] == item) {
                 return index;
             }

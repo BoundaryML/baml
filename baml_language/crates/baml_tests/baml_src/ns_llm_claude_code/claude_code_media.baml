@@ -27,7 +27,7 @@ function CcListen(clip: audio) -> string {
 }
 
 function cc_render(spec: ai.FunctionSpec<string>) -> ai.Prompt {
-    spec.prompt_template(ai.internal.build_output_format(spec.output_type()))
+    (spec.prompt_template)(ai.internal.build_output_format(spec.output_type()))
 }
 
 // The stdin message, parsed.

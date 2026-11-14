@@ -3,15 +3,12 @@ using Baml;
 using Baml.Generated;
 using CsharpTuples;
 
-// `dotnet run -- <case>` runs one tuple stream case (see RunStreamCaseAsync);
-// with no argument the boundary suite below runs.
 if (args.Length > 0)
 {
     await RunStreamCaseAsync(args[0]);
     return;
 }
 
-// Native tuples: sync and async calls, slot order, singletons, nesting.
 Require(Functions.EchoPair((1L, "one")) == (1L, "one"), "sync native pair");
 Require(await Functions.EchoPairAsync((2L, "two")) == (2L, "two"), "async native pair");
 Require(Functions.SwapPair((3L, "three")) == ("three", 3L), "tuple slot order");
@@ -21,8 +18,6 @@ Require(
     Functions.EchoNested(((5L, "five"), true)) == ((5L, "five"), true),
     "nested native tuple");
 
-// The widest native tuple, and slots that erase in C#: still native tuples,
-// checked against the declared tuple.
 var seven = (1L, 2L, 3L, 4L, 5L, 6L, 7L);
 Require(Functions.EchoSeven(seven) == seven, "seven-slot native tuple");
 Require(await Functions.EchoSevenAsync(seven) == seven, "async seven-slot native tuple");
@@ -32,7 +27,6 @@ ExpectAny(() => Functions.EchoLiteral(("wrong", 9L)), "wrong literal slot");
 Require(optional.Item1 is null && optional.Item2 == 10L, "nullable-reference slot");
 Require(Functions.EchoOptionalSlot(("ten", 10L)) == ("ten", 10L), "a present nullable slot");
 
-// Nested in classes, lists, optionals, maps, and methods.
 var holder = new TupleHolder
 {
     Pair = (11L, "eleven"),
@@ -62,7 +56,6 @@ IReadOnlyDictionary<string, (long, string)> map = Functions.EchoTupleMap(
         new Dictionary<string, (long, string)> { ["k"] = (13L, "thirteen") }));
 Require(map["k"] == (13L, "thirteen"), "tuple map values");
 
-// Unions of tuples and tuples of unions stay distinct.
 BamlUnion<(long, bool), (string, bool)> unionResult = Functions.EchoUnionOfTuples(
     BamlUnion<(long, bool), (string, bool)>.FromT1(("s", true)));
 Require(unionResult.IsT1 && unionResult.AsT1 == ("s", true), "union of tuples");
@@ -73,7 +66,6 @@ Require(unionResult.IsT0 && unionResult.AsT0 == (14L, false), "union of tuples, 
     (BamlUnion<long, string>.FromT1("x"), false));
 Require(product.Item1.IsT1 && product.Item1.AsT1 == "x" && !product.Item2, "tuple of unions");
 
-// Host callback arguments and results.
 var callbackSeen = new List<(long, string)>();
 (string, long) swapped = Functions.CallPairCallback(
     BamlCallback.FromSync<(long, string), (string, long)>(pair =>
@@ -94,8 +86,6 @@ swapped = await Functions.CallPairCallbackAsync(
     (16L, "sixteen"));
 Require(swapped == ("sixteen", 16L), "async host callback tuple");
 
-// Dynamic values: an engine tuple carries its type, so it decodes as the C#
-// tuple registered for that identity, or falls back to its slots.
 BamlValue dynamic = Functions.MakeUnknownTuple();
 Require(dynamic.Kind == BamlValueKind.Tuple, "dynamic tuple kind");
 Require(
@@ -135,7 +125,6 @@ Require(
         == (18L, "x"),
     "a plain list takes a requested tuple shape");
 
-// Thrown values.
 BamlErrorException thrown = Expect<BamlErrorException>(
     () => Functions.ThrowPair((19L, "nineteen")),
     "a thrown tuple");
@@ -148,8 +137,6 @@ Require(
     Functions.EchoUnknown(thrown.ThrownValue).As<(long, string)>() == (19L, "nineteen"),
     "a thrown tuple is restated with its carried type");
 
-// Carried identity: the declared slot types pick the C# tuple, not the
-// slot values. `(int | string, bool)` holding `(1, true)` stays that tuple.
 BamlValue unionSlot = Functions.MakeUnionSlotTuple();
 (BamlUnion<long, string>, bool) unionSlotTuple =
     unionSlot.As<(BamlUnion<long, string>, bool)>();
@@ -161,10 +148,6 @@ Require(
     Functions.EchoUnknown(unionSlot).As<(BamlUnion<long, string>, bool)>() == unionSlotTuple,
     "a union-slot tuple is restated with its carried type");
 
-// Erasing slots follow the rules for erased values in open positions: a
-// literal slot has no context-free C# type, so only its slots are read; a
-// nullable-reference slot shares its C# tuple with the non-null one, whose
-// statement a host value takes.
 BamlValue literalTuple = Functions.MakeLiteralTuple();
 Require(!literalTuple.TryGet(out (string, long) _), "a literal-slot tuple has no context-free C# tuple");
 Require(
@@ -181,8 +164,6 @@ Require(
         && !nonNullStated.Type.Arguments[0].IsNullable,
     "a host tuple states the non-null tuple of its C# type");
 
-// Eight slots: no C# tuple. The slots are still readable, and asking for a
-// C# tuple fails clearly.
 BamlValue wideTuple = Functions.MakeWideTuple();
 Require(
     wideTuple.TryGetTupleItems(out IReadOnlyList<BamlValue>? wideItems) && wideItems.Count == 8,
@@ -194,12 +175,10 @@ Require(
     wideError.Message.Contains("8 slots", StringComparison.Ordinal),
     "the wide tuple failure names its arity");
 
-// Generic substitutions are part of the carried identity.
 Require(
     Functions.MakeGenericPair().As<(long, long)>() == (21L, 21L),
     "a generic tuple carries its substituted slot types");
 
-// No registered tuple type: a list of the join of the carried slot types.
 BamlValue unregistered = Functions.MakeUnregisteredTuple();
 Require(!unregistered.TryGet(out (string, long, string) _), "an unregistered tuple type");
 IReadOnlyList<BamlUnion<long, string>> joined =
@@ -231,7 +210,6 @@ Require(
         && wideJoined[2].IsT1 && wideJoined[2].AsT1 == "y",
     "a union slot joins through the engine's selected arm");
 
-// No union list for the join either: the heterogeneous list, every slot kept.
 BamlValue unjoined = Functions.MakeUnjoinedTuple();
 Require(
     !unjoined.TryGet(out IReadOnlyList<BamlUnion<long, string>>? _),
@@ -244,9 +222,6 @@ Require(
         && heterogeneous[2].As<double>() == 2.5,
     "the heterogeneous fallback keeps every slot in order");
 
-// Generic tuples are native tuples built from their slots once the call
-// binds `T`, and cross as the declared tuple, so the engine checks every
-// slot, including a literal one.
 Require(Functions.PairOf(23L) == (23L, 23L), "a generic native tuple");
 Require(
     await Functions.PairOfAsync("x") == ("x", "x"),
@@ -260,7 +235,6 @@ ExpectAny(
 ((string, string), long) nested = Functions.GenericTaggedNested<string>((("x", "tag"), 25L));
 Require(nested == (("x", "tag"), 25L), "a generic tuple nested in a generic native tuple");
 
-// A host callback echoing a dynamic tuple restates its carried type.
 BamlValue? callbackArgument = null;
 BamlValue callbackResult = Functions.CallUnknownCallback(
     BamlCallback.FromSync<BamlValue, BamlValue>(argument =>
@@ -275,9 +249,6 @@ Require(
 
 Console.WriteLine("csharp_tuples=ok");
 
-// Tuples as stream items: the scripted clients replay fixed deltas, so the
-// partials are exact. Every partial and the final value decode as the C#
-// tuple the stream's item type projects to.
 static async Task RunStreamCaseAsync(string streamCase)
 {
     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));

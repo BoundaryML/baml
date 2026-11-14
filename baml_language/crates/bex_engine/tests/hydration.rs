@@ -782,12 +782,6 @@ async fn a_type_value_naming_an_undeclared_variant_is_refused() {
     ),);
 }
 
-/// A host's inbound conversion states a tuple at the type its destination
-/// declares, and the engine builds it at the stated type: a declared tuple
-/// type fixes the hydrated tuple's carried type, whatever the items would
-/// suggest. Where the destination fixes no tuple type (here `unknown`), the
-/// stated type is kept, and tuples are invariant: a tuple stated at one type
-/// is no member of another, however its items fit.
 #[tokio::test]
 async fn a_tuple_is_built_at_its_stated_slot_types_and_is_invariant() {
     let source = r#"
@@ -811,8 +805,6 @@ async fn a_tuple_is_built_at_its_stated_slot_types_and_is_invariant() {
         )
     };
     assert_eq!(call(source, "second", vec![pair()]).await.unwrap(), s("a"));
-    // `(1, "a")` stated at the declared `(int | string, string?)`: built at
-    // that type, not at the `(int, string)` its items would suggest.
     let declared_wide = || {
         tuple(
             vec![
@@ -837,15 +829,11 @@ async fn a_tuple_is_built_at_its_stated_slot_types_and_is_invariant() {
             .unwrap(),
         BexExternalValue::Bool(true)
     );
-    // Invariant: an `(int, string)` is no member of `(int | string, string?)`.
     let message = refusal(call(source, "first_of_wide", vec![pair()]).await);
     assert!(
         message.contains("does not match the declared type") && message.contains("(int, string)"),
         "{message}"
     );
-    // Where nothing fixes the tuple type, the stated one is kept: a tuple
-    // stated at `(int | string, string)` is that type, not an `(int, string)`,
-    // and an `(int, string)` is not an `(int | string, string)`.
     let stated_wide = || {
         tuple(
             vec![
@@ -876,7 +864,6 @@ async fn a_tuple_is_built_at_its_stated_slot_types_and_is_invariant() {
         BexExternalValue::Bool(true)
     );
     assert!(refusal(call(source, "second", vec![stated_wide()]).await).contains("`(int, string)`"));
-    // The wrong element type, or the wrong arity, is not a member.
     let swapped = tuple(
         vec![WireTy::string(), WireTy::int()],
         vec![s("a"), BexExternalValue::Int(1)],
@@ -884,7 +871,6 @@ async fn a_tuple_is_built_at_its_stated_slot_types_and_is_invariant() {
     assert!(refusal(call(source, "second", vec![swapped]).await).contains("`(int, string)`"));
     let short = tuple(vec![WireTy::int()], vec![BexExternalValue::Int(1)]);
     assert!(refusal(call(source, "second", vec![short]).await).contains("`(int, string)`"));
-    // An item must be a member of its stated slot type.
     let mislabeled = tuple(
         vec![WireTy::string(), WireTy::string()],
         vec![BexExternalValue::Int(1), s("a")],

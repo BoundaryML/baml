@@ -7,9 +7,6 @@
 //! non-generic class declarations composed from the same shapes; instance
 //! methods on user classes, including `Self` nested anywhere in their types;
 //! and receiver-free class methods as package helpers because Go has no
-//! associated-function syntax. Go has no tuple type: a BAML tuple is a
-//! generated `TupleN_<slots>` struct (or `[]any` when a slot mentions a type
-//! parameter), and a function returning a tuple returns one Go result per slot.
 //! Nullable and container class edges support finite recursive values, while
 //! impossible required-only direct class cycles remain omitted. Every symbol
 //! left out of the SDK is reported as a [`SkipWarning`] with its reason. A BAML package
@@ -1297,8 +1294,6 @@ impl WireCodecs {
     }
 }
 
-/// The typed unions and named tuples a package's types.go declares, whose
-/// codecs its functions.go must render.
 #[derive(Clone, Copy)]
 struct DeclaredStructuralTypes<'a> {
     unions: &'a [GoUnionKey],
@@ -1396,9 +1391,6 @@ fn collect_projected_codec_types(
                 }
             }
         }
-        // A named tuple has its own codec pair; the `[]any` fallback encodes
-        // and decodes through runtime helpers, but its slots may still need
-        // codecs of their own.
         GoTy::Tuple(key) => {
             if !key.is_named()
                 || collected
@@ -1618,9 +1610,6 @@ fn renderable_class_names(pool: &SymbolPool, projection: &GoTypeProjection<'_>) 
             _ => None,
         })
         .collect::<BTreeSet<_>>();
-    // A named tuple holds its slots by value, so a required class cycle
-    // through a tuple slot is a Go type of infinite size that no pointer in
-    // the class can break. Its values are infinite in BAML too; omit it.
     let tuple_cyclic = tuple_cyclic_class_names(pool, &candidates, projection);
     candidates.retain(|name| !tuple_cyclic.contains(name));
 
@@ -1648,8 +1637,6 @@ fn renderable_class_names(pool: &SymbolPool, projection: &GoTypeProjection<'_>) 
     }
 }
 
-/// The classes in `classes` that reach themselves along required edges, one
-/// of which passes through a tuple slot.
 fn tuple_cyclic_class_names(
     pool: &SymbolPool,
     classes: &BTreeSet<Name>,
@@ -1692,9 +1679,6 @@ fn tuple_cyclic_class_names(
         .collect()
 }
 
-/// The classes a tuple-typed `ty` holds by value: its class slots, and those
-/// of the tuples nested in its slots, but nothing behind an optional or a
-/// container.
 fn required_tuple_slot_classes<'a>(ty: &'a GoTy, out: &mut Vec<&'a Name>) {
     if let GoTy::Tuple(key) = ty {
         for slot in key.slots() {
@@ -1790,8 +1774,6 @@ fn type_var_candidate_reifiable(ty: &GoTy, classes: &BTreeSet<Name>) -> bool {
             .members()
             .iter()
             .all(|member| type_var_candidate_reifiable(member, classes)),
-        // A tuple mentioning a type variable is the `[]any` fallback, whose
-        // Go type cannot select a candidate.
         GoTy::Literal(_)
         | GoTy::EnumVariant(_, _)
         | GoTy::Json
@@ -1830,8 +1812,6 @@ fn generic_class_argument_reifiable(ty: &GoTy, classes: &BTreeSet<Name>) -> bool
             matches!(member, GoTy::Literal(_) | GoTy::EnumVariant(_, _))
                 || generic_class_argument_reifiable(member, classes)
         }),
-        // A named tuple states its whole descriptor itself; the `[]any`
-        // fallback erases it like `any` does.
         GoTy::Tuple(key) => key.is_named(),
         _ => true,
     }
@@ -2482,8 +2462,6 @@ fn render_functions(
                 format!("({receiver_parameter} {receiver_type}) ")
             });
         let receiver = receiver.as_deref().unwrap_or("");
-        // A top-level tuple return is one Go result per slot, beside the
-        // error; on failure each slot result is its type's zero value.
         let expanded_return = expanded_return_slots(&function.return_type, projection);
         let expanded_return_types = expanded_return.as_ref().map(|slots| {
             slots
@@ -2683,8 +2661,6 @@ fn render_functions(
                 routed.go_name.wire().to_string()
             );
         } else if let (Some(slots), Some(zeros)) = (&expanded_return, &expanded_zeros) {
-            // Decode the one BAML tuple, check its arity, then expose its
-            // slots, each through its own converter.
             let slots_local = GeneratorIdent::TupleSlotsLocal;
             let _ = writeln!(out, "\tif {error_local} != nil {{");
             let _ = writeln!(out, "\t\treturn {zeros}, {error_local}\n\t}}");
@@ -2748,10 +2724,6 @@ fn render_functions(
     out
 }
 
-/// The slots a generated function or method returns as separate Go results:
-/// those of its declared return type when that is, after alias resolution, a
-/// tuple. Only that outer tuple expands; a tuple in a slot, or inside an
-/// optional, union, list or stream, is one value.
 fn expanded_return_slots(
     return_type: &Ty,
     projection: &GoTypeProjection<'_>,
@@ -2927,8 +2899,6 @@ fn add_function_surface_imports(
                 );
             }
         }
-        // A named tuple is spelled like a typed union; the `[]any` fallback
-        // spells no type.
         GoTy::Tuple(key) if key.is_named() => {
             let target = context.packages.get(surface_owner_package);
             if target.go_name() != context.current_package {
@@ -3126,8 +3096,6 @@ fn add_projected_surface_imports(
                 );
             }
         }
-        // A named tuple, like a typed union, owns its slot imports in its
-        // codec; the `[]any` fallback spells no type.
         GoTy::Tuple(key) => {
             if key.is_named() {
                 let target = context.packages.get(surface_owner_package);
@@ -3735,7 +3703,6 @@ fn projected_input_encoder(
         GoTy::Tuple(key) if key.is_named() => codecs
             .tuple_ident(current_baml_package, key, UnionCodecDirection::Encode)
             .to_string(),
-        // The `[]any` fallback still states the declared tuple type.
         GoTy::Tuple(_) => format!(
             "{runtime}.TupleListEncoder({})",
             scoped_baml_type_descriptor(ty, current_package, names, type_vars)
@@ -4575,10 +4542,6 @@ fn render_union_codecs(
     }
 }
 
-/// Renders each registered named tuple's codec pair. The encoder sends the
-/// slots as a list stating the tuple type, each through its slot's encoder;
-/// the decoder checks the wire tuple's arity and decodes each slot through
-/// its slot's decoder.
 fn render_tuple_codecs(
     out: &mut String,
     codecs: &WireCodecs,
@@ -4674,7 +4637,6 @@ fn dynamic_union_arm_is_asserted(member: &GoTy, direct_json: bool) -> bool {
             || projected_contains_type_var(member))
 }
 
-/// A list, map or tuple arm, possibly nullable.
 fn projected_is_container(ty: &GoTy) -> bool {
     match ty {
         GoTy::List(_) | GoTy::Map { .. } | GoTy::Tuple(_) => true,
@@ -4810,7 +4772,6 @@ fn projected_contains_dynamic_union(ty: &GoTy) -> bool {
             projected_contains_dynamic_union(key) || projected_contains_dynamic_union(value)
         }
         GoTy::TypedUnion(key) => key.members().iter().any(projected_contains_dynamic_union),
-        // The `[]any` fallback erases its slots like a dynamic union does.
         GoTy::Tuple(key) => {
             !key.is_named() || key.slots().iter().any(projected_contains_dynamic_union)
         }
@@ -6182,10 +6143,6 @@ fn render_union_type(body: &mut String, key: &GoUnionKey, renderer: &mut ClassTy
     }
 }
 
-/// Declares the named struct of a tuple: one field per slot, in order, plus
-/// the hooks that make it findable by its tuple identity wherever Go looks a
-/// type up (generated codecs, `DecodeAs`/`TypeOf`, dynamic encoding, and
-/// dynamic decoding by the tuple type a value carries).
 fn render_tuple_type(body: &mut String, key: &GoTupleKey, renderer: &mut ClassTypeRenderer<'_>) {
     let package = renderer.current_baml_package.clone();
     let type_name = renderer
@@ -6236,8 +6193,6 @@ fn render_tuple_type(body: &mut String, key: &GoTupleKey, renderer: &mut ClassTy
     );
     let _ = writeln!(body, "\tdecoded_, err_ := {decoder}({value_parameter})");
     let _ = writeln!(body, "\treturn decoded_, err_\n}}\n");
-    // Registered under its tuple type, so a tuple no declaration names (an
-    // `any` position, a thrown value) still decodes as this struct.
     let _ = writeln!(
         body,
         "func init() {{ {runtime}.RegisterTuple[{type_name}]() }}\n"
@@ -9310,7 +9265,6 @@ mod tests {
             "example.com/project/baml_sdk",
         );
         let functions = without_horizontal_whitespace(&files[&PathBuf::from("functions.go")]);
-        // One slot, several slots, and a nested tuple, which stays one result.
         for signature in [
             "func ReadSingle(ctx_ context.Context, options_ ...baml_go.CallOption) (string, error)",
             "func Read(ctx_ context.Context, options_ ...baml_go.CallOption) (int64, string, bool, error)",
@@ -9322,7 +9276,6 @@ mod tests {
                 "missing `{signature}` in:\n{functions}"
             );
         }
-        // One tuple is decoded, its arity checked, and its slots exposed.
         assert!(functions.contains(&without_horizontal_whitespace(
             "slots_, err_ := result_.Tuple(3)"
         )));
@@ -9349,7 +9302,6 @@ mod tests {
         assert!(functions.contains(&without_horizontal_whitespace(
             "func ReadOrFail(ctx_ context.Context, options_ ...baml_go.CallOption) (int64, string, error)"
         )));
-        // Bootstrap, call, arity and slot failures all return zero data.
         let zeros = without_horizontal_whitespace("return *new(int64), *new(string), err_");
         let start = functions
             .find(&without_horizontal_whitespace("func ReadOrFail("))
@@ -9379,8 +9331,6 @@ mod tests {
                 "missing `{signature}` in:\n{functions}"
             );
         }
-        // The named struct, its slots, and its registration hooks share one
-        // name, which the codecs also use.
         for declaration in [
             "type Tuple2_IntString struct {\n\tItem0 int64\n\tItem1 string\n}",
             "type Tuple2_Tuple2_IntStringBool struct {\n\tItem0 Tuple2_IntString\n\tItem1 bool\n}",

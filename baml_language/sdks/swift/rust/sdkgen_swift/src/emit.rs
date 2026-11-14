@@ -105,9 +105,6 @@ pub(crate) struct RenderedField {
     /// The field's [`slot_expr`], its type variables spelled as the class
     /// slot's arguments ([`class_argument_local`]).
     pub slot: String,
-    /// Where the field's Swift type holds a native tuple, which is not
-    /// `Equatable`: the field's [`slot_expr`] with each type variable its own
-    /// slot, which compares two of its values.
     pub equal_slot: Option<String>,
 }
 
@@ -216,8 +213,6 @@ pub(crate) fn render_class(
     }
     out.push_str("\t}\n");
 
-    // A native tuple is not `Equatable`, so `==` cannot be synthesized
-    // through a field holding one: each such field compares through its slot.
     if fields.iter().any(|field| field.equal_slot.is_some()) {
         let comparisons = fields
             .iter()
@@ -971,8 +966,6 @@ pub(crate) fn render_recursive_union_alias(
     }
     out.push_str("\t\t}\n\t}\n\n");
 
-    // A native tuple is not `Equatable`, so `==` cannot be synthesized
-    // through a case holding one: such a case compares through its slot.
     let tuple_arms: Vec<bool> = arms
         .iter()
         .map(|arm| {

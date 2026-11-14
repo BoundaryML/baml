@@ -1,12 +1,4 @@
-// Tuple ordering, list search, and cyclic rendering.
-//
-// Tuples implement `baml.ops.Compare` automatically when every slot type does,
-// at any arity and through nested tuples, comparing slots lexicographically
-// from left to right through each slot's own `Compare.cmp`. Names carry a
-// `tc_` / `Tc` prefix to stay clear of the other namespaces in this
-// one-project corpus.
 
-// ─── Operators ───────────────────────────────────────────────────────────────
 
 function tc_lt(a: (int, string), b: (int, string)) -> bool {
     a < b
@@ -53,7 +45,6 @@ test "tuple_ordering_every_arity" {
     assert.is_true(tc_wide())
 }
 
-// ─── Nested tuples ───────────────────────────────────────────────────────────
 
 function tc_nested(a: ((int, string), bool), b: ((int, string), bool)) -> bool {
     a < b
@@ -65,10 +56,7 @@ test "nested_tuple_ordering" {
     assert.is_true(!tc_nested(((2, "a"), false), ((1, "z"), true)))
 }
 
-// ─── Custom slot implementations ─────────────────────────────────────────────
 
-// Orders by `rank` descending, ignoring `label`: the tuple must consult this
-// `cmp` rather than any structural order of the class.
 class TcRank {
     rank: int
     label: string
@@ -105,7 +93,6 @@ test "nested_tuple_ordering_honors_custom_slot_compare" {
     assert.is_true(tc_nested_custom() == baml.ops.Ordering.Greater)
 }
 
-// ─── Bounds ──────────────────────────────────────────────────────────────────
 
 function tc_max<T extends baml.ops.Compare>(a: T, b: T) -> T {
     if (a < b) { b } else { a }
@@ -116,7 +103,6 @@ test "tuple_satisfies_compare_bound" {
     assert.equal(tc_max(((0,), 2), ((1,), 0)), ((1,), 0))
 }
 
-// Bounds on the slots prove the tuple's own `Compare`.
 function tc_pair_lt<A extends baml.ops.Compare, B extends baml.ops.Compare>(
     a: (A, B),
     b: (A, B),
@@ -145,7 +131,6 @@ test "tuples_sort_lexicographically" {
     assert.equal(tc_sorted(), [(1, "b"), (1, "z"), (2, "a")])
 }
 
-// ─── List search ─────────────────────────────────────────────────────────────
 
 function tc_search() -> (bool, int?, int?) {
     let xs = [(1, 2), (3, 4), (1, 2)];
@@ -173,7 +158,6 @@ test "list_search_compares_nested_contents" {
     assert.is_true(tc_search_nested())
 }
 
-// `includes` honors a slot's `Equals` override exactly as `==` does.
 function tc_search_custom() -> (bool, int?) {
     let xs = [(TcRank { rank: 1, label: "a" }, 0), (TcRank { rank: 2, label: "b" }, 0)];
     let probe = (TcRank { rank: 2, label: "different" }, 0);
@@ -188,8 +172,6 @@ class TcNode {
     next: (int, TcNode[])
 }
 
-// A cycle through a tuple: equality treats a pair already being compared as
-// equal, so the search terminates.
 function tc_cyclic_node() -> TcNode {
     let children: TcNode[] = [];
     let node = TcNode { next: (1, children) };
@@ -205,9 +187,7 @@ test "list_search_terminates_on_cycles" {
     assert.is_true(tc_search_cyclic())
 }
 
-// ─── Cyclic rendering ────────────────────────────────────────────────────────
 
-// A value reached again while it is still being rendered renders as `…`.
 function tc_render_cyclic() -> string {
     string.from(tc_cyclic_node())
 }
@@ -230,8 +210,6 @@ class TcHolder {
     loop: (string, TcHolder[])
 }
 
-// The override-collection pass terminates on the cycle and stays aligned with
-// the renderer: the override still renders in place.
 function tc_render_cyclic_override() -> string {
     let holders: TcHolder[] = [];
     let holder = TcHolder { shown: TcShown { items: (0, []) }, loop: ("x", holders) };
@@ -246,7 +224,6 @@ test "override_rendering_terminates_on_cycles_through_tuples" {
     )
 }
 
-// A shared value that is not a cycle still renders in full each time.
 function tc_render_shared() -> string {
     let shared = [1];
     string.from((shared, shared))

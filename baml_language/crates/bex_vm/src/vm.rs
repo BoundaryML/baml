@@ -3938,10 +3938,6 @@ impl BexVm {
         }
     }
 
-    /// Pair `elements` with the slot types of `tuple_ty`, the tuple type they
-    /// are built at. The type must be a tuple of exactly their arity: the
-    /// carried slot types are the tuple's instantiation, never inferred from
-    /// the elements.
     pub(crate) fn tuple_at_type(
         tuple_ty: bex_vm_types::RealizedTy,
         elements: Vec<Value>,
@@ -4305,10 +4301,6 @@ impl BexVm {
                     ),
                 },
                 // A float has no literal type to be precise about, and every
-                // other object's precise type is already its concrete one —
-                // a tuple's included: its carried slot types are its
-                // instantiation, so a `(string,)` holding `"a"` is not the
-                // literal tuple type `("a",)`.
                 _ => {}
             }
         }
@@ -4528,10 +4520,6 @@ impl BexVm {
                 key: Box::new((*map.key_ty).clone()),
                 value: Box::new((*map.value_ty).clone()),
             },
-            // A tuple carries its instantiated slot types, which are its
-            // type: they are never reconstructed from its elements, which
-            // could only recover a lower bound (`"foo"` fills a `string` slot
-            // as well as a `"foo"` one).
             Object::Tuple(tuple) => ConcreteRealizedTy::Tuple(tuple.element_tys.clone()),
             // A cell is a transparent capture/mutable-binding slot, not a value
             // of its own: its concrete type is that of the value it holds.
@@ -7301,7 +7289,6 @@ impl BexVm {
             | Concrete::Uint8Array
             | Concrete::Media(_)
             | Concrete::Enum(_)
-            // A tuple has no methods, so no bound method has a tuple receiver.
             | Concrete::Tuple(_)
             | Concrete::Function { .. }
             | Concrete::RustType
@@ -9821,10 +9808,6 @@ impl BexVm {
                         }
                     }
 
-                    // ── LoadTupleField ──────────────────────────
-                    // Tuple slots, stored and synchronized like instance fields.
-                    // The slot number is a compile-time constant the checker
-                    // bounds-checked, so a bad slot is malformed bytecode.
                     OpCode::LoadTupleField => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let top = self.stack.ensure_pop();
@@ -9847,8 +9830,6 @@ impl BexVm {
                         };
                         self.push_stack(value)?;
                     }
-
-
 
                     // ── VirtualLoadField / VirtualStoreField ──────────────────────
                     // The field analogue of `VirtualCall`: the operand indexes the
@@ -9987,8 +9968,6 @@ impl BexVm {
 
                     OpCode::AllocTuple => {
                         let size = { read_u32_unchecked(code, pc) as usize };
-                        // The tuple's instantiated type rides on top of the
-                        // `size` elements, as an array's element type does.
                         let tuple_ty = self.ensure_pop_type()?;
                         let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
                         let elements: Vec<Value> = self.stack.drain(drain_range).collect();
@@ -11652,7 +11631,6 @@ impl BexVm {
                             }
                             Object::Array(arr) => arr.len() as i64,
                             Object::Uint8Array(bytes) => bytes.len() as i64,
-                            // A tuple's arity: the tuple pattern shape test.
                             Object::Tuple(tuple) => tuple.len() as i64,
                             Object::Map(map) => map.len() as i64,
                             Object::String(s) => s.byte_len() as i64,

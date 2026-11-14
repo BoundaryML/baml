@@ -70,8 +70,6 @@ pub(crate) fn truthiness(ty: &Ty) -> Truthiness {
         | InferTy::Resource
         | InferTy::PromptAst
         | InferTy::RustType
-        // A tuple is always truthy, even the empty one reflection can build
-        // (the VM truth test has no tuple arm).
         | InferTy::Tuple(..) => Truthiness::AlwaysTruthy,
         InferTy::Union(members) => {
             let mut all_truthy = true;

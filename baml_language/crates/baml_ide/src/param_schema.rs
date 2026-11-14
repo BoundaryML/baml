@@ -107,8 +107,6 @@ pub enum FieldSchema {
         key: Box<FieldSchema>,
         value: Box<FieldSchema>,
     },
-    /// A fixed-arity tuple: one schema per slot, in slot order. The value
-    /// is a JSON array of exactly `elements.len()` entries.
     Tuple {
         elements: Vec<FieldSchema>,
     },

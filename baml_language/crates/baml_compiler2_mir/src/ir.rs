@@ -803,10 +803,6 @@ pub enum IndexKind {
     Array,
     /// Map indexing: `map[key]`
     Map,
-    /// Tuple slot read: `t[i]`, the index an `int` the checker proved names a
-    /// slot of every tuple the receiver can be. Read-only: tuple slots are
-    /// immutable, so a valid body never stores through this place (it may be
-    /// the base of one, as in `t[0].x = v`).
     Tuple,
 }
 
@@ -927,7 +923,9 @@ pub enum BoundFrame {
 #[derive(Debug, Clone)]
 pub enum Rvalue<'db> {
     /// Detached settings, or null when hook selection is suppressed.
-    TraceHookSettings { with_settings: bool },
+    TraceHookSettings {
+        with_settings: bool,
+    },
     /// Use an operand directly.
     Use(Operand<'db>),
 
@@ -939,7 +937,10 @@ pub enum Rvalue<'db> {
     },
 
     /// Unary operation: `!_1`, `-_1`
-    UnaryOp { op: UnaryOp, operand: Operand<'db> },
+    UnaryOp {
+        op: UnaryOp,
+        operand: Operand<'db>,
+    },
 
     /// Strings joined left to right, in one step: `concat(_1, _2, _3)`. What
     /// a chain of string `+` (and so a template) lowers to; always three or
@@ -979,8 +980,6 @@ pub enum Rvalue<'db> {
     /// - Classes: assigned unique IDs starting at 100
     TypeTag(Place),
 
-    /// Get length of an array, map, string, or byte array, or the arity of a
-    /// tuple (the tuple pattern shape test): `len(_1)`
     Len(Place),
 
     /// Type check for pattern matching: `is_type(_1, Type)`
@@ -1011,7 +1010,10 @@ pub enum Rvalue<'db> {
     /// emitter to sniff out. `tag` is a `baml_type::typetag` constant; the
     /// emitter lowers this to the same `IsType`-against-`Int` bytecode as the
     /// other coarse tag checks.
-    IsTypeTag { operand: Operand<'db>, tag: i64 },
+    IsTypeTag {
+        operand: Operand<'db>,
+        tag: i64,
+    },
 
     /// Whether the type value `ty` satisfies the interface bound `bound`, the
     /// check a `let type T extends I = …` statement makes: the question a
@@ -1266,13 +1268,9 @@ pub enum AggregateKind<'db> {
         class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
         type_arg_templates: Vec<TyTemplate>,
     },
-    /// A tuple `(_1, _2)`. Immutable. `element_templates` carries one
-    /// `TyTemplate` per element: the tuple's inferred or contextual slot
-    /// types, in slot order, with enclosing generics as frame references (so
-    /// `(x,)` in `wrap<T>` carries the realized `T`). They are emitted as one
-    /// `LoadType` of the tuple type before `AllocTuple`, and the tuple
-    /// carries them: its runtime type is never derived from its elements.
-    Tuple { element_templates: Vec<TyTemplate> },
+    Tuple {
+        element_templates: Vec<TyTemplate>,
+    },
 }
 
 // ============================================================================

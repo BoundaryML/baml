@@ -255,8 +255,6 @@ pub(crate) fn to_inbound(
                 Some(In::ClassValue(wire::InboundClassValue { fields })),
             )
         }
-        // Inbound has no tuple payload: a tuple goes back as a list stating
-        // the tuple type it carries, so it keeps its slot types.
         Out::TupleValue(tuple) => {
             let value_type = restate(
                 tuple

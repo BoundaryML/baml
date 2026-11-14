@@ -186,9 +186,6 @@ def test_decode_failure_preserves_transferred_owner_and_releases_remaining(
         elif container in ("tuple", "carried_tuple"):
             holders = [root.tuple_value.items.add() for _ in range(3)]
             if container == "carried_tuple":
-                # A tuple that carries its type decodes to a `BamlTuple`, but
-                # only once every slot has decoded: a failing later slot
-                # leaves the earlier slots' owners to the same cleanup.
                 for _ in range(3):
                     root.tuple_value.tuple_type.tuple.items.add().unknown.SetInParent()
         elif container == "map":

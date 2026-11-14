@@ -9,12 +9,6 @@ import (
 	baml_go "github.com/boundaryml/baml-go"
 )
 
-// Tuples as stream items, over `ns_tuple_streams`: each function's client is
-// a scripted `StreamingClient` replaying fixed deltas, so no replay server or
-// key is needed. A partial is the declared type parsed from the text so far,
-// so every partial of a tuple-typed stream is a tuple: here the generated
-// named struct for its tuple identity, decoded from the wire's tuple value
-// (a BAML list never decodes as one).
 
 func drainTupleStream[T any](t *testing.T, ctx context.Context, stream baml_go.Stream[T]) []T {
 	t.Helper()
@@ -53,7 +47,6 @@ func Test_tuples_stream_items(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(final, want) {
 		t.Fatalf("final = %#v, %v", final, err)
 	}
-	// The non-streaming call settles to the same tuples.
 	settled, err := baml_sdk.TupleStreamsStreamTupleItems(ctx, "x")
 	if err != nil || !reflect.DeepEqual(settled, want) {
 		t.Fatalf("settled = %#v, %v", settled, err)
@@ -72,8 +65,6 @@ func Test_tuples_stream_final(t *testing.T) {
 	if len(partials) == 0 || partials[len(partials)-1] != want {
 		t.Fatalf("partials = %#v", partials)
 	}
-	// A stream item is a value within the stream, so it stays one named
-	// struct; only a top-level tuple return expands to one result per slot.
 	final, err := stream.Final(ctx)
 	if err != nil || final != want {
 		t.Fatalf("final = %#v, %v", final, err)

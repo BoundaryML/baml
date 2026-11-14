@@ -165,8 +165,6 @@ fn to_source_code_internal(
                 .insert(java_identifier(name.name().as_str()));
         }
     }
-    // Tuple records live in the root package beside the anchor and facades,
-    // so their names avoid every identifier the root already claims.
     let root_pkg = PackagePath {
         segments: Vec::new(),
     };
@@ -336,9 +334,6 @@ fn to_source_code_internal(
         out.insert(java_file_path(&pkg, &ident), with_package(&pkg, &body));
     }
 
-    // One record per tuple identity, and its typemap registration: the
-    // record's binary name under the identity's own descriptor, the token
-    // decode receives for a position of that type.
     let mut tuple_registry: Vec<(String, String)> = Vec::new();
     {
         let ctx = TranslateCtx {
@@ -1046,7 +1041,6 @@ mod tests {
         Ty::Tuple(items.into())
     }
 
-    /// A free function `name(x: arg) -> ret` in package `user`, namespace `ns`.
     fn tuple_fn(ns: &[&str], fn_name: &str, arg: Ty, ret: Ty, span: u32) -> (Name, Symbol) {
         let n = name("user", ns, fn_name);
         let mut function = method_fn(fn_name, ("x", arg), ret, span);
@@ -1078,7 +1072,6 @@ mod tests {
         ]);
         let out = emit_sdk(&pool);
 
-        // One record per identity, in the root package, `item{i}` per slot.
         assert!(
             file(&out, "Tuple2_IntString.java")
                 .contains("public record Tuple2_IntString(long item0, java.lang.String item1) {}"),
@@ -1086,7 +1079,6 @@ mod tests {
             file(&out, "Tuple2_IntString.java")
         );
         assert!(file(&out, "Tuple2_IntString.java").contains("package baml_sdk;"));
-        // An optional slot is a nullable component; its token says so.
         assert!(
             file(&out, "Tuple2_IntOptionalString.java").contains(
                 "public record Tuple2_IntOptionalString(long item0, java.lang.@org.jspecify.annotations.Nullable String item1) {}"
@@ -1094,7 +1086,6 @@ mod tests {
             "{}",
             file(&out, "Tuple2_IntOptionalString.java")
         );
-        // A nested tuple is its own record, named after the inner record.
         assert!(
             file(&out, "Tuple2_Tuple2_IntStringBoolean.java").contains(
                 "public record Tuple2_Tuple2_IntStringBoolean(baml_sdk.Tuple2_IntString item0, boolean item1) {}"
@@ -1103,7 +1094,6 @@ mod tests {
             file(&out, "Tuple2_Tuple2_IntStringBoolean.java")
         );
 
-        // Use sites name the record.
         assert!(
             file(&out, "Holder.java").contains("java.util.List<baml_sdk.Tuple2_IntString> pairs"),
             "{}",
@@ -1114,7 +1104,6 @@ mod tests {
             fns.contains("public static baml_sdk.Tuple2_Tuple2_IntStringBoolean nest(baml_sdk.Tuple2_IntOptionalString x)"),
             "{fns}"
         );
-        // The decode descriptor is the tuple identity the record is registered under.
         assert!(
             fns.contains("baml_bridge.BamlType.tuple(baml_bridge.BamlType.tuple(baml_bridge.BamlType.INT, baml_bridge.BamlType.STRING), baml_bridge.BamlType.BOOL)"),
             "{fns}"
@@ -1152,8 +1141,6 @@ mod tests {
                 t_tuple(vec![t_int()]),
                 1,
             ),
-            // A product of unions and the union of products it expands to are
-            // distinct identities.
             tuple_fn(
                 &[],
                 "c",
@@ -1212,7 +1199,6 @@ mod tests {
             ),
             (a_node.clone(), class_sym(&a_node, &[], 1)),
             (b_node.clone(), class_sym(&b_node, &[], 2)),
-            // `(Label, int)` is `(string, int)`: one record.
             tuple_fn(
                 &[],
                 "f",
@@ -1236,7 +1222,6 @@ mod tests {
             fns.contains("baml_sdk.Tuple2_StringInt f(baml_sdk.Tuple2_StringInt x)"),
             "{fns}"
         );
-        // Identity order decides who keeps the base name.
         assert!(
             fns.contains("baml_sdk.Tuple2_NodeInt2 g(baml_sdk.Tuple2_NodeInt x)"),
             "{fns}"

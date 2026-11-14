@@ -23,8 +23,6 @@ where
     ObjectToPrimitive(Cow<'v, crate::jsonish::Value<'s>>),
     ObjectToMap(Cow<'v, crate::jsonish::Value<'s>>),
     ExtraKey(Cow<'s, str>, Cow<'v, crate::jsonish::Value<'s>>),
-    /// A complete array had more items than the tuple's arity; the item at this index (and
-    /// its value) was dropped. Scored like [`Flag::ExtraKey`].
     TupleExtraItem(usize, Cow<'v, crate::jsonish::Value<'s>>),
     StrippedNonAlphaNumeric(Cow<'s, str>),
     SubstringMatch(Cow<'s, str>),

@@ -670,7 +670,6 @@ impl Walker<'_, '_> {
             Object::String(_) => Shape::String,
             Object::Bigint(_) => Shape::Bigint,
             Object::Array(values) => Shape::Array(values.to_vec()),
-            // A tuple is a JSON array, in element order.
             Object::Tuple(tuple) => Shape::Array(tuple.slot_values().collect()),
             Object::Map(_) => Shape::Map,
             Object::Instance(instance) => Shape::Instance(instance.class),

@@ -123,7 +123,6 @@ impl<N: Clone + PartialEq> TyTemplateOrigins<N> {
         })
     }
 
-    /// Project these origins through a tuple element.
     pub fn tuple_element(&self, index: usize) -> Self {
         self.project(|origin| match origin {
             TyTemplate::Tuple(elements) => elements.get(index).cloned(),

@@ -518,8 +518,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 index,
                 kind: IndexKind::Tuple,
             } => {
-                // An optional receiver reaches the read only on its non-null
-                // branch, so the slot comes from the tuple arms.
                 let base_ty = self.resolve_place_type(base)?.strip_null();
                 tuple_slot_type(&base_ty, self.constant_index(*index))
             }
@@ -534,9 +532,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         }
     }
 
-    /// The statically known value of an index local: an integer literal type,
-    /// or a single definition from an integer constant (as a tuple pattern's
-    /// projection index is).
     fn constant_index(&self, index: Local) -> Option<i64> {
         let index = self.analysis.resolve_copy_source(index);
         if let Some(RuntimeTy::Literal(baml_type::Literal::Int(value), _)) =
@@ -2306,8 +2301,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             | TyTemplate::Interface(..)
             | TyTemplate::AssociatedTypeProjection { .. }
             | TyTemplate::Union(..)
-            // A tuple's type is derived from its elements, so the element-
-            // precise value matcher is the only test (no coarse tag).
             | TyTemplate::Tuple(..) => emit_structural(self, ty_template),
 
             // ── Function signatures ──────────────────────────────────────────
@@ -3490,10 +3483,18 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         Ok(())
     }
 
-    fn load_index(&mut self, kind: IndexKind, base: &Place, index: Local) -> Result<(), Self::Error> {
+    fn load_index(
+        &mut self,
+        kind: IndexKind,
+        base: &Place,
+        index: Local,
+    ) -> Result<(), Self::Error> {
         match kind {
             IndexKind::Tuple => {
-                let slot = self.constant_index(index).and_then(|index| usize::try_from(index).ok()).expect("tuple projection has a constant slot");
+                let slot = self
+                    .constant_index(index)
+                    .and_then(|index| usize::try_from(index).ok())
+                    .expect("tuple projection has a constant slot");
                 self.emit(Instruction::LoadTupleField(slot));
             }
             IndexKind::Array if self.thread_local(base) => {
@@ -3543,8 +3544,6 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
     }
 
     fn alloc_tuple(&mut self, tuple_ty: &TyTemplate, len: usize) -> Result<(), Self::Error> {
-        // Push the (frame-resolved) tuple type on top of the `len` elements,
-        // as for `AllocArray`; the tuple carries its slot types.
         self.load_type(tuple_ty)?;
         self.emit(Instruction::AllocTuple(len));
         Ok(())
@@ -3860,10 +3859,6 @@ impl<'db: 'ctx, 'ctx> StackEffectSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '
     }
 }
 
-/// The type a tuple slot read produces from a receiver of type `base`: the
-/// slot `index` names when it is statically known, else a type every slot
-/// shares. A union receiver joins the slot across its tuple arms, so arms whose
-/// slots differ yield a union that no primitive specialization accepts.
 fn tuple_slot_type(base: &RuntimeTy, index: Option<i64>) -> Option<RuntimeTy> {
     match base {
         RuntimeTy::Tuple(elements) => match index {
@@ -3914,9 +3909,6 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         // reaches here; returning `None` keeps that the only answer rather than
         // leaving a wrong one for the next caller to find.
         RealizedTy::Literal(..) => None,
-        // Deliberately untagged: every tuple shares one `TUPLE` tag, which
-        // would conflate `(int, int)` with `(string, string)`. Tuple tests go
-        // through the structural value matcher.
         RealizedTy::Tuple(..) => None,
         RealizedTy::Media(..)
         | RealizedTy::Class(..)
@@ -4099,8 +4091,6 @@ mod tests {
         );
     }
 
-    /// A constant index selects one slot of a direct tuple; a union receiver
-    /// joins that slot across its arms rather than assuming one primitive.
     #[test]
     fn tuple_slot_type_selects_and_joins_slots() {
         use baml_compiler2_mir::RuntimeTy;
@@ -4113,23 +4103,19 @@ mod tests {
         assert_eq!(tuple_slot_type(&direct, Some(1)), Some(RuntimeTy::string()));
         assert_eq!(tuple_slot_type(&direct, Some(2)), None);
         assert_eq!(tuple_slot_type(&direct, Some(-1)), None);
-        // An unknown index is typed only when every slot agrees.
         assert_eq!(tuple_slot_type(&direct, None), None);
         assert_eq!(
             tuple_slot_type(&pair(RuntimeTy::int(), RuntimeTy::int()), None),
             Some(RuntimeTy::int())
         );
 
-        // Arms agreeing on the slot collapse to it, across arities too.
         let agreeing = RuntimeTy::union([
             direct.clone(),
             RuntimeTy::Tuple(vec![RuntimeTy::int()].into()),
         ]);
         assert_eq!(tuple_slot_type(&agreeing, Some(0)), Some(RuntimeTy::int()));
-        // A slot missing from an arm has no static type.
         assert_eq!(tuple_slot_type(&agreeing, Some(1)), None);
 
-        // Arms that differ join into a union, never one arm's primitive.
         let differing = RuntimeTy::union([direct, pair(RuntimeTy::float(), RuntimeTy::string())]);
         assert_eq!(
             tuple_slot_type(&differing, Some(0)),
@@ -4140,7 +4126,6 @@ mod tests {
             Some(RuntimeTy::string())
         );
 
-        // A non-tuple arm leaves the slot unknown.
         let mixed = RuntimeTy::union([
             pair(RuntimeTy::int(), RuntimeTy::int()),
             RuntimeTy::string(),

@@ -830,7 +830,6 @@ fn display_instruction_textual(
             let name = meta_str(idx);
             format!("store_field_local .{name}")
         }
-        // A tuple slot is its number, so it needs no name metadata.
         Instruction::LoadTupleField(slot) => format!("load_tuple_field .{slot}"),
         // The operand indexes the *interface's* field list, not the receiver's
         // layout, so show the name and mark it virtual.

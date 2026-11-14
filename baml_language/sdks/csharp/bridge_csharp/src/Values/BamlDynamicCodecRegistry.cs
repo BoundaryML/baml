@@ -10,12 +10,6 @@ internal static class BamlDynamicCodecRegistry
 {
     private static readonly ConcurrentDictionary<Type, EntrySet> Entries = [];
 
-    // Tuple and list declarations whose slot or item types name unions. A
-    // union is not context-free on its own (its CLR arms are one ordering of
-    // its options), so these never decode a value by its own type alone; they
-    // serve tuples that carry their type: a tuple identity names its union
-    // slots exactly, and a list of the join of its slot types is the fallback
-    // representation when no tuple type is registered.
     private static readonly ConcurrentDictionary<Type, IReadOnlyList<Entry>> Structural = [];
 
     internal static void Register(
@@ -108,12 +102,6 @@ internal static class BamlDynamicCodecRegistry
         return false;
     }
 
-    /// <summary>
-    /// Decode a tuple that carries no type, or a plain list, as the registered
-    /// tuple type <typeparamref name="T"/>: the requested type supplies the
-    /// shape. The arity must match exactly and every slot must decode through
-    /// its own slot codec; anything else is no match.
-    /// </summary>
     internal static bool TryDecodeTupleShape<T>(BamlValue value, out T result)
     {
         result = default!;
@@ -157,11 +145,6 @@ internal static class BamlDynamicCodecRegistry
         return false;
     }
 
-    /// <summary>
-    /// Decode a tuple that carries its type as a registered tuple type whose
-    /// slots name unions: the carried identity must be exactly the registered
-    /// one. Tuple types without unions are found by <see cref="TryDecode{T}"/>.
-    /// </summary>
     internal static bool TryDecodeCarriedTuple<T>(BamlValue value, out T result)
     {
         result = default!;
@@ -191,14 +174,6 @@ internal static class BamlDynamicCodecRegistry
         return false;
     }
 
-    /// <summary>
-    /// Decode a tuple that carries its type as a registered list of the join
-    /// of its carried slot types, <c>(T1 | T2 | …)[]</c>: the fallback when its
-    /// tuple type has no registered C# type. The list's item type must name
-    /// exactly the join's members (in any order); each slot crosses as the
-    /// union arm of its own carried slot type, never one guessed from its
-    /// value. Every slot is kept, in order.
-    /// </summary>
     internal static bool TryDecodeTupleJoinList<T>(BamlValue value, out T result)
     {
         result = default!;
@@ -283,18 +258,12 @@ internal static class BamlDynamicCodecRegistry
             }
             catch (Exception error) when (error is BamlProtocolException or BamlTypeMappingException)
             {
-                // Not this representation; try the next one.
             }
         }
 
         return false;
     }
 
-    /// <summary>
-    /// A tuple slot as an item of a list of the join: the union arm of the
-    /// slot's carried type (or, for a union slot, of the arm the engine
-    /// selected), with the join as its union type.
-    /// </summary>
     private static BamlGeneratedValue? AsJoinArm(
         BamlGeneratedValue item,
         BamlTy slotType,
@@ -353,10 +322,6 @@ internal static class BamlDynamicCodecRegistry
             "$");
     }
 
-    /// <summary>
-    /// The members a type contributes to a join: a union's options and an
-    /// optional's inner type plus <c>null</c>, flattened.
-    /// </summary>
     private static IReadOnlyList<BamlTy> Members(BamlTy type)
     {
         var members = new List<BamlTy>();
@@ -425,11 +390,6 @@ internal static class BamlDynamicCodecRegistry
                 : [.. stored, candidate]);
     }
 
-    /// <summary>
-    /// A tuple whose slots, or a list whose item, name unions of otherwise
-    /// context-free types: the declarations a carried tuple type can reach
-    /// through <see cref="Structural"/>.
-    /// </summary>
     private static bool IsStructuralWithUnions(byte[] metadata)
     {
         BamlTy type = BamlGeneratedTypeMetadata.Parse(metadata, "generated");
@@ -516,9 +476,6 @@ internal static class BamlDynamicCodecRegistry
 
     private sealed class EntrySet
     {
-        // Nullable reference annotations erase to the same CLR Type. Keep every
-        // exact occurrence descriptor for decode and prefer the one with the
-        // fewest nullable parts for context-free encoding.
         private readonly IReadOnlyDictionary<BamlTypeDescriptor, Entry> entries;
 
         internal EntrySet(Entry entry)
@@ -565,10 +522,6 @@ internal static class BamlDynamicCodecRegistry
         internal bool TryGetValue(BamlTypeDescriptor descriptor, out Entry entry) =>
             entries.TryGetValue(descriptor, out entry!);
 
-        // Two descriptors of one CLR type that differ only in nullability. A
-        // nullable value type is a CLR type of its own, so any difference is
-        // a nullable reference annotation, at the top or inside (a tuple
-        // slot: `(string?, long)` and `(string, long)` are one CLR type).
         private static bool AreNullableReferenceAliases(
             BamlTypeDescriptor left,
             BamlTypeDescriptor right) =>

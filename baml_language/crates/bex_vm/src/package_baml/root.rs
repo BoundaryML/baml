@@ -265,9 +265,6 @@ fn has_to_string_override(
 /// override node is recorded and *not* descended into — its `to_string` owns its
 /// whole subtree. Immutable and allocation-free so the garbage collector cannot
 /// move objects mid-walk. Matches the traversal order of [`render_to_sink`] so
-/// the two stay index-aligned, including its cycle guard: an object reached
-/// again while it is still on the walk's stack is a back-edge, which the
-/// renderer prints as `…` without descending, so this pass skips it too.
 pub(super) fn collect_to_string_overrides(
     vm: &BexVm,
     value: Value,
@@ -563,7 +560,6 @@ enum DisplaySnap {
     /// An array — elements rendered as `[a, b, c]`, with at most one trailing
     /// ellipsis when diagnostic limits omit further siblings.
     Seq(Vec<Value>, bool),
-    /// A tuple — elements rendered as `(a, b)`, a 1-tuple as `(a,)`.
     Tuple(Vec<Value>, bool),
     /// A map whose keys and values are rendered recursively.
     Entries(Vec<(Value, Value)>, bool),
@@ -577,13 +573,6 @@ const TRUNCATED_RENDER: &str = "…";
 
 /// Mutable traversal state for structural string rendering.
 ///
-/// User-facing `ToString` rendering has no depth or size bound and carries the
-/// precomputed override tables; it shares the diagnostic renderer's cycle
-/// guard, so a value reached again while it is still being rendered prints as
-/// an ellipsis instead of recursing forever (shared, acyclic values render in
-/// full each time). Native diagnostic rendering has empty override tables and
-/// strict depth/node/cycle guards: an error-reporting path must degrade to an
-/// ellipsis rather than dispatch, throw, or recurse forever.
 pub(super) struct StringRenderState<'a> {
     pending: &'a [HeapPtr],
     results: &'a [String],
@@ -861,7 +850,6 @@ pub(super) fn render_to_sink(
                 }
                 sink.push_text(TRUNCATED_RENDER);
             } else if rendered_count == 1 {
-                // `(a,)`: without the comma a 1-tuple would read as grouping.
                 sink.push_text(",");
             }
             sink.push_text(")");
@@ -1027,6 +1015,7 @@ fn deep_copy_value_recursive(
                     for (slot, element) in tuple.slot_values().enumerate() {
                         let copied = deep_copy_value_recursive(vm, element, copied_objects)?;
                         // SAFETY: the destination tuple is private until copying completes.
+                        #[allow(unsafe_code)]
                         let Object::Tuple(copy) = (unsafe { placeholder_ptr.get_mut() }) else {
                             unreachable!("the placeholder was allocated as a tuple")
                         };

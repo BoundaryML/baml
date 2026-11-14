@@ -1144,26 +1144,9 @@ pub enum Instruction {
         index: usize,
     },
 
-    /// Builds a tuple and allocates it on the heap.
-    ///
-    /// Format: `ALLOC_TUPLE n` where `n` is the number of elements (zero is
-    /// valid). All elements must be on the stack, first element deepest, with
-    /// the tuple's instantiated type on top (a preceding `LoadType`, already
-    /// resolved against the frame's type args): `[e0, .., e(n-1), type((T0,
-    /// ..))] -> [tuple]`. The tuple carries those slot types; their count must
-    /// be `n`. Appended so serialized instruction discriminants stay stable.
     AllocTuple(usize),
 
-    /// Load a slot of a tuple.
-    ///
-    /// Format: `LOAD_TUPLE_FIELD i` where `i` is the zero-based slot number,
-    /// fixed at compile time: `[tuple] -> [element]`. Accepts only a tuple
-    /// (class fields use [`Self::LoadField`]); an out-of-range slot is an
-    /// invalid field access. Appended so serialized instruction discriminants
-    /// stay stable.
     LoadTupleField(usize),
-
-
 }
 
 /// Compact bytecode opcodes.
@@ -1405,10 +1388,7 @@ pub enum OpCode {
     // u32 iterator slot + u32 index slot; appended to preserve discriminants.
     ArrayIterNext,
     ArrayIterNextLocal,
-    /// Appended last to keep every earlier opcode byte stable.
     AllocTuple,
-    // Tuple slot read/write (u32 slot), appended to keep every earlier opcode
-    // byte stable.
     LoadTupleField,
 }
 
@@ -3706,11 +3686,17 @@ mod compact_tests {
 
     #[test]
     fn encode_tuple_field_read() {
-        let bc = make_bytecode(vec![Instruction::LoadTupleField(258), Instruction::Return], Vec::new());
+        let bc = make_bytecode(
+            vec![Instruction::LoadTupleField(258), Instruction::Return],
+            Vec::new(),
+        );
         let compact = bc.lower_to_compact();
         assert_eq!(compact.code.len(), 6);
         assert_eq!(compact.code[0], OpCode::LoadTupleField as u8);
-        assert_eq!(u32::from_le_bytes(compact.code[1..5].try_into().unwrap()), 258);
+        assert_eq!(
+            u32::from_le_bytes(compact.code[1..5].try_into().unwrap()),
+            258
+        );
         assert_eq!(compact.code[5], OpCode::Return as u8);
         let encoded = borsh::to_vec(&bc.instructions).unwrap();
         let decoded: Vec<Instruction> = borsh::from_slice(&encoded).unwrap();

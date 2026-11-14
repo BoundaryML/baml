@@ -198,7 +198,6 @@ export function lowerTypeToWireTy(token) {
             return { union: { options: shape.union.map(lowerTypeToWireTy) } };
         }
         if ('tuple' in shape) {
-            // Slots keep their order and repeats; a tuple has at least one.
             if (!Array.isArray(shape.tuple) || shape.tuple.length === 0)
                 return unsupported(token);
             return { tuple: { items: shape.tuple.map(lowerTypeToWireTy) } };

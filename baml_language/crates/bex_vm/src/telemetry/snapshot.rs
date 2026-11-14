@@ -165,8 +165,6 @@ impl Scratch {
                     })
                 }
                 Object::Tuple(tuple) => {
-                    // The carried slot types, never the types of the values
-                    // the slots hold now.
                     let element_types: SmallVec<[(OwnedType, bool); 4]> = {
                         let mut leaves = b.leaves();
                         tuple

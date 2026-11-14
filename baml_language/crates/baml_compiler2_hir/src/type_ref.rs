@@ -80,7 +80,6 @@ pub enum TypeRefKind {
     Union {
         variants: Box<[TypeRefId]>,
     },
-    /// `(A, B)`, `(A,)`
     Tuple {
         elements: Box<[TypeRefId]>,
     },

@@ -221,8 +221,6 @@ func outboundToInbound(value *cffi.BamlOutboundValue, transaction *inputTransact
 			ListValue: &cffi.InboundListValue{Values: values},
 		}}, nil
 	case *cffi.BamlOutboundValue_TupleValue:
-		// An inbound tuple is a list stating its tuple type: the type the
-		// engine carried beside the tuple, one slot type per item.
 		tuple := item.TupleValue
 		if tuple == nil {
 			return nil, errors.New("thrown tuple value is empty")

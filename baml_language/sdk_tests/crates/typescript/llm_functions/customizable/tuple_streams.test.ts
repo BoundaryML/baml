@@ -1,14 +1,3 @@
-// Tuples as stream items, offline: `baml_sdk/tuple_streams` scripts each
-// function's client to replay fixed text deltas, so the generated stream
-// companions run the ordinary partial/final parse with no replay server (and
-// no HTTP, so every runtime runs them). Web runtimes have no synchronous calls
-// or stream pulls, so only Node also drives the sync forms.
-//
-//   stream_tuple_items$stream(text) -> Stream<[string, number][]>
-//     partials are lists of tuple arrays, `[["a", 1]]` first; the final value
-//     is `[["a", 1], ["b", 2]]`.
-//   stream_tuple_final$stream(text) -> Stream<[number, string]>
-//     every partial is itself a tuple array, and so is the final `[1, "a"]`.
 import { describe, it, expect } from "vitest";
 
 import "./baml_sdk/index.js";
@@ -49,13 +38,11 @@ function expectItemsPartials(partials: [string, number][][]) {
   for (const partial of partials) {
     expect(Array.isArray(partial)).toBe(true);
     for (const item of partial) {
-      // A tuple is an array of exactly its arity, slots in order.
       expect(Array.isArray(item)).toBe(true);
       expect(item).toHaveLength(2);
       expect(typeof item[0]).toBe("string");
       expect(typeof item[1]).toBe("number");
     }
-    // Each partial is a prefix of the final value.
     expect(partial).toEqual(ITEMS.slice(0, partial.length));
   }
 }
@@ -79,7 +66,6 @@ describe("tuple streams", () => {
       expectItemsPartials(drain(() => stream.next()));
       const final = stream.final();
       expect(final).toEqual(ITEMS);
-      // The non-streaming call parses the same reply to the same value.
       expect(tuple_streams.stream_tuple_items("x")).toEqual(final);
     }
 

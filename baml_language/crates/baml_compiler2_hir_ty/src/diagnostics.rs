@@ -243,24 +243,37 @@ impl fmt::Display for ShadowedParamOwner {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TirTypeError {
     /// A declaration trace hook is invalid.
-    InvalidTraceHook { message: String },
+    InvalidTraceHook {
+        message: String,
+    },
     /// Type mismatch: expected vs actual.
-    TypeMismatch { expected: Ty, got: Ty },
+    TypeMismatch {
+        expected: Ty,
+        got: Ty,
+    },
     /// A list pattern against a scrutinee none of whose values is a list:
     /// the pattern can never match.
-    ListPatternNeverMatches { scrutinee: Ty },
+    ListPatternNeverMatches {
+        scrutinee: Ty,
+    },
     /// Member not found on a known type.
     ///
     /// Reported when the base type IS resolved (known class/enum) but the
     /// member doesn't exist. Error messages are tailored by base type:
     /// - Class: "Class `X` has no member `y`"
     /// - Enum: "Enum `X` has no variant `y`"
-    UnresolvedMember { base_type: Ty, member: Name },
+    UnresolvedMember {
+        base_type: Ty,
+        member: Name,
+    },
     /// A member (method or field) accessed on a union type is not reachable because
     /// the union's arms implement no *common* interface that declares it. Each arm may
     /// declare it independently (via distinct interfaces), but those are different
     /// members — the union has no single agreed-upon one.
-    UnionMemberNoCommonInterface { union: Ty, member: Name },
+    UnionMemberNoCommonInterface {
+        union: Ty,
+        member: Name,
+    },
     /// A member reached through a union needs ONE type at a position where
     /// its arms bind an associated type differently. A method parameter takes
     /// one argument whichever arm the receiver holds, and a field is both
@@ -274,7 +287,9 @@ pub enum TirTypeError {
     },
     /// A path that resolved to nothing started at an item of this namespace
     /// spelled like a package: the package is out of reach by that name.
-    ItemShadowsPackage { name: Name },
+    ItemShadowsPackage {
+        name: Name,
+    },
     /// Name could not be resolved at all.
     UnresolvedName {
         name: Name,
@@ -284,20 +299,28 @@ pub enum TirTypeError {
     /// A value name was written bare in a generic slot. A runtime type is
     /// lifted into a type position only by a `let type T = value;` binding;
     /// the slot then names `T`.
-    ComputedGenericArgumentRequiresLetType { name: Name },
+    ComputedGenericArgumentRequiresLetType {
+        name: Name,
+    },
     /// A `let type T extends … = …` statement has no `else` block. Its bounds
     /// are checked when it runs, so it must say what a miss does.
-    BoundedLetTypeRequiresElse { name: Name },
+    BoundedLetTypeRequiresElse {
+        name: Name,
+    },
     /// A `let type` operand is a class builder's pending type, which is not a
     /// type until the builder is built.
     LetTypePendingOperand,
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
-    MountedPackageCallUnsupported { path: Name },
+    MountedPackageCallUnsupported {
+        path: Name,
+    },
     /// An assignment target spelled as a path whose root is not a local
     /// binding - a function, an enum variant, a class - so there is no
     /// storage to write through (`mk = mk`, `Shape.Circle = Shape.Circle`).
-    InvalidAssignmentTarget { path: Name },
+    InvalidAssignmentTarget {
+        path: Name,
+    },
     /// A constant pattern argument to `baml.regex.new` does not compile.
     /// Checked here so a typo in a literal pattern is a source error rather
     /// than a throw the program has to reach to discover.
@@ -314,7 +337,10 @@ pub enum TirTypeError {
     /// A shorthand property (`{ name }`) could not resolve its implicit value.
     /// Suggestions are in-scope values with similar names; the diagnostic
     /// renders them as explicit `name: suggestion` mappings.
-    UnresolvedPropertyShorthand { name: Name, suggestions: Vec<Name> },
+    UnresolvedPropertyShorthand {
+        name: Name,
+        suggestions: Vec<Name>,
+    },
     /// A class constructor shorthand property resolves as a value but its name
     /// is not an exact class-field match.
     UnknownClassPropertyShorthand {
@@ -338,7 +364,9 @@ pub enum TirTypeError {
     },
     /// Sealed reflection-kind values are VM views and cannot be constructed
     /// with an object literal.
-    CannotConstructReflectionKind { class_name: baml_type::DeclName },
+    CannotConstructReflectionKind {
+        class_name: baml_type::DeclName,
+    },
     /// Builtin companion carriers (`baml.Int`, `baml.Map`, …) hold no fields
     /// and cannot be constructed with an object literal.
     CannotConstructBuiltinCompanion {
@@ -355,26 +383,44 @@ pub enum TirTypeError {
     },
     /// A constructor head that is an alias of a type no object literal can
     /// construct (anything but a class).
-    CannotConstructAlias { name: Name, denotes: baml_type::Ty },
+    CannotConstructAlias {
+        name: Name,
+        denotes: baml_type::Ty,
+    },
     /// A constructor head that is a type parameter or a scoped `type`
     /// binding: it shadows every item and names no class.
-    ConstructedTypeParameter { name: Name },
+    ConstructedTypeParameter {
+        name: Name,
+    },
     /// A builtin that is lowered where it is called (`log.info`,
     /// `baml.spawn.__spawn`, ...) was referenced as a value.
-    CallSiteBuiltinValue { reference: String },
+    CallSiteBuiltinValue {
+        reference: String,
+    },
     /// Unreachable code after a diverging statement (return/break/continue).
-    DeadCode { unreachable_count: usize },
+    DeadCode {
+        unreachable_count: usize,
+    },
     /// A value was produced where only the unit type is admitted: the final
     /// expression of a block expected to be unit, the branch of an `if` with
     /// no `else`. The value would be dropped silently, so the author
     /// discards it with `;`.
-    UnitExpected { context: UnitContext, found: Ty },
+    UnitExpected {
+        context: UnitContext,
+        found: Ty,
+    },
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
-    NotCallable { ty: Ty },
+    NotCallable {
+        ty: Ty,
+    },
     /// Expression is not iterable (e.g. `for let i in 42 { ... }` where 42 is an int).
-    NotIterable { ty: Ty },
+    NotIterable {
+        ty: Ty,
+    },
     /// Expression is not indexable (e.g. `true[0]`).
-    NotIndexable { ty: Ty },
+    NotIndexable {
+        ty: Ty,
+    },
     /// A class destructuring pattern names a field the class does not declare.
     UnknownClassPatternField {
         class_name: DeclName,
@@ -384,7 +430,9 @@ pub enum TirTypeError {
     /// A `map` type expression whose key type is not `string` (e.g. `map<int, V>`).
     /// Map keys are strings at runtime, so the key type must denote `string` or a
     /// subset of it.
-    InvalidMapKeyType { key: Ty },
+    InvalidMapKeyType {
+        key: Ty,
+    },
     /// Invalid operand types for a binary operator (e.g. `true + false`).
     InvalidBinaryOp {
         op: baml_compiler2_ast::BinaryOp,
@@ -454,11 +502,15 @@ pub enum TirTypeError {
     /// the member, so it cannot be left for inference.
     WildcardInProjectionSubject,
     /// An ordinary inference variable remained unresolved at writeback.
-    TypeMustBeKnown { full_type: Ty },
+    TypeMustBeKnown {
+        full_type: Ty,
+    },
     /// A member was accessed on a value whose type was still being inferred.
     /// Member lookup needs the receiver's structure at that point; resolving
     /// the variable later cannot retroactively choose the member.
-    ReceiverTypeMustBeKnown { member: Name },
+    ReceiverTypeMustBeKnown {
+        member: Name,
+    },
     /// An associated-type projection references `member`, but the subject it
     /// projects through does not declare (or cannot declare) it as an
     /// associated type.
@@ -479,45 +531,54 @@ pub enum TirTypeError {
         candidates: Vec<DeclName>,
     },
     /// Wrong number of arguments in a function call.
-    ArgumentCountMismatch { expected: usize, got: usize },
+    ArgumentCountMismatch {
+        expected: usize,
+        got: usize,
+    },
     /// A positional argument appeared after a named argument in the same call.
     PositionalArgumentAfterNamed,
-    /// An assignment to a tuple element (`t[0] = v`): tuples are immutable.
     TupleElementNotAssignable,
-    /// A tuple indexed by an integer whose value is not known statically
-    /// (`t[i]` with `i: int`): each slot has its own type, so the index must
-    /// be static or have an integer literal type.
-    TupleIndexNotStatic { found: Ty },
-    /// A static tuple index outside the receiver's slots (`t[2]` on a pair,
-    /// `t[-1]`). For a union receiver, `variant` is the tuple variant that
-    /// lacks the slot.
+    FunctionFieldNeedsParens,
     TupleIndexOutOfRange {
         index: i64,
         tuple: Ty,
         variant: Option<Ty>,
     },
-    /// A whole-tuple type test (`(0, 0)`, `(int?, string)`, or an alias of a
-    /// tuple type in a pattern) that no tuple of the scrutinee's static type
-    /// can pass: it compares the tuple's carried type, never its values.
-    TupleTypeTestNeverMatches { scrutinee: Ty, tested: Ty },
+    TupleTypeTestNeverMatches {
+        scrutinee: Ty,
+        tested: Ty,
+    },
     /// A named argument was supplied more than once.
-    DuplicateNamedArgument { name: Name },
+    DuplicateNamedArgument {
+        name: Name,
+    },
     /// A call supplied a named argument that is not present in the callable type.
-    UnknownNamedArgument { name: Name },
+    UnknownNamedArgument {
+        name: Name,
+    },
     /// Native and compiler-only calls do not expose a traceable invocation.
     TraceUnsupportedCall,
     /// Trace handles have no public constructor or fields.
     TraceOpaqueValue,
     /// A defaulted parameter was supplied positionally instead of by name.
-    DefaultedParamPassedPositionally { name: Name },
+    DefaultedParamPassedPositionally {
+        name: Name,
+    },
     /// A required parameter was omitted.
-    MissingRequiredArgument { name: Name },
+    MissingRequiredArgument {
+        name: Name,
+    },
     /// A required parameter appeared after a defaulted parameter in a declaration.
-    RequiredParamAfterDefault { name: Name },
+    RequiredParamAfterDefault {
+        name: Name,
+    },
     /// The special `self` receiver cannot declare a default.
     SelfParamDefault,
     /// A default expression referenced a later parameter from the same signature.
-    DefaultParamForwardReference { param: Name, referenced: Name },
+    DefaultParamForwardReference {
+        param: Name,
+        referenced: Name,
+    },
     /// An implicit unit — a block with no final expression, an `if` with no
     /// `else`, a bare `return;` — stands where a type other than the unit
     /// type is expected. `null <: int?` does not admit it: the value the
@@ -533,13 +594,18 @@ pub enum TirTypeError {
     /// Examples: `type A = A`, `type A = B; type B = A`.
     /// Valid recursion through containers (`type JSON = string | JSON[]`) does NOT
     /// trigger this — only cycles with no base case.
-    AliasCycle { name: Name },
+    AliasCycle {
+        name: Name,
+    },
     /// Class participates in an unconstructable required-field cycle.
     ///
     /// Examples: `class A { b B }; class B { a A }`.
     /// Cycles through optional, list, or map fields are valid since those can
     /// be null/empty, breaking the construction dependency.
-    ClassCycle { name: Name, cycle_path: String },
+    ClassCycle {
+        name: Name,
+        cycle_path: String,
+    },
     /// `match` is missing arms for one or more values.
     NonExhaustiveMatch {
         scrutinee_type: Ty,
@@ -565,7 +631,9 @@ pub enum TirTypeError {
     },
     /// A generic class destructure with fields must write its type arguments
     /// directly on the class pattern, e.g. `Box<int> { value }`.
-    GenericClassDestructureRequiresTypeArgs { class_name: Name },
+    GenericClassDestructureRequiresTypeArgs {
+        class_name: Name,
+    },
     /// A rest pattern (`..`) carries a sub-pattern that is not binding-shaped.
     /// Allowed: `..let r`, `.._`, bind chains, and a terminal `: T` ascription
     /// link. Rejected: bare type patterns, structural destructures, and
@@ -574,14 +642,18 @@ pub enum TirTypeError {
     RestSubPatternNotBinding,
     /// A `let` statement or `for-let` binding uses a pattern that can fail
     /// for values of the type flowing into it.
-    RefutablePatternInLet { context: IrrefutableContextKind },
+    RefutablePatternInLet {
+        context: IrrefutableContextKind,
+    },
     /// An `if let` pattern that covers every value of the scrutinee — the
     /// `else` branch is unreachable. Suggests using a plain `let` instead.
     IrrefutablePatternInIfLet,
     /// `let … else { … }` whose else block does not have type `Ty::Never`.
     /// The else branch must diverge — return, throw, break, continue, or
     /// loop forever — so that fall-through past the binding cannot occur.
-    LetElseMustDiverge { got: Ty },
+    LetElseMustDiverge {
+        got: Ty,
+    },
     /// A `let … else` pattern that covers every value of the initializer
     /// type — the else branch is unreachable. Suggest using a plain `let`.
     IrrefutablePatternInLetElse,
@@ -592,9 +664,13 @@ pub enum TirTypeError {
     /// `return`/`break`/`continue` inside a `defer` body that would escape the
     /// defer (BEP-042). Only `throw` may leave a defer. `keyword` is the
     /// offending control-flow keyword.
-    DeferControlFlowEscape { keyword: &'static str },
+    DeferControlFlowEscape {
+        keyword: &'static str,
+    },
     /// Catch binding cannot be typed as `any` or `unknown`.
-    InvalidCatchBindingType { type_name: String },
+    InvalidCatchBindingType {
+        type_name: String,
+    },
     /// Inferred escaping throws are not covered by the declared throws contract.
     ThrowsContractViolation {
         declared: Ty,
@@ -609,7 +685,9 @@ pub enum TirTypeError {
         concrete_throws: Option<Ty>,
     },
     /// Declared throws contains extra types that never escape.
-    ExtraneousThrowsDeclaration { extra_types: Vec<String> },
+    ExtraneousThrowsDeclaration {
+        extra_types: Vec<String>,
+    },
     /// An `unknown`-containing throws contract without an escaping value typed
     /// `unknown`.
     ImpreciseUnknownThrows {
@@ -622,15 +700,23 @@ pub enum TirTypeError {
         needs_declaration: bool,
     },
     /// A type parameter could not be inferred at a call site.
-    CannotInferTypeParameter { name: Name },
+    CannotInferTypeParameter {
+        name: Name,
+    },
     /// An interface pattern's instantiation leaves the associated type
     /// `name` unpinned, and nothing else determines it.
-    CannotInferAssociatedType { name: Name },
+    CannotInferAssociatedType {
+        name: Name,
+    },
     /// A type parameter's arguments give it types with no common candidate
     /// (`pick(1, "s")` for `pick<T>(a: T, b: T)`), and nothing else - an
     /// expected type - decides between them. Two of the conflicting types
     /// are named.
-    ConflictingTypeArguments { name: Name, first: Ty, second: Ty },
+    ConflictingTypeArguments {
+        name: Name,
+        first: Ty,
+        second: Ty,
+    },
     /// A method's generic type parameter shadows a generic parameter of the
     /// enclosing class or interface.
     TypeParamShadowed {
@@ -640,14 +726,22 @@ pub enum TirTypeError {
     },
     /// A method's generic type parameter shadows a generic parameter declared on
     /// the enclosing `implements` block.
-    TypeParamShadowedImplParam { param_name: Name },
+    TypeParamShadowedImplParam {
+        param_name: Name,
+    },
     /// A generic type parameter declared more than once in the same parameter list.
-    DuplicateGenericParam { name: Name },
+    DuplicateGenericParam {
+        name: Name,
+    },
     /// An associated type declared more than once on the same interface.
-    DuplicateAssociatedType { name: Name },
+    DuplicateAssociatedType {
+        name: Name,
+    },
     /// An associated type sharing its name with one of the interface's own
     /// generic parameters.
-    AssociatedTypeConflictsWithGenericParam { name: Name },
+    AssociatedTypeConflictsWithGenericParam {
+        name: Name,
+    },
     /// Wrong number of type arguments for a generic class or interface.
     WrongNumberOfTypeArgs {
         type_name: Name,
@@ -674,7 +768,10 @@ pub enum TirTypeError {
     },
     /// Type arguments were supplied for a type that is not generic
     /// (enums and type aliases cannot take type parameters).
-    TypeIsNotGeneric { type_name: Name, kind: &'static str },
+    TypeIsNotGeneric {
+        type_name: Name,
+        kind: &'static str,
+    },
     /// A generic function was referenced as a value without specialization
     /// (`let f = identity` where `identity<T>`). A generic function is a type
     /// constructor — it must be specialized (`identity<int>`) or have its type
@@ -692,7 +789,9 @@ pub enum TirTypeError {
     },
     /// A lambda parameter has no type annotation and no expected type context
     /// to infer the type from.
-    CannotInferLambdaParamType { param_name: Name },
+    CannotInferLambdaParamType {
+        param_name: Name,
+    },
     /// `?.` used on a non-nullable type (e.g. `a?.b` where `a` is not nullable).
     UnnecessaryOptionalChaining {
         /// The full expression text (e.g. `a?.b`)
@@ -731,27 +830,40 @@ pub enum TirTypeError {
     },
     /// BEP-049 §10: a backtick template was attached to a tag that resolves to
     /// something that isn't a function (so it can't be a tagged-string tag).
-    TaggedTagNotAFunction { name: Name },
+    TaggedTagNotAFunction {
+        name: Name,
+    },
     /// BEP-049 §10: the tag resolves to a function, but it lacks the
     /// `//baml:tagged_string` marker that makes it usable as a tagged-template tag.
-    TaggedTagNotMarked { name: Name },
+    TaggedTagNotMarked {
+        name: Name,
+    },
     /// BEP-049 §10: a `//baml:tagged_string` tag's first parameter is not a
     /// well-formed `body: (...) -> baml.TaggedString` (missing / wrong name /
     /// not a lambda / lambda return type isn't `baml.TaggedString`).
-    TaggedTagBadBodyParam { name: Name },
+    TaggedTagBadBodyParam {
+        name: Name,
+    },
     /// BEP-049 §11: an untagged `${expr}` interpolates a nullable value. The
     /// implicit `.to_string()` can't run on a possibly-null value; the user
     /// must coalesce (`${x ?? "…"}`) or unwrap first.
-    InterpolatedValueMaybeNull { ty: Ty },
+    InterpolatedValueMaybeNull {
+        ty: Ty,
+    },
     /// The output-format method was referenced without being called.
     OutputFormatNotCalled,
     /// An untagged `${expr}` interpolates a value whose type holds an
     /// `ai.Role`. Only a `prompt` template turns a role marker into a message
     /// boundary; an untagged string would render it as text.
-    RoleMarkerInUntaggedTemplate { ty: Ty },
+    RoleMarkerInUntaggedTemplate {
+        ty: Ty,
+    },
     /// A condition whose truthiness is statically known. The type is included
     /// when it alone proves the result (rather than boolean composition).
-    ConditionAlwaysConstant { ty: Option<Ty>, always_true: bool },
+    ConditionAlwaysConstant {
+        ty: Option<Ty>,
+        always_true: bool,
+    },
     /// A function value tested without being called.
     UncalledFunctionInCondition {
         name: String,
@@ -797,7 +909,9 @@ pub enum TirTypeError {
 
     /// `.as<T>` is an interface projection/upcast; the target must be an
     /// interface type.
-    InvalidInterfaceUpcastTarget { target: Ty },
+    InvalidInterfaceUpcastTarget {
+        target: Ty,
+    },
 
     /// Interface members are instance/view members, not static members on the
     /// interface type. Call through an interface-typed value or `.as<I>`.
@@ -870,7 +984,10 @@ pub enum TirTypeError {
     },
     /// BEP-044: a value almost satisfies an interface via a blanket impl, but a
     /// generic bound (`T extends Bound`) is not met. Names the failed bound.
-    BlanketBoundNotSatisfied { value_type: Ty, bound: Ty },
+    BlanketBoundNotSatisfied {
+        value_type: Ty,
+        bound: Ty,
+    },
     /// More than one implementation could prove that `value_type` implements
     /// `interface`, and nothing in the program picks one (rustc's E0283).
     AmbiguousImplementation {
@@ -881,18 +998,26 @@ pub enum TirTypeError {
     /// An integer literal (or a constant-folded integer expression) is outside
     /// the representable `int` range `[-2^62, 2^62-1]`. `int` is 63-bit; larger
     /// magnitudes need a `bigint` literal (`n` suffix).
-    IntegerLiteralOutOfRange { value: i64 },
+    IntegerLiteralOutOfRange {
+        value: i64,
+    },
     /// BEP-044: a generic parameter's bound (`<T extends X>`) resolved to a
     /// concrete non-interface type. Generic bounds must be interfaces.
-    GenericBoundNotInterface { bound: Ty },
+    GenericBoundNotInterface {
+        bound: Ty,
+    },
     /// BEP-062: an `implements` block targets a compiler-builtin interface
     /// (`reflect.AnyFunction`), whose conformance is derived by the compiler and
     /// cannot be written by hand.
-    BuiltinInterfaceNotImplementable { interface: DeclName },
+    BuiltinInterfaceNotImplementable {
+        interface: DeclName,
+    },
     /// BEP-062: a generic parameter's bound names a compiler-builtin interface
     /// (`reflect.AnyFunction`) that is only legal as a value type (an
     /// existential), never as a bound.
-    BuiltinInterfaceNotABound { interface: DeclName },
+    BuiltinInterfaceNotABound {
+        interface: DeclName,
+    },
     /// [`TYPE_SYSTEM.md` § Generics on Functions](TYPE_SYSTEM.md#generics-on-functions):
     /// an interface-bounded type parameter
     /// (`<T extends I>`) was given a non-concrete type argument (a union,
@@ -928,7 +1053,10 @@ pub enum TirTypeError {
     /// interface alone does not determine it (Rust's E0223). Naming the
     /// interface explicitly takes a qualified projection
     /// (`(Base as Iterator).Element`).
-    InterfaceProjectionBase { interface: DeclName, member: Name },
+    InterfaceProjectionBase {
+        interface: DeclName,
+        member: Name,
+    },
     /// A *bare* interface destructure pattern (`Source { value }`, no written generic
     /// args or associated bindings) adopts its associated-type bindings from the
     /// scrutinee — so the scrutinee must determine them uniquely. A scrutinee admitting
@@ -942,7 +1070,10 @@ pub enum TirTypeError {
     },
     /// An `implements` block does not provide a body for a method the interface
     /// declares as required (no default). Impl conformance (E0113).
-    MissingInterfaceMethod { interface: DeclName, method: Name },
+    MissingInterfaceMethod {
+        interface: DeclName,
+        method: Name,
+    },
     /// A `$rust_io_function` (sys-op) method inside an `implements` block has
     /// method-level generic parameters. An impl-block method is reached only
     /// through interface (virtual) dispatch, which does not reconstruct the
@@ -950,17 +1081,28 @@ pub enum TirTypeError {
     /// stack — so such a call would fail at runtime. (A generic sys-op declared
     /// directly on a class is fine: it lowers to a direct `SysOp` instruction,
     /// which does supply those slots.) Impl conformance.
-    GenericSysOpMethodInInterfaceImpl { interface: DeclName, method: Name },
+    GenericSysOpMethodInInterfaceImpl {
+        interface: DeclName,
+        method: Name,
+    },
     /// An interface that declares fields is implemented out-of-body
     /// (`implement I for T`). A field-bearing interface can only be implemented in the
     /// class body, where its fields are satisfied by the class's own fields (E0126).
-    OutOfBodyImplementsFieldInterface { interface: DeclName },
+    OutOfBodyImplementsFieldInterface {
+        interface: DeclName,
+    },
     /// An `implements` block provides a method the interface neither requires nor
     /// declares as a default — so it overrides nothing. Impl conformance (E0115).
-    UnknownInterfaceMember { interface: DeclName, member: Name },
+    UnknownInterfaceMember {
+        interface: DeclName,
+        member: Name,
+    },
     /// An interface field is not satisfied by any class field — neither a same-named
     /// field nor an explicit `field as class_field` link. Impl conformance (E0124).
-    MissingInterfaceField { interface: DeclName, field: Name },
+    MissingInterfaceField {
+        interface: DeclName,
+        field: Name,
+    },
     /// The class field satisfying an interface field has an incompatible type — field types
     /// are invariant, so they must be equivalent. Impl conformance (E0116).
     InterfaceFieldTypeMismatch {
@@ -1001,13 +1143,19 @@ pub enum TirTypeError {
     },
     /// An `implements` head names a type that is not an interface (a class, enum, or alias).
     /// Impl header (E0119).
-    ImplTargetNotInterface { name: Name },
+    ImplTargetNotInterface {
+        name: Name,
+    },
     /// An out-of-body impl's `for` target is not a single concrete impl subject — a union,
     /// optional, interface (`dyn`), literal, `unknown`, function, `Future`, … Impl header (E0138).
-    ImplTargetNotConcrete { target: Ty },
+    ImplTargetNotConcrete {
+        target: Ty,
+    },
     /// An impl declares a generic parameter that its `for` type and interface arguments do not
     /// determine, so it can never be inferred at a use site. Impl header (E0135).
-    UnconstrainedImplTypeParam { name: Name },
+    UnconstrainedImplTypeParam {
+        name: Name,
+    },
     /// An out-of-body impl of a *foreign* interface is not anchored on a local type — the
     /// RFC-2451 covered rule (BEP-044). Impl header (E0139).
     ImplViolatesOrphanRule {
@@ -1018,7 +1166,10 @@ pub enum TirTypeError {
     },
     /// The left side of a `field as class_field` link does not name a field of the
     /// implemented interface. Field-link well-formedness (E0128).
-    UnknownInterfaceFieldLink { interface: DeclName, field: Name },
+    UnknownInterfaceFieldLink {
+        interface: DeclName,
+        field: Name,
+    },
     /// The right side of a `field as class_field` link does not name a field of the
     /// class. Field-link well-formedness (E0129).
     UnknownClassFieldInInterfaceLink {
@@ -1028,20 +1179,34 @@ pub enum TirTypeError {
     },
     /// The same interface field is linked by more than one `field as class_field` link in
     /// one `implements` block. Field-link well-formedness (E0130).
-    DuplicateInterfaceFieldLink { interface: DeclName, field: Name },
+    DuplicateInterfaceFieldLink {
+        interface: DeclName,
+        field: Name,
+    },
     /// A `type Name = …` binding in an `implements` block names an associated type the
     /// interface does not declare. Assoc-binding hygiene.
-    UnknownAssociatedTypeBinding { interface: DeclName, name: Name },
+    UnknownAssociatedTypeBinding {
+        interface: DeclName,
+        name: Name,
+    },
     /// An `implements` block binds the same associated type more than once. Assoc-binding
     /// hygiene.
-    DuplicateAssociatedTypeBinding { interface: DeclName, name: Name },
+    DuplicateAssociatedTypeBinding {
+        interface: DeclName,
+        name: Name,
+    },
     /// An `implements` block does not bind an associated type the interface declares with no
     /// default, so it is left undetermined. Assoc-binding hygiene. (Distinct from
     /// [`Self::MissingAssociatedTypeBindings`], which is the existential *value*-position rule.)
-    MissingImplAssociatedTypeBinding { interface: DeclName, name: Name },
+    MissingImplAssociatedTypeBinding {
+        interface: DeclName,
+        name: Name,
+    },
     /// Associated type bindings were written on an `implements` *target* (`implements
     /// I<Item = …>`) instead of inside the block (`type Item = …`). Assoc-binding hygiene.
-    AssociatedTypeBindingsOnImplementsTarget { interface: DeclName },
+    AssociatedTypeBindingsOnImplementsTarget {
+        interface: DeclName,
+    },
     /// An `implements` block binds an associated type to a type that does not implement the
     /// interface's declared bound for it (`type Item extends J`) — a bound is an *implements*
     /// relation, like a generic bound. Assoc-binding hygiene.
@@ -1054,7 +1219,10 @@ pub enum TirTypeError {
     },
     /// `Self` appears in an interface *field* type. `Self` is only meaningful in method
     /// signatures; a recursive field must name the interface itself. Interface-declaration well-formedness (E0136).
-    SelfInInterfaceField { interface: DeclName, field: Name },
+    SelfInInterfaceField {
+        interface: DeclName,
+        field: Name,
+    },
     /// Bare `Self` appears in an associated type's *default*. `Self` is universal — it
     /// denotes each implementor, not the existential — so at an interface-existential
     /// type (`I<…>`, where the implementor is hidden) such a default has nothing to
@@ -1070,10 +1238,15 @@ pub enum TirTypeError {
     /// alias, or any structural type — the clause parses a full type expression). Only
     /// interfaces can be required, exactly as only interfaces can be generic bounds (see
     /// [`Self::GenericBoundNotInterface`]). Interface-declaration well-formedness (E0133).
-    InterfaceRequiresNonInterface { interface: DeclName, target: Ty },
+    InterfaceRequiresNonInterface {
+        interface: DeclName,
+        target: Ty,
+    },
     /// An interface's transitive `requires` graph cycles back to itself. Interface-declaration well-formedness (E0118).
     /// `chain` is the witnessing name path `[root, …, root]`.
-    InterfaceRequiresCycle { chain: Vec<Name> },
+    InterfaceRequiresCycle {
+        chain: Vec<Name>,
+    },
     /// An interface associated type's default does not implement its declared bound (`type Item
     /// extends J = V` where `V` does not implement `J`). Interface-declaration well-formedness.
     AssociatedTypeDefaultViolatesBound {
@@ -1090,7 +1263,10 @@ pub enum TirTypeError {
     CyclicImplHeader,
     /// An interface method (required or default) omits its `throws` clause. Interface signatures
     /// must declare it explicitly — it is never inferred (`TYPE_SYSTEM.md` rule 1). Interface-declaration well-formedness.
-    InterfaceMethodMissingThrows { interface: DeclName, method: Name },
+    InterfaceMethodMissingThrows {
+        interface: DeclName,
+        method: Name,
+    },
     /// A function type omits its `throws` clause in a position where the error type cannot be
     /// inferred — a type alias, class field, `let` annotation, nested or return position
     /// (`TYPE_SYSTEM.md` rule 5). Only an immediate callback parameter of a function declaration
@@ -1155,10 +1331,15 @@ pub enum TirTypeError {
     /// An optional field, in a class an LLM function returns, that a model's
     /// JSON answer can never fill (a warning): its type has no JSON form
     /// besides `null`, so the field is always `null`.
-    LlmOutputFieldAlwaysNull { field: Name },
+    LlmOutputFieldAlwaysNull {
+        field: Name,
+    },
     /// `@json` attributes on a class that provides `baml.ToJson` or
     /// `baml.FromJson`, which they would not reach.
-    JsonAttributesWithOverride { name: Name, interface: String },
+    JsonAttributesWithOverride {
+        name: Name,
+        interface: String,
+    },
     /// `@json.flatten` or `@json.fallback` on a field that is not
     /// `map<string, json>`.
     JsonRestFieldType {
@@ -1173,20 +1354,35 @@ pub enum TirTypeError {
     },
     /// `@skip` on a field JSON has to read: a `@json.flatten` or
     /// `@json.fallback` field, or a fallback class's tag.
-    JsonAttributeSkipped { field: Name },
+    JsonAttributeSkipped {
+        field: Name,
+    },
     /// A class with a second `@json.flatten` or `@json.fallback` field.
-    JsonRestRepeated { class: Name },
+    JsonRestRepeated {
+        class: Name,
+    },
     /// A `@json.fallback` class with a field that is not a literal.
-    JsonFallbackFieldNotLiteral { class: Name, field: Name },
+    JsonFallbackFieldNotLiteral {
+        class: Name,
+        field: Name,
+    },
     /// A `@json.fallback` class with no literal field to name its tag.
-    JsonFallbackNoTag { class: Name },
+    JsonFallbackNoTag {
+        class: Name,
+    },
     /// A union with a `@json.fallback` member and a member the tag can't
     /// reach, so the fallback would take its objects or it would take every
     /// object.
-    JsonFallbackUntaggedMember { fallback: Name, member: Ty },
+    JsonFallbackUntaggedMember {
+        fallback: Name,
+        member: Ty,
+    },
     /// A union with a `@json.fallback` member and two members no literal
     /// field tells apart.
-    JsonFallbackOverlap { first: Ty, second: Ty },
+    JsonFallbackOverlap {
+        first: Ty,
+        second: Ty,
+    },
     /// An assignment targets a top-level binding. `$init` sets every global
     /// once and requests then share it, so the binding is immutable; only
     /// what it holds may change.
@@ -1196,12 +1392,16 @@ pub enum TirTypeError {
         is_client: bool,
     },
     /// A `return` at the top level of a global variable's initializer.
-    ReturnInGlobalInitializer { name: Name },
+    ReturnInGlobalInitializer {
+        name: Name,
+    },
     /// Global variables whose initializers need each other's values: no
     /// order exists in which `$init` could evaluate them. `chain` is the
     /// cycle as written, starting and ending at the reported global, with
     /// every function it passes through (`a → helper → b → a`).
-    GlobalInitializationCycle { chain: Vec<Name> },
+    GlobalInitializationCycle {
+        chain: Vec<Name>,
+    },
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1743,18 +1943,14 @@ impl TirTypeError {
                 TirTypeError::ArgumentCountMismatch { expected, got } => {
                     write!(f, "expected {expected} argument(s), got {got}")
                 }
+                TirTypeError::FunctionFieldNeedsParens => write!(
+                    f,
+                    "calling a function-valued member requires parentheses: use `(value.member)(...)`"
+                ),
                 TirTypeError::TupleElementNotAssignable => {
                     write!(
                         f,
                         "cannot assign to a tuple element: tuples are immutable; build a new tuple instead"
-                    )
-                }
-                TirTypeError::TupleIndexNotStatic { found } => {
-                    write!(
-                        f,
-                        "tuple index must be a static or integer-literal-typed value, found `{}`: \
-                         each element has its own type, so the index must name one slot",
-                        found.spell(vp)
                     )
                 }
                 TirTypeError::TupleIndexOutOfRange {

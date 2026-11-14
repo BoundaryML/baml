@@ -905,9 +905,6 @@ fn member_is_opaque_for_tag_proof(m: &RuntimeTy) -> bool {
         | RuntimeTy::Future(..)
         | RuntimeTy::List(..)
         | RuntimeTy::Map { .. }
-        // A tuple carries the fixed `TUPLE` tag, distinct from every other
-        // shape; tuple arms themselves never take the tag path (see
-        // `type_tag_for_ty`).
         | RuntimeTy::Tuple(..)
         | RuntimeTy::RustType
         | RuntimeTy::Type
@@ -1037,8 +1034,6 @@ fn switch_member_tag_sufficient(member: &RuntimeTy, scrutinee: Option<&RuntimeTy
         // A specific variant type (`Color.Red`) needs variant-level discrimination
         // the shared `ENUM` tag can't express, so always take the precise chain.
         RuntimeTy::EnumVariant(..) => false,
-        // Every tuple shares one `TUPLE` tag whatever its arity or elements, so
-        // a tuple arm always takes the precise (structural) chain.
         RuntimeTy::Tuple(..) => false,
         RuntimeTy::Class(name, args) => {
             if args.is_empty() {
@@ -4167,9 +4162,6 @@ impl<'db> LoweringContext<'db> {
         // to the direct-call path, which would name an interface-keyed global
         // that a required method has no body for.
         let recv_ty = &widen_literal_bases(recv_ty);
-        // A tuple's `Compare` is the compiler-derived witness, with no impl
-        // block to find: dispatch its members virtually, so the VM selects
-        // the structural tuple order. TIR has proved the slots comparable.
         if let Tir2Ty::Tuple(_) = recv_ty {
             let compare = self.baml_decl("ops", "Compare");
             return self
@@ -4383,12 +4375,6 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// The slot type templates for a tuple-literal expression — the `T0, T1,
-    /// …` of its `(T0, T1, …)` static type, the checker's inferred or
-    /// contextual instantiation — for [`AggregateKind::Tuple`]. Enclosing
-    /// generics stay frame references, so the tuple carries their realized
-    /// arguments. The checker types every tuple literal as a tuple of its
-    /// arity.
     fn tuple_element_templates(
         &self,
         expr_id: AstExprId,
@@ -7946,11 +7932,13 @@ impl<'db> LoweringContext<'db> {
         dest: Place,
     ) -> Lowered<()> {
         let base_op = self.lower_to_operand(base)?;
+        let base_ty = self.expr_ty(base)?;
+        let base_local = self.operand_to_local(base_op, base_ty);
 
         // Test: base == null
         let is_null = Rvalue::BinaryOp {
             op: BinOp::Eq,
-            left: base_op,
+            left: Operand::Copy(Place::Local(base_local)),
             right: Operand::Constant(Constant::Null),
         };
         let test_local = self.builder.temp(RuntimeTy::Bool);
@@ -7964,7 +7952,13 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_member_access(expr_id, base, field, dest)?;
+            self.lower_member_access_with_base(
+                expr_id,
+                base,
+                field,
+                dest,
+                Some(&Operand::Copy(Place::Local(base_local))),
+            )?;
             // Don't create our own join — the OptionalChain handler does that
         } else {
             // Standalone (no wrapping OptionalChain) — fall back to own null/join blocks
@@ -7975,7 +7969,13 @@ impl<'db> LoweringContext<'db> {
                 .branch(Operand::Copy(Place::Local(test_local)), bb_null, bb_access);
 
             self.builder.set_current_block(bb_access);
-            self.lower_member_access(expr_id, base, field, dest.clone())?;
+            self.lower_member_access_with_base(
+                expr_id,
+                base,
+                field,
+                dest.clone(),
+                Some(&Operand::Copy(Place::Local(base_local))),
+            )?;
             if !self.builder.is_current_terminated() {
                 self.builder.goto(bb_join);
             }
@@ -7997,8 +7997,6 @@ impl<'db> LoweringContext<'db> {
         index: AstExprId,
         dest: Place,
     ) -> Lowered<()> {
-        // Evaluate the receiver once: the null test and the access both read
-        // the same local.
         let base_ty = self.expr_ty(base)?;
         let base_op = self.lower_to_operand(base)?;
         let base_local = self.operand_to_local(base_op, base_ty.clone());
@@ -10607,14 +10605,41 @@ impl<'db> LoweringContext<'db> {
         field: &Name,
         dest: Place,
     ) -> Lowered<()> {
+        self.lower_member_access_with_base(expr_id, base, field, dest, None)
+    }
+
+    fn lower_member_access_with_base(
+        &mut self,
+        expr_id: AstExprId,
+        base: AstExprId,
+        field: &Name,
+        dest: Place,
+        cached_base: Option<&Operand<'db>>,
+    ) -> Lowered<()> {
         if let Ok(slot) = field.as_str().parse::<usize>() {
             let base_ty = self.expr_ty(base)?;
-            let base = self.lower_to_operand(base)?;
+            let base = match cached_base {
+                Some(base) => base.clone(),
+                None => self.lower_to_operand(base)?,
+            };
             let base_local = self.builder.temp(base_ty);
-            self.builder.assign(Place::local(base_local), Rvalue::Use(base));
+            self.builder
+                .assign(Place::local(base_local), Rvalue::Use(base));
             let index = self.builder.temp(RuntimeTy::Int);
-            self.builder.assign(Place::local(index), Rvalue::Use(Operand::Constant(Constant::Int(i64::try_from(slot).expect("tuple slot")))));
-            self.builder.assign(dest, Rvalue::Use(Operand::Copy(Place::Index { base: Box::new(Place::local(base_local)), index, kind: IndexKind::Tuple })));
+            self.builder.assign(
+                Place::local(index),
+                Rvalue::Use(Operand::Constant(Constant::Int(
+                    i64::try_from(slot).expect("tuple slot"),
+                ))),
+            );
+            self.builder.assign(
+                dest,
+                Rvalue::Use(Operand::Copy(Place::Index {
+                    base: Box::new(Place::local(base_local)),
+                    index,
+                    kind: IndexKind::Tuple,
+                })),
+            );
             return Ok(());
         }
         // Check if TIR resolved this to a method or free function — if so, emit a function constant
@@ -10641,7 +10666,10 @@ impl<'db> LoweringContext<'db> {
                     // Bound method reference: lower receiver and emit MakeBoundMethod.
                     let item = resolution.callable(self.db);
                     if let Some(item) = item {
-                        let receiver_op = self.lower_to_operand(base)?;
+                        let receiver_op = match cached_base {
+                            Some(base) => base.clone(),
+                            None => self.lower_to_operand(base)?,
+                        };
                         self.assign_bound_method_value(expr_id, dest, item, receiver_op)?;
                         return Ok(());
                     }
@@ -10697,7 +10725,10 @@ impl<'db> LoweringContext<'db> {
         if let Some(view) = self.dispatch_target_for_member_access(expr_id, base, field)
             && self.mir_interface_declares_method(&view.0, field)
         {
-            let recv_op = self.lower_to_operand(base)?;
+            let recv_op = match cached_base {
+                Some(base) => base.clone(),
+                None => self.lower_to_operand(base)?,
+            };
             let recv_local = self.builder.temp(self.expr_ty(base)?);
             self.builder
                 .assign(Place::local(recv_local), Rvalue::Use(recv_op));
@@ -10720,7 +10751,10 @@ impl<'db> LoweringContext<'db> {
 
         // Regular field access
         let base_ty = self.expr_ty(base)?;
-        let base_op = self.lower_to_operand(base)?;
+        let base_op = match cached_base {
+            Some(base) => base.clone(),
+            None => self.lower_to_operand(base)?,
+        };
         let field_str = field.to_string();
 
         // Unwrap Optional — when called from lower_optional_member_access,
@@ -10907,9 +10941,6 @@ impl<'db> LoweringContext<'db> {
         let base_local = self.operand_to_local(base_op, base_ty.clone());
         let index_local = self.operand_to_local(index_op, index_ty);
 
-        // A tuple slot read (`t[i]`: TIR has proved every arm of the receiver
-        // is a tuple with the slot the index's type names) shares the element
-        // load with lists, never the map fallback.
         let kind = self.index_kind_of(base_ty);
         if kind == IndexKind::Map {
             self.emit_map_call(
@@ -10933,10 +10964,6 @@ impl<'db> LoweringContext<'db> {
         );
     }
 
-    /// How `base[index]` indexes a receiver of checked type `base_ty`. Null
-    /// strips (an optional receiver is null-checked before the access), and
-    /// an opaque recursive alias unfolds to its target, so `chain[1]?.[0]`
-    /// through `type Chain = (int, Chain?)` reads a tuple slot.
     fn index_kind_of(&self, base_ty: &RuntimeTy) -> IndexKind {
         index_kind_for(
             &self
@@ -10945,9 +10972,6 @@ impl<'db> LoweringContext<'db> {
         )
     }
 
-    /// `ty` with every opaque (recursive) alias at its top level, or at the
-    /// top of a union member, replaced by its target. `seen` guards an alias
-    /// that names itself without a constructor in between.
     fn unfold_index_receiver(&self, ty: &RuntimeTy, seen: &mut Vec<DeclName>) -> RuntimeTy {
         match ty {
             RuntimeTy::TypeAlias(name) if !seen.contains(name) => {
@@ -12491,10 +12515,6 @@ impl LoweringContext<'_> {
         }
     }
 
-    /// The place an assignment stores to. Tuples are immutable: TIR rejects
-    /// every tuple-slot store (`t[0] = v`, `t?.[0] += v`, `x?.t[0] = v`), so
-    /// a tuple-slot place here is an internal error rather than a store the
-    /// VM would misroute.
     fn lower_store_place(&mut self, expr_id: AstExprId) -> Lowered<Place> {
         let place = self.lower_lvalue(expr_id)?;
         if matches!(
@@ -12651,8 +12671,6 @@ impl LoweringContext<'_> {
                 let index_op = self.lower_to_operand(index_id)?;
                 let index_ty = self.expr_ty(index_id)?;
                 let index_local = self.operand_to_local(index_op, index_ty);
-                // A tuple slot is only ever the base of a place (`t[0].x =
-                // v`): TIR rejects a store to the slot itself.
                 Ok(Place::Index {
                     base: Box::new(base_place),
                     index: index_local,
@@ -13572,11 +13590,6 @@ impl<'db> LoweringContext<'db> {
             .branch(Operand::Copy(Place::Local(test_local)), success, failure);
     }
 
-    /// The runtime shape test of a destructuring tuple pattern: the value
-    /// is a tuple (its coarse `TUPLE` tag) with exactly `arity` slots,
-    /// whatever slot types it carries. Emitted the same way for every
-    /// scrutinee type, `unknown` included; whole-tuple type tests compare
-    /// carried types through `IsType` instead.
     fn emit_tuple_shape_branch(
         &mut self,
         scrutinee: Local,
@@ -13797,9 +13810,6 @@ impl<'db> LoweringContext<'db> {
             // The class arm names its declaration; the tag is whoever lays
             // that declaration into an image assigns.
             RuntimeTy::Class(tn, _) => layout::class_ref_of(self.db, tn).map(SwitchKey::Class),
-            // Deliberately untagged: one `TUPLE` tag would conflate `(int, int)`
-            // with `(string, string)` in a jump table. Tuple arms go through
-            // the structural `IsType` chain.
             RuntimeTy::Tuple(..) => None,
             _ => None,
         }
@@ -13809,7 +13819,6 @@ impl<'db> LoweringContext<'db> {
         match &self.body.patterns[pat_id] {
             AstPattern::Class { .. } | AstPattern::Array { .. } | AstPattern::Tuple(_) => true,
             AstPattern::Or(parts) => parts.iter().any(|p| self.pattern_contains_structural(*p)),
-            // `let whole: (let first, _) = …` destructures beneath the binding.
             AstPattern::Bind {
                 subpat: Some(sub), ..
             } => self.pattern_contains_structural(*sub),
@@ -14365,10 +14374,6 @@ impl<'db> LoweringContext<'db> {
                 }
             }
             AstPattern::Tuple(elements) => {
-                // Shape: "a tuple of this arity, whatever its carried slot
-                // types", skipped when the scrutinee is statically one. Not
-                // membership in `(unknown, …)`: tuples are invariant, so a
-                // tuple carrying `(int, string)` is no `(unknown, unknown)`.
                 let arity = elements.len();
                 let statically_tuple = matches!(
                     self.builder.local_ty(scrutinee),
@@ -14536,8 +14541,6 @@ impl<'db> LoweringContext<'db> {
             AstPattern::Or(parts) => parts
                 .iter()
                 .any(|part| self.is_irrefutable_catch_all(*part)),
-            // A tuple pattern still tests the scrutinee's shape unless the
-            // scrutinee is statically a tuple; stay conservative here.
             AstPattern::Type(_)
             | AstPattern::Class { .. }
             | AstPattern::Array { .. }
@@ -14742,17 +14745,12 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Whether `pat_id` introduces any name (so a tuple element needs to be
-    /// projected in the binding phase).
     fn pattern_binds_names(&self, pat_id: AstPatId) -> bool {
         let mut bindings = Vec::new();
         self.collect_pattern_bindings(pat_id, &mut bindings);
         !bindings.is_empty()
     }
 
-    /// Read tuple slot `index` of `scrutinee` into a fresh local typed at the
-    /// slot's static type (the union of that slot over the scrutinee's
-    /// same-arity tuple members, when the scrutinee is a union).
     fn project_tuple_pattern_element(
         &mut self,
         scrutinee: Local,
@@ -14778,8 +14776,6 @@ impl<'db> LoweringContext<'db> {
             1 => slots.pop().expect("one slot"),
             _ => RuntimeTy::Union(slots.into()),
         };
-        // The slot reads through the tuple element load at a constant index,
-        // as `t[index]` does.
         let index_local = self.builder.temp(RuntimeTy::Int);
         self.builder.assign(
             Place::local(index_local),
@@ -15561,8 +15557,6 @@ fn lower_function_impl<'db>(
     }
 }
 
-/// How `base[index]` indexes a (null-stripped) receiver of type `ty`: a
-/// tuple's slot, a list's or byte array's element, or else a map entry.
 fn index_kind_for(ty: &RuntimeTy) -> IndexKind {
     if is_tuple_runtime_ty(ty) {
         IndexKind::Tuple
@@ -15573,8 +15567,6 @@ fn index_kind_for(ty: &RuntimeTy) -> IndexKind {
     }
 }
 
-/// Whether indexing a value of `ty` reads a tuple slot: a tuple, or a union
-/// whose every member is one.
 fn is_tuple_runtime_ty(ty: &RuntimeTy) -> bool {
     match ty {
         RuntimeTy::Tuple(_) => true,

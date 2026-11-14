@@ -7,9 +7,6 @@ internal static class BamlValueLimits
     internal const int MaxBytes = 64 * 1024 * 1024;
     internal const int MaxNodes = 2_000_000;
 
-    // The most slots a native C# tuple holds without nesting a `TRest` tuple.
-    // A wider BAML tuple has no generated C# type; it is read as a dynamic
-    // value's slots.
     internal const int MaxNativeTupleArity = 7;
 
     internal static void RequireBytes(long length, string path, Type clrType)

@@ -7,8 +7,8 @@ use baml_syntax::{
     Token,
     nodes::{
         AnyArrayPatternElement, AnyPattern, ArrayPattern, BindingPattern, DestructurePattern,
-        FieldPattern, ParenPattern, PatternArm, TuplePattern, PatternAscription, RestPattern, TypeAscription,
-        TypePattern, UnionPattern, WildcardPattern,
+        FieldPattern, ParenPattern, PatternArm, PatternAscription, RestPattern, TuplePattern,
+        TypeAscription, TypePattern, UnionPattern, WildcardPattern,
     },
     token::{
         Ident, KindSet, TokenKind, TokenSet as _, ctx, punct,
@@ -107,16 +107,27 @@ fn atom(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyPattern, Missing> 
         let inner = pattern(p, Restrictions::empty());
         if let Some(sep) = p.cur.eat::<punct::Comma>() {
             let mut elements = Vec::new();
-            if let Ok(item) = inner { elements.push(SepItem { item, sep: Some(sep) }); }
+            if let Ok(item) = inner {
+                elements.push(SepItem {
+                    item,
+                    sep: Some(sep),
+                });
+            }
             while !p.cur.at(TokenKind::RParen) && !p.cur.at_end() {
-                let Ok(item) = pattern(p, Restrictions::empty()) else { break };
+                let Ok(item) = pattern(p, Restrictions::empty()) else {
+                    break;
+                };
                 let sep = p.cur.eat::<punct::Comma>();
                 elements.push(SepItem { item, sep });
-                if sep.is_none() { break; }
+                if sep.is_none() {
+                    break;
+                }
             }
             let elements = p.out.alloc_list(elements);
             let r = p.expect::<punct::RParen>();
-            return Ok(AnyPattern::Tuple(p.alloc(mark, TuplePattern { l, elements, r })));
+            return Ok(AnyPattern::Tuple(
+                p.alloc(mark, TuplePattern { l, elements, r }),
+            ));
         }
         let r = p.expect::<punct::RParen>();
         return Ok(AnyPattern::Paren(
@@ -173,6 +184,9 @@ fn introduced(
     r: Restrictions,
 ) -> Result<AnyPattern, Missing> {
     let mark = introducer.map_or_else(|| p.cur.mark(), Mark::of);
+    if introducer.is_none() && p.cur.at(TokenKind::LParen) {
+        return atom(p, r);
+    }
     if let Some(underscore) = p.cur.eat::<ctx::Underscore>() {
         return Ok(AnyPattern::Wildcard(p.alloc(
             mark,

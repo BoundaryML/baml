@@ -459,8 +459,6 @@ impl<'a> AstGraphBuilder<'a> {
                 .expect("frame stack should not be empty");
             frame.next_ordinal(&CounterKind::BranchGroup)
         };
-        // A tuple scrutinee is its own delimiters: `match (a, b)`, never
-        // `match ((a, b))`.
         let label = match &self.body.exprs[scrutinee] {
             ast::Expr::Tuple { .. } => {
                 format!("match {}", render_expr_compact_ast(self.body, scrutinee))
@@ -1225,9 +1223,6 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 "[...]".to_string()
             }
         }
-        // Unlike a list, a tuple renders its elements: the arity and the
-        // positions are what a reader matches a tuple scrutinee or receiver
-        // against. A singleton keeps its comma.
         ast::Expr::Tuple { elements } => {
             let parts: Vec<_> = elements
                 .iter()
@@ -1656,7 +1651,6 @@ mod tests {
                 pattern: pat,
                 initializer: Some(if_expr),
                 origin: ast::LetOrigin::Source,
-                is_const: false,
                 else_branch: None,
             });
             Some(exprs.alloc(ast::Expr::Block {
@@ -1697,7 +1691,6 @@ mod tests {
                 pattern: pat,
                 initializer: Some(if_expr),
                 origin: ast::LetOrigin::Source,
-                is_const: false,
                 else_branch: None,
             });
             Some(exprs.alloc(ast::Expr::Block {
@@ -2293,7 +2286,6 @@ mod tests {
         let single = exprs.alloc(ast::Expr::Tuple { elements: vec![a] });
         let zero = exprs.alloc(ast::Expr::Literal(ast::Literal::Int(0)));
         let one = exprs.alloc(ast::Expr::Literal(ast::Literal::Int(1)));
-        // `(a,)[0][1]`
         let first = exprs.alloc(ast::Expr::Index {
             base: single,
             index: zero,
@@ -2302,7 +2294,6 @@ mod tests {
             base: first,
             index: one,
         });
-        // `t[i + 1]`
         let t = path(&mut exprs, "t");
         let i = path(&mut exprs, "i");
         let sum = exprs.alloc(ast::Expr::Binary {
@@ -2314,7 +2305,6 @@ mod tests {
             base: t,
             index: sum,
         });
-        // `t?.[0]`
         let optional_index = exprs.alloc(ast::Expr::OptionalIndex {
             base: t,
             index: zero,
@@ -2333,8 +2323,6 @@ mod tests {
     #[test]
     fn tuple_access_callees_follow_evaluation_order() {
         let mut exprs = Arena::new();
-        // `(f(), g())[choose_index()]`: the receiver's elements in order,
-        // then the index.
         let f = call0(&mut exprs, "f");
         let g = call0(&mut exprs, "g");
         let pair = exprs.alloc(ast::Expr::Tuple {

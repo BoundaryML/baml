@@ -193,7 +193,7 @@ class FunctionSpec<Out> {
     }
 
     function prompt(self) -> Prompt {
-        self.prompt_template(root.internal.build_output_format(self.output_type()))
+        (self.prompt_template)(root.internal.build_output_format(self.output_type()))
     }
 
     function tools(self) -> root.tools.Toolbox {

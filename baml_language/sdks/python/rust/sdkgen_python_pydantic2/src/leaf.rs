@@ -3107,8 +3107,6 @@ mod protocol_callables_tests {
         );
     }
 
-    /// A callable in a tuple slot is a value of the side that makes the
-    /// tuple, as one in a list is.
     #[test]
     fn tuple_slot_keeps_the_side_of_the_value_that_holds_it() {
         let callback = with_optional();

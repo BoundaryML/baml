@@ -411,8 +411,7 @@ pub fn type_at(
     let token = crate::syntax::find_token_at_offset(db, file, offset)?;
     let index = baml_parser::tree_index(db, file);
 
-    if let Some(access) = crate::resolve::tuple_access_at(db, file, offset)
-    {
+    if let Some(access) = crate::resolve::tuple_access_at(db, file, offset) {
         return Some(TypeInfo::Symbol {
             declaration: format!(
                 "{}: {}",
@@ -466,7 +465,6 @@ form stringifies each value and produces a `string`."
     if as_keyword {
         return keyword_type_info(token.text());
     }
-
 
     // Only WORD tokens can be names — but an operator token addresses its
     // dispatch method through the same layer as go-to-definition, so hover
@@ -2877,88 +2875,33 @@ let current = Status.Active<[CURSOR]"#,
     }
 
     #[test]
-    fn tuple_access_hovers_the_selected_slot() {
-        let test = CursorTest::new(
-            r#"function example(t: (int, string)) -> string {
-    t<[CURSOR][1]
-}"#,
-        );
+    fn tuple_slot_hovers_its_type() {
+        let test = CursorTest::new("function example(t: (int, string)) -> string { t.<[CURSOR]1 }");
         let (declaration, owner, docstring) = symbol_parts(info_at(&test));
-        assert_eq!(declaration, "t[1]: string");
+        assert_eq!(declaration, "t.1: string");
         assert_eq!(owner, None);
         assert_eq!(docstring, None);
     }
 
     #[test]
-    fn tuple_union_access_hovers_the_joined_slot() {
+    fn chained_tuple_slots_have_independent_hover_types() {
         let test = CursorTest::new(
-            r#"function example(t: (int, string) | (bool, string, float)) -> int | bool {
-    t[0<[CURSOR]]
-}"#,
+            "function example(t: ((int, string), bool)) -> string { t.0.<[CURSOR]1 }",
         );
         let (declaration, ..) = symbol_parts(info_at(&test));
-        assert_eq!(declaration, "t[0]: int | bool");
-    }
-
-    #[test]
-    fn optional_tuple_access_hovers_an_optional_slot() {
+        assert_eq!(declaration, "t.0.1: string");
         let test = CursorTest::new(
-            r#"function example(t: (int, string)?) -> string? {
-    t<[CURSOR]?.[1]
-}"#,
+            "function example(t: ((int, string), bool)) -> string { t.<[CURSOR]0.1 }",
         );
         let (declaration, ..) = symbol_parts(info_at(&test));
-        assert_eq!(declaration, "t?.[1]: string | null");
+        assert_eq!(declaration, "t.0: (int, string)");
     }
 
     #[test]
-    fn tuple_index_literal_hovers_as_an_integer() {
-        let test = CursorTest::new(
-            r#"function example(t: (int, string)) -> string {
-    t[<[CURSOR]1]
-}"#,
-        );
-        let TypeInfo::Documentation { label, detail } = info_at(&test) else {
-            panic!("the index literal hovers as its own literal");
-        };
-        assert_eq!(label, "1");
-        assert!(detail.contains("`int`"), "{detail}");
-    }
-
-    #[test]
-    fn chained_tuple_access_hovers_the_access_whose_bracket_holds_the_cursor() {
-        // The second `[` sits exactly at the end of the inner `t[0]`; the
-        // bracket opens the outer access, so that is the slot read.
-        let test = CursorTest::new(
-            r#"function example(t: ((int, string), bool)) -> string {
-    t[0]<[CURSOR][1]
-}"#,
-        );
-        let (declaration, ..) = symbol_parts(info_at(&test));
-        assert_eq!(declaration, "t[0][1]: string");
-    }
-
-    #[test]
-    fn tuple_access_hovers_from_just_past_its_closing_bracket() {
-        let test = CursorTest::new(
-            r#"function example(t: (int, string)) -> string {
-    t[1]<[CURSOR]
-}"#,
-        );
-        let (declaration, ..) = symbol_parts(info_at(&test));
-        assert_eq!(declaration, "t[1]: string");
-    }
-
-    #[test]
-    fn tuple_access_has_no_declaration_target() {
-        let test = CursorTest::new(
-            r#"function example(t: (int, string)) -> string {
-    t<[CURSOR][1]
-}"#,
-        );
+    fn tuple_slot_has_no_declaration_target() {
+        let test = CursorTest::new("function example(t: (int, string)) -> string { t.<[CURSOR]1 }");
         assert!(
-            crate::resolve::symbol_at(&test.db, test.cursor.file, test.cursor.offset).is_none(),
-            "a tuple slot has no declaration to navigate to"
+            crate::resolve::symbol_at(&test.db, test.cursor.file, test.cursor.offset).is_none()
         );
     }
 

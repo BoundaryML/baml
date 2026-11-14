@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 989. IDs with complete required parity: 240. Required gaps: 5140.
+Distinct exact test IDs: 1036. IDs with complete required parity: 287. Required gaps: 5140.
 
-Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5140). Present declarations: 2621 (baseline: 2620). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5140). Present declarations: 2835 (baseline: 2816). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 459 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 481 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 459 / 459 | 100.0% |
-| typescript_node | 193 / 459 | 42.0% |
-| typescript_web_chromium | 169 / 459 | 36.8% |
-| typescript_web_cloudflare_workers | 169 / 459 | 36.8% |
-| cpp | 138 / 459 | 30.1% |
-| csharp | 0 / 459 | 0.0% |
-| rust | 235 / 459 | 51.2% |
-| go | 21 / 459 | 4.6% |
-| java | 307 / 459 | 66.9% |
-| swift | 191 / 459 | 41.6% |
+| python_pydantic2 | 481 / 481 | 100.0% |
+| typescript_node | 213 / 481 | 44.3% |
+| typescript_web_chromium | 189 / 481 | 39.3% |
+| typescript_web_cloudflare_workers | 189 / 481 | 39.3% |
+| cpp | 157 / 481 | 32.6% |
+| csharp | 0 / 481 | 0.0% |
+| rust | 255 / 481 | 53.0% |
+| go | 36 / 481 | 7.5% |
+| java | 328 / 481 | 68.2% |
+| swift | 211 / 481 | 43.9% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -395,6 +395,7 @@ Parity is the share of the 459 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_throwing_callable_round_trips_original_host_exception | - | - | - | - | y | - | - | - | - | y | all |  |
 | function_calls/host_callables_throwing_callable_round_trips_original_python_exception | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/host_callables_thrown_value_of_another_go_type_is_a_contract_violation | - | - | - | - | - | - | - | y | - | - | go | Go's completion classification of a value thrown as a Go type other than the declared one |
+| function_calls/host_callables_throws_never_accepts_sync_and_async_callbacks_typescript_only | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | TypeScript callback typing regression for explicit throws never |
 | function_calls/host_callables_two_arg_callable_unpacks_positional_args | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_typed_throw_too_deep_is_a_bridge_failure | - | - | - | - | y | - | - | - | - | - | cpp | C++ throws a BAML value with baml::host_throw. |
 | function_calls/host_callables_unfit_callback_result_is_a_contract_violation | - | - | - | - | y | - | - | - | - | - | cpp | C++ can return only a malformed bigint as unfit. |
@@ -789,13 +790,23 @@ Parity is the share of the 459 test IDs declared in `python_pydantic2` that are 
 | type_shapes/handles_open_file_returns_file_handle | y | - | - | - | - | - | y | - | y | y | all |  |
 | type_shapes/host_created_media_round_trips_through_optional_list | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python host-created media wrapper encoding |
 | type_shapes/host_from_file_reads_now_and_keeps_the_base_name | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates the Python media wrapper's from_file, which is BAML's from_file |
+| type_shapes/json_interchange_a_member_behind_an_alias_keeps_its_tag | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_a_member_whose_tag_matches_but_fields_do_not_is_an_error | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_a_tag_holding_another_string_is_not_the_class | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_a_tag_of_the_fallbacks_kind_reaches_the_fallback | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_an_object_no_member_matches_is_the_fallback_as_sent | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_an_object_with_no_tag_is_an_error | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_an_optional_literal_is_checked_and_left_out | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_both_reject_what_baml_rejects | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_deserialize_matches_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_flattened_keys_are_kept_and_a_declared_field_wins | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_json_fields_match_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_optional_fields_may_be_absent_or_null | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_renamed_keys_and_tags_match_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_serialize_matches_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_serialize_matches_baml_outside_a_class | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/json_interchange_unions_take_the_first_arm_that_fits | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_unset_fields_are_left_out_and_nested_unions_keep_their_member | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/lists_round_trip_empty_list | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/lists_round_trip_ints | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/lists_round_trip_list_container | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -1002,8 +1013,10 @@ Parity is the share of the 459 test IDs declared in `python_pydantic2` that are 
 | type_shapes/symbol_collisions_round_trip_foo_bar | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/symbol_collisions_round_trip_ipsum | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/transparent_alias_functions_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
+| type_shapes/tuples_array_fitting_tuple_and_list_is_tuple | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | only a TypeScript array is both a list and a tuple |
 | type_shapes/tuples_callback_forwards_a_thrown_tuple_under_its_carried_type | - | - | - | - | y | - | - | y | - | y | cpp, go, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_callback_rejects_a_wrong_tuple_result | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python's untyped callbacks can return a wrong-shaped tuple |
+| type_shapes/tuples_cross_by_copy | - | - | - | - | - | - | y | - | - | y | rust, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_dynamic_value_decodes_as_a_tuple | - | - | - | - | y | - | y | y | y | - | cpp, rust, go, java | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_dynamic_value_keeps_carried_type | y | y | y | y | y | - | y | - | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_failing_return_gives_zero_values_and_the_error | - | - | - | - | - | - | - | y | - | - | go | Go-only: a failing expanded tuple return yields zero values beside the error |
@@ -1026,6 +1039,7 @@ Parity is the share of the 459 test IDs declared in `python_pydantic2` that are 
 | type_shapes/tuples_round_trip_single_and_repeated | y | y | y | y | y | - | y | - | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_round_trip_union_arms | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_round_trip_wide | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
+| type_shapes/tuples_round_trip_wide_in_class_and_union | - | - | - | - | - | - | - | - | - | y | swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_thrown_unnamed_tuple | - | - | - | - | - | - | - | y | y | - | go, java | only Go and Java need a fallback for a tuple with no generated type |
 | type_shapes/tuples_thrown_value | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# covers tuples in its own tuples fixture |
 | type_shapes/tuples_type_parameter_slots_use_the_carried_type | - | - | - | - | - | - | - | y | y | - | go, java | only Go and Java need a fallback for a tuple with no generated type |

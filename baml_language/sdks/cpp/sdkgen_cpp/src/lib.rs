@@ -1875,13 +1875,6 @@ fn translate_ty(
                 inner
             }
         }
-        // A tuple is a native `std::tuple`, slots in declaration order. C++
-        // templates are structural, like `::baml::variant`, so the tuple's
-        // identity is its spelling: no named type or typemap entry is needed,
-        // and every shape BAML can declare is representable, so the
-        // list fallbacks never apply. Unlike a union, slots are neither
-        // sorted nor deduplicated: `(int, string)` and `(string, int)` are
-        // distinct, and `(int, int)` keeps both slots.
         Ty::Tuple(items) => {
             let mut slots = Vec::with_capacity(items.len());
             for item in items {
@@ -3196,7 +3189,6 @@ mod tuple_tests {
             ),
         ]));
 
-        // Slots keep declaration order and repeats; nothing is sorted.
         assert!(
             header.contains(
                 "std::tuple<std::string, int64_t> swap(const std::tuple<int64_t, std::string>& t"

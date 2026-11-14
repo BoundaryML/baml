@@ -761,11 +761,6 @@ internal static class PrimitiveProtocol
         };
     }
 
-    /// <summary>
-    /// A tuple crosses inbound as a list stating its tuple type, which makes
-    /// the engine build it as that tuple. A tuple the engine returned is
-    /// restated with the type it carried; one with no type cannot be stated.
-    /// </summary>
     private static InboundValue EncodeTuple(
         BamlGeneratedValue value,
         NativeApi? api,
@@ -937,12 +932,6 @@ internal static class PrimitiveProtocol
             path);
     }
 
-    /// <summary>
-    /// A tuple the engine returned, with the tuple type it carries: its
-    /// instantiated type, one slot type per item. The carrier keeps that type,
-    /// so a value decoded without a declared type still finds its registered
-    /// C# tuple by identity, and a host that sends it back states it.
-    /// </summary>
     private static BamlGeneratedValue DecodeTuple(
         BamlValueTuple tuple,
         string path,
@@ -976,8 +965,6 @@ internal static class PrimitiveProtocol
                 $"A tuple at {path} carried a {stated.TyCase} type.");
         }
 
-        // Resolve the carried type before any slot claims a handle, so a
-        // missing type fails while the ownership scope still owns them all.
         byte[] tupleType = Metadata(tuple.TupleType, path, "tuple");
         var items = new List<BamlGeneratedValue>(tuple.Items.Count);
         try
@@ -995,8 +982,6 @@ internal static class PrimitiveProtocol
         }
         catch
         {
-            // Earlier slots claimed their handles out of the ownership scope,
-            // so the scope no longer releases them: release them here.
             var disposed = new HashSet<global::Baml.BamlHandle>(ReferenceEqualityComparer.Instance);
             foreach (BamlGeneratedValue item in items)
             {

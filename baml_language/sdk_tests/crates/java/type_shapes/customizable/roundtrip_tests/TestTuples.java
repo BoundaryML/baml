@@ -1,17 +1,3 @@
-// Roundtrip coverage for `baml_sdk.tuples` — tuples at the host boundary.
-//
-// java-port note: Java has no native tuple, so each concrete tuple identity
-// renders as a generated record in the root package, `TupleN_Type1Type2…`
-// (arity, then one union-arm token per slot in slot order), with components
-// `item0`, `item1`, … (zero-based, like BAML's `t[0]`). The record is
-// registered in the typemap under its tuple identity: decode constructs it by
-// identity, encode states the identity its class was registered for. Every
-// tuple carries its own type on the wire, so a value that reaches Java without
-// a declared type (a dynamic call's result, a thrown value, an `unknown` or
-// unbound `T` position) still finds its record by that carried identity. An
-// identity with no record is a `BamlTupleList`: the list of its slots (as
-// arms of their join where Java has that union), which keeps the carried type
-// and restates as that tuple when sent back.
 package roundtrip_tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -71,7 +57,6 @@ class TestTuples {
     // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_make_swap_and_index() {
-        // Slot order is identity: the swap returns the other record.
         assertEquals(new Tuple2_StringInt("a", 1L), Fns.swap_pair(PAIR));
         assertEquals(1L, Fns.pair_first(PAIR));
         assertEquals(new Tuple2_IntString(7L, "seven"), Fns.make_pair(7L, "seven"));
@@ -112,7 +97,6 @@ class TestTuples {
         assertEquals(
                 new Union2.Arm1<Tuple2_IntString, String>("s"),
                 Fns.round_trip_tuple_or_string(new Union2.Arm1<Tuple2_IntString, String>("s")));
-        // Two same-arity tuple arms: the slot types pick the arm.
         assertEquals(
                 new Union2.Arm0<Tuple2_IntString, Tuple2_StringInt>(PAIR),
                 Fns.round_trip_tuple_arms(new Union2.Arm0<Tuple2_IntString, Tuple2_StringInt>(PAIR)));
@@ -138,7 +122,6 @@ class TestTuples {
     // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_round_trip_generic_argument() {
-        // A type argument that is a tuple: the instance's type args bind `T`.
         TupleBox<Tuple2_IntString> box = TupleBox.of(BamlType.of(Tuple2_IntString.class), PAIR);
         TupleBox<Tuple2_IntString> back = Fns.round_trip_tuple_box(box);
         assertEquals(PAIR, back.value());
@@ -172,8 +155,6 @@ class TestTuples {
     // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_thrown_value() {
-        // A thrown value decodes with no declared type: its carried identity
-        // still finds the record.
         BamlError error = assertThrows(BamlError.class, () -> Fns.throw_pair(PAIR));
         assertEquals(PAIR, error.value());
     }
@@ -181,13 +162,9 @@ class TestTuples {
     // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_dynamic_value_decodes_as_a_tuple() {
-        // A dynamic call states no return type: the tuple's carried type finds
-        // its record.
         Object result = baml_sdk.Baml.invoke(
                 Target.named("user.tuples.round_trip_pair"), Map.of("t", PAIR), null, baml_sdk.BamlOptions.empty());
         assertEquals(PAIR, result);
-        // A plain list has no tuple identity of its own, and no slot supplies
-        // one here: the engine refuses it as the tuple argument.
         assertThrows(
                 Throwable.class,
                 () -> baml_sdk.Baml.invoke(
@@ -200,8 +177,6 @@ class TestTuples {
     // SDK_PARITY_LINT(skip): only Python and Java accept a plain list at a tuple slot
     @Test
     void test_tuples_plain_list_stands_in_at_a_tuple_slot() {
-        // A plain list stands in for a tuple where the slot supplies the shape:
-        // exactly its arity, each item converted against its own slot.
         Object ok = baml_sdk.Baml.invoke(
                 Target.named("user.tuples.round_trip_pair"),
                 Map.of("t", new baml_bridge.BamlTypedValue(List.of(5L, "five"), BamlType.of(Tuple2_IntString.class))),
@@ -213,9 +188,6 @@ class TestTuples {
     // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_wrong_arity_and_slots_rejected() {
-        // The generated records make a wrong arity or slot unrepresentable, so
-        // the rejections go through a list stated at the tuple type: too few
-        // and too many slots are refused host-side.
         assertThrows(
                 IllegalArgumentException.class,
                 () -> baml_sdk.Baml.invoke(
@@ -230,7 +202,6 @@ class TestTuples {
                         Map.of("t", new baml_bridge.BamlTypedValue(List.of(5L, "five", 6L), BamlType.of(Tuple2_IntString.class))),
                         null,
                         baml_sdk.BamlOptions.empty()));
-        // A wrong slot type is refused by the engine's own check.
         assertThrows(
                 Throwable.class,
                 () -> baml_sdk.Baml.invoke(
@@ -238,7 +209,6 @@ class TestTuples {
                         Map.of("t", new baml_bridge.BamlTypedValue(List.of("five", 5L), BamlType.of(Tuple2_IntString.class))),
                         null,
                         baml_sdk.BamlOptions.empty()));
-        // So is a tuple of the other slot order.
         assertThrows(
                 Throwable.class,
                 () -> baml_sdk.Baml.invoke(
@@ -251,7 +221,6 @@ class TestTuples {
     // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_reflected_type_token() {
-        // The first call loads the SDK, which registers the generated records.
         assertInstanceOf(Tuple2_IntString.class, Fns.round_trip_pair(PAIR));
         assertEquals(BamlType.tuple(BamlType.INT, BamlType.STRING), BamlType.of(Tuple2_IntString.class));
     }
@@ -262,14 +231,10 @@ class TestTuples {
     // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_dynamic_value_keeps_carried_type() {
-        // Returned as `unknown`, `(1, true)` is still the `(int | string, bool)`
-        // it was built as, not the `(int, bool)` its elements suggest.
         Object back = Fns.tuple_as_unknown(PRODUCT);
         assertEquals(PRODUCT, back);
         assertEquals(PRODUCT, Fns.tuple_as_unknown_async(PRODUCT).join());
-        // Sent back, it restates that identity.
         assertTrue(Fns.unknown_has_carried_tuple_type(back));
-        // A callback receiving it at an open slot and returning it unchanged.
         List<Object> received = new ArrayList<>();
         assertTrue(Fns.call_unknown_tuple_callback(
                 v -> {
@@ -283,19 +248,14 @@ class TestTuples {
     // SDK_PARITY_LINT(skip): only Go and Java need a fallback for a tuple with no generated type
     @Test
     void test_tuples_type_parameter_slots_use_the_carried_type() {
-        // `(T, int)[]` with `T` unbound: each tuple's carried type finds the
-        // record where one is registered.
         assertEquals(
                 List.of(new Tuple2_StringInt("x", 1L), new Tuple2_StringInt("x", 2L)),
                 baml_sdk.go_codegen.tuple_edges.Fns.tag_values("x"));
-        // No record for `(float, int)`: the list of its slot join, keeping the
-        // carried type.
         List<Object> floats = baml_sdk.go_codegen.tuple_edges.Fns.tag_values(1.5);
         BamlType floatInt = BamlType.tuple(BamlType.FLOAT, BamlType.INT);
         BamlTupleList first = assertInstanceOf(BamlTupleList.class, floats.get(0));
         assertEquals(floatInt, first.tupleType());
         assertEquals(List.of(new Union2.Arm0<Double, Long>(1.5), new Union2.Arm1<Double, Long>(1L)), first);
-        // Sent back, it is that tuple; a plain list of the same items is a list.
         assertTrue(Fns.value_has_type(first, BamlTypes.of("T", floatInt)));
         assertFalse(Fns.value_has_type(List.of(1.5, 1L), BamlTypes.of("T", floatInt)));
     }
@@ -311,10 +271,8 @@ class TestTuples {
     @Test
     void test_tuples_method_round_trip() {
         TuplePairBox box = new TuplePairBox(1L, "a");
-        // An instance method returning a tuple, and one taking a tuple.
         assertEquals(PAIR, box.as_pair());
         assertEquals(new TuplePairBox(2L, "b"), box.with_pair(new Tuple2_IntString(2L, "b")));
-        // A static method taking a tuple.
         assertEquals(new TuplePairBox(3L, "c"), TuplePairBox.from_pair(new Tuple2_IntString(3L, "c")));
         assertEquals(PAIR, box.as_pair_async().join());
         assertEquals(new TuplePairBox(4L, "d"), box.with_pair_async(new Tuple2_IntString(4L, "d")).join());
@@ -324,8 +282,6 @@ class TestTuples {
     // SDK_PARITY_LINT(skip): C# covers tuples in its own tuples fixture
     @Test
     void test_tuples_function_handle_round_trip() {
-        // A BAML closure returned to the host: its handle takes and returns
-        // tuples.
         var swap = Fns.make_tuple_swapper();
         assertEquals(new Tuple2_StringInt("a", 1L), swap.apply(PAIR));
         assertEquals(new Tuple2_StringInt("b", 2L), swap.apply(new Tuple2_IntString(2L, "b")));

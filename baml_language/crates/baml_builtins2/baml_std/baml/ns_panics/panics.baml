@@ -140,7 +140,7 @@ class AllocFailure {
 /// # Examples
 ///
 /// ```baml
-/// baml.fs.open("file.txt"); // panics on browser
+/// (baml.fs.open)("file.txt"); // panics on browser
 /// ```
 class HostUnavailable {
     resource: string,

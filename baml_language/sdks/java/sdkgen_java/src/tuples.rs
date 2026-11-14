@@ -1,54 +1,21 @@
-//! Generated tuple records.
-//!
-//! Java has no native tuple type, so every concrete tuple identity the SDK
-//! mentions gets a generated `record` in the root `baml_sdk` package, named
-//! `TupleN_Type1Type2…` (arity, then one [`union_arm_token`] per slot in slot
-//! order, repeats kept), with one component per slot (`item0`, `item1`, …,
-//! numbered like BAML's `t.0`). The anchor registers each record in the
-//! typemap under its tuple identity (`TypeRegistry.registerTuple`), so decode
-//! constructs it by identity and encode recovers the identity from the
-//! record's class, never from its name or its component types.
-//!
-//! A tuple's identity is its slot types in order with non-recursive aliases
-//! erased (they erase at every Java use site, so `(Alias, int)` and the
-//! tuple it spells are one Java type). A product of unions is not a union of
-//! products and a one-slot tuple is not its slot: each is its own identity.
-//! A tuple that mentions a type variable has no one identity to register
-//! (each instantiation is its own), so it is not given a record: its
-//! positions render as `java.lang.Object`, which admits the bridge's list
-//! fallbacks.
-//!
-//! [`TupleTable`] is the one place a record name is decided: the type
-//! translator, the record emitter and the registration all read it.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use baml_sdkgen_types::{CallableParam, Function, Symbol, SymbolPool, Ty};
 
 use crate::translate_ty::{AliasTable, collect_type_vars, union_arm_token};
 
-/// One generated tuple record: its simple name (in the root `baml_sdk`
-/// package) and its slot types in order, aliases erased.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TupleDecl {
     pub(crate) ident: String,
     pub(crate) items: Vec<Ty>,
 }
 
-/// Every tuple record the SDK generates, keyed by tuple identity (the
-/// alias-erased `Ty::Tuple`).
 #[derive(Debug, Default)]
 pub(crate) struct TupleTable {
     by_identity: BTreeMap<Ty, TupleDecl>,
 }
 
 impl TupleTable {
-    /// Collect every concrete tuple identity `pool` mentions, at any depth
-    /// (fields, signatures, throws, alias bodies, slots of other tuples) and
-    /// name each one. `reserved` holds the root package's taken identifiers.
-    /// Names are assigned in identity order, so the output is deterministic;
-    /// two identities whose tokens coincide (`a.Node` and `b.Node` are both
-    /// `Node`) are told apart by a trailing counter, as union arm records are.
     pub(crate) fn collect(
         pool: &SymbolPool,
         aliases: &AliasTable,
@@ -106,13 +73,10 @@ impl TupleTable {
         Self { by_identity }
     }
 
-    /// The record generated for the tuple of `items`, or `None` for a tuple
-    /// that has none (one that mentions a type variable).
     pub(crate) fn decl(&self, items: &[Ty], aliases: &AliasTable) -> Option<&TupleDecl> {
         self.by_identity.get(&tuple_identity(items, aliases))
     }
 
-    /// Every generated record with its identity, in identity order.
     pub(crate) fn iter(&self) -> impl Iterator<Item = (&Ty, &TupleDecl)> {
         self.by_identity.iter()
     }
@@ -128,9 +92,6 @@ fn visit_function(function: &Function, visit: &mut dyn FnMut(&Ty)) {
     }
 }
 
-/// The base record name of a tuple of `items`: `Tuple{arity}_` followed by one
-/// [`tuple_slot_token`] per slot, in slot order, repeats kept —
-/// `(int, string)` is `Tuple2_IntString`, `(int, int)` is `Tuple2_IntInt`.
 pub(crate) fn tuple_base_name(items: &[Ty]) -> String {
     let mut name = format!("Tuple{}_", items.len());
     for item in items {
@@ -139,10 +100,6 @@ pub(crate) fn tuple_base_name(items: &[Ty]) -> String {
     name
 }
 
-/// The token a tuple slot contributes to its record's name: the slot's
-/// [`union_arm_token`], except that a union slot spells its members
-/// (`int | string` is `IntOrString`, `string?` is `OptionalString`), since a
-/// union is a slot's type where it is never a union arm's.
 fn tuple_slot_token(ty: &Ty) -> String {
     let Ty::Union(members) = ty else {
         return union_arm_token(ty);
@@ -160,9 +117,6 @@ fn tuple_slot_token(ty: &Ty) -> String {
     }
 }
 
-/// The identity of the tuple of `items`: the tuple type with every
-/// non-recursive alias erased to what it names (recursive aliases stay
-/// nominal) and literals at their regular freshness.
 pub(crate) fn tuple_identity(items: &[Ty], aliases: &AliasTable) -> Ty {
     Ty::Tuple(
         items

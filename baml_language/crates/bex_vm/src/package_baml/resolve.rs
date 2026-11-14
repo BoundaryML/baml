@@ -590,9 +590,6 @@ impl<'vm> ImplResolver<'vm> {
         eligible
     }
 
-    /// The compiler-derived tuple `Compare` witness: a tuple whose every slot
-    /// type implements `Compare` (explicitly, or as a nested eligible tuple).
-    /// No other receiver has a structural `Compare`.
     fn tuple_compare_eligible(
         self,
         ty: &RealizedTy,

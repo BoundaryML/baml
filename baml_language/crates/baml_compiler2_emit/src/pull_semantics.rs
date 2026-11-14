@@ -38,7 +38,12 @@ pub(crate) trait PullSink<'db> {
     /// Load a field of `base`, the instance place the field applies to.
     fn load_field(&mut self, field: usize, name: &str, base: &Place) -> Result<(), Self::Error>;
     /// Load an element of `base`, the container place the index applies to.
-    fn load_index(&mut self, kind: IndexKind, base: &Place, index: Local) -> Result<(), Self::Error>;
+    fn load_index(
+        &mut self,
+        kind: IndexKind,
+        base: &Place,
+        index: Local,
+    ) -> Result<(), Self::Error>;
 
     /// Complete a binary operation after its operands have been pulled. Typed
     /// code generators can use the operands to select a specialized opcode.
@@ -52,8 +57,6 @@ pub(crate) trait PullSink<'db> {
     fn concat_strings(&mut self, len: usize) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
-    /// Pop `len` element values (first element deepest) and push the tuple,
-    /// built at the tuple type `tuple_ty` (loaded on top of the elements).
     fn alloc_tuple(&mut self, tuple_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
     fn alloc_uint8array(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
     fn alloc_map(
@@ -389,7 +392,9 @@ pub(crate) fn walk_place_pull<'db, S: PullSink<'db>>(
         }
         Place::Index { base, index, kind } => {
             walk_place_pull(sink, base)?;
-            if *kind != IndexKind::Tuple { walk_place_pull(sink, &Place::Local(*index))?; }
+            if *kind != IndexKind::Tuple {
+                walk_place_pull(sink, &Place::Local(*index))?;
+            }
             sink.load_index(*kind, base, *index)
         }
     }

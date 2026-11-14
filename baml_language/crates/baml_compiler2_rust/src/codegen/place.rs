@@ -55,16 +55,18 @@ impl<'db> Generator<'_, 'db> {
                 Ok(Expr::new(code, Repr::Value))
             }
             Place::Index { base, index, kind } => {
-                // A tuple slot read shares the element load, as in the
-                // interpreter.
                 if matches!(kind, baml_compiler2_mir::IndexKind::Map) {
                     return unsupported("map index");
                 }
                 if matches!(kind, baml_compiler2_mir::IndexKind::Tuple) {
                     let base = self.load(block, base)?;
                     let base = self.value_arg(&base);
-                    let index = super::coerce(&format!("l{}", index.0), self.repr(*index), Repr::Int);
-                    let code = self.fallible(block, &format!("vm.load_tuple_field({base}, ({index}) as usize)"))?;
+                    let index =
+                        super::coerce(&format!("l{}", index.0), self.repr(*index), Repr::Int);
+                    let code = self.fallible(
+                        block,
+                        &format!("vm.load_tuple_field({base}, ({index}) as usize)"),
+                    )?;
                     return Ok(Expr::new(code, Repr::Value));
                 }
                 let needs = self.analysis.escape.object_needs(base);

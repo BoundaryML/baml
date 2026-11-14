@@ -106,10 +106,6 @@ pub enum Object {
     /// mutation under `spawn`.
     Map(Map),
 
-    /// Tuple of values with its instantiated slot types. Fixed arity; slots
-    /// are mutable and stored like instance fields (one atomic slot each, no
-    /// container-wide lock). Its runtime type is its carried slot types, never
-    /// re-derived from its elements, and slot writes never change it.
     Tuple(crate::Tuple),
 
     /// Boxed 64-bit float. Floats are heap-allocated because `Value`
@@ -348,7 +344,6 @@ enum ObjectWire {
     /// (`ConstValue::Type` templates materialize through the VM's `LoadType`),
     /// so this round trip is exercised only by unit/link tooling.
     Type(Box<crate::RealizedTy>),
-    // Appended last: `ObjectWire` discriminants are the serialized form.
     Tuple(Vec<crate::RealizedTy>, Vec<Value>),
 }
 

@@ -780,8 +780,6 @@ mod tests {
 
     #[test]
     fn outbound_tuple_carries_its_own_slot_types() {
-        // The carried slot types ride beside the items, wider than the items
-        // that happen to fill them, in both encoders.
         let slots = vec![
             WireTy::Union(Box::new([WireTy::int(), WireTy::string()])),
             WireTy::Bool,

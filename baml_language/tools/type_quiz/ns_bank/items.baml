@@ -492,15 +492,11 @@ class FlowItem {
     }
 }
 
-/// One member of the unguarded cycle's shape, rendered: the case, and how
-/// selection sees it.
 class CycleCase {
     case: root.engine.Case,
     casting: root.engine.Casting,
 }
 
-/// Where a cycle closes: straight back on itself, or `guarded`, alongside a
-/// list of itself, which is the edge the per-SCC check asks for.
 function closed(cycle: root.algebra.Ty, guarded: bool) -> root.algebra.Ty throws never {
     if (guarded) {
         root.algebra.Union.new([cycle, root.algebra.Array.new(cycle)])
@@ -509,11 +505,6 @@ function closed(cycle: root.algebra.Ty, guarded: bool) -> root.algebra.Ty throws
     }
 }
 
-/// The cycle through `a` — `a` alone, or `a` and `b` when `two` — as a case.
-/// Unguarded it is `type A = A;`, which the spec rejects with E0068; guarded
-/// it is the spec's own near miss, `type A = A | A[];`, the same cycle with
-/// a list edge added, which it accepts. Both are spelled from the same names
-/// and form, so a draw's members differ in nothing but the guard.
 function cycle_case(a: string, b: string, two: bool, guarded: bool) -> CycleCase throws never {
     let decl = if (two) {
         root.algebra.AliasDecl.recursive(a, (cycle) -> {
@@ -546,17 +537,11 @@ function cycle_case(a: string, b: string, two: bool, guarded: bool) -> CycleCase
     let key: root.engine.Verdict = if (guarded) {
         root.engine.Compiles { tests: [] }
     } else {
-        // The spec's E0068 is per cycle member, so the two-alias form
-        // expects two. Where the compiler will point is the first alias's
-        // name: its first occurrence in the source is its declaration.
         let more: string[] = if (two) {
             ["E0068"]
         } else {
             []
         };
-        // The alias's own name, which this source always spells: byte
-        // zero would be a region pointing at whatever happens to be
-        // first, and a wrong region reads as a compiler disagreement.
         let at = source.index_of(a)
             ?? throw baml.panics.Unreachable { message: `no \`${a}\` in the case it names` };
         let prefix = source.slice(0, at);
@@ -569,15 +554,10 @@ function cycle_case(a: string, b: string, two: bool, guarded: bool) -> CycleCase
     };
     CycleCase {
         case: root.engine.Case { files: root.engine.one_file(file, source), key, trace },
-        // A cycle has no direction, so each member has the one casting.
         casting: casting(trace, 0, [ty], []),
     }
 }
 
-/// `type B = B;` and its two-alias form, which the spec rejects with E0068,
-/// as a shape: on a coin, the same cycle with a list edge, which it accepts.
-/// Alone, the item would answer one way, and a learner could read the verdict
-/// off a declaration that refers to itself.
 class UnguardedCycleItem {
     implements root.engine.Item {
         function id(self) -> string throws never {
@@ -607,10 +587,6 @@ class UnguardedCycleItem {
             )
         }
 
-        /// The near miss is a case of its own rather than a foil: the two
-        /// differ by text added rather than by text moved, so put side by
-        /// side, the one with the list would answer the question by looking
-        /// different.
         function foil(self, seed: root.engine.Seed) -> root.engine.Foil? throws never {
             null
         }

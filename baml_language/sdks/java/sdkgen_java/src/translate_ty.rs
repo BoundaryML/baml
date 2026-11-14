@@ -29,10 +29,6 @@
 //! - Type aliases erase to their resolved type (Java has no alias
 //!   mechanism); **recursive** aliases mint a nominal type instead
 //!   (erasure would not terminate), named after the alias itself.
-//! - Tuples render as the generated record of their identity
-//!   (`baml_sdk.Tuple2_IntString`, see [`crate::tuples`]); a tuple that
-//!   mentions a type variable has no one identity and renders as
-//!   `java.lang.Object`, like a union with a type-variable arm.
 
 use std::collections::BTreeMap;
 
@@ -113,7 +109,6 @@ pub(crate) struct UnionSink {
 pub(crate) struct TranslateCtx<'a> {
     pub(crate) aliases: &'a AliasTable,
     pub(crate) crossings: &'a CrossingTable,
-    /// The generated tuple records, by tuple identity.
     pub(crate) tuples: &'a TupleTable,
     /// The package currently being rendered — where a minted host-callable
     /// interface is placed (so it sits beside the function/class that uses it).
@@ -214,9 +209,6 @@ pub(crate) fn translate_ty(
     }
 }
 
-/// The Java type of a tuple: its generated record (in the root package), or
-/// `java.lang.Object` for a tuple with no record, one that mentions a type
-/// variable — the bridge then hands over a list of its slots.
 fn tuple_type(items: &[Ty], ctx: &TranslateCtx<'_>) -> String {
     ctx.tuples.decl(items, ctx.aliases).map_or_else(
         || "java.lang.Object".to_string(),
@@ -548,8 +540,6 @@ pub(crate) fn descriptor_expr(ty: &Ty, ctx: &TranslateCtx<'_>, sink: &mut UnionS
         }
         Ty::Literal(lit, ..) => literal_expr(lit),
         Ty::Union(items) => descriptor_union_expr(items, ctx, sink),
-        // The tuple identity itself: the slot types in order. The generated
-        // record is registered under exactly this token.
         Ty::Tuple(items) => {
             let items: Vec<String> = items
                 .iter()
@@ -822,7 +812,6 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
         Ty::Future(..) => "Future".to_string(),
         // validate() bans nested unions; unreachable in valid pools.
         Ty::Union(..) => "Union".to_string(),
-        // A tuple arm is named after its record's base name.
         Ty::Tuple(items) => tuple_base_name(items),
     }
 }

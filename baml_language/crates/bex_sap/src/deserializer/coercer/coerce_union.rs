@@ -96,8 +96,6 @@ where
             .collect::<Result<_, _>>()
             .ok()?;
 
-        // Indices stay in the original (unfiltered) index space so UnionMatch flags and hints
-        // agree with coerce().
         let non_null =
             (0..variants.len()).filter(|&i| !matches!(variants[i], TyResolvedRef::Null(_)));
         let order = member_order(ctx.union_variant_hint, non_null);
@@ -142,9 +140,6 @@ where
     }
 }
 
-/// The order a union tries its members in: a hinted member (the one a previous list element
-/// matched) first, then the rest in declaration order. Among perfect matches with no clear
-/// winner, the first in this order wins.
 fn member_order(hint: Option<usize>, members: impl Iterator<Item = usize>) -> Vec<usize> {
     let members: Vec<usize> = members.collect();
     let hint = hint.filter(|h| members.contains(h));
@@ -153,22 +148,6 @@ fn member_order(hint: Option<usize>, members: impl Iterator<Item = usize>) -> Ve
         .collect()
 }
 
-/// Picks the union member a value parses as, trying members in `order` with `try_member`.
-///
-/// Returns the winning perfect (score-zero) match, or, when no member matched perfectly, every
-/// member's result in index order for the caller's imperfect-match selection. Among perfect
-/// matches:
-///
-/// 1. A tuple built from a real JSON array beats a list built from one (see
-///    [`array_helper::defers_to_perfect_tuple`]), so `[1, 1]` becomes `(int, int)` rather than
-///    `int[]`; when a perfect tuple exists, only perfect tuples remain in contention.
-/// 2. A member strictly more specific than every other remaining one wins (see
-///    [`is_strictly_more_specific`]): for `[1]`, `(1,)` beats `(int,)` in either order.
-/// 3. Otherwise the first remaining one in `order` wins: `(int,) | (int?,)` gives `(int,)`.
-///
-/// The search stops at the first perfect match unless some other member could still beat it,
-/// i.e. it is a list or another member is strictly more specific; only then are the remaining
-/// members tried.
 fn select_member<'s, 'v, 't, N: TypeIdent>(
     db: &'t TypeRefDb<'t, N>,
     members: &[Option<TyResolvedRef<'t, N>>],
@@ -246,30 +225,6 @@ fn select_member<'s, 'v, 't, N: TypeIdent>(
     Ok(contenders.swap_remove(winner).1)
 }
 
-/// Whether union member `a` is strictly more specific than member `b`: `a` is at least as
-/// specific as `b` everywhere and `b` is not at least as specific as `a`.
-///
-/// This is SAP's own order for ranking perfect union matches, not subtyping: under invariance
-/// `(1,)` is not a subtype of `(int,)`, nor `1[]` of `int[]`, yet SAP prefers the literal arm.
-/// "`a` is at least as specific as `b`" holds when:
-///
-/// - `a` and `b` are the same type;
-/// - `a` is a literal and `b` its base primitive (`1` and `int`, `"x"` and `string`, `true` and
-///   `bool`, `1n` and `bigint`), or `a` is one variant of the enum `b`;
-/// - recursively, slot by slot: tuples of equal arity compare slot by slot, lists by element,
-///   maps by key and value, stream states by their value, and classes by field: two classes
-///   compare when they have the same field names, field by field (a class is equal to itself);
-/// - with unions on either side (a non-union type counts as a union of one member): every
-///   member of `a` is at least as specific as some member of `b`, and every member of `b` has
-///   some member of `a` at least as specific as it. So `1 | 2` is more specific than `int` and
-///   `1?` than `int?`, but nullability is never ranked: `int` and `int?` are incomparable,
-///   since `null` in `int?` has no counterpart in `int`.
-///
-/// Anything else is incomparable: different shapes (a tuple and a list, tuples of different
-/// arity, classes with different fields), or slots that point in opposite directions, like
-/// `(int, string?)` and `(int?, string)`. Incomparable members have no winner, so union order
-/// decides. Recursive types compare coinductively: a pair already being compared is assumed
-/// to hold.
 pub(super) fn is_strictly_more_specific<'t, N: TypeIdent>(
     db: &'t TypeRefDb<'t, N>,
     a: TyResolvedRef<'t, N>,
@@ -282,10 +237,8 @@ pub(super) fn is_strictly_more_specific<'t, N: TypeIdent>(
     cmp.at_least_as_specific(a, b) && !cmp.at_least_as_specific(b, a)
 }
 
-/// The "at least as specific" relation of [`is_strictly_more_specific`].
 struct SpecificityCmp<'t, N: TypeIdent> {
     db: &'t TypeRefDb<'t, N>,
-    /// Composite pairs being compared further up the stack, by address.
     assumed: HashSet<(usize, usize)>,
 }
 
@@ -316,8 +269,6 @@ impl<'t, N: TypeIdent> SpecificityCmp<'t, N> {
                 .all(|&y| a_members.iter().any(|&x| self.member(x, y)))
     }
 
-    /// The non-union members of `ty`, through nested unions and aliases; `None` if a member
-    /// does not resolve.
     fn flatten(&self, ty: TyResolvedRef<'t, N>) -> Option<Vec<TyResolvedRef<'t, N>>> {
         let mut out = Vec::new();
         let mut seen = HashSet::new();
@@ -337,7 +288,6 @@ impl<'t, N: TypeIdent> SpecificityCmp<'t, N> {
         Some(out)
     }
 
-    /// Compares two non-union types.
     fn member(&mut self, a: TyResolvedRef<'t, N>, b: TyResolvedRef<'t, N>) -> bool {
         use TyResolvedRef as T;
         let key = match (address(a), address(b)) {
@@ -397,7 +347,6 @@ impl<'t, N: TypeIdent> SpecificityCmp<'t, N> {
     }
 }
 
-/// The address of a composite type, which identifies it while comparing recursive types.
 fn address<N: TypeIdent>(ty: TyResolvedRef<'_, N>) -> Option<usize> {
     use TyResolvedRef as T;
     Some(match ty {

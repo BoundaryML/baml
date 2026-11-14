@@ -492,10 +492,6 @@ impl<'a> BexValue<'a> {
     }
 }
 
-/// `path` holds the heap containers whose conversion is in progress — the
-/// current value's ancestors, by identity. A container reached again while
-/// it is on the path is a cycle: the copy is a tree, so a cycle has no
-/// finite copy. Shared (acyclic) sub-values are copied once per reference.
 fn owned_inner(
     value: BexValue<'_>,
     heap: &BexHeap,
@@ -648,7 +644,6 @@ fn convert_object(
     lossy: bool,
     path: &mut Vec<*mut Object>,
 ) -> Result<BexExternalValue, AccessError> {
-    // Only containers recurse, so only they can close a cycle.
     let obj = unsafe { heap_ptr.get() };
     if !matches!(
         obj,
@@ -657,7 +652,6 @@ fn convert_object(
         return convert_object_body(heap_ptr, heap, lossy, path);
     }
     if path.contains(&heap_ptr.as_ptr()) {
-        // Traces keep the rest of the tree, as for any unconvertible leaf.
         return if lossy {
             Ok(BexExternalValue::String(bex_str::BexStr::from("<cycle>")))
         } else {
@@ -712,9 +706,6 @@ fn convert_object_body(
                 .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy, path))
                 .collect::<Result<_, _>>()?,
         }),
-        // A tuple carries its slot types, so they are named where they can
-        // be; a slot naming a runtime-only declaration falls back to the
-        // placeholder, as an array's element type does here.
         Object::Tuple(tuple) => Ok(BexExternalValue::Tuple {
             element_types: tuple
                 .element_tys
@@ -979,10 +970,6 @@ mod tests {
         }
     }
 
-    /// A tuple reaching itself, through a list (`t = ([t],)`) or directly
-    /// (`t.0 = t`), fails the deep copy instead of recursing forever; a trace
-    /// copy stubs the back edge and keeps the rest. A value shared without a
-    /// cycle copies normally.
     #[tokio::test]
     async fn cyclic_values_through_tuples_fail_finitely() {
         use bex_vm_types::{
@@ -1038,8 +1025,6 @@ mod tests {
             "{inner:?}"
         );
 
-        // Break the cycle: the tuple shared by both slots of `shared` is a
-        // DAG, not a cycle, and copies once per reference.
         unsafe { array.data_unchecked_mut() }.clear();
         let owned = super::convert_object(shared, &heap, false, &mut Vec::new()).unwrap();
         let BexExternalValue::Tuple { items, .. } = owned else {
@@ -1051,7 +1036,5 @@ mod tests {
                 .iter()
                 .all(|item| matches!(item, BexExternalValue::Tuple { .. }))
         );
-
-
     }
 }

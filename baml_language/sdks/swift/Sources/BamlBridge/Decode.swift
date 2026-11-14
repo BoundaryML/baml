@@ -70,10 +70,6 @@ public struct BamlOutboundValue: Sendable {
         return nil
     }
 
-    /// The tuple type this value carries if its arm is a tuple, else nil:
-    /// the tuple's instantiated type, never one read back off its items.
-    /// Used by union decode to pick a tuple arm by identity where no
-    /// selection came with the value.
     public func carriedTupleType() -> BamlTypeDescriptor? {
         guard case .tupleValue(let tuple) = normalized.value, tuple.hasTupleType else {
             return nil
@@ -162,8 +158,6 @@ extension BamlSlot {
 }
 
 extension BamlSlotNode {
-    /// Whether the engine's selected union member `selected` is this
-    /// declared arm (see `BamlSlot._bamlSelects`).
     func selects(_ selected: BamlTypeDescriptor) -> Bool {
         if type == selected { return true }
         guard case .leaf = shape, case .union(let merged)? = type.raw.ty else {
@@ -320,11 +314,6 @@ func releaseTypeValues(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
     }
 }
 
-/// Gives back the engine handles under `value` that no decoded value adopted:
-/// a value is the only owner of each engine handle key it arrived with until
-/// a `BamlHandle` takes it, so one dropped undecoded releases them here.
-/// Host handles are this host's own registrations and stay. Type values are
-/// not touched: `releaseTypeValues` already gave theirs back on arrival.
 func releaseEngineHandles(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
     switch value.value {
     case .handleValue(let handle):
@@ -478,9 +467,6 @@ extension Optional: BamlDecodable where Wrapped: BamlDecodable {
     }
 }
 
-/// `value` as an optional: `nil` for null, else `wrapped` of the value as it
-/// came, union wrapper and all (a union wrapped in `Optional` selects its
-/// case from it).
 func decodeOptional<Wrapped>(
     _ value: BamlOutboundValue,
     _ wrapped: (BamlOutboundValue) throws -> Wrapped
@@ -503,13 +489,11 @@ extension Array: BamlDecodable where Element: BamlDecodable {
     }
 }
 
-/// The items of a list value. A tuple is not a list, whatever its slots.
 func listItems(_ value: BamlOutboundValue) throws -> [BamlBridge_Cffi_V1_BamlOutboundValue] {
     let raw = value.normalized
     guard case .listValue(let list) = raw.value else {
         throw BamlDecodeError.typeMismatch(expected: "Array", got: wireArmName(raw))
     }
-    // `item_type` metadata is deliberately ignored, like Python.
     return list.items
 }
 
@@ -525,7 +509,6 @@ extension Dictionary: BamlDecodable where Key == String, Value: BamlDecodable {
     }
 }
 
-/// The entries of a map value, each value decoded by `entry`.
 func decodeMap<Value>(
     _ value: BamlOutboundValue,
     _ entry: (BamlOutboundValue) throws -> Value
@@ -541,8 +524,6 @@ func decodeMap<Value>(
     return out
 }
 
-/// The items of a tuple value of exactly `arity` slots. A list is refused
-/// whatever its length: a tuple's identity is never inferred from one.
 func tupleItems(_ value: BamlOutboundValue, arity: Int) throws -> [BamlBridge_Cffi_V1_BamlOutboundValue] {
     let raw = value.normalized
     guard case .tupleValue(let tuple) = raw.value else {
@@ -557,8 +538,6 @@ func tupleItems(_ value: BamlOutboundValue, arity: Int) throws -> [BamlBridge_Cf
     return tuple.items
 }
 
-/// `value` decoded through `Value`'s own `BamlDecodable` conformance, with no
-/// declared slot, for a `Value` known only generically (a stream's values).
 func decodeOwn<Value>(_ value: BamlOutboundValue, as _: Value.Type) throws -> Value {
     guard let decodable = Value.self as? any BamlDecodable.Type else {
         throw BamlDecodeError.unsupported("decoding \(Value.self) without its declared type")

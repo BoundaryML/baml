@@ -823,7 +823,6 @@ public final class ProtoReader {
                     accessor.setAccessible(true);
                     releaseDecoded(accessor.invoke(record));
                 } catch (ReflectiveOperationException | RuntimeException ignored) {
-                    // Unreadable component: its references fall to their Cleaner.
                 }
             }
         }
@@ -1347,9 +1346,6 @@ public final class ProtoReader {
                 // code expects follows the generator's rules for it: a union of
                 // literals of one base is that base's scalar, and a union
                 // mentioning a type variable is the bare wire value (its Java type
-                // is Object), as is one naming a declaration the runtime created
-                // (its values are the engine's own, with no generated type).
-                // Anything else is the arity family's arm record.
                 if (literalBaseOf(desc) != null || mentionsTypeVar(desc) || mentionsRuntimeDeclaration(desc)) {
                     return decodeValue(new WireReader(valueBytes), lenient);
                 }
@@ -1407,7 +1403,6 @@ public final class ProtoReader {
     private static Object decodeTupleWithDesc(byte[] valueBytes, BamlType tupleDesc, boolean lenient) {
         byte[] tupleBytes = outboundSub(valueBytes, OV_TUPLE);
         if (tupleBytes == null) {
-            // Descriptor says tuple but the wire is not one (e.g. null) → wire-driven.
             return decodeValue(new WireReader(valueBytes), lenient);
         }
         WireTuple tuple = WireTuple.read(tupleBytes);
@@ -1422,8 +1417,6 @@ public final class ProtoReader {
                     List.of(),
                     null);
         }
-        // A declared tuple over an unbound type variable names no one identity
-        // (its Java positions are Object): the tuple's carried type does.
         BamlType carried = tuple.carriedType();
         BamlType identity = carried != null && carried.tupleItems().size() == slots.size()
                         && mentionsTypeVar(tupleDesc)
@@ -1459,7 +1452,6 @@ public final class ProtoReader {
         try {
             record = TypeRegistry.constructTuple(tupleType, items);
         } catch (RuntimeException refused) {
-            // The record refused its slots: no host value holds them now.
             items.forEach(ProtoReader::releaseDecoded);
             throw refused;
         }
@@ -1488,7 +1480,6 @@ public final class ProtoReader {
      */
     private static List<Object> unionListFallback(BamlType tupleType, List<Object> items) {
         List<BamlType> join = new ArrayList<>();
-        // Per slot: its members, as indices into the join.
         List<List<Integer>> slotMembers = new ArrayList<>();
         for (BamlType slot : tupleType.tupleItems()) {
             List<Integer> members = new ArrayList<>();
@@ -1523,8 +1514,6 @@ public final class ProtoReader {
             int member = 0;
             Object inner = item;
             if (members.size() > 1) {
-                // A union slot decoded to its own Union{n} arm: its arm index
-                // names the slot member, which names the join's arm.
                 if (!(item instanceof baml_bridge.BamlUnion)) {
                     return null;
                 }
@@ -1726,9 +1715,6 @@ public final class ProtoReader {
         }
         String[] order = TypeRegistry.classFieldOrder(fqn);
         BamlType[] descs = TypeRegistry.classFieldDescs(fqn);
-        // A field over a type parameter stays wire-driven (its Java type is
-        // the erased `T`): a tuple there still finds its record by the
-        // identity it carries, and a union is its bare arm value.
         Map<String, Object> fields = new LinkedHashMap<>();
         for (int i = 0; i < keys.size(); i++) {
             BamlType fieldDesc = null;
@@ -2273,8 +2259,6 @@ public final class ProtoReader {
             if (i >= slots.size()) {
                 return false;
             }
-            // A union slot's item arrives in its own envelope; its inner value
-            // is what the slot's members match.
             byte[] effective = outboundArm(item) == OV_UNION ? extractUnionInner(item) : item;
             BamlType slot = slots.get(i++);
             if (effective == null || outboundArm(effective) == OV_NULL || outboundArm(effective) == 0) {

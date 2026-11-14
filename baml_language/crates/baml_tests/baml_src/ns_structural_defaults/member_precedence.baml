@@ -101,8 +101,8 @@ class StructuralCallbackFields {
 function call_callback_view(value: StructuralCallbackView) -> string throws never {
     let callback = (value).eq;
     assert.equal(callback(7), "callback")
-    assert.equal(value.to_json(), 42)
-    value.eq(7)
+    assert.equal((value.to_json)(), 42)
+    (value.eq)(7)
 }
 
 test "function fields retain their values and call signatures" {
@@ -116,8 +116,8 @@ test "function fields retain their values and call signatures" {
     assert.equal(path_method(7), "callback")
     assert.equal(expression_method(7), "callback")
     assert.equal(json_method(), 42)
-    assert.equal(value.eq(7), "callback")
-    assert.equal((value).eq(7), "callback")
-    assert.equal(value.to_json(), 42)
+    assert.equal((value.eq)(7), "callback")
+    assert.equal((value.eq)(7), "callback")
+    assert.equal((value.to_json)(), 42)
     assert.equal(call_callback_view(value), "callback")
 }

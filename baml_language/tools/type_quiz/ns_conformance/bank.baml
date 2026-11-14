@@ -868,9 +868,6 @@ test "bank: nearly every case it can draw turns on a single rule" {
 /// A site nothing reaches is a site that is not being tested. The coherence
 /// site is reachable only for a pair of types an `implements` block may name,
 /// which rules out a union, a literal, an interface, `never`, `unknown` and a
-/// recursive alias, so it takes the smaller share. The unguarded cycle is
-/// put at no site at all — a declaration is the whole of its program — and
-/// is what `other` counts.
 function sites_reached_report() -> string throws never {
     let concluded = root.bank.items()
         .filter((item) -> {

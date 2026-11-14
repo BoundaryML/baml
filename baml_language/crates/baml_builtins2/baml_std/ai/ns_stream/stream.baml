@@ -764,7 +764,7 @@ class Stream<T> {
 
     function _next(self) -> T | Done {
         while (true) {
-            match (self._next_text()) {
+            match ((self._next_text)()) {
                 null => {
                     self._finished = true;
                     self._settle() catch (e) {
@@ -802,7 +802,7 @@ class Stream<T> {
             _in_context(
                 () -> {
                     while (!self._finished) {
-                        match (self._next_text()) {
+                        match ((self._next_text)()) {
                             null => {
                                 self._finished = true;
                             },
@@ -864,7 +864,7 @@ class Stream<T> {
         if (self._result == null) {
             self._finished = true;
             self._result = _StreamError { error: error };
-            self._release();
+            (self._release)();
             self._span.fail_with_context(error, context);
         }
     }
@@ -873,7 +873,7 @@ class Stream<T> {
     /// Abandonment does not imply cancellation or successful parsing.
     function cleanup(self) -> void {
         self._finished = true;
-        self._release() catch_all (e) {
+        (self._release)() catch_all (e) {
             _ => {
                 self._span.close();
                 throw e;

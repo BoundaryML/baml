@@ -923,12 +923,6 @@ struct codec<std::vector<T>> {
   }
 };
 
-// A BAML tuple `(A, B)` is `std::tuple<A, B>`: slots in declaration order,
-// identity by spelling (no typemap entry), so the list fallbacks of other
-// SDKs never apply here. Inbound it travels as a list stating the tuple
-// type, which the engine checks slot by slot; outbound it arrives as a
-// tuple value of exactly that many items, each decoded at its own slot.
-// A plain BAML list never decodes as a tuple, whatever its length.
 template <typename... Ts>
 struct codec<std::tuple<Ts...>> {
   static_assert(sizeof...(Ts) > 0, "a BAML tuple has at least one slot");
@@ -967,7 +961,6 @@ struct codec<std::tuple<Ts...>> {
  private:
   template <typename Items, std::size_t... Is>
   static T decode_slots(const Items& items, std::index_sequence<Is...>) {
-    // Braced initialization decodes the slots left to right.
     return T{codec<Ts>::decode(items.Get(static_cast<int>(Is)))...};
   }
 };
@@ -1087,9 +1080,6 @@ struct codec<lit<Vs...>> {
 //     unions with a float arm but no int arm.
 //
 // Class/enum alternatives dispatch precisely by wire FQN inside their own
-// codecs; a tuple claims the alternative its carried tuple type spells
-// before any pass; structurally ambiguous alternatives (two lists) resolve
-// by probing elements.
 template <class... Ts>
 struct codec<std::variant<Ts...>> {
   using V = std::variant<Ts...>;
@@ -1132,8 +1122,6 @@ struct codec<std::variant<Ts...>> {
     }
     const auto& v = detail::unwrap(raw);
     std::optional<V> out;
-    // A tuple names its own type: the alternative spelling it is the arm,
-    // whatever else its elements would fit.
     if (v.value_case() == detail::pb::BamlOutboundValue::kTupleValue &&
         v.tuple_value().has_tuple_type()) {
       const std::string carried =
@@ -1171,8 +1159,6 @@ struct codec<std::variant<Ts...>> {
         "generated C++ union");
   }
 
-  // Byte equality, as for a selected type: a carried type is an
-  // annotation, which never names a `live` head.
   template <class T>
   static bool claim_carried(const detail::pb::BamlOutboundValue& v,
                             const std::string& carried, std::optional<V>& out) {

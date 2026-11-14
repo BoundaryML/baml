@@ -97,8 +97,6 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
 
     /// BEP-075's field-default table over `ty`: nullable types → `null`, literals → the
     /// literal, `string` → `""`, arrays and maps → empty, a one-variant enum → its variant, a
-    /// class → all of its fields' defaults, a tuple → all of its elements' defaults, and
-    /// everything else (numbers, `bool`, media, other
     /// enums, non-nullable unions, a class with a `never` field or containing itself) →
     /// [`DefaultValue::Never`].
     ///
@@ -113,8 +111,6 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
     }
 
     /// What a complete object may omit: `null` for nullable types and an empty container for
-    /// arrays and maps. Anything else is required ([`DefaultValue::Never`]), including tuples:
-    /// no single value stands in for an omitted fixed-arity tuple.
     ///
     /// # Errors
     /// `ty` names something the database does not contain.
@@ -249,10 +245,6 @@ impl<'t, N: TypeIdent> DefaultDeriver<'t, N> {
         Ok(default)
     }
 
-    /// Every element's default, or `never` if any element has none.
-    ///
-    /// A tuple cannot contain itself without indirection (the named-entry guard in
-    /// [`Self::resolved`] catches `type T = (int, T)`), so no class-style stack is needed.
     fn tuple_default(&mut self, tuple: &'t TupleTy<'t, N>) -> Result<DefaultValue<N>, &'t N> {
         let mut items = Vec::with_capacity(tuple.items.len());
         for item in &tuple.items {
@@ -324,7 +316,6 @@ pub enum TyResolved<'t, N: TypeIdent> {
     LiteralBigint(BigintLiteralTy),
     LiteralBool(BoolLiteralTy),
     Array(ArrayTy<'t, N>),
-    /// A fixed-arity tuple `(T1, T2, ...)`, written as a JSON array of exactly that length.
     Tuple(TupleTy<'t, N>),
     Map(MapTy<'t, N>),
     Class(ClassTy<'t, N>),
@@ -410,7 +401,6 @@ pub enum TyResolvedRef<'t, N: TypeIdent> {
     LiteralBigint(&'t BigintLiteralTy),
     LiteralBool(&'t BoolLiteralTy),
     Array(&'t ArrayTy<'t, N>),
-    /// A fixed-arity tuple `(T1, T2, ...)`, written as a JSON array of exactly that length.
     Tuple(&'t TupleTy<'t, N>),
     Map(&'t MapTy<'t, N>),
     Class(&'t ClassTy<'t, N>),
@@ -715,11 +705,6 @@ where
     type Value = BamlArray<'s, 'v, 't, N>;
 }
 
-/// A fixed-arity tuple `(T1, T2, ...)`; zero-length only when built through
-/// reflection, as source cannot spell it. In JSON it is an array of exactly
-/// `items.len()` values, position `i` holding a `T{i+1}`.
-///
-/// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone, PartialEq)]
 pub struct TupleTy<'t, N: TypeIdent> {
     pub items: Vec<Ty<'t, N>>,
@@ -940,7 +925,6 @@ pub enum DefaultValue<N: TypeIdent> {
     },
     /// A `StreamState` field that has not started, around the inner type's default.
     StreamStatePending(Box<DefaultValue<N>>),
-    /// A tuple whose every element has a default, in element order.
     Tuple(Vec<DefaultValue<N>>),
 }
 

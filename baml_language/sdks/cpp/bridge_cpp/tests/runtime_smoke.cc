@@ -407,10 +407,6 @@ static void TestTranscodeKeepsTheTypesTheEngineGave() {
           "a literal is implied by its scalar; nothing is stated");
 }
 
-// A received tuple goes back as a list stating the tuple type it carries,
-// not one read off its elements: `(int | string, bool)` holding `(1, true)`
-// keeps its union slot. A tuple without that type is refused, never stated
-// with `unknown` slots.
 static void TestTupleTranscodesUnderItsCarriedType() {
   namespace pb = baml::detail::pb;
   pb::BamlOutboundValue tuple;
@@ -456,9 +452,6 @@ static void TestTupleTranscodesUnderItsCarriedType() {
   Require(refused(short_type), "a tuple was restated under the wrong arity");
 }
 
-// With no selection on the value, a union takes the tuple alternative its
-// carried type spells: `(int, string?)` holding `(1, "a")` is that arm, not
-// `(int, string)`, which its elements also fit.
 static void TestUnionTakesTheTupleArmItsCarriedTypeSpells() {
   namespace pb = baml::detail::pb;
   using Exact = std::tuple<int64_t, std::string>;
@@ -475,9 +468,6 @@ static void TestUnionTakesTheTupleArmItsCarriedTypeSpells() {
           "a tuple did not take the arm its carried type spells");
 }
 
-// A slot value that counts its decodes, encodes, and live instances, and a
-// slot value that cannot be encoded: what a tuple codec does around a slot
-// that fails part way.
 struct Tracked {
   static int decoded, encoded, live;
   Tracked() { ++live; }
@@ -513,9 +503,6 @@ struct codec<Unencodable> {
 };
 }  // namespace baml
 
-// A tuple whose later slot fails decodes each earlier slot once, keeps
-// nothing it decoded, and refuses a wrong arity or slot before or as it
-// reaches it.
 static void TestTupleFailingPartWayKeepsNothingAndDecodesOnce() {
   namespace pb = baml::detail::pb;
   using Tuple = std::tuple<Tracked, Tracked, int64_t>;
@@ -549,7 +536,6 @@ static void TestTupleFailingPartWayKeepsNothingAndDecodesOnce() {
     list.mutable_list_value()->add_items()->set_int_value(1);
   Require(refused(list), "a list decoded as a tuple");
 
-  // Encoding stops at the failing slot, every earlier slot encoded once.
   Tracked::encoded = 0;
   bool threw = false;
   try {
@@ -564,9 +550,6 @@ static void TestTupleFailingPartWayKeepsNothingAndDecodesOnce() {
   Require(Tracked::live == 0, "a slot outlived its failed encode");
 }
 
-// A dynamic value keeps the tuple type a received tuple carries: decoded at
-// a union it takes the arm that type spells, and sent back it states that
-// type. Its position is open: a list of them is a list of `unknown`.
 static void TestDynamicValueKeepsTheCarriedTupleType() {
   namespace pb = baml::detail::pb;
   using Carried = std::tuple<baml::variant<int64_t, std::string>, bool>;

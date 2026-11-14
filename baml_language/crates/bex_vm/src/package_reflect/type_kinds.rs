@@ -2108,13 +2108,6 @@ fn field_value_fits(vm: &BexVm, value: Value, expected: &bex_vm_types::RealizedT
     })
 }
 
-/// The fix `reflect.Class.instantiate` (or `reflect.Tuple.instantiate`) names
-/// when a list, map, or tuple misses its field's or slot's type: the position
-/// takes a container of the same kind (a tuple of the same arity), so only
-/// the element, key, value or slot types differ. A container keeps the types
-/// it was built with, so a literal written inside `fields` is typed by its own
-/// elements and `[]` is `unknown[]`; tuples are invariant, so a `(1,)` built
-/// as `(int,)` is no `(int?,)`. Empty when the mismatch is anything else.
 fn container_hint(
     vm: &BexVm,
     got: &bex_vm_types::RealizedTy,
@@ -2148,16 +2141,13 @@ fn container_hint(
     format!(": {rule}; build it as {wanted} first")
 }
 
-/// The container kind [`container_hint`] looks for in the expected type.
 #[derive(Clone, Copy)]
 enum ContainerKind {
     List,
     Map,
-    /// A tuple of this arity.
     Tuple(usize),
 }
 
-/// The containers of `kind` in `ty` and in its union members, through the
 /// type aliases not in `within`.
 fn same_kind_containers(
     vm: &BexVm,
@@ -2256,8 +2246,6 @@ impl BamlClassArray for PackageReflectImpl {
 
 impl BamlClassTuple for PackageReflectImpl {
     fn _new(vm: &mut BexVm, element_types: &[Value]) -> Value {
-        // An empty list is the zero-length tuple type: reflection is its only
-        // spelling, since source has no `()`.
         let elements = element_types
             .iter()
             .map(|value| reflected_type_value(vm, *value).ty)
@@ -2273,8 +2261,6 @@ impl BamlClassTuple for PackageReflectImpl {
         vm: &mut BexVm,
         values: &[Value],
     ) -> Result<Value, crate::errors::VmRustFnError> {
-        // The caller's `T`, as in `Class.instantiate`: a missing one is a
-        // frame-seeding bug.
         let Some(tuple_ty) = vm.current_call_type_args().first().cloned() else {
             return Err(crate::errors::VmRustFnError::InternalError(
                 bex_vm_types::errors::VmInternalError::MissingNativeFunction {
@@ -2298,8 +2284,6 @@ impl BamlClassTuple for PackageReflectImpl {
                 ),
             ));
         }
-        // Values are stored exactly as given, under the same membership test
-        // `Class.instantiate` applies to field values.
         for (index, (value, ty)) in values.iter().zip(element_tys.iter()).enumerate() {
             if field_value_fits(vm, *value, ty) {
                 continue;
@@ -2322,6 +2306,37 @@ impl BamlClassTuple for PackageReflectImpl {
         let tuple = bex_vm_types::Tuple::new(element_tys.clone(), values.to_vec())
             .unwrap_or_else(|err| unreachable!("arity checked above: {err}"));
         Ok(Value::object(vm.tlab.alloc_tuple(tuple)))
+    }
+
+    fn get_element(
+        vm: &mut BexVm,
+        value: &Value,
+        index: i64,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let result = value
+            .as_object_ptr()
+            .and_then(|ptr| match vm.get_object(ptr) {
+                bex_vm_types::Object::Tuple(tuple) => Some((
+                    usize::try_from(index)
+                        .ok()
+                        .and_then(|slot| tuple.try_load_slot(slot)),
+                    tuple.len(),
+                )),
+                _ => None,
+            });
+        match result {
+            Some((Some(value), _)) => Ok(value),
+            Some((None, arity)) => Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Tuple.get_element: slot {index} is out of range for a tuple of {arity} slots"
+                ),
+            )),
+            None => Err(invalid_argument(
+                vm,
+                "reflect.Tuple.get_element expects a tuple value".to_string(),
+            )),
+        }
     }
 
     fn element_types(

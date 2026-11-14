@@ -148,8 +148,6 @@ impl TextDecoder<'_, '_> {
         ))
     }
 
-    /// A tuple: an array of exactly one element per slot. Any other length
-    /// stops, for the full decoder to report.
     fn tuple(&mut self, vm: &mut BexVm, slots: &[RealizedTy]) -> Result<Value, Stop> {
         self.parser.reader.open_array()?;
         let mut items = Vec::with_capacity(slots.len());
@@ -162,7 +160,6 @@ impl TextDecoder<'_, '_> {
         if self.parser.reader.next_element(items.is_empty())? {
             return Err(Stop);
         }
-        // The tuple carries its target slot types, one per element read.
         let tuple = bex_vm_types::Tuple::new(slots.to_vec(), items)
             .unwrap_or_else(|_| unreachable!("one element is read per slot"));
         Ok(Value::object(vm.tlab.alloc_tuple(tuple)))

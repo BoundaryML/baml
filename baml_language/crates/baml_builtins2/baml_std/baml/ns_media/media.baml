@@ -48,7 +48,7 @@ class Pdf {
         file: string,
         mime_type: string?,
     ) -> pdf throws root.errors.Io | root.errors.InvalidArgument {
-        let handle = root.fs.open(file, "r");
+        let handle = (root.fs.open)(file, "r");
         defer { handle.close() }
         Pdf.from_file_content(file, handle.bytes().to_base64(), mime_type)
     }
@@ -128,7 +128,7 @@ class Audio {
         file: string,
         mime_type: string?,
     ) -> audio throws root.errors.Io | root.errors.InvalidArgument {
-        let handle = root.fs.open(file, "r");
+        let handle = (root.fs.open)(file, "r");
         defer { handle.close() }
         Audio.from_file_content(file, handle.bytes().to_base64(), mime_type)
     }
@@ -208,7 +208,7 @@ class Video {
         file: string,
         mime_type: string?,
     ) -> video throws root.errors.Io | root.errors.InvalidArgument {
-        let handle = root.fs.open(file, "r");
+        let handle = (root.fs.open)(file, "r");
         defer { handle.close() }
         Video.from_file_content(file, handle.bytes().to_base64(), mime_type)
     }
@@ -288,7 +288,7 @@ class Image {
         file: string,
         mime_type: string?,
     ) -> image throws root.errors.Io | root.errors.InvalidArgument {
-        let handle = root.fs.open(file, "r");
+        let handle = (root.fs.open)(file, "r");
         defer { handle.close() }
         Image.from_file_content(file, handle.bytes().to_base64(), mime_type)
     }

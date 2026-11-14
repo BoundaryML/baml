@@ -521,9 +521,6 @@ pub fn receiver_at_dot<'db>(
         .map(|(owner, ty, _)| (owner, ty))
 }
 
-/// Calls `visit` with every body that can own code at `offset`, together
-/// with its source map and inference — the bodies [`receiver_at_dot`]
-/// searches, each visited once.
 fn visit_bodies_at<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     file: SourceFile,
@@ -563,7 +560,10 @@ fn visit_bodies_at<'db>(
     }
 }
 
-pub(crate) fn tuple_slots(db: &dyn baml_compiler2_hir::Db, ty: &baml_type::Ty) -> Option<Vec<baml_type::Ty>> {
+pub(crate) fn tuple_slots(
+    db: &dyn baml_compiler2_hir::Db,
+    ty: &baml_type::Ty,
+) -> Option<Vec<baml_type::Ty>> {
     let mut ty = ty.clone();
     for _ in 0..32 {
         match ty {
@@ -578,19 +578,48 @@ pub(crate) fn tuple_slots(db: &dyn baml_compiler2_hir::Db, ty: &baml_type::Ty) -
     None
 }
 
-pub struct TupleAccess { pub access: String, pub ty: baml_type::Ty }
+pub struct TupleAccess {
+    pub access: String,
+    pub ty: baml_type::Ty,
+}
 
-pub fn tuple_access_at(db: &dyn baml_compiler2_hir::Db, file: SourceFile, offset: TextSize) -> Option<TupleAccess> {
+pub fn tuple_access_at(
+    db: &dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Option<TupleAccess> {
     let mut best: Option<(TextSize, TupleAccess)> = None;
     visit_bodies_at(db, file, offset, |_, body, source_map, inference| {
         for (id, expr) in body.exprs.iter() {
-            let (Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. }) = expr else { continue };
-            if member.as_str().parse::<u32>().is_err() { continue; }
-            let Some(span) = source_map.member_name_span(id) else { continue };
-            if !span.contains(offset) { continue; }
-            let Some(ty) = inference.type_of_expr.get(&id).filter(|ty| !matches!(ty, baml_type::Ty::Error)) else { continue };
+            let (Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. }) =
+                expr
+            else {
+                continue;
+            };
+            if member.as_str().parse::<u32>().is_err() {
+                continue;
+            }
+            let Some(span) = source_map.member_name_span(id) else {
+                continue;
+            };
+            if !span.contains(offset) {
+                continue;
+            }
+            let Some(ty) = inference
+                .type_of_expr
+                .get(&id)
+                .filter(|ty| !matches!(ty, baml_type::Ty::Error))
+            else {
+                continue;
+            };
             if best.as_ref().is_none_or(|(len, _)| span.len() < *len) {
-                best = Some((span.len(), TupleAccess { access: body.display_expr(id), ty: ty.clone() }));
+                best = Some((
+                    span.len(),
+                    TupleAccess {
+                        access: body.display_expr(id),
+                        ty: ty.clone(),
+                    },
+                ));
             }
         }
     });
@@ -1369,8 +1398,6 @@ fn operator_target_at(
 
     let (_, dispatch, lhs, rhs) = claim?;
     let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
-    // Indexing a tuple selects a slot; it dispatches no method, and a slot
-    // has no declaration to name.
     if dispatch == ops::INDEX_DISPATCH
         && tuple_slots(db, inference.type_of_expr.get(&lhs)?).is_some()
     {

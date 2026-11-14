@@ -437,8 +437,6 @@ impl<T: BamlValue> __BamlValuePrivate for Mixed<T> {
 /// Synthesized union enum shape: one variant per (null-stripped) arm,
 /// `From` per payload arm, inbound encodes the bare arm value, decode
 /// trial-matches arms in declared order (wire kinds / FQNs / literal
-/// values discriminate every supported combination), each on its own copy
-/// of the value's references, releasing the value once an arm is chosen.
 #[derive(Debug, Clone, PartialEq)]
 enum IntOrString {
     Int(i64),
@@ -1226,10 +1224,6 @@ fn class_fqn_drift_fails_loudly() {
     }
 }
 
-/// A BAML tuple wider than std's 12-slot trait impls is still a native
-/// Rust tuple: the bridge converts tuples of up to `MAX_TUPLE_ARITY` slots.
-/// Rust implements `Debug` and `PartialEq` only up to 12 slots, so the
-/// tests compare a wide tuple's slots in parts.
 type Wide = (
     i64,
     String,
@@ -1268,7 +1262,6 @@ fn wide() -> Wide {
     )
 }
 
-/// A wide tuple's slots, in parts that implement `PartialEq` and `Debug`.
 #[allow(clippy::type_complexity)]
 fn wide_parts(t: Wide) -> ((i64, String, (i64, String), Point), [i64; 9]) {
     (
@@ -1286,7 +1279,6 @@ fn round_trips_a_tuple_wider_than_std_impls_as_a_native_tuple() {
     assert_eq!(wide_parts(back), wide_parts(wide()));
 }
 
-/// `(int, …)` of `N` slots holding `0..N`.
 macro_rules! counting_tuple {
     ($($idx:tt)+) => {
         ($($idx as i64,)+)
@@ -1381,7 +1373,6 @@ fn a_wide_tuple_rejects_a_tuple_of_another_arity() {
 
 #[test]
 fn a_wide_tuple_rejects_a_wrong_slot() {
-    // The right arity, but slot 0 is a string where the tuple holds an int.
     ensure_runtime();
     let result =
         runtime::invoke_sync::<Wide, Infallible>("user.make_wide_with_string_head", |_| Ok(vec![]));
@@ -1394,8 +1385,6 @@ fn a_wide_tuple_rejects_a_wrong_slot() {
 
 #[test]
 fn the_engine_refuses_a_wide_tuple_of_the_wrong_slot_types() {
-    // Stated as its own Rust type, `(string, …)` is not the declared
-    // `(int, …)`: the engine checks every slot.
     ensure_runtime();
     let wrong = wide();
     let wrong = (
@@ -1420,13 +1409,6 @@ fn the_engine_refuses_a_wide_tuple_of_the_wrong_slot_types() {
     assert!(result.is_err(), "the engine accepted a wrong slot");
 }
 
-// ---------------------------------------------------------------------------
-// Ownership: a tuple that fails to decode partway gives up every engine
-// reference it held, and a union arm that fails partway never releases one
-// the chosen arm keeps.
-// ---------------------------------------------------------------------------
-
-/// A value as the engine sent it, its references not yet owned by anything.
 struct Raw(wire::BamlOutboundValue);
 
 impl __BamlValuePrivate for Raw {
@@ -1444,7 +1426,6 @@ impl __BamlValuePrivate for Raw {
 }
 
 impl Raw {
-    /// The engine handles in the tuple's slots, in slot order.
     fn handles(&self) -> Vec<wire::BamlOutboundHandle> {
         let Some(wire::baml_outbound_value::Value::TupleValue(tuple)) = &self.0.value else {
             panic!("expected a tuple, got {:?}", self.0);
@@ -1460,8 +1441,6 @@ impl Raw {
     }
 }
 
-/// A `reflect.Package` sent as exactly the reference `0` is, not a clone of
-/// it: the engine refuses a reference this process already released.
 struct SentAsIs(wire::BamlOutboundHandle);
 
 impl __BamlValuePrivate for SentAsIs {
@@ -1484,8 +1463,6 @@ impl __BamlValuePrivate for SentAsIs {
     }
 }
 
-/// Whether the engine still holds `handle` for this process. A live one is
-/// handed over by the probe.
 fn still_held(handle: &wire::BamlOutboundHandle) -> bool {
     runtime::invoke_sync::<bool, Infallible>("user.package_has_point", |arguments| {
         own(arguments, "p", &SentAsIs(handle.clone()))?;
@@ -1499,8 +1476,6 @@ fn a_tuple_failing_at_a_later_slot_releases_every_slot() {
     let raw: Raw = call("user.package_string_package", |_| Ok(()));
     let handles = raw.handles();
     assert_eq!(handles.len(), 2);
-    // Slot 1 is a string where the tuple holds an int: slot 0 was decoded
-    // (and is released with its value), slot 2 never was.
     let result = <(Package, i64, Package)>::from_baml(raw.0);
     assert!(
         matches!(result, Err(DecodeError::WrongType { .. })),
@@ -1525,9 +1500,6 @@ fn a_tuple_of_the_wrong_arity_releases_its_slots() {
     }
 }
 
-/// `(reflect.Package, int) | (reflect.Package, string)`, as the generator
-/// emits a union: the selected arm when the engine names one, else each
-/// arm tried on its own copy of the value's references.
 #[derive(Debug)]
 enum PackageIntOrPackageString {
     #[expect(dead_code, reason = "the arm this test's value must not take")]
@@ -1573,9 +1545,6 @@ impl __BamlValuePrivate for PackageIntOrPackageString {
 
 #[test]
 fn a_union_arm_failing_partway_keeps_the_next_arms_references() {
-    // Sent with no union envelope, so each arm is tried. The first takes
-    // slot 0's package before slot 1 refuses it; the second must still own
-    // a live package.
     let raw: Raw = call("user.package_and_string", |_| Ok(()));
     let original = raw.handles();
     let decoded = PackageIntOrPackageString::from_baml(raw.0).expect("second arm fits");
@@ -1588,9 +1557,7 @@ fn a_union_arm_failing_partway_keeps_the_next_arms_references() {
         Ok(())
     });
     assert!(has_point);
-    // The value's own reference went with it: the arm holds its own copy.
     assert!(!still_held(&original[0]));
-    // Neither arm fits: everything is released.
     let raw: Raw = call("user.package_and_string", |_| Ok(()));
     let original = raw.handles();
     let result = <(Package, i64)>::from_baml(raw.0);
@@ -1598,8 +1565,6 @@ fn a_union_arm_failing_partway_keeps_the_next_arms_references() {
     assert!(!still_held(&original[0]));
 }
 
-/// `(int | string)[] | (int, int | string)`: a tuple is never a list, so a
-/// list arm tried first leaves a tuple to the tuple arm.
 #[derive(Debug, PartialEq)]
 enum ListOrPair {
     List(Vec<IntOrString>),
@@ -1634,8 +1599,6 @@ impl __BamlValuePrivate for ListOrPair {
 
 #[test]
 fn a_tuple_is_not_a_list() {
-    // A tuple decodes only as a tuple of its arity, never as a list of its
-    // slots.
     ensure_runtime();
     let result =
         runtime::invoke_sync::<Vec<IntOrString>, Infallible>("user.make_pair", |_| Ok(vec![]));
@@ -1643,7 +1606,6 @@ fn a_tuple_is_not_a_list() {
         matches!(result, Err(Error::Decode(DecodeError::WrongType { .. }))),
         "{result:?}"
     );
-    // A union with a list arm and a tuple arm takes a tuple as the tuple.
     let raw: Raw = call("user.make_pair", |_| Ok(()));
     assert_eq!(
         ListOrPair::from_baml(raw.0).unwrap(),

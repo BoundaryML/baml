@@ -433,7 +433,6 @@ pub struct Tuple {
     slots: Box<[Value]>,
 }
 
-/// A tuple built with a different number of slot types than elements.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TupleShapeMismatch {
     pub types: usize,
@@ -453,7 +452,6 @@ impl std::fmt::Display for TupleShapeMismatch {
 impl std::error::Error for TupleShapeMismatch {}
 
 impl Tuple {
-    /// Pair `element_tys` with `data`, which must agree in length.
     pub fn new(
         element_tys: impl Into<Box<[crate::RealizedTy]>>,
         data: impl IntoIterator<Item = Value>,
@@ -469,25 +467,21 @@ impl Tuple {
         Ok(Self { element_tys, slots })
     }
 
-    /// The tuple's arity.
     #[inline]
     pub fn len(&self) -> usize {
         self.slots.len()
     }
 
-    /// Whether this is the zero-arity tuple.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.slots.is_empty()
     }
 
-    /// The value in slot `idx`, or `None` if out of bounds.
     #[inline]
     pub fn try_load_slot(&self, idx: usize) -> Option<Value> {
         self.slots.get(idx).copied()
     }
 
-    /// The value in slot `idx`. Panics if out of bounds.
     #[inline]
     pub fn load_slot(&self, idx: usize) -> Value {
         self.slots[idx]
@@ -501,7 +495,6 @@ impl Tuple {
         self.slots.iter().copied()
     }
 
-    /// The tuple's own type: `(T0, T1, ...)` over its carried slot types.
     pub fn ty(&self) -> crate::RealizedTy {
         crate::RealizedTy::Tuple(self.element_tys.clone())
     }

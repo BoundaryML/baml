@@ -369,9 +369,6 @@ impl BexEngine {
         self.convert_vm_value_on_path(value, declared_type, vm, permit, &mut Vec::new())
     }
 
-    /// [`Self::convert_vm_value_to_external_with_type`] beneath the
-    /// containers on `path` — the ancestors whose conversion is in progress,
-    /// by identity (see [`Self::convert_heap_ptr_to_external_with_type`]).
     fn convert_vm_value_on_path(
         &self,
         value: Value,
@@ -423,14 +420,6 @@ impl BexEngine {
 
     /// Convert an object to a `BexExternalValue` using the effective (non-union) type.
     ///
-    /// BAML permits self-referencing values (`n.next = n`, or a tuple
-    /// reaching itself through a list it holds), but `BexExternalValue` and
-    /// the outbound protobuf are trees, so no bridge could carry a cycle.
-    /// `path` holds the containers whose conversion is in progress, by
-    /// identity: reaching one again is a cycle, which fails with an
-    /// `EngineError` that surfaces on the envelope's error arm in every SDK.
-    /// A value shared without a cycle converts once per reference.
-    ///
     /// # Safety
     ///
     /// This method uses unsafe calls to dereference `HeapPtr`. It is safe because:
@@ -446,7 +435,6 @@ impl BexEngine {
     ) -> Result<BexExternalValue, EngineError> {
         // SAFETY: We only read objects, and the pointer comes from a valid handle.
         let obj = unsafe { ptr.get() };
-        // Only containers recurse, so only they can close a cycle.
         let container = match obj {
             Object::Array(_) => "list",
             Object::Tuple(_) => "tuple",
@@ -509,10 +497,6 @@ impl BexEngine {
             }
 
             Object::Tuple(tuple) => {
-                // Each element converts at its declared slot type, so a union
-                // slot selects and wraps its arm; without a same-arity tuple
-                // declaration (`unknown`, `json`, …) at the tuple's own slot
-                // types, which the value carries.
                 let slots: &[bex_vm_types::RealizedTy] = match effective_type {
                     bex_vm_types::RealizedTy::Tuple(slots) if slots.len() == tuple.len() => slots,
                     _ => &tuple.element_tys,
@@ -1429,7 +1413,6 @@ fn find_matching_member(
                 runtime_ty_structurally_equal(key_type, key)
                     && runtime_ty_structurally_equal(value_type, value)
             }
-            // A tuple carries its slot types: the member naming exactly them.
             (BexExternalValue::Tuple { element_types, .. }, WireTy::Tuple(slots)) => {
                 element_types.len() == slots.len()
                     && element_types
@@ -1568,9 +1551,18 @@ fn value_matches_type(value: &BexExternalValue, ty: &WireTy) -> bool {
         ) => entries
             .values()
             .all(|value| value_matches_type(value, expected_value)),
-        (BexExternalValue::Tuple { element_types, items }, WireTy::Tuple(slots)) => {
+        (
+            BexExternalValue::Tuple {
+                element_types,
+                items,
+            },
+            WireTy::Tuple(slots),
+        ) => {
             element_types.len() == slots.len()
-                && element_types.iter().zip(slots).all(|(own, slot)| runtime_ty_structurally_equal(own, slot))
+                && element_types
+                    .iter()
+                    .zip(slots)
+                    .all(|(own, slot)| runtime_ty_structurally_equal(own, slot))
                 && items.len() == slots.len()
                 && items
                     .iter()
@@ -1950,11 +1942,6 @@ fn find_matching_union_member<'a>(
                                 && runtime_ty_structurally_equal(actual_value, value))
                     })
                 }
-                // A tuple carries its slot types, and tuples are invariant: the
-                // one member is the same-arity tuple whose every slot is
-                // equivalent to the tuple's own. Equivalence, not spelling: SAP
-                // allocates a parsed tuple at simplified slot types (`int` for
-                // `5 | int`), which must still select the arm it was parsed for.
                 Object::Tuple(tuple) => members.iter().find(|member| {
                     matches!(member, bex_vm_types::RealizedTy::Tuple(slots)
                         if slots.len() == tuple.len()
@@ -2036,8 +2023,6 @@ mod outbound_selection_tests {
 
     use super::*;
 
-    /// A context with no heap facts: no alias, interface or enum resolves.
-    /// Enough for selections the realized types decide on their own.
     struct NoHeapFacts;
 
     impl TypeContext<bex_vm_types::TypeHead> for NoHeapFacts {
@@ -2204,8 +2189,6 @@ mod outbound_selection_tests {
             Value::object(tlab.alloc_tuple(bex_vm_types::Tuple::new(slots, values).unwrap()))
         };
         let optional = Ty::Tuple(Box::new([Ty::Union(Box::new([Ty::Int, Ty::Null]))]));
-        // `5 | int` is spelled differently from the carried `int`, as a type
-        // SAP simplified, and is equivalent to it.
         let spelled = Ty::Tuple(Box::new([Ty::Union(Box::new([
             Ty::Literal(Literal::Int(5), Freshness::Regular),
             Ty::Int,
@@ -2224,7 +2207,6 @@ mod outbound_selection_tests {
             find_matching_union_member(wide, &members, &NoHeapFacts),
             Some(&optional)
         );
-        // Invariant: an `(int,)` is no member of `(int?,)`, whatever it holds.
         assert_eq!(
             find_matching_union_member(exact, std::slice::from_ref(&optional), &NoHeapFacts),
             None
@@ -2399,7 +2381,6 @@ mod outbound_selection_tests {
 
     #[test]
     fn tuple_uses_its_slot_types_to_select_union_arm() {
-        // Both arms admit `(1, null)`; the tuple's own slot types name one.
         let exact = WireTy::Tuple(Box::new([WireTy::int(), WireTy::optional(WireTy::int())]));
         let broader = WireTy::Tuple(Box::new([
             WireTy::int(),
@@ -2421,9 +2402,7 @@ mod outbound_selection_tests {
     }
 
     #[test]
-    fn tuple_falls_back_to_the_structurally_matching_union_arm() {
-        // No arm names the carried slot types; the arm whose arity and slots
-        // admit the items is selected, not a type mismatch.
+    fn tuple_rejects_union_arms_with_different_carried_slots() {
         let pair = WireTy::Tuple(Box::new([WireTy::int(), WireTy::string()]));
         let triple = WireTy::Tuple(Box::new([WireTy::int(), WireTy::string(), WireTy::Bool]));
         let swapped = WireTy::Tuple(Box::new([WireTy::string(), WireTy::int()]));
@@ -2434,18 +2413,12 @@ mod outbound_selection_tests {
                 BexExternalValue::Int(2),
             ],
         };
-        assert!(value_matches_type(&value, &swapped));
+        assert!(!value_matches_type(&value, &swapped));
         assert!(!value_matches_type(&value, &pair));
         assert!(!value_matches_type(&value, &triple));
-        let wrapped = maybe_wrap_union(
-            value,
-            &WireTy::Union(Box::new([pair, triple, swapped.clone()])),
-        )
-        .unwrap();
-        let BexExternalValue::Union { metadata, .. } = wrapped else {
-            panic!("expected union wrapper")
-        };
-        assert_eq!(metadata.selected_option, swapped);
+        assert!(
+            maybe_wrap_union(value, &WireTy::Union(Box::new([pair, triple, swapped]))).is_err()
+        );
     }
 
     #[test]

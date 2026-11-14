@@ -8,14 +8,6 @@
 //! coincide when `T` is instantiated to that arm's type), which Rust's
 //! coherence rejects — so those arms are constructed by variant.
 //!
-//! A value the engine sent with its selected arm decodes as that arm. One
-//! sent without it is tried against each arm, each trial decoding its own
-//! copy of the value's references (`baml_bridge::decode::trial`), so an arm
-//! that fails partway never releases a reference the chosen arm keeps.
-//!
-//! An enum holding a tuple wider than 12 slots derives only `Clone`: Rust
-//! implements `Debug` and `PartialEq` for tuples of at most 12 slots.
-//!
 //! The impl shape is pinned by the hand-written executable spec in
 //! `bridge_rust/tests/conversions.rs`.
 //!

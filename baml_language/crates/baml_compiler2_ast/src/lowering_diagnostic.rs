@@ -101,9 +101,6 @@ pub enum LoweringDiagnostic {
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
 
-    /// A `let` introducer inside a destructure started with `const`
-    /// (`const (let a, const b) = pair`). A `const` destructure binds only
-    /// with `const`, recursively; a `let` one may mix both.
     LetInConstDestructure {
         span: TextRange,
         const_span: TextRange,

@@ -1,8 +1,3 @@
-// Tuples as stream items, over `ns_tuple_streams`: each function's client is
-// a scripted `StreamingClient` replaying fixed deltas, so no replay server or
-// key is needed. A partial is the declared type parsed from the text so far,
-// so every partial of a tuple-typed stream is a tuple: here the generated
-// record registered for its tuple identity, never a list fallback.
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -61,7 +56,6 @@ class TestTupleStreams {
         assertTupleListPartials(drain(() -> async.next_async().join()));
         assertEquals(expected, async.get_final_async().join());
 
-        // The non-streaming call settles to the same tuples.
         assertEquals(expected, Fns.stream_tuple_items("x"));
     }
 

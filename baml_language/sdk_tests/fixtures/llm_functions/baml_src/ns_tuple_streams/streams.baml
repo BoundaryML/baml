@@ -1,14 +1,3 @@
-// Tuples as stream items, with no live LLM or replay server: each function's
-// client is a scripted `StreamingClient` that replays fixed text deltas
-// through `ai.stream.TurnStream.from_chunks`, so every SDK's generated stream
-// companion drives the ordinary `Fn@stream` path (partial parse per delta,
-// final parse at EOF) offline and deterministically.
-//
-//   * `stream_tuple_items` -- `(string, int)[]`: each partial is a list of
-//     complete tuples (`[("a", 1)]`, then `[("a", 1), ("b", 2)]`), the final
-//     value the full list.
-//   * `stream_tuple_final` -- `(int, string)`: each partial is itself a
-//     tuple (`(1, "")`, then `(1, "a")`), and so is the final value.
 
 class TupleChunkClient {
   chunks: string[],

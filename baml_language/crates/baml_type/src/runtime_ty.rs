@@ -149,7 +149,6 @@ impl<N: Clone> RuntimeTy<N> {
                         .all(|member| member.is_unit() || member.is_uninhabited())
             }
             RuntimeTy::Never => false,
-            // One value per position: unit exactly when every element is.
             RuntimeTy::Tuple(elements) => elements.iter().all(RuntimeTy::is_unit),
             RuntimeTy::Int
             | RuntimeTy::Bigint

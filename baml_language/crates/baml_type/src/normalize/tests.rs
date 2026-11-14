@@ -2201,8 +2201,6 @@ mod branded_head {
 
 #[test]
 fn tuples_are_invariant_elementwise() {
-    // Slots are writable, so viewing `(int,)` as `(int?,)` would admit a write
-    // of `null` through the wider view: slots relate by equivalence only.
     let ctx = Ctx::default();
     let tuple = |elements: Vec<Ty>| Ty::Tuple(elements.into());
     let narrow = tuple(vec![Ty::int(), Ty::string()]);
@@ -2211,11 +2209,9 @@ fn tuples_are_invariant_elementwise() {
     assert!(!is_subtype(&wide, &narrow, &ctx));
     let literal = tuple(vec![lit_int(1), Ty::string()]);
     assert!(!is_subtype(&literal, &narrow, &ctx));
-    // Equivalent spellings still relate both ways.
     let spelled = tuple(vec![union(vec![lit_int(5), Ty::int()]), Ty::string()]);
     assert!(equivalent(&spelled, &narrow, &ctx));
     assert!(is_subtype(&spelled, &narrow, &ctx));
-    // A tuple fits a union holding an equivalent arm, and nothing wider.
     assert!(is_subtype(
         &narrow,
         &union(vec![narrow.clone(), Ty::int()]),
@@ -2230,7 +2226,6 @@ fn tuples_are_invariant_elementwise() {
 
 #[test]
 fn distinct_tuple_arms_do_not_absorb() {
-    // `(int,) | (int?,)` keeps both arms: neither is a subtype of the other.
     let ctx = Ctx::default();
     let tuple = |elements: Vec<Ty>| Ty::Tuple(elements.into());
     let narrow = tuple(vec![Ty::int()]);
@@ -2242,7 +2237,6 @@ fn distinct_tuple_arms_do_not_absorb() {
     }
     assert!(!equivalent(&both, &wide, &ctx));
     assert!(!equivalent(&both, &narrow, &ctx));
-    // Equivalent spellings are one type and still deduplicate.
     let spelled = tuple(vec![union(vec![lit_int(5), Ty::int()])]);
     assert!(equivalent(
         &union(vec![narrow.clone(), spelled]),
@@ -2253,8 +2247,6 @@ fn distinct_tuple_arms_do_not_absorb() {
 
 #[test]
 fn products_of_unions_and_unions_of_products_are_unrelated() {
-    // With writable slots, viewing a product over union slots as the union of
-    // its products (or the reverse) is unsound, so neither direction relates.
     let ctx = Ctx::default();
     let tuple = |elements: Vec<Ty>| Ty::Tuple(elements.into());
     let product = tuple(vec![union(vec![Ty::int(), Ty::string()]), Ty::bool()]);
@@ -2270,7 +2262,6 @@ fn products_of_unions_and_unions_of_products_are_unrelated() {
         &class1("Box", distributed.clone()),
         &ctx
     ));
-    // Correlated arms and the product of their slot joins are unrelated too.
     let correlated = union(vec![
         tuple(vec![Ty::int(), Ty::string()]),
         tuple(vec![Ty::string(), Ty::int()]),
@@ -2281,7 +2272,6 @@ fn products_of_unions_and_unions_of_products_are_unrelated() {
     ]);
     assert!(!is_subtype(&correlated, &joined, &ctx));
     assert!(!is_subtype(&joined, &correlated, &ctx));
-    // Singleton wrappers are kept, in either direction.
     let nested = tuple(vec![
         tuple(vec![union(vec![Ty::int(), Ty::string()])]),
         Ty::bool(),

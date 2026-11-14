@@ -105,8 +105,6 @@ enum Container {
         element: RealizedTy,
         decoded: Vec<Value>,
     },
-    /// A tuple, opened over a JSON array of exactly its arity: one slot type
-    /// per element.
     Tuple {
         source: HeapPtr,
         elements: Vec<Value>,
@@ -250,8 +248,6 @@ impl Container {
             Self::List {
                 element, decoded, ..
             } => vm.alloc(Object::Array(Array::new(element, decoded))),
-            // Type-directed: the tuple carries the target slot types it
-            // decoded, one per element.
             Self::Tuple { slots, decoded, .. } => vm.tlab.alloc_tuple(
                 bex_vm_types::Tuple::new(slots, decoded)
                     .unwrap_or_else(|_| unreachable!("a tuple decodes one element per slot")),
@@ -1031,8 +1027,6 @@ fn open_list(
     }
 }
 
-/// A tuple of `slots`, opened over the JSON array `json`, which must have
-/// exactly one element per slot.
 fn open_tuple(
     vm: &mut BexVm,
     json: Value,
@@ -1057,7 +1051,6 @@ fn open_tuple(
     }
 }
 
-/// Why a JSON array of `found` elements is not a tuple of `arity`.
 pub(super) fn tuple_arity_message(arity: usize, found: usize) -> String {
     format!("expected an array of {arity} elements, got {found}")
 }

@@ -111,7 +111,6 @@ where
 {
     pub value: Vec<BamlValueWithFlags<'s, 'v, 't, N>>,
 }
-/// A tuple value: exactly one element per position of its [`crate::sap_model::TupleTy`].
 #[derive(Debug, Clone)]
 pub struct BamlTuple<'s, 'v, 't, N: TypeIdent>
 where
@@ -249,7 +248,6 @@ impl<N: TypeIdent> serde::Serialize for BamlArray<'_, '_, '_, N> {
     }
 }
 
-/// A tuple serializes as a fixed-length JSON array.
 impl<N: TypeIdent> serde::Serialize for BamlTuple<'_, '_, '_, N> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeSeq;

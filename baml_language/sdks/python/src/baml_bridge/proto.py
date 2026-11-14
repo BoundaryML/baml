@@ -198,14 +198,11 @@ class BamlTuple(tuple):
         cls, items: typing.Iterable[Any], ty: "baml_type_pb2.BamlTy"
     ) -> "BamlTuple":
         value = super().__new__(cls, items)
-        # An owned copy: a sub-message would keep the whole response alive.
         value._ty = baml_type_pb2.BamlTy()
         value._ty.CopyFrom(ty)
         return value
 
     def __reduce__(self):
-        # The carried type is runtime metadata: a copy or pickle is the
-        # plain tuple of the same items.
         return (tuple, (tuple(self),))
 
 
@@ -325,8 +322,6 @@ def _fill_wire_ty(ty: "baml_type_pb2.BamlTy", py_type: Any) -> None:
         if origin in (list, typing.List):
             _fill_inner(ty.list.item, targs[0] if targs else None)
             return
-        # `tuple[A, B]` is a fixed-arity BAML tuple; the variadic
-        # `tuple[A, ...]` has no BAML counterpart and is rejected.
         if origin in (tuple, typing.Tuple):
             if not targs or Ellipsis in targs:
                 raise TypeError(
@@ -1000,7 +995,6 @@ def _host_call_handle_keys(holder) -> typing.Iterator[int]:
         for item in holder.list_value.items:
             yield from _host_call_handle_keys(item)
     elif which == "tuple_value":
-        # The carried tuple type is an annotation and names no row.
         for item in holder.tuple_value.items:
             yield from _host_call_handle_keys(item)
     elif which == "map_value":
@@ -1083,8 +1077,6 @@ def decode_value(
             decode_value(item, type_map, ownership) for item in holder.list_value.items
         ]
     if which == "tuple_value":
-        # Python's tuple is native, and its items decode by what they are;
-        # the tuple keeps the type it carries for when it goes back.
         items = [
             decode_value(item, type_map, ownership) for item in holder.tuple_value.items
         ]

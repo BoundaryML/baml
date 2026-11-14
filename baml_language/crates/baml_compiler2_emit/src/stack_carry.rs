@@ -1139,8 +1139,6 @@ fn simulate_operand_prefix_pull_stack(
             kind: baml_compiler2_mir::AggregateKind::Tuple { .. },
             fields,
         } => {
-            // Like class type args, the tuple descriptor's `LoadType` is pushed
-            // after every element and popped by `AllocTuple`.
             let values = fields.iter().collect::<Vec<_>>();
             Some(simulate_stack_consuming_aggregate(
                 AggregateStackShape {
@@ -1469,7 +1467,14 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         _base: &Place,
         _index: Local,
     ) -> Result<(), Self::Error> {
-        if !self.sim.pop_n(if kind == baml_compiler2_mir::IndexKind::Tuple { 1 } else { 2 }) {
+        if !self
+            .sim
+            .pop_n(if kind == baml_compiler2_mir::IndexKind::Tuple {
+                1
+            } else {
+                2
+            })
+        {
             return Err(());
         }
         self.sim.push();
@@ -1516,8 +1521,6 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
     }
 
     fn alloc_tuple(&mut self, _tuple_ty: &TyTemplate, len: usize) -> Result<(), Self::Error> {
-        // As for `alloc_array`: `load_type` pushes the tuple type and
-        // `AllocTuple` pops it again, so the net effect is pop `len`, push 1.
         if !self.sim.pop_n(len) {
             return Err(());
         }
@@ -2068,8 +2071,6 @@ mod tests {
 
         assert_eq!(ok, Some(true));
         assert!(sim.used);
-        // `AllocTuple` consumed the carried element along with its sibling,
-        // the pulled constant, and the descriptor.
         assert_eq!(sim.depth, None);
     }
 

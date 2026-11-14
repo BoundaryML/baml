@@ -140,8 +140,6 @@ fn value_to_serde_at(
         ValueKind::Int(i) => serde_json::Value::Number(i.into()),
         ValueKind::OmittedArg => serde_json::Value::Null,
         ValueKind::Object(ptr) => {
-            // A tuple can reach itself, directly (`t.0 = t`) or through a
-            // mutable element (a list inside it), so it is tracked too.
             let is_container = matches!(
                 vm.get_object(ptr),
                 Object::Array(_) | Object::Map(_) | Object::Tuple(_)

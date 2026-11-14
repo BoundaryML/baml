@@ -40,13 +40,7 @@ pub(crate) struct Analysis {
     /// What each class's literal fields say about a JSON object, for unions
     /// to choose a member by.
     json_tags: HashMap<Name, JsonTag>,
-    /// Emitted classes and aliases whose Rust types do not implement
-    /// `Debug` and `PartialEq`: they hold a tuple wider than
-    /// [`STD_MAX_TUPLE_ARITY`], directly or through another such type.
-    /// Such a class derives only `Clone`.
     lacks_std_traits: HashSet<Name>,
-    /// Classes a `baml_bridge` type stands in for, whose `Debug` and
-    /// `PartialEq` impls do not depend on their type arguments.
     bridged: HashSet<Name>,
     /// How each class in the pool crosses the boundary, decided by the
     /// compiler once per declaration.
@@ -140,9 +134,6 @@ impl Analysis {
         has_serde(ty, &self.serde)
     }
 
-    /// Whether the Rust type for `ty` implements `Debug` and `PartialEq`,
-    /// which a generated class or union enum holding it derives. Clone is
-    /// implemented for tuples of every arity, so every type has it.
     pub(crate) fn has_std_traits(&self, ty: &Ty) -> bool {
         has_std_traits(ty, &self.lacks_std_traits, &self.bridged)
     }
@@ -409,10 +400,6 @@ pub(crate) fn analyze(
         }
     }
 
-    // Least fixpoint: a class or alias lacks `Debug`/`PartialEq` when a
-    // field (or its right-hand side) holds a type that lacks them. Starting
-    // from none and adding until nothing changes keeps recursive types,
-    // whose derives hold through their own references, deriving.
     let std_candidates: Vec<(&Name, Vec<&Ty>)> = classes
         .iter()
         .map(|(name, class)| {
@@ -588,9 +575,6 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
                 }
             }
         }
-        // A tuple is a native Rust tuple, representable iff the bridge
-        // converts its arity and every element is representable; its
-        // elements are stored inline, so their nominal deps are its deps.
         Ty::Tuple(items) => {
             if let Some(reason) = crate::translate_ty::unsupported_tuple_arity(items.len()) {
                 return Err(reason);
@@ -698,20 +682,10 @@ pub(crate) fn json_key(prop: &ClassProperty) -> &str {
     prop.json_rename.as_deref().unwrap_or(prop.name.as_str())
 }
 
-/// The widest Rust tuple the standard library implements `Debug`,
-/// `PartialEq`, `Eq`, `Hash`, `Default` and the ordering traits for. (It
-/// implements `Clone` and `Copy` at every arity.)
 pub(crate) const STD_MAX_TUPLE_ARITY: usize = 12;
 
-/// The widest Rust tuple serde implements `Serialize` and `Deserialize` for.
 const SERDE_MAX_TUPLE_ARITY: usize = 16;
 
-/// Whether the Rust type `translate_ty` produces for `ty` implements `Debug`
-/// and `PartialEq`, given the classes and aliases that do not
-/// (`lacking`) and the classes a `baml_bridge` type stands in for
-/// (`bridged`). Only a tuple wider than [`STD_MAX_TUPLE_ARITY`] lacks them
-/// on its own; a container, union, tuple or generic instantiation lacks
-/// them when something it holds does.
 fn has_std_traits(ty: &Ty, lacking: &HashSet<Name>, bridged: &HashSet<Name>) -> bool {
     let all = |items: &[Ty]| {
         items
@@ -723,13 +697,9 @@ fn has_std_traits(ty: &Ty, lacking: &HashSet<Name>, bridged: &HashSet<Name>) -> 
         Ty::List(inner) => has_std_traits(inner, lacking, bridged),
         Ty::Map { value, .. } => has_std_traits(value, lacking, bridged),
         Ty::Union(items) => all(items),
-        // `Stream<T>`, `FunctionSpec<T>` and `Prompt` implement both for
-        // every type argument.
         Ty::Class(name, _) if bridged.contains(name) => true,
         Ty::Class(name, args) => !lacking.contains(name) && all(args),
         Ty::TypeAlias(name) => !lacking.contains(name),
-        // `BamlFunction` has no `PartialEq`; no class field or union arm
-        // holds one.
         Ty::Function { .. } => false,
         _ => true,
     }
@@ -750,8 +720,6 @@ fn has_serde(ty: &Ty, serde: &HashSet<Name>) -> bool {
         Ty::Bigint | Ty::Uint8Array => false,
         Ty::List(inner) => has_serde(inner, serde),
         Ty::Map { value, .. } => has_serde(value, serde),
-        // A Rust tuple's serde form is a JSON array, as is a BAML tuple's;
-        // serde implements its traits for tuples of up to 16 slots.
         Ty::Tuple(items) if items.len() > SERDE_MAX_TUPLE_ARITY => false,
         Ty::Union(items) | Ty::Tuple(items) => items.iter().all(|item| has_serde(item, serde)),
         Ty::Class(name, args) => {
@@ -826,8 +794,6 @@ fn non_heap_class_refs<'a>(
                 non_heap_class_refs(arg, emitted, enums, out);
             }
         }
-        // Rust tuples store their elements inline (like class fields), so a
-        // same-SCC class inside a tuple is a containment edge too.
         Ty::Union(items) | Ty::Tuple(items) => {
             for item in items {
                 non_heap_class_refs(item, emitted, enums, out);

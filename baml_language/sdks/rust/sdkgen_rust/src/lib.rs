@@ -478,9 +478,6 @@ fn to_source_code_with_optional_metadata(
                 PathBuf::from("src/lib.rs"),
                 // BAML names keep their spelling, and docstrings are copied
                 // verbatim from BAML sources: their prose need not follow
-                // rustdoc's Markdown list-continuation rules. Types are spelled
-                // as BAML declares them, so a wide tuple or a returned
-                // callable's whole signature is no complexity to factor out.
                 quote! {
                     #![allow(
                         non_camel_case_types,
@@ -773,8 +770,6 @@ mod tests {
         src.chars().filter(|c| !c.is_whitespace()).collect()
     }
 
-    /// [`flat`], without the trailing commas the pretty-printer adds once a
-    /// tuple or generic argument list wraps.
     fn tight(src: &str) -> String {
         flat(src).replace(",)", ")").replace(",>", ">")
     }
@@ -969,9 +964,6 @@ mod tests {
 
     #[test]
     fn recursion_through_a_tuple_boxes_the_inline_element() {
-        // Tuple elements are stored inline, so `(Node, int)?` is still a
-        // containment cycle and the class element boxes; a list inside the
-        // tuple is heap-indirected and does not.
         let node = name("user", &[], "Node");
         let node_ty = Ty::Class(node.clone(), Box::new([]));
         let next = Ty::Union(Box::new([
@@ -1093,8 +1085,6 @@ mod tests {
 
     #[test]
     fn tuples_wider_than_std_impls_are_native_tuples() {
-        // Thirteen and twenty slots: past std's 12-slot trait impls, within
-        // the bridge's. Every arity is a native tuple, slots in order.
         for arity in [13, 20, crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY] {
             let n = name("user", &[], "f");
             let mut slots = vec![Ty::Int; arity - 1];
@@ -1129,7 +1119,6 @@ mod tests {
             "{:?}",
             generated.warnings
         );
-        // A class field skips its class the same way.
         let wide = name("user", &[], "Wide");
         let pool = SymbolPool::from([(
             wide.clone(),
@@ -1157,10 +1146,6 @@ mod tests {
 
     #[test]
     fn a_class_with_a_wide_tuple_field_derives_only_clone() {
-        // Std implements `Debug`/`PartialEq` for tuples of at most 12 slots,
-        // so a class holding 13 derives only `Clone`, and so does a class
-        // holding that class; a class holding 12 derives all three. Serde
-        // reaches 16 slots, so the 13-slot class keeps its serde derive.
         let wide = name("user", &[], "Wide");
         let outer = name("user", &[], "Outer");
         let narrow = name("user", &[], "Narrow");
@@ -1287,8 +1272,6 @@ mod tests {
         let n = name("user", &[], "f");
         let a = name("user", &[], "A");
         let a_ty = Ty::Class(a.clone(), Box::new([]));
-        // A wide tuple holding a native tuple, a nullable union and a class,
-        // inside a native tuple.
         let mut slots = vec![
             Ty::Tuple(Box::new([Ty::Int, Ty::String])),
             Ty::Union(Box::new([Ty::Int, Ty::String, Ty::Null])),
@@ -1347,16 +1330,12 @@ mod tests {
             )),
             "{lib}"
         );
-        // Recursive, yet it derives only `Clone`: its tuple has 13 slots.
         assert!(lib.contains("#[derive(Clone)]"), "{lib}");
         assert!(!lib.contains("#[derive(Debug,Clone,PartialEq)]"), "{lib}");
     }
 
     #[test]
     fn a_tuple_slot_follows_the_slot_types_own_rules() {
-        // `unknown`, media, and an empty tuple have no Rust type
-        // anywhere, so a tuple holding one skips its symbol, as a list
-        // holding one does; directly, nested, and inside a union arm.
         let unsupported = [
             Ty::Unknown,
             Ty::Media(baml_base::MediaKind::Image),
@@ -1388,7 +1367,6 @@ mod tests {
                 let lib = flat(text(&generated, "src/lib.rs"));
                 assert!(!lib.contains("dynamic::Value>"), "{lib}");
             }
-            // A list holding the slot type skips its symbol the same way.
             let n = name("user", &[], "f");
             let pool = SymbolPool::from([(
                 n.clone(),

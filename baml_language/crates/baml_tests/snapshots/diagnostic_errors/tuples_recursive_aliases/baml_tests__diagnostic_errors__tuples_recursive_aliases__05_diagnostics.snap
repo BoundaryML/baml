@@ -5,39 +5,39 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0068
 
   × recursive type alias cycle: Endless
-    ╭─[recursive_aliases.baml:13:6]
- 13 │ type Endless = (int, Endless)
-    ·      ───────
-    ╰────
+   ╭─[recursive_aliases.baml:7:6]
+ 7 │ type Endless = (int, Endless)
+   ·      ───────
+   ╰────
 
   [type] E0068
 
   × recursive type alias cycle: Bad
-    ╭─[recursive_aliases.baml:16:6]
- 16 │ type Bad = (Bad, int?)
-    ·      ───
-    ╰────
+   ╭─[recursive_aliases.baml:9:6]
+ 9 │ type Bad = (Bad, int?)
+   ·      ───
+   ╰────
 
   [type] E0068
 
   × recursive type alias cycle: HeadFirst
-    ╭─[recursive_aliases.baml:19:6]
- 19 │ type HeadFirst = (HeadFirst, HeadFirst[])
+    ╭─[recursive_aliases.baml:11:6]
+ 11 │ type HeadFirst = (HeadFirst, HeadFirst[])
     ·      ─────────
     ╰────
 
   [type] E0068
 
   × recursive type alias cycle: Ping
-    ╭─[recursive_aliases.baml:22:6]
- 22 │ type Ping = (int, Pong)
+    ╭─[recursive_aliases.baml:13:6]
+ 13 │ type Ping = (int, Pong)
     ·      ────
     ╰────
 
   [type] E0068
 
   × recursive type alias cycle: Pong
-    ╭─[recursive_aliases.baml:23:6]
- 23 │ type Pong = (Ping, string)
+    ╭─[recursive_aliases.baml:14:6]
+ 14 │ type Pong = (Ping, string)
     ·      ────
     ╰────

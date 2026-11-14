@@ -255,14 +255,6 @@ test_deserializer!(
     null
 );
 
-// ============================================================================
-// Specificity among perfect matches
-// ============================================================================
-//
-// A member strictly more specific than every other perfect match wins regardless of union
-// order; otherwise the leftmost perfect match does. These tests report the member type the
-// value was parsed as, since the parsed JSON alone cannot tell `(1,)` from `(int,)`.
-
 mod specificity {
     use crate::{
         baml_db, baml_ty,
@@ -273,12 +265,10 @@ mod specificity {
         sap_model::{Ty, TyResolvedRef, TypeName, TypeRefDb, UnionTy},
     };
 
-    /// The member type the value parsed as.
     fn chosen(value: &BamlValueWithFlags<'_, '_, '_, &'static str>) -> String {
         value.meta.ty.type_name().into_owned()
     }
 
-    /// The member type each element of a parsed list parsed as.
     fn chosen_elements(value: &BamlValueWithFlags<'_, '_, '_, &'static str>) -> String {
         let crate::baml_value::BamlValue::Array(arr) = &value.value else {
             panic!("a list");
@@ -287,7 +277,6 @@ mod specificity {
         format!("[{}]", items.join(", "))
     }
 
-    /// Parses `raw` at `ty` and returns `report` of the result.
     fn parse_chosen(
         raw: &str,
         ty: &Ty<'_, &'static str>,
@@ -304,10 +293,6 @@ mod specificity {
         report(&value)
     }
 
-    /// Runs the strict (`try_cast`) and coercing union paths directly and checks they both
-    /// choose `expected`: with no hint, and, when `expected` is a clear winner, with a hint at
-    /// each member. (Without a clear winner a hinted perfect match comes first, as the leftmost
-    /// does when there is no hint.)
     fn assert_both_paths(
         raw: &str,
         ty: &Ty<'_, &'static str>,
@@ -333,7 +318,6 @@ mod specificity {
         }
     }
 
-    /// A complete jsonish value for `json`, as a strict parse would see it.
     fn from_json(json: serde_json::Value) -> crate::jsonish::Value<'static> {
         use crate::jsonish::{CompletionState::Complete, Value};
         match json {
@@ -354,8 +338,6 @@ mod specificity {
         }
     }
 
-    /// Checks the member chosen for `$raw` by a full parse and by both union paths. Pass
-    /// `leftmost` when no member is a clear winner.
     macro_rules! test_chosen {
         ($name:ident, $raw:expr, $ty:expr, $db:expr, $expected:expr $(, $leftmost:ident)?) => {
             #[test]
@@ -369,7 +351,6 @@ mod specificity {
         };
     }
 
-    // Tuples: the literal slot wins in either order.
     test_chosen!(
         test_literal_tuple_beats_int_tuple,
         "[1]",
@@ -385,7 +366,6 @@ mod specificity {
         "(literal[1],)"
     );
 
-    // Slot by slot: more specific in one slot and equal in the rest still wins.
     test_chosen!(
         test_literal_slot_beats_in_wider_tuple,
         r#"[1, "a"]"#,
@@ -394,7 +374,6 @@ mod specificity {
         "(literal[1], string)"
     );
 
-    // Nullability is not ranked: `(int,)` and `(int?,)` have no winner, so the leftmost wins.
     test_chosen!(
         test_int_tuple_or_nullable_tuple_picks_leftmost,
         "[1]",
@@ -412,7 +391,6 @@ mod specificity {
         leftmost
     );
 
-    // Slots pointing in opposite directions are incomparable: the leftmost wins.
     test_chosen!(
         test_incomparable_tuples_pick_leftmost,
         r#"[1, "a"]"#,
@@ -430,7 +408,6 @@ mod specificity {
         leftmost
     );
 
-    // A nullable literal slot is more specific than a nullable int slot.
     test_chosen!(
         test_nullable_literal_tuple_beats_nullable_int_tuple,
         "[1]",
@@ -439,7 +416,6 @@ mod specificity {
         "(literal[1] | null,)"
     );
 
-    // Lists compare by element.
     test_chosen!(
         test_literal_list_beats_int_list,
         "[1, 1]",
@@ -455,7 +431,6 @@ mod specificity {
         "literal[1][]"
     );
 
-    // Classes compare field by field.
     test_chosen!(
         test_literal_class_beats_int_class,
         r#"{"x": 1}"#,
@@ -477,7 +452,6 @@ mod specificity {
         "CL"
     );
 
-    // Classes with different fields are incomparable.
     test_chosen!(
         test_classes_with_different_fields_pick_leftmost,
         r#"{"x": 1}"#,
@@ -490,7 +464,6 @@ mod specificity {
         leftmost
     );
 
-    // An enum variant is more specific than its enum.
     test_chosen!(
         test_enum_variant_beats_enum,
         r#""A""#,
@@ -499,8 +472,6 @@ mod specificity {
         "E.A"
     );
 
-    // A clear winner must beat every other perfect match: `(1,)` beats `(int,)` but not
-    // `(int?,)`, so the leftmost wins.
     test_chosen!(
         test_no_clear_winner_among_three_picks_leftmost,
         "[1]",
@@ -510,8 +481,6 @@ mod specificity {
         leftmost
     );
 
-    // The first element only fits `(int,)` and becomes the hint for the second, which still
-    // goes to the more specific `(1,)`.
     #[test]
     fn test_more_specific_member_beats_hinted_member() {
         let db: TypeRefDb<'_, &str> = baml_db! {};
@@ -532,8 +501,6 @@ mod specificity {
         }
     }
 
-    // Without a clear winner, a hinted perfect match is kept: after `[null]` picks `(int?,)`,
-    // `[1]` stays with it rather than going to the leftmost `(int,)`.
     #[test]
     fn test_hinted_member_wins_without_clear_winner() {
         let db: TypeRefDb<'_, &str> = baml_db! {};
@@ -544,8 +511,6 @@ mod specificity {
         );
     }
 
-    // A perfect tuple still beats a perfect list, whatever the list's element type; among the
-    // perfect tuples, specificity applies.
     test_chosen!(
         test_literal_tuple_beats_list_and_int_tuple,
         "[1, 1]",
@@ -561,7 +526,6 @@ mod specificity {
         "(int, int)"
     );
 
-    // Recursive types compare without looping.
     test_chosen!(
         test_recursive_classes_compare,
         r#"{"x": 1, "next": {"x": 1, "next": null}}"#,

@@ -10,10 +10,6 @@
 //!   asked for. A `bigint` is a `bigint`.
 //! - A `string` is a string; in an enum slot it names a variant, by
 //!   conversion, because a generated TypeScript enum member is a plain string.
-//! - An `Array` is a list, unless the runtime decoded it from a BAML tuple:
-//!   then it is that tuple, with the slot types it carries. Since an array
-//!   is also the language's tuple, one that fits both a tuple and a list
-//!   member of a union is the tuple. A `Uint8Array` is bytes.
 //! - A plain object (prototype `Object.prototype` or none) is a map of its own
 //!   enumerable entries and stands in for a class when the slot asks for one;
 //!   an object whose constructor the typemap knows is an instance of that
@@ -86,8 +82,6 @@ pub trait JsView: Sized {
     /// when it carries all of them.
     fn type_args(&self) -> Result<Option<Vec<StatedTy>>, Self::Error>;
 
-    /// The slot types an `Array` decoded from a BAML tuple carries, while it
-    /// still has that tuple's arity; `None` for any other array.
     fn tuple_slots(&self) -> Result<Option<Vec<StatedTy>>, Self::Error>;
 
     /// The text of a `string`. The engine's APIs copy a JavaScript string
@@ -123,9 +117,6 @@ impl<J: JsView> HostValue for Js<J> {
             JsKind::Bytes => HostShape::Scalar(Scalar::Bytes),
             JsKind::Array => {
                 let items = Box::new(self.0.elements()?.map(|item| item.map(Js)));
-                // Only an array the runtime decoded from a BAML tuple is a
-                // tuple, with the slot types it carries; any other array is a
-                // list, whatever its elements.
                 match self.0.tuple_slots()? {
                     Some(slots) => HostShape::Tuple {
                         slots: Some(slots),

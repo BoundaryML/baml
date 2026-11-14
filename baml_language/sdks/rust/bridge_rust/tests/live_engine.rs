@@ -214,8 +214,6 @@ fn return_only_type_param_is_bound_from_type_args() {
     assert_eq!(string_name, "string");
 }
 
-/// The declared type of `rt_wide_literals`' parameter, as a generated
-/// binding states it: a tuple of the int literals `0` through `12`.
 fn wide_literals_ty() -> baml_bridge::wire::BamlTy {
     use baml_bridge::{baml_value::internal, wire};
     internal::tuple_ty(
@@ -225,8 +223,6 @@ fn wide_literals_ty() -> baml_bridge::wire::BamlTy {
     )
 }
 
-/// `rt_wide_literals`' parameter as its generated binding spells it: each
-/// literal slot widens to `i64`.
 type WideLiterals = (
     i64,
     i64,
@@ -257,19 +253,15 @@ fn call_wide_literals<T: baml_bridge::BamlValue>(x: &T) -> Result<WideLiterals, 
 
 #[test]
 fn a_wide_native_tuple_states_its_declared_literal_slots() {
-    // Thirteen literal slots: a native tuple of their base type, stating
-    // the declared tuple type going in.
     let back = call_wide_literals(&counting()).expect("the tuple round-trips");
     assert_eq!((back.0, back.6, back.12), (0, 6, 12));
 }
 
 #[test]
 fn a_wide_native_tuple_is_checked_slot_by_slot_and_by_arity() {
-    // The engine checks each element against its own literal slot...
     let mut wrong_slot = counting();
     wrong_slot.12 = 0;
     assert!(call_wide_literals(&wrong_slot).is_err());
-    // ...and the arity of the declared tuple.
     let short = (
         0i64, 1i64, 2i64, 3i64, 4i64, 5i64, 6i64, 7i64, 8i64, 9i64, 10i64, 11i64,
     );
@@ -279,9 +271,6 @@ fn a_wide_native_tuple_is_checked_slot_by_slot_and_by_arity() {
 #[test]
 fn a_tuple_with_an_unknown_slot_crosses_as_a_dynamic_value() {
     ensure_runtime();
-    // `(int, unknown)` has no Rust type (`unknown` has none), so no
-    // generated binding names it; the dynamic surface holds it as it
-    // arrived, and sends it back as the tuple it carries.
     let pair = runtime::invoke_sync::<baml_bridge::dynamic::Value, Infallible>(
         "user.make_unknown_pair",
         |_| Ok(vec![]),
@@ -302,7 +291,6 @@ fn a_tuple_with_an_unknown_slot_crosses_as_a_dynamic_value() {
         },
     )
     .expect("rt_unknown_pair succeeds");
-    // Its slots decode at any Rust types they fit; it is never a list.
     assert_eq!(
         back.decode::<(i64, String)>().unwrap(),
         (1, "a".to_string())
