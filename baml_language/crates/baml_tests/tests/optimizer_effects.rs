@@ -231,7 +231,8 @@ fn dead_allocations_and_guarded_patterns_keep_their_old_instruction_budgets() {
         ("arb_tail_len", 21),
         ("arb_grab", 30),
         ("arb_pushing_to_rest_does_not_mutate_source", 43),
-        ("gc_map_survives_pressure", 17),
+        // Includes the five insertions of the inlined `gc_build_map`.
+        ("gc_map_survives_pressure", 43),
         ("parameter_default", 10),
     ] {
         let index = program.rendered_callables()[&format!("user.{name}")]

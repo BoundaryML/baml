@@ -149,6 +149,23 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@spec(topic: string) -> ai.Functi
     let _9: (string, string) -> null | ai.Client throws never
     let _10: string[]
     let _11: reflect.Type
+    let _12: ai.tools.Toolbox
+    let _13: string[] // names
+    let _14: baml.iter.Iterator<Error = never, Item = ai.tools.Tool>
+    let _15: unknown
+    let _16: bool
+    let _17: ai.tools.Tool
+    let _18: ai.tools.Tool // t
+    let _19: bool
+    let _20: string
+    let _21: reflect.Type
+    let _22: baml.errors.InvalidArgument
+    let _23: string
+    let _24: string
+    let _25: string
+    let _26: int
+    let _27: string
+    let _28: reflect.Type
 
     bb0: {
         _3 = {  }: map<string, unknown>;
@@ -159,22 +176,76 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@spec(topic: string) -> ai.Functi
         _2 = copy _3;
         _5 = make_closure lambda[0]();
         _7 = []: ai.tools.Tool[];
-        _6 = call const fn ai.tools.Toolbox.new(copy _7) -> [bb2];
+        goto -> bb2;
     }
 
-    bb2: {
+    bb2 [inlined ai.tools.Toolbox.new]: {
+        _13 = []: string[];
+        _14 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.tools.Tool>(copy _7) -> [bb3];
+    }
+
+    bb3 [inlined ai.tools.Toolbox.new]: {
+        _15 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.tools.Tool>(copy _14) -> [bb4];
+    }
+
+    bb4 [inlined ai.tools.Toolbox.new]: {
+        _16 = is_type(copy _15, baml.iter.Done);
+        branch copy _16 -> [bb10, bb5];
+    }
+
+    bb5 [inlined ai.tools.Toolbox.new]: {
+        _17 = copy _15;
+        _18 = copy _17;
+        _20 = copy _18.0;
+        _21 = load_type(string);
+        _19 = call const fn baml.Array.includes<copy _21>(copy _13, copy _20) -> [bb6];
+    }
+
+    bb6 [inlined ai.tools.Toolbox.new]: {
+        branch copy _19 -> [bb8, bb7];
+    }
+
+    bb7 [inlined ai.tools.Toolbox.new]: {
+        _27 = copy _18.0;
+        _28 = load_type(string);
+        _26 = call const fn baml.Array.push<copy _28>(copy _13, copy _27) -> [bb3];
+    }
+
+    bb8 [inlined ai.tools.Toolbox.new]: {
+        _25 = copy _18.0;
+        _24 = copy _25;
+        goto -> bb9;
+    }
+
+    bb9 [inlined ai.tools.Toolbox.new]: {
+        _23 = const "duplicate tool name: " + copy _24;
+        _22 = baml.errors.InvalidArgument { copy _23 };
+        throw copy _22;
+    }
+
+    bb10 [inlined ai.tools.Toolbox.new]: {
+        _12 = ai.tools.Toolbox { copy _7 };
+        goto -> bb11;
+    }
+
+    bb11 [inlined ai.tools.Toolbox.new]: {
+        _6 = copy _12;
+        goto -> bb12;
+    }
+
+    bb12: {
         _9 = make_closure lambda[1]();
         _10 = [const "openai", const "openai-chat", const "openai-decisions", const "openai-images", const "ollama", const "openrouter", const "anthropic", const "typesafeai", const "google", const "vertex", const "bedrock", const "ai-gateway-images", const "claude-code"]: string[];
         _11 = load_type(never);
-        _8 = call const fn ai.clients.resolve<copy _11>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _9, copy _10) -> [bb3];
+        _8 = call const fn ai.clients.resolve<copy _11>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _9, copy _10) -> [bb13];
     }
 
-    bb3: {
+    bb13: {
         _0 = ai.FunctionSpec<string> { const "QuotedPrompt", const fn user.fixtures.llm_quoted_prompt.QuotedPrompt, copy _2, copy _5, copy _6, copy _8 };
-        goto -> bb4;
+        goto -> bb14;
     }
 
-    bb4: {
+    bb14: {
         return;
     }
 }
@@ -267,40 +338,50 @@ fn .<lambda(QuotedPrompt@spec, 1)>(prefix: string, model: string) -> null | ai.C
     let _13: bool
     let _14: bool
     let _15: bool
+    let _16: typesafeai.Client
+    let _17: string // model
+    let _18: string | null | baml.env.Ref // api_key
+    let _19: bool
+    let _20: openai.DecisionsClient
+    let _21: string // model
+    let _22: string | null | baml.env.Ref // api_key
+    let _23: bool
+    let _24: baml.env.Ref
+    let _25: baml.env.Ref
 
     bb0: {
         _3 = is_type(copy _1, "openai");
-        branch copy _3 -> [bb26, bb1];
+        branch copy _3 -> [bb38, bb1];
     }
 
     bb1: {
         _4 = is_type(copy _1, "openai-chat");
-        branch copy _4 -> [bb25, bb2];
+        branch copy _4 -> [bb37, bb2];
     }
 
     bb2: {
         _5 = is_type(copy _1, "openai-decisions");
-        branch copy _5 -> [bb24, bb3];
+        branch copy _5 -> [bb30, bb3];
     }
 
     bb3: {
         _6 = is_type(copy _1, "openai-images");
-        branch copy _6 -> [bb23, bb4];
+        branch copy _6 -> [bb29, bb4];
     }
 
     bb4: {
         _7 = is_type(copy _1, "ollama");
-        branch copy _7 -> [bb22, bb5];
+        branch copy _7 -> [bb28, bb5];
     }
 
     bb5: {
         _8 = is_type(copy _1, "openrouter");
-        branch copy _8 -> [bb21, bb6];
+        branch copy _8 -> [bb27, bb6];
     }
 
     bb6: {
         _9 = is_type(copy _1, "anthropic");
-        branch copy _9 -> [bb20, bb7];
+        branch copy _9 -> [bb26, bb7];
     }
 
     bb7: {
@@ -335,62 +416,124 @@ fn .<lambda(QuotedPrompt@spec, 1)>(prefix: string, model: string) -> null | ai.C
 
     bb13: {
         _0 = const null;
-        goto -> bb27;
+        goto -> bb39;
     }
 
     bb14: {
-        _0 = call const fn claude_code.ClaudeCodeClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn claude_code.ClaudeCodeClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb15: {
-        _0 = call const fn vercel.AiGatewayImageClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn vercel.AiGatewayImageClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb16: {
-        _0 = call const fn aws.BedrockClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn aws.BedrockClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb17: {
-        _0 = call const fn google.VertexClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn google.VertexClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb18: {
-        _0 = call const fn google.GeminiClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn google.GeminiClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb19: {
-        _0 = call const fn typesafeai.Client.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _17 = copy _2;
+        goto -> bb20;
     }
 
-    bb20: {
-        _0 = call const fn anthropic.Client.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb20 [inlined typesafeai.Client.new]: {
+        _19 = copy _17 == const <omitted>;
+        branch copy _19 -> [bb21, bb22];
     }
 
-    bb21: {
-        _0 = call const fn openai.OpenRouterClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb21 [inlined typesafeai.Client.new]: {
+        _17 = const "jev-latest";
+        goto -> bb22;
     }
 
-    bb22: {
-        _0 = call const fn openai.OllamaClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb22 [inlined typesafeai.Client.new > baml.env.ref]: {
+        _24 = baml.env.Ref { const "TYPESAFE_API_KEY" };
+        goto -> bb23;
     }
 
-    bb23: {
-        _0 = call const fn openai.ImageClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb23 [inlined typesafeai.Client.new > baml.env.ref]: {
+        _18 = copy _24;
+        goto -> bb24;
     }
 
-    bb24: {
-        _0 = call const fn openai.DecisionsClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb24 [inlined typesafeai.Client.new]: {
+        _16 = typesafeai.Client { copy _17, copy _18, const "https://api.typesafe.ai/v1", const null, const true };
+        goto -> bb25;
     }
 
-    bb25: {
-        _0 = call const fn openai.ChatClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb25 [inlined typesafeai.Client.new]: {
+        _0 = copy _16;
+        goto -> bb39;
     }
 
     bb26: {
-        _0 = call const fn openai.ResponsesClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn anthropic.Client.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb27: {
+        _0 = call const fn openai.OpenRouterClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
+    }
+
+    bb28: {
+        _0 = call const fn openai.OllamaClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
+    }
+
+    bb29: {
+        _0 = call const fn openai.ImageClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
+    }
+
+    bb30: {
+        _21 = copy _2;
+        goto -> bb31;
+    }
+
+    bb31 [inlined openai.DecisionsClient.new]: {
+        _23 = copy _21 == const <omitted>;
+        branch copy _23 -> [bb32, bb33];
+    }
+
+    bb32 [inlined openai.DecisionsClient.new]: {
+        _21 = const "gpt-6-luna";
+        goto -> bb33;
+    }
+
+    bb33 [inlined openai.DecisionsClient.new > baml.env.ref]: {
+        _25 = baml.env.Ref { const "OPENAI_API_KEY" };
+        goto -> bb34;
+    }
+
+    bb34 [inlined openai.DecisionsClient.new > baml.env.ref]: {
+        _22 = copy _25;
+        goto -> bb35;
+    }
+
+    bb35 [inlined openai.DecisionsClient.new]: {
+        _20 = openai.DecisionsClient { copy _21, copy _22, const "https://api.openai.com/v1", const null, const true };
+        goto -> bb36;
+    }
+
+    bb36 [inlined openai.DecisionsClient.new]: {
+        _0 = copy _20;
+        goto -> bb39;
+    }
+
+    bb37: {
+        _0 = call const fn openai.ChatClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
+    }
+
+    bb38: {
+        _0 = call const fn openai.ResponsesClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
+    }
+
+    bb39: {
         return;
     }
 }
@@ -597,6 +740,23 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@spec(topic: string) -> ai.Func
     let _10: (string, string) -> null | ai.Client throws never
     let _11: string[]
     let _12: reflect.Type
+    let _13: ai.tools.Toolbox
+    let _14: string[] // names
+    let _15: baml.iter.Iterator<Error = never, Item = ai.tools.Tool>
+    let _16: unknown
+    let _17: bool
+    let _18: ai.tools.Tool
+    let _19: ai.tools.Tool // t
+    let _20: bool
+    let _21: string
+    let _22: reflect.Type
+    let _23: baml.errors.InvalidArgument
+    let _24: string
+    let _25: string
+    let _26: string
+    let _27: int
+    let _28: string
+    let _29: reflect.Type
 
     bb0: {
         _3 = {  }: map<string, unknown>;
@@ -608,22 +768,76 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@spec(topic: string) -> ai.Func
         _2 = copy _3;
         _6 = make_closure lambda[0](copy _1);
         _8 = []: ai.tools.Tool[];
-        _7 = call const fn ai.tools.Toolbox.new(copy _8) -> [bb2];
+        goto -> bb2;
     }
 
-    bb2: {
+    bb2 [inlined ai.tools.Toolbox.new]: {
+        _14 = []: string[];
+        _15 = virtual_call iter as baml.iter.Iterable<Error = never, Item = ai.tools.Tool>(copy _8) -> [bb3];
+    }
+
+    bb3 [inlined ai.tools.Toolbox.new]: {
+        _16 = virtual_call next as baml.iter.Iterator<Error = never, Item = ai.tools.Tool>(copy _15) -> [bb4];
+    }
+
+    bb4 [inlined ai.tools.Toolbox.new]: {
+        _17 = is_type(copy _16, baml.iter.Done);
+        branch copy _17 -> [bb10, bb5];
+    }
+
+    bb5 [inlined ai.tools.Toolbox.new]: {
+        _18 = copy _16;
+        _19 = copy _18;
+        _21 = copy _19.0;
+        _22 = load_type(string);
+        _20 = call const fn baml.Array.includes<copy _22>(copy _14, copy _21) -> [bb6];
+    }
+
+    bb6 [inlined ai.tools.Toolbox.new]: {
+        branch copy _20 -> [bb8, bb7];
+    }
+
+    bb7 [inlined ai.tools.Toolbox.new]: {
+        _28 = copy _19.0;
+        _29 = load_type(string);
+        _27 = call const fn baml.Array.push<copy _29>(copy _14, copy _28) -> [bb3];
+    }
+
+    bb8 [inlined ai.tools.Toolbox.new]: {
+        _26 = copy _19.0;
+        _25 = copy _26;
+        goto -> bb9;
+    }
+
+    bb9 [inlined ai.tools.Toolbox.new]: {
+        _24 = const "duplicate tool name: " + copy _25;
+        _23 = baml.errors.InvalidArgument { copy _24 };
+        throw copy _23;
+    }
+
+    bb10 [inlined ai.tools.Toolbox.new]: {
+        _13 = ai.tools.Toolbox { copy _8 };
+        goto -> bb11;
+    }
+
+    bb11 [inlined ai.tools.Toolbox.new]: {
+        _7 = copy _13;
+        goto -> bb12;
+    }
+
+    bb12: {
         _10 = make_closure lambda[1]();
         _11 = [const "openai", const "openai-chat", const "openai-decisions", const "openai-images", const "ollama", const "openrouter", const "anthropic", const "typesafeai", const "google", const "vertex", const "bedrock", const "ai-gateway-images", const "claude-code"]: string[];
         _12 = load_type(never);
-        _9 = call const fn ai.clients.resolve<copy _12>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _10, copy _11) -> [bb3];
+        _9 = call const fn ai.clients.resolve<copy _12>(const item user.fixtures.llm_quoted_prompt.QuotedPromptClient, copy _10, copy _11) -> [bb13];
     }
 
-    bb3: {
+    bb13: {
         _0 = ai.FunctionSpec<string> { const "BacktickPrompt", const fn user.fixtures.llm_quoted_prompt.BacktickPrompt, copy _2, copy _6, copy _7, copy _9 };
-        goto -> bb4;
+        goto -> bb14;
     }
 
-    bb4: {
+    bb14: {
         return;
     }
 }
@@ -767,40 +981,50 @@ fn .<lambda(BacktickPrompt@spec, 1)>(prefix: string, model: string) -> null | ai
     let _13: bool
     let _14: bool
     let _15: bool
+    let _16: typesafeai.Client
+    let _17: string // model
+    let _18: string | null | baml.env.Ref // api_key
+    let _19: bool
+    let _20: openai.DecisionsClient
+    let _21: string // model
+    let _22: string | null | baml.env.Ref // api_key
+    let _23: bool
+    let _24: baml.env.Ref
+    let _25: baml.env.Ref
 
     bb0: {
         _3 = is_type(copy _1, "openai");
-        branch copy _3 -> [bb26, bb1];
+        branch copy _3 -> [bb38, bb1];
     }
 
     bb1: {
         _4 = is_type(copy _1, "openai-chat");
-        branch copy _4 -> [bb25, bb2];
+        branch copy _4 -> [bb37, bb2];
     }
 
     bb2: {
         _5 = is_type(copy _1, "openai-decisions");
-        branch copy _5 -> [bb24, bb3];
+        branch copy _5 -> [bb30, bb3];
     }
 
     bb3: {
         _6 = is_type(copy _1, "openai-images");
-        branch copy _6 -> [bb23, bb4];
+        branch copy _6 -> [bb29, bb4];
     }
 
     bb4: {
         _7 = is_type(copy _1, "ollama");
-        branch copy _7 -> [bb22, bb5];
+        branch copy _7 -> [bb28, bb5];
     }
 
     bb5: {
         _8 = is_type(copy _1, "openrouter");
-        branch copy _8 -> [bb21, bb6];
+        branch copy _8 -> [bb27, bb6];
     }
 
     bb6: {
         _9 = is_type(copy _1, "anthropic");
-        branch copy _9 -> [bb20, bb7];
+        branch copy _9 -> [bb26, bb7];
     }
 
     bb7: {
@@ -835,62 +1059,124 @@ fn .<lambda(BacktickPrompt@spec, 1)>(prefix: string, model: string) -> null | ai
 
     bb13: {
         _0 = const null;
-        goto -> bb27;
+        goto -> bb39;
     }
 
     bb14: {
-        _0 = call const fn claude_code.ClaudeCodeClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn claude_code.ClaudeCodeClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb15: {
-        _0 = call const fn vercel.AiGatewayImageClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn vercel.AiGatewayImageClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb16: {
-        _0 = call const fn aws.BedrockClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn aws.BedrockClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb17: {
-        _0 = call const fn google.VertexClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn google.VertexClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb18: {
-        _0 = call const fn google.GeminiClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn google.GeminiClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb19: {
-        _0 = call const fn typesafeai.Client.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _17 = copy _2;
+        goto -> bb20;
     }
 
-    bb20: {
-        _0 = call const fn anthropic.Client.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb20 [inlined typesafeai.Client.new]: {
+        _19 = copy _17 == const <omitted>;
+        branch copy _19 -> [bb21, bb22];
     }
 
-    bb21: {
-        _0 = call const fn openai.OpenRouterClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb21 [inlined typesafeai.Client.new]: {
+        _17 = const "jev-latest";
+        goto -> bb22;
     }
 
-    bb22: {
-        _0 = call const fn openai.OllamaClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb22 [inlined typesafeai.Client.new > baml.env.ref]: {
+        _24 = baml.env.Ref { const "TYPESAFE_API_KEY" };
+        goto -> bb23;
     }
 
-    bb23: {
-        _0 = call const fn openai.ImageClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb23 [inlined typesafeai.Client.new > baml.env.ref]: {
+        _18 = copy _24;
+        goto -> bb24;
     }
 
-    bb24: {
-        _0 = call const fn openai.DecisionsClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb24 [inlined typesafeai.Client.new]: {
+        _16 = typesafeai.Client { copy _17, copy _18, const "https://api.typesafe.ai/v1", const null, const true };
+        goto -> bb25;
     }
 
-    bb25: {
-        _0 = call const fn openai.ChatClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+    bb25 [inlined typesafeai.Client.new]: {
+        _0 = copy _16;
+        goto -> bb39;
     }
 
     bb26: {
-        _0 = call const fn openai.ResponsesClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn anthropic.Client.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
     }
 
     bb27: {
+        _0 = call const fn openai.OpenRouterClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
+    }
+
+    bb28: {
+        _0 = call const fn openai.OllamaClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
+    }
+
+    bb29: {
+        _0 = call const fn openai.ImageClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
+    }
+
+    bb30: {
+        _21 = copy _2;
+        goto -> bb31;
+    }
+
+    bb31 [inlined openai.DecisionsClient.new]: {
+        _23 = copy _21 == const <omitted>;
+        branch copy _23 -> [bb32, bb33];
+    }
+
+    bb32 [inlined openai.DecisionsClient.new]: {
+        _21 = const "gpt-6-luna";
+        goto -> bb33;
+    }
+
+    bb33 [inlined openai.DecisionsClient.new > baml.env.ref]: {
+        _25 = baml.env.Ref { const "OPENAI_API_KEY" };
+        goto -> bb34;
+    }
+
+    bb34 [inlined openai.DecisionsClient.new > baml.env.ref]: {
+        _22 = copy _25;
+        goto -> bb35;
+    }
+
+    bb35 [inlined openai.DecisionsClient.new]: {
+        _20 = openai.DecisionsClient { copy _21, copy _22, const "https://api.openai.com/v1", const null, const true };
+        goto -> bb36;
+    }
+
+    bb36 [inlined openai.DecisionsClient.new]: {
+        _0 = copy _20;
+        goto -> bb39;
+    }
+
+    bb37: {
+        _0 = call const fn openai.ChatClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
+    }
+
+    bb38: {
+        _0 = call const fn openai.ResponsesClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb39];
+    }
+
+    bb39: {
         return;
     }
 }

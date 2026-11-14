@@ -18,8 +18,6 @@ function add(base: int, amount: int) -> int {
 }
 
 function main() -> int {
-    load_const 5
-    load_const <omitted>
-    call user.add
+    load_const 12
     return
 }

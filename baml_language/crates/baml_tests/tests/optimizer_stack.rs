@@ -23,7 +23,8 @@ fn optimized_instruction_and_local_counts() {
         ("and_value", 6, 0),
         ("or_value", 6, 0),
         ("coalesce", 4, 0),
-        ("array_mixed", 8, 0),
+        // Its two calls are inlined, leaving three constants.
+        ("array_mixed", 6, 0),
         ("virtual_result", 5, 0),
         ("constants", 2, 0),
         ("overwritten", 6, 0),

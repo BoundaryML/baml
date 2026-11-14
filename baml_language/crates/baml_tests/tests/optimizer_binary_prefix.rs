@@ -9,8 +9,16 @@ use indexmap::IndexMap;
 const BACKTICKS: &str = include_str!("../baml_src/ns_backtick_strings/backtick_strings.baml");
 const SOURCE: &str = r#"
 class PrefixCounter { value: int }
-function prefix_number(value: int) -> int { value }
-function prefix_identity(value: int) -> int { value }
+// Each calls itself on a path never taken, which keeps its calls from being
+// inlined: a call's result in an operand prefix is the subject here.
+function prefix_number(value: int) -> int {
+    if (value < 0) { return prefix_number(0 - value) }
+    value
+}
+function prefix_identity(value: int) -> int {
+    if (value < 0) { return prefix_identity(0 - value) }
+    value
+}
 function prefix_tick(counter: PrefixCounter) -> int {
     counter.value = counter.value + 1
     counter.value
@@ -63,7 +71,7 @@ fn inlined_binary_prefixes_do_not_spill_call_results() {
     for (name, count) in [
         ("bt_case_h", 2),
         ("bt_case_i", 2),
-        ("bt_case_n", 3),
+        ("bt_case_n", 2),
         ("prefix_template", 7),
         ("prefix_subtract", 5),
         ("prefix_divide", 5),

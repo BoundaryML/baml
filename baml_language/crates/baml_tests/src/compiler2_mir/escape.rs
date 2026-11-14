@@ -120,13 +120,15 @@ fn needs(source: &str, function: &str) -> (Vec<(String, u64)>, Vec<Vec<u64>>) {
         .iter()
         .find(|&&loc| function_data(&db, loc).name.as_str() == function)
         .unwrap_or_else(|| panic!("no function `{function}`"));
-    let mir = lower_function(&db, loc, OptLevel::Two)
+    // At `One`, where a call to a small function is still a call: what a
+    // caller proves about its arguments is the subject here.
+    let mir = lower_function(&db, loc, OptLevel::One)
         .as_ref()
         .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("`{function}` must lower to bytecode")
     };
-    let facts = escape::analyze(&db, file.source_root(&db), body, mir.arity, OptLevel::Two);
+    let facts = escape::analyze(&db, file.source_root(&db), body, mir.arity, OptLevel::One);
     let mut seen = std::collections::HashSet::new();
     let locals = body
         .locals

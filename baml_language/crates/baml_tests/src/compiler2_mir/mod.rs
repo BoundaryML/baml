@@ -837,8 +837,9 @@ fn source_param_interface_dispatch_respects_shadowed_local_binding() {
         .nth(1)
         .and_then(|tail| tail.split("\nfn ").next())
         .unwrap_or(&output);
+    // The method is small enough that its call is replaced by its body.
     assert!(
-        f_body.contains("call const fn user.Shadow.iter"),
+        f_body.contains("[inlined user.Shadow.iter]"),
         "shadowed source parameter should dispatch to the local class method:\n{output}"
     );
     assert!(

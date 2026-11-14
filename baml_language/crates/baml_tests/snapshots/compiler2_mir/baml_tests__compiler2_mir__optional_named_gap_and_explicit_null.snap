@@ -82,12 +82,37 @@ fn user.is_null(value: int | null) -> bool {
 fn user.omitted_middle() -> int {
     // Locals:
     let _0: int // _0 // return
+    let _1: int
+    let _2: bool
 
     bb0: {
-        _0 = call const fn user.score(const "cats", const <omitted>, const "recent") -> [bb1];
+        goto -> bb1;
     }
 
-    bb1: {
+    bb1 [inlined user.score]: {
+        _2 = call const fn baml.ops.equals_equals(const "recent", const null) -> [bb2];
+    }
+
+    bb2 [inlined user.score]: {
+        branch copy _2 -> [bb4, bb3];
+    }
+
+    bb3 [inlined user.score]: {
+        _1 = const 11_i64;
+        goto -> bb5;
+    }
+
+    bb4 [inlined user.score]: {
+        _1 = const 10_i64;
+        goto -> bb5;
+    }
+
+    bb5 [inlined user.score]: {
+        _0 = copy _1;
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
@@ -95,12 +120,22 @@ fn user.omitted_middle() -> int {
 fn user.explicit_null() -> bool {
     // Locals:
     let _0: bool // _0 // return
+    let _1: bool
 
     bb0: {
-        _0 = call const fn user.is_null(const null) -> [bb1];
+        goto -> bb1;
     }
 
-    bb1: {
+    bb1 [inlined user.is_null]: {
+        _1 = call const fn baml.ops.equals_equals(const null, const null) -> [bb2];
+    }
+
+    bb2 [inlined user.is_null]: {
+        _0 = copy _1;
+        goto -> bb3;
+    }
+
+    bb3: {
         return;
     }
 }
