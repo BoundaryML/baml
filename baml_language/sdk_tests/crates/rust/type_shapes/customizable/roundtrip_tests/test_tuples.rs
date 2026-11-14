@@ -1,15 +1,20 @@
-use baml_sdk::tuples::{
-    IntOrString,
-    IntStringIntStringIntStringIntStringIntStringIntStringIntTupleOrString as WideOrString,
-    IntStringTupleOrString, IntStringTupleOrStringIntTuple, TupleBox, TupleHolder, TuplePairBox,
-    WideTupleHolder, call_tuple_callback, call_tuple_callback_async, make_pair, make_tuple_swapper,
-    pair_first, pair_with, round_trip_holder, round_trip_nested, round_trip_optional_slot,
-    round_trip_optional_tuple, round_trip_pair, round_trip_pair_async, round_trip_repeated,
-    round_trip_single, round_trip_tuple_arms, round_trip_tuple_box, round_trip_tuple_list,
-    round_trip_tuple_map, round_trip_tuple_or_string, round_trip_wide, round_trip_wide_holder,
-    round_trip_wide_or_string, round_trip_wide20, swap_pair, throw_pair, tuple_generic_identity,
+use baml_sdk::{
+    Arguments, BamlOptions, Input, Target, Type, TypeBindings, Value, invoke_sync,
+    tuples::{
+        IntOrString,
+        IntStringIntStringIntStringIntStringIntStringIntStringIntTupleOrString as WideOrString,
+        IntStringTupleOrString, IntStringTupleOrStringIntTuple, TupleBox, TupleHolder,
+        TuplePairBox, WideTupleHolder, call_tuple_callback, call_tuple_callback_sync,
+        make_pair_sync, make_tuple_swapper_sync, pair_first_sync, pair_with_sync,
+        round_trip_holder_sync, round_trip_nested_sync, round_trip_optional_slot_sync,
+        round_trip_optional_tuple_sync, round_trip_pair, round_trip_pair_sync,
+        round_trip_repeated_sync, round_trip_single_sync, round_trip_tuple_arms_sync,
+        round_trip_tuple_box_sync, round_trip_tuple_list_sync, round_trip_tuple_map_sync,
+        round_trip_tuple_or_string_sync, round_trip_wide_holder_sync,
+        round_trip_wide_or_string_sync, round_trip_wide_sync, round_trip_wide20_sync,
+        swap_pair_sync, throw_pair_sync, tuple_generic_identity_sync,
+    },
 };
-use baml_sdk::{Arguments, BamlOptions, Input, Target, Type, TypeBindings, Value, invoke};
 
 fn s(value: &str) -> String {
     value.to_string()
@@ -24,7 +29,7 @@ fn try_call(
     args: Vec<(&str, Input)>,
     types: Vec<(&str, Type)>,
 ) -> Result<Value, baml_bridge::Error<Value>> {
-    invoke(
+    invoke_sync(
         Target::named(format!("user.tuples.{name}")),
         args.into_iter()
             .map(|(key, value)| (key.to_string(), value))
@@ -39,41 +44,38 @@ fn try_call(
 
 #[test]
 fn test_tuples_round_trip_pair() {
-    assert_eq!(round_trip_pair((1, s("a"))).unwrap(), (1, s("a")));
+    assert_eq!(round_trip_pair_sync((1, s("a"))).unwrap(), (1, s("a")));
 }
 
 #[tokio::test]
 async fn test_tuples_round_trip_pair_async() {
-    assert_eq!(
-        round_trip_pair_async((2, s("b"))).await.unwrap(),
-        (2, s("b"))
-    );
+    assert_eq!(round_trip_pair((2, s("b"))).await.unwrap(), (2, s("b")));
 }
 
 #[test]
 fn test_tuples_round_trip_single_and_repeated() {
-    assert_eq!(round_trip_single((s("only"),)).unwrap(), (s("only"),));
-    assert_eq!(round_trip_repeated((1, 2, 3)).unwrap(), (1, 2, 3));
+    assert_eq!(round_trip_single_sync((s("only"),)).unwrap(), (s("only"),));
+    assert_eq!(round_trip_repeated_sync((1, 2, 3)).unwrap(), (1, 2, 3));
 }
 
 #[test]
 fn test_tuples_round_trip_nested() {
     assert_eq!(
-        round_trip_nested(((1, s("a")), true)).unwrap(),
+        round_trip_nested_sync(((1, s("a")), true)).unwrap(),
         ((1, s("a")), true)
     );
 }
 
 #[test]
 fn test_tuples_round_trip_optional_slot_and_optional_tuple() {
-    assert_eq!(round_trip_optional_slot((1, None)).unwrap(), (1, None));
+    assert_eq!(round_trip_optional_slot_sync((1, None)).unwrap(), (1, None));
     assert_eq!(
-        round_trip_optional_slot((1, Some(s("a")))).unwrap(),
+        round_trip_optional_slot_sync((1, Some(s("a")))).unwrap(),
         (1, Some(s("a")))
     );
-    assert_eq!(round_trip_optional_tuple(None).unwrap(), None);
+    assert_eq!(round_trip_optional_tuple_sync(None).unwrap(), None);
     assert_eq!(
-        round_trip_optional_tuple(Some((2, s("b")))).unwrap(),
+        round_trip_optional_tuple_sync(Some((2, s("b")))).unwrap(),
         Some((2, s("b")))
     );
 }
@@ -123,7 +125,7 @@ fn wide_parts(t: Wide) -> ([i64; 7], [String; 6]) {
 fn test_tuples_round_trip_wide() {
     assert_wide_class_and_union();
     assert_wide20();
-    let back = round_trip_wide(wide()).unwrap();
+    let back = round_trip_wide_sync(wide()).unwrap();
     assert_eq!(wide_parts(back), wide_parts(wide()));
 }
 
@@ -131,7 +133,7 @@ fn assert_wide20() {
     let twenty = (
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
     );
-    let back = round_trip_wide20(twenty).unwrap();
+    let back = round_trip_wide20_sync(twenty).unwrap();
     assert_eq!(
         [back.0, back.1, back.12, back.18, back.19],
         [0, 1, 12, 18, 19]
@@ -143,17 +145,17 @@ fn assert_wide_class_and_union() {
         wide: wide(),
         label: s("w"),
     };
-    let back = round_trip_wide_holder(&holder.clone()).unwrap();
+    let back = round_trip_wide_holder_sync(&holder.clone()).unwrap();
     assert_eq!(back.label, "w");
     assert_eq!(wide_parts(back.wide), wide_parts(wide()));
 
     let WideOrString::IntStringIntStringIntStringIntStringIntStringIntStringIntTuple(back) =
-        round_trip_wide_or_string(wide()).unwrap()
+        round_trip_wide_or_string_sync(wide()).unwrap()
     else {
         panic!("expected the wide tuple arm");
     };
     assert_eq!(wide_parts(back), wide_parts(wide()));
-    let WideOrString::String(back) = round_trip_wide_or_string(s("s")).unwrap() else {
+    let WideOrString::String(back) = round_trip_wide_or_string_sync(s("s")).unwrap() else {
         panic!("expected the string arm");
     };
     assert_eq!(back, "s");
@@ -216,8 +218,11 @@ fn assert_wide_shape_validation() {
 }
 
 fn assert_generic_slots() {
-    assert_eq!(pair_with(s("x"), 1).unwrap(), (s("x"), 1));
-    assert_eq!(pair_with((true, s("y")), 2).unwrap(), ((true, s("y")), 2));
+    assert_eq!(pair_with_sync(s("x"), 1).unwrap(), (s("x"), 1));
+    assert_eq!(
+        pair_with_sync((true, s("y")), 2).unwrap(),
+        ((true, s("y")), 2)
+    );
 }
 
 #[test]
@@ -235,7 +240,7 @@ fn test_tuples_cross_by_copy() {
             .unwrap(),
         (1, s("a"))
     );
-    assert_eq!(round_trip_pair(host.clone()).unwrap(), (99, s("a")));
+    assert_eq!(round_trip_pair_sync(host.clone()).unwrap(), (99, s("a")));
 }
 
 #[test]
@@ -273,29 +278,29 @@ fn test_tuples_wrong_arity_and_slots_rejected() {
 #[test]
 fn test_tuples_round_trip_containers() {
     assert_eq!(
-        round_trip_tuple_list(vec![(s("a"), 1), (s("b"), 2)]).unwrap(),
+        round_trip_tuple_list_sync(vec![(s("a"), 1), (s("b"), 2)]).unwrap(),
         vec![(s("a"), 1), (s("b"), 2)]
     );
     let map = baml_bridge::Map::from_iter([(s("k"), (1, true))]);
-    assert_eq!(round_trip_tuple_map(map.clone()).unwrap(), map);
+    assert_eq!(round_trip_tuple_map_sync(map.clone()).unwrap(), map);
 }
 
 #[test]
 fn test_tuples_round_trip_union_arms() {
     assert_eq!(
-        round_trip_tuple_or_string((1, s("a"))).unwrap(),
+        round_trip_tuple_or_string_sync((1, s("a"))).unwrap(),
         IntStringTupleOrString::IntStringTuple((1, s("a")))
     );
     assert_eq!(
-        round_trip_tuple_or_string(s("s")).unwrap(),
+        round_trip_tuple_or_string_sync(s("s")).unwrap(),
         IntStringTupleOrString::String(s("s"))
     );
     assert_eq!(
-        round_trip_tuple_arms((1, s("a"))).unwrap(),
+        round_trip_tuple_arms_sync((1, s("a"))).unwrap(),
         IntStringTupleOrStringIntTuple::IntStringTuple((1, s("a")))
     );
     assert_eq!(
-        round_trip_tuple_arms((s("a"), 1)).unwrap(),
+        round_trip_tuple_arms_sync((s("a"), 1)).unwrap(),
         IntStringTupleOrStringIntTuple::StringIntTuple((s("a"), 1))
     );
 }
@@ -308,23 +313,23 @@ fn test_tuples_round_trip_class_fields() {
         maybe: Some((3, None)),
         pairs: vec![(s("c"), 4)],
     };
-    assert_eq!(round_trip_holder(&holder).unwrap(), holder);
+    assert_eq!(round_trip_holder_sync(&holder).unwrap(), holder);
 }
 
 #[test]
 fn test_tuples_round_trip_generic_argument() {
     assert_generic_slots();
     let boxed = TupleBox::<(i64, String)> { value: (1, s("a")) };
-    assert_eq!(round_trip_tuple_box(&boxed).unwrap(), boxed);
+    assert_eq!(round_trip_tuple_box_sync(&boxed).unwrap(), boxed);
 }
 
 #[test]
 fn test_tuples_make_swap_and_index() {
-    assert_eq!(make_pair(1, s("a")).unwrap(), (1, s("a")));
-    assert_eq!(swap_pair((1, s("a"))).unwrap(), (s("a"), 1));
-    assert_eq!(pair_first((7, s("a"))).unwrap(), 7);
+    assert_eq!(make_pair_sync(1, s("a")).unwrap(), (1, s("a")));
+    assert_eq!(swap_pair_sync((1, s("a"))).unwrap(), (s("a"), 1));
+    assert_eq!(pair_first_sync((7, s("a"))).unwrap(), 7);
     assert_eq!(
-        round_trip_pair(make_pair(2, s("b")).unwrap()).unwrap(),
+        round_trip_pair_sync(make_pair_sync(2, s("b")).unwrap()).unwrap(),
         (2, s("b"))
     );
 }
@@ -333,7 +338,7 @@ fn test_tuples_make_swap_and_index() {
 fn test_tuples_host_callback_args_and_results() {
     let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let record = std::sync::Arc::clone(&seen);
-    let swapped = call_tuple_callback(
+    let swapped = call_tuple_callback_sync(
         move |t: (i64, String)| {
             record.lock().unwrap().push(t.clone());
             (t.1, t.0)
@@ -346,7 +351,7 @@ fn test_tuples_host_callback_args_and_results() {
 
     let swapped = tokio::runtime::Runtime::new()
         .unwrap()
-        .block_on(call_tuple_callback_async(
+        .block_on(call_tuple_callback(
             |t: (i64, String)| async move { (t.1, t.0) },
             (2, s("b")),
         ))
@@ -356,7 +361,7 @@ fn test_tuples_host_callback_args_and_results() {
 
 #[test]
 fn test_tuples_thrown_value() {
-    let error = throw_pair((1, s("a"))).unwrap_err();
+    let error = throw_pair_sync((1, s("a"))).unwrap_err();
     let baml_bridge::Error::Thrown { value, .. } = error else {
         panic!("expected the thrown tuple, got {error}");
     };
@@ -424,7 +429,7 @@ fn test_tuples_reflected_type_token() {
         pair_type()
     ));
     assert_eq!(
-        tuple_generic_identity::<(i64, String)>((1, s("a"))).unwrap(),
+        tuple_generic_identity_sync::<(i64, String)>((1, s("a"))).unwrap(),
         (1, s("a"))
     );
 }
@@ -432,24 +437,24 @@ fn test_tuples_reflected_type_token() {
 #[test]
 fn test_tuples_method_round_trip() {
     let pair_box = TuplePairBox { a: 1, b: s("a") };
-    assert_eq!(pair_box.as_pair().unwrap(), (1, s("a")));
+    assert_eq!(pair_box.as_pair_sync().unwrap(), (1, s("a")));
     assert_eq!(
-        pair_box.with_pair((2, s("b"))).unwrap(),
+        pair_box.with_pair_sync((2, s("b"))).unwrap(),
         TuplePairBox { a: 2, b: s("b") }
     );
     assert_eq!(
-        TuplePairBox::from_pair((3, s("c"))).unwrap(),
+        TuplePairBox::from_pair_sync((3, s("c"))).unwrap(),
         TuplePairBox { a: 3, b: s("c") }
     );
 
     tokio::runtime::Runtime::new().unwrap().block_on(async {
-        assert_eq!(pair_box.as_pair_async().await.unwrap(), (1, s("a")));
+        assert_eq!(pair_box.as_pair().await.unwrap(), (1, s("a")));
         assert_eq!(
-            pair_box.with_pair_async((4, s("d"))).await.unwrap(),
+            pair_box.with_pair((4, s("d"))).await.unwrap(),
             TuplePairBox { a: 4, b: s("d") }
         );
         assert_eq!(
-            TuplePairBox::from_pair_async((5, s("e"))).await.unwrap(),
+            TuplePairBox::from_pair((5, s("e"))).await.unwrap(),
             TuplePairBox { a: 5, b: s("e") }
         );
     });
@@ -457,7 +462,7 @@ fn test_tuples_method_round_trip() {
 
 #[test]
 fn test_tuples_function_handle_round_trip() {
-    let swap = make_tuple_swapper().unwrap();
-    assert_eq!(swap.call(((1, s("a")),)).unwrap(), (s("a"), 1));
-    assert_eq!(swap.call(((2, s("b")),)).unwrap(), (s("b"), 2));
+    let swap = make_tuple_swapper_sync().unwrap();
+    assert_eq!(swap.call_sync(((1, s("a")),)).unwrap(), (s("a"), 1));
+    assert_eq!(swap.call_sync(((2, s("b")),)).unwrap(), (s("b"), 2));
 }

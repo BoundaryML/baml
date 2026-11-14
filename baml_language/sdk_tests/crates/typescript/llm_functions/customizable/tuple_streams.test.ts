@@ -62,32 +62,32 @@ describe("tuple streams", () => {
   // SDK_PARITY_LINT(skip): C# streams tuples from its own tuples fixture
   it("tuples_stream_items", async () => {
     if (hasSyncCalls) {
-      const stream = tuple_streams.stream_tuple_items$stream("x");
-      expectItemsPartials(drain(() => stream.next()));
-      const final = stream.final();
+      const stream = tuple_streams.stream_tuple_items$stream_sync("x");
+      expectItemsPartials(drain(() => stream.nextSync()));
+      const final = stream.finalSync();
       expect(final).toEqual(ITEMS);
-      expect(tuple_streams.stream_tuple_items("x")).toEqual(final);
+      expect(tuple_streams.stream_tuple_items_sync("x")).toEqual(final);
     }
 
-    const asyncStream = await tuple_streams.stream_tuple_items$stream_async("x");
-    expectItemsPartials(await drainAsync(() => asyncStream.nextAsync()));
-    expect(await asyncStream.finalAsync()).toEqual(ITEMS);
-    expect(await tuple_streams.stream_tuple_items_async("x")).toEqual(ITEMS);
+    const asyncStream = await tuple_streams.stream_tuple_items$stream("x");
+    expectItemsPartials(await drainAsync(() => asyncStream.next()));
+    expect(await asyncStream.final()).toEqual(ITEMS);
+    expect(await tuple_streams.stream_tuple_items("x")).toEqual(ITEMS);
   });
 
   // SDK_PARITY_LINT(skip): C# streams tuples from its own tuples fixture
   it("tuples_stream_final", async () => {
     if (hasSyncCalls) {
-      const stream = tuple_streams.stream_tuple_final$stream("x");
-      expectFinalPartials(drain(() => stream.next()));
-      const final = stream.final();
+      const stream = tuple_streams.stream_tuple_final$stream_sync("x");
+      expectFinalPartials(drain(() => stream.nextSync()));
+      const final = stream.finalSync();
       expect(final).toEqual([1, "a"]);
-      expect(tuple_streams.stream_tuple_final("x")).toEqual(final);
+      expect(tuple_streams.stream_tuple_final_sync("x")).toEqual(final);
     }
 
-    const asyncStream = await tuple_streams.stream_tuple_final$stream_async("x");
-    expectFinalPartials(await drainAsync(() => asyncStream.nextAsync()));
-    expect(await asyncStream.finalAsync()).toEqual([1, "a"]);
-    expect(await tuple_streams.stream_tuple_final_async("x")).toEqual([1, "a"]);
+    const asyncStream = await tuple_streams.stream_tuple_final$stream("x");
+    expectFinalPartials(await drainAsync(() => asyncStream.next()));
+    expect(await asyncStream.final()).toEqual([1, "a"]);
+    expect(await tuple_streams.stream_tuple_final("x")).toEqual([1, "a"]);
   });
 });
