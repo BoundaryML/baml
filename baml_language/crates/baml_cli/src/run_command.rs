@@ -313,11 +313,18 @@ struct ResolvedInvocation {
 
 impl Prepared {
     fn into_engine(self, argv: Vec<String>) -> Result<BexEngine> {
+        let build = crate::build_record::provider(
+            &self.db,
+            self.package,
+            &self.program,
+            btel_types::BuildOrigin::Run,
+        );
         crate::runtime_telemetry::create_engine_with_context(
             self.program,
             argv,
             &self.recording_root,
             self.recording_sources,
+            build,
             self.launch_context,
         )
         .context("failed to create engine")

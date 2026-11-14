@@ -77,9 +77,10 @@ impl ProcessEuid {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct EngineId(pub u64);
 
-/// Identity of a compiled program. Workerd uses a temporary zero-random
-/// `UUIDv7` implementation that may collide with another program initialized in
-/// the same millisecond.
+/// Identity of a compiled program: derived from what was linked when the
+/// program records it, else random. Workerd's random form uses a temporary
+/// zero-random `UUIDv7` implementation that may collide with another program
+/// initialized in the same millisecond.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ProgramId(pub [u8; 16]);
 

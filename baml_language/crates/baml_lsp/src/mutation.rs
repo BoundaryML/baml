@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use baml_base::{Name, SourceRootKind};
+use baml_base::{ClaimedIdentity, Name, SourceRootKind};
 
 /// A source root to add or replace.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,6 +17,8 @@ pub struct RootSpec {
     /// The package's own name (`[package].name`); `None` for an unnamed
     /// project.
     pub self_name: Option<Name>,
+    /// What the project's manifest claims the package is.
+    pub claim: ClaimedIdentity,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

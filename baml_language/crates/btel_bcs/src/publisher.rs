@@ -1718,6 +1718,8 @@ mod tests {
             sources: Some(sources),
             context: None,
             exit: Arc::default(),
+            program_id: None,
+            build: None,
         });
         assert_eq!(publisher.queue.len(), 1);
         assert_eq!(publisher.queue[0].id, id);

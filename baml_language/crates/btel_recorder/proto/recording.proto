@@ -42,6 +42,9 @@ message RecordingHeader {
                                  // 12 adds general owned-function closure and named input roots.
                                  // 13 adds model usage on completions and model
                                  // invoke functions.
+                                 // 14 adds the compilation unit hash of a
+                                 // function's package, the program identity
+                                 // and the build of the program's package.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -56,6 +59,32 @@ message RecordingHeader {
   // Minor 9. Immutable process launch context, including explicit empty context.
   // Absent means unavailable (legacy producer or failed capture), never empty.
   optional CasId initial_context_cas_id = 11;
+  // Minor 14. The linked program this engine runs: exactly 16 bytes (UUID).
+  // Derived from the program's packages when they record their hashes, so
+  // every run of one program writes the same value; random otherwise.
+  optional bytes program_id = 12;
+  // Minor 14. The build of the program's own package.
+  Build build = 13;
+}
+
+// One run of the compiler building one package. Two builds of the same code
+// are two builds: the ID is random and the timestamp is the build's.
+message Build {
+  bytes build_id = 1;           // Exactly 16 bytes (UUID).
+  sfixed64 timestamp_unix_ns = 2;
+  string origin = 3;            // pack, generate, run, test, dynamic.
+  GitInfo git = 4;              // Absent when the package is not in a git repository.
+  bytes source_hash = 5;        // Exactly 32 bytes: the formatted, normalized source text.
+  bytes compilation_unit_hash = 6; // Exactly 32 bytes: the package the build produced.
+}
+
+message GitInfo {
+  // URL of origin in https form without credentials. Absent without an origin.
+  optional string remote = 1;
+  bytes hash = 2;               // Commit at HEAD: 20 bytes (SHA-1) or 32 (SHA-256).
+  bool dirty = 3;               // The package's files differ from the commit.
+  optional string branch = 4;   // Absent on a detached HEAD no CI names.
+  string package_path = 5;      // Package directory relative to the repository root.
 }
 
 message Definitions {
@@ -101,6 +130,10 @@ message FunctionMetadata {
   // Minor 13. An ai.Client.invoke implementation or a stream's settle step:
   // the usage on its spans is the usage of the calls it made itself.
   bool model_invoke = 16;
+  // Minor 14. Hash of the compiled package that owns the function: which
+  // build of the package its spans ran. Exactly 32 bytes when supplied.
+  // Absent for functions no compiled package owns and for older producers.
+  optional bytes compilation_unit_hash = 17;
 }
 
 // Line table of the code the VM executed, sorted by strictly increasing PC.

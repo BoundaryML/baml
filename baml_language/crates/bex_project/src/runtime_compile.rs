@@ -477,6 +477,8 @@ fn projected_interface(
         });
     }
     Ok(WireInterface {
+        claimed: baml_base::ClaimedIdentity::default(),
+        compiler_version: baml_compiler2_hir_ty::package_interface::COMPILER_VERSION.to_owned(),
         dependencies: slots.locators(),
         rows: interface,
     })

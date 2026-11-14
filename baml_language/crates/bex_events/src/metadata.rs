@@ -7,9 +7,11 @@ pub use btel_types::{
 
 use crate::ids::{ProgramId, SourceSnapshotId};
 
-/// A point-in-time program metadata snapshot, including dynamic functions. `program_id`
-/// is currently random per engine instance (artifact-local joins only, not
-/// durable cross-run identity).
+/// A point-in-time program metadata snapshot, including dynamic functions.
+/// `program_id` identifies the linked program by its content
+/// (`bex_vm_types::identity::linked_program_id`), the same for every run of
+/// it; a program whose packages carry no metadata gets a random one per
+/// engine instance instead.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProgramMetadata {
     pub program_id: ProgramId,

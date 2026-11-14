@@ -429,6 +429,16 @@ pub(crate) fn build_db_from_sources(
     on_file: impl Fn(&Path),
 ) -> (ProjectDatabase, SourceRoot) {
     let (mut db, workspace) = workspace_db(&resolved.root);
+    // A manifest that does not parse claims nothing: the strict loader has
+    // already refused it, and a caller that got this far without one chose
+    // to compile anyway.
+    if let Some(manifest) = resolved
+        .manifest
+        .as_deref()
+        .and_then(|content| baml_db::manifest::parse(content).ok())
+    {
+        db.set_claimed_identity(workspace, baml_db::manifest::claimed_identity(&manifest));
+    }
     for (path, _) in &resolved.files {
         on_file(path);
     }

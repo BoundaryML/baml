@@ -15,7 +15,7 @@ use std::{
 
 #[cfg(not(target_arch = "wasm32"))]
 use baml_base::Name;
-use baml_base::SourceRootKind;
+use baml_base::{ClaimedIdentity, SourceRootKind};
 
 use crate::{
     mutation::RootSpec,
@@ -65,6 +65,7 @@ pub fn workspace_root_spec(path: PathBuf) -> RootSpec {
         path,
         kind: SourceRootKind::Workspace,
         self_name: None,
+        claim: ClaimedIdentity::default(),
     }
 }
 
@@ -88,7 +89,8 @@ pub fn retain_outermost_manifest_projects(
     });
 }
 
-/// The name a project declares in its manifest, or `None`.
+/// The spec of the project at `root`: named and claiming what its manifest
+/// declares, unnamed with no claim when it declares neither.
 ///
 /// Discovery is lenient where the CLI loader is strict: a project with no
 /// `baml.toml`, one whose manifest does not parse, or one that omits
@@ -96,21 +98,29 @@ pub fn retain_outermost_manifest_projects(
 /// because its manifest has a typo would take the editor down over the very
 /// thing the editor exists to help fix.
 #[cfg(not(target_arch = "wasm32"))]
-fn declared_package_name(root: &Path) -> Option<Name> {
+fn declared_package(root: &Path) -> RootSpec {
     use baml_db::project_resolution::BAML_TOML;
     let toml_path = root.join(BAML_TOML);
-    let text = std::fs::read_to_string(&toml_path).ok()?;
-    let manifest = baml_db::manifest::parse(&text)
-        .inspect_err(|error| {
-            tracing::debug!(
-                path = %toml_path.display(),
-                %error,
-                "unparseable manifest; the project stays unnamed"
-            );
+    let claim = std::fs::read_to_string(&toml_path)
+        .ok()
+        .and_then(|text| {
+            baml_db::manifest::parse(&text)
+                .inspect_err(|error| {
+                    tracing::debug!(
+                        path = %toml_path.display(),
+                        %error,
+                        "unparseable manifest; the project stays unnamed"
+                    );
+                })
+                .ok()
         })
-        .ok()?;
-    let name = manifest.package.as_ref()?.name.as_ref()?.trim();
-    (!name.is_empty()).then(|| Name::new(name))
+        .map(|manifest| baml_db::manifest::claimed_identity(&manifest))
+        .unwrap_or_default();
+    RootSpec {
+        self_name: claim.name.as_deref().map(Name::new),
+        claim,
+        ..workspace_root_spec(root.to_path_buf())
+    }
 }
 
 /// A filesystem-less host: reads fail with `Unsupported` and discovery finds
@@ -196,10 +206,7 @@ impl ProjectFs for NativeFs {
             .map(|root| {
                 let files = baml_db::discover_baml_files(&project_source_root(&root));
                 DiscoveredRoot {
-                    spec: RootSpec {
-                        self_name: declared_package_name(&root),
-                        ..workspace_root_spec(root)
-                    },
+                    spec: declared_package(&root),
                     files,
                 }
             })
@@ -335,6 +342,10 @@ mod tests {
             roots[0].spec,
             RootSpec {
                 self_name: Some(Name::new("p")),
+                claim: ClaimedIdentity {
+                    name: Some("p".to_owned()),
+                    ..ClaimedIdentity::default()
+                },
                 ..workspace_root_spec(ws.clone())
             },
             "the name the manifest declares is read at discovery"

@@ -310,6 +310,9 @@ pub struct CompilationUnit {
 pub struct PackageRecord {
     /// Versioned artifact containing the whole-package interface.
     pub interface_blob: Vec<u8>,
+    /// What the compile recorded about the package: its content hashes and
+    /// claimed identity. `None` only for a record no compile produced.
+    pub metadata: Option<bex_vm_types::identity::PackageMetadata>,
 }
 
 /// One package's `$init` / `$init_test` tail: the package's
@@ -356,11 +359,12 @@ pub struct InitTail {
 }
 
 /// One package's compiled output for one link: what the emitter produces for
-/// a package and the linker consumes for it. Carries no package identity —
-/// the driver that emits or loads it knows which package it is for — and
-/// every reference into another package is by dependency slot and
-/// declaration path, so it is a pure function of the package's sources and
-/// its dependencies' interfaces.
+/// a package and the linker consumes for it. Nothing in it is an identity
+/// the linker binds by — the driver that emits or loads it knows which
+/// package it is for — and every reference into another package is by
+/// dependency slot and declaration path, so it is a pure function of the
+/// package's sources, what its manifest claims it is, and its dependencies'
+/// interfaces.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct EmittedPackage {
     pub unit: CompilationUnit,

@@ -46,6 +46,26 @@ pub struct Dependency {
     pub root: SourceRoot,
 }
 
+/// What a package's manifest claims it is: a name, a version, and where and
+/// by whom it is published (BEP-085).
+///
+/// A claim is an assertion, not an identity: the compiler and runtime never
+/// compare or index packages by it, and two packages may make the same
+/// claim. It is hashed into the package's interface and so into its
+/// compilation unit, and tooling decides what the claim is worth.
+#[derive(
+    Debug, Clone, Default, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
+pub struct ClaimedIdentity {
+    /// URL of the package repository. `None` is the default repository.
+    pub registry: Option<String>,
+    /// The publishing organization. `None` for a local, dynamically loaded,
+    /// or builtin package.
+    pub organization: Option<String>,
+    pub name: Option<String>,
+    pub version: Option<String>,
+}
+
 /// Input: one source root — a directory subtree holding the files of exactly
 /// one package. The root IS the package: package identity is this input's
 /// id, and every package-level query is keyed on it.
@@ -93,6 +113,13 @@ pub struct SourceRoot {
     #[default]
     #[returns(clone)]
     pub exclude_tests: bool,
+
+    /// What the package's manifest claims it is. Empty for a package with
+    /// no manifest. Unlike [`Self::self_name`] it names nothing the compiler
+    /// resolves or renders: it is metadata the package's hashes cover.
+    #[default]
+    #[returns(clone)]
+    pub claim: ClaimedIdentity,
 
     /// The package's serialized compiler interface (`borsh(PackageInterface)`,
     /// versioned as a `baml_artifact`), when the package is served from one

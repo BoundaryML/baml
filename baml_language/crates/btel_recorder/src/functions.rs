@@ -79,6 +79,7 @@ fn convert(m: &FunctionMetadata) -> proto::FunctionMetadata {
         lambda_path: m.lambda_path.clone(),
         definition_key: m.definition_key.as_ref().map(|key| key.0.clone()),
         package_name: m.package_name.clone(),
+        compilation_unit_hash: m.compilation_unit_hash.map(|hash| hash.to_vec()),
         namespace: m.namespace.clone(),
         argument_layout: m
             .argument_layout

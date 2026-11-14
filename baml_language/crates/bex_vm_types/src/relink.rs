@@ -315,7 +315,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::{
         HeapPtr, Object,
@@ -323,7 +323,7 @@ mod tests {
         types::{FunctionKind, FunctionOrigin},
     };
 
-    fn test_function() -> Function {
+    pub(crate) fn test_function() -> Function {
         use Instruction as I;
         let bytecode = Bytecode {
             instructions: vec![

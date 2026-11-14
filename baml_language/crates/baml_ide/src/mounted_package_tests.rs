@@ -490,6 +490,8 @@ fn a_class_reached_through_a_re_exporting_view_reads_as_the_defining_row() {
     let blob = baml_artifact::encode(
         baml_artifact::ArtifactKind::PackageInterface,
         &WireInterface {
+            claimed: baml_base::ClaimedIdentity::default(),
+            compiler_version: baml_compiler2_hir_ty::package_interface::COMPILER_VERSION.to_owned(),
             dependencies: vec![Locator::Direct {
                 edge: Name::new("app"),
                 digest: interface_digest(&db, lib),

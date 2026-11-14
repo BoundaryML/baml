@@ -84,6 +84,10 @@ pub struct ProcessRecording {
     /// Canonical launch context snapshot; absence means unavailable.
     pub context: Option<Snapshot>,
     pub exit: std::sync::Arc<btel_types::ProcessExitSlot>,
+    /// The linked program the engine runs.
+    pub program_id: Option<[u8; 16]>,
+    /// The build of the program's own package.
+    pub build: Option<btel_types::BuildRecord>,
 }
 
 struct ProcessHeader {
@@ -91,6 +95,8 @@ struct ProcessHeader {
     source: Option<proto::CasId>,
     context: Option<proto::CasId>,
     exit: std::sync::Arc<btel_types::ProcessExitSlot>,
+    program_id: Option<[u8; 16]>,
+    build: Option<proto::Build>,
 }
 
 /// Sink-independent encoding, capture deduplication and recording sequencing.
@@ -181,6 +187,8 @@ impl RecordingBuilder {
             source,
             context,
             exit: process.exit,
+            program_id: process.program_id,
+            build: process.build.as_ref().map(build),
         });
         self
     }
@@ -269,7 +277,19 @@ impl RecordingBuilder {
                         btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR
                     } else {
                         0
-                    }),
+                    })
+                    .max(
+                        if self
+                            .process
+                            .as_ref()
+                            .is_some_and(|p| p.program_id.is_some() || p.build.is_some())
+                            || defines_package_identity(&ready.definitions)
+                        {
+                            btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR
+                        } else {
+                            0
+                        },
+                    ),
                 recording_id: self.id.as_bytes().to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
                 process_id: self.process.as_ref().map(|p| p.info.process_id.to_vec()),
@@ -286,6 +306,12 @@ impl RecordingBuilder {
                     .map(|p| p.info.started_at_unix_ns),
                 source_cas_id: self.process.as_ref().and_then(|p| p.source),
                 initial_context_cas_id: self.process.as_ref().and_then(|p| p.context),
+                program_id: self
+                    .process
+                    .as_ref()
+                    .and_then(|p| p.program_id)
+                    .map(|id| id.to_vec()),
+                build: self.process.as_ref().and_then(|p| p.build.clone()),
             }),
             sequence: sequence.get(),
             definitions: Some(ready.definitions),
@@ -650,6 +676,33 @@ enum Sealing {
 mod tests;
 #[cfg(test)]
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
+
+fn build(record: &btel_types::BuildRecord) -> proto::Build {
+    proto::Build {
+        build_id: record.build_id.to_vec(),
+        timestamp_unix_ns: record.timestamp_unix_ns,
+        origin: record.origin.as_str().to_owned(),
+        git: record.git.as_ref().map(|git| proto::GitInfo {
+            remote: git.remote.clone(),
+            hash: git.hash.as_bytes().to_vec(),
+            dirty: git.dirty,
+            branch: git.branch.clone(),
+            package_path: git.package_path.clone(),
+        }),
+        source_hash: record.source_hash.to_vec(),
+        compilation_unit_hash: record.compilation_unit_hash.to_vec(),
+    }
+}
+
+fn defines_package_identity(definitions: &proto::Definitions) -> bool {
+    definitions.functions.iter().any(|function| {
+        matches!(
+            &function.resolution,
+            Some(proto::function_definition::Resolution::Metadata(metadata))
+                if metadata.compilation_unit_hash.is_some()
+        )
+    })
+}
 
 fn defines_model_invoke(definitions: &proto::Definitions) -> bool {
     definitions.functions.iter().any(|function| {

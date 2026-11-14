@@ -29,10 +29,15 @@ pub struct TelemetryRecording {
     destination: Destination,
     host: String,
     sources: Vec<(String, String)>,
+    build: Option<BuildProvider>,
     exit: Arc<btel_types::ProcessExitSlot>,
     initial_failure: Option<InitialFailurePolicy>,
     recording_override: RecordingOverride,
 }
+
+/// Describes the build of a program's package; see
+/// [`TelemetryRecording::with_build`].
+pub type BuildProvider = Box<dyn FnOnce() -> Option<btel_types::BuildRecord> + Send>;
 enum Destination {
     InvalidConfiguration(Box<bcs_api::diagnostics::Diagnostic>),
     LocalFiles {
@@ -379,6 +384,7 @@ impl TelemetryRecording {
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
+            build: None,
             exit: Arc::default(),
             destination: Destination::Cloud {
                 publisher,
@@ -402,6 +408,7 @@ impl TelemetryRecording {
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
+            build: None,
             exit: Arc::default(),
             destination: Destination::LocalFiles {
                 recordings: project_root
@@ -428,6 +435,7 @@ impl TelemetryRecording {
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
+            build: None,
             exit: Arc::default(),
             destination: Destination::LocalFiles { recordings, cas },
             initial_failure: None,
@@ -446,6 +454,7 @@ impl TelemetryRecording {
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
+            build: None,
             exit: Arc::default(),
             destination: Destination::UserFiles {
                 project_from_cwd: false,
@@ -495,6 +504,16 @@ impl TelemetryRecording {
         self
     }
 
+    /// How to describe the build of the program's package (its git commit,
+    /// source hash and unit hash). Called at most once, and only when a
+    /// recording that keeps it starts, so a host pays for reading git and
+    /// formatting sources only then.
+    #[must_use]
+    pub fn with_build(mut self, build: BuildProvider) -> Self {
+        self.build = Some(build);
+        self
+    }
+
     /// Where the host records how the process ended.
     pub(crate) fn process_exit(&self) -> Arc<btel_types::ProcessExitSlot> {
         Arc::clone(&self.exit)
@@ -504,8 +523,9 @@ impl TelemetryRecording {
     /// allowlisted environment metadata and omit arguments/sources; local
     /// recordings retain the caller's context and existing debugging details.
     fn process(
-        &self,
+        &mut self,
         launch_context: &btel_types::context::Context,
+        program_id: Option<[u8; 16]>,
     ) -> btel_recorder::ProcessRecording {
         let recorded_context = if matches!(self.destination, Destination::Cloud { .. }) {
             environment::context(launch_context)
@@ -544,12 +564,26 @@ impl TelemetryRecording {
                 &btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default()),
             ),
             exit: Arc::clone(&self.exit),
+            program_id,
+            // The build names the git remote and branch: like the sources,
+            // it stays out of cloud recordings until source upload lands.
+            build: self
+                .build
+                .take()
+                .filter(|_| {
+                    matches!(
+                        self.destination,
+                        Destination::LocalFiles { .. } | Destination::UserFiles { .. }
+                    )
+                })
+                .and_then(|build| build()),
         }
     }
 
     pub(crate) fn start(
-        self,
+        mut self,
         source_snapshot: Option<[u8; 32]>,
+        program_id: Option<[u8; 16]>,
         functions: Arc<btel_types::FunctionMetadataTable>,
         launch_context: &btel_types::context::Context,
     ) -> Result<
@@ -560,7 +594,7 @@ impl TelemetryRecording {
         EngineError,
     > {
         let transport = btel_settings::transport::ChunkConfig::default();
-        let process = self.process(launch_context);
+        let process = self.process(launch_context, program_id);
         self.config
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
@@ -1263,29 +1297,38 @@ mod source_privacy_tests {
             "main.baml".to_owned(),
             "function Secret() -> int { 42 }".to_owned(),
         )];
-        let local =
+        let build = || btel_types::BuildRecord {
+            build_id: [1; 16],
+            timestamp_unix_ns: 7,
+            origin: btel_types::BuildOrigin::Run,
+            git: None,
+            source_hash: [2; 32],
+            compilation_unit_hash: [3; 32],
+        };
+        let mut local =
             TelemetryRecording::local_files("/tmp/baml-source-privacy", RecordingConfig::default())
-                .with_sources(sources.clone());
-        let cloud = TelemetryRecording::cloud(
+                .with_sources(sources.clone())
+                .with_build(Box::new(move || Some(build())));
+        let mut cloud = TelemetryRecording::cloud(
             RecordingConfig::default(),
             btel_bcs::CloudPublisherConfig::default(),
             btel_bcs::delivery::DeliveryConfig::new(
                 "https://boundary.example.test".parse().unwrap(),
             ),
         )
-        .with_sources(sources);
-        assert!(
-            local
-                .process(&btel_types::context::Context::default())
-                .sources
-                .is_some()
-        );
-        assert!(
-            cloud
-                .process(&btel_types::context::Context::default())
-                .sources
-                .is_none()
-        );
+        .with_sources(sources)
+        .with_build(Box::new(|| {
+            unreachable!("a cloud recording never describes the build")
+        }));
+        let program_id = Some([4; 16]);
+        let local_process = local.process(&btel_types::context::Context::default(), program_id);
+        assert!(local_process.sources.is_some());
+        assert_eq!(local_process.build, Some(build()));
+        assert_eq!(local_process.program_id, program_id);
+        let cloud_process = cloud.process(&btel_types::context::Context::default(), program_id);
+        assert!(cloud_process.sources.is_none());
+        assert_eq!(cloud_process.build, None);
+        assert_eq!(cloud_process.program_id, program_id);
         let context = btel_types::context::Context::default();
         let snapshot = |context: &btel_types::context::Context| {
             btel_snapshot::context::capture(
@@ -1296,11 +1339,11 @@ mod source_privacy_tests {
             .root_id()
         };
         assert_eq!(
-            local.process(&context).context.unwrap().root_id(),
+            local.process(&context, None).context.unwrap().root_id(),
             snapshot(&context)
         );
         assert_ne!(
-            cloud.process(&context).context.unwrap().root_id(),
+            cloud.process(&context, None).context.unwrap().root_id(),
             snapshot(&context)
         );
     }

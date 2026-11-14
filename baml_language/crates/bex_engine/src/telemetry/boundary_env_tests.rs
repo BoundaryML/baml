@@ -87,7 +87,8 @@ fn from_boundary_env() {
             return;
         }
         if matches!(recording.destination, Destination::InvalidConfiguration(_)) {
-            let Err(error) = recording.start(None, Arc::default(), &Context::default()) else {
+            let Err(error) = recording.start(None, None, Arc::default(), &Context::default())
+            else {
                 panic!("invalid Boundary configuration must stop execution");
             };
             let crate::EngineError::CloudAuthorization(diagnostic) = error else {

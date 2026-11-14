@@ -128,6 +128,123 @@ testset "smoke" { test "ok" { assert.is_true(true) } }
     assert!(!home.join(RECORDINGS).exists());
 }
 
+/// The header of every recording under `root`, with the compilation unit
+/// hash its `user.main` definition names when it ran `main`, oldest
+/// recording first.
+fn recorded_builds(root: &Path) -> Vec<(btel_recorder::proto::RecordingHeader, Option<Vec<u8>>)> {
+    let mut builds: Vec<_> = std::fs::read_dir(root.join(RECORDINGS))
+        .unwrap()
+        .map(|entry| {
+            let recording = btel_file::read_directory(&entry.unwrap().path()).unwrap();
+            let header = recording.files[0].header.clone().unwrap();
+            let main_unit = recording
+                .files
+                .iter()
+                .flat_map(|file| file.definitions.iter().flat_map(|d| &d.functions))
+                .find_map(|function| match &function.resolution {
+                    Some(btel_recorder::proto::function_definition::Resolution::Metadata(
+                        metadata,
+                    )) if metadata.fqn == "user.main" => metadata.compilation_unit_hash.clone(),
+                    _ => None,
+                });
+            (header, main_unit)
+        })
+        .collect();
+    builds.sort_by_key(|(header, _)| header.process_started_at_unix_ns);
+    builds
+}
+
+/// A recording names the program it ran, the build of its package, and for
+/// each function the package build that owns it; the same code is the same
+/// program and source however it is formatted, cached, or invoked.
+#[test]
+fn recordings_name_the_program_the_build_and_each_functions_package() {
+    let temp = tempfile::tempdir().unwrap();
+    let project = temp.path().join("project");
+    std::fs::create_dir(&project).unwrap();
+    let source = "function main() -> int {\n    7\n}\n";
+    common::write_project(&project, source);
+    let home = home(temp.path());
+    let run_main = || {
+        run(
+            cli(temp.path(), &home)
+                .args(["run", "main", "--project-dir"])
+                .arg(&project),
+            true,
+        );
+    };
+    // A compile, then a bytecode-cache hit.
+    run_main();
+    run_main();
+    run(
+        cli(temp.path(), &home)
+            .args(["test", "--project-dir"])
+            .arg(&project),
+        true,
+    );
+    let builds = recorded_builds(&project);
+    assert_eq!(builds.len(), 3);
+    let (cold, cold_unit) = &builds[0];
+    let cold_build = cold
+        .build
+        .as_ref()
+        .expect("a local recording keeps the build");
+    assert_eq!(cold.program_id.as_ref().map(Vec::len), Some(16));
+    assert_eq!(cold_build.build_id.len(), 16);
+    assert_eq!(cold_build.source_hash.len(), 32);
+    assert_eq!(cold_build.origin, "run");
+    assert_eq!(
+        Some(&cold_build.compilation_unit_hash),
+        cold_unit.as_ref(),
+        "the build produced the package that owns the root's functions"
+    );
+    assert!(cold.format_minor >= 14);
+
+    let (cached, cached_unit) = &builds[1];
+    let cached_build = cached.build.as_ref().unwrap();
+    assert_eq!(
+        cached.program_id, cold.program_id,
+        "one program, however loaded"
+    );
+    assert_eq!(cached_unit, cold_unit);
+    assert_eq!(cached_build.source_hash, cold_build.source_hash);
+    assert_ne!(cached_build.build_id, cold_build.build_id, "two builds");
+
+    let tested = builds[2].0.build.as_ref().unwrap();
+    assert_eq!(tested.origin, "test");
+    assert_eq!(
+        tested.compilation_unit_hash,
+        cold_build.compilation_unit_hash
+    );
+    assert_eq!(builds[2].0.program_id, cold.program_id);
+
+    // Reformatting changes neither the source hash nor what the code means.
+    std::fs::write(
+        project.join("baml_src/main.baml"),
+        "function main()   ->   int { 7 }\r\n",
+    )
+    .unwrap();
+    run_main();
+    let reformatted = recorded_builds(&project).pop().unwrap().0;
+    assert_eq!(
+        reformatted.build.unwrap().source_hash,
+        cold_build.source_hash
+    );
+
+    // An edit changes the source, the package, and the program.
+    std::fs::write(
+        project.join("baml_src/main.baml"),
+        "function main() -> int {\n    8\n}\n",
+    )
+    .unwrap();
+    run_main();
+    let (edited, edited_unit) = recorded_builds(&project).pop().unwrap();
+    assert_ne!(edited.build.unwrap().source_hash, cold_build.source_hash);
+    assert!(edited_unit.is_some());
+    assert_ne!(&edited_unit, cold_unit);
+    assert_ne!(edited.program_id, cold.program_id);
+}
+
 #[test]
 fn packed_modes_write_to_user_home_even_when_launched_in_another_project() {
     let _built = common::ensure_built();
