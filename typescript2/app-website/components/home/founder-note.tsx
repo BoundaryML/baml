@@ -2,7 +2,8 @@ import { SIGNUP } from './links';
 import { Button, LINKS } from './ui';
 
 // The founder's email, with the subject and the start of the message already filled in.
-const EMAIL_ME = `mailto:vbv@boundaryml.com?subject=${encodeURIComponent(
+const FOUNDER_EMAIL = 'vaibhav@boundaryml.com';
+const EMAIL_ME = `mailto:${FOUNDER_EMAIL}?subject=${encodeURIComponent(
   'Hi, I’m curious about Boundary/BAML',
 )}&body=${encodeURIComponent(
   'Hi Vaibhav,\n\nI’m working on \n\nand I’d love to talk about \n',
@@ -32,7 +33,7 @@ export function FounderNote({
           Vaibhav Gupta, co-founder and CEO
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
-          <Button href={EMAIL_ME}>vbv@boundaryml.com</Button>
+          <Button href={EMAIL_ME}>{FOUNDER_EMAIL}</Button>
           <Button href={SIGNUP} variant="secondary">
             Get on a call
           </Button>
