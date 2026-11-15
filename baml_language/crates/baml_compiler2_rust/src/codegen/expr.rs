@@ -503,14 +503,21 @@ impl<'db> Generator<'_, 'db> {
         };
         let bind = format!("let ({},) = ({},);", names.join(", "), args.join(", "));
         let bind = if args.is_empty() { String::new() } else { bind };
-        Ok(if types.is_empty() {
-            format!("{{ {bind} let __outcome = {call}; vm.finish_builtin(__outcome) }}")
+        // A builtin that cannot read type arguments is not given them.
+        let call = if types.is_empty() || !entry.reads_type_args {
+            call
         } else {
             format!(
-                "{{ {bind} let mut __types = [{}]; vm.with_call_type_args(&mut __types, |vm| {call}) }}",
+                "{{ let mut __types = [{}]; vm.with_call_type_args(&mut __types, |vm| {call}) }}",
                 types.join(", ")
             )
-        })
+        };
+        let finish = if entry.may_yield {
+            "finish_builtin"
+        } else {
+            "finish_result"
+        };
+        Ok(format!("{{ {bind} let __result = {call}; vm.{finish}(__result) }}"))
     }
 
     fn binary(&mut self, block: BlockId, op: BinOp, left: &Expr, right: &Expr) -> Gen<Expr> {

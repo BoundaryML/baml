@@ -775,6 +775,13 @@ pub struct NativeEntry {
     pub arity: usize,
     /// Whether a `{path}_local` twin takes the receiver without its lock.
     pub local_twin: bool,
+    /// Whether the builtin can pause. One that cannot returns its result as
+    /// `NativeFunctionResult`; one that can returns `NativeCallResult`.
+    pub may_yield: bool,
+    /// Whether the builtin can read its call's type arguments: its body takes
+    /// `vm`, it can pause, or its generated glue reads them. A caller passes
+    /// type arguments only to a builtin that can read them.
+    pub reads_type_args: bool,
 }
 
 impl NativeEntry {
@@ -788,10 +795,16 @@ impl NativeEntry {
         }
         path.push_str("::");
         path.push_str(&name);
+        let mut glue = String::new();
+        emit_glue_body(&mut glue, "Builtin", "builtin", b);
         Self {
             path,
             arity: entry_params(b).len(),
             local_twin: b.local_twin,
+            may_yield: b.may_yield,
+            reads_type_args: b.may_yield
+                || !matches!(b.vm_usage, VmUsage::None)
+                || glue.contains("current_call_type_args"),
         }
     }
 }
@@ -905,11 +918,25 @@ fn push_entry(
         args
     });
     let body = modules.entry(module).or_default();
+    // A builtin that cannot pause returns its body's `Result` itself; one
+    // that can returns `NativeCallResult` from its entry.
+    let array_args = params.join(", ");
     let mut twin = |suffix: &str, glue_suffix: &str, doc: &str| {
+        let (result_ty, call) = if b.may_yield {
+            (
+                "NativeCallResult",
+                format!("__entry_{glue_method}{glue_suffix}(vm{call_args})"),
+            )
+        } else {
+            (
+                "NativeFunctionResult",
+                format!("__body_{glue_method}{glue_suffix}(vm, [{array_args}])"),
+            )
+        };
         writeln!(
             body,
-            "/// `{path}`{doc}\n#[inline]\npub fn {name}{suffix}(vm: &mut BexVm{signature}) -> NativeCallResult {{\n    \
-             <{{IMPL}} as {trait_name}>::__entry_{glue_method}{glue_suffix}(vm{call_args})\n}}",
+            "/// `{path}`{doc}\n#[inline]\npub fn {name}{suffix}(vm: &mut BexVm{signature}) -> {result_ty} {{\n    \
+             <{{IMPL}} as {trait_name}>::{call}\n}}",
             path = b.path,
         )
         .unwrap();
@@ -2828,8 +2855,8 @@ mod tests {
             "pub mod Array {\n        #[allow(unused_imports)]\n        use super::*;"
         ));
         assert!(entries.contains(
-            "pub fn push(vm: &mut BexVm, array: Value, item: Value) -> NativeCallResult {\n            \
-             <PackageBamlImpl as BamlClassArray>::__entry_push(vm, array, item)"
+            "pub fn push(vm: &mut BexVm, array: Value, item: Value) -> NativeFunctionResult {\n            \
+             <PackageBamlImpl as BamlClassArray>::__body_push(vm, [array, item])"
         ));
         assert!(entries.contains("pub fn push_local(vm: &mut BexVm, array: Value, item: Value)"));
         let push = builtins.iter().find(|b| b.path == "baml.Array.push").unwrap();
@@ -2837,6 +2864,8 @@ mod tests {
         assert_eq!(entry.path, "bex_vm::package_baml::builtins::Array::push");
         assert_eq!(entry.arity, 2);
         assert!(entry.local_twin);
+        assert!(!entry.may_yield);
+        assert!(!entry.reads_type_args, "push's body takes no vm and its glue reads no type args");
     }
 
     #[test]
