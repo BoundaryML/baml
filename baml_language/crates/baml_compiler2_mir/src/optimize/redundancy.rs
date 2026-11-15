@@ -366,6 +366,8 @@ fn available_on_entry(
         }
     }
 
+    let loop_headers = loop_headers(body);
+
     let mut entries: Vec<Option<Available>> = vec![None; blocks];
     let mut exits: Vec<Option<Available>> = vec![None; blocks];
     for _ in 0..MAX_PASSES {
@@ -381,6 +383,19 @@ fn available_on_entry(
                 reached.next().cloned().map(|mut entry| {
                     for exit in reached {
                         entry.meet(exit);
+                    }
+                    // A heap read is reused only within one trip. Carried
+                    // around the back edge it would stand for the reads of
+                    // every later trip, and a loop waiting on another task's
+                    // write would never see it land.
+                    if loop_headers[block] {
+                        entry.values.retain(|&id, _| {
+                            let reads = &expressions.reads[id];
+                            !reads.heap
+                                && !reads.elements
+                                && reads.fields.is_empty()
+                                && reads.cells.is_empty()
+                        });
                     }
                     entry
                 })
@@ -404,6 +419,44 @@ fn available_on_entry(
         }
     }
     None
+}
+
+/// Which blocks head a loop: some predecessor is a block they dominate.
+fn loop_headers(body: &MirFunctionBody<'_>) -> Vec<bool> {
+    let entry = body.entry.0;
+    let succs: Vec<Vec<usize>> = body
+        .blocks
+        .iter()
+        .map(|block| {
+            block
+                .terminator
+                .iter()
+                .flat_map(Terminator::successors)
+                .chain(block.unwind)
+                .map(|b| b.0)
+                .collect()
+        })
+        .collect();
+    let rpo = crate::reducible::reverse_postorder(entry, &succs);
+    let idom = crate::reducible::immediate_dominators(entry, &succs, &rpo);
+    let mut headers = vec![false; body.blocks.len()];
+    for &block in &rpo {
+        for &successor in &succs[block] {
+            // Walk up from `block`: a back edge ends at one of its dominators.
+            let mut dominator = block;
+            loop {
+                if dominator == successor {
+                    headers[successor] = true;
+                    break;
+                }
+                if dominator == entry {
+                    break;
+                }
+                dominator = idom[dominator];
+            }
+        }
+    }
+    headers
 }
 
 /// Whether the value `holder` takes at `statement` is consumed straight off
@@ -980,6 +1033,34 @@ mod tests {
         assert!(computes(&body, 1, 0));
         assert!(copies(&body, 1, 1, 4));
         assert!(copies(&body, 1, 2, 4));
+    }
+
+    #[test]
+    fn a_heap_read_is_not_carried_around_a_loop() {
+        // bb0 reads the field, the header bb1 reads it again on every trip.
+        let reads = || (3..9).map(|local| set(local, read(1))).collect::<Vec<_>>();
+        let mut body = body(
+            vec![
+                block(0, vec![set(2, read(1))], goto(1)),
+                block(
+                    1,
+                    reads(),
+                    Terminator::Branch {
+                        condition: Operand::copy_local(Local(9)),
+                        then_block: BlockId(2),
+                        else_block: BlockId(3),
+                    },
+                ),
+                block(2, Vec::new(), goto(1)),
+                block(3, Vec::new(), Terminator::Return),
+            ],
+            10,
+        );
+        reuse_available_values(&mut body);
+        // A later trip has to see a write another task made meanwhile, so the
+        // header reads once per trip and reuses that.
+        assert!(computes(&body, 1, 0));
+        assert!(copies(&body, 1, 1, 3));
     }
 
     #[test]
