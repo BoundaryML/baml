@@ -315,6 +315,10 @@ impl Lookups {
     /// this call runs in; otherwise empty ones for it. Lookups handed back
     /// after the rules changed under them carry the generation they started
     /// at, so this is the one place a stale answer is refused.
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "the box is the VM's own slot, moved out and back without reallocating"
+    )]
     pub(super) fn take(vm: &mut BexVm, naming: JsonNaming) -> Box<Self> {
         let generation = vm.dynamic_dispatch.generation();
         let lexical = vm.current_runtime_package();
