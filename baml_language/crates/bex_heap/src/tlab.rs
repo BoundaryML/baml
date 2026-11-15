@@ -7,7 +7,10 @@
 //! refill, when the owner asks, and when the TLAB is dropped. Ordinary yields
 //! preserve unused capacity.
 
-use std::sync::{Arc, atomic::AtomicU64};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 
 use bex_vm_types::{
     AllocDebt, ClassLayout, HeapPtr, InstanceRef, Meter, OBJECT_CELL_WORDS, Object, RealizedTy,
@@ -356,6 +359,41 @@ impl Tlab {
             self.heap.register_finalizable(instance.ptr());
         }
         instance
+    }
+
+    /// Allocate an instance of `class` holding `words`, each already in its
+    /// slot's encoding: compiled code's allocation, with nothing to decide at
+    /// run time.
+    ///
+    /// # Safety
+    ///
+    /// `class` is a live class with no class type arguments and no finalizer,
+    /// whose layout is a header and exactly `N` field words.
+    #[inline(always)]
+    pub unsafe fn alloc_plain_instance<const N: usize>(
+        &mut self,
+        class: HeapPtr,
+        words: [u64; N],
+    ) -> HeapPtr {
+        #[cfg(debug_assertions)]
+        {
+            // SAFETY: the caller keeps `class` live.
+            let Object::Class(declaration) = (unsafe { class.get() }) else {
+                panic!("instantiating {class:?}, which is not a class");
+            };
+            let layout = ClassLayout::of(declaration);
+            debug_assert_eq!(layout.words(), N + 1, "fields for {class:?}");
+            debug_assert!(layout.type_args_slot().is_none() && declaration.cleanup.is_none());
+        }
+        // SAFETY: the cell was just carved for this instance alone.
+        let instance = unsafe { InstanceRef::from_cell(self.alloc_cell(N + 1)) };
+        instance.set_class(class);
+        // The instance is fresh: no other thread can reach it yet.
+        for (slot, word) in (1..).zip(words) {
+            // SAFETY: the layout has `N` field words after the header.
+            unsafe { instance.word(slot) }.store(word, Ordering::Relaxed);
+        }
+        instance.ptr()
     }
 
     /// Carve `words` zeroed words from this TLAB's block of cells.

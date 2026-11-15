@@ -219,6 +219,16 @@ impl<'p> ProgramIndex<'p> {
         Some(ClassLayout::of(class))
     }
 
+    /// Whether instances of class `object` are a header and their fields
+    /// alone, with nothing to register: no class type arguments and no
+    /// finalizer.
+    pub(crate) fn plain_class(&self, object: usize) -> bool {
+        matches!(
+            &self.program.objects[ObjectIndex::from_raw(object)],
+            Object::Class(class) if class.cleanup.is_none() && class.generic_param_count == 0
+        )
+    }
+
     fn class_fields(&self, coords: DeclCoords) -> Option<(usize, usize)> {
         let object = self.lookup(coords)?;
         let Object::Class(class) = &self.program.objects[ObjectIndex::from_raw(object)] else {

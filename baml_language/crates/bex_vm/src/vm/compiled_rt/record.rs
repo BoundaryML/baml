@@ -610,6 +610,10 @@ impl BexVm {
         clippy::inline_always,
         reason = "names the class on every compiled field access"
     )]
+    #[allow(
+        clippy::not_unsafe_ptr_arg_deref,
+        reason = "`statics` comes only from `static_objects` for this body's program"
+    )]
     #[inline(always)]
     #[must_use]
     pub fn class_at(

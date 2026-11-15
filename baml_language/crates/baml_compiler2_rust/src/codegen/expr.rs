@@ -102,7 +102,12 @@ impl<'db> Generator<'_, 'db> {
                 let class = class_ptr(object);
                 if type_arg_templates.is_empty() {
                     let words = self.slot_words(block, object, fields)?.join(", ");
-                    format!("vm.new_instance_of({class}, [{words}])")
+                    let new = if self.index.plain_class(object) {
+                        "new_plain_instance"
+                    } else {
+                        "new_instance_of"
+                    };
+                    format!("vm.{new}({class}, [{words}])")
                 } else {
                     let values = self.arg_values(block, fields)?.join(", ");
                     let type_args = self.realized_all(type_arg_templates)?.join(", ");

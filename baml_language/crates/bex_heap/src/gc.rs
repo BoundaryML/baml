@@ -79,6 +79,10 @@ pub struct GcStats {
 /// once they have been.
 pub struct Forwarding<'heap> {
     heap: &'heap BexHeap,
+    #[cfg_attr(
+        not(feature = "heap_debug"),
+        allow(dead_code, reason = "held so the old spaces outlive root forwarding")
+    )]
     from_space: [CellSpace; 2],
 }
 

@@ -118,7 +118,7 @@ impl Finalizable {
 ///
 /// # Generational Layout
 ///
-/// The heap uses three [`CellSpace`]s plus the compile-time pool:
+/// The heap uses three `CellSpace`s plus the compile-time pool:
 /// - `compile_time`: Permanent objects (functions, classes, enums) - never collected
 /// - `gen0`: the nursery — all new TLAB allocations land here
 /// - `gen2`: the old generation — every survivor of a collection

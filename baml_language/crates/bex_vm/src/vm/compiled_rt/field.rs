@@ -223,6 +223,19 @@ impl BexVm {
         self.store_slot::<LOCAL>((instance, class, field, slot), new.bits(), |_| new)
     }
 
+    /// [`Self::new_instance_of`] for a class without a finalizer: one bump
+    /// and the header and field stores.
+    #[inline(always)]
+    pub fn new_plain_instance<const N: usize>(&mut self, class: HeapPtr, words: [u64; N]) -> Value {
+        // SAFETY: emitted code calls this only for a class of its own
+        // program that is non-generic and has no finalizer
+        // (`baml_compiler2_rust`'s `ProgramIndex::plain_class`), passing one
+        // word per field.
+        #[allow(unsafe_code)]
+        let instance = unsafe { self.tlab.alloc_plain_instance(class, words) };
+        Value::object(instance)
+    }
+
     /// An instance of the non-generic `class` whose fields, in order, hold
     /// `words`, each already in its slot's encoding.
     #[inline(always)]
