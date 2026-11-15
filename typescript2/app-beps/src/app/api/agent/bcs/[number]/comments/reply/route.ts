@@ -7,6 +7,7 @@ import { NextRequest } from "next/server";
 import { api } from "../../../../../../../../convex/_generated/api";
 import { bcsCall } from "@/lib/bcs-convex";
 import { authenticate, json, refused } from "../../../shared";
+import { KNOWN_AGENTS, KNOWN_AGENT_IDS, normalizeAgent } from "../../../../../../../../convex/bcsAgents";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +43,21 @@ export async function POST(request: NextRequest, { params }: Params) {
   return json({
     commentId: replied.value,
     author: viewer.login,
-    agent: typeof sent.agent === "string" ? sent.agent.trim().toLowerCase() : undefined,
+    ...agentAnswer(sent.agent),
     url: `${request.nextUrl.origin}/bcs/${number}?comment=${replied.value}`,
   });
+}
+
+/**
+ * The agent a reply was stored as, and for a name that is not a known agent's, a note the CLI shows:
+ * an agent that misnamed itself can use a known name next time.
+ */
+function agentAnswer(given: unknown) {
+  if (typeof given !== "string" || !given.trim()) return {};
+  const agent = normalizeAgent(given);
+  if (KNOWN_AGENTS[agent]) return { agent };
+  return {
+    agent,
+    note: `"${agent}" is not a known agent, so it shows with a generic icon. Known agents: ${KNOWN_AGENT_IDS}.`,
+  };
 }

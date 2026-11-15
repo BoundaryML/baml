@@ -146,7 +146,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 }
 
 function commentsMarkdown(
-  proposal: { id: string; title: string; version: number },
+  proposal: { number: number; id: string; title: string; version: number },
   stats: { threads: number; open: number; resolved: number; replies: number },
   comments: AgentThread[],
   includeResolved: boolean
@@ -156,6 +156,11 @@ function commentsMarkdown(
     "",
     `Version ${proposal.version}. ${stats.open} open thread(s), ${stats.resolved} resolved` +
       (includeResolved ? "." : " (not shown: pass --include-resolved)."),
+    "",
+    `To reply: \`bep bcs reply ${proposal.number} <ID> "text" --agent <agent>\`. An agent replying for its user ` +
+      "passes the first of these that is it: claude (Claude Code; detected on its own), codex (OpenAI Codex or " +
+      "ChatGPT), gemini (Gemini CLI), cursor, copilot (GitHub Copilot), or its own short name. The reply then shows " +
+      "as the user's agent's. Get the user's OK before posting.",
     "",
   ];
   const groups: [string, AgentThread[]][] = [
