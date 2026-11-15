@@ -6,18 +6,20 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { byNumber, fail, outlineOf, tellSlack, versionRow } from "./bcs";
-import { AGENT_ID } from "./bcsAgents";
+import { AGENT_ID, KNOWN_AGENT_IDS, normalizeAgent } from "./bcsAgents";
 import { commentType } from "./schema";
 import { requireServerSecret } from "./serverSecret";
 
 /** The longest comment, which keeps a thread readable and a Slack reply within its limits. */
 export const MAX_COMMENT_CHARS = 10_000;
 
-/** An agent's id, lowercased, or a refusal when it is not one an id can be. */
+/** An agent's id (`normalizeAgent`), or a refusal when it is not one an id can be. */
 function checkAgent(agent: string | undefined): string | undefined {
   if (agent === undefined) return undefined;
-  const id = agent.trim().toLowerCase();
-  if (!AGENT_ID.test(id)) fail("invalid", "An agent is named by 1 to 32 letters, digits or hyphens, such as claude.");
+  const id = normalizeAgent(agent);
+  if (!AGENT_ID.test(id)) {
+    fail("invalid", `An agent is named by 1 to 32 letters, digits or hyphens: ${KNOWN_AGENT_IDS}, or your own.`);
+  }
   return id;
 }
 

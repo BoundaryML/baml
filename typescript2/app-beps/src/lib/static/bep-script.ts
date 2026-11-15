@@ -22,7 +22,8 @@ Usage:
     ./bep bcs push <number> # Team only: a new version of a BCS proposal
     ./bep bcs comments <n>  # Team only: a BCS proposal's open comment threads
     ./bep bcs reply <n> <comment-id> "text" --agent claude  # Team only: reply to a thread; an agent
-                            # replying for you passes --agent with its name (claude, codex, ...)
+                            # replying for you passes --agent: claude (Claude Code), codex (Codex,
+                            # ChatGPT), gemini, cursor, copilot, or its own name
 """
 
 import argparse
@@ -1164,8 +1165,10 @@ def cmd_bcs_reply(args: argparse.Namespace) -> int:
     if agent:
         body["agent"] = agent
     replied = bcs_call("POST", f"/{number}/comments/reply", body)
-    via = f" as your agent {agent}" if agent else ""
+    via = f" as your agent {replied.get('agent', agent)}" if agent else ""
     print(f"Replied on {format_bcs_number(number)}{via}: {replied['url']}")
+    if replied.get("note"):
+        print(f"Note: {replied['note']}")
     return 0
 
 
@@ -1262,7 +1265,7 @@ def main():
     bcs_reply.add_argument("ref", help="BCS number")
     bcs_reply.add_argument("comment_id", help="ID of the thread or reply to answer (from bep bcs comments)")
     bcs_reply.add_argument("content", help="Reply, in Markdown")
-    bcs_reply.add_argument("--agent", help="An agent replying for you passes its own name: claude, codex, gemini, cursor, copilot or another (default: BCS_AGENT, or claude inside Claude Code; none for your own reply). The site shows it next to your name")
+    bcs_reply.add_argument("--agent", help="An agent replying for you passes one of: claude (Claude Code), codex (OpenAI Codex or ChatGPT), gemini (Gemini CLI), cursor, copilot (GitHub Copilot); any other agent its own short name. Default: BCS_AGENT, or claude inside Claude Code; none for your own reply. The site shows it next to your name")
 
     args = parser.parse_args()
 
