@@ -825,18 +825,38 @@ pub(crate) fn equals_without_driver(vm: &mut BexVm, a: Value, b: Value) -> Optio
     }
     match (a.kind(), b.kind()) {
         (ValueKind::Object(pa), ValueKind::Object(pb)) => equals_objects_without_driver(vm, pa, pb),
-        // The driver loads a cell before comparing; any other object is a
-        // different kind from the non-object, so the two are unequal.
-        (ValueKind::Object(ptr), _) | (_, ValueKind::Object(ptr)) => {
-            (!matches!(vm.get_object(ptr), Object::Cell(_))).then_some(false)
-        }
-        // Non-object encodings are canonical, so two of them with different
-        // bits are different values, of one kind or of two. Every kind is
-        // listed, as in `compare_one`, so a new `ValueKind` must be
-        // classified here.
-        (ValueKind::Null | ValueKind::OmittedArg | ValueKind::Int(_) | ValueKind::Bool(_), _) => {
-            Some(false)
-        }
+        // Floats compare by value, reflexively (`NaN == NaN`, `-0.0 == 0.0`),
+        // so two inline floats with different bits can still be equal.
+        (ValueKind::Float(x), ValueKind::Float(y)) => Some(bex_vm_types::float_order::eq(x, y)),
+        (ValueKind::Object(ptr), _) => object_against_non_object(vm, ptr, b),
+        (_, ValueKind::Object(ptr)) => object_against_non_object(vm, ptr, a),
+        // The remaining non-object encodings are canonical, so two of them
+        // with different bits are different values, of one kind or of two.
+        // Every kind is listed, as in `compare_one`, so a new `ValueKind`
+        // must be classified here.
+        (
+            ValueKind::Null
+            | ValueKind::OmittedArg
+            | ValueKind::Int(_)
+            | ValueKind::Bool(_)
+            | ValueKind::Float(_),
+            _,
+        ) => Some(false),
+    }
+}
+
+/// [`equals_without_driver`] for the object at `ptr` against the non-object
+/// `other`. The driver loads a cell before comparing, so a cell goes to it;
+/// a boxed float compares by value against an inline one, as in
+/// `compare_one`; any other object is a different kind, so unequal.
+fn object_against_non_object(vm: &BexVm, ptr: HeapPtr, other: Value) -> Option<bool> {
+    match vm.get_object(ptr) {
+        Object::Cell(_) => None,
+        Object::Float(boxed) => Some(match other.kind() {
+            ValueKind::Float(x) => bex_vm_types::float_order::eq(*boxed, x),
+            _ => false,
+        }),
+        _ => Some(false),
     }
 }
 
@@ -1022,7 +1042,20 @@ mod tests {
         let left_a = Value::object(vm.tlab.alloc_variant(left, 0));
         let left_a_again = Value::object(vm.tlab.alloc_variant(left, 0));
         let right_a = Value::object(vm.tlab.alloc_variant(right, 0));
+
+        // Floats compare by value: different bits can be equal, and a
+        // boxed float (NaN) against itself boxed separately is equal too.
+        let zero = vm.tlab.float_value(0.0);
+        let negative_zero = vm.tlab.float_value(-0.0);
+        let one = vm.tlab.float_value(1.0);
+        let nan = vm.tlab.float_value(f64::NAN);
+        let nan_again = vm.tlab.float_value(f64::NAN);
         let mut eq = |a: Value, b: Value| equals_without_driver(&mut vm, a, b);
+        assert_eq!(eq(negative_zero, zero), Some(true));
+        assert_eq!(eq(zero, one), Some(false));
+        assert_eq!(eq(nan, nan_again), Some(true));
+        assert_eq!(eq(nan, one), Some(false));
+        assert_eq!(eq(one, Value::int(1)), Some(false));
 
         assert_eq!(eq(ab, ab_again), Some(true));
         assert_eq!(eq(ab, ac), Some(false));

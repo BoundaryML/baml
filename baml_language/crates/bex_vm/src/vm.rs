@@ -12383,13 +12383,11 @@ impl BexVm {
                                 )
                             } else {
                                 let type_args = self.take_type_args_below_values(0, arg_count)?;
-                                self.execute_call_from_locals_offset_with_type_args(
+                                self.execute_call_from_locals_offset_with_owned_type_args(
                                     callee_ptr,
                                     locals_offset,
                                     arg_count,
-                                    CallOptions {
-                                        type_args: &type_args.tys,
-                                    },
+                                    type_args.tys,
                                     frame_idx,
                                     function,
                                 )
