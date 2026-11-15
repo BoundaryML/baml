@@ -230,7 +230,8 @@ async function highlight(tree: Root): Promise<boolean> {
         );
         const classes = Array.isArray(code?.properties.className) ? code.properties.className.map(String) : [];
         const lang = classes.find((each) => each.startsWith("language-"))?.slice("language-".length);
-        if (code && lang && lang in bundledLanguages) blocks.push({ pre: child, code, lang });
+        // Own names only: "in" would also match Object.prototype's, such as "constructor".
+        if (code && lang && Object.hasOwn(bundledLanguages, lang)) blocks.push({ pre: child, code, lang });
         continue;
       }
       walk(child);
@@ -238,16 +239,22 @@ async function highlight(tree: Root): Promise<boolean> {
   };
   walk(tree);
   for (const block of blocks) {
+    // A block Shiki cannot color stays as written rather than failing the page.
     const colored = await codeToHast(text(block.code).replace(/\n$/, ""), {
       lang: block.lang,
       themes: SHIKI_THEMES,
       defaultColor: false,
-    });
+    }).catch(() => null);
+    if (!colored) continue;
     const pre = colored.children.find((each): each is Element => each.type === "element" && each.tagName === "pre");
     const code = pre?.children.find((each): each is Element => each.type === "element" && each.tagName === "code");
     if (!pre || !code) continue;
-    block.pre.properties.className = ["shiki"];
-    block.pre.properties.style = pre.properties.style;
+    // Added to the block's own classes and style (a page may give a <pre> its own), not replacing them.
+    const classes = Array.isArray(block.pre.properties.className) ? block.pre.properties.className : [];
+    block.pre.properties.className = [...classes.map(String), "shiki"];
+    const own = typeof block.pre.properties.style === "string" ? block.pre.properties.style.trim() : "";
+    const theme = typeof pre.properties.style === "string" ? pre.properties.style : "";
+    block.pre.properties.style = own ? `${theme};${own}` : theme;
     block.code.children = code.children;
   }
   return blocks.length > 0;
