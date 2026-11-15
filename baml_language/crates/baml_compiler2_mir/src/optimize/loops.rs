@@ -79,6 +79,9 @@ fn find_rotation(body: &MirFunctionBody<'_>) -> Option<Rotation> {
         })
         .collect();
     let rpo = reducible::reverse_postorder(entry, &succs);
+    if !reducible::has_cycle(&succs, &rpo) {
+        return None;
+    }
     let idom = reducible::immediate_dominators(entry, &succs, &rpo);
     let dominates = |a: usize, mut b: usize| loop {
         if a == b {
@@ -370,6 +373,9 @@ fn find_hoist(
         })
         .collect();
     let rpo = reducible::reverse_postorder(entry, &succs);
+    if !reducible::has_cycle(&succs, &rpo) {
+        return None;
+    }
     let idom = reducible::immediate_dominators(entry, &succs, &rpo);
     let dominates = |a: usize, mut b: usize| loop {
         if a == b {

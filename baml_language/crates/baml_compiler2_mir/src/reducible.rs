@@ -102,6 +102,19 @@ pub(crate) fn reverse_postorder(entry: usize, succs: &[Vec<usize>]) -> Vec<usize
     postorder
 }
 
+/// Whether the blocks in `rpo` contain a cycle. In a reverse postorder every
+/// edge of an acyclic graph runs forwards, so a cycle is an edge that does
+/// not. Cheap enough to ask before computing dominators: most bodies have no
+/// loop.
+pub(crate) fn has_cycle(succs: &[Vec<usize>], rpo: &[usize]) -> bool {
+    let mut order = vec![usize::MAX; succs.len()];
+    for (i, &node) in rpo.iter().enumerate() {
+        order[node] = i;
+    }
+    rpo.iter()
+        .any(|&from| succs[from].iter().any(|&to| order[to] <= order[from]))
+}
+
 /// Immediate dominators indexed by block (Cooper, Harvey & Kennedy, "A
 /// Simple, Fast Dominance Algorithm"). The entry is its own dominator;
 /// unreachable blocks keep `usize::MAX`.

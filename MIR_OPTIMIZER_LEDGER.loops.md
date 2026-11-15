@@ -251,6 +251,44 @@ not show it: that workload is 250,000 iterations and mostly process start, and t
 instruction is a `jump`. json-parser is within noise; its bytecode differs only by rotation and
 return threading, and neither adds an executed instruction.
 
+## Measured: hoisting and rotation through calls
+
+Bytecode instructions on the hot path of one trip, read off the listings before and after:
+
+| Loop | Before | After | What changed |
+| --- | --- | --- | --- |
+| bubble-sort inner (no swap / swap) | 21 / 35 | 16 / 30 | hoisting `arr.length() - i - 1` |
+| array-traversal `indexed`, inlined into `main` | 13 | 12 | hoisting `xs.length()` |
+| array-traversal `iterate` (`for` over an array) | 9 | 8 | rotation through `next` |
+| json-parser `read_digits` (`while is_digit(current(p))`) | 28 | 27 | rotation through calls |
+
+Of the fifteen surveyed workloads, hoisting changes the bytecode of three (bubble-sort,
+array-traversal, json-parser) and rotation through calls of five (array-traversal, json-parser,
+merge-sort, nbody, quick-sort). The other loops test a parameter's length or a counter.
+
+Wall time could not be used. The machine ran at a load average of 30 to 160 on 12 cores for the
+whole session, and one alternated pass of all 77 workloads put workloads neither pass touches
+anywhere from 2x faster to 2x slower. The numbers below are instructions retired by the whole
+process, from `/usr/bin/time -l baml-cli run --file main.baml main`, which load does not move.
+Minimum of three runs (six for startup), `fasttest` builds, before and after built from this
+tree. A `fasttest` process retires about 21.8 G instructions before the workload starts, mostly
+compiling the standard library with debug assertions on, so only a long loop shows.
+
+| Workload | Before | After | Loop only |
+| --- | --- | --- | --- |
+| compute/bubble-sort-5k | 66.16 G | 61.51 G | 44.40 G to 39.65 G, 10.7% fewer |
+| `for` over 500,000 integers, 100 passes (not in the suite) | 70.31 G | 68.40 G | 48.5 G to 46.5 G, 4% fewer |
+| process/startup | 21.76 G | 21.86 G | compile cost, see below |
+
+Every other workload moved by the startup difference and nothing more: json-parser, nbody and
+array-traversal were each rerun three times per build to check. Their loops that changed run too
+few trips to show one `jump` each against 22 G. All 77 workloads print the same result on the
+before and after builds.
+
+Compile cost: startup retires about 0.1 G more instructions (0.3 to 0.5%), with a run-to-run
+spread of 0.05 G on either build. Bodies with no cycle skip the dominator computation in all
+three loop analyses; that did not move the number, so the cost is elsewhere and was not found.
+
 ## Left undone, by expected instructions saved
 
 1. Let the emitter keep the left operand on the stack when the right operand can trap

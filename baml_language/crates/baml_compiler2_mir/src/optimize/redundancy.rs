@@ -467,8 +467,11 @@ fn loop_headers(body: &MirFunctionBody<'_>) -> Vec<bool> {
         })
         .collect();
     let rpo = crate::reducible::reverse_postorder(entry, &succs);
-    let idom = crate::reducible::immediate_dominators(entry, &succs, &rpo);
     let mut headers = vec![false; body.blocks.len()];
+    if !crate::reducible::has_cycle(&succs, &rpo) {
+        return headers;
+    }
+    let idom = crate::reducible::immediate_dominators(entry, &succs, &rpo);
     for &block in &rpo {
         for &successor in &succs[block] {
             // Walk up from `block`: a back edge ends at one of its dominators.
