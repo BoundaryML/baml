@@ -976,3 +976,32 @@ function main() -> int { entry(4) }
 "#;
     assert_eq!(run(source).await, Ok(BexExternalValue::Int(4104)));
 }
+
+#[tokio::test]
+async fn a_loop_test_is_not_hoisted_past_an_inlined_write() {
+    // `grow` is inlined into the loop, so its `push` is a write of the array
+    // the loop's test reads the length of: the length must be read again on
+    // every trip.
+    let source = r#"
+class Bag {
+  items: int[]
+}
+function grow(bag: Bag, n: int) -> int {
+  if (bag.items.length() < n) {
+    bag.items.push(1);
+  }
+  1
+}
+function main() -> int {
+  let bag = Bag { items: [1] };
+  let trips = 0;
+  let i = 0;
+  while (i < bag.items.length()) {
+    trips += grow(bag, 5);
+    i += 1;
+  }
+  trips * 10 + bag.items.length()
+}
+"#;
+    assert_eq!(run(source).await, Ok(BexExternalValue::Int(55)));
+}
