@@ -502,6 +502,15 @@ pub struct MapKeyUndecided;
 /// one entry, so it is held inline.
 type MapBucket = SmallVec<[EntryId; 2]>;
 
+/// The id slots `bucket` allocated beyond its inline room.
+fn spilled_capacity(bucket: &MapBucket) -> usize {
+    if bucket.spilled() {
+        bucket.capacity()
+    } else {
+        0
+    }
+}
+
 /// Ordered entries indexed by hashes computed by the VM, never by Rust's
 /// pointer-based `Value` equality or hashing.
 #[derive(Clone, Debug, Default)]
@@ -511,8 +520,9 @@ pub struct MapData {
     /// Randomly keyed: the hashes come from keys a program may take from
     /// untrusted input.
     buckets: HashMap<u64, MapBucket>,
-    /// Ids held by buckets that outgrew their inline room, for the footprint.
-    spilled_ids: usize,
+    /// Id slots allocated by buckets that outgrew their inline room, for the
+    /// footprint. A bucket keeps its allocation until it is dropped.
+    spilled_capacity: usize,
     next_id: EntryId,
     // Only membership changes invalidate an in-flight key comparison.
     epoch: u64,
@@ -544,12 +554,12 @@ impl MapData {
         // A bucket-table slot stores the hash, the bucket and a control byte.
         let bucket_slot = size_of::<u64>() + size_of::<MapBucket>() + 1;
         // A bucket holds its first ids inline; only a hash collision past
-        // them allocates, charged by the ids it moved out.
+        // them allocates, charged by the allocation it keeps.
         self.entries
             .capacity()
             .saturating_mul(entry)
             .saturating_add(self.buckets.capacity().saturating_mul(bucket_slot))
-            .saturating_add(self.spilled_ids.saturating_mul(size_of::<EntryId>()))
+            .saturating_add(self.spilled_capacity.saturating_mul(size_of::<EntryId>()))
     }
 
     pub fn len(&self) -> usize {
@@ -565,7 +575,7 @@ impl MapData {
             self.advance_epoch();
             self.entries.clear();
             self.buckets.clear();
-            self.spilled_ids = 0;
+            self.spilled_capacity = 0;
         }
     }
 
@@ -660,13 +670,9 @@ impl MapData {
         self.advance_epoch();
         self.entries.insert(id, MapEntry { key, value, hash });
         let bucket = self.buckets.entry(hash).or_default();
-        let was_spilled = bucket.spilled();
+        let before = spilled_capacity(bucket);
         bucket.push(id);
-        if was_spilled {
-            self.spilled_ids += 1;
-        } else if bucket.spilled() {
-            self.spilled_ids += bucket.len();
-        }
+        self.spilled_capacity = self.spilled_capacity - before + spilled_capacity(bucket);
         id
     }
 
@@ -716,11 +722,10 @@ impl MapData {
         self.advance_epoch();
         let entry = self.entries.shift_remove(&id).expect("validated map entry");
         let bucket = self.buckets.get_mut(&entry.hash).expect("map bucket");
+        // Removal keeps a spilled bucket's allocation until the bucket goes.
         bucket.retain(|candidate| *candidate != id);
-        if bucket.spilled() {
-            self.spilled_ids -= 1;
-        }
         if bucket.is_empty() {
+            self.spilled_capacity -= spilled_capacity(bucket);
             self.buckets.remove(&entry.hash);
         }
         Ok(Some(entry.value))
@@ -942,6 +947,29 @@ mod map_tests {
         map.set_if_epoch(epoch, Some(id), 0, Value::TRUE, Value::NULL)
             .unwrap();
         assert_eq!(map.get_if_epoch(epoch, Some(id)), Ok(Some(Value::NULL)));
+    }
+
+    /// A bucket that outgrew its inline room keeps its allocation while it
+    /// has entries, and the footprint charges it until the bucket goes.
+    #[test]
+    fn spilled_buckets_are_charged_until_they_are_dropped() {
+        let mut map = MapData::new();
+        let ids: Vec<_> = (0..3)
+            .map(|i| map.insert_hashed(7, Value::int(i), Value::NULL))
+            .collect();
+        let spilled = map.backing_bytes();
+        assert!(map.spilled_capacity >= 3, "three colliding ids spill");
+        for id in &ids[..2] {
+            map.remove_if_epoch(map.epoch(), Some(*id)).unwrap();
+        }
+        assert_eq!(
+            map.backing_bytes(),
+            spilled,
+            "removal keeps the bucket's allocation"
+        );
+        map.remove_if_epoch(map.epoch(), Some(ids[2])).unwrap();
+        assert_eq!(map.spilled_capacity, 0, "the empty bucket is dropped");
+        assert!(map.backing_bytes() < spilled);
     }
 
     #[test]
