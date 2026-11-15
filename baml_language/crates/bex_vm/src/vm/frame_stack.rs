@@ -49,10 +49,12 @@ impl ThreadStackBudget {
         additional: usize,
         #[cfg(test)] refuse_next_growth: &mut bool,
     ) -> Result<(), VmPanic> {
-        let needed = storage
-            .len()
-            .checked_add(additional)
-            .ok_or(VmPanic::StackOverflow)?;
+        // The error is built only on the failing path: an eager `ok_or` value
+        // is constructed and dropped on every push when its drop glue is not
+        // inlined.
+        let Some(needed) = storage.len().checked_add(additional) else {
+            return Err(VmPanic::StackOverflow);
+        };
         if needed <= storage.capacity() {
             return Ok(());
         }

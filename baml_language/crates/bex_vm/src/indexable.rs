@@ -31,7 +31,9 @@ impl EvalStack {
         self.values.capacity()
     }
 
-    /// Push one value with fallible, budgeted backing growth.
+    /// Push one value with fallible, budgeted backing growth. Inlined: the
+    /// dispatch loop pushes on nearly every instruction.
+    #[inline]
     pub fn try_push(&mut self, value: Value) -> Result<(), VmPanic> {
         self.try_reserve(1)?;
         self.values.push(value);
