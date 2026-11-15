@@ -209,18 +209,28 @@ impl<'p> ProgramIndex<'p> {
     }
 
     /// The implementations of `method` on `interface` that a receiver's class
-    /// alone selects, as (class, method body) objects.
+    /// alone selects, as [`DispatchArm`]s.
     ///
     /// Sound because the orphan rule and coherence stop any later package
     /// from implementing a static interface for a static class: the
     /// assumption `BexVm::virtual_target`'s static cache already makes.
-    pub(crate) fn class_dispatch(&self, interface: usize, method: &str) -> Vec<(usize, usize)> {
+    pub(crate) fn class_dispatch(&self, interface: usize, method: &str) -> Vec<DispatchArm> {
+        let Object::Interface(declaration) =
+            &self.program.objects[ObjectIndex::from_raw(interface)]
+        else {
+            return Vec::new();
+        };
+        let default = declaration
+            .methods
+            .iter()
+            .find(|def| def.name.as_str() == method)
+            .and_then(|def| def.default);
         self.program
             .packages
             .iter()
             .filter_map(|package| package.impl_rules.get(&ObjectIndex::from_raw(interface)))
             .flatten()
-            .filter_map(|rule| class_method(rule, method))
+            .filter_map(|rule| class_method(rule, method, default))
             .collect()
     }
 
@@ -473,10 +483,26 @@ fn package_ordinals(
     ordinals
 }
 
-/// The (class, body) of `rule`'s `method` when the rule is for one
-/// non-generic class, unbounded, and provides the method itself: an adopted
-/// default or a generic impl binds frame type arguments a direct call lacks.
-fn class_method(rule: &ProgramImplRule, method: &str) -> Option<(usize, usize)> {
+/// One arm of a compile-time dispatch: the receiver's class and the body
+/// it selects.
+pub(crate) struct DispatchArm {
+    pub(crate) class: usize,
+    pub(crate) body: usize,
+    /// The body is the interface's default, whose frame holds `Self` (the
+    /// class) as its one type argument.
+    pub(crate) default: bool,
+}
+
+/// The arm of `rule`'s `method` when the rule is for one non-generic class,
+/// unbounded, with no interface arguments. A method the rule omits is the
+/// interface's `default` body, run with `Self` as its frame, as
+/// `ImplResolver::rule_method_impl` does; a provided method with a frame
+/// binds type arguments a direct call lacks.
+fn class_method(
+    rule: &ProgramImplRule,
+    method: &str,
+    default: Option<ObjectIndex>,
+) -> Option<DispatchArm> {
     let TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
         return None;
     };
@@ -484,9 +510,20 @@ fn class_method(rule: &ProgramImplRule, method: &str) -> Option<(usize, usize)> 
     {
         return None;
     }
-    let body = rule.methods.get(method)?;
+    let class = head.tag().static_index()?;
+    let Some(body) = rule.methods.get(method) else {
+        return Some(DispatchArm {
+            class,
+            body: default?.raw(),
+            default: true,
+        });
+    };
     if !body.frame.is_empty() {
         return None;
     }
-    Some((head.tag().static_index()?, body.fqn.raw()))
+    Some(DispatchArm {
+        class,
+        body: body.fqn.raw(),
+        default: false,
+    })
 }

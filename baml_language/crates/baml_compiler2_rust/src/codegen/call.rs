@@ -9,6 +9,7 @@ use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     admit::Rejection,
     analysis::{EQUALS_EQUALS, Repr, builtin_is_callable, call_shape, operand_ty},
+    index::DispatchArm,
     render::coerce,
 };
 
@@ -454,7 +455,7 @@ impl<'db> Generator<'_, 'db> {
     fn class_dispatch(
         &mut self,
         block: BlockId,
-        arms: &[(usize, usize)],
+        arms: &[DispatchArm],
         args: &[Operand<'db>],
         receiver: &str,
         fallback: String,
@@ -466,8 +467,20 @@ impl<'db> Generator<'_, 'db> {
         let site_bindings = std::mem::take(&mut self.pending);
         let index = self.index;
         let mut code = format!("{{ let class = vm.instance_class({receiver}); ");
-        for &(class, object) in arms {
+        for &DispatchArm {
+            class,
+            body: object,
+            default,
+        } in arms
+        {
             let symbol = self.symbols[&object].clone();
+            let class_ptr = format!("vm.record_object(fr, ObjectIndex::from_raw({class}))");
+            // A default body's frame is `Self`, the receiver's class.
+            let types = if default {
+                vec![format!("vm.class_type({class_ptr})")]
+            } else {
+                Vec::new()
+            };
             let (call, repr) = self.compiled_entry(
                 block,
                 object,
@@ -476,7 +489,7 @@ impl<'db> Generator<'_, 'db> {
                 index.info(object),
                 None,
                 args,
-                &[],
+                &types,
             )?;
             let bindings = std::mem::take(&mut self.pending).concat();
             let call = match repr {
@@ -485,14 +498,14 @@ impl<'db> Generator<'_, 'db> {
             };
             let _ = write!(
                 code,
-                "if class == Some(vm.record_object(fr, ObjectIndex::from_raw({class}))) {{ {bindings} {call} }} else "
+                "if class == Some({class_ptr}) {{ {bindings} {call} }} else "
             );
         }
         self.pending = site_bindings;
         Ok(format!("{code}{fallback} }}"))
     }
 
-    /// The (class, body) arms of a site that dispatches on its first
+    /// The arms of a site that dispatches on its first
     /// argument with no type arguments, on a non-generic interface: each
     /// implementation compiled and of the call's arity. None past
     /// [`MAX_DISPATCH_ARMS`].
@@ -503,7 +516,7 @@ impl<'db> Generator<'_, 'db> {
         ntypeargs: usize,
         self_arg: usize,
         arity: usize,
-    ) -> Vec<(usize, usize)> {
+    ) -> Vec<DispatchArm> {
         if ntypeargs != 0 || self_arg != 0 || !iface.generics.is_empty() {
             return Vec::new();
         }
@@ -514,8 +527,8 @@ impl<'db> Generator<'_, 'db> {
             .index
             .class_dispatch(interface, method)
             .into_iter()
-            .filter(|(_, object)| {
-                self.symbols.contains_key(object) && self.index.info(*object).arity == arity
+            .filter(|arm| {
+                self.symbols.contains_key(&arm.body) && self.index.info(arm.body).arity == arity
             })
             .collect();
         if arms.len() > MAX_DISPATCH_ARMS {
