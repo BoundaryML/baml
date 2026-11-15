@@ -704,6 +704,8 @@ function main() -> int { entry(3) }
     assert!(mir.contains("[inlined .<lambda(entry, 0)>]"), "{mir}");
     assert!(mir.contains("[inlined .<lambda(entry, 1)>]"), "{mir}");
     assert!(!mir.contains("= call copy"), "{mir}");
+    // With both closures gone, `offset` and `count` are plain locals again.
+    assert!(!mir.contains("*_"), "{mir}");
     // shift: (0 + 4) + (1 + 5) + (2 + 6) = 18; count = 3.
     assert_eq!(run(source).await, Ok(BexExternalValue::Int(1803)));
 }
@@ -790,4 +792,187 @@ function main() -> int {
       File "test.baml", line 6, in .<lambda(main, 0)>
     uncaught throw: "over"
     "#);
+}
+
+const SHAPES: &str = r#"
+interface Shape {
+  function area(self) -> int throws never
+}
+class Square {
+  side: int
+  implements Shape {
+    function area(self) -> int { return self.side * self.side }
+  }
+}
+class Rect {
+  w: int
+  h: int
+  implements Shape {
+    function area(self) -> int { return self.w * self.h }
+  }
+}
+function pick(i: int) -> Shape {
+  if i % 2 == 0 { return Square { side: i }; };
+  return Rect { w: i, h: 3 };
+}
+function area_of(s: Shape) -> int {
+  return s.area()
+}
+"#;
+
+#[tokio::test]
+async fn an_interface_call_on_a_known_class_becomes_its_implementation() {
+    // The shape of `polymorphic-dispatch-100k`: `pick` returns one class
+    // from each `return`, so each way into the call knows its class.
+    let source = format!(
+        "{SHAPES}
+function entry(n: int) -> int {{
+  let acc = 0;
+  for (let i = 0; i < n; i += 1) {{
+    acc += area_of(pick(i));
+  }};
+  return acc;
+}}
+function main() -> int {{ entry(5) }}
+"
+    );
+    let (mir, calls) = lowered(&source, "entry", OptLevel::Two);
+    assert_eq!(calls, 0, "{mir}");
+    assert!(!mir.contains("virtual_call"), "{mir}");
+    assert!(
+        mir.contains("user.Square.area") || mir.contains("Square"),
+        "{mir}"
+    );
+    // Each way has its own instance, which is then never built.
+    assert!(!mir.contains("user.Square {"), "{mir}");
+    assert!(!mir.contains("user.Rect {"), "{mir}");
+    // 0 + 1*3 + 4 + 3*3 + 16
+    assert_eq!(run(&source).await, Ok(BexExternalValue::Int(32)));
+}
+
+#[test]
+fn an_interface_call_on_an_unknown_receiver_stays_one() {
+    let (mir, _) = lowered(SHAPES, "area_of", OptLevel::Two);
+    assert!(mir.contains("virtual_call"), "{mir}");
+    assert!(!mir.contains("[inlined"), "{mir}");
+}
+
+#[tokio::test]
+async fn an_interface_default_body_and_field_are_read_for_the_known_class() {
+    // `total` is the interface's own body, `step` each class's, and `base`
+    // a field the classes keep at different slots.
+    let source = r#"
+interface Counter {
+  base: int
+  function step(self) -> int throws never
+  function total(self) -> int throws never {
+    return self.base + self.step()
+  }
+}
+class Inc {
+  pad: int
+  base: int
+  implements Counter {
+    function step(self) -> int { return 1 }
+  }
+}
+class Dbl {
+  start: int
+  implements Counter {
+    base as start
+    function step(self) -> int { return self.start }
+  }
+}
+function entry(i: int) -> int {
+  let a = Inc { pad: 100, base: i };
+  let b = Dbl { start: i };
+  a.total() * 1000 + b.total() * 10 + a.base
+}
+function main() -> int { entry(4) }
+"#;
+    let (mir, _) = lowered(source, "entry", OptLevel::Two);
+    assert!(!mir.contains("virtual_call"), "{mir}");
+    assert!(!mir.contains("virtual_field"), "{mir}");
+    // (4 + 1) * 1000 + (4 + 4) * 10 + 4
+    assert_eq!(run(source).await, Ok(BexExternalValue::Int(5084)));
+}
+
+#[tokio::test]
+async fn an_error_in_an_inlined_implementation_reports_its_frame() {
+    let source = r#"
+interface Checked {
+  function check(self) -> int throws string
+}
+
+class Limit {
+  max: int
+  implements Checked {
+    function check(self) -> int {
+      if (self.max < 0) {
+        throw "negative"
+      }
+      self.max
+    }
+  }
+}
+
+function run_check(c: Checked) -> int {
+  c.check()
+}
+
+function main() -> int {
+  run_check(Limit { max: 3 }) + run_check(Limit { max: -1 })
+}
+"#;
+    let (mir, _) = lowered(source, "main", OptLevel::Two);
+    assert!(!mir.contains("virtual_call"), "{mir}");
+    let error = run(source).await.unwrap_err();
+    insta::assert_snapshot!(error, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 23, in user.main
+      File "test.baml", line 19, in user.run_check
+      File "test.baml", line 11, in user.<(user.Limit as user.Checked)>.check
+    uncaught throw: "negative"
+    "#);
+}
+
+#[tokio::test]
+async fn calls_through_function_and_bound_method_values_are_direct() {
+    let source = r#"
+class Scale {
+  by: int
+  function apply(self, x: int) -> int { x * self.by }
+}
+function add_one(x: int) -> int { x + 1 }
+function entry(n: int) -> int {
+  let step = add_one;
+  let scale = Scale { by: 3 };
+  let triple = scale.apply;
+  step(n) * 100 + triple(n)
+}
+function main() -> int { entry(4) }
+"#;
+    let (mir, calls) = lowered(source, "entry", OptLevel::Two);
+    assert_eq!(calls, 0, "{mir}");
+    assert!(!mir.contains("= call "), "{mir}");
+    assert_eq!(run(source).await, Ok(BexExternalValue::Int(512)));
+}
+
+#[tokio::test]
+async fn a_bound_method_keeps_the_receiver_it_was_bound_to() {
+    // `box` is rebound after `get` is made; `get` still reads the first one.
+    let source = r#"
+class Box {
+  value: int
+  function get(self) -> int { self.value }
+}
+function entry(n: int) -> int {
+  let box = Box { value: n };
+  let get = box.get;
+  box = Box { value: n + 100 };
+  get() * 1000 + box.value
+}
+function main() -> int { entry(4) }
+"#;
+    assert_eq!(run(source).await, Ok(BexExternalValue::Int(4104)));
 }

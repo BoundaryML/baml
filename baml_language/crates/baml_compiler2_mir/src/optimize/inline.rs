@@ -18,10 +18,11 @@
 use std::sync::Arc;
 
 use baml_compiler2_hir::{
-    item_data::{MethodOwner, function_data, function_trace_hook, method_owner},
+    item_data::{function_data, function_trace_hook},
     loc::{DeclRef, FunctionLoc},
 };
 
+use super::devirtualize;
 use crate::{
     BasicBlock, BinOp, BlockId, CellId, Constant, InlineScope, Local, LocalDecl, MirFunction,
     MirFunctionBody, MirFunctionId, MirFunctionKind, Operand, OptLevel, Place, Rvalue, Statement,
@@ -83,16 +84,228 @@ fn inline_body<'db>(
     let mut growth = 0;
     let mut index = 0;
     while index < body.blocks.len() {
-        if let Some(callee) = callee_of(db, root, body, arity, BlockId(index), lambdas, opt)
+        let site = BlockId(index);
+        read_known_fields(db, body, site, &mut growth);
+        // An interface call on a receiver of a known class is tried as the
+        // direct call of what that class provides, and put back if the
+        // callee turns out to keep its call.
+        let dispatched = resolve_dispatch(db, body, site, &mut growth);
+        let inlined = if let Some(callee) = callee_of(db, root, body, arity, site, lambdas, opt)
             && growth + callee.cost <= MAX_GROWTH
             && let Some(binding) = bind_arguments(&callee, &body.blocks[index])
         {
             growth += callee.cost;
-            splice(body, BlockId(index), &callee, &binding);
+            splice(body, site, &callee, &binding);
+            true
+        } else {
+            false
+        };
+        if !inlined && let Some(dispatched) = dispatched {
+            body.blocks[index].terminator = Some(dispatched);
         }
         index += 1;
     }
     growth > 0
+}
+
+/// Replace the interface call ending `site` with a direct call of the
+/// function it reaches, when the receiver's class is known there. Returns
+/// the interface call it replaced.
+fn resolve_dispatch<'db>(
+    db: &'db dyn crate::Db,
+    body: &mut MirFunctionBody<'db>,
+    site: BlockId,
+    growth: &mut usize,
+) -> Option<Terminator<'db>> {
+    let Some(Terminator::VirtualCall {
+        has_trace: false,
+        iface,
+        method,
+        args,
+        ntypeargs: 0,
+        self_arg,
+        ..
+    }) = body.blocks[site.0].terminator.clone()
+    else {
+        return None;
+    };
+    let at = (site, body.blocks[site.0].statements.len());
+    let class = devirtualize::class_of(body, at, args.get(self_arg)?, growth, MAX_GROWTH)?;
+    let function = devirtualize::method(db, &class, &iface, &method)?;
+    // Finding the class may have renamed the receiver, so the call is
+    // rebuilt from the terminator as it is now.
+    let Some(Terminator::VirtualCall {
+        argument_layout,
+        args,
+        destination,
+        target,
+        unwind,
+        ..
+    }) = body.blocks[site.0].terminator.clone()
+    else {
+        unreachable!("finding a receiver's class leaves its call in place")
+    };
+    body.blocks[site.0].terminator.replace(Terminator::Call {
+        has_trace: false,
+        argument_layout,
+        callee: Operand::Constant(Constant::Function(DeclRef::Source(function))),
+        args,
+        ntypeargs: 0,
+        destination,
+        target,
+        unwind,
+    })
+}
+
+/// Turn each interface field read in `site` whose receiver's class is known
+/// there into a read of the class field the interface field is linked to.
+fn read_known_fields<'db>(
+    db: &'db dyn crate::Db,
+    body: &mut MirFunctionBody<'db>,
+    site: BlockId,
+    growth: &mut usize,
+) {
+    let mut index = 0;
+    while index < body.blocks[site.0].statements.len() {
+        if let StatementKind::Assign {
+            value:
+                Rvalue::VirtualFieldAccess {
+                    iface,
+                    receiver,
+                    field,
+                    ..
+                },
+            ..
+        } = &body.blocks[site.0].statements[index].kind
+        {
+            let (iface, receiver, field) = (iface.clone(), receiver.clone(), field.clone());
+            if let Some(class) =
+                devirtualize::class_of(body, (site, index), &receiver, growth, MAX_GROWTH)
+                // A slot read names its base's class, and only a class
+                // without type arguments is spelled without a frame.
+                && class.args.is_empty()
+                && let Some(slot) = devirtualize::field_slot(db, &class, &iface, &field)
+            {
+                let instance = Local(body.locals.len());
+                body.locals.push(LocalDecl {
+                    name: None,
+                    ty: crate::RuntimeTy::Class(
+                        baml_compiler2_hir_ty::layout::class_head(db, class.class),
+                        Box::new([]),
+                    ),
+                    span: None,
+                    scope_span: None,
+                    is_captured: false,
+                });
+                let statements = &mut body.blocks[site.0].statements;
+                let span = statements[index].span;
+                // Finding the class may have renamed the receiver, so it is
+                // read again from the statement as it is now.
+                let StatementKind::Assign {
+                    value: value @ Rvalue::VirtualFieldAccess { .. },
+                    ..
+                } = &mut statements[index].kind
+                else {
+                    unreachable!("matched as an interface field read above")
+                };
+                let Rvalue::VirtualFieldAccess { receiver, .. } = value.clone() else {
+                    unreachable!("matched as an interface field read above")
+                };
+                *value = Rvalue::Use(Operand::Copy(Place::Field {
+                    base: Box::new(Place::Local(instance)),
+                    field: slot,
+                }));
+                statements.insert(
+                    index,
+                    Statement {
+                        kind: StatementKind::Assign {
+                            destination: Place::Local(instance),
+                            value: Rvalue::Use(receiver),
+                        },
+                        span,
+                    },
+                );
+                index += 1;
+            }
+        }
+        index += 1;
+    }
+}
+
+/// Give every captured local that no closure captures any more a plain slot
+/// again, in `function` and the lambdas lowered inside it: once the calls
+/// through a closure are inlined and the closure itself is gone, its
+/// captured variables are ordinary locals. Returns whether any was.
+pub(crate) fn release_cells(function: &mut MirFunction<'_>) -> bool {
+    let mut released = false;
+    if let MirFunctionKind::Bytecode(body) = &mut function.kind {
+        released |= release_body_cells(body);
+    }
+    for lambda in &mut function.lambdas {
+        released |= release_cells(lambda);
+    }
+    released
+}
+
+/// Rewrite a place that goes through the cell of a local in `plain` to name
+/// the local itself.
+fn value_place(place: &mut Place, plain: &[bool]) {
+    match place {
+        Place::Deref(CellId::Local(local)) if plain[local.0] => {
+            *place = Place::Local(*local);
+        }
+        Place::Field { base, .. } | Place::Index { base, .. } => value_place(base, plain),
+        Place::Local(_) | Place::Capture(_) | Place::Deref(_) => {}
+    }
+}
+
+fn release_body_cells(body: &mut MirFunctionBody<'_>) -> bool {
+    // A cell is shared exactly where a `MakeClosure` names its local bare.
+    let mut plain: Vec<bool> = body.locals.iter().map(|local| local.is_captured).collect();
+    for block in &body.blocks {
+        for statement in &block.statements {
+            if let StatementKind::Assign {
+                value: Rvalue::MakeClosure { captures, .. },
+                ..
+            } = &statement.kind
+            {
+                for capture in captures {
+                    if let Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) =
+                        capture
+                    {
+                        plain[local.0] = false;
+                    }
+                }
+            }
+        }
+    }
+    if !plain.contains(&true) {
+        return false;
+    }
+    for block in &mut body.blocks {
+        // Every read is dominated by a write of the binding, so the cell a
+        // `FreshCell` would have made holds nothing a read can see.
+        block.statements.retain(|statement| {
+            !matches!(
+                &statement.kind,
+                StatementKind::FreshCell { local, .. } if plain[local.0]
+            )
+        });
+        for statement in &mut block.statements {
+            super::for_each_place_in_statement(statement, &mut |place| value_place(place, &plain));
+        }
+        if let Some(terminator) = &mut block.terminator {
+            super::for_each_place_in_terminator(terminator, &mut |place| {
+                value_place(place, &plain);
+            });
+        }
+    }
+    for (local, plain) in body.locals.iter_mut().zip(&plain) {
+        if *plain {
+            local.is_captured = false;
+        }
+    }
+    true
 }
 
 /// A callee whose body may replace one particular call.
@@ -110,6 +323,9 @@ struct Callee<'a, 'db> {
     /// For a closure, the cell behind each of its captures, as the body the
     /// closure was made in names it.
     cells: Vec<CellId>,
+    /// For a bound method, the receiver it was bound to, which the call
+    /// passes ahead of its own arguments.
+    receiver: Option<Operand<'db>>,
     /// Its size in statements plus terminators.
     cost: usize,
 }
@@ -163,8 +379,16 @@ fn callee_of<'a, 'db: 'a>(
         Operand::Copy(Place::Local(value)) | Operand::Move(Place::Local(value))
             if *ntypeargs == 0 =>
         {
-            let closure = closure_of(body, arity, site, *value)?;
-            closure_callee(&lambdas[closure.lambda], closure)?
+            match callable_of(body, arity, site, *value)? {
+                Callable::Closure(closure) => closure_callee(&lambdas[closure.lambda], closure)?,
+                Callable::Function(function, frame) => {
+                    declared_callee(db, package, function, frame, opt)?
+                }
+                Callable::BoundMethod(function, receiver) => Callee {
+                    receiver: Some(receiver),
+                    ..declared_callee(db, package, function, Vec::new(), opt)?
+                },
+            }
         }
         _ => return None,
     };
@@ -219,6 +443,7 @@ fn declared_callee<'db>(
         frame,
         reads_frame_types: cost.reads_frame_types,
         cells: Vec::new(),
+        receiver: None,
         cost: cost.size,
     })
 }
@@ -257,8 +482,18 @@ fn closure_callee<'a, 'db>(
         frame: Vec::new(),
         reads_frame_types,
         cells: closure.cells,
+        receiver: None,
         cost,
     })
+}
+
+/// What a local is known to hold at a call through it.
+enum Callable<'db> {
+    Closure(KnownClosure),
+    /// A declared function, with the type arguments the value carries.
+    Function(FunctionLoc<'db>, Vec<Option<TyTemplate>>),
+    /// A method bound to a receiver.
+    BoundMethod(FunctionLoc<'db>, Operand<'db>),
 }
 
 /// A closure a local is known to hold at a call.
@@ -269,10 +504,11 @@ struct KnownClosure {
     cells: Vec<CellId>,
 }
 
-/// The closure `value` holds at the call ending `site`, when it can only be
-/// one: `value`'s one definition, or the one definition of the local it was
-/// copied from, is a `MakeClosure`, and each local whose cell the closure
-/// captured still has that cell at the call.
+/// What `value` holds at the call ending `site`, when it can only be one
+/// thing: `value`'s one definition, or the one definition of the local it
+/// was copied from, is a function constant, a method bound to a receiver
+/// that is not written again, or a `MakeClosure` each of whose captured
+/// locals still has, at the call, the cell the closure captured.
 ///
 /// A captured local gets a new cell where its binding is created
 /// (`FreshCell`), once per loop iteration for a binding inside a loop. The
@@ -280,12 +516,12 @@ struct KnownClosure {
 /// local may run between the `MakeClosure` and the call: not after the
 /// `MakeClosure` up to each copy that carries the closure on, and not after
 /// that copy up to the next one or the call.
-fn closure_of(
-    body: &MirFunctionBody<'_>,
+fn callable_of<'db>(
+    body: &MirFunctionBody<'db>,
     arity: usize,
     site: BlockId,
     value: Local,
-) -> Option<KnownClosure> {
+) -> Option<Callable<'db>> {
     let defs = super::count_local_defs(body);
     let mut value = value;
     // Where the closure is at each step, from the call back to where it was
@@ -339,10 +575,44 @@ fn closure_of(
                 {
                     return None;
                 }
-                return Some(KnownClosure {
+                return Some(Callable::Closure(KnownClosure {
                     lambda: *lambda_idx,
                     cells,
-                });
+                }));
+            }
+            Rvalue::Use(Operand::Constant(Constant::Function(DeclRef::Source(function)))) => {
+                return Some(Callable::Function(*function, Vec::new()));
+            }
+            Rvalue::Use(Operand::Constant(Constant::GenericFunction {
+                func: DeclRef::Source(function),
+                type_args,
+            })) => {
+                let frame = type_args
+                    .iter()
+                    .cloned()
+                    .map(|argument| Some(TyTemplate::from(argument)))
+                    .collect();
+                return Some(Callable::Function(*function, frame));
+            }
+            // The method's frame is the receiver's class arguments, which
+            // are not written here: a body that reads them keeps its call.
+            Rvalue::MakeBoundMethod {
+                func: DeclRef::Source(function),
+                receiver:
+                    receiver @ (Operand::Copy(Place::Local(bound)) | Operand::Move(Place::Local(bound))),
+                frame: crate::BoundFrame::Receiver,
+            } => {
+                // The value was bound to what the receiver's local held
+                // then, so the local must hold it still: a parameter never
+                // written, or a local written once.
+                let written = defs[bound.0];
+                let unchanged = if bound.0 <= arity {
+                    written == 0
+                } else {
+                    written == 1
+                };
+                return (unchanged && !body.locals[bound.0].is_captured)
+                    .then(|| Callable::BoundMethod(*function, receiver.clone()));
             }
             _ => return None,
         }
@@ -522,11 +792,6 @@ pub(crate) fn inline_cost<'db>(
     if traced(db, function) {
         return None;
     }
-    // An interface's default body is entered with `Self` in its frame, which
-    // dispatch fills in.
-    if matches!(method_owner(db, function), Some(MethodOwner::Interface(_))) {
-        return None;
-    }
     if !baml_compiler2_hir::item_data::function_has_body(db, function) {
         return None;
     }
@@ -657,12 +922,21 @@ fn bind_arguments<'db>(callee: &Callee<'_, 'db>, block: &BasicBlock<'db>) -> Opt
     else {
         return None;
     };
-    let args = &args[*ntypeargs..];
+    // A bound method's receiver is its first argument, ahead of the slots
+    // the call was checked against.
+    let mut args: Vec<Operand<'db>> = args[*ntypeargs..].to_vec();
+    let mut argument_layout = argument_layout.clone();
+    if let Some(receiver) = &callee.receiver {
+        args.insert(0, receiver.clone());
+        if let Some(layout) = &mut argument_layout {
+            layout.0.insert(0, None);
+        }
+    }
     let (declared, arity) = (&callee.declared, callee.arity);
     if declared.len() != arity {
         return None;
     }
-    let slots: Vec<Option<usize>> = match argument_layout {
+    let slots: Vec<Option<usize>> = match &argument_layout {
         // A compiler-synthesized call is already in the callee's layout.
         None => (0..arity).map(Some).collect(),
         Some(layout) => layout.map_to(declared).ok()?,
@@ -939,7 +1213,7 @@ fn argument_local(
 }
 
 /// Whether the statement writes `local` or a place inside it.
-fn defines(kind: &StatementKind<'_>, local: Local) -> bool {
+pub(super) fn defines(kind: &StatementKind<'_>, local: Local) -> bool {
     match kind {
         StatementKind::Assign { destination, .. } => destination.base_local() == Some(local),
         StatementKind::FreshCell { local: cell, .. } => *cell == local,
@@ -951,7 +1225,7 @@ fn defines(kind: &StatementKind<'_>, local: Local) -> bool {
 }
 
 /// Whether the terminator writes `local` or a place inside it.
-fn terminator_defines(terminator: &Terminator<'_>, local: Local) -> bool {
+pub(super) fn terminator_defines(terminator: &Terminator<'_>, local: Local) -> bool {
     match terminator {
         Terminator::NarrowBind { destination, .. } => *destination == local,
         Terminator::Call { destination, .. }
@@ -1123,7 +1397,10 @@ mod tests {
     }
 
     fn known(body: &MirFunctionBody<'static>, site: usize) -> bool {
-        closure_of(body, 0, BlockId(site), Local(2)).is_some()
+        matches!(
+            callable_of(body, 0, BlockId(site), Local(2)),
+            Some(Callable::Closure(_))
+        )
     }
 
     #[test]

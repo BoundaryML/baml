@@ -15241,6 +15241,10 @@ fn lower_function_inlined<'db>(
         return None;
     }
     optimize::optimize_function_tree(db, &mut mir, opt);
+    // With the closures gone, what they captured need not live in cells.
+    if optimize::inline::release_cells(&mut mir) {
+        optimize::optimize_function_tree(db, &mut mir, opt);
+    }
     Some(Ok(mir))
 }
 

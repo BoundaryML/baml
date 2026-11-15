@@ -41,16 +41,13 @@ fn user.combine(x: int, a: int, b: int) -> int {
 fn user.main() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int, int) -> int throws never // f
-    let _2: (int, int) -> int throws never
 
     bb0: {
-        _1 = const fn user.combine;
-        _2 = copy _1;
-        _0 = call copy _2(const 1_i64, const 5_i64) -> [bb1];
+        goto -> bb1;
     }
 
-    bb1: {
+    bb1 [inlined user.combine]: {
+        _0 = const 16_i64;
         return;
     }
 }

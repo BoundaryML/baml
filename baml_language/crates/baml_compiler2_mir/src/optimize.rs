@@ -16,6 +16,7 @@ use crate::{
     Place, Terminator, memory,
 };
 
+mod devirtualize;
 mod effects;
 pub(crate) mod inline;
 mod loops;

@@ -2,14 +2,7 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 function fixtures.lambda_basic.test_capture() -> int {
-    load_const null
-    make_cell
-    store_var offset
-    load_const 10
-    store_deref ?1
-    load_const 32
-    load_deref ?1
-    add_int
+    load_const 42
     return
 }
 

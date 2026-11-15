@@ -521,3 +521,82 @@ running and is not recorded here.
   by unit tests on hand-built MIR in `inline.rs`.
 - Snapshots: `ns_lambda_basic` (mir, bytecode) and `ns_lambda_owners`
   (bytecode) show closure calls replaced by their bodies.
+
+### Captured variables become plain locals again
+
+Once the calls through a closure are inlined and the `MakeClosure` is dead,
+no closure captures its variables. A captured local that no `MakeClosure`
+names any more loses its cell: `*_x` becomes `_x`, its `FreshCell`s go, and
+`is_captured` is cleared. The cleanup then runs once more. This is what lets
+scalar replacement and constant folding see through code that used a lambda
+(`ns_lambda_basic` now folds to a constant).
+
+- It runs only in `lower_function_inlined`, after the first cleanup.
+- Dropping a `FreshCell` relies on every read being dominated by a write of
+  the binding, which the debug verifier checks.
+- `optimizer_scalar_replace`'s `captured` fixture now hands its closure to a
+  function that keeps its call, since a closure called where it is made no
+  longer captures anything by the time scalar replacement runs.
+
+### Interface calls and field reads on a known class
+
+Code: `optimize/devirtualize.rs`, driven from the inliner's block scan.
+
+- **When the class is known.** The receiver is followed back from the call:
+  last definition in the block, then the one predecessor's, through copies,
+  until a class literal. A call result, a parameter, a join or a handler
+  entry ends the search with "unknown".
+- **What it resolves to.** `resolve_impl`, the checker's own selection, for
+  that class and the call's interface. If the implementation provides the
+  method, that function. If not, the interface's default body. Only an
+  explicit implementation written in source counts: a structural default
+  (`Equals` on a class with no impl) and an implementation served from a
+  package interface stay virtual calls.
+- **Why this is allowed in an open world.** It never assumes an interface
+  has one implementor. It assumes a class that has an implementation of an
+  interface keeps that one. The checker enforces one implementation per
+  class and interface, and the runtime checks implementations minted at run
+  time against existing ones and rejects an overlap
+  (`bex_vm/src/package_reflect/type_kinds.rs`, `OverlappingImplements`).
+  Lowering's own comment about not devirtualizing concrete classes is about
+  the structural default, which a later explicit implementation overrides.
+  That case is excluded here.
+- **The call is only rewritten when it is then inlined.** Otherwise the
+  virtual call is put back. A direct call that stays a call would save only
+  the VM's per-site dispatch cache lookup.
+- **Join splitting.** A function that returns one class from one `return`
+  and another from the next leaves two definitions meeting before the call.
+  When following the receiver back stops at such a join and every way in
+  ends at a class literal, the blocks from the join to the call are copied
+  once per extra way. Limits: 16 statements and terminators per copy, 4
+  ways, never the entry block, a handler block, or a chain a way loops back
+  into. Copies count against the body's growth budget. A copied block keeps
+  its inline scope, handler and shield.
+- **A local per way.** When each way builds the instance in its own last
+  statement and nothing outside the ways and the chain mentions the local,
+  each way gets its own local. One local built as two classes cannot be
+  scalar-replaced; two locals can. With this, the `polymorphic-dispatch`
+  shape allocates nothing.
+- **Field reads.** `VirtualFieldAccess` on a known class without type
+  arguments becomes a read of the class slot the interface field is linked
+  to (`name as model`, or the same name), through a temporary typed as the
+  class. Field stores are not done.
+- **Interface default bodies** may now be inlined, like any function, when
+  the types they read from their frame are known or not read at all.
+- **Not done: the guarded form** (test the class tag, direct path on a hit,
+  virtual call otherwise). It was to be added only if it measurably beat the
+  VM's dispatch cache, and no workload was left with a monomorphic site of
+  unknown class to measure it on.
+- Refused and left virtual: unknown receiver, generic class literal with a
+  type argument from the frame, interface template that is not a whole type,
+  method-level type arguments, `$trace` on the call, an implementation that
+  reads its frame's type arguments, and everything the inliner refuses.
+
+### Function and bound-method values
+
+A call through a local whose one definition is a function constant, or a
+generic function constant, is inlined as a direct call. A call through a
+local whose one definition binds a method to a receiver is inlined with that
+receiver as the first argument, when the receiver's local is not written
+again (a parameter never written, or a local written once) and the method
+does not read its frame's type arguments.

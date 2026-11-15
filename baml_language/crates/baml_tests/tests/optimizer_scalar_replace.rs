@@ -126,11 +126,18 @@ function stored_in_escaping_object(n: int) -> int {
     p.y = 9
     read_from_y(s)
 }
+// Calls itself on a path never taken, so the closure handed to it stays a
+// closure: one called where it is made is inlined, and what it captured is
+// then no longer captured.
+function call_later(f: () -> int, again: bool = false) -> int {
+    if (again) { return call_later(f) }
+    f()
+}
 function captured(n: int) -> int {
     let p = Point { x: n, y: 1 }
     let read = () => { p.x }
     p.x = 5
-    read()
+    call_later(read)
 }
 function stale_alias(n: int) -> int {
     let p = Point { x: n, y: 1 }

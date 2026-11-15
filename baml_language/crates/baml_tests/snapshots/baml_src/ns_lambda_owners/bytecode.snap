@@ -3,9 +3,6 @@ source: crates/baml_tests/src/corpus.rs
 ---
 function <(user.lambda_owners.Boxed<#0> as user.lambda_owners.Runner)>.run(self: lambda_owners.Boxed<#0>, x: int) -> int {
     load_var self
-    make_cell
-    store_var self
-    load_deref ?1
     load_field .inner
     load_var x
     load_type user.lambda_owners.Runner
@@ -15,50 +12,33 @@ function <(user.lambda_owners.Boxed<#0> as user.lambda_owners.Runner)>.run(self:
 }
 
 function <(user.lambda_owners.Other as user.lambda_owners.Runner)>.run(self: lambda_owners.Other, x: int) -> int {
-    load_var self
-    make_cell
-    store_var self
-    load_var x
-    load_deref ?1
+    load_var2 2 1
     load_field .delta
     sub_int
     return
 }
 
 function <(user.lambda_owners.Retry as user.lambda_owners.Runner)>.run(self: lambda_owners.Retry, x: int) -> int {
-    load_var self
-    make_cell
-    store_var self
-    load_var x
-    load_deref ?1
+    load_var2 2 1
     load_field .base
     add_int
     return
 }
 
 function lambda_owners.Retry.scaled(self: lambda_owners.Retry, x: int) -> int {
-    load_var self
-    make_cell
-    store_var self
-    load_var x
-    load_deref ?1
+    load_var2 2 1
     load_field .base
     mul_int
     return
 }
 
 function lambda_owners.Runner.twice(self: lambda_owners.Runner, x: int) -> int {
-    load_var self
-    make_cell
-    store_var self
-    load_deref ?1
-    load_var x
+    load_var2 1 2
     load_type user.lambda_owners.Runner
     load_const "run"
     virtual_call nargs=2 ntypeargs=0 self_arg=0
     store_var _3
-    load_deref ?1
-    load_var _3
+    load_var2 1 3
     load_type user.lambda_owners.Runner
     load_const "run"
     virtual_call nargs=2 ntypeargs=0 self_arg=0

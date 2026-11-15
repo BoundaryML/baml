@@ -5,18 +5,13 @@ source: crates/baml_tests/src/corpus.rs
 fn user.fixtures.lambda_basic.test_capture() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // offset [captured]
-    let _2: int
 
     bb0: {
-        fresh_cell(_1);
-        *_1 = const 10_i64;
         goto -> bb1;
     }
 
     bb1 [inlined .<lambda(test_capture, 0)>]: {
-        _2 = copy *_1;
-        _0 = const 32_i64 + copy _2;
+        _0 = const 42_i64;
         return;
     }
 }
@@ -56,16 +51,14 @@ fn user.fixtures.lambda_basic.test_nested() -> int {
 fn .<lambda(test_nested, 0)>(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // x // param [captured]
-    let _2: int
+    let _1: int // x // param
 
     bb0: {
         goto -> bb1;
     }
 
     bb1 [inlined .<lambda(<lambda(test_nested, 0)>, 1)>]: {
-        _2 = copy *_1;
-        _0 = copy _2 + const 1_i64;
+        _0 = copy _1 + const 1_i64;
         return;
     }
 }
