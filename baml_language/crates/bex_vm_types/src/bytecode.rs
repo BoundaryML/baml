@@ -1143,6 +1143,150 @@ pub enum Instruction {
         iterator: usize,
         index: usize,
     },
+
+    // ── Fused instructions ────────────────────────────────────────────────
+    // Each stands for a run of adjacent instructions and behaves exactly as
+    // that run does: the same result, the same panic, the same yield check.
+    // The emitter forms them at `OptLevel::Two`, inside one basic block and
+    // one source line, so every table keyed by PC reads the same for the
+    // fused instruction as it did for each instruction it replaced.
+    /// Checked `int` arithmetic fused with the loads of its operands and the
+    /// store of its result: `[LoadVar | LoadConst]* ; AddInt..ModInt ;
+    /// [StoreVar]`. Operands the instruction does not name come off the
+    /// stack; a result it does not store is pushed. Both operands are `int`,
+    /// as for the instruction it is built around, and it raises what that
+    /// instruction raises.
+    IntArith {
+        op: IntArithOp,
+        lhs: IntLhs,
+        rhs: IntRhs,
+        dst: IntDst,
+    },
+    /// `int` comparison fused with the loads of its operands and the branch
+    /// on its result: `[LoadVar | LoadConst]* ; CmpIntOp ; PopJumpIfTrue`.
+    /// Jumps by `offset` (relative to this instruction, like [`Self::Jump`])
+    /// when `lhs op rhs` holds. A `PopJumpIfFalse` is fused as the negated
+    /// comparison, which is exact for integers.
+    IntCmpJump {
+        op: CmpOp,
+        lhs: IntLhs,
+        rhs: IntRhs,
+        offset: i32,
+    },
+    /// Fused `LoadVar(var); LoadField(field)`, or `LoadFieldLocal` when
+    /// `thread_local`.
+    LoadVarField {
+        var: usize,
+        field: usize,
+        thread_local: bool,
+    },
+    /// Fused `LoadVar(array); LoadVar(index); LoadArrayElement`, or
+    /// `LoadArrayElementLocal` when `thread_local`.
+    LoadVarElement {
+        array: usize,
+        index: usize,
+        thread_local: bool,
+    },
+    /// Fused `LoadVar(source); StoreVar(destination)`.
+    MoveVar {
+        source: usize,
+        destination: usize,
+    },
+}
+
+/// The arithmetic of an [`Instruction::IntArith`]: the operation of the
+/// `AddInt`..`ModInt` instruction it is built around.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[borsh(use_discriminant = true)]
+pub enum IntArithOp {
+    Add = 0,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+}
+
+impl IntArithOp {
+    /// The operation of a specialized `int` arithmetic instruction.
+    pub fn of(instruction: &Instruction) -> Option<Self> {
+        match instruction {
+            Instruction::AddInt => Some(Self::Add),
+            Instruction::SubInt => Some(Self::Sub),
+            Instruction::MulInt => Some(Self::Mul),
+            Instruction::DivInt => Some(Self::Div),
+            Instruction::ModInt => Some(Self::Mod),
+            _ => None,
+        }
+    }
+
+    /// The mnemonic of the unfused instruction, which a listing reuses.
+    pub fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Add => "add_int",
+            Self::Sub => "sub_int",
+            Self::Mul => "mul_int",
+            Self::Div => "div_int",
+            Self::Mod => "mod_int",
+        }
+    }
+}
+
+impl CmpOp {
+    /// The comparison that holds exactly when this one does not. Exact for
+    /// a total order such as `int`; not for floats, where NaN fails both.
+    #[must_use]
+    pub fn negated(self) -> Self {
+        match self {
+            Self::Eq => Self::NotEq,
+            Self::NotEq => Self::Eq,
+            Self::Lt => Self::GtEq,
+            Self::LtEq => Self::Gt,
+            Self::Gt => Self::LtEq,
+            Self::GtEq => Self::Lt,
+        }
+    }
+
+    /// Lower-case name for a mnemonic (`jump_if_int_lt`).
+    pub fn mnemonic(self) -> &'static str {
+        match self {
+            Self::Eq => "eq",
+            Self::NotEq => "ne",
+            Self::Lt => "lt",
+            Self::LtEq => "le",
+            Self::Gt => "gt",
+            Self::GtEq => "ge",
+        }
+    }
+}
+
+/// Where a fused `int` instruction reads its left operand.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum IntLhs {
+    /// Popped from the stack, below the right operand when that is there too.
+    Stack,
+    /// A local slot.
+    Var(u16),
+}
+
+/// Where a fused `int` instruction reads its right operand.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum IntRhs {
+    /// Popped from the stack; the left operand is then on the stack below it.
+    Stack,
+    /// A local slot.
+    Var(u16),
+    /// The integer itself.
+    Imm(i32),
+}
+
+/// Where a fused `int` instruction leaves its result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum IntDst {
+    /// Pushed.
+    Stack,
+    /// Stored in a local slot.
+    Var(u16),
 }
 
 /// Compact bytecode opcodes.
@@ -1384,6 +1528,38 @@ pub enum OpCode {
     // u32 iterator slot + u32 index slot; appended to preserve discriminants.
     ArrayIterNext,
     ArrayIterNextLocal,
+
+    // ── Fused `int` arithmetic (`Instruction::IntArith`) ────────────────
+    // One opcode per operand shape. Operands, in order: u8 operation
+    // (`IntArithOp`), then a u32 slot per `Var`, an i32 per `Imm`, and a u32
+    // destination slot for the `Store` forms. `Stack` operands take none.
+    IntVarVar,
+    IntVarImm,
+    IntStackVar,
+    IntStackImm,
+    IntVarVarStore,
+    IntVarImmStore,
+    IntStackVarStore,
+    IntStackImmStore,
+    IntStackStackStore,
+
+    // ── Fused `int` compare-and-branch (`Instruction::IntCmpJump`) ──────
+    // u8 comparison (`CmpOp`), the operands as above, then the i32 jump
+    // offset, relative to the end of the instruction.
+    JumpIfIntVarVar,
+    JumpIfIntVarImm,
+    JumpIfIntStackVar,
+    JumpIfIntStackImm,
+    JumpIfIntStackStack,
+
+    // u32 local slot + u32 field index.
+    LoadVarField,
+    LoadVarFieldLocal,
+    // u32 array slot + u32 index slot.
+    LoadVarElement,
+    LoadVarElementLocal,
+    // u32 source slot + u32 destination slot.
+    MoveVar,
 }
 
 impl OpCode {
@@ -1554,9 +1730,54 @@ impl OpCode {
             | Self::StoreVar2
             | Self::NarrowBind
             | Self::ArrayIterNext
-            | Self::ArrayIterNextLocal => 9,
+            | Self::ArrayIterNextLocal
+            | Self::LoadVarField
+            | Self::LoadVarFieldLocal
+            | Self::LoadVarElement
+            | Self::LoadVarElementLocal
+            | Self::MoveVar => 9,
+
+            // Fused int forms: opcode + u8 operation + 4 bytes per named
+            // operand (+ 4 for a destination slot or a jump offset).
+            Self::IntStackVar
+            | Self::IntStackImm
+            | Self::IntStackStackStore
+            | Self::JumpIfIntStackStack => 6,
+            Self::IntVarVar
+            | Self::IntVarImm
+            | Self::IntStackVarStore
+            | Self::IntStackImmStore
+            | Self::JumpIfIntStackVar
+            | Self::JumpIfIntStackImm => 10,
+            Self::IntVarVarStore
+            | Self::IntVarImmStore
+            | Self::JumpIfIntVarVar
+            | Self::JumpIfIntVarImm => 14,
         }
     }
+
+    /// The opcodes of the fused instructions, in discriminant order.
+    pub const FUSED: [Self; 19] = [
+        Self::IntVarVar,
+        Self::IntVarImm,
+        Self::IntStackVar,
+        Self::IntStackImm,
+        Self::IntVarVarStore,
+        Self::IntVarImmStore,
+        Self::IntStackVarStore,
+        Self::IntStackImmStore,
+        Self::IntStackStackStore,
+        Self::JumpIfIntVarVar,
+        Self::JumpIfIntVarImm,
+        Self::JumpIfIntStackVar,
+        Self::JumpIfIntStackImm,
+        Self::JumpIfIntStackStack,
+        Self::LoadVarField,
+        Self::LoadVarFieldLocal,
+        Self::LoadVarElement,
+        Self::LoadVarElementLocal,
+        Self::MoveVar,
+    ];
 }
 
 impl TryFrom<u8> for OpCode {
@@ -1718,6 +1939,9 @@ impl TryFrom<u8> for OpCode {
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
+            x if x >= Self::IntVarVar as u8 && x <= Self::MoveVar as u8 => {
+                Ok(Self::FUSED[usize::from(x - Self::IntVarVar as u8)])
+            }
             _ => Err(byte),
         }
     }
@@ -1879,6 +2103,25 @@ impl std::fmt::Display for OpCode {
             Self::LoadVar2 => "LOAD_VAR2",
             Self::StoreVar2 => "STORE_VAR2",
             Self::NarrowBind => "NARROW_BIND",
+            Self::IntVarVar => "INT_VAR_VAR",
+            Self::IntVarImm => "INT_VAR_IMM",
+            Self::IntStackVar => "INT_STACK_VAR",
+            Self::IntStackImm => "INT_STACK_IMM",
+            Self::IntVarVarStore => "INT_VAR_VAR_STORE",
+            Self::IntVarImmStore => "INT_VAR_IMM_STORE",
+            Self::IntStackVarStore => "INT_STACK_VAR_STORE",
+            Self::IntStackImmStore => "INT_STACK_IMM_STORE",
+            Self::IntStackStackStore => "INT_STACK_STACK_STORE",
+            Self::JumpIfIntVarVar => "JUMP_IF_INT_VAR_VAR",
+            Self::JumpIfIntVarImm => "JUMP_IF_INT_VAR_IMM",
+            Self::JumpIfIntStackVar => "JUMP_IF_INT_STACK_VAR",
+            Self::JumpIfIntStackImm => "JUMP_IF_INT_STACK_IMM",
+            Self::JumpIfIntStackStack => "JUMP_IF_INT_STACK_STACK",
+            Self::LoadVarField => "LOAD_VAR_FIELD",
+            Self::LoadVarFieldLocal => "LOAD_VAR_FIELD_LOCAL",
+            Self::LoadVarElement => "LOAD_VAR_ELEMENT",
+            Self::LoadVarElementLocal => "LOAD_VAR_ELEMENT_LOCAL",
+            Self::MoveVar => "MOVE_VAR",
         };
         f.write_str(name)
     }
@@ -2173,7 +2416,62 @@ impl std::fmt::Display for Instruction {
                 write!(f, "ARRAY_ITER_NEXT_LOCAL {iterator} {index}")
             }
             Instruction::StoreVar2(a, b) => write!(f, "STORE_VAR2 {a} {b}"),
+            Instruction::IntArith { op, lhs, rhs, dst } => {
+                write!(f, "{}", op.mnemonic().to_uppercase())?;
+                write_int_operands(f, *lhs, *rhs)?;
+                match dst {
+                    IntDst::Stack => Ok(()),
+                    IntDst::Var(slot) => write!(f, " -> {slot}"),
+                }
+            }
+            Instruction::IntCmpJump {
+                op,
+                lhs,
+                rhs,
+                offset,
+            } => {
+                write!(f, "JUMP_IF_INT_{}", op.mnemonic().to_uppercase())?;
+                write_int_operands(f, *lhs, *rhs)?;
+                write!(f, " {offset:+}")
+            }
+            Instruction::LoadVarField {
+                var,
+                field,
+                thread_local,
+            } => {
+                let suffix = if *thread_local { "_LOCAL" } else { "" };
+                write!(f, "LOAD_VAR_FIELD{suffix} {var} {field}")
+            }
+            Instruction::LoadVarElement {
+                array,
+                index,
+                thread_local,
+            } => {
+                let suffix = if *thread_local { "_LOCAL" } else { "" };
+                write!(f, "LOAD_VAR_ELEMENT{suffix} {array} {index}")
+            }
+            Instruction::MoveVar {
+                source,
+                destination,
+            } => write!(f, "MOVE_VAR {source} -> {destination}"),
         }
+    }
+}
+
+/// The operands a fused `int` instruction names: a slot as its number, an
+/// immediate as `#n`. Stack operands are not written.
+fn write_int_operands(
+    f: &mut std::fmt::Formatter<'_>,
+    lhs: IntLhs,
+    rhs: IntRhs,
+) -> std::fmt::Result {
+    if let IntLhs::Var(slot) = lhs {
+        write!(f, " {slot}")?;
+    }
+    match rhs {
+        IntRhs::Stack => Ok(()),
+        IntRhs::Var(slot) => write!(f, " {slot}"),
+        IntRhs::Imm(value) => write!(f, " #{value}"),
     }
 }
 
@@ -3036,6 +3334,54 @@ impl Bytecode {
                             .to_le_bytes(),
                     );
                 }
+
+                // ── Fused int forms: u8 operation, named operands, then
+                // the destination slot or the jump offset ──
+                Instruction::IntArith {
+                    op: arith,
+                    lhs,
+                    rhs,
+                    dst,
+                } => {
+                    code.push(*arith as u8);
+                    encode_int_operands(&mut code, *lhs, *rhs);
+                    if let IntDst::Var(slot) = dst {
+                        code.extend_from_slice(&u32::from(*slot).to_le_bytes());
+                    }
+                }
+                Instruction::IntCmpJump {
+                    op: cmp,
+                    lhs,
+                    rhs,
+                    offset,
+                } => {
+                    code.push(*cmp as u8);
+                    encode_int_operands(&mut code, *lhs, *rhs);
+                    // As for `Jump`: the target is `i + offset`, and the
+                    // encoded offset is relative to this instruction's end.
+                    let target_instr = (i as isize + *offset as isize) as usize;
+                    let target_byte = index_to_offset[target_instr];
+                    let instr_end = index_to_offset[i] + op.encoded_size();
+                    let byte_delta = target_byte as i64 - instr_end as i64;
+                    code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
+                }
+                Instruction::LoadVarField {
+                    var: a, field: b, ..
+                }
+                | Instruction::LoadVarElement {
+                    array: a, index: b, ..
+                }
+                | Instruction::MoveVar {
+                    source: a,
+                    destination: b,
+                } => {
+                    code.extend_from_slice(
+                        &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
+                    );
+                }
             }
         }
 
@@ -3374,7 +3720,63 @@ impl Bytecode {
                 OpCode::MakeGenericFunctionFromValue
             }
             Instruction::VirtualCall { .. } => OpCode::VirtualCall,
+
+            // Fused forms: the operand shape selects the opcode.
+            Instruction::IntArith { lhs, rhs, dst, .. } => {
+                match (lhs, rhs, matches!(dst, IntDst::Var(_))) {
+                    (IntLhs::Var(_), IntRhs::Var(_), false) => OpCode::IntVarVar,
+                    (IntLhs::Var(_), IntRhs::Imm(_), false) => OpCode::IntVarImm,
+                    (IntLhs::Stack, IntRhs::Var(_), false) => OpCode::IntStackVar,
+                    (IntLhs::Stack, IntRhs::Imm(_), false) => OpCode::IntStackImm,
+                    (IntLhs::Var(_), IntRhs::Var(_), true) => OpCode::IntVarVarStore,
+                    (IntLhs::Var(_), IntRhs::Imm(_), true) => OpCode::IntVarImmStore,
+                    (IntLhs::Stack, IntRhs::Var(_), true) => OpCode::IntStackVarStore,
+                    (IntLhs::Stack, IntRhs::Imm(_), true) => OpCode::IntStackImmStore,
+                    (IntLhs::Stack, IntRhs::Stack, true) => OpCode::IntStackStackStore,
+                    (IntLhs::Stack, IntRhs::Stack, false) | (IntLhs::Var(_), IntRhs::Stack, _) => {
+                        unreachable!("{instr:?} fuses nothing or reads its operands out of order")
+                    }
+                }
+            }
+            Instruction::IntCmpJump { lhs, rhs, .. } => match (lhs, rhs) {
+                (IntLhs::Var(_), IntRhs::Var(_)) => OpCode::JumpIfIntVarVar,
+                (IntLhs::Var(_), IntRhs::Imm(_)) => OpCode::JumpIfIntVarImm,
+                (IntLhs::Stack, IntRhs::Var(_)) => OpCode::JumpIfIntStackVar,
+                (IntLhs::Stack, IntRhs::Imm(_)) => OpCode::JumpIfIntStackImm,
+                (IntLhs::Stack, IntRhs::Stack) => OpCode::JumpIfIntStackStack,
+                (IntLhs::Var(_), IntRhs::Stack) => {
+                    unreachable!("{instr:?} reads its operands out of order")
+                }
+            },
+            Instruction::LoadVarField { thread_local, .. } => {
+                if *thread_local {
+                    OpCode::LoadVarFieldLocal
+                } else {
+                    OpCode::LoadVarField
+                }
+            }
+            Instruction::LoadVarElement { thread_local, .. } => {
+                if *thread_local {
+                    OpCode::LoadVarElementLocal
+                } else {
+                    OpCode::LoadVarElement
+                }
+            }
+            Instruction::MoveVar { .. } => OpCode::MoveVar,
         }
+    }
+}
+
+/// Append the operands a fused `int` instruction names: a u32 slot per
+/// `Var`, an i32 per `Imm`, nothing for `Stack`.
+fn encode_int_operands(code: &mut Vec<u8>, lhs: IntLhs, rhs: IntRhs) {
+    if let IntLhs::Var(slot) = lhs {
+        code.extend_from_slice(&u32::from(slot).to_le_bytes());
+    }
+    match rhs {
+        IntRhs::Stack => {}
+        IntRhs::Var(slot) => code.extend_from_slice(&u32::from(slot).to_le_bytes()),
+        IntRhs::Imm(value) => code.extend_from_slice(&value.to_le_bytes()),
     }
 }
 
@@ -3738,6 +4140,158 @@ mod compact_tests {
             let decoded: Vec<Instruction> = borsh::from_slice(&encoded).unwrap();
             assert_eq!(format!("{decoded:?}"), format!("{:?}", bc.instructions));
         }
+    }
+
+    /// Every fused shape encodes to its opcode's stated size, and a fused
+    /// branch lands on the same instruction after byte-offset translation.
+    #[test]
+    fn fused_instructions_encode_by_operand_shape() {
+        let arith = |lhs, rhs, dst| Instruction::IntArith {
+            op: IntArithOp::Mod,
+            lhs,
+            rhs,
+            dst,
+        };
+        let branch = |lhs, rhs| Instruction::IntCmpJump {
+            op: CmpOp::GtEq,
+            lhs,
+            rhs,
+            offset: 1,
+        };
+        let var = IntLhs::Var(7);
+        let shapes = [
+            (arith(var, IntRhs::Var(8), IntDst::Stack), OpCode::IntVarVar),
+            (
+                arith(var, IntRhs::Imm(-3), IntDst::Stack),
+                OpCode::IntVarImm,
+            ),
+            (
+                arith(IntLhs::Stack, IntRhs::Var(8), IntDst::Stack),
+                OpCode::IntStackVar,
+            ),
+            (
+                arith(IntLhs::Stack, IntRhs::Imm(-3), IntDst::Stack),
+                OpCode::IntStackImm,
+            ),
+            (
+                arith(var, IntRhs::Var(8), IntDst::Var(9)),
+                OpCode::IntVarVarStore,
+            ),
+            (
+                arith(var, IntRhs::Imm(-3), IntDst::Var(9)),
+                OpCode::IntVarImmStore,
+            ),
+            (
+                arith(IntLhs::Stack, IntRhs::Var(8), IntDst::Var(9)),
+                OpCode::IntStackVarStore,
+            ),
+            (
+                arith(IntLhs::Stack, IntRhs::Imm(-3), IntDst::Var(9)),
+                OpCode::IntStackImmStore,
+            ),
+            (
+                arith(IntLhs::Stack, IntRhs::Stack, IntDst::Var(9)),
+                OpCode::IntStackStackStore,
+            ),
+            (branch(var, IntRhs::Var(8)), OpCode::JumpIfIntVarVar),
+            (branch(var, IntRhs::Imm(-3)), OpCode::JumpIfIntVarImm),
+            (
+                branch(IntLhs::Stack, IntRhs::Var(8)),
+                OpCode::JumpIfIntStackVar,
+            ),
+            (
+                branch(IntLhs::Stack, IntRhs::Imm(-3)),
+                OpCode::JumpIfIntStackImm,
+            ),
+            (
+                branch(IntLhs::Stack, IntRhs::Stack),
+                OpCode::JumpIfIntStackStack,
+            ),
+            (
+                Instruction::LoadVarField {
+                    var: 7,
+                    field: 2,
+                    thread_local: false,
+                },
+                OpCode::LoadVarField,
+            ),
+            (
+                Instruction::LoadVarField {
+                    var: 7,
+                    field: 2,
+                    thread_local: true,
+                },
+                OpCode::LoadVarFieldLocal,
+            ),
+            (
+                Instruction::LoadVarElement {
+                    array: 7,
+                    index: 8,
+                    thread_local: false,
+                },
+                OpCode::LoadVarElement,
+            ),
+            (
+                Instruction::LoadVarElement {
+                    array: 7,
+                    index: 8,
+                    thread_local: true,
+                },
+                OpCode::LoadVarElementLocal,
+            ),
+            (
+                Instruction::MoveVar {
+                    source: 7,
+                    destination: 9,
+                },
+                OpCode::MoveVar,
+            ),
+        ];
+        assert_eq!(
+            shapes.map(|(_, opcode)| opcode),
+            OpCode::FUSED,
+            "one case per fused opcode"
+        );
+        for (instruction, opcode) in shapes {
+            let bc = make_bytecode(vec![instruction, Instruction::Return], Vec::new());
+            assert_eq!(bc.instruction_to_opcode(&instruction), opcode);
+            assert_eq!(OpCode::try_from(opcode as u8), Ok(opcode));
+            let code = bc.lower_to_compact().code;
+            assert_eq!(code.len(), opcode.encoded_size() + 1, "{instruction:?}");
+            assert_eq!(code[0], opcode as u8);
+            let decoded: Vec<Instruction> =
+                borsh::from_slice(&borsh::to_vec(&bc.instructions).unwrap()).unwrap();
+            assert_eq!(decoded, bc.instructions);
+        }
+
+        // Operands in order: operation, left, right, destination.
+        let bc = make_bytecode(
+            vec![arith(var, IntRhs::Imm(-3), IntDst::Var(9))],
+            Vec::new(),
+        );
+        let code = bc.lower_to_compact().code;
+        assert_eq!(code[1], IntArithOp::Mod as u8);
+        assert_eq!(u32::from_le_bytes(code[2..6].try_into().unwrap()), 7);
+        assert_eq!(i32::from_le_bytes(code[6..10].try_into().unwrap()), -3);
+        assert_eq!(u32::from_le_bytes(code[10..14].try_into().unwrap()), 9);
+
+        // A backward fused branch over a one-byte instruction: its offset is
+        // relative to its own end.
+        let bc = make_bytecode(
+            vec![
+                Instruction::Return,
+                Instruction::IntCmpJump {
+                    op: CmpOp::Lt,
+                    lhs: var,
+                    rhs: IntRhs::Var(8),
+                    offset: -1,
+                },
+            ],
+            Vec::new(),
+        );
+        let code = bc.lower_to_compact().code;
+        assert_eq!(code[2], CmpOp::Lt as u8);
+        assert_eq!(i32::from_le_bytes(code[11..15].try_into().unwrap()), -15);
     }
 
     #[test]

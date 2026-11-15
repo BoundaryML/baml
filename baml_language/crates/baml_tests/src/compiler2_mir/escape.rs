@@ -1311,7 +1311,7 @@ function bump(c: Counter) -> int {
             .unwrap_or_else(|| panic!("no `{name}` in:\n{bytecode}"))
     };
     let build = body("build");
-    for local in ["load_field_local .n", "store_field_local .n"] {
+    for local in ["load_var_field_local c .n", "store_field_local .n"] {
         assert!(build.contains(local), "`build` lacks {local}:\n{build}");
     }
     assert!(

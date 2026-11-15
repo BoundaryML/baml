@@ -153,7 +153,13 @@ fn writes_local(code: &bex_vm_types::bytecode::CompactCode, local: usize) -> boo
         let stored = match op {
             OpCode::StoreVar | OpCode::StoreVarLoadVar => vec![operand(pc + 1)],
             OpCode::StoreVar2 => vec![operand(pc + 1), operand(pc + 5)],
-            OpCode::NarrowBind => vec![operand(pc + 5)],
+            OpCode::NarrowBind | OpCode::MoveVar => vec![operand(pc + 5)],
+            // A fused store's destination slot is its last operand.
+            OpCode::IntVarVarStore
+            | OpCode::IntVarImmStore
+            | OpCode::IntStackVarStore
+            | OpCode::IntStackImmStore
+            | OpCode::IntStackStackStore => vec![operand(pc + op.encoded_size() - 4)],
             _ => Vec::new(),
         };
         if stored

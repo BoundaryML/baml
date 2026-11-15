@@ -2,17 +2,11 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 function fixtures.catch_throw.CatchWithFallback(x: int) -> string {
-    load_var x
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L0
+    jump_if_int_ne x 0 L0
     jump L4
 
   L0:
-    load_var x
-    load_const 1
-    cmp_int_op ==
-    pop_jump_if_false L1
+    jump_if_int_ne x 1 L1
     jump L3
 
   L1:
@@ -49,10 +43,7 @@ function fixtures.catch_throw.CatchWithFallback(x: int) -> string {
 }
 
 function fixtures.catch_throw.SingleCatchWildcard(x: int) -> string {
-    load_var x
-    load_const 0
-    cmp_int_op ==
-    pop_jump_if_false L0
+    jump_if_int_ne x 0 L0
     jump L2
 
   L0:

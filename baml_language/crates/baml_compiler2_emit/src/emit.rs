@@ -3989,6 +3989,11 @@ pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
     let mut codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis, escape);
     codegen.own_file = mir_span.map(|span| span.file_id);
     let mut f = codegen.compile(identity);
+    // Fused instructions are an `O2` form: lower levels keep one instruction
+    // per operation, which is what the debugger steps through.
+    if opt == crate::analysis::OptLevel::Two {
+        crate::fuse::fuse(&mut f.bytecode, &f.local_names);
+    }
     if let Some(span) = mir_span {
         f.span = span;
     }

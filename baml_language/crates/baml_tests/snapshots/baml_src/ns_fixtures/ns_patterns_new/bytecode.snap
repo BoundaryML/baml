@@ -2,8 +2,7 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 function fixtures.patterns_new.chain_narrow_then_wildcard(v: int | string | bool) -> int {
-    load_var v
-    store_var _2
+    move_var v -> _2
     load_var _2
     narrow_bind int, slot=2
     pop_jump_if_true L0
@@ -16,13 +15,11 @@ function fixtures.patterns_new.chain_narrow_then_wildcard(v: int | string | bool
 }
 
 function fixtures.patterns_new.or_with_repeated_typed_binding(v: int | string) -> int {
-    load_var v
-    store_var _2
+    move_var v -> _2
     load_var _2
     narrow_bind int, slot=2
     pop_jump_if_true L1
-    load_var v
-    store_var _4
+    move_var v -> _4
     load_var _4
     narrow_bind int, slot=3
     pop_jump_if_true L0

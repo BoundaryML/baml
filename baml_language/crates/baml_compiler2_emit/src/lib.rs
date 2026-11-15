@@ -4,6 +4,7 @@
 
 mod analysis;
 mod emit;
+pub mod fuse;
 mod items;
 mod package;
 mod pull_semantics;

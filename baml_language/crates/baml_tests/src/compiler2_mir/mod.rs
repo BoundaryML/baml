@@ -1136,7 +1136,9 @@ function rotation_probe(n: int) -> int {
         .filter(|instruction| {
             matches!(
                 instruction,
-                Instruction::PopJumpIfTrue(_) | Instruction::PopJumpIfFalse(_)
+                Instruction::PopJumpIfTrue(_)
+                    | Instruction::PopJumpIfFalse(_)
+                    | Instruction::IntCmpJump { .. }
             )
         })
         .count();
@@ -1168,7 +1170,16 @@ function reuse_probe(x: int) -> int {
     let instructions = o2_instructions(&db, "reuse_probe");
     let remainders = instructions
         .iter()
-        .filter(|instruction| matches!(instruction, Instruction::ModInt))
+        .filter(|instruction| {
+            matches!(
+                instruction,
+                Instruction::ModInt
+                    | Instruction::IntArith {
+                        op: bex_vm_types::IntArithOp::Mod,
+                        ..
+                    }
+            )
+        })
         .count();
     assert_eq!(remainders, 1, "{instructions:?}");
     // Every arm returns where it would have jumped to a shared return.

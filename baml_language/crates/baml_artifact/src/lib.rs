@@ -141,7 +141,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 31: `Bytecode` carries `inline_frames` and `inline_table`, the
 /// calls the optimizer inlined into a function and the PCs each one covers,
 /// which a stack trace expands back into frames.
-pub const FORMAT_VERSION: u32 = 31;
+///
+/// Version 32: appended the fused instructions `IntArith`, `IntCmpJump`,
+/// `LoadVarField`, `LoadVarElement` and `MoveVar` to the instruction/opcode
+/// sets, which `O2` emits in place of the runs they stand for.
+pub const FORMAT_VERSION: u32 = 32;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

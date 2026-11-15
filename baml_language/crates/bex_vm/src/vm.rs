@@ -6495,6 +6495,50 @@ impl BexVm {
         }
     }
 
+    /// The checked arithmetic of `AddInt`..`ModInt` for a fused instruction,
+    /// whose operands are already off the stack: the same result and the same
+    /// panic as the instruction `operation` (an `IntArithOp` byte) names.
+    /// Both operands are `Int`-tagged, as the emitter guarantees for the
+    /// instruction the fused one is built around.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn fused_int_arith(&mut self, operation: u8, l: Value, r: Value) -> Result<Value, VmError> {
+        const ADD: u8 = bytecode::IntArithOp::Add as u8;
+        const SUB: u8 = bytecode::IntArithOp::Sub as u8;
+        const MUL: u8 = bytecode::IntArithOp::Mul as u8;
+        const DIV: u8 = bytecode::IntArithOp::Div as u8;
+        const MOD: u8 = bytecode::IntArithOp::Mod as u8;
+        match operation {
+            ADD => match Value::tagged_int_add_checked(l, r) {
+                Some(v) => Ok(v),
+                None => Err(self.tagged_int_overflow(l, '+', r)),
+            },
+            SUB => match Value::tagged_int_sub_checked(l, r) {
+                Some(v) => Ok(v),
+                None => Err(self.tagged_int_overflow(l, '-', r)),
+            },
+            _ => {
+                let (Some(l), Some(r)) = (l.as_int(), r.as_int()) else {
+                    verifier_unreachable!()
+                };
+                match operation {
+                    MUL => self.int_arith_result(l.checked_mul(r), l, '*', r),
+                    DIV | MOD if r == 0 => Err(VmError::thrown_fresh(
+                        self.panic_to_exception_value(VmPanic::DivisionByZero {
+                            left: Value::int(l),
+                            right: Value::int(r),
+                        }),
+                    )),
+                    // As for `DivInt`: `INT_MIN / -1` fits i64 but not i63,
+                    // which the range check reports.
+                    DIV => self.finish_int(l / r, l, '/', r),
+                    MOD => self.finish_int(l % r, l, '%', r),
+                    _ => verifier_unreachable!(),
+                }
+            }
+        }
+    }
+
     /// Build a catchable `baml.panics.IntegerOverflow` throw. Cold path only.
     #[cold]
     #[inline(never)]
@@ -9480,6 +9524,23 @@ impl BexVm {
         }
 
         #[inline(always)]
+        unsafe fn read_u8_unchecked(code: &[u8], pc: &mut usize) -> u8 {
+            unsafe {
+                let val = *code.get_unchecked(*pc);
+                *pc += 1;
+                val
+            }
+        }
+
+        // The operation bytes of the fused int instructions.
+        const CMP_EQ: u8 = CmpOp::Eq as u8;
+        const CMP_NE: u8 = CmpOp::NotEq as u8;
+        const CMP_LT: u8 = CmpOp::Lt as u8;
+        const CMP_LE: u8 = CmpOp::LtEq as u8;
+        const CMP_GT: u8 = CmpOp::Gt as u8;
+        const CMP_GE: u8 = CmpOp::GtEq as u8;
+
+        #[inline(always)]
         unsafe fn read_i8_unchecked(code: &[u8], pc: &mut usize) -> i8 {
             unsafe {
                 let val = *code.get_unchecked(*pc) as i8;
@@ -9551,6 +9612,175 @@ impl BexVm {
                         .replace_top_n::<2>(Value::bool(bex_vm_types::float_order::apply(
                             $op, l, r,
                         )));
+                }};
+            }
+
+            // The locals of the frame being run. SAFETY: the dispatch loop
+            // always runs with a Bytecode frame on top.
+            macro_rules! locals_offset {
+                () => {{
+                    #[allow(unsafe_code)]
+                    let Frame::Bytecode(bf) = (unsafe { self.frames.get_unchecked(*frame_idx) })
+                    else {
+                        unreachable!()
+                    };
+                    bf.locals_offset
+                }};
+            }
+            // Read field `$idx` of the instance `$top` and push it; shared by
+            // `LoadField` and its fused form. `$relaxed` selects the
+            // thread-local read.
+            macro_rules! load_field_op {
+                ($top:expr, $idx:expr, $relaxed:expr) => {{
+                    let top = $top;
+                    let idx = $idx;
+                    let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
+                    let load_result = {
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Instance.into(),
+                                got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                            }
+                            .into());
+                        };
+                        if $relaxed {
+                            instance.try_load_field_relaxed(idx)
+                        } else {
+                            instance.try_load_field(idx)
+                        }
+                        .ok_or_else(|| instance.field_len())
+                    };
+                    let value = match load_result {
+                        Ok(value) => value,
+                        Err(length) => {
+                            return Err(self.invalid_field_access_error(idx, length));
+                        }
+                    };
+                    self.push_stack(value)?;
+                }};
+            }
+            // Index `$array` by `$index` and push the element; shared by
+            // `LoadArrayElement` and its fused form.
+            macro_rules! load_array_element_op {
+                ($array:expr, $index:expr, $thread_local:expr) => {{
+                    let array_value = $array;
+                    let index_value = $index;
+                    let thread_local = $thread_local;
+                    let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
+                    let Some(i) = index_value.as_int() else {
+                        return Err(VmInternalError::TypeError {
+                            expected: bex_vm_types::types::Type::Int,
+                            got: self.type_of(&index_value),
+                        }
+                        .into());
+                    };
+                    // Acquire the array's read lock for the duration of the
+                    // bounds-check + element load so it stays atomic against
+                    // a racing `push`/grow. Guard drops at the end of the
+                    // inner scope before any `&mut self` call. A negative index
+                    // counts from the end; one that still lands outside the
+                    // array reports the original index in the panic.
+                    let load_result: Result<Value, (i64, usize)> = {
+                        match self.get_object(array_obj_index) {
+                            Object::Array(arr) => {
+                                let guard = if thread_local {
+                                    arr.lock_thread_local()
+                                } else {
+                                    arr.lock()
+                                };
+                                let len = guard.len();
+                                match crate::array_index::resolve_index(i, len) {
+                                    Some(idx) => Ok(guard[idx]),
+                                    None => Err((i, len)),
+                                }
+                            }
+                            Object::Uint8Array(bytes) => {
+                                let guard = if thread_local {
+                                    bytes.lock_thread_local()
+                                } else {
+                                    bytes.lock()
+                                };
+                                let len = guard.len();
+                                match crate::array_index::resolve_index(i, len) {
+                                    Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
+                                    None => Err((i, len)),
+                                }
+                            }
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Array.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        }
+                    };
+                    let element = match load_result {
+                        Ok(v) => v,
+                        Err((idx, len)) => {
+                            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                                VmPanic::IndexOutOfBounds {
+                                    index: idx,
+                                    length: len,
+                                },
+                            )));
+                        }
+                    };
+                    self.push_stack(element)?;
+                }};
+            }
+            // `l $op r` for two `Int`-tagged values, the comparison a fused
+            // compare-and-branch names by its `CmpOp` byte. Compares the
+            // tagged bits, like `cmp_int_op`.
+            macro_rules! fused_int_cmp {
+                ($cmp:expr, $l:expr, $r:expr) => {{
+                    let l = ($l).bits() as i64;
+                    let r = ($r).bits() as i64;
+                    match $cmp {
+                        CMP_EQ => l == r,
+                        CMP_NE => l != r,
+                        CMP_LT => l < r,
+                        CMP_LE => l <= r,
+                        CMP_GT => l > r,
+                        CMP_GE => l >= r,
+                        _ => verifier_unreachable!(),
+                    }
+                }};
+            }
+            // Take the branch of a fused compare-and-branch when `$taken`,
+            // then poll for a yield exactly as `PopJumpIfTrue` does.
+            macro_rules! fused_branch {
+                ($taken:expr) => {{
+                    let offset = read_i32_unchecked(code, pc);
+                    if $taken {
+                        *pc = (*pc as i64 + offset as i64) as usize;
+                    }
+                    if self.should_early_yield() {
+                        return Ok(Some(VmExecState::EarlyYield));
+                    }
+                }};
+            }
+            // A local of the running frame, named by a u32 slot operand.
+            macro_rules! read_local {
+                () => {{
+                    let slot = read_u32_unchecked(code, pc) as usize;
+                    self.stack
+                        .get_at(Self::local_slot_stack_index(locals_offset!(), slot))
+                }};
+            }
+            // An i32 immediate operand, as the `int` it stands for.
+            macro_rules! read_imm {
+                () => {
+                    Value::int(i64::from(read_i32_unchecked(code, pc)))
+                };
+            }
+            // Store a fused result in the local named by a u32 slot operand.
+            macro_rules! store_local {
+                ($value:expr) => {{
+                    let value = $value;
+                    let slot = read_u32_unchecked(code, pc) as usize;
+                    let index = Self::local_slot_stack_index(locals_offset!(), slot);
+                    self.store_local_value(index, value);
                 }};
             }
 
@@ -9745,29 +9975,17 @@ impl BexVm {
                     OpCode::LoadField | OpCode::LoadFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let top = self.stack.ensure_pop();
-                        let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
-                        let load_result = {
-                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Instance.into(),
-                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                                }
-                                .into());
-                            };
-                            if op == OpCode::LoadFieldLocal {
-                                instance.try_load_field_relaxed(idx)
-                            } else {
-                                instance.try_load_field(idx)
-                            }
-                            .ok_or_else(|| instance.field_len())
-                        };
-                        let value = match load_result {
-                            Ok(value) => value,
-                            Err(length) => {
-                                return Err(self.invalid_field_access_error(idx, length));
-                            }
-                        };
-                        self.push_stack(value)?;
+                        load_field_op!(top, idx, op == OpCode::LoadFieldLocal);
+                    }
+
+                    // LoadVarField(var, field) == `LoadVar(var); LoadField(field)`.
+                    OpCode::LoadVarField | OpCode::LoadVarFieldLocal => {
+                        let var = { read_u32_unchecked(code, pc) as usize };
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let top = self
+                            .stack
+                            .get_at(Self::local_slot_stack_index(locals_offset!(), var));
+                        load_field_op!(top, idx, op == OpCode::LoadVarFieldLocal);
                     }
 
                     OpCode::StoreField | OpCode::StoreFieldLocal => {
@@ -11607,67 +11825,25 @@ impl BexVm {
                         let thread_local = op == OpCode::LoadArrayElementLocal;
                         let index_value = self.stack.ensure_pop();
                         let array_value = self.stack.ensure_pop();
-                        let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
-                        let Some(i) = index_value.as_int() else {
-                            return Err(VmInternalError::TypeError {
-                                expected: bex_vm_types::types::Type::Int,
-                                got: self.type_of(&index_value),
-                            }
-                            .into());
-                        };
-                        // Acquire the array's read lock for the duration of the
-                        // bounds-check + element load so it stays atomic against
-                        // a racing `push`/grow. Guard drops at the end of the
-                        // inner scope before any `&mut self` call. A negative index
-                        // counts from the end; one that still lands outside the
-                        // array reports the original index in the panic.
-                        let load_result: Result<Value, (i64, usize)> = {
-                            match self.get_object(array_obj_index) {
-                                Object::Array(arr) => {
-                                    let guard = if thread_local {
-                                        arr.lock_thread_local()
-                                    } else {
-                                        arr.lock()
-                                    };
-                                    let len = guard.len();
-                                    match crate::array_index::resolve_index(i, len) {
-                                        Some(idx) => Ok(guard[idx]),
-                                        None => Err((i, len)),
-                                    }
-                                }
-                                Object::Uint8Array(bytes) => {
-                                    let guard = if thread_local {
-                                        bytes.lock_thread_local()
-                                    } else {
-                                        bytes.lock()
-                                    };
-                                    let len = guard.len();
-                                    match crate::array_index::resolve_index(i, len) {
-                                        Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
-                                        None => Err((i, len)),
-                                    }
-                                }
-                                other => {
-                                    return Err(VmInternalError::TypeError {
-                                        expected: ObjectType::Array.into(),
-                                        got: ObjectType::of(other).into(),
-                                    }
-                                    .into());
-                                }
-                            }
-                        };
-                        let element = match load_result {
-                            Ok(v) => v,
-                            Err((idx, len)) => {
-                                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                                    VmPanic::IndexOutOfBounds {
-                                        index: idx,
-                                        length: len,
-                                    },
-                                )));
-                            }
-                        };
-                        self.push_stack(element)?;
+                        load_array_element_op!(array_value, index_value, thread_local);
+                    }
+
+                    // LoadVarElement(array, index) ==
+                    // `LoadVar(array); LoadVar(index); LoadArrayElement`.
+                    OpCode::LoadVarElement | OpCode::LoadVarElementLocal => {
+                        let array = { read_u32_unchecked(code, pc) as usize };
+                        let index = { read_u32_unchecked(code, pc) as usize };
+                        let off = locals_offset!();
+                        let array_value =
+                            self.stack.get_at(Self::local_slot_stack_index(off, array));
+                        let index_value =
+                            self.stack.get_at(Self::local_slot_stack_index(off, index));
+                        // SAFETY (`thread_local`): see `ContainerLenLocal`.
+                        load_array_element_op!(
+                            array_value,
+                            index_value,
+                            op == OpCode::LoadVarElementLocal
+                        );
                     }
 
                     OpCode::LoadMapElement => {
@@ -11914,6 +12090,111 @@ impl BexVm {
                         };
                         let v = Value::object(self.alloc_float(l / r));
                         self.push_stack(v)?;
+                    }
+
+                    // ── Fused int arithmetic ──────────────────────────────────────
+                    // `[LoadVar | LoadConst]* ; AddInt..ModInt ; [StoreVar]` in one
+                    // dispatch. Operands are read in the order they are encoded:
+                    // operation, left, right, destination. A stack operand is
+                    // popped before the operation runs, so a panic leaves the
+                    // stack as the unfused instruction's does.
+                    OpCode::IntVarVar => {
+                        let operation = read_u8_unchecked(code, pc);
+                        let l = read_local!();
+                        let r = read_local!();
+                        let v = self.fused_int_arith(operation, l, r)?;
+                        self.push_stack(v)?;
+                    }
+                    OpCode::IntVarImm => {
+                        let operation = read_u8_unchecked(code, pc);
+                        let l = read_local!();
+                        let r = read_imm!();
+                        let v = self.fused_int_arith(operation, l, r)?;
+                        self.push_stack(v)?;
+                    }
+                    OpCode::IntStackVar => {
+                        let operation = read_u8_unchecked(code, pc);
+                        let r = read_local!();
+                        let l = self.stack.ensure_pop();
+                        let v = self.fused_int_arith(operation, l, r)?;
+                        self.push_stack(v)?;
+                    }
+                    OpCode::IntStackImm => {
+                        let operation = read_u8_unchecked(code, pc);
+                        let r = read_imm!();
+                        let l = self.stack.ensure_pop();
+                        let v = self.fused_int_arith(operation, l, r)?;
+                        self.push_stack(v)?;
+                    }
+                    OpCode::IntVarVarStore => {
+                        let operation = read_u8_unchecked(code, pc);
+                        let l = read_local!();
+                        let r = read_local!();
+                        store_local!(self.fused_int_arith(operation, l, r)?);
+                    }
+                    OpCode::IntVarImmStore => {
+                        let operation = read_u8_unchecked(code, pc);
+                        let l = read_local!();
+                        let r = read_imm!();
+                        store_local!(self.fused_int_arith(operation, l, r)?);
+                    }
+                    OpCode::IntStackVarStore => {
+                        let operation = read_u8_unchecked(code, pc);
+                        let r = read_local!();
+                        let l = self.stack.ensure_pop();
+                        store_local!(self.fused_int_arith(operation, l, r)?);
+                    }
+                    OpCode::IntStackImmStore => {
+                        let operation = read_u8_unchecked(code, pc);
+                        let r = read_imm!();
+                        let l = self.stack.ensure_pop();
+                        store_local!(self.fused_int_arith(operation, l, r)?);
+                    }
+                    OpCode::IntStackStackStore => {
+                        let operation = read_u8_unchecked(code, pc);
+                        let r = self.stack.ensure_pop();
+                        let l = self.stack.ensure_pop();
+                        store_local!(self.fused_int_arith(operation, l, r)?);
+                    }
+
+                    // ── Fused int compare-and-branch ──────────────────────────────
+                    // `[LoadVar | LoadConst]* ; CmpIntOp ; PopJumpIfTrue` in one
+                    // dispatch: comparison, left, right, jump offset.
+                    OpCode::JumpIfIntVarVar => {
+                        let cmp = read_u8_unchecked(code, pc);
+                        let l = read_local!();
+                        let r = read_local!();
+                        fused_branch!(fused_int_cmp!(cmp, l, r));
+                    }
+                    OpCode::JumpIfIntVarImm => {
+                        let cmp = read_u8_unchecked(code, pc);
+                        let l = read_local!();
+                        let r = read_imm!();
+                        fused_branch!(fused_int_cmp!(cmp, l, r));
+                    }
+                    OpCode::JumpIfIntStackVar => {
+                        let cmp = read_u8_unchecked(code, pc);
+                        let r = read_local!();
+                        let l = self.stack.ensure_pop();
+                        fused_branch!(fused_int_cmp!(cmp, l, r));
+                    }
+                    OpCode::JumpIfIntStackImm => {
+                        let cmp = read_u8_unchecked(code, pc);
+                        let r = read_imm!();
+                        let l = self.stack.ensure_pop();
+                        fused_branch!(fused_int_cmp!(cmp, l, r));
+                    }
+                    OpCode::JumpIfIntStackStack => {
+                        let cmp = read_u8_unchecked(code, pc);
+                        let r = self.stack.ensure_pop();
+                        let l = self.stack.ensure_pop();
+                        fused_branch!(fused_int_cmp!(cmp, l, r));
+                    }
+
+                    // MoveVar(source, destination) == `LoadVar(source); StoreVar(destination)`.
+                    OpCode::MoveVar => {
+                        let value = read_local!();
+                        store_local!(value);
                     }
 
                     // ── Specialized int comparison (skip type dispatch) ───────────

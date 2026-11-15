@@ -229,7 +229,11 @@ use sha2::{Digest, Sha256};
 /// Version 28: `Bytecode` carries `inline_frames` and `inline_table`, the
 /// calls the optimizer inlined into a function and the PCs each one covers,
 /// which a stack trace expands back into frames.
-pub const FORMAT_VERSION: u32 = 28;
+///
+/// Version 29: appended the fused instructions `IntArith`, `IntCmpJump`,
+/// `LoadVarField`, `LoadVarElement` and `MoveVar` to the instruction/opcode
+/// sets, which `O2` emits in place of the runs they stand for.
+pub const FORMAT_VERSION: u32 = 29;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

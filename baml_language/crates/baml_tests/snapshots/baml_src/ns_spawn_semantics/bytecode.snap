@@ -23,9 +23,7 @@ function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn()
     load_var f
     await
     store_var c
-    load_var2 2 3
-    add_int
-    load_var c
-    add_int
+    add_int a b
+    add_int c
     return
 }
