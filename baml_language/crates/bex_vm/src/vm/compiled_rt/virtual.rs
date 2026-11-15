@@ -9,7 +9,7 @@ use bex_vm_types::{
 use crate::{
     errors::{VmError, VmInternalError},
     package_baml::ImplResolver,
-    vm::{BexVm, StaticVirtualCallKey, StaticVirtualCallTarget},
+    vm::{BexVm, StaticVirtualCallTarget, VirtualSiteQuery},
 };
 
 impl BexVm {
@@ -23,19 +23,30 @@ impl BexVm {
         site: Option<u32>,
     ) -> Result<HeapPtr, Box<VmError>> {
         let head = self.interface_head(iface)?;
-        let key = site.and_then(|site| self.virtual_call_key(receiver, head, iface_args, site));
-        if let Some(target) = key
-            .as_ref()
-            .and_then(|key| self.static_virtual_call_cache.get(key))
-        {
-            self.compiled
-                .call_type_args
-                .extend_from_slice(&target.frame_type_args);
-            self.compiled
-                .call_type_args
-                .extend_from_slice(method_type_args);
-            return Ok(target.callee.ptr());
-        }
+        // The lane is moved out across the probe so a hit can extend it while
+        // the borrowed query holds `self`.
+        let mut call_type_args = std::mem::take(&mut self.compiled.call_type_args);
+        let probe = {
+            let mut scratch = None;
+            match site.and_then(|site| {
+                self.virtual_call_query(receiver, head, iface_args, site, &mut scratch)
+            }) {
+                Some(query) => match self.static_virtual_call_cache.get(&query) {
+                    Some(target) => {
+                        call_type_args.extend_from_slice(&target.frame_type_args);
+                        call_type_args.extend_from_slice(method_type_args);
+                        Ok(target.callee.ptr())
+                    }
+                    None => Err(Some(query.to_key())),
+                },
+                None => Err(None),
+            }
+        };
+        self.compiled.call_type_args = call_type_args;
+        let key = match probe {
+            Ok(callee) => return Ok(callee),
+            Err(key) => key,
+        };
         let self_ty = self.dispatch_self_ty(receiver)?;
         let resolver = ImplResolver::for_value(self, receiver);
         let implementation = resolver
@@ -53,6 +64,7 @@ impl BexVm {
                 StaticVirtualCallTarget {
                     callee: Weak::new(callee),
                     frame_type_args: frame.clone(),
+                    arg_count: None,
                 },
             );
         }
@@ -63,13 +75,14 @@ impl BexVm {
         Ok(callee)
     }
 
-    fn virtual_call_key(
-        &self,
+    fn virtual_call_query<'a>(
+        &'a self,
         receiver: Value,
         interface_head: TypeHead,
-        iface_args: &[RealizedTy],
+        iface_args: &'a [RealizedTy],
         site: u32,
-    ) -> Option<StaticVirtualCallKey> {
+        scratch: &'a mut Option<RealizedTy>,
+    ) -> Option<VirtualSiteQuery<'a>> {
         let top = self.top_frame()?;
         // SAFETY: a compiled frame's function lives in the compile-time heap;
         // see `load_function`.
@@ -80,12 +93,12 @@ impl BexVm {
             .compact
             .as_ref()?
             .offset_of(site as usize)?;
-        Some(StaticVirtualCallKey {
+        Some(VirtualSiteQuery {
             caller_function_addr: std::ptr::from_ref(function) as usize,
             call_pc,
-            receiver: self.static_virtual_receiver_key(receiver)?,
+            receiver: self.virtual_receiver_query(receiver, scratch)?,
             interface_head,
-            interface_args: iface_args.into(),
+            interface_args: iface_args,
         })
     }
 
