@@ -38,6 +38,7 @@ pub mod json;
 mod map;
 mod media;
 mod ops;
+pub(crate) use ops::{EnumEqualsMemo, equals_without_driver};
 mod ops_bitwise;
 mod ops_math;
 mod prompt;

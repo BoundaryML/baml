@@ -60,6 +60,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::CallHooked { callee: slot, .. }
             | I::Call { callee: slot, .. }
             | I::CallLocal { callee: slot, .. }
+            | I::CallEquals(slot)
             | I::MakeGenericFunction { function: slot, .. }
             | I::MakeGenericBoundMethod { function: slot, .. } => {
                 $visit($operand::Global(slot));
@@ -145,6 +146,8 @@ macro_rules! visit_bytecode_index_operands {
             | I::LoadArrayElementLocal
             | I::StoreArrayElementLocal
             | I::ContainerLenLocal
+            | I::IsNull
+            | I::IsNotNull
             | I::StoreMapElement
             | I::Spawn
             | I::Await

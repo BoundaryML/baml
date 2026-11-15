@@ -805,6 +805,128 @@ pub(super) fn equals_structural_default(vm: &mut BexVm, a: Value, b: Value) -> N
     EqualsDriver::new(a, b).drive(vm)
 }
 
+/// `a == b` for the pairs [`EqualsDriver`] decides without a worklist or
+/// user code: `Some(equal)`, or `None` when the driver has to run. Where it
+/// answers, it answers what the driver would; `OpCode::CallEquals` calls the
+/// driver for the rest.
+///
+/// It decides identical values (reflexivity, as in `compare_one`), every
+/// pair of non-object values, an object against a non-object, two strings,
+/// two floats, and two variants of one enum whose equality is the structural
+/// default (see [`enum_equality_is_structural`]).
+#[inline]
+pub(crate) fn equals_without_driver(vm: &mut BexVm, a: Value, b: Value) -> Option<bool> {
+    // `Value` equality is bit equality: the same primitive or the same object.
+    if a == b {
+        return Some(true);
+    }
+    match (a.kind(), b.kind()) {
+        (ValueKind::Object(pa), ValueKind::Object(pb)) => equals_objects_without_driver(vm, pa, pb),
+        // The driver loads a cell before comparing; any other object is a
+        // different kind from the non-object, so the two are unequal.
+        (ValueKind::Object(ptr), _) | (_, ValueKind::Object(ptr)) => {
+            (!matches!(vm.get_object(ptr), Object::Cell(_))).then_some(false)
+        }
+        // Non-object encodings are canonical, so two of them with different
+        // bits are different values, of one kind or of two. Every kind is
+        // listed, as in `compare_one`, so a new `ValueKind` must be
+        // classified here.
+        (ValueKind::Null | ValueKind::OmittedArg | ValueKind::Int(_) | ValueKind::Bool(_), _) => {
+            Some(false)
+        }
+    }
+}
+
+/// [`equals_without_driver`] for two distinct heap objects.
+fn equals_objects_without_driver(vm: &mut BexVm, pa: HeapPtr, pb: HeapPtr) -> Option<bool> {
+    let (enm, index_a, index_b) = match (vm.get_object(pa), vm.get_object(pb)) {
+        (Object::Variant(x), Object::Variant(y)) => {
+            // Different enums ⇒ never equal, with or without a custom `eq`.
+            if x.enm != y.enm {
+                return Some(false);
+            }
+            (x.enm, x.index, y.index)
+        }
+        (Object::String(x), Object::String(y)) => return Some(x == y),
+        (Object::Float(x), Object::Float(y)) => {
+            return Some(bex_vm_types::float_order::eq(*x, *y));
+        }
+        _ => return None,
+    };
+    enum_equality_is_structural(vm, enm, pa).then_some(index_a == index_b)
+}
+
+/// Whether `==` on the variants of `enm` (of which `variant` is one) is the
+/// structural default, compared by variant, rather than a custom
+/// `Equals.eq`: the question [`EqualsDriver`] asks [`resolve_equals_eq`] on
+/// every comparison, memoized per VM.
+///
+/// An `Equals` impl can arrive after the comparison was compiled (a
+/// registered witness, a published graft), so the memo is keyed on the
+/// engine's resolution generation, which every such change bumps. It is
+/// kept only for a compile-time enum compared from static code: there the
+/// resolver's world holds no runtime package, so the answer depends on the
+/// enum and the rule tables alone; and the enum never moves or dies, so the
+/// memo holds no pointer a collection must visit. Everything else answers
+/// `false`, which sends the pair to the driver.
+fn enum_equality_is_structural(vm: &mut BexVm, enm: HeapPtr, variant: HeapPtr) -> bool {
+    if !vm.heap.is_compile_time_ptr(enm) || !vm.current_runtime_package().is_null() {
+        return false;
+    }
+    let generation = vm.dynamic_dispatch.generation();
+    if let Some(structural) = vm.enum_equals_memo.get(generation, enm) {
+        return structural;
+    }
+    // `Ok(None)` is no custom `eq`. A custom one, or an error the driver
+    // reports, is not structural.
+    let structural = matches!(
+        value_concrete_ty(vm, variant).map(|ty| resolve_equals_eq(vm, Value::object(variant), &ty)),
+        Some(Ok(None))
+    );
+    // An answer computed across a generation bump is not stored.
+    if vm.dynamic_dispatch.generation() == generation {
+        vm.enum_equals_memo.insert(generation, enm, structural);
+    }
+    structural
+}
+
+/// Per-VM memo for [`enum_equality_is_structural`]: for each compile-time
+/// enum asked about since the resolution generation last moved, whether its
+/// equality is the structural default. A program compares few enums, so a
+/// short list is the whole table.
+#[derive(Debug, Default)]
+pub(crate) struct EnumEqualsMemo {
+    generation: u64,
+    entries: Vec<(HeapPtr, bool)>,
+}
+
+impl EnumEqualsMemo {
+    /// More distinct enums than this empty the memo before the next insert.
+    const CAPACITY: usize = 16;
+
+    fn get(&mut self, generation: u64, enm: HeapPtr) -> Option<bool> {
+        if self.generation != generation {
+            self.generation = generation;
+            self.entries.clear();
+            return None;
+        }
+        self.entries
+            .iter()
+            .find_map(|&(entry, structural)| (entry == enm).then_some(structural))
+    }
+
+    fn insert(&mut self, generation: u64, enm: HeapPtr, structural: bool) {
+        if self.generation != generation {
+            self.generation = generation;
+            self.entries.clear();
+        }
+        if self.entries.len() >= Self::CAPACITY {
+            self.entries.clear();
+        }
+        self.entries.push((enm, structural));
+    }
+}
+
 /// Read a `baml.ops.Ordering` value back as a Rust [`std::cmp::Ordering`].
 ///
 /// Matches on the variant's declared NAME rather than its index, so reordering
