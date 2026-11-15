@@ -2135,21 +2135,6 @@ pub fn resolve_panic_class_ptrs(
         .collect()
 }
 
-/// Extract an `f64` if `value` carries a heap-boxed float.
-///
-/// Floats are no longer inline in `Value`; they live as `Object::Float(f64)`
-/// behind a `HeapPtr`. Returns `None` for any other variant (including ints —
-/// callers that want int→float promotion must combine this with `as_int`).
-#[inline]
-fn value_as_float(value: Value) -> Option<f64> {
-    let ptr = value.as_object_ptr()?;
-    // SAFETY: HeapPtr from a live Value is valid for read.
-    match unsafe { ptr.get() } {
-        Object::Float(f) => Some(*f),
-        _ => None,
-    }
-}
-
 /// The [`ConcreteRealizedTy::Function`] a callable *value* denotes: the
 /// `Function`'s stored signature templates, materialized against the realized
 /// type arguments that value carries.
@@ -2279,6 +2264,7 @@ fn value_type_tag(value: Value) -> i64 {
         ValueKind::Int(_) => type_tags::INT,
         ValueKind::Bool(_) => type_tags::BOOL,
         ValueKind::Null => type_tags::NULL,
+        ValueKind::Float(_) => type_tags::FLOAT,
         ValueKind::Object(ptr) => {
             // SAFETY: Reading type information from objects via HeapPtr.
             let obj = unsafe { ptr.get() };
@@ -3993,14 +3979,16 @@ impl BexVm {
     /// argument, zero (`0`, `0n`, `0.0`), and empty string/list/map/bytes
     /// are falsy; every other
     /// value - including `NaN`, instances, variants, closures, and
-    /// futures - is truthy. The scalar fast path never touches the heap;
-    /// only strings, containers, and the boxed numerics dereference.
+    /// futures - is truthy. The scalar fast path (inline floats included)
+    /// never touches the heap; only strings, containers, and the boxed
+    /// numerics dereference.
     pub fn is_truthy(&self, value: Value) -> bool {
         use bex_vm_types::ValueKind;
         match value.kind() {
             ValueKind::Null | ValueKind::OmittedArg => false,
             ValueKind::Bool(b) => b,
             ValueKind::Int(v) => v != 0,
+            ValueKind::Float(f) => f != 0.0,
             ValueKind::Object(ptr) => match self.get_object(ptr) {
                 Object::String(s) => !s.is_empty(),
                 Object::Array(arr) => !arr.is_empty(),
@@ -4200,7 +4188,7 @@ impl BexVm {
     /// Whether `value` inhabits the singleton type denoted by `literal`.
     ///
     /// The runtime counterpart of `TyTemplate::Literal`: exact representation
-    /// *and* exact contents. A heap `Float` is not the int literal `1` however
+    /// *and* exact contents. A `float` is not the int literal `1` however
     /// close its magnitude, and a `bigint` is not an `int` — those are disjoint
     /// types (`TYPE_SYSTEM.md` "Concrete Types": no concrete type is a subtype
     /// of another), even though the `==` operator deliberately widens across
@@ -4226,13 +4214,9 @@ impl BexVm {
             // rejects `1.0` in type position), so this arm is unreachable from
             // BAML source. It is still answered exactly rather than defaulted,
             // so a future float-literal type cannot inherit a silent `false`.
-            baml_type::Literal::Float(repr) => match value.as_object_ptr() {
-                Some(ptr) => match self.get_object(ptr) {
-                    Object::Float(v) => repr.parse::<f64>().is_ok_and(|expected| *v == expected),
-                    _ => false,
-                },
-                None => false,
-            },
+            baml_type::Literal::Float(repr) => value
+                .as_float()
+                .is_some_and(|v| repr.parse::<f64>().is_ok_and(|expected| v == expected)),
         }
     }
 
@@ -4448,6 +4432,9 @@ impl BexVm {
         }
         if value.is_null() {
             return Some(ConcreteRealizedTy::Null);
+        }
+        if value.is_inline_float() {
+            return Some(ConcreteRealizedTy::Float);
         }
         Some(match self.get_object(value.as_object_ptr()?) {
             Object::Float(_) => ConcreteRealizedTy::Float,
@@ -4962,8 +4949,9 @@ impl BexVm {
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
-        // Box every reachable `ConstValue::Float` into a compile-time
-        // `Object::Float` (floats can no longer live inline in `Value`).
+        // Box every reachable `ConstValue::Float` with no inline `Value`
+        // encoding (NaN, ±inf, extreme magnitudes) into a compile-time
+        // `Object::Float`.
         let float_indices = bex_vm_types::types::box_compile_time_floats(
             &mut compile_time_objects,
             &bytecode.globals,
@@ -4986,7 +4974,7 @@ impl BexVm {
             .globals
             .into_iter()
             .map(|cv| match cv {
-                bex_vm_types::ConstValue::Float(f) => {
+                bex_vm_types::ConstValue::Float(f) if float_indices.contains_key(&f.to_bits()) => {
                     let idx = float_indices[&f.to_bits()];
                     Value::object(heap.compile_time_ptr(idx))
                 }
@@ -8982,13 +8970,11 @@ impl BexVm {
                 CmpOp::GtEq => l >= r,
             })
         } else if let (Some(l), Some(r)) = (
-            left.as_int()
-                .map(|i| i as f64)
-                .or_else(|| value_as_float(left)),
+            left.as_int().map(|i| i as f64).or_else(|| left.as_float()),
             right
                 .as_int()
                 .map(|i| i as f64)
-                .or_else(|| value_as_float(right)),
+                .or_else(|| right.as_float()),
         ) {
             // Float/float that emit could not specialize, or a mixed
             // `int`/float pair whose float side was statically erased. Both
@@ -9152,13 +9138,11 @@ impl BexVm {
                 BinOp::Shr => self.int_shr(l, r)?,
             }
         } else if let (Some(l), Some(r)) = (
-            left.as_int()
-                .map(|i| i as f64)
-                .or_else(|| value_as_float(left)),
+            left.as_int().map(|i| i as f64).or_else(|| left.as_float()),
             right
                 .as_int()
                 .map(|i| i as f64)
-                .or_else(|| value_as_float(right)),
+                .or_else(|| right.as_float()),
         ) {
             // IEEE-754 throughout, exactly like the specialized `DivFloat`
             // opcode and the `float` operator impls: a zero divisor yields
@@ -9179,7 +9163,7 @@ impl BexVm {
                     .into());
                 }
             };
-            Value::object(self.alloc_float(f))
+            self.float_value(f)
         } else if let Some(l) = self.bigint_operand_of(left)
             && let Some(r) = self.bigint_operand_of(right)
         {
@@ -9500,8 +9484,8 @@ impl BexVm {
             // Tagged-int comparisons skip untagging by comparing bits directly
             // (see `Value::tagged_int_add_checked` for the encoding rationale; the
             // shift-left-by-1 preserves signed ordering between operands that
-            // share the same tag bit). Float comparisons unwrap two heap-boxed
-            // floats and apply the operator through `float_order` — BAML's total
+            // share the same tag bit). Float comparisons read two floats (inline
+            // or boxed) and apply the operator through `float_order` — BAML's total
             // float order, so these stay identical to the `exec_cmpop` fallback and
             // to `baml.ops.Compare for float`. Both operands are guaranteed Float by
             // the bytecode encoder, so the `else` arms are unreachable.
@@ -9516,13 +9500,17 @@ impl BexVm {
         }
             macro_rules! cmp_float_op {
                 ($op:expr) => {{
-                    let Some(r) =
-                        value_as_float(self.stack.get_at(self.stack.ensure_slot_from_top(0)))
+                    let Some(r) = self
+                        .stack
+                        .get_at(self.stack.ensure_slot_from_top(0))
+                        .as_float()
                     else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) =
-                        value_as_float(self.stack.get_at(self.stack.ensure_slot_from_top(1)))
+                    let Some(l) = self
+                        .stack
+                        .get_at(self.stack.ensure_slot_from_top(1))
+                        .as_float()
                     else {
                         std::hint::unreachable_unchecked()
                     };
@@ -11850,33 +11838,33 @@ impl BexVm {
 
                     // ── Specialized float arithmetic (skip type dispatch) ─────────
                     OpCode::AddFloat => {
-                        let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(r) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(l) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = Value::object(self.alloc_float(l + r));
+                        let v = self.float_value(l + r);
                         self.push_stack(v)?;
                     }
                     OpCode::SubFloat => {
-                        let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(r) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(l) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = Value::object(self.alloc_float(l - r));
+                        let v = self.float_value(l - r);
                         self.push_stack(v)?;
                     }
                     OpCode::MulFloat => {
-                        let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(r) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(l) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = Value::object(self.alloc_float(l * r));
+                        let v = self.float_value(l * r);
                         self.push_stack(v)?;
                     }
                     OpCode::DivFloat => {
@@ -11886,13 +11874,13 @@ impl BexVm {
                         // about.
                         let right_v = self.stack.ensure_pop();
                         let left_v = self.stack.ensure_pop();
-                        let Some(r) = value_as_float(right_v) else {
+                        let Some(r) = right_v.as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let Some(l) = value_as_float(left_v) else {
+                        let Some(l) = left_v.as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = Value::object(self.alloc_float(l / r));
+                        let v = self.float_value(l / r);
                         self.push_stack(v)?;
                     }
 
@@ -12041,8 +12029,8 @@ impl BexVm {
                                     );
                                 }
                             }
-                        } else if let Some(n) = value_as_float(val) {
-                            let v = Value::object(self.alloc_float(-n));
+                        } else if let Some(n) = val.as_float() {
+                            let v = self.float_value(-n);
                             self.push_stack(v)?;
                         } else if let Some(ptr) = val.as_object_ptr() {
                             // Bigint negation. Compute the negated value into an

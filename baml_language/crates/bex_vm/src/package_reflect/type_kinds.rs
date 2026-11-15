@@ -1272,11 +1272,9 @@ impl BamlClassLiteral for PackageReflectImpl {
                 baml_type::Literal::Int(n) => Value::int(n),
                 baml_type::Literal::Bool(b) => Value::bool(b),
                 baml_type::Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n))?,
-                baml_type::Literal::Float(s) => Value::object(
-                    vm.alloc_float(
-                        s.parse()
-                            .expect("a float literal has a valid representation"),
-                    ),
+                baml_type::Literal::Float(s) => vm.float_value(
+                    s.parse()
+                        .expect("a float literal has a valid representation"),
                 ),
             }),
             bex_vm_types::RealizedTy::EnumVariant(head, name) => {
@@ -2353,9 +2351,7 @@ class Fresh {}
         );
         let value = <PackageReflectImpl as BamlClassLiteral>::value(&mut vm, &literal)
             .expect("a literal view has a value");
-        let Object::Float(value) = vm.get_object(value.as_object_ptr().unwrap()) else {
-            panic!("expected a float value")
-        };
+        let value = value.as_float().expect("expected a float value");
         assert_eq!(value.to_bits(), (-1.25_f64).to_bits());
     }
 

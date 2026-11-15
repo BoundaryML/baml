@@ -314,6 +314,7 @@ impl TraceSnapshotBuilder {
             ValueKind::Null => self.alloc(TraceValue::Null),
             ValueKind::Bool(value) => self.alloc(TraceValue::Bool(value)),
             ValueKind::Int(value) => self.alloc(TraceValue::Int(value)),
+            ValueKind::Float(value) => self.alloc(TraceValue::Float(value)),
             ValueKind::OmittedArg => {
                 self.omitted(TraceOmissionReason::OmittedArgument, "omitted argument")
             }

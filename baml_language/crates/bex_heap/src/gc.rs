@@ -1074,7 +1074,7 @@ mod tests {
         let heap = BexHeap::with_tlab_size(vec![], 1);
         let mut tlab = Tlab::new(heap.clone());
         for _ in 0..ChunkedVec::<Object>::CHUNK_SIZE - 1 {
-            tlab.alloc_float(0.0);
+            tlab.alloc_string(String::new());
         }
         let mut rooted = None;
         for id in 0..4 {
@@ -2994,7 +2994,7 @@ mod tests {
     }
 
     /// The finalizer scan examines the registered instances only: 10,000 dead
-    /// floats around them are never visited.
+    /// strings around them are never visited.
     #[test]
     fn finalizer_scan_visits_only_finalizable_instances() {
         let heap = BexHeap::new(vec![]);
@@ -3006,7 +3006,7 @@ mod tests {
         let live = tlab.alloc_instance(class, vec![]);
         let dead = tlab.alloc_instance(class, vec![]);
         for i in 0..10_000_u32 {
-            tlab.alloc_float(f64::from(i));
+            tlab.alloc_string(i.to_string());
         }
         assert_eq!(finalizable_entries(&heap), {
             let mut both = vec![live, dead];

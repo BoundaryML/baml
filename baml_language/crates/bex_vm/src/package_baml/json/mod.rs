@@ -376,7 +376,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
         if let Some(value) = next.take() {
             let copied = match value.kind() {
                 ValueKind::Null | ValueKind::OmittedArg => Some(Value::NULL),
-                ValueKind::Bool(_) | ValueKind::Int(_) => Some(value),
+                ValueKind::Bool(_) | ValueKind::Int(_) | ValueKind::Float(_) => Some(value),
                 ValueKind::Object(ptr) => {
                     let children = match vm.get_object(ptr) {
                         Object::Array(array) => Some((
