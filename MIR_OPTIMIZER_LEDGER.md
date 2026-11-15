@@ -121,7 +121,36 @@ sees fewer.
 
 ## Results
 
-Filled in as passes land.
+Whole suite on the VM, 2026-11-15, everything together (all MIR passes, fused
+instructions, the push-path fix) against the build with the inliner and scalar
+replacement off. Both are fasttest builds. Two alternated rounds, three trials
+each, on a machine at load 35 to 40.
+
+- 78 workloads, geomean 1.48x faster. 39 faster by more than 7%.
+- Largest: wide-nested-class-create 17.0x, default-method 16.5x,
+  nested-field-access 11.5x, generic-apply 8.2x, closure-apply 7.2x,
+  polymorphic-dispatch 7.1x, method-chain 5.3x, method-call 4.1x.
+- Loops: fib-iterative 2.0x, collatz 1.96x, richards 1.97x, nested-loops 1.86x,
+  array-pipeline 1.67x, bubble-sort 1.44x.
+
+The harness also showed 19 workloads 7 to 30% slower (strings, JSON, spawn,
+enum-equals). That is measurement noise, not a regression. Run directly, the
+same packed programs are faster on the new build:
+
+- Instructions retired, 20 jobs: enum-equals 18.5 G to 16.7 G, split-short
+  17.0 G to 15.8 G, trim-padded 15.7 G to 14.5 G, k-nucleotide 56.8 G to
+  51.1 G, json-typed-orders 3.48 G to 3.22 G.
+- Elapsed per run, five runs each, ranges do not overlap: enum-equals 197 ms
+  to 183 ms, trim-padded 147 ms to 138 ms, json-typed-orders 32 ms to 30 ms.
+
+Do not read sub-15% differences from the harness on a loaded machine.
+
+Startup costs about 20 M more instructions per process (about 2%), from the
+standard library's loop forms.
+
+`array-build-sum-100k` failed once in one of four whole-suite runs on the new
+build and passed in the three reruns that followed. Not reproduced, cause
+unknown; the harness kept no error text.
 
 ## Inliner
 
