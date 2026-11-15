@@ -129,12 +129,13 @@ impl<N: Clone> RuntimeTy<N> {
         matches!(self, RuntimeTy::Null)
     }
 
-    /// True if this is the unit type — the type with exactly one value, which
-    /// source spells `null` or `void`. A unit-returning function carries no
+    /// True if this is the unit type — a type whose only value is `null`,
+    /// spelled `null` or `void`. A unit-returning function carries no
     /// information in its result, which is what a consumer that elides the
     /// result (a CLI's stdout) keys on. A type that merely *admits* the unit
     /// value (`int?`) is not unit; one that admits nothing else is, however it
-    /// is spelled (`null | null`, `never | null`).
+    /// is spelled (`null | null`, `never | null`). Tuples are distinct values,
+    /// including the empty tuple and tuples containing only `null`.
     ///
     /// Decided structurally, which is exact for a runtime type: non-recursive
     /// aliases are already expanded, and a recursive alias always reaches a
@@ -149,7 +150,6 @@ impl<N: Clone> RuntimeTy<N> {
                         .all(|member| member.is_unit() || member.is_uninhabited())
             }
             RuntimeTy::Never => false,
-            RuntimeTy::Tuple(elements) => elements.iter().all(RuntimeTy::is_unit),
             RuntimeTy::Int
             | RuntimeTy::Bigint
             | RuntimeTy::Float
@@ -163,6 +163,7 @@ impl<N: Clone> RuntimeTy<N> {
             | RuntimeTy::Enum(..)
             | RuntimeTy::EnumVariant(..)
             | RuntimeTy::List(..)
+            | RuntimeTy::Tuple(..)
             | RuntimeTy::Map { .. }
             | RuntimeTy::Function { .. }
             | RuntimeTy::Future(..)
@@ -615,11 +616,18 @@ mod tests {
         for ty in unit {
             assert!(ty.is_unit(), "{ty:?}");
         }
-        let not_unit: [RuntimeTy; 4] = [
+        let not_unit: [RuntimeTy; 8] = [
             RuntimeTy::Never,
             RuntimeTy::Union(Box::new([RuntimeTy::Int, RuntimeTy::Null])),
             RuntimeTy::Union(Box::new([RuntimeTy::Never, RuntimeTy::Never])),
             RuntimeTy::Unknown,
+            RuntimeTy::Tuple(Box::new([])),
+            RuntimeTy::Tuple(Box::new([RuntimeTy::Null])),
+            RuntimeTy::Tuple(Box::new([RuntimeTy::Null, RuntimeTy::Null])),
+            RuntimeTy::Union(Box::new([
+                RuntimeTy::Null,
+                RuntimeTy::Tuple(Box::new([RuntimeTy::Null])),
+            ])),
         ];
         for ty in not_unit {
             assert!(!ty.is_unit(), "{ty:?}");

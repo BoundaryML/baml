@@ -10,7 +10,7 @@
 //! `serde_json` so the message (and its line and column) stays the one
 //! `parse` has always given.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
@@ -459,6 +459,84 @@ impl<'a> Reader<'a> {
 
 // ─── parse ───────────────────────────────────────────────────────────────────
 
+/// Normalize the tuple spelling accepted by typed decoding to JSON arrays.
+/// Strings are scanned as strings, and all other JSON grammar stays strict.
+/// Replacing punctuation (and a trailing tuple comma with a space) preserves
+/// byte offsets for the ordinary parser's diagnostics.
+pub(super) fn normalize_tuples(text: &str) -> Result<Cow<'_, str>, Stop> {
+    fn value(reader: &mut Reader<'_>, normalized: &mut [u8]) -> Result<(), Stop> {
+        match reader.peek().ok_or(Stop)? {
+            b'(' => {
+                normalized[reader.pos] = b'[';
+                reader.open()?;
+                let mut count = 0;
+                loop {
+                    if reader.peek() == Some(b')') {
+                        // A singleton needs its comma; empty internal tuples
+                        // and trailing commas on larger tuples are valid.
+                        break;
+                    }
+                    value(reader, normalized)?;
+                    count += 1;
+                    match reader.peek() {
+                        Some(b',') => {
+                            let comma = reader.pos;
+                            reader.pos += 1;
+                            if reader.peek() == Some(b')') {
+                                normalized[comma] = b' ';
+                                break;
+                            }
+                        }
+                        Some(b')') if count != 1 => break,
+                        _ => return Err(Stop),
+                    }
+                }
+                normalized[reader.pos] = b']';
+                reader.pos += 1;
+                reader.depth -= 1;
+            }
+            b'[' => {
+                reader.open_array()?;
+                let mut first = true;
+                while reader.next_element(first)? {
+                    first = false;
+                    value(reader, normalized)?;
+                }
+            }
+            b'{' => {
+                reader.open_object()?;
+                let mut first = true;
+                while reader.next_key(first)?.is_some() {
+                    first = false;
+                    value(reader, normalized)?;
+                }
+            }
+            b'"' => {
+                reader.string()?;
+            }
+            b'n' => reader.null()?,
+            b't' | b'f' => {
+                reader.bool()?;
+            }
+            _ => {
+                reader.number()?;
+            }
+        }
+        Ok(())
+    }
+
+    if !text.contains('(') {
+        return Ok(Cow::Borrowed(text));
+    }
+    let mut normalized = text.as_bytes().to_vec();
+    let mut reader = Reader::new(text);
+    value(&mut reader, &mut normalized)?;
+    reader.finish()?;
+    Ok(Cow::Owned(String::from_utf8(normalized).unwrap_or_else(
+        |_| unreachable!("only ASCII punctuation is replaced"),
+    )))
+}
+
 /// Build the `json` value `text` holds, or [`Stop`] when it is not valid JSON
 /// (see [`syntax_error`] for the message).
 pub(super) fn parse(vm: &mut BexVm, text: &str) -> Result<Value, Stop> {
@@ -712,7 +790,51 @@ impl<'de> serde::de::Visitor<'de> for Check {
 
 #[cfg(test)]
 mod tests {
-    use super::{Number, Reader, Refusal, check, refusal};
+    use super::{Number, Reader, Refusal, check, normalize_tuples, refusal};
+
+    #[test]
+    fn tuple_input_normalizes_only_sequence_punctuation() {
+        for (input, expected) in [
+            (r#"(1, "a")"#, r#"[1, "a"]"#),
+            ("(1,)", "[1 ]"),
+            ("()", "[]"),
+            (
+                r#"{"pairs": [(1, ("é ) [",)), (2, null,)]}"#,
+                r#"{"pairs": [[1, ["é ) [" ]], [2, null ]] }"#,
+            ),
+        ] {
+            let normalized = normalize_tuples(input).unwrap();
+            assert_eq!(normalized.len(), input.len());
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&normalized).unwrap(),
+                serde_json::from_str::<serde_json::Value>(expected).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn tuple_input_keeps_strict_data_grammar() {
+        for input in [
+            "(1)",
+            "(1,]",
+            "[1,)",
+            "(1 2)",
+            "(1,,2)",
+            "(f(), 2)",
+            "(1 + 2, 3)",
+            "(1,",
+            "((1,), 2",
+            "(1, 2) trailing",
+            "(1, [2,])",
+        ] {
+            assert!(
+                normalize_tuples(input).map_or(true, |normalized| check(&normalized).is_err()),
+                "{input}"
+            );
+        }
+        let deep = format!("{}{}", "(".repeat(128), ",)".repeat(128));
+        assert!(normalize_tuples(&deep).is_err());
+    }
 
     /// Whether the scanner accepts `text` as one JSON document.
     fn scans(text: &str) -> bool {

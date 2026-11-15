@@ -44,7 +44,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0007
 
-  × type `(NoOrder,)` has no member `cmp`
+  × type `(NoOrder,)` has no member `cmp`; tuple slots are numbered, such as `.0`
     ╭─[tuple_compare.baml:31:5]
  31 │     a.cmp(b)
     ·     ────────

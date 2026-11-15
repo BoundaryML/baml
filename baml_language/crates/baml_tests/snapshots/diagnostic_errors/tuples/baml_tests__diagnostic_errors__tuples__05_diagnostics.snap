@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+  × cannot replace a tuple slot: tuple slots are immutable; build a new tuple instead (mutable children can still be changed)
    ╭─[immutable.baml:1:46]
  1 │ function replace(t: (int, string)) -> null { t.0 = 2; }
    ·                                              ───
@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+  × cannot replace a tuple slot: tuple slots are immutable; build a new tuple instead (mutable children can still be changed)
    ╭─[immutable.baml:2:47]
  2 │ function compound(t: (int, string)) -> null { t.0 += 2; }
    ·                                               ───
@@ -20,7 +20,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+  × cannot replace a tuple slot: tuple slots are immutable; build a new tuple instead (mutable children can still be changed)
    ╭─[immutable.baml:3:48]
  3 │ function nested(t: ((int,), string)) -> null { t.0.0 = 2; }
    ·                                                ─────
@@ -28,7 +28,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot assign to a tuple element: tuples are immutable; build a new tuple instead
+  × cannot replace a tuple slot: tuple slots are immutable; build a new tuple instead (mutable children can still be changed)
    ╭─[immutable.baml:4:48]
  4 │ function optional(t: (int, string)?) -> null { t?.0 = 2; }
    ·                                                ────
@@ -36,7 +36,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0008
 
-  × cannot index into type `(int, string)`
+  × cannot index into type `(int, string)`; tuples use fixed dot slots such as `.0`; use `reflect.Tuple.get_element` for a runtime-selected slot
    ╭─[immutable.baml:5:45]
  5 │ function bracket(t: (int, string)) -> int { t[0] }
    ·                                             ────
@@ -44,7 +44,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0007
 
-  × type `(int, string) | (float, string)` has no member `0`: its members implement no common interface that declares `0`
+  × cannot read slot `0` through tuple union `(int, string) | (float, string)`; narrow to one tuple type first
    ╭─[immutable.baml:6:71]
  6 │ function union_first(t: (int, string) | (float, string)) -> unknown { t.0 }
    ·                                                                       ───
@@ -52,7 +52,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0007
 
-  × type `(int, string) | (float, string)` has no member `1`: its members implement no common interface that declares `1`
+  × cannot read slot `1` through tuple union `(int, string) | (float, string)`; narrow to one tuple type first
    ╭─[immutable.baml:7:71]
  7 │ function union_common(t: (int, string) | (float, string)) -> string { t.1 }
    ·                                                                       ───
@@ -60,50 +60,74 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0007
 
-  × type `(int, string) | (float, string)` has no member `1`: its members implement no common interface that declares `1`
+  × cannot read slot `1` through tuple union `(int, string) | (float, string)`; narrow to one tuple type first
    ╭─[immutable.baml:8:81]
  8 │ function optional_union(t: (int, string) | (float, string) | null) -> string? { t?.1 }
    ·                                                                                 ────
    ╰────
 
+  [type] E0007
+
+  × type `(int, string)` has no member `first`; tuple slots are numbered, such as `.0`
+   ╭─[immutable.baml:9:48]
+ 9 │ function named_slot(t: (int, string)) -> int { t.first }
+   ·                                                ───────
+   ╰────
+
+  [type] E0008
+
+  × cannot index into type `(int, string)`; tuples use fixed dot slots such as `.0`; use `reflect.Tuple.get_element` for a runtime-selected slot
+    ╭─[immutable.baml:10:66]
+ 10 │ function dynamic_slot(t: (int, string), index: int) -> unknown { t[index] }
+    ·                                                                  ────────
+    ╰────
+
+  [type] E0001
+
+  × tuple slot 2 is out of range for `(int, string)` (arity 2)
+    ╭─[immutable.baml:11:66]
+ 11 │ function nested_bounds(t: ((int, string), bool)) -> string { t.0.2 }
+    ·                                                                  ─
+    ╰────
+
   [type] E0151
 
   × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
-    ╭─[immutable.baml:10:21]
- 10 │ class Callable { f: (int) -> int }
+    ╭─[immutable.baml:13:21]
+ 13 │ class Callable { f: (int) -> int }
     ·                     ────────────
     ╰────
 
   [type] E0001
 
-  × calling a function-valued member requires parentheses: use `(value.member)(...)`
-    ╭─[immutable.baml:11:49]
- 11 │ function direct_field(value: Callable) -> int { value.f(1) }
+  × calling a function-valued member requires parentheses: use `(obj.f)(...)` or `(t.0)(...)`
+    ╭─[immutable.baml:14:49]
+ 14 │ function direct_field(value: Callable) -> int { value.f(1) }
     ·                                                 ───────
     ╰────
 
   [type] E0151
 
   × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
-    ╭─[immutable.baml:12:26]
- 12 │ function direct_slot(t: ((int) -> int,)) -> int { t.0(1) }
+    ╭─[immutable.baml:15:26]
+ 15 │ function direct_slot(t: ((int) -> int,)) -> int { t.0(1) }
     ·                          ────────────
     ╰────
 
   [type] E0001
 
-  × calling a function-valued member requires parentheses: use `(value.member)(...)`
-    ╭─[immutable.baml:12:51]
- 12 │ function direct_slot(t: ((int) -> int,)) -> int { t.0(1) }
+  × calling a function-valued member requires parentheses: use `(obj.f)(...)` or `(t.0)(...)`
+    ╭─[immutable.baml:15:51]
+ 15 │ function direct_slot(t: ((int) -> int,)) -> int { t.0(1) }
     ·                                                   ───
     ╰────
 
   [type] E0001
 
-  × tuple index 2 is out of range for `(int, string)`
-   ╭─[tuples.baml:1:55]
+  × tuple slot 2 is out of range for `(int, string)` (arity 2)
+   ╭─[tuples.baml:1:57]
  1 │ function slot_out_of_range(t: (int, string)) -> int { t.2 }
-   ·                                                       ───
+   ·                                                         ─
    ╰────
 
   [type] E0007
@@ -116,7 +140,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0007
 
-  × type `(int, int) | null` has no member `0`: its members implement no common interface that declares `0`
+  × cannot read slot `0` on optional tuple `(int, int) | null`; use `?.0` or narrow away `null` first
    ╭─[tuples.baml:3:49]
  3 │ function nullable_slot(t: (int, int)?) -> int { t.0 }
    ·                                                 ───

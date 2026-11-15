@@ -2166,6 +2166,18 @@ function via_alias() -> Nothing {
 function via_union() -> null | null {
   null
 }
+
+function null_tuple() -> (null,) {
+  (null,)
+}
+
+function nested_null_tuple() -> ((null,), null) {
+  ((null,), null)
+}
+
+function optional_null_tuple() -> (null,)? {
+  null
+}
 "#,
     );
 
@@ -2190,6 +2202,14 @@ function via_union() -> null | null {
         stdout_of(&["run", "optional_null", "--project-dir", "."]),
         "null"
     );
+    // Tuple identity survives even when every slot contains the unit value.
+    for (target, expected) in [
+        ("null_tuple", "(null,)"),
+        ("nested_null_tuple", "((null,), null)"),
+        ("optional_null_tuple", "null"),
+    ] {
+        assert_eq!(stdout_of(&["run", target, "--project-dir", "."]), expected);
+    }
     assert_eq!(
         stdout_of(&["run", "-e", "as_void()", "--project-dir", "."]),
         "null"

@@ -718,6 +718,29 @@ function f() -> int throws never {
     }
 
     #[test]
+    fn chained_tuple_completion_offers_slots() {
+        for source in [
+            "function f(t: ((int, string), bool)) -> int { t.0.<[CURSOR] }\n",
+            "function f(t: ((int, string), bool)) -> int { t.0.1<[CURSOR] }\n",
+            "function f(t: ((int, string)?, bool)) -> int { t.0?.<[CURSOR] }\n",
+        ] {
+            let test = CursorTest::new(source);
+            let items = complete(&test);
+            for (label, detail) in [("0", "int"), ("1", "string")] {
+                let item = items
+                    .iter()
+                    .find(|item| item.label == label)
+                    .unwrap_or_else(|| {
+                        panic!("missing slot {label} in {source}: {:?}", labels(&items))
+                    });
+                assert_eq!(item.detail.as_deref(), Some(detail));
+                let fragment = &test.cursor.file.text(&test.db)[item.source_range];
+                assert!(fragment.is_empty() || fragment == "1", "{fragment}");
+            }
+        }
+    }
+
+    #[test]
     fn a_field_type_is_a_type_position() {
         let test = CursorTest::new("class Foo {\n    bar: <[CURSOR]\n}\n");
         let items = complete(&test);

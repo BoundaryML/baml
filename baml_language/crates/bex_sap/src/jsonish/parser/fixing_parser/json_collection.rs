@@ -7,7 +7,9 @@ use crate::jsonish::{CompletionState, Value};
 pub enum JsonCollection<'s> {
     // Key, Value
     Object(Vec<Cow<'s, str>>, Vec<Value<'s>>, CompletionState),
-    Array(Vec<Value<'s>>, CompletionState),
+    // Brackets and tuple parentheses share positional coercion. Retain the
+    // closing delimiter while parsing so nested sequences close correctly.
+    Array(Vec<Value<'s>>, CompletionState, char),
     QuotedString(Cow<'s, str>, CompletionState),
     TripleQuotedString(Cow<'s, str>, CompletionState),
     SingleQuotedString(Cow<'s, str>, CompletionState),
@@ -37,7 +39,7 @@ impl JsonCollection<'_> {
     pub fn name(&self) -> &'static str {
         match self {
             JsonCollection::Object(_, _, _) => "Object",
-            JsonCollection::Array(_, _) => "Array",
+            JsonCollection::Array(_, _, _) => "Array",
             JsonCollection::QuotedString(_, _) => "String",
             JsonCollection::SingleQuotedString(_, _) => "String",
             JsonCollection::TripleBacktickString { .. } => "TripleBacktickString",
@@ -52,7 +54,7 @@ impl JsonCollection<'_> {
     pub fn completion_state(&self) -> CompletionState {
         match *self {
             JsonCollection::Object(_, _, s) => s,
-            JsonCollection::Array(_, s) => s,
+            JsonCollection::Array(_, s, _) => s,
             JsonCollection::QuotedString(_, s) => s,
             JsonCollection::SingleQuotedString(_, s) => s,
             JsonCollection::TripleBacktickString {
@@ -81,7 +83,7 @@ impl<'s> From<JsonCollection<'s>> for Option<Value<'s>> {
                 }
                 Value::Object(object, object_completion)
             }
-            JsonCollection::Array(values, completion_state) => {
+            JsonCollection::Array(values, completion_state, _) => {
                 Value::Array(values, completion_state)
             }
             JsonCollection::QuotedString(s, completion_state) => Value::String(s, completion_state),

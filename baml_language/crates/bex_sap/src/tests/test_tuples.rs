@@ -1,6 +1,84 @@
 use super::*;
 
 test_deserializer!(
+    test_parenthesized_tuple,
+    r#"(1, "a")"#,
+    baml_ty!(tuple(int, string)),
+    baml_db! {},
+    [1, "a"]
+);
+
+test_deserializer!(
+    test_parenthesized_singleton_tuple,
+    "(1,)",
+    baml_ty!(tuple(int)),
+    baml_db! {},
+    [1]
+);
+
+test_deserializer!(
+    test_parenthesized_tuple_in_prose,
+    "Here you go: (1, true)",
+    baml_ty!(tuple(int, bool)),
+    baml_db! {},
+    [1, true]
+);
+
+test_deserializer!(
+    test_nested_parenthesized_tuples,
+    r#"{"pairs": [(1, ("a",)), (2, ("b",))]}"#,
+    baml_ty!(Container),
+    baml_db! { class Container { pairs: [tuple(int, (tuple(string)))], } },
+    {"pairs": [[1, ["a"]], [2, ["b"]]]}
+);
+
+test_deserializer!(
+    test_parenthesized_tuple_preserves_string_punctuation,
+    r#"("é (a) [b]", 2)"#,
+    baml_ty!(tuple(string, int)),
+    baml_db! {},
+    ["é (a) [b]", 2]
+);
+
+test_deserializer!(
+    test_parenthesized_tuple_repairs_missing_slots,
+    "(1,)",
+    baml_ty!(tuple(int, (string | null), [int])),
+    baml_db! {},
+    [1, null, []]
+);
+
+test_failing_deserializer!(
+    test_parenthesized_tuple_missing_required_slot,
+    "(1,)",
+    baml_ty!(tuple(int, string)),
+    baml_db! {}
+);
+
+test_partial_none_deserializer!(
+    test_parenthesized_tuple_partial_number,
+    "(1",
+    baml_ty!(tuple(int, string)),
+    baml_db! {}
+);
+
+test_partial_deserializer!(
+    test_parenthesized_tuple_partial_pending_string,
+    "(1,",
+    baml_ty!(tuple(int, string)),
+    baml_db! {},
+    [1, ""]
+);
+
+test_partial_deserializer!(
+    test_parenthesized_tuple_partial_string,
+    r#"(1, "a"#,
+    baml_ty!(tuple(int, string)),
+    baml_db! {},
+    [1, "a"]
+);
+
+test_deserializer!(
     test_tuple_exact,
     r#"[1, "a"]"#,
     baml_ty!(tuple(int, string)),

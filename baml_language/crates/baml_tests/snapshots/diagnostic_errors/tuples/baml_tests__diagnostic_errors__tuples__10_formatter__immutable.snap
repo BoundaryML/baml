@@ -33,6 +33,18 @@ function optional_union(t: (int, string) | (float, string) | null) -> string? {
     t?.1
 }
 
+function named_slot(t: (int, string)) -> int {
+    t.first
+}
+
+function dynamic_slot(t: (int, string), index: int) -> unknown {
+    t[index]
+}
+
+function nested_bounds(t: ((int, string), bool)) -> string {
+    t.0.2
+}
+
 class Callable {
     f: (int) -> int,
 }

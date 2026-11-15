@@ -14321,10 +14321,15 @@ impl<'db> InferenceContext<'db> {
                     } else {
                         DiagnosticSeverity::Error
                     };
+                let primary = if matches!(error, TirTypeError::TupleIndexOutOfRange { .. }) {
+                    DiagnosticLocation::ExprMember(expr)
+                } else {
+                    DiagnosticLocation::Expr(expr)
+                };
                 diags.push(TirDiagnostic {
                     error,
                     severity,
-                    primary: DiagnosticLocation::Expr(expr),
+                    primary,
                     related,
                 });
             }

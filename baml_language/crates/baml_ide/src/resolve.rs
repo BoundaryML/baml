@@ -588,6 +588,20 @@ pub fn tuple_access_at(
     file: SourceFile,
     offset: TextSize,
 ) -> Option<TupleAccess> {
+    let nullable = |ty: &baml_type::Ty| {
+        let mut ty = ty.clone();
+        for _ in 0..32 {
+            if let baml_type::Ty::TypeAlias(ref name) = ty {
+                let Some(alias) = baml_compiler2_hir_ty::layout::alias_ref_of(db, name) else {
+                    return false;
+                };
+                ty = baml_compiler2_hir_ty::layout::alias_value(db, alias).clone();
+            } else {
+                return ty.is_null() || ty.is_nullable_union();
+            }
+        }
+        false
+    };
     let mut best: Option<(TextSize, TupleAccess)> = None;
     visit_bodies_at(db, file, offset, |_, body, source_map, inference| {
         for (id, expr) in body.exprs.iter() {
@@ -602,7 +616,14 @@ pub fn tuple_access_at(
             let Some(span) = source_map.member_name_span(id) else {
                 continue;
             };
-            if !span.contains(offset) {
+            // A chain may share one float-shaped token, so find the separator
+            // from this slot's own range rather than from the token range.
+            let before = &file.text(db)[..usize::from(span.start())];
+            let dot_start = before.trim_end().strip_suffix('.').map(|prefix| {
+                let prefix = prefix.strip_suffix('?').unwrap_or(prefix);
+                TextSize::of(prefix)
+            });
+            if !TextRange::new(dot_start.unwrap_or(span.start()), span.end()).contains(offset) {
                 continue;
             }
             let Some(ty) = inference
@@ -613,11 +634,33 @@ pub fn tuple_access_at(
                 continue;
             };
             if best.as_ref().is_none_or(|(len, _)| span.len() < *len) {
+                // Inference records the non-null payload at each link and
+                // adds null at the enclosing OptionalChain. Hover presents
+                // the selected access as an expression of its own.
+                let mut link = id;
+                let mut optional = false;
+                loop {
+                    match &body.exprs[link] {
+                        Expr::OptionalMemberAccess { base, .. }
+                        | Expr::OptionalIndex { base, .. }
+                        | Expr::OptionalCall { callee: base, .. } => {
+                            optional |= inference.type_of_expr.get(base).is_some_and(&nullable);
+                            link = *base;
+                        }
+                        Expr::MemberAccess { base, .. } | Expr::Index { base, .. } => link = *base,
+                        Expr::Call { callee, .. } => link = *callee,
+                        _ => break,
+                    }
+                }
                 best = Some((
                     span.len(),
                     TupleAccess {
                         access: body.display_expr(id),
-                        ty: ty.clone(),
+                        ty: if optional {
+                            baml_type::Ty::optional(ty.clone())
+                        } else {
+                            ty.clone()
+                        },
                     },
                 ));
             }

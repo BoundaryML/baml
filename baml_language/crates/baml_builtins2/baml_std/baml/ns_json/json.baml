@@ -102,7 +102,7 @@ function parse(s: string) -> json throws ParseError {
 
 /// Parses JSON text and decodes it into `T`.
 ///
-/// `decode<T>(s)` is `to<T>(parse(s))`: the text is parsed first, then `T`
+/// For standard JSON, `decode<T>(s)` is `to<T>(parse(s))`: the text is parsed first, then `T`
 /// drives the walk by the rules of `to<T>`, `baml.FromJson` overrides
 /// included. The walk is a shape check rather than a coercion, so
 /// `decode<int>("\"5\"")` fails: a JSON string does not become an `int`.
@@ -112,11 +112,16 @@ function parse(s: string) -> json throws ParseError {
 /// class that uses the most of its keys. A class field whose type admits
 /// `null` may be missing from the text, and is then `null`.
 ///
+/// Positional data also accepts tuple parentheses: `(1, "a")` and `(1,)`.
+/// A tuple target requires exactly one value per slot, including nullable
+/// slots. Encoding always writes JSON arrays. `parse` itself accepts standard
+/// JSON only.
+///
 /// `naming` picks the names fields and variants go by; see `to<T>`.
 ///
 /// # Throws
 ///
-/// - `baml.json.ParseError` if `s` is not valid JSON, or holds a number with
+/// - `baml.json.ParseError` if `s` is not valid JSON or parenthesized positional data, or holds a number with
 ///   a fraction or exponent too large for a `float`, such as `1e400`.
 /// - `baml.json.DecodeError` if the parsed JSON does not fit `T`, or if a
 ///   `baml.FromJson` override rejects it. `path` locates the offending node.

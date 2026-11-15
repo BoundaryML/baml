@@ -2884,6 +2884,32 @@ let current = Status.Active<[CURSOR]"#,
     }
 
     #[test]
+    fn tuple_slot_dot_hovers_its_type() {
+        for (source, expected) in [
+            (
+                "function f(t: (int, string)) -> string { t<[CURSOR].1 }",
+                "t.1: string",
+            ),
+            (
+                "function f(t: (int, string)?) -> string? { t<[CURSOR]?.1 }",
+                "t?.1: string | null",
+            ),
+            (
+                "function f(t: ((int, string), bool)) -> string { t.0<[CURSOR].1 }",
+                "t.0.1: string",
+            ),
+            (
+                "function f(t: ((int, string), bool)) -> string { t<[CURSOR].0.1 }",
+                "t.0: (int, string)",
+            ),
+        ] {
+            let test = CursorTest::new(source);
+            let (declaration, ..) = symbol_parts(info_at(&test));
+            assert_eq!(declaration, expected);
+        }
+    }
+
+    #[test]
     fn chained_tuple_slots_have_independent_hover_types() {
         let test = CursorTest::new(
             "function example(t: ((int, string), bool)) -> string { t.0.<[CURSOR]1 }",
@@ -2895,6 +2921,32 @@ let current = Status.Active<[CURSOR]"#,
         );
         let (declaration, ..) = symbol_parts(info_at(&test));
         assert_eq!(declaration, "t.0: (int, string)");
+    }
+
+    #[test]
+    fn optional_tuple_slot_hovers_include_null() {
+        for (source, expected) in [
+            (
+                "function f(t: (int, string)) -> string { t?.<[CURSOR]1 }",
+                "t?.1: string",
+            ),
+            (
+                "function f(t: (int, string)?) -> string? { t?.<[CURSOR]1 }",
+                "t?.1: string | null",
+            ),
+            (
+                "function f(t: ((int, string), bool)?) -> string? { t?.0.<[CURSOR]1 }",
+                "t?.0.1: string | null",
+            ),
+            (
+                "function f(t: ((int, string), bool)?) -> string? { t?.<[CURSOR]0.1 }",
+                "t?.0: (int, string) | null",
+            ),
+        ] {
+            let test = CursorTest::new(source);
+            let (declaration, ..) = symbol_parts(info_at(&test));
+            assert_eq!(declaration, expected);
+        }
     }
 
     #[test]

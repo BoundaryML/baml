@@ -86,6 +86,11 @@ impl BamlNamespaceJson for PackageBamlImpl {
             Err(error) => return NativeCallResult::Error(error),
         };
         let s = s.as_str();
+        let normalized = match text::normalize_tuples(s) {
+            Ok(normalized) => normalized,
+            Err(text::Stop) => return NativeCallResult::Error(text::syntax_error(vm, s)),
+        };
+        let s = normalized.as_ref();
         let naming = JsonNaming::new(aliased);
         let mut lookups = Lookups::take(vm, naming);
         // With no override in reach, `T` reads the text in one pass.

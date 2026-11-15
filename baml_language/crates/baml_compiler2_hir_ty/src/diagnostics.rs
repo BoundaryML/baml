@@ -1510,11 +1510,34 @@ impl TirTypeError {
                 TirTypeError::UnresolvedMember { base_type, member } => {
                     if matches!(base_type, Ty::Unknown) {
                         write!(f, "cannot access field `{member}` on `unknown`")
+                    } else if matches!(base_type, Ty::Tuple(_)) {
+                        write!(
+                            f,
+                            "tuple `{}` has no named member `{member}`; tuple slots are numbered, such as `.0`",
+                            base_type.spell(vp)
+                        )
                     } else {
                         write!(f, "type `{}` has no member `{member}`", base_type.spell(vp))
                     }
                 }
                 TirTypeError::UnionMemberNoCommonInterface { union, member } => {
+                    if member.as_str().parse::<usize>().is_ok()
+                        && let Ty::Union(members) = union
+                        && members.iter().any(|member| matches!(member, Ty::Tuple(_)))
+                    {
+                        if members.len() == 2 && members.iter().any(Ty::is_null) {
+                            return write!(
+                                f,
+                                "cannot read slot `{member}` on optional tuple `{}`; use `?.{member}` or narrow away `null` first",
+                                union.spell(vp)
+                            );
+                        }
+                        return write!(
+                            f,
+                            "cannot read slot `{member}` through tuple union `{}`; narrow to one tuple type first",
+                            union.spell(vp)
+                        );
+                    }
                     write!(
                         f,
                         "type `{}` has no member `{member}`: its members implement no common \
@@ -1737,7 +1760,14 @@ impl TirTypeError {
                     write!(f, "cannot iterate over type `{}`", ty.spell(vp))
                 }
                 TirTypeError::NotIndexable { ty } => {
-                    write!(f, "type `{}` is not indexable", ty.spell(vp))
+                    write!(f, "type `{}` is not indexable", ty.spell(vp))?;
+                    if matches!(ty, Ty::Tuple(_)) {
+                        write!(
+                            f,
+                            "; tuples use fixed dot slots such as `.0`; use `reflect.Tuple.get_element` for a runtime-selected slot"
+                        )?;
+                    }
+                    Ok(())
                 }
                 TirTypeError::UnknownClassField {
                     class_name,
@@ -1945,12 +1975,12 @@ impl TirTypeError {
                 }
                 TirTypeError::FunctionFieldNeedsParens => write!(
                     f,
-                    "calling a function-valued member requires parentheses: use `(value.member)(...)`"
+                    "calling a function-valued member requires parentheses: use `(obj.f)(...)` or `(t.0)(...)`"
                 ),
                 TirTypeError::TupleElementNotAssignable => {
                     write!(
                         f,
-                        "cannot assign to a tuple element: tuples are immutable; build a new tuple instead"
+                        "cannot replace a tuple slot: tuple slots are immutable; build a new tuple instead (mutable children can still be changed)"
                     )
                 }
                 TirTypeError::TupleIndexOutOfRange {
@@ -1958,7 +1988,7 @@ impl TirTypeError {
                     tuple,
                     variant,
                 } => {
-                    write!(f, "tuple index {index} is out of range for ")?;
+                    write!(f, "tuple slot {index} is out of range for ")?;
                     match variant {
                         Some(variant) => write!(
                             f,
@@ -1968,6 +1998,9 @@ impl TirTypeError {
                         ),
                         None => write!(f, "`{}`", tuple.spell(vp)),
                     }?;
+                    if let Ty::Tuple(slots) = tuple {
+                        write!(f, " (arity {})", slots.len())?;
+                    }
                     if *index < 0 {
                         write!(f, "; tuple indices start at 0")?;
                     }
