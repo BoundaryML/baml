@@ -1058,3 +1058,47 @@ function main() -> int {
     uncaught throw: baml.panics.DivisionByZero {dividend: 80}
     ");
 }
+
+// ── standard library helpers written in Rust ────────────────────────────────
+
+/// `map`, `filter` and `reduce` are Rust functions that call the closure
+/// they are given. With the closure written at the call, each becomes the
+/// loop the standard library gives for it, with the closure's body inside.
+#[test]
+fn a_rust_helper_passed_a_closure_becomes_its_loop() {
+    let source = r#"
+function main(xs: int[], k: int) -> int {
+  let ys = xs.map((x: int) -> int { x * k + 1 });
+  let zs = ys.filter((x: int) -> bool { x % 3 != 0 });
+  zs.reduce((a: int, x: int) -> int { a + x }, 0)
+}
+"#;
+    let mir = lowered(source, "main", OptLevel::Two).0;
+    for helper in ["map", "filter", "reduce"] {
+        assert!(
+            !mir.contains(&format!("call const fn baml.Array.{helper}<")),
+            "`{helper}` is still called:\n{mir}"
+        );
+        assert!(
+            mir.contains(&format!("[inlined baml.Array.{helper} > .<lambda(main, ")),
+            "the closure passed to `{helper}` is still called:\n{mir}"
+        );
+    }
+    assert!(
+        !mir.contains("make_closure"),
+        "a closure is still made:\n{mir}"
+    );
+}
+
+/// A closure the caller cannot see is called by the Rust helper as before:
+/// the loop would only add a call per element.
+#[test]
+fn a_rust_helper_passed_an_unknown_closure_keeps_its_call() {
+    let source = r#"
+function main(xs: int[], f: (int) -> int) -> int[] {
+  xs.map(f)
+}
+"#;
+    let mir = lowered(source, "main", OptLevel::Two).0;
+    assert!(mir.contains("call const fn baml.Array.map<"), "{mir}");
+}

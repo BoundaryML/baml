@@ -225,6 +225,9 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj, 'w> {
     /// Per MIR block, the inlined call it belongs to, as an index into
     /// `Bytecode::inline_frames`.
     block_inline: Vec<Option<u32>>,
+    /// Per entry of `Bytecode::inline_frames`, whether it is the frame of a
+    /// function written in Rust, which reports line 0.
+    inline_native: Vec<bool>,
     /// The inlined call the instructions being emitted belong to.
     current_inline: Option<u32>,
     /// The database link names are rendered through at this boundary.
@@ -385,6 +388,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             own_file: None,
             inlined_line_starts: HashMap::new(),
             block_inline: Vec::new(),
+            inline_native: Vec::new(),
             current_inline: None,
             db: ctx.db,
             refs: ctx.refs,
@@ -1147,9 +1151,12 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             .parent
             .as_ref()
             .map(|parent| self.inline_frame(parent, indices));
-        let call_line = scope
-            .call_span
-            .map_or(0, |span| self.span_to_line(span, true));
+        // A call made by a function written in Rust has no line.
+        let call_line = match (&scope.parent, scope.call_span) {
+            (Some(parent), _) if parent.native => 0,
+            (_, Some(span)) => self.span_to_line(span, true),
+            (_, None) => 0,
+        };
         let file = scope.callee.file(self.db);
         let file_id = file.file_id(self.db);
         if self.own_file != Some(file_id) {
@@ -1167,10 +1174,15 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     baml_compiler2_hir_ty::render::Viewpoint::canonical(self.db)
                         .display_label(file.source_root(self.db))
                 }),
-                source_file: crate::relative_source_path(self.db, file),
+                source_file: if scope.native {
+                    String::new()
+                } else {
+                    crate::relative_source_path(self.db, file)
+                },
                 call_line,
                 parent,
             });
+        self.inline_native.push(scope.native);
         indices.insert(key, index);
         index
     }
@@ -1223,13 +1235,24 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             return;
         };
 
+        let native = self
+            .current_inline
+            .is_some_and(|frame| self.inline_native[frame as usize]);
+        let line = if native {
+            0
+        } else {
+            self.span_to_line(span, self.pending_sequence_point)
+        };
         let must_emit = match self.bytecode.line_table.last() {
             None => true,
-            Some(last) => last.span != span || self.pending_sequence_point,
+            // Code from a function written in Rust may share a span with the
+            // code around it and still reports its own line, 0.
+            Some(last) => {
+                last.span != span || (last.line == 0) != native || self.pending_sequence_point
+            }
         };
 
         if must_emit {
-            let line = self.span_to_line(span, self.pending_sequence_point);
             let discriminator = if self.pending_sequence_point {
                 let counter = self.next_line_discriminator.entry(line).or_insert(0);
                 let out = *counter;

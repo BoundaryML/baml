@@ -681,3 +681,123 @@ identical to the baseline, trace-only 51 / 0. No corpus test pins a line that
 fusion moved.
 
 **Undo.** Restore the line-table loop at the end of `barriers` in `fuse.rs`.
+
+## Array helpers that take a closure
+
+`map`, `filter`, `reduce`, `find`, `find_index`, `some` and `every` are Rust
+functions. They stay Rust functions. A call that passes a closure the inliner
+can see and inline is replaced, at O2, by a loop written in BAML with the
+closure's body inside it.
+
+### Why not move the helpers to BAML
+
+Measured first, on the fasttest build, 800,000 elements, neither form
+inlined: `map` + `filter` + `reduce` cost 3.17 G instructions in Rust and
+7.16 G as BAML loops called out of line. A call through a closure value
+costs about 1,300 instructions and the Rust helper already pays about 1,240
+per element, all in. So a BAML body is only worth having where the closure
+is inlined into it. The Rust functions are what O0, O1 and every call with
+an unknown closure still run.
+
+### The loop forms
+
+`containers.baml` gives each converted helper a sibling method named
+`_inlined_` and its name, with the same parameters and type parameters.
+`inline::loop_form` finds it by that name. `callee_of` uses it in place of
+the Rust function only when one of the call's arguments is a closure made in
+the same body that `closure_callee` accepts and that is within
+`MAX_CALLEE_SIZE`. The loop form itself is exempt from `MAX_CALLEE_SIZE`,
+not from `MAX_GROWTH`.
+
+Three small Rust helpers back them:
+
+- `_copy()`: a new array with the receiver's elements and its run-time
+  element type. One call takes the snapshot the Rust helpers take with
+  `to_vec()`.
+- `_results<U>()`: the array `map` returns, as long as the receiver, element
+  type `U`, slots unset. The loop writes every slot before the array is
+  visible to anything.
+- `_truncate(length)`: `filter` compacts the kept elements to the front of
+  its copy and cuts the rest off.
+
+Two things decided the shape of the loops:
+
+- No `push`. A call of `push` costs about 2,000 instructions: the call
+  passes the array's type argument and the VM's native-call path allocates
+  for it. A `map` loop that pushes measured 1.89 G against 1.01 G for the
+  Rust `map`. Index stores into a buffer of the right length cost about 500
+  per element, read included.
+- No `for ... in`. In generic standard library code it lowers to
+  `Iterable.iter` and one `Iterator.next` interface call per element. The
+  loop forms index with a counter.
+
+### Exactness
+
+`crates/baml_tests/tests/array_helpers.rs` was written before the switch
+and pins, for each helper: the order of the closure calls, that the helper
+iterates the elements it was called with when the closure changes the array,
+what a throwing closure leaves behind, the run-time element type of the
+result (empty arrays and union element types included), that an empty array
+never calls the closure, a closure that suspends, and the stack trace of an
+error that escapes. Every program runs at O1 and O2 and the two must agree.
+
+A stack trace taken in a closure called by a Rust helper shows the helper's
+frame with no file and line 0 (`File "", line 0, in baml.Array.map`). The
+copy keeps that: its `InlineScope` names the Rust function and has
+`native: true`. The emitter then writes an empty file name for that frame,
+line 0 for the loop's instructions, and call line 0 for a closure inlined
+inside it. No format change.
+
+A closure that suspends is not inlinable, so the helper it is passed to
+stays the Rust function.
+
+### Left as Rust functions
+
+- `sort_by`. A loop form was written (the same bottom-up merge, same
+  comparison order, one-step write-back) and passed the tests, but it was
+  slower: 200 sorts of 400 items cost 1.64 G against 1.30 G. The merge loop
+  is about 35 bytecode instructions per comparison, more than the Rust merge
+  plus a call. Removed.
+- `flat_map`. Its result has no known length, so it needs a `push` or a
+  `concat` per element.
+- `find_last`, `find_last_index`. Not converted: each loop form adds to what
+  every program compiles, and nothing measured uses them. The tests pin
+  their behaviour anyway.
+- `for_each` and `filter_map` were already BAML. They use `for ... in` and
+  `push`, so they have the costs above. Not changed.
+
+### Measured
+
+Instructions retired, fasttest build, `/usr/bin/time -l`, best of 2, two
+rounds alternating. Each program runs one helper 200 times over 4,000
+elements with a capturing closure. The figure is the program minus the same
+program with zero rounds.
+
+| Helper | Before | After |
+|---|---|---|
+| `map` (ints) | 1.15 G, 1.17 G | 0.60 G, 0.60 G |
+| `map` (class instances) | 1.43 G | 0.97 G |
+| `filter` | 1.24 G, 1.31 G | 0.92 G, 0.92 G |
+| `reduce` | 1.13 G, 1.14 G | 0.43 G, 0.42 G |
+| `find` (no match) | 1.23 G, 1.17 G | 0.57 G, 0.58 G |
+| `some` (no match) | 1.16 G, 1.14 G | 0.54 G, 0.51 G |
+| `for_each` (not changed) | 0.58 G | 0.48 G |
+| `sort_by`, 400 items (not changed) | 1.37 G | 1.28 G |
+| the `array-pipeline` loop, 200 rounds | 7.31 G, 7.33 G | 5.40 G, 5.41 G |
+
+The two unchanged rows show the noise of the subtraction, about 0.1 G.
+
+Wall time per job from `scripts/speedtest` (3 trials, two rounds, a busy
+machine, so only the best trial is worth reading): `array-pipeline-4k`
+12.6 ms before, 8.0 ms after. `closure-apply-1m` and `generate-sort-8k` did
+not move.
+
+### Cost
+
+Every loop form is standard library code compiled by every uncached run.
+The startup workload retires 22.06 to 22.14 G instructions with them and
+21.86 to 21.87 G without, about 1% more. Compiling a `main` with seven
+helper calls inlined adds about 0.1 G. So one cold process running
+`array-pipeline-4k` as committed (5 rounds, about 0.27 G of work) retires
+more instructions in total than before (22.30 G against 22.08 G), while the
+work itself costs about a quarter less.

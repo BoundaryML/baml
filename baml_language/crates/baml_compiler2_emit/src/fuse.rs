@@ -661,7 +661,7 @@ mod tests {
                 pair[1],
                 pair[0],
                 pair[1],
-                moved.clone(),
+                moved,
                 moved,
                 Instruction::Return,
             ]

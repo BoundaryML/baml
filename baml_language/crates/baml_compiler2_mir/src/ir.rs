@@ -339,6 +339,10 @@ pub struct InlineScope<'db> {
     /// The scope of the block that held the call, when that block was
     /// itself inlined.
     pub parent: Option<Arc<InlineScope<'db>>>,
+    /// Whether `callee` is written in Rust and the block is from the BAML
+    /// form of it. The frame a stack trace shows is then the Rust
+    /// function's, which has no file and no lines.
+    pub native: bool,
 }
 
 impl<'db> InlineScope<'db> {

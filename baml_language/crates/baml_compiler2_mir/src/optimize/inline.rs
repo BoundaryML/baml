@@ -14,6 +14,13 @@
 //! Each copied block records the call it stands in for
 //! ([`crate::InlineScope`]), which is how an error raised in it still
 //! reports the callee's frame.
+//!
+//! A standard library method written in Rust may have a loop form: a sibling
+//! method written in BAML that does exactly what it does ([`loop_form`]). A
+//! call of the Rust method that passes a closure this pass can inline is
+//! replaced by a copy of the loop form, so the closure's body ends up in the
+//! loop. A stack trace still shows the Rust method's frame, which has no
+//! file and no lines ([`crate::InlineScope::native`]).
 
 use std::sync::Arc;
 
@@ -328,6 +335,9 @@ struct Callee<'a, 'db> {
     receiver: Option<Operand<'db>>,
     /// Its size in statements plus terminators.
     cost: usize,
+    /// Whether the body is the loop form of `identity`, a function written
+    /// in Rust.
+    native: bool,
 }
 
 /// The callee of the call ending `site`, when that call may be inlined.
@@ -363,7 +373,10 @@ fn callee_of<'a, 'db: 'a>(
                 .iter()
                 .map(|argument| type_argument(body, arity, argument))
                 .collect();
-            declared_callee(db, package, *function, frame, opt)?
+            let passed = &args[*ntypeargs..];
+            named_callee(db, package, *function, frame, opt, || {
+                passes_a_closure_to_inline(body, arity, site, lambdas, passed)
+            })?
         }
         Operand::Constant(Constant::GenericFunction {
             func: DeclRef::Source(function),
@@ -374,7 +387,9 @@ fn callee_of<'a, 'db: 'a>(
                 .cloned()
                 .map(|argument| Some(TyTemplate::from(argument)))
                 .collect();
-            declared_callee(db, package, *function, frame, opt)?
+            named_callee(db, package, *function, frame, opt, || {
+                passes_a_closure_to_inline(body, arity, site, lambdas, args)
+            })?
         }
         Operand::Copy(Place::Local(value)) | Operand::Move(Place::Local(value))
             if *ntypeargs == 0 =>
@@ -398,12 +413,79 @@ fn callee_of<'a, 'db: 'a>(
     if callee.identity == MirFunctionId::Declared(root)
         || chain().any(|scope| scope.callee == callee.identity)
         || chain().count() >= MAX_DEPTH
-        || callee.cost > MAX_CALLEE_SIZE
+        // A loop form is written to be copied, whatever its size.
+        || (callee.cost > MAX_CALLEE_SIZE && !callee.native)
     {
         return None;
     }
     // Every type the body reads from its frame must come out whole.
     (!callee.reads_frame_types || substitutes(callee.body, &callee.frame)).then_some(callee)
+}
+
+/// The callee of a call that names `function`: the function itself, or its
+/// loop form when it has one and the call passes a closure to inline.
+fn named_callee<'db>(
+    db: &'db dyn crate::Db,
+    package: baml_base::SourceRoot,
+    function: FunctionLoc<'db>,
+    frame: Vec<Option<TyTemplate>>,
+    opt: OptLevel,
+    passes_a_closure: impl FnOnce() -> bool,
+) -> Option<Callee<'db, 'db>> {
+    match loop_form(db, function) {
+        Some(form) if passes_a_closure() => Some(Callee {
+            identity: MirFunctionId::Declared(function),
+            native: true,
+            ..declared_callee(db, package, form, frame, opt)?
+        }),
+        Some(_) => None,
+        None => declared_callee(db, package, function, frame, opt),
+    }
+}
+
+/// The loop form of a standard library method written in Rust: the method
+/// of the same class named `_inlined_` and then its name. It takes the same
+/// parameters and type parameters, and does exactly what the method does.
+#[salsa::tracked(returns(clone))]
+pub(crate) fn loop_form<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Option<FunctionLoc<'db>> {
+    use baml_compiler2_hir::item_data::{MethodOwner, class_data, method_owner};
+    if function.file(db).source_root(db).kind(db) != baml_base::SourceRootKind::Stdlib {
+        return None;
+    }
+    let MethodOwner::Class(class) = method_owner(db, function)? else {
+        return None;
+    };
+    let name = format!("_inlined_{}", function_data(db, function).name);
+    class_data(db, class)
+        .methods
+        .iter()
+        .copied()
+        .find(|&method| function_data(db, method).name.as_str() == name)
+}
+
+/// Whether one of the values the call ending `site` passes is a closure
+/// made in this body that a call through it would inline.
+fn passes_a_closure_to_inline<'db>(
+    body: &MirFunctionBody<'db>,
+    arity: usize,
+    site: BlockId,
+    lambdas: &[MirFunction<'db>],
+    passed: &[Operand<'db>],
+) -> bool {
+    passed.iter().any(|argument| {
+        let (Operand::Copy(Place::Local(value)) | Operand::Move(Place::Local(value))) = argument
+        else {
+            return false;
+        };
+        let Some(Callable::Closure(closure)) = callable_of(body, arity, site, *value) else {
+            return false;
+        };
+        closure_callee(&lambdas[closure.lambda], closure)
+            .is_some_and(|callee| callee.cost <= MAX_CALLEE_SIZE)
+    })
 }
 
 /// A declared function as the callee of a call that fills its frame's
@@ -445,6 +527,7 @@ fn declared_callee<'db>(
         cells: Vec::new(),
         receiver: None,
         cost: cost.size,
+        native: false,
     })
 }
 
@@ -484,6 +567,7 @@ fn closure_callee<'a, 'db>(
         cells: closure.cells,
         receiver: None,
         cost,
+        native: false,
     })
 }
 
@@ -983,6 +1067,7 @@ fn splice<'db>(
         callee: callee.identity.clone(),
         call_span,
         parent: call_block.inline.clone(),
+        native: callee.native,
     });
 
     // The callee's locals become fresh locals of the caller. A required
