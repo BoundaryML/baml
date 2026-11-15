@@ -814,7 +814,10 @@ pub(super) fn equals_structural_default(vm: &mut BexVm, a: Value, b: Value) -> N
 /// pair of non-object values, an object against a non-object, two strings,
 /// two floats, and two variants of one enum whose equality is the structural
 /// default (see [`enum_equality_is_structural`]).
-#[inline]
+///
+/// Kept out of line: inlined into the dispatch loop it grows that function
+/// and costs unrelated opcodes more than the call saves here.
+#[inline(never)]
 pub(crate) fn equals_without_driver(vm: &mut BexVm, a: Value, b: Value) -> Option<bool> {
     // `Value` equality is bit equality: the same primitive or the same object.
     if a == b {
