@@ -1,0 +1,5 @@
+name = "array pipeline 4k"
+description = "map, filter, reduce, find, for_each and sort_by with capturing lambdas over 4,000 ints and 4,000 class instances, 5 rounds"
+expect = "34452630"
+jobs = 24
+warmup = 1
