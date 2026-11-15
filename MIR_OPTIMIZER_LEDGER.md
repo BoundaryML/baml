@@ -600,3 +600,84 @@ local whose one definition binds a method to a receiver is inlined with that
 receiver as the first argument, when the receiver's local is not written
 again (a parameter never written, or a local written once) and the method
 does not read its frame's type arguments.
+
+## Lines of fused instructions (user decision, 2026-11-15)
+
+The user said: "it's ok if under some fusing we can't give exact line numbers
+for failures".
+
+**What changed.** The fuse pass (`baml_compiler2_emit/src/fuse.rs`, O2 only)
+no longer stops a run at a line change or at a statement's sequence point. A
+fused instruction that covers two lines reports the line of the first
+instruction of its run.
+
+**Exact scope.** The line number of a failure raised by a fused instruction
+may be a neighbouring line of the same function. Nothing else about an error
+changed:
+
+- its kind and message;
+- the frames, their order and their function names, inlined frames included
+  (an inlined call's range edge is still a barrier);
+- which handler catches it (handler, handler-body and shield range edges are
+  still barriers, and so are jump targets);
+- the line of every frame but the innermost. An outer frame's line is its
+  call's, a call is never fused, and each unfused instruction keeps the line
+  entry that covered it.
+
+**Sequence points.** Every MIR statement starts with one, so they were the
+barrier that mattered: a run could not cross a statement even on one line.
+Nothing in the VM reads `sequence_point`; only the emitter and the fuse pass
+do. The fuse pass runs at O2 only. `bex_project` compiles at O2 as well as
+the CLI, so a tool that steps that bytecode by sequence point sees fewer of
+them than before.
+
+The user was asked whether those coarser single-step stops at O2 matter and
+said (2026-11-15): "it doesn't at O2 we can break that boundary." So dropping
+the sequence-point barrier is approved too, not only the line barrier. The
+consequence: stepping stops at O2 are coarser, one per fused run instead of
+one per statement. O0 and O1 are unchanged.
+
+**Kept.** The barrier at the first instruction of a MIR block. The Rust
+backend reads those positions and it was not shown that they only carry
+lines.
+
+**What it bought.** Read off O2 listings, combined build:
+
+| Loop | Before | After |
+|---|---|---|
+| collatz `while` (even / odd) | 7 / 10 | 5 / 8 |
+| quick-sort, two `==` tests | 3 each | 1 each |
+| nested-loops inner | 5 | 5 |
+| fib loop | 5 | 5 |
+| bubble-sort inner (no swap / swap) | 8 / 19 | 8 / 19 |
+| array-traversal, merge-sort | unchanged | unchanged |
+
+The collatz case the fused ledger flagged (`x % 2 == 0` left as three
+instructions) was this barrier: the `%` and the `== 0` test are two
+statements. It is now `mod_int x 2; jump_if_int_eq 0`.
+
+Instructions retired by the whole process (`/usr/bin/time -l`, fasttest
+build, best of 3, two rounds). A run costs about 22 G before the workload
+starts and that part moves by about 0.1 G between runs, so only collatz is
+outside the noise:
+
+| Workload | Before | After |
+|---|---|---|
+| collatz-100k | 30.23 G, 30.09 G | 29.65 G, 29.62 G |
+| bubble-sort-5k | 45.94 G | 45.74 G |
+| fib-iterative-100k | 24.98 G, 24.90 G | 24.94 G, 24.88 G |
+| merge-sort-20k | 24.94 G, 24.83 G | 24.82 G, 24.82 G |
+| quick-sort-3way-1k | 22.19 G, 22.03 G | 22.11 G, 22.05 G |
+| nested-loops-500x500 | 22.04 G, 22.03 G | 22.12 G, 22.03 G |
+| array-traversal-8k | 22.06 G | 22.02 G |
+
+Collatz retires about 0.5 G fewer, some 6% of what the workload itself costs.
+
+**Tests.** No test pinned a line that moved. One emit test looked for a plain
+load of a local after a `NarrowBind` and now also accepts the fused
+load-and-read-field. One bytecode snapshot changed. Corpus: 6081 pass and the
+same 16 `root.trace*` failures in the full run, the non-trace pass list
+identical to the baseline, trace-only 51 / 0. No corpus test pins a line that
+fusion moved.
+
+**Undo.** Restore the line-table loop at the end of `barriers` in `fuse.rs`.

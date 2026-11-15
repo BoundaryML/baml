@@ -116,6 +116,7 @@ function main(x: Foo | int) -> int {
                 Instruction::LoadVar2(first, second) => {
                     *first == destination || *second == destination
                 }
+                Instruction::LoadVarField { var, .. } => *var == destination,
                 _ => false,
             }),
         "{:?}",

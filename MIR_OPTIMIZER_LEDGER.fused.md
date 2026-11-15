@@ -64,8 +64,12 @@ keyed by PC tells its instructions apart. A run stops before an instruction that
 - the start or end of a shield range (`defer` body);
 - the start of an inline-table entry (an inlined call begins or ends);
 - the first instruction of a MIR block (`block_pcs`, which the Rust backend reads);
-- on another source line, or a debugger sequence point. A line entry that only narrows the span
-  on the same line is crossed.
+- ~~on another source line, or a debugger sequence point.~~ No longer a barrier since
+  2026-11-15: see "Lines of fused instructions" in `MIR_OPTIMIZER_LEDGER.md`. A fused instruction
+  reports the line of the first instruction of its run. The user approved both halves that day:
+  "it's ok if under some fusing we can't give exact line numbers for failures", and, asked about
+  single-step stops, "it doesn't at O2 we can break that boundary." Stepping stops at O2 are
+  coarser (one per fused run, not one per statement). O0 and O1 are unchanged.
 
 When only the trailing `StoreVar` is past such a point, the rest of the run is fused and pushes.
 

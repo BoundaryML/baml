@@ -14,13 +14,18 @@
 //! | `LoadVar ; LoadVar ; LoadArrayElement[Local]` | [`Instruction::LoadVarElement`] |
 //! | `LoadVar ; StoreVar` | [`Instruction::MoveVar`] |
 //!
-//! A fused instruction must be indistinguishable from its run, so a run is
-//! fused only when every table keyed by PC reads the same for all of it: no
-//! jump lands inside it, no handler, handler-body, shield or inlined-call
-//! range starts or ends inside it, and all of it is on one source line with
-//! no debugger sequence point after its first instruction. A panic raised by
-//! the fused instruction then reports the line, the handler and the inlined
-//! frames the unfused instruction would have.
+//! A fused instruction must behave as its run did, so a run is fused only
+//! when no jump lands inside it and no handler, handler-body, shield or
+//! inlined-call range starts or ends inside it. A panic raised by the fused
+//! instruction is then caught by the handler, and reports the frames and
+//! function names the unfused instruction would have.
+//!
+//! Its line is the one thing that may differ. A run may span source lines
+//! and statement boundaries, and the fused instruction reports the line of
+//! the run's first instruction: an error it raises can name a neighbouring
+//! line of the same function instead of its own. Only the innermost frame is
+//! affected. An outer frame's line is its call's, and a call is never fused.
+//! The pass runs at the level whose line table no debugger steps by.
 //!
 //! The pass runs on finished bytecode, after jumps are patched, and rewrites
 //! every PC the bytecode holds.
@@ -129,9 +134,9 @@ fn steps(instructions: &[Instruction]) -> Vec<Step> {
 }
 
 /// Per original instruction (and one past the last): whether a run that
-/// started earlier must stop before it. That is every PC a table names as
-/// the start or end of something, and every PC where the source line changes
-/// or the debugger may stop.
+/// started earlier must stop before it. That is every PC a jump lands on or
+/// a table names as the start or end of a range. The line table is not such
+/// a table: see the module docs.
 fn barriers(bytecode: &Bytecode) -> Vec<bool> {
     let count = bytecode.instructions.len();
     let mut barriers = vec![false; count + 1];
@@ -183,15 +188,6 @@ fn barriers(bytecode: &Bytecode) -> Vec<bool> {
         if let Some(start) = block.start {
             bar(start);
         }
-    }
-    // A line entry that keeps the line and is not a sequence point only
-    // narrows the span; a run may cross it and report the same line.
-    let mut line = None;
-    for entry in &bytecode.line_table {
-        if entry.sequence_point || line != Some(entry.line) {
-            bar(entry.pc);
-        }
-        line = Some(entry.line);
     }
     barriers
 }
@@ -629,7 +625,7 @@ mod tests {
     }
 
     #[test]
-    fn a_run_stops_at_a_jump_target_a_range_edge_and_a_new_line() {
+    fn a_run_stops_at_a_jump_target_and_a_range_edge_but_not_at_a_new_line() {
         // The same two instructions three times; each time something
         // different separates the load from the store.
         let pair = [Instruction::LoadVar(1), Instruction::StoreVar(2)];
@@ -648,9 +644,10 @@ mod tests {
             error_slot: 3,
             context_slot: 4,
         });
-        // Pair 3 (pcs 5, 6): the store is on the next line.
+        // Pair 3 (pcs 5, 6): the store is on the next line, at a statement
+        // boundary. It fuses, and reports its load's line.
         // Pair 4 (pcs 7, 8): the store only narrows the span.
-        code.line_table = vec![line(0, 1, true), line(6, 2, false), line(8, 2, false)];
+        code.line_table = vec![line(0, 1, true), line(6, 2, true), line(8, 2, false)];
         fuse(&mut code, &[]);
         let moved = Instruction::MoveVar {
             source: 1,
@@ -664,23 +661,22 @@ mod tests {
                 pair[1],
                 pair[0],
                 pair[1],
-                pair[0],
-                pair[1],
+                moved.clone(),
                 moved,
                 Instruction::Return,
             ]
         );
-        // The fused pair and the return after it are both still on line 2;
-        // the entry inside the pair now starts after it.
+        // Pair 3, at pc 5, is on line 1 with its load. Pair 4, at pc 6,
+        // starts on line 2, and the return after it keeps its own entry.
         assert_eq!(
             code.line_table
                 .iter()
                 .map(|entry| (entry.pc, entry.line))
                 .collect::<Vec<_>>(),
-            [(0, 1), (6, 2), (8, 2)]
+            [(0, 1), (6, 2), (7, 2)]
         );
         assert_eq!(code.exception_table[0].end_pc, 4);
-        assert_eq!(code.exception_table[0].handler_pc, 8);
+        assert_eq!(code.exception_table[0].handler_pc, 7);
     }
 
     #[test]
