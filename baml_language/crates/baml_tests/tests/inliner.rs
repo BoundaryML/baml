@@ -1005,3 +1005,56 @@ function main() -> int {
 "#;
     assert_eq!(run(source).await, Ok(BexExternalValue::Int(55)));
 }
+
+#[tokio::test]
+async fn a_panic_in_a_fused_instruction_of_an_inlined_callee_reports_both_frames() {
+    // `scaled / bottom` is one fused instruction inside the copy of `ratio`.
+    let source = r#"
+function ratio(top: int, bottom: int) -> int {
+  let scaled = top * 10
+  scaled / bottom
+}
+
+function main() -> int {
+  let total = 0
+  for (let i = 2; i >= 0; i -= 1) {
+    total += ratio(8, i)
+  }
+  total
+}
+"#;
+    let db = database(&[("test.baml", source)]);
+    let program = baml_db::CheckedWorld::collect(&db, db.workspace_root().unwrap())
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("the program compiles");
+    let index = baml_tests::engine::function_index(&program, "user.main").unwrap();
+    let Some(bex_vm_types::Object::Function(main)) = program.objects.get(index) else {
+        panic!("expected function");
+    };
+    assert!(
+        !main.bytecode.inline_frames.is_empty(),
+        "`ratio` is inlined"
+    );
+    let divides_fused = main
+        .bytecode
+        .instructions
+        .iter()
+        .enumerate()
+        .any(|(pc, op)| {
+            matches!(op, bex_vm_types::Instruction::IntArith { .. })
+                && main.bytecode.inline_frame_for_pc(pc).is_some()
+        });
+    assert!(
+        divides_fused,
+        "no fused instruction inside the inlined call: {:?}",
+        main.bytecode.instructions
+    );
+    let error = run(source).await.unwrap_err();
+    insta::assert_snapshot!(error, @"
+    Traceback (most recent call last):
+      File \"test.baml\", line 10, in user.main
+      File \"test.baml\", line 4, in user.ratio
+    uncaught throw: baml.panics.DivisionByZero {dividend: 80}
+    ");
+}

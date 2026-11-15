@@ -109,8 +109,7 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
     store_var x
     load_const 0
     store_var hits
-    load_var items
-    store_var _6
+    move_var items -> _6
     load_const 0
     store_var ?8
     array_iter_next 6 8
@@ -121,9 +120,7 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
 
   L0:
     load_var _7
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L2
+    jump_if_int_le 0 L2
     load_var a
     jump_if_false_or_pop L1
     load_var b
@@ -134,10 +131,7 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
   L2:
     load_var x
     pop_jump_if_false L3
-    load_var hits
-    load_const 1
-    add_int
-    store_var hits
+    add_int hits 1 -> hits
 
   L3:
     array_iter_next 6 8
@@ -154,8 +148,7 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
 function fixtures.short_circuit_locals.initialized_local_in_branch_loop(items: int[]) -> int {
     load_const 0
     store_var total
-    load_var items
-    store_var _3
+    move_var items -> _3
     load_const 0
     store_var ?5
     array_iter_next 3 5
@@ -166,9 +159,7 @@ function fixtures.short_circuit_locals.initialized_local_in_branch_loop(items: i
 
   L0:
     load_var _4
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_true L1
+    jump_if_int_gt 0 L1
     load_const 2
     jump L2
 
