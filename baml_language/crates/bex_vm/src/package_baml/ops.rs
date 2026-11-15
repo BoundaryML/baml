@@ -419,6 +419,14 @@ impl EqualsDriver {
             }
             (ValueKind::Int(x), ValueKind::Int(y)) => step(x == y),
             (ValueKind::Bool(x), ValueKind::Bool(y)) => step(x == y),
+            // Floats compare by value, reflexively (`NaN == NaN`, `-0.0 == 0.0`).
+            // An inline float against a boxed one is compared by value too,
+            // though the canonical encoding means such a pair is never equal.
+            (ValueKind::Float(_), ValueKind::Float(_) | ValueKind::Object(_))
+            | (ValueKind::Object(_), ValueKind::Float(_)) => match (a.as_float(), b.as_float()) {
+                (Some(x), Some(y)) => step(bex_vm_types::float_order::eq(x, y)),
+                _ => Cmp::NotEqual,
+            },
             (ValueKind::Object(pa), ValueKind::Object(pb)) => {
                 // `pa != pb` here: identical pointers were settled by the
                 // reflexivity short-circuit above.
@@ -444,6 +452,7 @@ impl EqualsDriver {
                 | ValueKind::OmittedArg
                 | ValueKind::Int(_)
                 | ValueKind::Bool(_)
+                | ValueKind::Float(_)
                 | ValueKind::Object(_),
                 _,
             ) => Cmp::NotEqual,

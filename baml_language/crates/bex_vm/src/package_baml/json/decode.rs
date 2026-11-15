@@ -1213,6 +1213,7 @@ fn node_of(vm: &BexVm, json: Value) -> Node {
         ValueKind::Null | ValueKind::OmittedArg => Node::Null,
         ValueKind::Bool(b) => Node::Bool(b),
         ValueKind::Int(i) => Node::Int(i),
+        ValueKind::Float(f) => Node::Float(f),
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Float(f) => Node::Float(*f),
             Object::String(_) => Node::String(json),
@@ -1415,7 +1416,7 @@ impl<'p> Structural<'p> {
             RealizedTy::Float => match (&node, node.as_f64()) {
                 // A float is itself: NaN and the infinities too.
                 (Node::Float(_), _) => Ok(json),
-                (_, Some(float)) => Ok(Value::object(vm.alloc_float(float))),
+                (_, Some(float)) => Ok(vm.float_value(float)),
                 _ => Err(self.fail(vm, || "expected number".into())),
             },
             RealizedTy::String => match node {
@@ -1708,7 +1709,7 @@ impl<'p> Structural<'p> {
             baml_type::Literal::Float(expected) if node.is_number() => {
                 match (expected.parse::<f64>(), node.as_f64()) {
                     (Ok(expected), Some(actual)) if (expected - actual).abs() < f64::EPSILON => {
-                        Ok(Value::object(vm.alloc_float(actual)))
+                        Ok(vm.float_value(actual))
                     }
                     _ => Err(self.fail(vm, || "literal float mismatch".into())),
                 }
