@@ -531,8 +531,8 @@ impl BexHeap {
         let mut next = first;
         for (enum_index, count) in enums {
             let enm = ptr_at(enum_index);
-            for slot in next..next + count {
-                if let Object::Variant(variant) = &mut objects[slot] {
+            for object in &mut objects[next..next + count] {
+                if let Object::Variant(variant) = object {
                     variant.enm = enm;
                 }
             }
