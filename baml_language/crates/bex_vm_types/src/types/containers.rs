@@ -513,7 +513,7 @@ fn spilled_capacity(bucket: &MapBucket) -> usize {
 
 /// Ordered entries indexed by hashes computed by the VM, never by Rust's
 /// pointer-based `Value` equality or hashing.
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct MapData {
     /// Fx-hashed: entry ids are this map's own counter, never program input.
     entries: IndexMap<EntryId, MapEntry, FxBuildHasher>,
@@ -526,6 +526,23 @@ pub struct MapData {
     next_id: EntryId,
     // Only membership changes invalidate an in-flight key comparison.
     epoch: u64,
+}
+
+impl Clone for MapData {
+    fn clone(&self) -> Self {
+        let buckets = self.buckets.clone();
+        // A cloned bucket allocates only what its ids need: one that kept a
+        // spilled allocation after removals can come back inline, or with
+        // less room. Charge what the clone holds.
+        let spilled_capacity = buckets.values().map(spilled_capacity).sum();
+        Self {
+            entries: self.entries.clone(),
+            buckets,
+            spilled_capacity,
+            next_id: self.next_id,
+            epoch: self.epoch,
+        }
+    }
 }
 
 impl MapData {
@@ -970,6 +987,39 @@ mod map_tests {
         map.remove_if_epoch(map.epoch(), Some(ids[2])).unwrap();
         assert_eq!(map.spilled_capacity, 0, "the empty bucket is dropped");
         assert!(map.backing_bytes() < spilled);
+    }
+
+    /// A clone charges the spilled room its own buckets hold, not the
+    /// original's: a bucket that shrank by removal clones back inline.
+    #[test]
+    fn a_clone_charges_the_spilled_room_it_holds() {
+        let mut map = MapData::new();
+        let ids: Vec<_> = (0..3)
+            .map(|i| map.insert_hashed(7, Value::int(i), Value::NULL))
+            .collect();
+        for id in &ids[..2] {
+            map.remove_if_epoch(map.epoch(), Some(*id)).unwrap();
+        }
+        assert!(map.spilled_capacity > 0, "removal keeps the allocation");
+
+        let mut clone = map.clone();
+        assert_eq!(clone.spilled_capacity, 0, "one id clones back inline");
+        clone.remove_if_epoch(clone.epoch(), Some(ids[2])).unwrap();
+        assert_eq!(
+            clone.spilled_capacity, 0,
+            "an emptied clone charges no spilled room"
+        );
+
+        let mut spilled = MapData::new();
+        for i in 0..5 {
+            spilled.insert_hashed(7, Value::int(i), Value::NULL);
+        }
+        let clone = spilled.clone();
+        assert_eq!(
+            clone.spilled_capacity,
+            clone.buckets.values().map(spilled_capacity).sum::<usize>(),
+            "a spilled bucket's clone is charged for its own allocation"
+        );
     }
 
     #[test]
