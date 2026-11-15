@@ -14,9 +14,9 @@ use bex_vm_types::{
 
 use super::{CompiledFn, FrameRecord, Step};
 use crate::{
-    errors::{VmError, VmInternalError, VmPanic},
+    errors::{VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::EvalStackTrait,
-    package_baml::{NativeCallResult, NativeFunction},
+    package_baml::{NativeCallResult, NativeFunction, NativeFunctionResult},
     types::ObjectTrait as _,
     vm::{BexVm, Frame, VmExecState},
 };
@@ -54,7 +54,8 @@ impl BexVm {
         type_args: &mut [RealizedTy],
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        self.with_call_type_args(type_args, |vm| builtin(vm, args))
+        let outcome = self.with_call_type_args(type_args, |vm| builtin(vm, args));
+        self.finish_builtin(outcome)
     }
 
     /// The result of a builtin call: what generated code does after calling a
@@ -70,24 +71,47 @@ impl BexVm {
         }
     }
 
-    /// Run a generic builtin's entry point with `type_args` as its call's
-    /// type arguments, and finish its result. The arguments are lent, not
-    /// copied: the builtin reads them through `current_call_type_args`, and
-    /// the collector roots and updates them in place for the call.
+    /// The result of a builtin that cannot pause, called by name: what
+    /// [`Self::finish_builtin`] does, for a plain `Result`.
+    #[allow(clippy::inline_always, reason = "every compiled builtin call's tail")]
+    #[inline(always)]
+    pub fn finish_result(&mut self, result: NativeFunctionResult) -> Result<Value, Box<VmError>> {
+        self.settle();
+        match result {
+            Ok(value) => Ok(value),
+            Err(error) => Err(self.builtin_error(error)),
+        }
+    }
+
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "boxing out of line keeps the allocation off the inlined fast path"
+    )]
+    #[cold]
+    #[inline(never)]
+    fn builtin_error(&mut self, error: VmRustFnError) -> Box<VmError> {
+        Box::new(self.native_error_to_vm_error(error))
+    }
+
+    /// Run a builtin's entry point with `type_args` as its call's type
+    /// arguments. The arguments are lent, not copied: the builtin reads them
+    /// through `current_call_type_args`, and the collector roots and updates
+    /// them in place for the call. Only a builtin that can read them is given
+    /// them (`NativeEntry::reads_type_args`).
     #[inline]
-    pub fn with_call_type_args(
+    pub fn with_call_type_args<R>(
         &mut self,
         type_args: &mut [RealizedTy],
-        call: impl FnOnce(&mut Self) -> NativeCallResult,
-    ) -> Result<Value, Box<VmError>> {
+        call: impl FnOnce(&mut Self) -> R,
+    ) -> R {
         let previous = self
             .compiled
             .lent_type_args
             .replace(super::state::LentTypeArgs(std::ptr::NonNull::from(type_args)));
         let restore = RestoreLoan(&raw mut self.compiled.lent_type_args, previous);
-        let outcome = call(self);
+        let result = call(self);
         drop(restore);
-        self.finish_builtin(outcome)
+        result
     }
 
     #[allow(
