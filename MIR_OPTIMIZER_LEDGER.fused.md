@@ -117,23 +117,29 @@ Across the 14 compute workloads surveyed, the listings went from 2,473 lines to 
 
 ## Measured
 
-Packed workloads, driver from `tools/speedtest`, best of 7 alternating runs. The machine was at a
-load average near 40 from other builds, so these are single best values, not ranges.
-"Before" is the parent's `step3-fast` build. "After" has both commits.
+Packed workloads, driver from `tools/speedtest`, 7 alternating runs of each build in one session
+at a load average of 9 to 21. Each cell is the fastest run to the median run, per job.
 
-| Workload | Before | After |
-| --- | --- | --- |
-| empty counted loop, 1M | 50.8 ms | 20.2 ms |
-| nested-loops-500x500 | 14.3 ms | 7.04 ms |
-| fib-iterative-100k | 507 ms | 216 ms |
-| bubble-sort-5k | 2.38 s | 1.86 s |
+| Workload | Before | Push-path fix | Fix and fusion |
+| --- | --- | --- | --- |
+| empty counted loop, 1M | 36.8 to 37.3 ms | 30.3 to 30.5 ms | 15.8 to 15.9 ms |
+| nested-loops-500x500 | 11.5 to 11.6 ms | 8.69 to 8.82 ms | 5.67 to 5.72 ms |
+| fib-iterative-100k | 258 to 260 ms | 206 to 209 ms | 119 to 121 ms |
+| bubble-sort-5k | 1.82 to 1.84 s | 1.35 to 1.36 s | 1.13 to 1.15 s |
 
-The two commits were not measured separately in this table. The profile bounds the push-path fix
-at about a third of interpreter time on these loops. The "before" build is also two commits
-older than the base of this work (it lacks the inlining of generic callees and closures), which
-none of the four programs use.
+The fix alone is 1.2x to 1.35x. Fusion on top of it is 1.9x, 1.5x, 1.7x and 1.2x. Together 2.3x,
+2.0x, 2.2x and 1.6x. Bubble sort gains least from fusion: its inner loop is array reads, length
+tests and element stores, which are fused least.
 
-`scripts/speedtest` was not run: at that load its medians would not have meant anything.
+"Before" is the parent's `step3-fast` build, which is two commits older than the base of this
+work: it lacks the inlining of generic callees and closures, which none of the four programs
+use. "Push-path fix" is a build of the first commit alone. "Fix and fusion" is the build the
+tests and corpus ran on.
+
+An earlier run at a load average near 40 gave 50.8, 14.3, 507 and 2,380 ms before and 20.2, 7.04,
+216 and 1,860 ms after. The ratios agree except for bubble sort (1.3x then, 1.6x now).
+
+`scripts/speedtest` was not run.
 
 ## Verified
 
