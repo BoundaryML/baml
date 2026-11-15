@@ -284,6 +284,20 @@ impl EarlyYieldCheck {
         self.counter == 0
     }
 
+    /// [`Self::tick`] when that tick leaves the interval running; false, and
+    /// no tick, when it would elapse it. A dispatch fast path that cannot
+    /// poll uses this, then hands the elapsing tick to the full check.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub fn tick_unless_due(&mut self) -> bool {
+        if self.counter > 1 {
+            self.counter -= 1;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Make the next [`Self::tick`] elapse, so the flags are polled at the
     /// next control-flow check instead of up to an interval later. For a VM
     /// that has just learned it took spending over the GC budget.
