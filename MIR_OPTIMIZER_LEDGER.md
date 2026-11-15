@@ -360,3 +360,74 @@ Found when the inliner met the other two passes:
   Cost: `may_finalize` answers "maybe" for any class outside the package and
   the standard library, so an unused instance of a dependency's class is
   kept even when that class has no finalizer.
+
+## Inliner, second round
+
+Rules above that this round changes: "No type arguments" and "Direct call
+only" are narrower now. Everything else stands.
+
+### Generic callees
+
+- A callee whose body never reads its frame's type arguments is inlined
+  whatever type arguments the call passes. Many generic functions are like
+  this (`function id<T>(x: T) -> T { x }`), and so is every function that is
+  generic only in what it throws.
+- A callee that reads them is inlined when every slot it reads is filled, at
+  the call, by a type known where the call is written: the operand is a
+  local whose one definition is `LoadType` of a template with no frame
+  reference, or the callee is a `GenericFunction` constant. The types are
+  substituted into the copy's templates.
+- Kept as calls: a type argument that comes from the caller's own frame
+  (`function main<U>(x: U) { target(x) }`); a template that is not a whole
+  type after substitution (an associated-type projection); a type test
+  against a frame type (`x is T`), because lowering states a class or enum
+  test by declaration and a substituted template does not; interface default
+  bodies, whose `Self` dispatch fills in.
+- A copied local can keep a type that names the callee's type parameter
+  (`let _8: T`). Nothing after lowering interprets a type variable in a
+  local's type (checked in emit, the Rust backend, escape analysis and the
+  optimizer), so it reads as an opaque type. Substituting it would be more
+  precise and is not done.
+- New in `baml_type`: `TyTemplate::replace_type_arg_refs` and
+  `TyTemplateInterface::for_each_template_mut`. New in `memory.rs`: mutable
+  walkers over every template of a statement or terminator, arm for arm
+  with the read-only ones.
+
+### Closures
+
+- A call through a local is inlined when that local's one definition, or the
+  one definition of the local it was copied from, is `MakeClosure` of a
+  lambda of the same body with no captures and no captured type arguments.
+  This is what is left of `apply(double, i)` once `apply` is inlined.
+- A closure that captures anything stays a call. The copy would read the
+  captured cell through the caller's local, and a loop can give that local a
+  fresh cell after the closure was made. Proving it has not needs a
+  reaching-definitions pass over `FreshCell`. Not done.
+- A closure passed to a function that is not inlined stays a call.
+- `InlineScope::callee` is now a `MirFunctionId`, so a lambda's frame shows
+  in a stack trace as `.<lambda(main, 0)>`, as it did when called.
+
+### Result written in place
+
+With no handler around the call, the callee's return slot is the call's
+destination itself. A throw leaves the frame, so nothing can see the early
+write. Not done when a parameter of the callee stands for that same local,
+or when the types differ. This keeps a call result on the operand stack
+where the old code had one (`optimizer_binary_prefix`).
+
+### Not done: the default test for a run-time argument
+
+No speedtest workload declares a defaulted parameter, so this cannot move
+one. It also needs a proof that a run-time argument is never the omission
+sentinel, which is false inside a default expression that forwards a later
+parameter. Stopped here.
+
+### Snapshots and budgets, second round
+
+- `ns_spawn_semantics/bytecode.snap`: `baml.spawn.Plan.new` is inlined, so a
+  `spawn` builds its plan with `init_instance` instead of a call.
+- `ns_json_*`, `ns_llm_quoted_prompt`: results written in place.
+- Two `compiler2_mir` snapshots: generic callees that do not read their
+  frame are inlined.
+- `optimizer_binary_prefix::prefix_template`: 7 to 8 instructions. The
+  helper's virtual call replaced the call to the helper.

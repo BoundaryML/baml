@@ -1162,10 +1162,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         self.bytecode
             .inline_frames
             .push(bex_vm_types::bytecode::InlineFrame {
-                function: crate::refs::function_identity(
-                    self.db,
-                    &baml_compiler2_mir::MirFunctionId::Declared(scope.callee),
-                ),
+                function: crate::refs::function_identity(self.db, &scope.callee),
                 package: (file.source_root(self.db) != self.refs.root).then(|| {
                     baml_compiler2_hir_ty::render::Viewpoint::canonical(self.db)
                         .display_label(file.source_root(self.db))

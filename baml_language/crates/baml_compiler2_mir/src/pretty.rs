@@ -228,10 +228,7 @@ fn write_block(f: &mut impl Write, db: &dyn crate::Db, block: &BasicBlock<'_>) -
         chain.reverse();
         write!(f, " [inlined")?;
         for (depth, scope) in chain.into_iter().enumerate() {
-            let name = crate::lower::definition_display_name(
-                db,
-                baml_compiler2_hir::contributions::Definition::Function(scope.callee),
-            );
+            let name = scope.callee.display_name(db);
             write!(f, "{}{name}", if depth == 0 { " " } else { " > " })?;
         }
         write!(f, "]")?;

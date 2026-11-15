@@ -331,8 +331,9 @@ pub struct BasicBlock<'db> {
 /// or the function the block is in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InlineScope<'db> {
-    /// The function the block was copied from.
-    pub callee: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    /// The function the block was copied from: a declared function, or a
+    /// lambda of the function the block is in.
+    pub callee: MirFunctionId<'db>,
     /// The span of the call the copy replaced, in the caller's source.
     pub call_span: Option<Span>,
     /// The scope of the block that held the call, when that block was
@@ -514,6 +515,15 @@ pub enum TypeTest<'db> {
 }
 
 impl TypeTest<'_> {
+    /// Every template the test carries, for rewriting in place.
+    pub fn for_each_template_mut(&mut self, f: &mut impl FnMut(&mut TyTemplate)) {
+        match self {
+            Self::Class { args, .. } => args.iter_mut().for_each(f),
+            Self::Enum(_) => {}
+            Self::Template(template) => f(template),
+        }
+    }
+
     /// Every frame type-argument slot the test reads.
     pub fn for_each_type_arg_ref(&self, f: &mut impl FnMut(u32)) {
         match self {
@@ -1426,6 +1436,17 @@ pub enum FunctionOwner<'db> {
     Synthetic(Box<MirFunctionId<'db>>),
 }
 
+impl<'db> MirFunctionId<'db> {
+    /// The source file the function is written in. A synthetic function is
+    /// written inside its owner.
+    pub fn file(&self, db: &'db dyn crate::Db) -> baml_base::SourceFile {
+        match self {
+            MirFunctionId::Declared(function) => function.file(db),
+            MirFunctionId::Synthetic { parent, .. } => parent.file(db),
+        }
+    }
+}
+
 impl MirFunctionId<'_> {
     /// The name this function displays as — the declaration's canonical
     /// display name, or the synthetic spelling `<lambda(owner, i)>` /
@@ -1484,6 +1505,15 @@ impl MirFunctionId<'_> {
 }
 
 impl<'db> FunctionOwner<'db> {
+    /// The source file the owner is written in.
+    pub fn file(&self, db: &'db dyn crate::Db) -> baml_base::SourceFile {
+        match self {
+            FunctionOwner::Function(function) => function.file(db),
+            FunctionOwner::Let(binding) => binding.file(db),
+            FunctionOwner::Synthetic(id) => id.file(db),
+        }
+    }
+
     /// The spelling a synthetic function names this owner by — see
     /// [`MirFunctionId::short_name`].
     pub fn short_name(&self, db: &dyn crate::Db) -> String {

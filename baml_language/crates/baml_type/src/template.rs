@@ -701,6 +701,17 @@ impl<N: Clone> TyTemplateInterface<N> {
         )
     }
 
+    /// Every template position of the constraint, for rewriting in place:
+    /// the generic arguments, then the associated-type bindings.
+    pub fn for_each_template_mut(&mut self, f: &mut impl FnMut(&mut TyTemplate<N>)) {
+        for generic in &mut self.generics {
+            f(generic);
+        }
+        for (_, binding) in &mut self.associated_types {
+            f(binding);
+        }
+    }
+
     /// [`TyTemplate::for_each_type_arg_ref`] over every template position of
     /// the constraint: the generic arguments, then the associated-type bindings.
     pub fn for_each_type_arg_ref(&self, f: &mut impl FnMut(u32)) {
@@ -875,6 +886,21 @@ impl<N: Clone> TyTemplate<N> {
         visit_template(self, &mut |template| {
             if let TyTemplate::TypeArgRef(index) = template {
                 f(*index);
+            }
+        });
+    }
+
+    /// Replaces every [`TyTemplate::TypeArgRef`] leaf with the template `f`
+    /// gives for its frame slot: the template as it reads in a frame whose
+    /// slots hold those types. What `f` returns is placed as it is, not
+    /// rewritten again.
+    pub fn replace_type_arg_refs(&mut self, f: &mut impl FnMut(u32) -> TyTemplate<N>) {
+        walk_template(self, false, &mut |template, _| {
+            if let TyTemplate::TypeArgRef(index) = template {
+                *template = f(*index);
+                false
+            } else {
+                true
             }
         });
     }

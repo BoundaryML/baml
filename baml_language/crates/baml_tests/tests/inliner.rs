@@ -291,11 +291,12 @@ function main() -> int { target(1) }
 }
 
 #[test]
-fn a_generic_function_keeps_its_call() {
+fn a_generic_call_with_types_from_the_callers_frame_stays_a_call() {
+    // `U` is only known when `main` runs.
     assert_not_inlined(
         r#"
 function target<T>(x: T) -> T[] { [x] }
-function main() -> int[] { target(1) }
+function main<U>(x: U) -> U[] { target(x) }
 "#,
     );
 }
@@ -595,4 +596,141 @@ function main() -> int {
     assert_eq!(calls, 0, "{mir}");
     assert!(!mir.contains("user.Vec {"), "{mir}");
     assert_eq!(run(source).await, Ok(BexExternalValue::Int(670)));
+}
+
+#[tokio::test]
+async fn a_generic_callee_reads_the_types_the_call_names() {
+    // `T` is `int` at one call and `string` at the other; the arrays the
+    // copies build must say so.
+    let source = r#"
+class Box<T> {
+  value: T
+  function get(self) -> T { self.value }
+  function listed(self) -> T[] { [self.value] }
+}
+function wrap<T>(x: T) -> T[] { [x] }
+function describe(xs: unknown) -> string {
+  if (xs is int[]) { "ints" } else if (xs is string[]) { "strings" } else { "other" }
+}
+function entry(n: int, s: string) -> string {
+  let numbers = wrap(n)
+  let words = wrap(s)
+  let boxed = Box<int> { value: n }
+  let sum = boxed.get() + numbers[0]
+  `${describe(numbers)} ${describe(words)} ${describe(boxed.listed())} ${sum}`
+}
+function main() -> string { entry(4, "four") }
+"#;
+    let (mir, calls) = lowered(source, "entry", OptLevel::Two);
+    assert_eq!(calls, 0, "{mir}");
+    assert!(mir.contains("[inlined user.wrap]"), "{mir}");
+    assert_eq!(
+        run(source).await,
+        Ok(BexExternalValue::String("ints strings ints 8".into()))
+    );
+}
+
+#[tokio::test]
+async fn an_error_in_an_inlined_generic_callee_reports_its_frame() {
+    let source = r#"
+function first<T>(xs: T[]) -> T {
+  if (xs.length() == 0) {
+    throw "empty"
+  }
+  xs[0]
+}
+
+function main() -> int {
+  let none: int[] = []
+  first(none)
+}
+"#;
+    let (mir, _) = lowered(source, "main", OptLevel::Two);
+    assert!(mir.contains("[inlined user.first]"), "{mir}");
+    let error = run(source).await.unwrap_err();
+    insta::assert_snapshot!(error, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 11, in user.main
+      File "test.baml", line 4, in user.first
+    uncaught throw: "empty"
+    "#);
+}
+
+#[tokio::test]
+async fn a_call_through_a_closure_that_captures_nothing_is_inlined() {
+    // The shape of the `closure-apply-1m` workload: `apply` is inlined, which
+    // leaves a call of the closure where it was made.
+    let source = r#"
+function apply(f: (int) -> int, x: int) -> int { f(x) }
+function entry(n: int) -> int {
+  let double = (x: int) -> int { x * 2 };
+  let total = 0;
+  for (let i = 0; i < n; i += 1) { total += apply(double, i); };
+  total
+}
+function main() -> int { entry(5) }
+"#;
+    let (mir, calls) = lowered(source, "entry", OptLevel::Two);
+    assert_eq!(calls, 0, "{mir}");
+    assert!(
+        mir.contains("[inlined user.apply > .<lambda(entry, 0)>]"),
+        "{mir}"
+    );
+    assert!(!mir.contains("= call "), "{mir}");
+    assert_eq!(run(source).await, Ok(BexExternalValue::Int(20)));
+}
+
+#[test]
+fn a_call_through_a_closure_that_captures_stays_a_call() {
+    let source = r#"
+function entry(n: int) -> int {
+  let offset = n + 1;
+  let shift = (x: int) -> int { x + offset };
+  shift(n)
+}
+"#;
+    let (mir, _) = lowered(source, "entry", OptLevel::Two);
+    assert!(!mir.contains("[inlined"), "{mir}");
+    assert!(mir.contains("= call "), "{mir}");
+}
+
+#[tokio::test]
+async fn an_error_in_an_inlined_closure_reports_its_frame() {
+    let source = r#"
+function apply(f: (int) -> int, x: int) -> int {
+  f(x)
+}
+
+function main() -> int {
+  let fail = (x: int) -> int {
+    throw "boom"
+  };
+  apply(fail, 1)
+}
+"#;
+    let (mir, _) = lowered(source, "main", OptLevel::Two);
+    assert!(mir.contains("<lambda(main, 0)>]"), "{mir}");
+    let error = run(source).await.unwrap_err();
+    insta::assert_snapshot!(error, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 10, in user.main
+      File "test.baml", line 3, in user.apply
+      File "test.baml", line 8, in .<lambda(main, 0)>
+    uncaught throw: "boom"
+    "#);
+}
+
+#[tokio::test]
+async fn a_parameter_defaulting_to_a_closure_calls_what_it_was_passed() {
+    // `f` has one assignment in the body, its default, but the caller's
+    // closure is what it holds when one is passed.
+    let source = r#"
+function twice(x: int, f: (int) -> int throws never = (q: int) -> int { q * 2 }) -> int {
+  f(x)
+}
+function main() -> int {
+  twice(5) * 100 + twice(5, f = (q: int) -> int { q + 1 })
+}
+"#;
+    assert_eq!(run(source).await, Ok(BexExternalValue::Int(1006)));
 }

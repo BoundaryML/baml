@@ -19,9 +19,6 @@ fn user.checked(t: reflect.Type) -> bool {
     let _3: bool
     let _4: bool
     let _5: bool
-    let _6: bool
-    let _7: string
-    let _8: reflect.Type
 
     bb0: {
         bind_type(0, copy _1);
@@ -41,21 +38,11 @@ fn user.checked(t: reflect.Type) -> bool {
     }
 
     bb3: {
-        _8 = load_type(#0);
-        _7 = call const fn user.erase<copy _8>() -> [bb4];
+        _5 = is_type_tag(const null, NULL);
+        goto -> bb4;
     }
 
     bb4: {
-        _6 = copy _7 == const "ok";
-        _5 = short_circuit(&&) copy _6 -> [eval: bb5, join: bb6];
-    }
-
-    bb5: {
-        _5 = is_type_tag(const null, NULL);
-        goto -> bb6;
-    }
-
-    bb6: {
         _0 = copy _5;
         return;
     }
@@ -67,8 +54,6 @@ fn user.guarded(t: reflect.Type) -> bool {
     let _1: reflect.Type // t // param
     let _2: reflect.Type
     let _3: bool
-    let _4: string
-    let _5: reflect.Type
 
     bb0: {
         bind_type(0, copy _1);
@@ -83,12 +68,7 @@ fn user.guarded(t: reflect.Type) -> bool {
     }
 
     bb2: {
-        _5 = load_type(#0);
-        _4 = call const fn user.erase<copy _5>() -> [bb3];
-    }
-
-    bb3: {
-        _0 = copy _4 == const "ok";
+        _0 = const true;
         return;
     }
 }

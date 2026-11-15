@@ -68,7 +68,26 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@build_request(topic: string, cli
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
-    let _5: reflect.Type
+    let _5: ai.FunctionSpec // self
+    let _6: null | ai.Client // client
+    let _7: bool
+    let _8: ai.Client // selected
+    let _9: ai.Client
+    let _10: ai.ModelTurnInput
+    let _11: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _12: ai.Journal
+    let _13: ai.tools.Toolbox
+    let _14: reflect.Type
+    let _15: ai.FunctionSpec<Out> // spec
+    let _16: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.ModelCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.UserMessage)[]
+    let _17: ai.events.RunStarted
+    let _18: string
+    let _19: map<string, unknown>
+    let _20: reflect.Type // output_type
+    let _21: null
+    let _22: reflect.Type
+    let _23: ai.FunctionSpec // self
+    let _24: ai.FunctionSpec // self
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -85,11 +104,90 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@build_request(topic: string, cli
     }
 
     bb3: {
-        _5 = load_type(string);
-        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+        _5 = copy _4;
+        _6 = copy _2;
+        goto -> bb4;
     }
 
-    bb4: {
+    bb4 [inlined ai.FunctionSpec.build_request]: {
+        _7 = copy _6 == const <omitted>;
+        branch copy _7 -> [bb5, bb6];
+    }
+
+    bb5 [inlined ai.FunctionSpec.build_request]: {
+        _6 = const null;
+        goto -> bb6;
+    }
+
+    bb6 [inlined ai.FunctionSpec.build_request]: {
+        _9 = short_circuit(??) copy _6 -> [eval: bb7, join: bb8];
+    }
+
+    bb7 [inlined ai.FunctionSpec.build_request]: {
+        _9 = copy _5.5;
+        goto -> bb8;
+    }
+
+    bb8 [inlined ai.FunctionSpec.build_request]: {
+        _8 = copy _9;
+        _11 = copy _5.3;
+        _15 = copy _5;
+        goto -> bb9;
+    }
+
+    bb9 [inlined ai.FunctionSpec.build_request > ai.Journal.new]: {
+        _23 = copy _15;
+        goto -> bb10;
+    }
+
+    bb10 [inlined ai.FunctionSpec.build_request > ai.Journal.new > ai.FunctionSpec.name]: {
+        _18 = copy _23.0;
+        goto -> bb11;
+    }
+
+    bb11 [inlined ai.FunctionSpec.build_request > ai.Journal.new]: {
+        _24 = copy _15;
+        goto -> bb12;
+    }
+
+    bb12 [inlined ai.FunctionSpec.build_request > ai.Journal.new > ai.FunctionSpec.arguments]: {
+        _19 = copy _24.2;
+        goto -> bb13;
+    }
+
+    bb13 [inlined ai.FunctionSpec.build_request > ai.Journal.new]: {
+        _17 = ai.events.RunStarted { copy _18, copy _19 };
+        _16 = [copy _17]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ModelCall | ai.events.FinalProduced[];
+        _12 = ai.Journal { copy _16 };
+        goto -> bb14;
+    }
+
+    bb14 [inlined ai.FunctionSpec.build_request > ai.FunctionSpec.tools]: {
+        _13 = copy _5.4;
+        goto -> bb15;
+    }
+
+    bb15 [inlined ai.FunctionSpec.build_request > ai.FunctionSpec.output_type]: {
+        _20 = load_type(string);
+        goto -> bb16;
+    }
+
+    bb16 [inlined ai.FunctionSpec.build_request > ai.FunctionSpec.output_type]: {
+        _22 = copy _20;
+        _21 = call const fn ai.internal.validate_output_type(copy _22) -> [bb17];
+    }
+
+    bb17 [inlined ai.FunctionSpec.build_request > ai.FunctionSpec.output_type]: {
+        _14 = copy _20;
+        goto -> bb18;
+    }
+
+    bb18 [inlined ai.FunctionSpec.build_request]: {
+        _10 = ai.ModelTurnInput { copy _11, copy _12, copy _13, copy _14 };
+        _0 = virtual_call render as ai.Client(copy _8, copy _10) -> [bb19];
+    }
+
+    bb19: {
         return;
     }
 }
@@ -505,7 +603,26 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@build_request(topic: string, c
     let _2: null | ai.Client // client // param
     let _3: bool
     let _4: ai.FunctionSpec<string>
-    let _5: reflect.Type
+    let _5: ai.FunctionSpec // self
+    let _6: null | ai.Client // client
+    let _7: bool
+    let _8: ai.Client // selected
+    let _9: ai.Client
+    let _10: ai.ModelTurnInput
+    let _11: (ai.OutputFormat) -> ai.Prompt throws ai.errors.PromptRenderError
+    let _12: ai.Journal
+    let _13: ai.tools.Toolbox
+    let _14: reflect.Type
+    let _15: ai.FunctionSpec<Out> // spec
+    let _16: (ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.ModelCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.UserMessage)[]
+    let _17: ai.events.RunStarted
+    let _18: string
+    let _19: map<string, unknown>
+    let _20: reflect.Type // output_type
+    let _21: null
+    let _22: reflect.Type
+    let _23: ai.FunctionSpec // self
+    let _24: ai.FunctionSpec // self
 
     bb0: {
         _3 = copy _2 == const <omitted>;
@@ -522,11 +639,90 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@build_request(topic: string, c
     }
 
     bb3: {
-        _5 = load_type(string);
-        _0 = call const fn ai.FunctionSpec.build_request<copy _5>(copy _4, copy _2) -> [bb4];
+        _5 = copy _4;
+        _6 = copy _2;
+        goto -> bb4;
     }
 
-    bb4: {
+    bb4 [inlined ai.FunctionSpec.build_request]: {
+        _7 = copy _6 == const <omitted>;
+        branch copy _7 -> [bb5, bb6];
+    }
+
+    bb5 [inlined ai.FunctionSpec.build_request]: {
+        _6 = const null;
+        goto -> bb6;
+    }
+
+    bb6 [inlined ai.FunctionSpec.build_request]: {
+        _9 = short_circuit(??) copy _6 -> [eval: bb7, join: bb8];
+    }
+
+    bb7 [inlined ai.FunctionSpec.build_request]: {
+        _9 = copy _5.5;
+        goto -> bb8;
+    }
+
+    bb8 [inlined ai.FunctionSpec.build_request]: {
+        _8 = copy _9;
+        _11 = copy _5.3;
+        _15 = copy _5;
+        goto -> bb9;
+    }
+
+    bb9 [inlined ai.FunctionSpec.build_request > ai.Journal.new]: {
+        _23 = copy _15;
+        goto -> bb10;
+    }
+
+    bb10 [inlined ai.FunctionSpec.build_request > ai.Journal.new > ai.FunctionSpec.name]: {
+        _18 = copy _23.0;
+        goto -> bb11;
+    }
+
+    bb11 [inlined ai.FunctionSpec.build_request > ai.Journal.new]: {
+        _24 = copy _15;
+        goto -> bb12;
+    }
+
+    bb12 [inlined ai.FunctionSpec.build_request > ai.Journal.new > ai.FunctionSpec.arguments]: {
+        _19 = copy _24.2;
+        goto -> bb13;
+    }
+
+    bb13 [inlined ai.FunctionSpec.build_request > ai.Journal.new]: {
+        _17 = ai.events.RunStarted { copy _18, copy _19 };
+        _16 = [copy _17]: ai.events.RunStarted | ai.events.UserMessage | ai.events.AssistantMessage | ai.events.ToolRequested | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ModelCall | ai.events.FinalProduced[];
+        _12 = ai.Journal { copy _16 };
+        goto -> bb14;
+    }
+
+    bb14 [inlined ai.FunctionSpec.build_request > ai.FunctionSpec.tools]: {
+        _13 = copy _5.4;
+        goto -> bb15;
+    }
+
+    bb15 [inlined ai.FunctionSpec.build_request > ai.FunctionSpec.output_type]: {
+        _20 = load_type(string);
+        goto -> bb16;
+    }
+
+    bb16 [inlined ai.FunctionSpec.build_request > ai.FunctionSpec.output_type]: {
+        _22 = copy _20;
+        _21 = call const fn ai.internal.validate_output_type(copy _22) -> [bb17];
+    }
+
+    bb17 [inlined ai.FunctionSpec.build_request > ai.FunctionSpec.output_type]: {
+        _14 = copy _20;
+        goto -> bb18;
+    }
+
+    bb18 [inlined ai.FunctionSpec.build_request]: {
+        _10 = ai.ModelTurnInput { copy _11, copy _12, copy _13, copy _14 };
+        _0 = virtual_call render as ai.Client(copy _8, copy _10) -> [bb19];
+    }
+
+    bb19: {
         return;
     }
 }

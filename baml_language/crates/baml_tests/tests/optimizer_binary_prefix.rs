@@ -72,7 +72,9 @@ fn inlined_binary_prefixes_do_not_spill_call_results() {
         ("bt_case_h", 2),
         ("bt_case_i", 2),
         ("bt_case_n", 2),
-        ("prefix_template", 7),
+        // The hole's `to_string` helper is inlined: its virtual call sits
+        // in the prefix in place of the call to the helper.
+        ("prefix_template", 8),
         ("prefix_subtract", 5),
         ("prefix_divide", 5),
         ("prefix_nested", 7),
