@@ -680,18 +680,50 @@ function main() -> int { entry(5) }
     assert_eq!(run(source).await, Ok(BexExternalValue::Int(20)));
 }
 
-#[test]
-fn a_call_through_a_closure_that_captures_stays_a_call() {
+#[tokio::test]
+async fn a_call_through_a_closure_over_locals_reads_and_writes_them() {
+    // `shift` reads `offset` and `bump` writes `count`, both through the
+    // cells the closures captured.
     let source = r#"
 function entry(n: int) -> int {
   let offset = n + 1;
+  let count = 0;
   let shift = (x: int) -> int { x + offset };
-  shift(n)
+  let bump = () -> int { count += 1; count };
+  let total = 0;
+  for (let i = 0; i < n; i += 1) {
+    total += shift(i);
+    bump();
+    offset += 1;
+  };
+  total * 100 + count
 }
+function main() -> int { entry(3) }
 "#;
     let (mir, _) = lowered(source, "entry", OptLevel::Two);
-    assert!(!mir.contains("[inlined"), "{mir}");
-    assert!(mir.contains("= call "), "{mir}");
+    assert!(mir.contains("[inlined .<lambda(entry, 0)>]"), "{mir}");
+    assert!(mir.contains("[inlined .<lambda(entry, 1)>]"), "{mir}");
+    assert!(!mir.contains("= call copy"), "{mir}");
+    // shift: (0 + 4) + (1 + 5) + (2 + 6) = 18; count = 3.
+    assert_eq!(run(source).await, Ok(BexExternalValue::Int(1803)));
+}
+
+#[tokio::test]
+async fn a_closure_made_each_iteration_sees_that_iterations_binding() {
+    let source = r#"
+function entry(n: int) -> int {
+  let total = 0;
+  for (let i = 0; i < n; i += 1) {
+    let square = i * i;
+    let get = () -> int { square + i };
+    total += get();
+  };
+  total
+}
+function main() -> int { entry(4) }
+"#;
+    // 0 + 2 + 6 + 12
+    assert_eq!(run(source).await, Ok(BexExternalValue::Int(20)));
 }
 
 #[tokio::test]
@@ -733,4 +765,29 @@ function main() -> int {
 }
 "#;
     assert_eq!(run(source).await, Ok(BexExternalValue::Int(1006)));
+}
+
+#[tokio::test]
+async fn an_error_in_an_inlined_capturing_closure_reports_its_frame() {
+    let source = r#"
+function main() -> int {
+  let limit = 2
+  let check = (x: int) -> int {
+    if (x > limit) {
+      throw "over"
+    }
+    x
+  };
+  check(1) + check(5)
+}
+"#;
+    let (mir, _) = lowered(source, "main", OptLevel::Two);
+    assert!(mir.contains("[inlined .<lambda(main, 0)>]"), "{mir}");
+    let error = run(source).await.unwrap_err();
+    insta::assert_snapshot!(error, @r#"
+    Traceback (most recent call last):
+      File "test.baml", line 10, in user.main
+      File "test.baml", line 6, in .<lambda(main, 0)>
+    uncaught throw: "over"
+    "#);
 }

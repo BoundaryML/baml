@@ -493,3 +493,31 @@ concurrency/spawn-fan-out-100                 777.8us ->    721.4us   1.08x (ran
 for: both were near 1.1x before it. Nothing is slower. An earlier whole-suite
 run (three passes, before this round) was taken while test builds were
 running and is not recorded here.
+
+## Inliner, third round
+
+### Closures with captures
+
+- A call through a local that holds a capturing closure is now inlined. The
+  copy reads and writes each captured variable through the cell the
+  enclosing body holds for it (`*capture[i]` becomes `*_local`, or the
+  enclosing closure's own capture when the body is itself a lambda).
+- The condition: the cell a captured local holds at the call is the cell the
+  closure was made with. A local gets a new cell only at a `FreshCell`
+  (where its binding is created, once per loop iteration for a binding in a
+  loop). So no `FreshCell` of a captured local may run between the
+  `MakeClosure` and the call.
+- The check is plain reachability, not a dataflow fixpoint. For each link of
+  the chain (made, copied, copied, called) it looks at the rest of the first
+  block, the start of the second, and every block that is both reachable
+  from the first and able to reach the second without running the first
+  again. A path that runs the first again has a newer closure or copy to
+  start from. Handler edges count as edges.
+- Refused: any `FreshCell` of a captured local in that region, a closure
+  whose body reads captured type arguments, a lambda with lambdas of its
+  own, and (as before) a parameter or a local with more than one definition.
+- From source the refusal is hard to reach: a binding's `FreshCell` sits
+  where the binding is declared, before any closure over it. It is covered
+  by unit tests on hand-built MIR in `inline.rs`.
+- Snapshots: `ns_lambda_basic` (mir, bytecode) and `ns_lambda_owners`
+  (bytecode) show closure calls replaced by their bodies.

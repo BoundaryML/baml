@@ -23,7 +23,7 @@ use baml_compiler2_hir::{
 };
 
 use crate::{
-    BasicBlock, BinOp, BlockId, Constant, InlineScope, Local, LocalDecl, MirFunction,
+    BasicBlock, BinOp, BlockId, CellId, Constant, InlineScope, Local, LocalDecl, MirFunction,
     MirFunctionBody, MirFunctionId, MirFunctionKind, Operand, OptLevel, Place, Rvalue, Statement,
     StatementKind, Terminator, TyTemplate, TypeTest, memory,
 };
@@ -107,6 +107,9 @@ struct Callee<'a, 'db> {
     frame: Vec<Option<TyTemplate>>,
     /// Whether the body reads its frame's type arguments.
     reads_frame_types: bool,
+    /// For a closure, the cell behind each of its captures, as the body the
+    /// closure was made in names it.
+    cells: Vec<CellId>,
     /// Its size in statements plus terminators.
     cost: usize,
 }
@@ -160,7 +163,8 @@ fn callee_of<'a, 'db: 'a>(
         Operand::Copy(Place::Local(value)) | Operand::Move(Place::Local(value))
             if *ntypeargs == 0 =>
         {
-            closure_callee(&lambdas[closure_of(body, arity, *value)?])?
+            let closure = closure_of(body, arity, site, *value)?;
+            closure_callee(&lambdas[closure.lambda], closure)?
         }
         _ => return None,
     };
@@ -214,14 +218,17 @@ fn declared_callee<'db>(
         ),
         frame,
         reads_frame_types: cost.reads_frame_types,
+        cells: Vec::new(),
         cost: cost.size,
     })
 }
 
 /// A lambda of the body being compiled as the callee of a call through a
-/// closure made from it. Only a closure that captures nothing is known to be
-/// the same at the call as where it was made.
-fn closure_callee<'a, 'db>(lambda: &'a MirFunction<'db>) -> Option<Callee<'a, 'db>> {
+/// closure known to be made from it.
+fn closure_callee<'a, 'db>(
+    lambda: &'a MirFunction<'db>,
+    closure: KnownClosure,
+) -> Option<Callee<'a, 'db>> {
     let MirFunctionKind::Bytecode(body) = &lambda.kind else {
         return None;
     };
@@ -230,7 +237,8 @@ fn closure_callee<'a, 'db>(lambda: &'a MirFunction<'db>) -> Option<Callee<'a, 'd
     }
     let signature = lambda.signature.as_ref()?;
     let (cost, reads_frame_types) = body_cost(None, body)?;
-    // With no captured type arguments there is no frame for it to read.
+    // Its frame is the type arguments captured where it was made, which the
+    // enclosing frame may have rebound since.
     if reads_frame_types {
         return None;
     }
@@ -248,33 +256,61 @@ fn closure_callee<'a, 'db>(lambda: &'a MirFunction<'db>) -> Option<Callee<'a, 'd
         ),
         frame: Vec::new(),
         reads_frame_types,
+        cells: closure.cells,
         cost,
     })
 }
 
-/// The lambda the closure in `value` was made from, when `value` can only
-/// hold a closure that captures nothing: its one definition, or the one
-/// definition of the local it was copied from, is such a `MakeClosure`.
-fn closure_of(body: &MirFunctionBody<'_>, arity: usize, value: Local) -> Option<usize> {
+/// A closure a local is known to hold at a call.
+struct KnownClosure {
+    /// The lambda it was made from, as `MakeClosure` numbers it.
+    lambda: usize,
+    /// The cell behind each capture.
+    cells: Vec<CellId>,
+}
+
+/// The closure `value` holds at the call ending `site`, when it can only be
+/// one: `value`'s one definition, or the one definition of the local it was
+/// copied from, is a `MakeClosure`, and each local whose cell the closure
+/// captured still has that cell at the call.
+///
+/// A captured local gets a new cell where its binding is created
+/// (`FreshCell`), once per loop iteration for a binding inside a loop. The
+/// closure keeps the cell it was made with. So no `FreshCell` of a captured
+/// local may run between the `MakeClosure` and the call: not after the
+/// `MakeClosure` up to each copy that carries the closure on, and not after
+/// that copy up to the next one or the call.
+fn closure_of(
+    body: &MirFunctionBody<'_>,
+    arity: usize,
+    site: BlockId,
+    value: Local,
+) -> Option<KnownClosure> {
     let defs = super::count_local_defs(body);
     let mut value = value;
+    // Where the closure is at each step, from the call back to where it was
+    // made.
+    let mut steps = vec![(site, body.blocks[site.0].statements.len())];
     // A copy chain cannot be longer than the body has locals.
     for _ in 0..body.locals.len() {
         // A parameter also holds what the caller passed.
         if defs[value.0] != 1 || value.0 <= arity {
             return None;
         }
-        let definition = body
-            .blocks
-            .iter()
-            .flat_map(|block| &block.statements)
-            .find_map(|statement| match &statement.kind {
-                StatementKind::Assign {
-                    destination: Place::Local(local),
-                    value: definition,
-                } if *local == value => Some(definition),
-                _ => None,
-            })?;
+        let (at, definition) = body.blocks.iter().find_map(|block| {
+            block
+                .statements
+                .iter()
+                .enumerate()
+                .find_map(|(index, statement)| match &statement.kind {
+                    StatementKind::Assign {
+                        destination: Place::Local(local),
+                        value: definition,
+                    } if *local == value => Some(((block.id, index), definition)),
+                    _ => None,
+                })
+        })?;
+        steps.push(at);
         match definition {
             Rvalue::Use(
                 Operand::Copy(Place::Local(source)) | Operand::Move(Place::Local(source)),
@@ -284,14 +320,95 @@ fn closure_of(body: &MirFunctionBody<'_>, arity: usize, value: Local) -> Option<
             Rvalue::MakeClosure {
                 lambda_idx,
                 captures,
-                type_arg_templates,
-            } if captures.is_empty() && type_arg_templates.is_empty() => {
-                return Some(*lambda_idx);
+                ..
+            } => {
+                let cells = captures
+                    .iter()
+                    .map(|capture| match capture {
+                        Operand::Copy(place) | Operand::Move(place) => {
+                            CellId::try_from(place.clone()).ok()
+                        }
+                        Operand::Constant(_) => None,
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                let captured: Vec<Local> = cells.iter().filter_map(CellId::local).collect();
+                if !captured.is_empty()
+                    && steps
+                        .windows(2)
+                        .any(|step| fresh_cell_between(body, step[1], step[0], &captured))
+                {
+                    return None;
+                }
+                return Some(KnownClosure {
+                    lambda: *lambda_idx,
+                    cells,
+                });
             }
             _ => return None,
         }
     }
     None
+}
+
+/// Whether some path from just after statement `from` to just before
+/// statement `to` (a block and a statement index; the block's length for
+/// its terminator) gives one of `locals` a new cell, without running `from`
+/// again: a path that does has a newer `from` to start at.
+fn fresh_cell_between(
+    body: &MirFunctionBody<'_>,
+    from: (BlockId, usize),
+    to: (BlockId, usize),
+    locals: &[Local],
+) -> bool {
+    let fresh = |statements: &[Statement<'_>]| {
+        statements.iter().any(|statement| {
+            matches!(
+                &statement.kind,
+                StatementKind::FreshCell { local, .. } if locals.contains(local)
+            )
+        })
+    };
+    let (start, end) = (&body.blocks[from.0.0], &body.blocks[to.0.0]);
+    if from.0 == to.0 && from.1 < to.1 {
+        return fresh(&start.statements[from.1 + 1..to.1]);
+    }
+    if fresh(&start.statements[from.1 + 1..]) || fresh(&end.statements[..to.1]) {
+        return true;
+    }
+    // A throw or panic anywhere in a block continues at its handler.
+    let successors = |block: &BasicBlock<'_>| {
+        block
+            .terminator
+            .iter()
+            .flat_map(Terminator::successors)
+            .chain(block.unwind)
+            .collect::<Vec<_>>()
+    };
+    let mut predecessors: Vec<Vec<BlockId>> = vec![Vec::new(); body.blocks.len()];
+    for block in &body.blocks {
+        for successor in successors(block) {
+            predecessors[successor.0].push(block.id);
+        }
+    }
+    let reach = |seeds: Vec<BlockId>, next: &dyn Fn(BlockId) -> Vec<BlockId>| {
+        let mut seen = vec![false; body.blocks.len()];
+        let mut pending = seeds;
+        while let Some(block) = pending.pop() {
+            if block != from.0 && !std::mem::replace(&mut seen[block.0], true) {
+                pending.extend(next(block));
+            }
+        }
+        seen
+    };
+    let after = reach(successors(start), &|block| {
+        successors(&body.blocks[block.0])
+    });
+    let before = reach(predecessors[to.0.0].clone(), &|block| {
+        predecessors[block.0].clone()
+    });
+    body.blocks
+        .iter()
+        .any(|block| after[block.id.0] && before[block.id.0] && fresh(&block.statements))
 }
 
 /// The type a call passes in `argument`, when it is known where the call is
@@ -671,6 +788,11 @@ fn splice<'db>(
         block.inline = Some(scope.clone());
         for statement in &mut block.statements {
             super::rewrite_locals_in_statement(statement, &local_map);
+            if !callee.cells.is_empty() {
+                super::for_each_place_in_statement(statement, &mut |place| {
+                    read_through_captured_cell(place, &callee.cells);
+                });
+            }
             if callee.reads_frame_types {
                 memory::for_each_statement_template_mut(&mut statement.kind, &mut |template| {
                     substitute(template, &callee.frame);
@@ -715,6 +837,11 @@ fn splice<'db>(
                     });
                 }
                 super::rewrite_locals_in_terminator(terminator, &local_map);
+                if !callee.cells.is_empty() {
+                    super::for_each_place_in_terminator(terminator, &mut |place| {
+                        read_through_captured_cell(place, &callee.cells);
+                    });
+                }
                 super::rewrite_block_ids_in_terminator(terminator, &block_map);
                 if let Terminator::Call { unwind: edge, .. }
                 | Terminator::VirtualCall { unwind: edge, .. }
@@ -757,6 +884,25 @@ fn splice<'db>(
     call_block.terminator = Some(Terminator::Goto {
         target: BlockId(base + callee_body.entry.0),
     });
+}
+
+/// Rewrite a place of a closure's body that goes through the closure's
+/// capture array to go through the cell the capture holds, as the body the
+/// closure was made in names it.
+fn read_through_captured_cell(place: &mut Place, cells: &[CellId]) {
+    match place {
+        Place::Deref(cell) => {
+            if let CellId::Capture(index) = cell {
+                *cell = cells[*index];
+            }
+        }
+        Place::Field { base, .. } | Place::Index { base, .. } => {
+            read_through_captured_cell(base, cells);
+        }
+        // A closure's body names a capture bare only to hand the cell to a
+        // closure of its own, and such a body is never copied.
+        Place::Local(_) | Place::Capture(_) => {}
+    }
 }
 
 /// The caller local whose value `operand` is at the call ending `site`, and
@@ -900,4 +1046,154 @@ fn omission_tests(body: &MirFunctionBody<'_>, parameter: Local) -> Vec<(BlockId,
         }
     }
     tests
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::RuntimeTy;
+
+    fn block(
+        id: usize,
+        statements: Vec<StatementKind<'static>>,
+        terminator: Terminator<'static>,
+    ) -> BasicBlock<'static> {
+        let mut block = BasicBlock::new(BlockId(id));
+        block.statements = statements
+            .into_iter()
+            .map(|kind| Statement { kind, span: None })
+            .collect();
+        block.terminator = Some(terminator);
+        block
+    }
+
+    fn goto(target: usize) -> Terminator<'static> {
+        Terminator::Goto {
+            target: BlockId(target),
+        }
+    }
+
+    fn fresh(local: usize) -> StatementKind<'static> {
+        StatementKind::FreshCell {
+            local: Local(local),
+            carry_value: false,
+        }
+    }
+
+    /// `_2 = closure capturing the cell of _1`.
+    fn make() -> StatementKind<'static> {
+        StatementKind::Assign {
+            destination: Place::Local(Local(2)),
+            value: Rvalue::MakeClosure {
+                lambda_idx: 0,
+                captures: vec![Operand::Copy(Place::Local(Local(1)))],
+                type_arg_templates: Vec::new(),
+            },
+        }
+    }
+
+    /// `_0 = call _2() -> next`.
+    fn call(next: usize) -> Terminator<'static> {
+        Terminator::Call {
+            has_trace: false,
+            argument_layout: Some(baml_type::CallLayout::default()),
+            callee: Operand::copy_local(Local(2)),
+            args: Vec::new(),
+            ntypeargs: 0,
+            destination: Place::Local(Local(0)),
+            target: BlockId(next),
+            unwind: None,
+        }
+    }
+
+    fn body(blocks: Vec<BasicBlock<'static>>) -> MirFunctionBody<'static> {
+        MirFunctionBody {
+            blocks,
+            entry: BlockId(0),
+            locals: (0..3)
+                .map(|index| LocalDecl {
+                    name: None,
+                    ty: RuntimeTy::int(),
+                    span: None,
+                    scope_span: None,
+                    is_captured: index == 1,
+                })
+                .collect(),
+        }
+    }
+
+    fn known(body: &MirFunctionBody<'static>, site: usize) -> bool {
+        closure_of(body, 0, BlockId(site), Local(2)).is_some()
+    }
+
+    #[test]
+    fn a_closure_called_with_its_captured_cell_still_in_place_is_known() {
+        let body = body(vec![
+            block(0, vec![fresh(1), make()], goto(1)),
+            block(1, vec![], call(2)),
+            block(2, vec![], Terminator::Return),
+        ]);
+        assert!(known(&body, 1));
+    }
+
+    #[test]
+    fn a_new_cell_between_making_and_calling_hides_the_closure() {
+        // Straight after the closure is made, in a block on the way, and
+        // right before the call.
+        for at in 0..3 {
+            let mut blocks = vec![
+                block(0, vec![fresh(1), make()], goto(1)),
+                block(1, vec![], goto(2)),
+                block(2, vec![], call(3)),
+                block(3, vec![], Terminator::Return),
+            ];
+            blocks[at].statements.push(Statement {
+                kind: fresh(1),
+                span: None,
+            });
+            assert!(!known(&body(blocks), 2), "new cell in bb{at}");
+        }
+    }
+
+    #[test]
+    fn a_new_cell_each_iteration_before_the_closure_is_made_does_not() {
+        // bb1 is a loop body: new cell, new closure, call, around again. The
+        // only way from the closure to the new cell runs the `MakeClosure`
+        // again before the next call.
+        let body = body(vec![
+            block(0, vec![], goto(1)),
+            block(1, vec![fresh(1), make()], call(2)),
+            block(
+                2,
+                vec![],
+                Terminator::Branch {
+                    condition: Operand::copy_local(Local(0)),
+                    then_block: BlockId(1),
+                    else_block: BlockId(3),
+                },
+            ),
+            block(3, vec![], Terminator::Return),
+        ]);
+        assert!(known(&body, 1));
+    }
+
+    #[test]
+    fn a_new_cell_on_the_way_around_a_loop_hides_a_closure_made_before_it() {
+        // The closure is made once, then bb1 loops: call, new cell, again.
+        let body = body(vec![
+            block(0, vec![fresh(1), make()], goto(1)),
+            block(1, vec![], call(2)),
+            block(
+                2,
+                vec![fresh(1)],
+                Terminator::Branch {
+                    condition: Operand::copy_local(Local(0)),
+                    then_block: BlockId(1),
+                    else_block: BlockId(3),
+                },
+            ),
+            block(3, vec![], Terminator::Return),
+        ]);
+        assert!(!known(&body, 1));
+    }
 }

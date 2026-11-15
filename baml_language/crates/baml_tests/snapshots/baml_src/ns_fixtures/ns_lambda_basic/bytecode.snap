@@ -8,9 +8,8 @@ function fixtures.lambda_basic.test_capture() -> int {
     load_const 10
     store_deref ?1
     load_const 32
-    load_var offset
-    make_closure .<lambda(test_capture, 0)>, 1
-    call_indirect
+    load_deref ?1
+    add_int
     return
 }
 
