@@ -22,14 +22,18 @@ test "warm_decodes_keep_each_naming_apart" {
         total += baml.json.decode<JdcPoint>("{\"ex\": 10, \"y\": 2}", naming = aliased).x;
         total += baml.json.to<JdcPoint>({ "x": 100, "y": 2 }).x;
     }
-    assert.equal(total, 50 * 111)
+    assert.equal(total, 50 * 111);
     // The aliased key is unknown under declared names, and the reverse.
     let declared_misses = baml.json.decode<JdcPoint>("{\"ex\": 1, \"y\": 2}") catch (e) {
-        baml.json.DecodeError => { e.message }
+        baml.json.DecodeError => {
+            e.message
+        }
     };
-    assert.equal(declared_misses, "missing required field `x`")
+    assert.equal(declared_misses, "missing required field `x`");
     let aliased_misses = baml.json.decode<JdcPoint>("{\"x\": 1, \"y\": 2}", naming = aliased) catch (e) {
-        baml.json.DecodeError => { e.message }
+        baml.json.DecodeError => {
+            e.message
+        }
     };
     assert.equal(aliased_misses, "missing required field `ex`")
 }
@@ -65,17 +69,43 @@ function jdc_churn_and_collect() -> null {
 }
 
 test "warm_decodes_of_runtime_classes_survive_collection" {
-    assert.equal(jdc_decode_minted("gold", 20), 190)
+    assert.equal(jdc_decode_minted("gold", 20), 190);
     jdc_churn_and_collect();
     // A class minted after the collection, with the same name, decodes by its
     // own fields.
-    assert.equal(jdc_decode_minted("tin", 20), 190)
+    assert.equal(jdc_decode_minted("tin", 20), 190);
     let other = reflect.Class.new("Badge", { "label": int.type() });
     let type Other = other;
     let refused = baml.json.decode<Other>("{\"label\": \"tin\"}") catch (e) {
-        baml.json.DecodeError => { e.path + ": " + e.message }
+        baml.json.DecodeError => {
+            e.path + ": " + e.message
+        }
     };
     assert.equal(refused, ".label: expected integer")
+}
+
+// One minted class decoded warm, then the heap churned and collected while the
+// class stays in use (the collection moves it), then decoded again: the warm
+// answers were dropped and are worked out anew at its new address.
+function jdc_decode_across_collection(label: string) -> string {
+    let kept = reflect.Class.new("Badge", { "label": string.type(), "rank": int.type() });
+    let type Kept = kept;
+    let before: Kept[] = [];
+    for (let i = 0; i < 10; i += 1) {
+        before.push(
+            baml.json.decode<Kept>("{\"label\":\"" + label + "\",\"rank\":" + i.to_string() + "}"),
+        );
+    }
+    jdc_churn_and_collect();
+    let after: Kept = baml.json.decode<Kept>("{\"rank\":10,\"label\":\"" + label + "\"}");
+    baml.json.stringify(before[9]) + " " + baml.json.stringify(after)
+}
+
+test "a_runtime_class_kept_across_a_collection_decodes_after_it" {
+    assert.equal(
+        jdc_decode_across_collection("gold"),
+        "{\"label\":\"gold\",\"rank\":9} {\"label\":\"gold\",\"rank\":10}",
+    )
 }
 
 // ─── a decode inside a provided `from_json` ──────────────────────────────────
@@ -125,7 +155,9 @@ class JdcRight {
 
 function jdc_union_message(text: string) -> string {
     let decoded = baml.json.decode<JdcLeft | JdcRight | uint8array>(text) catch (e) {
-        baml.json.DecodeError => { return e.message; }
+        baml.json.DecodeError => {
+            return e.message;
+        }
     };
     "decoded"
 }
@@ -135,6 +167,6 @@ test "a_warm_failing_union_reports_the_same_message" {
     for (let i = 0; i < 20; i += 1) {
         assert.equal(jdc_union_message("{\"left\": \"x\"}"), first)
     }
-    assert.is_true(first.includes("`uint8array` is not possible here"))
+    assert.is_true(first.includes("`uint8array` is not possible here"));
     assert.equal(jdc_union_message("{\"right\": 2}"), "decoded")
 }
