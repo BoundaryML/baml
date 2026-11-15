@@ -4045,6 +4045,18 @@ impl BexVm {
         self.package_object(package_ptr, idx)
     }
 
+    /// [`Self::idx_to_ptr`] for an operand of a function whose runtime
+    /// package (`runtime_package_of`, null for a static function) the caller
+    /// already holds, as the dispatch loop does: no frame walk.
+    #[inline]
+    fn object_in(&self, package: HeapPtr, idx: ObjectIndex) -> HeapPtr {
+        if package.is_null() {
+            self.heap.compile_time_ptr(idx.into_raw())
+        } else {
+            self.package_object(package, idx)
+        }
+    }
+
     /// The object at `idx` in the runtime package `package_ptr`.
     pub(crate) fn package_object(&self, package_ptr: HeapPtr, idx: ObjectIndex) -> HeapPtr {
         let Object::Package(package) = self.get_object(package_ptr) else {
@@ -10354,7 +10366,8 @@ impl BexVm {
 
                     OpCode::AllocVariant => {
                         let raw = { read_u32_unchecked(code, pc) };
-                        let enum_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
+                        let enum_ptr =
+                            self.object_in(runtime_package, ObjectIndex::from_raw(raw as usize));
                         let variant = self.stack.ensure_pop();
                         let (variant_count, shared) = {
                             let Object::Enum(enm) = self.get_object(enum_ptr) else {
