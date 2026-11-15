@@ -749,6 +749,7 @@ pub(crate) mod tests {
             static_virtual_call_cache: super::VirtualSiteCache::default(),
             static_virtual_field_cache: super::VirtualSiteCache::default(),
             impl_cache: std::cell::RefCell::default(),
+            json_decode_cache: crate::package_baml::json::DecodeCache::default(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -1892,6 +1893,10 @@ pub struct BexVm {
     /// lookup or an insert only, never across a resolution, so a nested
     /// resolution can use it too.
     pub(crate) impl_cache: std::cell::RefCell<crate::impl_cache::ImplCache>,
+    /// What `baml.json` decoding has worked out about types (class plans,
+    /// provided `from_json`s, which types reach one), kept between calls.
+    /// Not a root: dropped at every collection.
+    pub(crate) json_decode_cache: crate::package_baml::json::DecodeCache,
 }
 
 /// VM execution state.
@@ -2615,6 +2620,7 @@ impl BexVm {
             static_virtual_call_cache: VirtualSiteCache::default(),
             static_virtual_field_cache: VirtualSiteCache::default(),
             impl_cache: std::cell::RefCell::default(),
+            json_decode_cache: crate::package_baml::json::DecodeCache::default(),
             telemetry,
             trace_scope,
             manual_activations: Vec::new(),
@@ -12443,6 +12449,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             pending_call_type_args,
             compiled,
             impl_cache,
+            json_decode_cache,
             checkpoint_passed: _,
             pending_call_passes_type_args: _,
             static_load_type_cache,
@@ -12525,6 +12532,11 @@ impl ::bex_vm_types::RootHaver for BexVm {
         }
         // Resolver answers, held weakly like the static caches above.
         impl_cache.get_mut().visit_weak(visitor);
+        // Decode lookups hold pointers too, but they are refilled in one
+        // decode call, so a collection drops them rather than forwarding
+        // them. Before the frames, so a suspended decode's class plans are
+        // its own when they are repointed.
+        json_decode_cache.clear();
 
         for ContextTransfer { handling, target } in context_transfers.iter_mut() {
             handling.visit_roots(visitor);
