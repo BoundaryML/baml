@@ -113,7 +113,7 @@ fn optimize_body(
         }
     }
     if opt >= crate::OptLevel::Two {
-        redundancy::optimize(body, arity);
+        redundancy::optimize(body, arity, scope);
     }
     if opt >= crate::OptLevel::One {
         values::materialize_operand_prefixes(body);

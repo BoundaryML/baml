@@ -40,8 +40,8 @@ use crate::{
 /// What the pass reads outside the body: class layouts and finalizers, as the
 /// package owning the body sees them.
 pub(super) struct Scope<'a> {
-    db: &'a dyn crate::Db,
-    root: SourceRoot,
+    pub(super) db: &'a dyn crate::Db,
+    pub(super) root: SourceRoot,
 }
 
 impl<'a> Scope<'a> {

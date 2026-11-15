@@ -50,7 +50,7 @@ cheapest instruction the VM has, so removing one moves wall time less than its s
 
 ## Passes
 
-The four MIR passes run once, from one call placed right after the cleanup loop in
+The five MIR passes run once, from one call placed right after the cleanup loop in
 `optimize_body`. They do not run inside the loop because rotation must come after dead-code
 elimination. `effects.rs` proves a dead evaluation cannot trap from integer ranges, and it bounds
 a loop counter from the test at the top of the loop. With the test at the bottom the bound is
@@ -70,6 +70,34 @@ Blocked when: neither side is the literal (the general driver stays); both sides
 
 One difference from the driver was checked and accepted. The driver looks through a raw cell
 value. A MIR operand is never a raw cell: `verify_mir` rejects a bare read of a captured local.
+
+### Invariant hoisting (`loops.rs`, `hoist_invariants`)
+
+Runs just before rotation. Statements of a loop's test that compute the same value on every trip
+move to a new block in front of the header: `len` of a container, a field read, a unary or binary
+operator, when every operand is a constant, a local the loop never writes, or a result hoisted
+with it. Entry edges go to the new block. Back edges still go to the header.
+
+Only the test is looked at: the header and the single-entry blocks its `goto`s lead through.
+Those statements run every time the loop is reached, with or without a trip, so nothing is
+evaluated that the program did not evaluate, and a zero-trip loop does what its test did. The
+loop body is not looked at. A read there may sit behind a check the loop makes.
+
+Blocked when:
+- The object read is not thread-local. `escape::analyze_local` decides, per local. It is the
+  escape analysis with callee summaries off: a summary reads lowered MIR, and this body is still
+  being lowered, so asking would cycle. Every call to a source function is opaque and its
+  arguments count as shared. Builtins keep their known effects, so `push` does not share an array.
+  A parameter is shared.
+- The loop stores the same field index through any object, or makes a call, await or spawn.
+- For `len`: the loop writes an element other than through an array index. An indexed array
+  store is bounds-checked and never changes the length.
+- An operand is a local the loop writes, a `move`, an index read, or goes through a cell.
+- The destination is named, captured, a parameter, or has another definition.
+- The statement can trap and the test runs a store, or another evaluation that can trap, before
+  it and leaves that one behind. The first error the test raises stays the first.
+- The statement is a bare copy that no hoisted statement reads. Moving a load saves nothing.
+- The header is the entry block or a handler.
 
 ### Loop rotation (`loops.rs`)
 
@@ -108,6 +136,11 @@ Blocked when:
 - A store to the same field index through any object, or any element store or `len`-changing
   write, happened since. The model is `memory.rs`: field sensitive, alias insensitive.
 - A call, virtual call, sys-op, await or spawn happened since, for any heap read.
+- The block is a loop header, for any heap read. Every read available on entry is dropped
+  there, so a read is reused within one trip and never carried around the back edge. Carried
+  around, one read would stand for the reads of every later trip, which is hoisting a shared
+  read by another route. The first version of the pass allowed it whenever the cost model
+  agreed, which a header with four or more reads of one field is enough for.
 - A join has a predecessor where the expression is missing or held in another local. The
   evaluation, and its trap, has not happened on that path.
 - The block is a handler. It starts with nothing: it is entered before the faulting store.
@@ -148,11 +181,12 @@ store in this frame. In that window this task takes no step that could make anot
 visible. Reading the same value twice is one of the outcomes the original program already
 allowed, so the rewrite picks an allowed outcome. It never invents one.
 
-Hoisting a heap read out of a loop is not done. A loop can spin on a field that another task
-writes. The original loop ends when the write lands. A hoisted read never sees it. That is a new
-outcome, not an allowed one. `len(arr)` in a loop test is the common case and it stays in the loop.
-Doing this safely needs proof the object is thread-local, which is `escape.rs`, which needs a
-database handle. The optimizer has none, and none was threaded through.
+Hoisting a heap read out of a loop is done only for an object no other task can reach. A loop
+can spin on a field that another task writes. The original loop ends when the write lands. A
+hoisted read never sees it. That is a new outcome, not an allowed one. So a read moves in front
+of a loop only when escape analysis says the object is thread-local, and value reuse forgets
+every heap read at a loop header. `len(xs)` on a parameter stays in the loop: the caller may
+have shared the array.
 
 ## Snapshots accepted
 

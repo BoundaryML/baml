@@ -1,4 +1,8 @@
-//! Loop rotation: test a loop at its bottom instead of its top.
+//! Loop passes: hoist what a loop's test recomputes on every trip
+//! ([`hoist_invariants`]), then test the loop at its bottom instead of its
+//! top ([`rotate_loops`]).
+//!
+//! # Rotation
 //!
 //! Lowering gives `while` and C-style `for` a header that tests the condition
 //! and a latch that jumps back to it, so every iteration pays for the jump as
@@ -21,10 +25,11 @@
 //! effect, or heap read moves. The original header still runs the test once,
 //! on entry, which keeps a zero-trip loop a zero-trip loop.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
-    BasicBlock, BlockId, Local, MirFunctionBody, Place, StatementKind, Terminator, reducible,
+    BasicBlock, BlockId, IndexKind, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
+    Terminator, memory, reducible,
 };
 
 /// Most statements a loop test may hold and still be copied.
@@ -242,6 +247,344 @@ fn rotate(body: &mut MirFunctionBody<'_>, arity: usize, rotation: &Rotation) {
         }
     }
     body.blocks.push(copy);
+}
+
+// ============================================================================
+// Invariant hoisting
+// ============================================================================
+
+/// Move what a loop's test recomputes identically on every trip into a new
+/// block in front of the loop: `len` of a container, a field read, and the
+/// arithmetic over them, when nothing the loop does can change the result.
+///
+/// Only the test is looked at: the header and the single-entry blocks its
+/// `goto`s lead through. Those statements run every time the loop is reached,
+/// trips or no trips, so running them once in front of the header instead adds
+/// no evaluation the program did not have, and a zero-trip loop still does
+/// exactly what its test did. The loop body is left alone: a read there may
+/// sit behind a null check the loop performs.
+///
+/// A heap read is hoisted only from an object `thread_local` vouches for.
+/// Another task may write a shared object while this one loops, and a loop
+/// that waits for such a write would never see it through a hoisted read.
+pub(super) fn hoist_invariants(
+    body: &mut MirFunctionBody<'_>,
+    arity: usize,
+    thread_local: &mut dyn FnMut(&MirFunctionBody<'_>, &Place) -> bool,
+) {
+    // Each hoist empties one test of its invariants; a test is never refilled.
+    for _ in 0..body.blocks.len() {
+        let Some(hoist) = find_hoist(body, arity, thread_local) else {
+            return;
+        };
+        hoist_into_preheader(body, &hoist);
+    }
+}
+
+/// The statements of one loop's test to move in front of it.
+struct Hoist {
+    header: usize,
+    /// The header's predecessors outside the loop.
+    entries: Vec<usize>,
+    /// `(block, statement)` of each statement to move, in execution order.
+    statements: Vec<(usize, usize)>,
+}
+
+/// What a loop writes, gathered over every block of it.
+struct LoopWrites {
+    locals: HashSet<Local>,
+    /// Field stores by index; `heap` is set by anything that runs code this
+    /// frame cannot see.
+    heap: memory::Resources,
+    /// Whether a container may change length: any element write other than a
+    /// store through an array index, which is bounds-checked and never grows
+    /// the array.
+    resizes: bool,
+}
+
+fn find_hoist(
+    body: &MirFunctionBody<'_>,
+    arity: usize,
+    thread_local: &mut dyn FnMut(&MirFunctionBody<'_>, &Place) -> bool,
+) -> Option<Hoist> {
+    let entry = body.entry.0;
+    let succs: Vec<Vec<usize>> = body
+        .blocks
+        .iter()
+        .map(|block| {
+            block
+                .terminator
+                .iter()
+                .flat_map(Terminator::successors)
+                .chain(block.unwind)
+                .map(|b| b.0)
+                .collect()
+        })
+        .collect();
+    let rpo = reducible::reverse_postorder(entry, &succs);
+    let idom = reducible::immediate_dominators(entry, &succs, &rpo);
+    let dominates = |a: usize, mut b: usize| loop {
+        if a == b {
+            return true;
+        }
+        if b == entry {
+            return false;
+        }
+        b = idom[b];
+    };
+    let mut preds = vec![Vec::new(); body.blocks.len()];
+    for &u in &rpo {
+        for &v in &succs[u] {
+            preds[v].push(u);
+        }
+    }
+    let defs = super::count_local_defs(body);
+    let model = memory::ClobberModel::for_body(body);
+
+    for &header in &rpo {
+        let head = &body.blocks[header];
+        // The entry block has no edge to redirect, and a handler is entered
+        // by the VM, not through a block placed in front of it.
+        if header == entry || head.landing.is_some() {
+            continue;
+        }
+        let (latches, entries): (Vec<usize>, Vec<usize>) = preds[header]
+            .iter()
+            .partition(|&&pred| dominates(header, pred));
+        if latches.is_empty() || entries.is_empty() {
+            continue;
+        }
+        let mut in_loop = vec![false; body.blocks.len()];
+        in_loop[header] = true;
+        let mut pending = latches;
+        while let Some(block) = pending.pop() {
+            if !in_loop[block] {
+                in_loop[block] = true;
+                pending.extend(&preds[block]);
+            }
+        }
+
+        // The test, as rotation reads it: blocks that run back to back under
+        // one handler and one inlined call, entered only from the header.
+        let mut test = vec![header];
+        while let Some(Terminator::Goto { target }) =
+            &body.blocks[*test.last().expect("the header")].terminator
+        {
+            let next = &body.blocks[target.0];
+            if test.contains(&target.0)
+                || preds[target.0].len() != 1
+                || next.landing.is_some()
+                || next.unwind != head.unwind
+                || next.handling != head.handling
+                || next.shielded != head.shielded
+                || next.inline != head.inline
+            {
+                break;
+            }
+            test.push(target.0);
+        }
+
+        let writes = loop_writes(body, model, &in_loop);
+        let mut hoisted: Vec<(usize, usize)> = Vec::new();
+        let mut defined: HashSet<Local> = HashSet::new();
+        // Set once the test has run something that stays behind and can be
+        // observed. An evaluation that can trap may not move in front of it.
+        let mut barrier = false;
+        for &block in &test {
+            for (index, statement) in body.blocks[block].statements.iter().enumerate() {
+                let invariant = match &statement.kind {
+                    StatementKind::Assign {
+                        destination: Place::Local(local),
+                        value,
+                    } => {
+                        let decl = &body.locals[local.0];
+                        local.0 > arity
+                            && decl.name.is_none()
+                            && !decl.is_captured
+                            && defs[local.0] == 1
+                            && (!barrier || !memory::rvalue_can_trap(body, value))
+                            && rvalue_is_invariant(body, value, &writes, &defined, thread_local)
+                    }
+                    _ => false,
+                };
+                if invariant {
+                    if let StatementKind::Assign {
+                        destination: Place::Local(local),
+                        ..
+                    } = &statement.kind
+                    {
+                        defined.insert(*local);
+                    }
+                    hoisted.push((block, index));
+                } else {
+                    let written = memory::statement_clobbers(body, model, &statement.kind);
+                    // A trap that stays behind counts too: it would no longer
+                    // be the first error the test raises.
+                    let traps = matches!(
+                        &statement.kind,
+                        StatementKind::Assign { value, .. } if memory::rvalue_can_trap(body, value)
+                    );
+                    barrier |= traps
+                        || written.order
+                        || written.heap
+                        || written.elements
+                        || !written.fields.is_empty()
+                        || !written.cells.is_empty();
+                }
+            }
+        }
+
+        // A bare copy is a load wherever it runs. It moves only to feed a
+        // hoisted computation that reads it.
+        let mut needed: HashSet<Local> = HashSet::new();
+        let mut kept = Vec::new();
+        for &(block, index) in hoisted.iter().rev() {
+            let StatementKind::Assign {
+                destination: Place::Local(local),
+                value,
+            } = &body.blocks[block].statements[index].kind
+            else {
+                unreachable!("only local assignments are hoisted");
+            };
+            if matches!(value, Rvalue::Use(_)) && !needed.contains(local) {
+                continue;
+            }
+            memory::walk_rvalue_places(value, &mut |place| {
+                needed.extend(place.base_local());
+            });
+            kept.push((block, index));
+        }
+        kept.reverse();
+        if !kept.is_empty() {
+            return Some(Hoist {
+                header,
+                entries,
+                statements: kept,
+            });
+        }
+    }
+    None
+}
+
+fn loop_writes(
+    body: &MirFunctionBody<'_>,
+    model: memory::ClobberModel,
+    in_loop: &[bool],
+) -> LoopWrites {
+    let mut writes = LoopWrites {
+        locals: HashSet::new(),
+        heap: memory::Resources::default(),
+        resizes: false,
+    };
+    for block in body.blocks.iter().filter(|block| in_loop[block.id.0]) {
+        if let Some(landing) = block.landing {
+            writes.locals.insert(landing.error_local);
+            writes.locals.insert(landing.context_local);
+        }
+        for statement in &block.statements {
+            let written = memory::statement_clobbers(body, model, &statement.kind);
+            let array_store = matches!(
+                &statement.kind,
+                StatementKind::Assign {
+                    destination: Place::Index {
+                        kind: IndexKind::Array,
+                        ..
+                    },
+                    ..
+                }
+            );
+            writes.resizes |= written.elements && !array_store;
+            writes.locals.extend(&written.locals);
+            writes.heap.extend(&written);
+        }
+        if let Some(terminator) = &block.terminator {
+            let written = memory::terminator_clobbers(model, terminator);
+            writes.resizes |= written.elements;
+            writes.locals.extend(&written.locals);
+            writes.heap.extend(&written);
+        }
+    }
+    writes
+}
+
+/// Whether a place reads the same value on every trip. An index read is left
+/// out: it is bounds-checked, and its element may be the one the loop sorts.
+fn place_is_invariant(
+    body: &MirFunctionBody<'_>,
+    place: &Place,
+    writes: &LoopWrites,
+    defined: &HashSet<Local>,
+    thread_local: &mut dyn FnMut(&MirFunctionBody<'_>, &Place) -> bool,
+) -> bool {
+    match place {
+        Place::Local(local) => !writes.locals.contains(local) || defined.contains(local),
+        Place::Field { base, field } => {
+            !writes.heap.heap
+                && !writes.heap.fields.contains(field)
+                && place_is_invariant(body, base, writes, defined, thread_local)
+                && thread_local(body, base)
+        }
+        Place::Index { .. } | Place::Capture(_) | Place::Deref(_) => false,
+    }
+}
+
+fn rvalue_is_invariant(
+    body: &MirFunctionBody<'_>,
+    value: &Rvalue<'_>,
+    writes: &LoopWrites,
+    defined: &HashSet<Local>,
+    thread_local: &mut dyn FnMut(&MirFunctionBody<'_>, &Place) -> bool,
+) -> bool {
+    let mut operand = |operand: &Operand<'_>| match operand {
+        Operand::Constant(_) => true,
+        Operand::Copy(place) => place_is_invariant(body, place, writes, defined, thread_local),
+        // A move consumes its source.
+        Operand::Move(_) => false,
+    };
+    match value {
+        Rvalue::Use(value) | Rvalue::UnaryOp { operand: value, .. } => operand(value),
+        Rvalue::BinaryOp { left, right, .. } => operand(left) && operand(right),
+        Rvalue::Len(place) => {
+            !writes.heap.heap
+                && !writes.resizes
+                && place_is_invariant(body, place, writes, defined, thread_local)
+                && thread_local(body, place)
+        }
+        _ => false,
+    }
+}
+
+fn hoist_into_preheader(body: &mut MirFunctionBody<'_>, hoist: &Hoist) {
+    let preheader = BlockId(body.blocks.len());
+    let head = &body.blocks[hoist.header];
+    // The hoisted statements trap, if they trap, where the header's did:
+    // under its handler and inside its inlined call.
+    let mut block = BasicBlock::new(preheader);
+    block.span = head.span;
+    block.unwind = head.unwind;
+    block.handling = head.handling;
+    block.shielded = head.shielded;
+    block.inline.clone_from(&head.inline);
+    block.terminator = Some(Terminator::Goto {
+        target: BlockId(hoist.header),
+    });
+    for &(source, index) in &hoist.statements {
+        let statement = &mut body.blocks[source].statements[index];
+        block.statements.push(statement.clone());
+        statement.kind = StatementKind::Nop;
+    }
+    for &(source, _) in &hoist.statements {
+        body.blocks[source]
+            .statements
+            .retain(|statement| !matches!(statement.kind, StatementKind::Nop));
+    }
+    let redirect = HashMap::from([(BlockId(hoist.header), preheader)]);
+    for &entry in &hoist.entries {
+        if let Some(terminator) = &mut body.blocks[entry].terminator {
+            super::rewrite_block_ids_in_terminator_with_map(terminator, &redirect);
+        }
+    }
+    body.blocks.push(block);
 }
 
 #[cfg(test)]
@@ -479,5 +822,179 @@ mod tests {
         rotate_loops(&mut body, 1);
         // One copy could not run the test under both handlers.
         assert_eq!(body.blocks.len(), 6);
+    }
+
+    fn field(base: usize, field: usize) -> Place {
+        Place::Field {
+            base: Box::new(Place::Local(Local(base))),
+            field,
+        }
+    }
+
+    /// `i = 0; while i < len(xs) - 1 { i = i + 1 }`, with `xs` in `_1`, `i`
+    /// in `_2`, and the test's temporaries in `_3` to `_5`.
+    fn len_loop() -> MirFunctionBody<'static> {
+        let mut body = counting_loop();
+        body.blocks[1].statements = vec![
+            set(3, Rvalue::Len(Place::Local(Local(1)))),
+            set(
+                4,
+                binary(BinOp::Sub, 3, Operand::Constant(Constant::Int(1))),
+            ),
+            set(5, binary(BinOp::Lt, 2, Operand::copy_local(Local(4)))),
+        ];
+        body.blocks[1].terminator = Some(branch(5, 2, 3));
+        let extra = body.locals[0].clone();
+        body.locals.extend([extra.clone(), extra.clone(), extra]);
+        body
+    }
+
+    fn hoist(body: &mut MirFunctionBody<'static>, thread_local: bool) {
+        hoist_invariants(body, 1, &mut |_, _| thread_local);
+    }
+
+    #[test]
+    fn a_length_and_the_arithmetic_over_it_run_once_in_front_of_the_loop() {
+        let mut body = len_loop();
+        hoist(&mut body, true);
+
+        // Entry reaches the header through the new block; the latch does not.
+        assert_eq!(body.blocks.len(), 5);
+        assert!(matches!(
+            body.blocks[0].terminator,
+            Some(Terminator::Goto { target }) if target.0 == 4
+        ));
+        assert!(matches!(
+            body.blocks[2].terminator,
+            Some(Terminator::Goto { target }) if target.0 == 1
+        ));
+        let front = &body.blocks[4];
+        assert!(matches!(
+            front.terminator,
+            Some(Terminator::Goto { target }) if target.0 == 1
+        ));
+        assert!(matches!(
+            front.statements.as_slice(),
+            [
+                Statement {
+                    kind: StatementKind::Assign {
+                        value: Rvalue::Len(_),
+                        ..
+                    },
+                    ..
+                },
+                Statement {
+                    kind: StatementKind::Assign {
+                        value: Rvalue::BinaryOp { op: BinOp::Sub, .. },
+                        ..
+                    },
+                    ..
+                },
+            ]
+        ));
+        // The header keeps the comparison and still decides a zero-trip loop.
+        assert_eq!(body.blocks[1].statements.len(), 1);
+        assert!(matches!(
+            body.blocks[1].terminator,
+            Some(Terminator::Branch { .. })
+        ));
+
+        // Nothing is left to move.
+        hoist(&mut body, true);
+        assert_eq!(body.blocks.len(), 5);
+    }
+
+    #[test]
+    fn an_object_another_task_may_reach_is_read_on_every_trip() {
+        let mut body = len_loop();
+        hoist(&mut body, false);
+        assert_eq!(body.blocks.len(), 4);
+        assert_eq!(body.blocks[1].statements.len(), 3);
+    }
+
+    #[test]
+    fn a_length_is_hoisted_past_an_element_store_but_not_past_a_call() {
+        let mut storing = len_loop();
+        storing.blocks[2].statements.push(Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Index {
+                    base: Box::new(Place::Local(Local(1))),
+                    index: Local(2),
+                    kind: IndexKind::Array,
+                },
+                value: Rvalue::Use(Operand::Constant(Constant::Int(0))),
+            },
+            span: None,
+        });
+        hoist(&mut storing, true);
+        assert_eq!(storing.blocks.len(), 5);
+
+        // The callee may push to the array.
+        let mut calling = len_loop();
+        calling.blocks[2].terminator = Some(Terminator::Call {
+            has_trace: false,
+            argument_layout: None,
+            callee: Operand::copy_local(Local(1)),
+            args: Vec::new(),
+            ntypeargs: 0,
+            destination: Place::Local(Local(0)),
+            target: BlockId(1),
+            unwind: None,
+        });
+        hoist(&mut calling, true);
+        assert_eq!(calling.blocks.len(), 4);
+    }
+
+    #[test]
+    fn a_field_is_hoisted_unless_the_loop_stores_it() {
+        for (stored, hoisted) in [(1, true), (0, false)] {
+            let mut body = len_loop();
+            // The bound is `_1.0 - 1`, and the loop stores a field of `_1`.
+            body.blocks[1].statements[0] = set(3, Rvalue::Use(Operand::Copy(field(1, 0))));
+            body.blocks[2].statements.push(Statement {
+                kind: StatementKind::Assign {
+                    destination: field(1, stored),
+                    value: Rvalue::Use(Operand::copy_local(Local(2))),
+                },
+                span: None,
+            });
+            hoist(&mut body, true);
+            assert_eq!(body.blocks.len() == 5, hoisted, "store to field {stored}");
+        }
+    }
+
+    #[test]
+    fn a_copy_nothing_hoisted_reads_stays_in_the_test() {
+        let mut body = counting_loop();
+        // `_4 = copy n; _3 = i < _4`: moving the copy would save nothing.
+        body.blocks[1].statements = vec![
+            set(4, Rvalue::Use(Operand::copy_local(Local(1)))),
+            set(3, binary(BinOp::Lt, 2, Operand::copy_local(Local(4)))),
+        ];
+        body.locals.push(body.locals[0].clone());
+        hoist(&mut body, true);
+        assert_eq!(body.blocks.len(), 4);
+    }
+
+    #[test]
+    fn a_trap_does_not_move_in_front_of_what_the_test_does_first() {
+        let mut body = len_loop();
+        // The test first stores to a field, then subtracts, which may
+        // overflow. The store has to be seen before that error is.
+        body.blocks[1].statements.insert(
+            0,
+            Statement {
+                kind: StatementKind::Assign {
+                    destination: field(1, 0),
+                    value: Rvalue::Use(Operand::copy_local(Local(2))),
+                },
+                span: None,
+            },
+        );
+        hoist(&mut body, true);
+        // The length cannot trap and goes; the subtraction stays.
+        assert_eq!(body.blocks.len(), 5);
+        assert_eq!(body.blocks[4].statements.len(), 1);
+        assert_eq!(body.blocks[1].statements.len(), 3);
     }
 }

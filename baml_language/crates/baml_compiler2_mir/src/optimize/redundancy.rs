@@ -19,13 +19,21 @@ use crate::{
     memory::{self, Resources},
 };
 
-/// The redundancy passes, then loop rotation over what they left.
+/// The redundancy passes, then the loop passes over what they left.
 ///
 /// Runs once, on a body the cleanup passes have finished with. Rotation has
 /// to come last: the trap proofs dead-code elimination relies on bound a
 /// loop's counter from the test at the top of the loop, and are weaker once
-/// the test sits at the bottom.
-pub(super) fn optimize(body: &mut MirFunctionBody<'_>, arity: usize) {
+/// the test sits at the bottom. Hoisting comes just before it, while the
+/// test is still the one block every trip runs.
+///
+/// `scope` is how the body's objects are known to be out of other tasks'
+/// reach; without one, no heap read is hoisted.
+pub(super) fn optimize(
+    body: &mut MirFunctionBody<'_>,
+    arity: usize,
+    scope: Option<&super::scalar_replace::Scope<'_>>,
+) {
     reuse_available_values(body);
     fold_negated_branches(body);
     thread_returns(body);
@@ -33,6 +41,27 @@ pub(super) fn optimize(body: &mut MirFunctionBody<'_>, arity: usize) {
     // jumps to any more, so a loop test is copied clean.
     super::eliminate_dead_blocks(body);
     super::eliminate_dead_locals(body, arity);
+
+    // Callee summaries are off limits here: they read lowered MIR, and this
+    // body is still being lowered. A call is opaque, so whatever it is handed
+    // counts as shared. The facts are per local, and hoisting adds none.
+    let mut facts: Option<crate::escape::EscapeFacts> = None;
+    super::loops::hoist_invariants(body, arity, &mut |body, place| {
+        let Some(scope) = scope else {
+            return false;
+        };
+        facts
+            .get_or_insert_with(|| {
+                crate::escape::analyze_local(
+                    scope.db,
+                    scope.root,
+                    body,
+                    arity,
+                    crate::OptLevel::Two,
+                )
+            })
+            .object_is_thread_local(place)
+    });
     super::loops::rotate_loops(body, arity);
 }
 
