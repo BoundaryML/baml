@@ -22,7 +22,9 @@ Measured on the VM before starting (loaded machine, treat as ratios):
 
 So on this workload the call is about 18% of the time, the allocation and field
 reads about 43%, and the loop itself about 17%. A counting loop costs roughly
-50 ns per iteration, which is interpreter dispatch, not something MIR can fix.
+50 ns per iteration. A simple loop runs 13 to 15 bytecode instructions per
+iteration (see `MIR_OPTIMIZER_LEDGER.loops.md`), so that is about 3.5 ns per
+instruction. MIR passes cannot reduce that much further.
 
 ## Decisions
 
@@ -106,10 +108,16 @@ sees fewer.
 
 ## Findings that are not decisions
 
-- The interpreter's per-instruction cost (about 8 ns) is the largest single
-  factor on tight loops. That is VM work, outside this task.
-- `mir_type_audit.rs` (untracked, in `crates/baml_tests/tests/`) counts how
-  precise MIR types are across the corpus.
+- On tight loops the largest remaining factor is how many bytecode
+  instructions one iteration takes (13 to 15 for a simple loop, at about
+  3.5 ns each), not the cost of any one instruction. An earlier version of
+  this ledger said "about 8 ns per instruction"; that assumed fewer
+  instructions than the loop survey later counted. The levers are in the
+  emitter and VM (fused instructions, a register bytecode, a leaner dispatch
+  loop) or native code. The dispatch loop has not been profiled.
+- `mir_type_audit.rs` counts how precise MIR types are across the corpus. It
+  was moved out of the tree to `baml_language/target/mir-opt/` so the clippy
+  hook passes; it is not committed.
 
 ## Results
 
