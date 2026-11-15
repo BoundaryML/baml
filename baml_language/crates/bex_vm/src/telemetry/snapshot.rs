@@ -934,6 +934,7 @@ mod tests {
             other: indexmap::IndexMap::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let instance = vm.tlab.alloc_instance_with_type_args(
             class_ptr,

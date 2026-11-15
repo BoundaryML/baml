@@ -750,6 +750,7 @@ pub(crate) mod tests {
             static_virtual_field_cache: super::VirtualSiteCache::default(),
             impl_cache: std::cell::RefCell::default(),
             json_decode_cache: crate::package_baml::json::DecodeCache::default(),
+            enum_equals_memo: crate::package_baml::EnumEqualsMemo::default(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -1897,6 +1898,10 @@ pub struct BexVm {
     /// provided `from_json`s, which types reach one), kept between calls.
     /// Not a root: dropped at every collection.
     pub(crate) json_decode_cache: crate::package_baml::json::DecodeCache,
+    /// Whether `==` on a compile-time enum is the structural default, per
+    /// resolution generation: the `CallEquals` fast path's one lookup. Holds
+    /// compile-time pointers only, so a collection has nothing to visit.
+    pub(crate) enum_equals_memo: crate::package_baml::EnumEqualsMemo,
 }
 
 /// VM execution state.
@@ -2621,6 +2626,7 @@ impl BexVm {
             static_virtual_field_cache: VirtualSiteCache::default(),
             impl_cache: std::cell::RefCell::default(),
             json_decode_cache: crate::package_baml::json::DecodeCache::default(),
+            enum_equals_memo: crate::package_baml::EnumEqualsMemo::default(),
             telemetry,
             trace_scope,
             manual_activations: Vec::new(),
@@ -4037,6 +4043,18 @@ impl BexVm {
             return self.heap.compile_time_ptr(idx.into_raw());
         }
         self.package_object(package_ptr, idx)
+    }
+
+    /// [`Self::idx_to_ptr`] for an operand of a function whose runtime
+    /// package (`runtime_package_of`, null for a static function) the caller
+    /// already holds, as the dispatch loop does: no frame walk.
+    #[inline]
+    fn object_in(&self, package: HeapPtr, idx: ObjectIndex) -> HeapPtr {
+        if package.is_null() {
+            self.heap.compile_time_ptr(idx.into_raw())
+        } else {
+            self.package_object(package, idx)
+        }
     }
 
     /// The object at `idx` in the runtime package `package_ptr`.
@@ -10348,8 +10366,10 @@ impl BexVm {
 
                     OpCode::AllocVariant => {
                         let raw = { read_u32_unchecked(code, pc) };
-                        let enum_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
-                        let variant_count = {
+                        let enum_ptr =
+                            self.object_in(runtime_package, ObjectIndex::from_raw(raw as usize));
+                        let variant = self.stack.ensure_pop();
+                        let (variant_count, shared) = {
                             let Object::Enum(enm) = self.get_object(enum_ptr) else {
                                 return Err(VmInternalError::TypeError {
                                     expected: ObjectType::Enum.into(),
@@ -10357,9 +10377,19 @@ impl BexVm {
                                 }
                                 .into());
                             };
-                            enm.variants.len()
+                            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                            let shared = variant
+                                .as_int()
+                                .and_then(|index| enm.shared_variants.get(index as usize))
+                                .copied();
+                            (enm.variants.len(), shared)
                         };
-                        let variant = self.stack.ensure_pop();
+                        // A compile-time enum's variants are permanent shared
+                        // objects (see `Enum::shared_variants`).
+                        if let Some(variant_ptr) = shared {
+                            self.push_stack(Value::object(variant_ptr))?;
+                            continue;
+                        }
                         let Some(variant_index) = variant.as_int() else {
                             return Err(VmInternalError::TypeError {
                                 expected: bex_vm_types::types::Type::Int,
@@ -12308,6 +12338,62 @@ impl BexVm {
                         // SAFETY: the encoder validates one input value.
                         self.stack.replace_top_n::<1>(Value::bool(truthy));
                     }
+                    OpCode::IsNull => {
+                        let val = self.stack.get_at(self.stack.ensure_stack_top());
+                        // SAFETY: the encoder validates one input value.
+                        self.stack.replace_top_n::<1>(Value::bool(val.is_null()));
+                    }
+                    OpCode::IsNotNull => {
+                        let val = self.stack.get_at(self.stack.ensure_stack_top());
+                        // SAFETY: the encoder validates one input value.
+                        self.stack.replace_top_n::<1>(Value::bool(!val.is_null()));
+                    }
+                    // `==`: decide the pair in place when no driver is needed,
+                    // otherwise call the driver exactly as `Call` would.
+                    OpCode::CallEquals => {
+                        let raw = read_u32_unchecked(code, pc);
+                        let b = self.stack.get_at(self.stack.ensure_slot_from_top(0));
+                        let a = self.stack.get_at(self.stack.ensure_slot_from_top(1));
+                        if let Some(equal) = crate::package_baml::equals_without_driver(self, a, b)
+                        {
+                            // SAFETY: the encoder validates two comparison operands.
+                            self.stack.replace_top_n::<2>(Value::bool(equal));
+                        } else {
+                            let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                            let callee_value = self.load_global_in(runtime_package, callee_global);
+                            let (callee_ptr, arg_count) =
+                                self.resolve_callable_target(callee_value)?;
+                            let locals_offset = StackIndex::from_raw(
+                                self.stack
+                                    .len()
+                                    .checked_sub(arg_count)
+                                    .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?,
+                            );
+                            let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                                verifier_unreachable!()
+                            };
+                            bf.instruction_ptr = *pc;
+                            return if self.pending_call_type_args.is_empty() {
+                                self.execute_call_from_locals_offset(
+                                    callee_ptr,
+                                    locals_offset,
+                                    arg_count,
+                                    frame_idx,
+                                    function,
+                                )
+                            } else {
+                                let type_args = self.take_type_args_below_values(0, arg_count)?;
+                                self.execute_call_from_locals_offset_with_owned_type_args(
+                                    callee_ptr,
+                                    locals_offset,
+                                    arg_count,
+                                    type_args.tys,
+                                    frame_idx,
+                                    function,
+                                )
+                            };
+                        }
+                    }
                     OpCode::Neg => {
                         let val = self.stack.ensure_pop();
                         if let Some(n) = val.as_int() {
@@ -12455,6 +12541,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             static_load_type_cache,
             static_virtual_call_cache,
             static_virtual_field_cache,
+            enum_equals_memo: _,
         } = self;
         debug_assert!(
             matches!(

@@ -1046,6 +1046,7 @@ mod tests {
             other: indexmap::IndexMap::new(),
             owner: Owner::anonymous(),
             telemetry_definition: crate::DefinitionCell::default(),
+            shared_variants: Box::default(),
         }));
         assert!(
             program

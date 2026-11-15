@@ -884,6 +884,7 @@ mod tests {
             other: Default::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
 
         // Allocate a variant (Color::Green = index 1)

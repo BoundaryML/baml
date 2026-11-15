@@ -2028,6 +2028,7 @@ mod outbound_selection_tests {
             other: indexmap::IndexMap::new(),
             owner: bex_vm_types::types::Owner::Package(user),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let head =
             bex_vm_types::TypeHead::new(enum_ptr, baml_type::typetag::TypeTag::from_i64(200));
