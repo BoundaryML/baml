@@ -434,7 +434,7 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
     ("interfaces.total", r#"function total(shapes: Shape[]) -> int { let sum = 0; for (let s in shapes) { sum += s.area(); } sum }"#,
         &["vm.instance_class(", "Square_as_user_interfaces_Shape___area_", "Rect_as_user_interfaces_Shape___area_", "vm.virtual_target("], &[]),
     ("interfaces.scaled", r#"function scaled(s: Shape, by: int) -> int { s.scaled(by) }"#,
-        &["vm.virtual_target("], &["vm.instance_class("]),
+        &["vm.instance_class(", "vm.class_type(", "user_interfaces_Shape_scaled_", "vm.virtual_target("], &[]),
     ("interfaces.area_fn", r#"function area_fn(s: Shape) -> () -> int throws never { s.area }"#,
         &[], &[]),
     ("interfaces.rename", r#"function rename(n: Named, to: string) -> string { n.name = to; n.name }"#,
@@ -731,7 +731,29 @@ fn interface_calls_dispatch_on_known_classes() {
             "{task}: {body}"
         );
     }
-    assert_eq!(body.matches("if class == Some(vm.record_object(").count(), 4);
+    assert_eq!(
+        body.matches("if class == Some(vm.record_object(").count(),
+        4
+    );
+    assert!(body.contains("vm.virtual_target("), "{body}");
+}
+
+/// A default method gets an arm per class that adopts it, each entering the
+/// interface's one body with the class as `Self`.
+#[test]
+fn default_methods_dispatch_on_known_classes() {
+    let db = baml_test_support::setup_test_db(include_str!(
+        "../../../tools/speedtest/workloads/interfaces/default-method-100k/main.baml"
+    ));
+    let program = lower(&db, OptLevel::Two);
+    let module = render(&db, &program, OptLevel::Two, None);
+    let body = body_of(&module, "user.run");
+    assert_eq!(
+        body.matches("if class == Some(vm.record_object(").count(),
+        2
+    );
+    assert_eq!(body.matches("vm.class_type(").count(), 2, "{body}");
+    assert!(body.contains("user_Counter_total_"), "{body}");
     assert!(body.contains("vm.virtual_target("), "{body}");
 }
 

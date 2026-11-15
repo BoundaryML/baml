@@ -153,3 +153,59 @@ function DispatchRuntimeClass() -> void {
     let row: Row = baml.json.to<Row>({ "label": "r" });
     baml.io.println(`${DxShout(row)},${DxShout(DxLoud { label: "l" })},${DxShout(DxQuiet { label: "q" })}`);
 }
+
+// Defaults that call back into the receiver, and that throw, entered from a
+// site whose classes all adopt them.
+interface DxCounter {
+    base: int
+    function step(self) -> int throws never
+    function total(self) -> int throws never {
+        self.base + self.step()
+    }
+    function ratio(self) -> int throws string {
+        if (self.base < 0) {
+            throw `negative:${self.base}`;
+        }
+        self.base / self.step()
+    }
+}
+
+class DxInc {
+    base: int,
+    implements DxCounter {
+        function step(self) -> int throws never { 1 }
+    }
+}
+
+class DxNone {
+    base: int,
+    implements DxCounter {
+        function step(self) -> int throws never { 0 }
+    }
+}
+
+function DxRun(c: DxCounter) -> int {
+    c.total()
+}
+
+function DxRatio(c: DxCounter) -> int {
+    c.ratio()
+}
+
+function DispatchDefaultChain() -> void {
+    let acc = 0;
+    for (let i = 0; i < 40; i += 1) {
+        if (i % 2 == 0) {
+            acc += DxRun(DxInc { base: i });
+        } else {
+            acc += DxRun(DxNone { base: i });
+        }
+    }
+    let thrown = DxRatio(DxInc { base: -3 }) catch (e) {
+        let s: string => s,
+    };
+    let divided = DxRatio(DxNone { base: 4 }) catch (e) {
+        baml.panics.DivisionByZero => -1,
+    };
+    baml.io.println(`${acc}:${DxRatio(DxInc { base: 9 })}:${thrown}:${divided}`);
+}

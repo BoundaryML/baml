@@ -97,6 +97,7 @@ const PROBES: &[&str] = &[
     "DispatchOptional",
     "DispatchGeneric",
     "DispatchDefault",
+    "DispatchDefaultChain",
     "DispatchRuntimeClass",
     "GenericChains",
     "HookedDeep",
