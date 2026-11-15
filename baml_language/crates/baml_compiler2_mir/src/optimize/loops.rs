@@ -20,6 +20,10 @@
 //! and branches straight back to the body, so the back edge costs one
 //! conditional jump where it cost a conditional jump and a jump.
 //!
+//! A `for` over an iterator tests the result of a call: its header calls
+//! `next`, and the block the call returns to branches on what came back. The
+//! copy is then the call in one block and the branch in the next.
+//!
 //! This is tail duplication and nothing else: on every path the program runs
 //! the same statements in the same order under the same handler, so no trap,
 //! effect, or heap read moves. The original header still runs the test once,
@@ -37,8 +41,9 @@ const MAX_TEST_STATEMENTS: usize = 8;
 
 /// A loop whose test can move to the bottom.
 struct Rotation {
-    /// The test: the header, then each single-entry block its `goto`s lead
-    /// through, the last of which ends in the branch that leaves the loop.
+    /// The test: the header, then each single-entry block its `goto`s and
+    /// calls lead through, the last of which ends in the branch that leaves
+    /// the loop.
     test: Vec<usize>,
     /// The header's predecessors inside the loop.
     latches: Vec<usize>,
@@ -119,25 +124,14 @@ fn find_rotation(body: &MirFunctionBody<'_>) -> Option<Rotation> {
         let mut statements = head.statements.len();
         let (then_block, else_block) = loop {
             let last = &body.blocks[*test.last().expect("the header")];
-            match &last.terminator {
-                Some(Terminator::Goto { target }) => {
-                    let next = &body.blocks[target.0];
-                    // The copy runs as one block under the header's handler
-                    // and inside the header's inlined call, so every block of
-                    // the test must already run under both, and none may be
-                    // entered from elsewhere.
-                    if test.contains(&target.0)
-                        || preds[target.0].len() != 1
-                        || next.landing.is_some()
-                        || next.unwind != head.unwind
-                        || next.handling != head.handling
-                        || next.shielded != head.shielded
-                        || next.inline != head.inline
-                    {
-                        return None;
-                    }
-                    test.push(target.0);
-                    statements += next.statements.len();
+            let target = match &last.terminator {
+                Some(Terminator::Goto { target }) => target,
+                // A call the test makes is copied with it, and counts as a
+                // statement of it. Its handler, if it has one, is entered
+                // from the copy as it is from the original.
+                Some(Terminator::Call { target, .. } | Terminator::VirtualCall { target, .. }) => {
+                    statements += 1;
+                    target
                 }
                 Some(Terminator::Branch {
                     then_block,
@@ -145,7 +139,23 @@ fn find_rotation(body: &MirFunctionBody<'_>) -> Option<Rotation> {
                     ..
                 }) => break (then_block.0, else_block.0),
                 _ => return None,
+            };
+            let next = &body.blocks[target.0];
+            // The copy runs under the header's handler and inside the
+            // header's inlined call, so every block of the test must already
+            // run under both, and none may be entered from elsewhere.
+            if test.contains(&target.0)
+                || preds[target.0].len() != 1
+                || next.landing.is_some()
+                || next.unwind != head.unwind
+                || next.handling != head.handling
+                || next.shielded != head.shielded
+                || next.inline != head.inline
+            {
+                return None;
             }
+            test.push(target.0);
+            statements += next.statements.len();
         };
         if statements > MAX_TEST_STATEMENTS {
             return None;
@@ -179,19 +189,41 @@ fn rotate(body: &mut MirFunctionBody<'_>, arity: usize, rotation: &Rotation) {
     let header = rotation.test[0];
     let bottom = BlockId(body.blocks.len());
     let head = &body.blocks[header];
-    let mut copy = BasicBlock::new(bottom);
-    copy.span = head.span;
-    copy.unwind = head.unwind;
-    copy.handling = head.handling;
-    copy.shielded = head.shielded;
-    copy.inline.clone_from(&head.inline);
-    for &block in &rotation.test {
-        copy.statements
-            .extend(body.blocks[block].statements.iter().cloned());
+    let empty_copy = |id: BlockId| {
+        let mut copy = BasicBlock::new(id);
+        copy.span = head.span;
+        copy.unwind = head.unwind;
+        copy.handling = head.handling;
+        copy.shielded = head.shielded;
+        copy.inline.clone_from(&head.inline);
+        copy
+    };
+    // Blocks joined by a `goto` become one block. A call ends its block, so
+    // what follows it starts the next.
+    let mut copies = vec![empty_copy(bottom)];
+    for (position, &block) in rotation.test.iter().enumerate() {
+        let source = &body.blocks[block];
+        let next = BlockId(bottom.0 + copies.len());
+        let copy = copies.last_mut().expect("a copy in progress");
+        copy.statements.extend(source.statements.iter().cloned());
+        let Some(&continuation) = rotation.test.get(position + 1) else {
+            copy.terminator.clone_from(&source.terminator);
+            copy.terminator_span = source.terminator_span;
+            break;
+        };
+        if matches!(source.terminator, Some(Terminator::Goto { .. })) {
+            continue;
+        }
+        copy.terminator.clone_from(&source.terminator);
+        copy.terminator_span = source.terminator_span;
+        if let Some(terminator) = &mut copy.terminator {
+            super::rewrite_block_ids_in_terminator_with_map(
+                terminator,
+                &HashMap::from([(BlockId(continuation), next)]),
+            );
+        }
+        copies.push(empty_copy(next));
     }
-    let last = &body.blocks[*rotation.test.last().expect("the header")];
-    copy.terminator.clone_from(&last.terminator);
-    copy.terminator_span = last.terminator_span;
 
     // A temporary that lives entirely inside the test gets its own local in
     // the copy. Sharing one would give it two definitions, and the emitter
@@ -200,7 +232,7 @@ fn rotate(body: &mut MirFunctionBody<'_>, arity: usize, rotation: &Rotation) {
     let uses = super::count_local_uses(body);
     let mut test_defs = vec![0usize; body.locals.len()];
     let mut test_uses = vec![0usize; body.locals.len()];
-    for statement in &copy.statements {
+    for statement in copies.iter().flat_map(|copy| &copy.statements) {
         match &statement.kind {
             StatementKind::Assign {
                 destination: Place::Local(local),
@@ -217,7 +249,21 @@ fn rotate(body: &mut MirFunctionBody<'_>, arity: usize, rotation: &Rotation) {
         }
         super::count_in_statement(statement, &mut test_uses);
     }
-    if let Some(terminator) = &copy.terminator {
+    for terminator in copies.iter().filter_map(|copy| copy.terminator.as_ref()) {
+        // What a copied call returns is a definition of the test's too. A
+        // result only the test reads then gets its own local in the copy, and
+        // each of the two calls still hands its result straight to its branch.
+        if let Terminator::Call {
+            destination: Place::Local(local),
+            ..
+        }
+        | Terminator::VirtualCall {
+            destination: Place::Local(local),
+            ..
+        } = terminator
+        {
+            test_defs[local.0] += 1;
+        }
         super::count_in_terminator(terminator, &mut test_uses);
     }
     let mut renamed: Vec<Option<Local>> = (0..body.locals.len()).map(|i| Some(Local(i))).collect();
@@ -233,11 +279,13 @@ fn rotate(body: &mut MirFunctionBody<'_>, arity: usize, rotation: &Rotation) {
             body.locals.push(decl.clone());
         }
     }
-    for statement in &mut copy.statements {
-        super::rewrite_locals_in_statement(statement, &renamed);
-    }
-    if let Some(terminator) = &mut copy.terminator {
-        super::rewrite_locals_in_terminator(terminator, &renamed);
+    for copy in &mut copies {
+        for statement in &mut copy.statements {
+            super::rewrite_locals_in_statement(statement, &renamed);
+        }
+        if let Some(terminator) = &mut copy.terminator {
+            super::rewrite_locals_in_terminator(terminator, &renamed);
+        }
     }
 
     let redirect = HashMap::from([(BlockId(header), bottom)]);
@@ -246,7 +294,7 @@ fn rotate(body: &mut MirFunctionBody<'_>, arity: usize, rotation: &Rotation) {
             super::rewrite_block_ids_in_terminator_with_map(terminator, &redirect);
         }
     }
-    body.blocks.push(copy);
+    body.blocks.extend(copies);
 }
 
 // ============================================================================
@@ -643,6 +691,19 @@ mod tests {
         }
     }
 
+    fn call(destination: usize, target: usize) -> Terminator<'static> {
+        Terminator::Call {
+            has_trace: false,
+            argument_layout: None,
+            callee: Operand::copy_local(Local(1)),
+            args: Vec::new(),
+            ntypeargs: 0,
+            destination: Place::Local(Local(destination)),
+            target: BlockId(target),
+            unwind: None,
+        }
+    }
+
     fn branch(condition: usize, then_block: usize, else_block: usize) -> Terminator<'static> {
         Terminator::Branch {
             condition: Operand::copy_local(Local(condition)),
@@ -781,18 +842,9 @@ mod tests {
 
     #[test]
     fn a_header_that_does_not_end_in_the_exit_test_is_not_rotated() {
-        // A header that calls, as a `for` over an iterator does.
+        // A header whose call returns straight into the body.
         let mut calling = counting_loop();
-        calling.blocks[1].terminator = Some(Terminator::Call {
-            has_trace: false,
-            argument_layout: None,
-            callee: Operand::copy_local(Local(1)),
-            args: Vec::new(),
-            ntypeargs: 0,
-            destination: Place::Local(Local(3)),
-            target: BlockId(2),
-            unwind: None,
-        });
+        calling.blocks[1].terminator = Some(call(3, 2));
         // A header whose branch stays in the loop both ways.
         let mut no_exit = counting_loop();
         no_exit.blocks[1].terminator = Some(branch(3, 2, 2));
@@ -800,6 +852,87 @@ mod tests {
             rotate_loops(&mut body, 1);
             assert_eq!(body.blocks.len(), 4);
         }
+    }
+
+    /// header: `_4 = call` -> bb4: `_3 = i < _4; branch`.
+    fn call_tested_loop() -> MirFunctionBody<'static> {
+        let mut body = counting_loop();
+        body.blocks[1].statements.clear();
+        body.blocks[1].terminator = Some(call(4, 4));
+        body.blocks.push(block(
+            4,
+            vec![set(3, binary(BinOp::Lt, 2, Operand::copy_local(Local(4))))],
+            branch(3, 2, 3),
+        ));
+        body.locals.push(body.locals[0].clone());
+        body
+    }
+
+    fn call_destination(block: &BasicBlock<'static>) -> Local {
+        match &block.terminator {
+            Some(Terminator::Call {
+                destination: Place::Local(local),
+                ..
+            }) => *local,
+            other => panic!("not a call: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_test_of_what_a_call_returns_is_copied_call_and_all() {
+        let mut body = call_tested_loop();
+        rotate_loops(&mut body, 1);
+
+        // Entry still calls and tests through the original two blocks.
+        assert!(matches!(
+            body.blocks[1].terminator,
+            Some(Terminator::Call { target, .. }) if target.0 == 4
+        ));
+        // The latch enters the copied call, which returns to the copied test.
+        assert_eq!(body.blocks.len(), 7);
+        assert!(matches!(
+            body.blocks[2].terminator,
+            Some(Terminator::Goto { target }) if target.0 == 5
+        ));
+        assert!(matches!(
+            body.blocks[5].terminator,
+            Some(Terminator::Call { target, .. }) if target.0 == 6
+        ));
+        assert!(matches!(
+            body.blocks[6].terminator,
+            Some(Terminator::Branch { then_block, else_block, .. })
+                if then_block.0 == 2 && else_block.0 == 3
+        ));
+        // Only the test reads the result, so the copy has a result of its own
+        // and each call still feeds its branch directly.
+        let result = call_destination(&body.blocks[5]);
+        assert!(result.0 > 4, "a fresh local: {result}");
+        assert!(matches!(
+            &body.blocks[6].statements[0].kind,
+            StatementKind::Assign {
+                value: Rvalue::BinaryOp {
+                    right: Operand::Copy(Place::Local(read)),
+                    ..
+                },
+                ..
+            } if *read == result
+        ));
+
+        let blocks = body.blocks.len();
+        rotate_loops(&mut body, 1);
+        assert_eq!(body.blocks.len(), blocks);
+    }
+
+    #[test]
+    fn a_call_result_the_body_reads_is_the_same_local_in_the_copy() {
+        // As a `for` over an iterator reads the item `next` returned.
+        let mut body = call_tested_loop();
+        body.blocks[2]
+            .statements
+            .push(set(0, Rvalue::Use(Operand::copy_local(Local(4)))));
+        rotate_loops(&mut body, 1);
+        assert_eq!(body.blocks.len(), 7);
+        assert_eq!(call_destination(&body.blocks[5]), Local(4));
     }
 
     #[test]
@@ -931,16 +1064,7 @@ mod tests {
 
         // The callee may push to the array.
         let mut calling = len_loop();
-        calling.blocks[2].terminator = Some(Terminator::Call {
-            has_trace: false,
-            argument_layout: None,
-            callee: Operand::copy_local(Local(1)),
-            args: Vec::new(),
-            ntypeargs: 0,
-            destination: Place::Local(Local(0)),
-            target: BlockId(1),
-            unwind: None,
-        });
+        calling.blocks[2].terminator = Some(call(0, 1));
         hoist(&mut calling, true);
         assert_eq!(calling.blocks.len(), 4);
     }

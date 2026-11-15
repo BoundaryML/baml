@@ -106,19 +106,34 @@ enters the copy instead. The copy branches back to the body. This is tail duplic
 execution runs the same statements in the same order under the same handler. The original header
 still runs the test on entry, so a loop that runs zero times still runs zero times.
 
+A test may make calls. A `for` over an iterator has a header that calls `next`, and the block the
+call returns to branches on the result. `while f(x)` has the same shape. The copy is then one
+block per call: each copied call returns to the next copied block, and the last one branches. A
+handler the call unwinds to is entered from the copy as from the original. Escape analysis and
+both backends recognise an array walk per `next` site, so a walked array stays an index walk
+with two sites (`array_iter_next` twice in the bytecode).
+
 Blocked when:
 - No back edge is an unconditional `goto`. There is no jump to save. This also stops a rotated
   loop from being rotated again.
-- The test does not end in a `branch` with one target in the loop and one out. A `for` over an
-  iterator has a call in its header and is left alone. Escape analysis recognises that shape.
+- The test does not end in a `branch` with one target in the loop and one out.
+- A block of the test ends in anything but a `goto`, a call, a virtual call or that branch. An
+  await, a sys-op or a spawn in the test leaves the loop alone.
 - The test spans blocks with different `unwind`, `handling` or `shielded`, or a block of it has
   another predecessor. One copy could not run under both handlers.
 - The header is a handler. The VM lands there with its error slots.
-- The test has more than 8 statements. This bounds code growth.
+- The test has more than 8 statements, a call counting as one. This bounds code growth.
 
 A temporary that lives entirely inside the test gets a fresh local in the copy. Without that it
 would have two definitions and the emitter would keep it in a slot, which costs more than the
-jump saved. A local read outside the test stays shared.
+jump saved. A local read outside the test stays shared. The result of a copied call is such a
+temporary when only the test reads it (`while f(x)`), and is shared when the body reads it (the
+item of a `for`). The first version shared every call result, and `while is_digit(current(p))`
+in json-parser then paid `store_var; load_var` on each test to save one `jump`.
+
+Rotation runs on a function before its calls are inlined, so a test that calls two small
+functions is copied as two calls and both copies are inlined afterwards. That is the growth in
+json-parser's listing (2244 to 2373 instructions, 6%). The inliner's own budgets bound it.
 
 ### Value reuse (`redundancy.rs`, `reuse_available_values`)
 
@@ -238,19 +253,30 @@ return threading, and neither adds an executed instruction.
 
 ## Left undone, by expected instructions saved
 
-1. Hoist `len` and field reads out of loops for thread-local objects. Bubble-sort would lose 5 of
-   21 per inner iteration. Needs escape facts, so a database handle in `optimize_body`.
-2. Let the emitter keep the left operand on the stack when the right operand can trap
+1. Let the emitter keep the left operand on the stack when the right operand can trap
    (`a[i] <= a[j]`, `h * 31 + xs[i]`). Today the left value is stored and kept
    (`store_var_load_var`). One instruction per such expression: bubble, merge, checksum.
-3. Reuse on paths, not only where every path has the value. `j + 1` and `a[j + 1]` in the
-   bubble-sort swap would save 6 to 9 on the swap path but cost 1 to 3 on the other, so the pass
-   declines. Needs sinking the holder into the path that reuses it, or partial redundancy
-   elimination.
-4. Store-to-load forwarding for `x.f = v; ... x.f`. Richards `self.count -= 1; if self.count == 0`.
-   Two instructions each.
-5. Fuse `store_var i; load_var i` across a statement boundary. The emitter declines on purpose to
-   keep a sequence point for the debugger. One instruction per counted loop after rotation.
-6. Rotate `for` over an iterator. The header is a call. Rotating it would need the array walk
-   recognition in `escape.rs` to follow.
-7. Fold `is_type_tag(const null, NULL)` to `true`. Seen once in the snapshots, not in a loop.
+2. Fuse `store_var i; load_var i` across a statement boundary. The emitter declines on purpose to
+   keep a sequence point for the debugger. One instruction per counted loop after rotation, and
+   one per trip of a `for` over an array (`store_var _4; load_var _4` after `array_iter_next`).
+3. Hoist from loops over a parameter. `len(xs)` on a parameter stays in the test because the
+   caller may have shared the array: merge-sort, quick-sort and `indexed` in array-traversal.
+   Needs a caller-side fact (every call site passes a thread-local array) or a guarded copy.
+4. Fold `is_type_tag(const null, NULL)` to `true`. Seen once in the snapshots, not in a loop.
+
+Looked at and not done, because the instruction count does not move:
+
+- Store-to-load forwarding for `x.f = v; ... x.f`. A scan of the fifteen surveyed workloads
+  found ten store-then-read pairs in one block (richards 4, splay 4, json-parser 2). In every
+  one the stored value is a computation (`self.count - 1`, `copy _6.0`), not a local. Keeping
+  it in a local costs a store-and-keep and a load, which is what the field reload costs. No
+  pair stores a plain local, the only case that pays.
+- Reuse on the bubble-sort swap path. Three candidates, estimated from the bytecode listing and
+  not built: `j + 1` reused inside the swap block needs a slot for it (`store_var` plus a broken
+  load pair, 2 instructions) to save 2, so it breaks even. `j + 1` and `a[j + 1]` held from the
+  compare cost about 1 each on the path that does not swap. `tmp = a[j]` could read the
+  compare's `a[j]` for about 3 instructions less on the swap path at no cost, but only because
+  the emitter already keeps
+  that value in a slot (item 1 above). The cost model cannot know that without repeating the
+  emitter's classification, and fixing item 1 would turn the free reuse into a cost on the
+  other path.

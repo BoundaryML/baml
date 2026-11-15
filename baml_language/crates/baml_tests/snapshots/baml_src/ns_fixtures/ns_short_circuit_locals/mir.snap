@@ -57,6 +57,7 @@ fn user.fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: i
     let _13: bool
     let _14: bool
     let _15: int
+    let _16: bool
 
     bb0: {
         _4 = const false;
@@ -70,7 +71,7 @@ fn user.fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: i
 
     bb2: {
         _8 = is_type(copy _7, baml.iter.Done);
-        branch copy _8 -> [bb9, bb3];
+        branch copy _8 -> [bb11, bb3];
     }
 
     bb3: {
@@ -97,16 +98,25 @@ fn user.fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: i
 
     bb7: {
         _14 = copy _4;
-        branch copy _14 -> [bb8, bb1];
+        branch copy _14 -> [bb8, bb9];
     }
 
     bb8: {
         _15 = copy _5;
         _5 = copy _15 + const 1_i64;
-        goto -> bb1;
+        goto -> bb9;
     }
 
     bb9: {
+        _7 = virtual_call next as baml.iter.Iterator<Error = never, Item = int>(copy _6) -> [bb10];
+    }
+
+    bb10: {
+        _16 = is_type(copy _7, baml.iter.Done);
+        branch copy _16 -> [bb11, bb3];
+    }
+
+    bb11: {
         _0 = copy _5;
         return;
     }
