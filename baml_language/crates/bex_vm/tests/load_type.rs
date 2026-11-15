@@ -481,6 +481,9 @@ fn load_type_template_reuses_one_object_per_frame_binding() {
         "a moved object is followed"
     );
     let rebuilt = run_with_frame_type_args(&mut vm, function_ptr, vec![RealizedTy::int()]);
+    // The simulated collection frees no memory, so a stale entry would still
+    // read back as `int[]`; only a fresh object proves the entry was dropped.
+    assert_ne!(rebuilt, ints, "a freed object is not returned");
     assert_eq!(type_of(&vm, rebuilt), int_list, "a freed object is rebuilt");
     assert_eq!(
         run_with_frame_type_args(&mut vm, function_ptr, vec![RealizedTy::int()]),
