@@ -431,3 +431,57 @@ parameter. Stopped here.
   frame are inlined.
 - `optimizer_binary_prefix::prefix_template`: 7 to 8 instructions. The
   helper's virtual call replaced the call to the helper.
+
+### Measured, second round
+
+All 77 workloads, `fasttest` builds, VM with telemetry off, 3 trials,
+base and new alternated twice with nothing else of ours running (load
+average 5 to 11 from the rest of the machine). "Before" is
+`target/mir-opt/base-fast`, built by the coordinator with inlining and scalar
+replacement off. "After" is commit `0d8727c43b`: all passes, generic callees
+and closures included. The new build was linked with the Command Line Tools
+because Xcode's licence blocked the system linker mid-session. Rows are
+workloads that moved more than 7%.
+
+```
+compute/wide-nested-class-create-50k          63.60ms ->     7.85ms   8.10x
+compute/generic-apply-inferred-1m            297.68ms ->    44.16ms   6.74x
+compute/closure-apply-1m                     272.72ms ->    44.03ms   6.19x
+compute/nested-field-access-500k             105.39ms ->    18.63ms   5.66x
+classes/method-chain-100k                     18.41ms ->     5.79ms   3.18x
+compute/call-chain-100x10k                    31.56ms ->    10.51ms   3.00x
+compute/class-instances-100k                  12.51ms ->     5.09ms   2.46x
+classes/method-call-100k                      17.94ms ->     8.45ms   2.12x
+programs/richards-50                         363.40ms ->   181.22ms   2.01x
+compute/pure-call-1m                          65.42ms ->    36.66ms   1.78x
+interfaces/generic-from-json-20k              38.50ms ->    25.13ms   1.53x
+memory/binary-trees-14                       996.85ms ->   694.89ms   1.43x
+memory/heap-calls                              2.40ms ->     1.68ms   1.43x
+compute/if-else-dispatch-1m                  125.41ms ->    88.58ms   1.42x
+interfaces/to-string-interpolation-10k        21.24ms ->    15.80ms   1.34x
+compute/divide-guard-1m                       94.07ms ->    71.44ms   1.32x
+interfaces/polymorphic-dispatch-100k          28.96ms ->    22.94ms   1.26x
+compute/json-hello                              0.9us ->      0.8us   1.26x (ranges overlap)
+compute/guard-clauses-1m                     132.51ms ->   105.86ms   1.25x
+interfaces/match-dispatch-100k                28.53ms ->    22.82ms   1.25x
+programs/json-parser-15                      226.87ms ->   183.94ms   1.23x
+compute/mixed-ops-5k                           2.37ms ->     1.98ms   1.20x (ranges overlap)
+memory/live-heap                             242.74ms ->   205.94ms   1.18x (ranges overlap)
+interfaces/field-access-100k                  34.63ms ->    29.50ms   1.17x
+memory/splay-2k                              147.17ms ->   126.61ms   1.16x
+process/startup                                43.5us ->     37.5us   1.16x (ranges overlap)
+programs/request-handler-2k                    9.14ms ->     8.02ms   1.14x
+concurrency/spawn-await-x10k                 159.82ms ->   141.34ms   1.13x
+concurrency/idle-tasks-8k                    393.65ms ->   348.87ms   1.13x (ranges overlap)
+compute/json-ndjson-events                     6.28ms ->     5.63ms   1.12x
+programs/agent-loop-300                       45.12ms ->    41.06ms   1.10x
+interfaces/default-method-100k                61.08ms ->    55.90ms   1.09x
+concurrency/spawn-fan-out-100                 777.8us ->    721.4us   1.08x (ranges overlap)
+
+77 workloads; geomean time ratio new/base 0.789 (1.27x faster); faster>7%: 33, slower>7%: 0, within: 44
+```
+
+`closure-apply-1m` and `generic-apply-inferred-1m` are the two this round was
+for: both were near 1.1x before it. Nothing is slower. An earlier whole-suite
+run (three passes, before this round) was taken while test builds were
+running and is not recorded here.
