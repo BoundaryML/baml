@@ -1,6 +1,8 @@
 use std::{cell::UnsafeCell, collections::HashMap};
 
 use indexmap::IndexMap;
+use rustc_hash::FxBuildHasher;
+use smallvec::SmallVec;
 
 use crate::{AllocDebt, Value, lazy_biased_mutex::LazyBiasedMutex};
 
@@ -461,11 +463,23 @@ pub type EntryId = u64;
 
 /// Hash a native string key with the same framing as the VM's `Hash` driver.
 pub fn map_string_hash(key: &str) -> u64 {
+    framed_hash(5, key.as_bytes())
+}
+
+/// Hash a native int key with the same framing as the VM's `Hash` driver,
+/// so a map finds an int key whichever of the two hashed it.
+pub fn map_int_hash(key: i64) -> u64 {
+    framed_hash(1, &key.to_le_bytes())
+}
+
+/// The `Hash` driver's framing of a primitive (`tag`, byte length, bytes),
+/// hashed with `baml.hash.DefaultHasher`'s algorithm.
+fn framed_hash(tag: u8, bytes: &[u8]) -> u64 {
     use std::hash::Hasher;
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    hasher.write(&[5]);
-    hasher.write(&(key.len() as u64).to_le_bytes());
-    hasher.write(key.as_bytes());
+    hasher.write(&[tag]);
+    hasher.write(&(bytes.len() as u64).to_le_bytes());
+    hasher.write(bytes);
     hasher.finish()
 }
 
@@ -479,12 +493,26 @@ pub struct MapEntry {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MapEpochChanged;
 
+/// A bucket held a key that [`MapData::find_hashed`]'s comparison could not
+/// judge without running VM code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MapKeyUndecided;
+
+/// The ids of the entries whose keys share one hash. Almost every bucket has
+/// one entry, so it is held inline.
+type MapBucket = SmallVec<[EntryId; 2]>;
+
 /// Ordered entries indexed by hashes computed by the VM, never by Rust's
 /// pointer-based `Value` equality or hashing.
 #[derive(Clone, Debug, Default)]
 pub struct MapData {
-    entries: IndexMap<EntryId, MapEntry>,
-    buckets: HashMap<u64, Vec<EntryId>>,
+    /// Fx-hashed: entry ids are this map's own counter, never program input.
+    entries: IndexMap<EntryId, MapEntry, FxBuildHasher>,
+    /// Randomly keyed: the hashes come from keys a program may take from
+    /// untrusted input.
+    buckets: HashMap<u64, MapBucket>,
+    /// Ids held by buckets that outgrew their inline room, for the footprint.
+    spilled_ids: usize,
     next_id: EntryId,
     // Only membership changes invalidate an in-flight key comparison.
     epoch: u64,
@@ -514,14 +542,14 @@ impl MapData {
         // An entry stores its id, the entry and its hash, plus an index slot.
         let entry = size_of::<EntryId>() + size_of::<MapEntry>() + 2 * size_of::<usize>();
         // A bucket-table slot stores the hash, the bucket and a control byte.
-        let bucket_slot = size_of::<u64>() + size_of::<Vec<EntryId>>() + 1;
-        // Each distinct hash has a bucket, whose first allocation holds four ids.
-        let bucket = 4 * size_of::<EntryId>();
+        let bucket_slot = size_of::<u64>() + size_of::<MapBucket>() + 1;
+        // A bucket holds its first ids inline; only a hash collision past
+        // them allocates, charged by the ids it moved out.
         self.entries
             .capacity()
             .saturating_mul(entry)
             .saturating_add(self.buckets.capacity().saturating_mul(bucket_slot))
-            .saturating_add(self.buckets.len().saturating_mul(bucket))
+            .saturating_add(self.spilled_ids.saturating_mul(size_of::<EntryId>()))
     }
 
     pub fn len(&self) -> usize {
@@ -537,6 +565,7 @@ impl MapData {
             self.advance_epoch();
             self.entries.clear();
             self.buckets.clear();
+            self.spilled_ids = 0;
         }
     }
 
@@ -580,6 +609,31 @@ impl MapData {
         )
     }
 
+    /// The entry with key hash `hash` whose key `matches` accepts, for keys
+    /// whose equality the caller can decide without running VM code, such as
+    /// strings and ints. `matches` returns `None` for a candidate it cannot
+    /// judge (a key with its own `Equals`); the search then stops with
+    /// [`MapKeyUndecided`] and the caller takes the general, snapshot-based
+    /// search. Under the caller's lock the result is current, so the ids it
+    /// returns are valid for this map's current epoch.
+    pub fn find_hashed(
+        &self,
+        hash: u64,
+        mut matches: impl FnMut(&Value) -> Option<bool>,
+    ) -> Result<Option<EntryId>, MapKeyUndecided> {
+        let Some(bucket) = self.buckets.get(&hash) else {
+            return Ok(None);
+        };
+        for id in bucket {
+            match matches(&self.entries[id].key) {
+                Some(true) => return Ok(Some(*id)),
+                Some(false) => {}
+                None => return Err(MapKeyUndecided),
+            }
+        }
+        Ok(None)
+    }
+
     /// The value of the entry with key hash `hash` whose key `matches`
     /// accepts. For keys whose equality the caller can decide without
     /// running VM code, such as strings.
@@ -605,7 +659,14 @@ impl MapData {
             .expect("map entry IDs exhausted");
         self.advance_epoch();
         self.entries.insert(id, MapEntry { key, value, hash });
-        self.buckets.entry(hash).or_default().push(id);
+        let bucket = self.buckets.entry(hash).or_default();
+        let was_spilled = bucket.spilled();
+        bucket.push(id);
+        if was_spilled {
+            self.spilled_ids += 1;
+        } else if bucket.spilled() {
+            self.spilled_ids += bucket.len();
+        }
         id
     }
 
@@ -656,6 +717,9 @@ impl MapData {
         let entry = self.entries.shift_remove(&id).expect("validated map entry");
         let bucket = self.buckets.get_mut(&entry.hash).expect("map bucket");
         bucket.retain(|candidate| *candidate != id);
+        if bucket.spilled() {
+            self.spilled_ids -= 1;
+        }
         if bucket.is_empty() {
             self.buckets.remove(&entry.hash);
         }
