@@ -163,6 +163,25 @@ impl HeapPtr {
         self.ptr.map_addr(|addr| addr & !INSTANCE_TAG).cast()
     }
 
+    /// The first word of the object cell this names: the [`Object`]'s tag,
+    /// which is the cell's header. Meaningless for an instance or a
+    /// compile-time object, neither of which is an object cell.
+    #[inline]
+    pub fn object_cell(self) -> *mut AtomicU64 {
+        debug_assert!(!self.is_instance(), "{self:?} is an instance");
+        self.ptr.cast::<AtomicU64>()
+    }
+
+    /// The first word of the cell this names, whichever kind it is.
+    #[inline]
+    pub fn cell_start(self) -> *mut AtomicU64 {
+        if self.is_instance() {
+            self.cell()
+        } else {
+            self.object_cell()
+        }
+    }
+
     /// Whether this is the inert compile-time/runtime-owner sentinel.
     #[inline]
     pub fn is_null(self) -> bool {

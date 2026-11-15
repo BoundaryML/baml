@@ -491,11 +491,15 @@ pub(crate) mod tests {
             *vm.get_object_mut(class) = class_object(Some(finalizer));
         }
 
+        let gc_heap = std::sync::Arc::clone(&vm.heap);
         // SAFETY: single-threaded test; no VM is executing.
-        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
+        let (_, _, forwarding) = unsafe { gc_heap.collect_garbage(&[]) };
         assert_eq!(
             vm.heap.take_pending_finalizers(),
-            vec![(forwarding[&older], forwarding[&finalizer])]
+            vec![(
+                forwarding.get(older).unwrap(),
+                forwarding.get(finalizer).unwrap()
+            )]
         );
     }
 
@@ -1160,11 +1164,12 @@ pub(crate) mod tests {
             "active trampoline frame must root its synthetic function"
         );
 
-        let (stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        let gc_heap = std::sync::Arc::clone(&vm.heap);
+        let (stats, _remapped_roots, forwarding) = unsafe { gc_heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 1);
         assert!(
-            forwarding.contains_key(&trampoline),
+            forwarding.get(trampoline).is_some(),
             "active trampoline function must be forwarded by GC"
         );
 
@@ -1208,7 +1213,8 @@ pub(crate) mod tests {
             "returned trampoline function must not remain rooted"
         );
 
-        let (stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        let gc_heap = std::sync::Arc::clone(&vm.heap);
+        let (stats, _remapped_roots, forwarding) = unsafe { gc_heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 0);
         assert!(
@@ -1216,7 +1222,7 @@ pub(crate) mod tests {
             "GC should collect the unrooted trampoline function"
         );
         assert!(
-            !forwarding.contains_key(&trampoline),
+            forwarding.get(trampoline).is_none(),
             "unrooted trampoline function must not be forwarded after return"
         );
     }
@@ -1261,10 +1267,10 @@ pub(crate) mod tests {
             "a live realized frame argument must root its declaration without metadata",
         );
 
-        let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        let gc_heap = std::sync::Arc::clone(&vm.heap);
+        let (_stats, _remapped_roots, forwarding) = unsafe { gc_heap.collect_garbage(&roots) };
         let moved = forwarding
-            .get(&class_ptr)
-            .copied()
+            .get(class_ptr)
             .expect("the frame type argument's declaration must survive collection");
         let heap = Arc::clone(&vm.heap);
         vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
@@ -1316,10 +1322,10 @@ pub(crate) mod tests {
             "a native call's realized argument must root its runtime declaration",
         );
 
-        let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        let gc_heap = std::sync::Arc::clone(&vm.heap);
+        let (_stats, _remapped_roots, forwarding) = unsafe { gc_heap.collect_garbage(&roots) };
         let moved = forwarding
-            .get(&class_ptr)
-            .copied()
+            .get(class_ptr)
             .expect("the pending native type argument must survive collection");
         let heap = Arc::clone(&vm.heap);
         vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));

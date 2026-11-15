@@ -248,13 +248,14 @@ fn exec_string(vm: &mut BexVm) -> String {
 
 // SAFETY: callers own the heap's only mutator and keep its fiber parked.
 #[allow(unsafe_code)]
-fn collect(vm: &mut BexVm) -> HashMap<HeapPtr, HeapPtr> {
+/// Collect, forward the VM's roots, and return where each of `watched` went.
+fn collect(vm: &mut BexVm, watched: &[HeapPtr]) -> Vec<Option<HeapPtr>> {
     let mut roots = Vec::new();
     vm.collect_roots(&mut roots);
-    let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
     let heap = Arc::clone(&vm.heap);
+    let (_, _, forwarding) = unsafe { heap.collect_garbage(&roots) };
     vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
-    forwarding
+    watched.iter().map(|&ptr| forwarding.get(ptr)).collect()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -293,7 +294,7 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
     let out = loop {
         match vm.exec().unwrap() {
             VmExecState::EarlyYield => {
-                collect(&mut vm);
+                collect(&mut vm, &[]);
             }
             VmExecState::Complete(value) => break value,
             other => panic!("unexpected execution state: {other:?}"),
@@ -1188,9 +1189,8 @@ fn compiled_delivery_survives_collection_before_resume() {
     assert!(roots.contains(&thrown_ptr));
     assert!(roots.contains(&context_ptr));
 
-    let forwarding = collect(&mut vm);
-    let moved_value = forwarding[&thrown_ptr];
-    let moved_context = forwarding[&context_ptr];
+    let moved = collect(&mut vm, &[thrown_ptr, context_ptr]);
+    let (moved_value, moved_context) = (moved[0].unwrap(), moved[1].unwrap());
     assert_ne!(moved_value, thrown_ptr);
     assert_ne!(moved_context, context_ptr);
     let Some(VmError::Thrown(thrown)) = vm.compiled.delivery.as_deref() else {
@@ -1542,10 +1542,7 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
             "a native call's realized argument must root its runtime declaration",
         );
 
-        let forwarding = collect(&mut vm);
-        let moved = forwarding
-            .get(&class_ptr)
-            .copied()
+        let moved = collect(&mut vm, &[class_ptr])[0]
             .expect("the pending native type argument must survive collection");
 
         let ty = match lane {

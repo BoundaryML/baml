@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
+use super::cell::cell_tag;
 use crate::{
     ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure,
     Uint8ArrayContainer, Value, Variant,
@@ -19,46 +20,50 @@ use crate::{
 /// into the `Vm::objects` pool.
 ///
 /// Read `Vm::objects` for more information.
+/// `repr(u64)` puts the variant tag in the first word, ahead of the payload,
+/// and each tag sets [`OBJECT_BODY`](crate::OBJECT_BODY): the tag is the
+/// header of the object's cell (see `types/cell.rs`).
 #[derive(Clone, Debug)]
+#[repr(u64)]
 pub enum Object {
     /// Package object.
-    Package(Box<Package>),
+    Package(Box<Package>) = cell_tag(0),
 
     /// Function object.
-    Function(Box<Function>),
+    Function(Box<Function>) = cell_tag(1),
 
     /// Represents an interface definition. Not a value object.
-    Interface(Box<InterfaceDef>),
+    Interface(Box<InterfaceDef>) = cell_tag(2),
 
     /// Represents an implementation rule for an interface.
-    ImplRule(Box<RuntimeImplRule>),
+    ImplRule(Box<RuntimeImplRule>) = cell_tag(3),
 
     /// Class object.
-    Class(Box<Class>),
+    Class(Box<Class>) = cell_tag(4),
 
     /// What [`HeapPtr::get`](crate::HeapPtr::get) shows for a class
     /// instance. An instance lives in a cell of its own, never in an
     /// `Object` slot; read it through [`InstanceRef`](crate::InstanceRef).
-    Instance,
+    Instance = cell_tag(5),
 
     /// Enum object.
-    Enum(Box<Enum>),
+    Enum(Box<Enum>) = cell_tag(6),
 
     /// Type-alias object. A declaration, not a value — only recursive aliases
     /// reach the runtime, and they exist so a nominal reference can point at the
     /// indirection rather than expand it away.
-    TypeAlias(Box<TypeAliasDef>),
+    TypeAlias(Box<TypeAliasDef>) = cell_tag(7),
 
     /// Enum value object.
-    Variant(Variant),
+    Variant(Variant) = cell_tag(8),
 
     /// A closure: a function paired with captured variable cells.
-    Closure(Closure),
+    Closure(Closure) = cell_tag(9),
 
     /// A method bound to a specific receiver instance.
     /// Created by `MakeBoundMethod`. The receiver is inserted as `self`
     /// at call time by `CallIndirect`.
-    BoundMethod(BoundMethod),
+    BoundMethod(BoundMethod) = cell_tag(10),
 
     /// A generic function instantiation carrying concrete type arguments
     /// (`foo<int>` referenced as a value, not called). Pooled and interned at
@@ -67,7 +72,7 @@ pub enum Object {
     /// `function` via the global table and seeds `frame.type_args` from
     /// `type_args`, so type-reifying bodies (`reflect.Type.of<T>`, json natives)
     /// work through the value.
-    GenericFunction(GenericFunction),
+    GenericFunction(GenericFunction) = cell_tag(11),
 
     /// A host-language callable bound to a BAML function type.
     ///
@@ -75,56 +80,56 @@ pub enum Object {
     /// `RuntimeTy::Function` parameter. Calling it (`CallIndirect`) dispatches
     /// `SysOp::BamlHostCallHostValue`, which fires the bridge's
     /// `HostDispatchFn` and awaits the host's response.
-    HostClosure(HostClosure),
+    HostClosure(HostClosure) = cell_tag(12),
 
     /// A mutable cell holding a single captured value.
-    Cell(Cell),
+    Cell(Cell) = cell_tag(13),
 
     /// Heap allocated string backed by [`bex_str::BexStr`].
     ///
     /// `BexStr` avoids allocating for small strings (up to ~22 bytes inline)
     /// and reference-counts larger ones, making clone cheap.
-    String(bex_str::BexStr),
+    String(bex_str::BexStr) = cell_tag(14),
 
     /// Heap-allocated arbitrary-precision integer.
     ///
     /// `Value: Copy` so bigints must live on the heap behind an `Arc`. The
     /// `Arc` lets multiple values share the same allocation (e.g. after a
     /// `let y = x` assignment) without deep-copying the underlying digit slice.
-    Bigint(std::sync::Arc<num_bigint::BigInt>),
+    Bigint(std::sync::Arc<num_bigint::BigInt>) = cell_tag(15),
 
     /// Byte array (uint8array). Wrapped in [`Uint8ArrayContainer`] so the
     /// underlying `Vec<u8>` is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against
     /// racing mutation under `spawn`.
-    Uint8Array(Uint8ArrayContainer),
+    Uint8Array(Uint8ArrayContainer) = cell_tag(16),
 
     /// List of values. Wrapped in [`ArrayContainer`] so the underlying
     /// `Vec<Value>` is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
     /// mutation under `spawn`.
-    Array(Array),
+    Array(Array) = cell_tag(17),
 
     /// Map of values. Wrapped in [`crate::MapContainer`] so the underlying
     /// [`crate::MapData`] is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
     /// mutation under `spawn`.
-    Map(Map),
+    Map(Map) = cell_tag(18),
 
     /// Boxed 64-bit float. Floats are heap-allocated because `Value`
     /// itself is a single tagged 64-bit word with no inline encoding
     /// for full-precision f64. Allocation rate is low in practice —
     /// BAML programs are integer-and-object-heavy.
-    Float(f64),
+    Float(f64) = cell_tag(19),
 
-    Future(crate::Future),
+    Future(crate::Future) = cell_tag(20),
 
     /// Opaque Rust-managed data, accessed via `Arc<dyn Any>` downcast.
     /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
-    RustData(Arc<dyn crate::BexRustData>),
+    RustData(Arc<dyn crate::BexRustData>) = cell_tag(21),
 
     /// A type descriptor value — wraps a [`crate::types::TypeValue`]. The
     /// described type is the whole of it: `==` is type equivalence, so a GC
     /// copy, a `baml.deep_copy`, and a wire round trip all denote the same
     /// type by construction.
-    Type(Box<crate::types::TypeValue>),
+    Type(Box<crate::types::TypeValue>) = cell_tag(22),
 
     /// What is in a slot with no object: one a collection moved to another
     /// space, or one reserved and not yet published (`bex_heap::Reservation`).
@@ -132,10 +137,10 @@ pub enum Object {
     /// naming a sibling that is published before anything reads it; so one is
     /// only ever seen by code that walks slots by position, and reaching one by
     /// following a reference is a use-after-free.
-    Tombstone,
+    Tombstone = cell_tag(23),
 
     #[cfg(feature = "heap_debug")]
-    Sentinel(crate::types::SentinelKind),
+    Sentinel(crate::types::SentinelKind) = cell_tag(24),
 }
 
 const _: () = assert!(

@@ -2403,11 +2403,11 @@ class Fresh {}
         let heap = Arc::clone(&vm.heap);
         let mut index = crate::package_load::DynDispatchRoot::new(Arc::clone(&vm.dynamic_dispatch));
         let (_, _, forwarding) = unsafe { heap.collect_garbage(&[class.ptr()]) };
-        assert!(forwarding.contains_key(&rule), "the class owns its rule");
+        assert!(forwarding.get(rule).is_some(), "the class owns its rule");
         vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         index.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         assert_eq!(index.tables.rule_count(), 1);
-        let moved = TypeHead::new(forwarding[&class.ptr()], class.tag());
+        let moved = TypeHead::new(forwarding.get(class.ptr()).unwrap(), class.tag());
         assert!(
             crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
                 &class_ty(moved),

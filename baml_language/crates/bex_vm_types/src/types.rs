@@ -6,6 +6,7 @@
 //! argument; the unsafe code here is intentional and necessary.
 
 #![allow(unsafe_code)]
+mod cell;
 mod class;
 mod const_value;
 mod containers;
@@ -28,6 +29,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 /// runtime spells it unqualified everywhere it builds a declaration.
 pub use baml_type::DeclarationName;
 use borsh::{BorshDeserialize, BorshSerialize};
+pub use cell::*;
 pub use class::*;
 pub use const_value::*;
 pub use containers::*;

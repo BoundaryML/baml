@@ -3243,7 +3243,7 @@ impl BexEngine {
         #[cfg(feature = "heap_debug")]
         for &ptr in &all_roots {
             assert!(
-                forwarding.contains_key(&ptr),
+                forwarding.get(ptr).is_some(),
                 "heap_debug: post-GC integrity sweep — root {ptr:?} was not \
                  reached by the GC BFS (collect_roots produced it but it is \
                  not in the forwarding map)"
@@ -3268,7 +3268,7 @@ impl BexEngine {
             heap_guard.collect_roots(&mut roots_after);
             for &ptr in &roots_after {
                 assert!(
-                    !self.heap.debug_ptr_in_inactive(ptr),
+                    !forwarding.in_from_space(ptr),
                     "heap_debug: post-forward_roots — root {ptr:?} still points \
                      into the inactive space (forward_roots missed it)"
                 );

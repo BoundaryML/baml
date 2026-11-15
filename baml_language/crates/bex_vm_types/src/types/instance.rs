@@ -4,9 +4,9 @@
 //!
 //! # Header
 //!
-//! Bits 1-2 of a cell's header are the cell's kind. Kind 0 is an instance:
-//! the header is its class pointer's bits, with bit 0 the BEP-042 cleanup
-//! latch. Other kinds are reserved for objects that move into cell spaces.
+//! An instance's header is its class pointer's bits with
+//! [`OBJECT_BODY`](crate::OBJECT_BODY) clear; bit 0 is the BEP-042 cleanup
+//! latch. `types/cell.rs` documents every header bit.
 //!
 #![allow(
     clippy::inline_always,
@@ -24,16 +24,9 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use crate::{Class, ClassField, HeapPtr, Object, RealizedTy, RuntimeTy, Value};
-
-/// Bytes in one cell word: the header and every slot.
-pub const WORD_BYTES: usize = size_of::<u64>();
-
-/// The header bit set once an instance's `cleanup` has started.
-const CLEANED: u64 = 0b001;
-
-/// The header bits that are not the class pointer: the latch and the kind.
-const HEADER_FLAGS: u64 = 0b111;
+use crate::{
+    CLEANED, Class, ClassField, HEADER_FLAGS, HeapPtr, Object, RealizedTy, RuntimeTy, Value,
+};
 
 /// How an instance stores one field, fixed for a class by the field's
 /// declared type.

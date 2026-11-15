@@ -5,89 +5,119 @@
 //! - **Safepoints**: GC only runs when all VMs are yielded (async operations)
 //! - **Two active spaces and a to-space**: Gen0 (the nursery, carved into
 //!   TLABs), Gen2 (survivors), and inactive (the copy destination)
-//! - **Every collection is full**: Traces everything reachable across Gen0 and
-//!   Gen2, copies survivors to inactive, swaps inactive↔Gen2, clears Gen0
+//! - **Every collection is full**: Copies everything reachable from Gen0 and
+//!   Gen2 into inactive, swaps inactive↔Gen2, and retires the old spaces
 //! - **Compacting**: No fragmentation; all live objects are contiguous in Gen2
 //! - **Handle-aware**: Handles updated to point to new object locations
 //!
+//! # One scan
+//!
+//! The roots are copied first. Then a cursor walks the copies in the
+//! inactive space, in the order they were made: for each reference a copy
+//! holds, the referenced cell is copied (unless it already was) and the
+//! reference is rewritten to the copy. Copying appends to the very space the
+//! cursor walks, so the walk ends when it catches up with the last copy, and
+//! every survivor has then been both found and fixed up.
+//!
+//! A copied cell's old header records where it went: the copy's address
+//! with [`FORWARDED`](bex_vm_types::FORWARDED) set. So the collector
+//! needs no table of moves; it reads the old header.
+//!
 //! # Invariant: compile-time objects do not contain runtime `HeapPtr`s
 //!
-//! When the BFS in `copy_collection` encounters a
-//! compile-time pointer it identity-maps it into `forwarding` and stops —
-//! it does **not** call `add_references_to_worklist` on the compile-time
-//! object's payload. This shortcut is sound only because every compile-time
-//! `Object` variant (`Function`, `Class`, `Enum`, `Type`) is a leaf with no
-//! `HeapPtr` fields. If a future change adds a runtime-`HeapPtr` field to
-//! one of those variants, the BFS would silently miss anything reachable
-//! only through it and the GC would reclaim live objects.
+//! The collector never copies or scans a compile-time object: a reference
+//! to one stays as it is. That is sound only because every compile-time
+//! object's references name other compile-time objects. Sealing the heap
+//! checks this in debug builds ([`BexHeap::seal`]).
 //!
-//! `add_references_to_worklist` carries a `debug_assert!` that fires if it
-//! is ever handed a compile-time pointer whose payload would have produced
-//! a runtime reference, so a regression of this invariant surfaces as an
-//! immediate panic in debug builds (and under `heap_debug`).
+//! # Invariant: a survivor's old cell is read through its header only
 //!
-//! # Invariant: a survivor's old slot is read exactly once
-//!
-//! Evacuation moves each survivor into its destination space and leaves an
-//! `Object::Tombstone` in the slot it came from (`evacuate_object`). From then
-//! on the old slot no longer holds the object: tracing, fixup, the finalizer and
-//! unhandled-error scans, and the engine's root forwarding must reach a
-//! survivor through the `forwarding` map, never through its old pointer. A
-//! from-space scan may still read slots that are *not* in `forwarding`; those
-//! are dead objects, and they stay intact until their space is cleared.
-//!
-//! An instance cell is copied rather than moved, and its old cell is left
-//! as it was: the cell owns nothing, and `forwarding` alone says it moved.
+//! Once a cell is copied, its old header holds the forwarding address and
+//! the copy owns the object: tracing, fixup, the finalizer and
+//! unhandled-error scans, and the engine's root forwarding reach a survivor
+//! through the old header, never through the rest of the old cell. For an
+//! object cell the header is the `Object`'s tag, so the old cell is no
+//! longer an `Object` at all; a moved class is read through
+//! `class_declaration`. A from-space scan may read cells that were *not*
+//! copied; those are dead objects, intact until `drop_dead_objects` drops
+//! them.
 //!
 //! Because survivors are gone from from-space, a collection cannot be
 //! abandoned halfway: once the first object has moved, the roots are stale
 //! until root forwarding completes. A panic in that window must not resume
 //! execution; the engine aborts the process instead.
 
-use std::{cell::UnsafeCell, collections::HashMap};
+use std::sync::atomic::AtomicU64;
 
 use bex_vm_types::{
-    Class, ClassLayout, FutureRead, HeapPtr, InstanceRef, Meter, Object, Value,
+    ClassLayout, FutureRead, HeapPtr, InstanceRef, Meter, OBJECT_CELL_WORDS, Object, Value,
     types::{Future, Objects, Slots},
 };
 
-use crate::{BexHeap, cell_space::CellSpace, chunked_vec::ChunkedVec};
-
-/// Extract the inner `HeapPtr` held by a settled future (Ready / Error), if
-/// the held value is an object reference. Pending / Cancelled / InternalError
-/// futures hold no reachable outgoing references; this returns `None` for
-/// those, and for settled futures whose payload is a non-object `Value`.
-///
-/// Centralizes the GC's view of "what does a Future point at?" for every walk
-/// that asks.
-fn future_object_ref(fut: &Future) -> Option<HeapPtr> {
-    use bex_vm_types::FutureRead;
-    match fut.read() {
-        FutureRead::Ready(v) | FutureRead::Error(v) => v.as_object_ptr(),
-        FutureRead::Pending(_) | FutureRead::Cancelled | FutureRead::InternalError(_) => None,
-    }
-}
+use crate::{
+    BexHeap,
+    cell_space::{CellBody, CellSpace, Cursor, forward_to, forwarding_address, is_forwarded},
+};
 
 /// Result of a garbage collection cycle.
 #[derive(Debug, Clone)]
 pub struct GcStats {
-    /// Objects marked as live (copied).
+    /// Cells that survived (copied).
     pub live_count: usize,
-    /// Slots reclaimed (including unused TLAB reservations), not an object-death count.
+    /// Cells that died.
     pub collected_count: usize,
-    /// Bytes the survivors keep alive outside their slots, with storage shared
+    /// Bytes the survivors keep alive outside their cells, with storage shared
     /// between them counted once.
     pub live_payload_bytes: usize,
     /// Detailed diagnostics in profiling builds; a zero-sized marker otherwise.
     pub profile: crate::GcProfile,
 }
 
+/// Where a collection moved each object, read from the headers of the cells
+/// it left behind. Holds the old spaces until dropped, so roots outside the
+/// heap can be forwarded after [`BexHeap::collect_garbage`] returns; drop it
+/// once they have been.
+pub struct Forwarding<'heap> {
+    heap: &'heap BexHeap,
+    from_space: [CellSpace; 2],
+}
+
+impl Forwarding<'_> {
+    /// `ptr`'s new address; see [`bex_vm_types::Forwarding`].
+    pub fn get(&self, ptr: HeapPtr) -> Option<HeapPtr> {
+        self.heap.forwarded(ptr)
+    }
+
+    /// Whether `ptr` names a cell in the retired spaces: a pointer that root
+    /// forwarding missed.
+    #[cfg(feature = "heap_debug")]
+    pub fn in_from_space(&self, ptr: HeapPtr) -> bool {
+        self.from_space
+            .iter()
+            .any(|space| space.contains(ptr.cell_start()))
+    }
+}
+
+impl bex_vm_types::Forwarding for Forwarding<'_> {
+    fn forwarded(&self, ptr: HeapPtr) -> Option<HeapPtr> {
+        self.get(ptr)
+    }
+}
+
+/// The scan's place in the inactive space and its tally of the survivors.
+struct Scan {
+    cursor: Cursor,
+    cells: usize,
+    words: usize,
+    census: Meter,
+}
+
 impl BexHeap {
     /// Run a full garbage collection with the given roots.
     ///
-    /// Traces all live objects reachable from `roots` across Gen0 and Gen2,
-    /// copies survivors to the inactive space, then atomically swaps inactive↔Gen2
-    /// and clears Gen0. After collection all survivors reside in Gen2.
+    /// Copies all live objects reachable from `roots` out of Gen0 and Gen2
+    /// into the inactive space, then swaps inactive↔Gen2 and retires the old
+    /// spaces. After collection all survivors reside in Gen2.
     ///
     /// # Safety
     ///
@@ -95,32 +125,159 @@ impl BexHeap {
     /// This is typically guaranteed by the engine's epoch-based GC protocol.
     ///
     /// If this panics, the heap must not be used again: survivors may already
-    /// have been moved out of the slots the roots point at.
-    ///
-    /// # Arguments
-    ///
-    /// * `roots` — Stack roots from all yielded VMs plus any externally-held handles.
+    /// have been moved out of the cells the roots point at.
     ///
     /// # Returns
     ///
-    /// A tuple of `(GcStats, remapped_roots, forwarding_map)` where:
-    /// - `GcStats` contains live/collected counts and the survivors' payload.
-    /// - `remapped_roots` contains the new `HeapPtr` for each input root (in order).
-    /// - `forwarding_map` maps every moved object's old `HeapPtr` to its new location.
-    ///   Callers must use this map to update any stale `HeapPtr` values they hold
-    ///   (e.g., parked-VM stacks, TLAB invalidation, continuation captures).
+    /// `(GcStats, remapped_roots, forwarding)` where `remapped_roots` holds the
+    /// new `HeapPtr` for each input root (in order) and `forwarding` answers
+    /// where any old pointer went. Callers must forward every stale `HeapPtr`
+    /// they hold (parked-VM stacks, continuation captures) before dropping it.
     pub unsafe fn collect_garbage(
         &self,
         roots: &[HeapPtr],
-    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
+    ) -> (GcStats, Vec<HeapPtr>, Forwarding<'_>) {
         self.copy_collection(roots)
     }
 
-    /// BEP-042: the instances in the given from-space generations that died
-    /// this collection (not in `forwarding`), are not already cleaned, and
-    /// whose class defines a `cleanup` finalizer. Returns each (old) instance
-    /// pointer with its class's finalizer — the keep-alive seeds for
-    /// finalization.
+    /// Where this collection moved `ptr`: `ptr` itself for a pointer that
+    /// never moves (null or compile-time), the copy's address for a copied
+    /// cell, `None` otherwise. Valid from the first copy until the
+    /// [`Forwarding`] the collection returns is dropped, for a pointer from
+    /// before the collection.
+    pub(crate) fn forwarded(&self, ptr: HeapPtr) -> Option<HeapPtr> {
+        if ptr.is_null() || self.is_compile_time_ptr(ptr) {
+            return Some(ptr);
+        }
+        let cell = ptr.cell_start();
+        // SAFETY: `ptr` names a cell of a space this collection is copying
+        // from or into, both intact until the `Forwarding` is dropped.
+        if !unsafe { is_forwarded(cell) } {
+            return None;
+        }
+        // SAFETY: as above, and the cell was forwarded.
+        let (to, object) = unsafe { forwarding_address(cell) };
+        Some(self.ptr_to(to, object))
+    }
+
+    /// The pointer naming the cell at `cell`.
+    fn ptr_to(&self, cell: *mut AtomicU64, object: bool) -> HeapPtr {
+        if object {
+            // SAFETY: `cell` starts an object cell, which is its object.
+            unsafe { self.make_heap_ptr(cell.cast()) }
+        } else {
+            // SAFETY: `cell` starts an instance cell.
+            unsafe { InstanceRef::from_cell(cell) }.ptr()
+        }
+    }
+
+    /// Copy the cell `ptr` names into the inactive space, unless it is
+    /// already there or never moves, and return where it now is.
+    ///
+    /// The cell is copied word for word, so the object is moved, not cloned:
+    /// its backing storage keeps its address and capacity, and a collection
+    /// costs time proportional to the survivors, not to the bytes they own.
+    /// Its references still name from-space until the scan reaches the copy.
+    fn forward(&self, ptr: HeapPtr) -> HeapPtr {
+        if let Some(moved) = self.forwarded(ptr) {
+            return moved;
+        }
+        debug_assert!(
+            // SAFETY: an unforwarded object cell is an intact `Object`.
+            ptr.is_instance() || !matches!(unsafe { ptr.get() }, Object::Tombstone),
+            "the collector reached a tombstone at {ptr:?}: a stale pointer, or a \
+             reservation dropped or held unpublished across a collection"
+        );
+        let old = ptr.cell_start();
+        let words = if ptr.is_instance() {
+            // SAFETY: an unforwarded instance's header names its class.
+            self.instance_words(unsafe { InstanceRef::from_cell(old) })
+        } else {
+            OBJECT_CELL_WORDS
+        };
+        // SAFETY: GC safepoint with exclusive access to the inactive space;
+        // the destination is freshly carved, so the two never overlap.
+        let new = unsafe {
+            let to = (*self.inactive.get()).carve(words);
+            std::ptr::copy_nonoverlapping(old, to, words);
+            forward_to(old, to);
+            to
+        };
+        self.ptr_to(new, !ptr.is_instance())
+    }
+
+    /// Scan the inactive space from the scan's cursor to its end, copying
+    /// what each copy references and rewriting the references.
+    fn scan(&self, scan: &mut Scan) {
+        // SAFETY: GC safepoint. The borrow of the space ends before each
+        // cell is scanned, which may carve more of it.
+        while let Some(cell) = unsafe { (*self.inactive.get()).next_cell(&mut scan.cursor) } {
+            // SAFETY: the cursor stops only at copies, which are never
+            // forwarded.
+            let words = match unsafe { CellBody::at(cell) } {
+                CellBody::Object(object) => {
+                    // SAFETY: nothing else references the copy during the scan.
+                    let object = unsafe { &mut *object };
+                    visit_refs(object, &mut |ptr| *ptr = self.forward(*ptr));
+                    object.measure(&mut scan.census);
+                    OBJECT_CELL_WORDS
+                }
+                CellBody::Instance(instance) => {
+                    visit_instance_refs(instance, &mut |ptr| *ptr = self.forward(*ptr))
+                }
+            };
+            scan.cursor.advance(words);
+            scan.cells += 1;
+            scan.words += words;
+        }
+    }
+
+    /// The declaration of `class`, read where this collection has put it: a
+    /// runtime-created class is itself collectible, and a moved class's old
+    /// cell holds only its forwarding address.
+    fn class_declaration(&self, class: HeapPtr) -> &'static bex_vm_types::Class {
+        let class = self.forwarded(class).unwrap_or(class);
+        // SAFETY: a forwarded class names its copy; an unforwarded one names
+        // an intact cell, live or not yet dropped.
+        match unsafe { class.get() } {
+            Object::Class(class) => class,
+            other => unreachable!(
+                "an instance's class is a {}",
+                bex_vm_types::ObjectType::of(other)
+            ),
+        }
+    }
+
+    /// Words in `instance`'s cell, from its class wherever that now is.
+    fn instance_words(&self, instance: InstanceRef) -> usize {
+        ClassLayout::of(self.class_declaration(instance.class())).words()
+    }
+
+    /// Words in a cell of a space this collection touches, whether or not
+    /// the cell was copied.
+    ///
+    /// # Safety
+    ///
+    /// GC safepoint, before from-space is released; `cell` starts a cell.
+    pub(crate) unsafe fn cell_words(&self, cell: *mut AtomicU64) -> usize {
+        // SAFETY: the caller guarantees `cell` starts an intact cell.
+        let (cell, object) = if unsafe { is_forwarded(cell) } {
+            unsafe { forwarding_address(cell) }
+        } else {
+            let body = unsafe { CellBody::at(cell) };
+            (cell, matches!(body, CellBody::Object(_)))
+        };
+        if object {
+            OBJECT_CELL_WORDS
+        } else {
+            // SAFETY: an unforwarded cell, or a copy, is an intact instance.
+            self.instance_words(unsafe { InstanceRef::from_cell(cell) })
+        }
+    }
+
+    /// BEP-042: the instances that died this collection (not forwarded), are
+    /// not already cleaned, and whose class defines a `cleanup` finalizer:
+    /// the (old) pointers that seed finalization.
     ///
     /// Checks only the finalizable list ([`FinalizableInstances`]), not every
     /// object in from-space: a dead object without a finalizer is never
@@ -128,18 +285,13 @@ impl BexHeap {
     /// invariant), and each entry is tested against the same conditions a
     /// walk of `gens` applies, so the seeds are the same. They come back in
     /// the order such a walk finds them: by generation in `gens` order, then
-    /// by slot.
+    /// by position.
     ///
-    /// SAFETY: call only at a GC safepoint, after the root trace has populated
-    /// `forwarding`, and before the space swap — the from-space objects must
-    /// still be intact.
+    /// SAFETY: call only at a GC safepoint, after the root scan, and before
+    /// from-space is released.
     ///
     /// [`FinalizableInstances`]: crate::heap::FinalizableInstances
-    unsafe fn scan_dead_finalizers(
-        &self,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-        gens: &[&CellSpace],
-    ) -> Vec<(HeapPtr, HeapPtr)> {
+    unsafe fn scan_dead_finalizers(&self, gens: &[&CellSpace]) -> Vec<HeapPtr> {
         // Fast path: if no class defines `cleanup`, no instance can ever be
         // finalizable.
         if !self
@@ -159,46 +311,36 @@ impl BexHeap {
         for &ptr in &finalizable.instances {
             #[cfg(test)]
             tests::FINALIZER_SCAN_VISITS.with(|visits| visits.set(visits.get() + 1));
-            if forwarding.contains_key(&ptr) {
+            if self.forwarded(ptr).is_some() {
                 continue; // reachable from roots → not dead
             }
             // Every entry is in from-space: entries are registered as their
             // objects are allocated or rewritten there, and each collection
             // moves the survivors' entries and drops the rest.
-            // SAFETY: GC safepoint; only addresses are compared.
             let position = gens
                 .iter()
                 .enumerate()
                 .find_map(|(generation, space)| Some((generation, space.position(ptr.cell())?)))
                 .unwrap_or_else(|| unreachable!("finalizable entry {ptr:?} is outside from-space"));
-            // SAFETY: a dead instance's cell is intact until its space is cleared.
+            // SAFETY: a dead instance's cell is intact until its space is released.
             let inst = unsafe { InstanceRef::of(ptr) }.expect("finalizable entries are instances");
             if inst.is_cleaned() {
                 continue; // explicit/`defer` already cleaned it — SuppressFinalize
             }
-            let class = Self::class_in_collection(inst.class(), forwarding);
-            // The finalizer is the class's own method, taken while the
-            // class is in hand. The instance keeps its class alive and the
-            // class its methods, so the closure copied from the seed
-            // carries the function along.
-            if let Some(cleanup) = class.cleanup() {
-                seeds.push((position, ptr, cleanup));
+            if self.class_declaration(inst.class()).cleanup().is_some() {
+                seeds.push((position, ptr));
             }
         }
-        seeds.sort_unstable_by_key(|&(order, ..)| order);
-        seeds
-            .into_iter()
-            .map(|(_, instance, cleanup)| (instance, cleanup))
-            .collect()
+        seeds.sort_unstable_by_key(|&(order, _)| order);
+        seeds.into_iter().map(|(_, instance)| instance).collect()
     }
 
     /// BEP-042: if an existing class gained a finalizer since the last
     /// collection, rebuild the finalizable list from a walk of every
-    /// generation. Runs before the root trace, while every object is still
-    /// in place: evacuation leaves a tombstone where a live object was, so a
-    /// later walk would miss the live instances.
+    /// generation. Runs before the root scan, while every object is still
+    /// in place.
     ///
-    /// SAFETY: GC safepoint, before any object is evacuated.
+    /// SAFETY: GC safepoint, before any object is copied.
     unsafe fn refresh_finalizable_instances(&self) {
         let mut finalizable = self.finalizable.lock().expect("finalizable lock poisoned");
         if !finalizable.stale {
@@ -206,316 +348,195 @@ impl BexHeap {
         }
         finalizable.instances.clear();
         // SAFETY: GC safepoint; nothing has moved yet.
-        for space in unsafe { [&*self.gen0_cells.get(), &*self.gen2_cells.get()] } {
+        for space in unsafe { [&*self.gen0.get(), &*self.gen2.get()] } {
             space.for_each_cell(|cell| {
-                // SAFETY: nothing has moved, so the instance and its class are intact.
-                let instance = unsafe { InstanceRef::from_cell(cell) };
-                if Self::needs_finalizer(instance) {
+                // SAFETY: nothing has moved, so every cell and class is intact.
+                if let CellBody::Instance(instance) = unsafe { CellBody::at(cell) }
+                    && Self::needs_finalizer(instance)
+                {
                     finalizable.instances.push(instance.ptr());
                 }
-                instance.layout().words()
+                // SAFETY: as above.
+                unsafe { self.cell_words(cell) }
             });
         }
         finalizable.stale = false;
     }
 
     /// BEP-042: move each finalizable entry to where this collection put it,
-    /// and drop the dead. Called with the final `forwarding` map, before the
-    /// space swap, like [`update_function_lookup`](Self::update_function_lookup).
-    fn update_finalizable_instances(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    /// and drop the dead. Called before from-space is released, like
+    /// [`update_function_lookup`](Self::update_function_lookup).
+    fn update_finalizable_instances(&self) {
         self.finalizable
             .lock()
             .expect("finalizable lock poisoned")
             .instances
-            .retain_mut(|ptr| forwarding.get(ptr).map(|&new_ptr| *ptr = new_ptr).is_some());
+            .retain_mut(|ptr| self.forwarded(*ptr).map(|new_ptr| *ptr = new_ptr).is_some());
     }
 
     /// BEP-042: keep alive every dead, not-yet-cleaned instance of a class
-    /// with a finalizer (and its transitive closure) by copying it into the
-    /// inactive space, and queue it for finalization. The copy loop mirrors the
-    /// root trace in [`copy_collection`]; queued pointers are the post-copy
-    /// locations, which the engine roots as handles before it releases the
-    /// heap.
+    /// with a finalizer (and its transitive closure) by copying it and
+    /// continuing the scan, and queue it for finalization. Queued pointers are
+    /// the post-copy locations, which the engine roots as handles before it
+    /// releases the heap.
     ///
-    /// SAFETY: GC safepoint, after the root trace, before the swap.
-    unsafe fn keepalive_finalizers(&self, forwarding: &mut HashMap<HeapPtr, HeapPtr>) {
-        let seeds = unsafe {
-            self.scan_dead_finalizers(
-                forwarding,
-                &[&*self.gen0_cells.get(), &*self.gen2_cells.get()],
-            )
-        };
-        if seeds.is_empty() {
-            return;
-        }
-        // Both halves of a seed are kept alive explicitly: the finalizer is
-        // reachable from its instance through the class, but seeding it means
-        // the closure below places it in `forwarding` whatever generation the
-        // class sits in.
-        let mut worklist: Vec<HeapPtr> = seeds
-            .iter()
-            .flat_map(|(instance, cleanup)| [*instance, *cleanup])
-            .collect();
-        while let Some(old_ptr) = worklist.pop() {
-            if forwarding.contains_key(&old_ptr) {
-                continue;
-            }
-            if self.is_compile_time_ptr(old_ptr) {
-                forwarding.insert(old_ptr, old_ptr);
-                continue;
-            }
-            let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
-            self.trace(new_ptr, forwarding, &mut worklist);
-        }
-        for (instance, cleanup) in seeds {
-            // Both were seeded above, so both are now in `forwarding`.
-            self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
+    /// SAFETY: GC safepoint, after the root scan, before from-space is released.
+    unsafe fn keepalive_finalizers(&self, scan: &mut Scan) {
+        let seeds = unsafe { self.scan_dead_finalizers(&[&*self.gen0.get(), &*self.gen2.get()]) };
+        // The instance keeps its class alive and the class its `cleanup`
+        // method, so copying the instance keeps the finalizer too. Its new
+        // address is read from the instance's scanned copy: the seed's may
+        // already be a new address, which must not be forwarded again.
+        let instances: Vec<_> = seeds.into_iter().map(|seed| self.forward(seed)).collect();
+        self.scan(scan);
+        for instance in instances {
+            // SAFETY: the scan finished, so the copy names its class's copy.
+            let copy = unsafe { InstanceRef::of(instance) }.expect("a finalizable instance");
+            let cleanup = copy
+                .class_object()
+                .cleanup()
+                .expect("its class has a finalizer");
+            self.push_pending_finalizer(instance, cleanup);
         }
     }
 
     /// Find dead errored futures whose result was never delivered to an
-    /// awaiter. This runs after the normal root trace while from-space is
-    /// still intact.
+    /// awaiter. This runs after the root scan while from-space is still
+    /// intact.
     unsafe fn scan_unhandled_spawn_errors(
         &self,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-        gens: &[&ChunkedVec<Object>],
+        gens: &[&CellSpace],
     ) -> Vec<crate::UnhandledSpawnError> {
         let mut errors = Vec::new();
         for space in gens {
-            let len = space.len();
-            // Resolve each stable chunk once, rather than going through the
-            // chunk directory for every slot. GC has exclusive access, and
-            // this scan neither grows nor clears any of the spaces it reads.
-            for start in (0..len).step_by(ChunkedVec::<Object>::CHUNK_SIZE) {
-                // SAFETY: start < len, so this chunk exists. Its initialized
-                // slots remain valid for the entire scan (before the swap).
-                let chunk =
-                    unsafe { space.chunk_start_ptr(start / ChunkedVec::<Object>::CHUNK_SIZE) };
-                let count = (len - start).min(ChunkedVec::<Object>::CHUNK_SIZE);
-                for offset in 0..count {
-                    // SAFETY: offset is in this initialized chunk. No mutator
-                    // can write or reclaim this object while GC holds permits.
-                    let raw_ptr = unsafe { chunk.add(offset) };
-                    let Object::Future(future) = (unsafe { &*raw_ptr }) else {
-                        continue;
-                    };
-                    if future.is_observed() {
-                        continue;
-                    }
-                    // Only futures can contribute an unhandled error. In
-                    // particular, do not hash unused TLAB slots or instances.
-                    let ptr = unsafe { self.make_heap_ptr(raw_ptr.cast_mut()) };
-                    if forwarding.contains_key(&ptr) {
-                        continue;
-                    }
-                    if let FutureRead::Error(value) = future.read()
-                        && future.try_mark_reported()
-                    {
-                        errors.push(crate::UnhandledSpawnError {
-                            future_id: future.id(),
-                            value,
-                            trace: future.error_trace(),
-                            cancelled: future.was_cancelled(),
-                        });
-                    }
+            space.for_each_cell(|cell| {
+                // A survivor's error was seen through its copy.
+                // SAFETY: GC has exclusive access, and from-space is intact
+                // until it is released.
+                if !unsafe { is_forwarded(cell) }
+                    && let CellBody::Object(object) = unsafe { CellBody::at(cell) }
+                    && let Object::Future(future) = unsafe { &*object }
+                {
+                    Self::report_unhandled(future, &mut errors);
                 }
-            }
+                // SAFETY: as above.
+                unsafe { self.cell_words(cell) }
+            });
         }
         errors
     }
 
+    /// Record `future`'s error if no awaiter ever saw it.
+    fn report_unhandled(future: &Future, errors: &mut Vec<crate::UnhandledSpawnError>) {
+        if future.is_observed() {
+            return;
+        }
+        if let FutureRead::Error(value) = future.read()
+            && future.try_mark_reported()
+        {
+            errors.push(crate::UnhandledSpawnError {
+                future_id: future.id(),
+                value,
+                trace: future.error_trace(),
+                cancelled: future.was_cancelled(),
+            });
+        }
+    }
+
     /// Preserve the payload graph of every unhandled error found by a
     /// collection, then queue the remapped values for the engine.
-    unsafe fn keepalive_unhandled_spawn_errors(&self, forwarding: &mut HashMap<HeapPtr, HeapPtr>) {
-        let errors = unsafe {
-            self.scan_unhandled_spawn_errors(forwarding, &[self.gen0_ref(), self.gen2_ref()])
-        };
-        let mut worklist: Vec<HeapPtr> = errors
-            .iter()
-            .filter_map(|error| error.value.as_object_ptr())
+    unsafe fn keepalive_unhandled_spawn_errors(&self, scan: &mut Scan) {
+        let errors =
+            unsafe { self.scan_unhandled_spawn_errors(&[&*self.gen0.get(), &*self.gen2.get()]) };
+        let errors: Vec<_> = errors
+            .into_iter()
+            .map(|error| {
+                let value = error
+                    .value
+                    .as_object_ptr()
+                    .map_or(error.value, |ptr| Value::object(self.forward(ptr)));
+                crate::UnhandledSpawnError { value, ..error }
+            })
             .collect();
-        while let Some(old_ptr) = worklist.pop() {
-            if forwarding.contains_key(&old_ptr) {
-                continue;
-            }
-            if self.is_compile_time_ptr(old_ptr) {
-                forwarding.insert(old_ptr, old_ptr);
-                continue;
-            }
-            let new_ptr = self.evacuate_object(&self.inactive, old_ptr, forwarding);
-            self.trace(new_ptr, forwarding, &mut worklist);
-        }
+        self.scan(scan);
         for error in errors {
-            let value = error.value.as_object_ptr().map_or(error.value, |ptr| {
-                Value::object(
-                    *forwarding
-                        .get(&ptr)
-                        .expect("error payload must be forwarded"),
-                )
-            });
-            self.push_unhandled_spawn_error(crate::UnhandledSpawnError { value, ..error });
+            self.push_unhandled_spawn_error(error);
         }
     }
 
     /// Full copy collection — the core GC implementation.
-    ///
-    /// Traces all live objects reachable from `roots` across Gen0 and Gen2,
-    /// copies survivors into the inactive space, then atomically swaps inactive↔Gen2
-    /// and clears Gen0. After collection all survivors reside in Gen2.
-    ///
-    /// Returns `(GcStats, remapped_roots, forwarding_map)`.
-    fn copy_collection(
-        &self,
-        roots: &[HeapPtr],
-    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
+    fn copy_collection(&self, roots: &[HeapPtr]) -> (GcStats, Vec<HeapPtr>, Forwarding<'_>) {
         // SAFETY: collection caller guarantees exclusive heap access.
         let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
-        // Track old -> new pointer mappings (forwarding pointers)
-        let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
-
-        self.debug_verify_tlab_canaries();
 
         // Advance epoch before creating any new runtime pointers.
         self.bump_epoch();
 
-        // SAFETY: GC safepoint; nothing has been evacuated yet.
+        // SAFETY: GC safepoint; nothing has been copied yet.
         unsafe { self.refresh_finalizable_instances() };
 
-        // Count objects across all active generations for stats.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
-        let old_count = unsafe { self.gen0_ref().len() + self.gen2_ref().len() };
-
-        // Clear inactive space — it becomes our copy destination.
+        // The inactive space becomes the copy destination.
         // SAFETY: GC runs at safepoints, exclusive access guaranteed.
-        unsafe {
-            self.inactive_mut().clear();
-            (*self.inactive_cells.get()).clear();
-        }
-
-        // BFS from roots — copy every reachable object into inactive.
-        let mut worklist: Vec<HeapPtr> = roots.to_vec();
-
+        unsafe { (*self.inactive.get()).clear() };
+        let mut scan = Scan {
+            cursor: Cursor::default(),
+            cells: 0,
+            words: 0,
+            census: Meter::census(),
+        };
         profile.finish_phase(crate::gc_profile::HeapPhase::Prepare);
 
-        while let Some(old_ptr) = worklist.pop() {
-            // Skip already-forwarded objects.
-            if forwarding.contains_key(&old_ptr) {
-                continue;
-            }
-
-            // Compile-time objects are permanent — keep their pointer
-            // unchanged and skip tracing their outgoing references (see
-            // the module-level "compile-time objects do not contain
-            // runtime HeapPtrs" invariant).
-            if self.is_compile_time_ptr(old_ptr) {
-                #[cfg(debug_assertions)]
-                {
-                    // SAFETY: GC runs at safepoints; the compile-time
-                    // object's payload is stable for the program lifetime.
-                    let obj = unsafe { old_ptr.get() };
-                    let mut tmp = Vec::new();
-                    self.add_references_to_worklist(obj, &mut tmp);
-                    debug_assert!(
-                        tmp.iter().all(|p| self.is_compile_time_ptr(*p)),
-                        "compile-time object {old_ptr:?} contains a runtime \
-                         HeapPtr — module-level invariant violated; the GC's \
-                         compile-time shortcut would silently miss it"
-                    );
-                }
-                forwarding.insert(old_ptr, old_ptr);
-                continue;
-            }
-
-            // Move this object to the inactive space.
-            let new_ptr = self.evacuate_object(&self.inactive, old_ptr, &mut forwarding);
-
-            // Enqueue this object's outgoing heap references.
-            self.trace(new_ptr, &forwarding, &mut worklist);
-        }
-
+        let remapped_roots: Vec<HeapPtr> = roots.iter().map(|&root| self.forward(root)).collect();
+        self.scan(&mut scan);
         profile.finish_phase(crate::gc_profile::HeapPhase::Trace);
 
-        // Preserve unobserved spawn errors before reclaiming their futures.
+        // Preserve unobserved spawn errors before reclaiming their futures,
+        // then keep alive every dead instance with a `cleanup` finalizer.
         // SAFETY: GC safepoint; exclusive access.
         unsafe {
-            self.keepalive_unhandled_spawn_errors(&mut forwarding);
+            self.keepalive_unhandled_spawn_errors(&mut scan);
+            self.keepalive_finalizers(&mut scan);
         }
-
-        // BEP-042: keep alive every dead instance with a `cleanup` finalizer
-        // (and its transitive closure) by copying it into inactive, and queue
-        // it for post-collection finalization. After the root trace (so dead =
-        // not in `forwarding`), before the swap (so from-space is intact).
-        // SAFETY: GC safepoint; exclusive access.
-        unsafe {
-            self.keepalive_finalizers(&mut forwarding);
-        }
-
         profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
 
-        // Patch all intra-heap pointers in the inactive space to their new
-        // locations, and take the census of what the survivors hold.
-        // SAFETY: All live objects have been copied; no VMs are executing.
-        let live_payload_bytes = unsafe { self.fixup_and_measure_survivors(&forwarding) };
-        // SAFETY: as above.
-        let (live_cells, live_cell_words) = unsafe { self.fixup_instances(&forwarding) };
-
-        // Resolve weak function lookups before destroying from-space. These
-        // pointers are deliberately absent from the root set.
-        self.update_function_lookup(&forwarding);
-        self.update_finalizable_instances(&forwarding);
-
+        // Resolve weak lookups before releasing from-space. These pointers
+        // are deliberately absent from the root set.
+        self.update_function_lookup();
+        self.update_finalizable_instances();
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
-        // SAFETY: GC runs at safepoints.
-        let live_count = unsafe { self.inactive_ref().len() } + live_cells;
-        let collected_count = old_count.saturating_sub(live_count);
-
-        // Swap inactive ↔ Gen2; clear Gen0.
-        // After the swap: survivors are in Gen2, old-space debris is in inactive.
+        // SAFETY: GC safepoint; every survivor has been copied and scanned.
+        let collected_count = unsafe { self.drop_dead_objects() };
+        // Survivors become Gen2; the old Gen0 and Gen2 go to the caller's
+        // `Forwarding`, which releases them when it is dropped.
         // SAFETY: GC safepoint; exclusive access to all three spaces.
-        unsafe {
+        let from_space = unsafe {
             std::ptr::swap(self.gen2.get(), self.inactive.get());
-            self.gen0_mut().clear();
-            std::ptr::swap(self.gen2_cells.get(), self.inactive_cells.get());
-            (*self.gen0_cells.get()).clear();
-            (*self.inactive_cells.get()).clear();
-        }
-
-        // Gen0 is now empty — reset the TLAB cursor to 0.
-        self.reset_next_chunk(0);
-        self.clear_tlab_canaries();
-
-        // Poison or clear the inactive space (now holds old-space debris).
-        self.finalize_inactive_space();
+            [(*self.gen0.get()).take(), (*self.inactive.get()).take()]
+        };
+        self.reset_gen0_blocks();
 
         // Bug H, check 2 (heap_debug only): after a collection, every live
-        // object lives in compile_time or Gen2 (Gen0 was just cleared). Walk
-        // every Gen2 object's outgoing references and assert each lands in
-        // compile_time or Gen2 — anything else is a reference the fixup
-        // missed, now pointing into a cleared region.
+        // object lives in compile_time or Gen2. Walk every Gen2 cell's
+        // references and assert each lands in compile_time or Gen2.
         #[cfg(feature = "heap_debug")]
         // SAFETY: GC safepoint, all permits parked.
         unsafe {
             self.debug_assert_post_collection_no_dead_refs();
         }
-
         profile.finish_phase(crate::gc_profile::HeapPhase::Reclaim);
 
-        // Remap each root to its new location (or keep it if it was compile-time).
-        let remapped_roots: Vec<HeapPtr> = roots
-            .iter()
-            .map(|old_ptr| *forwarding.get(old_ptr).unwrap_or(old_ptr))
-            .collect();
-
+        let forwarding = Forwarding {
+            heap: self,
+            from_space,
+        };
         // Update the handle table so external handles point to new locations.
         self.update_handles(&forwarding);
 
         self.gc_policy.after_full(
-            (live_count - live_cells)
-                .saturating_mul(size_of::<Object>())
-                .saturating_add(live_cell_words.saturating_mul(size_of::<u64>()))
-                .saturating_add(live_payload_bytes),
+            scan.words
+                .saturating_mul(size_of::<u64>())
+                .saturating_add(scan.census.total()),
         );
 
         // Reset the actual-object counter used by GC profiling.
@@ -527,614 +548,314 @@ impl BexHeap {
         // SAFETY: exclusive heap access is still held.
         let profile = unsafe { profile.finish(self) };
         let stats = GcStats {
-            live_count,
+            live_count: scan.cells,
             collected_count,
             profile,
-            live_payload_bytes,
+            live_payload_bytes: scan.census.total(),
         };
-
         (stats, remapped_roots, forwarding)
     }
 
-    /// Move a survivor out of its slot into `to` (the inactive space) and
-    /// return its new address.
+    /// Drop every object in from-space (Gen0 and Gen2) that did not survive,
+    /// releasing what it owns outside its cell. Returns how many cells died.
     ///
-    /// The object is moved, not cloned: its backing storage keeps its address
-    /// and capacity, so a collection costs time proportional to the number of
-    /// survivors rather than to the bytes they own. The old slot is left
-    /// holding an [`Object::Tombstone`], which owns nothing and is discarded
-    /// when its space is cleared.
-    ///
-    /// A collection reads each survivor's old slot exactly once, here. Every
-    /// later step works from the destination and the `forwarding` map, so
-    /// anything that still needs a survivor must look it up through
-    /// `forwarding` first.
-    fn evacuate_object(
-        &self,
-        to: &UnsafeCell<ChunkedVec<Object>>,
-        old_ptr: HeapPtr,
-        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
-    ) -> HeapPtr {
-        debug_assert!(
-            !self.is_compile_time_ptr(old_ptr),
-            "compile-time object {old_ptr:?} must never be evacuated"
-        );
-        if old_ptr.is_instance() {
-            return self.evacuate_instance(old_ptr, forwarding);
-        }
-        // Scans every chunk of `to`, so it is a `heap_debug` check rather than
-        // a `debug_assert!`: it would otherwise run once per survivor.
-        #[cfg(feature = "heap_debug")]
-        assert!(
-            // SAFETY: GC runs at safepoints; only addresses are compared.
-            !unsafe { (*to.get()).contains_ptr(old_ptr.as_ptr()) },
-            "heap_debug: {old_ptr:?} already lives in its destination space"
-        );
-
-        // SAFETY: GC runs at safepoints, so nothing else references this slot.
-        // `replace` moves the object out and installs the tombstone in one
-        // step; the slot is never left uninitialized.
-        let obj = unsafe { std::ptr::replace(old_ptr.as_ptr(), Object::Tombstone) };
-        debug_assert!(
-            !matches!(obj, Object::Tombstone),
-            "the collector reached a tombstone at {old_ptr:?}: a stale pointer, or a \
-             reservation dropped or held unpublished across a collection"
-        );
-
-        // Append to the destination space and get a pointer to the new location.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
-        let new_ptr = unsafe {
-            let space = &mut *to.get();
-            let new_idx = space.len();
-            space.push_with(obj, || Object::String(bex_str::BexStr::empty()));
-            let raw_ptr = space.get_ptr(new_idx);
-            self.make_heap_ptr(raw_ptr)
-        };
-
-        // Record forwarding pointer
-        let previous = forwarding.insert(old_ptr, new_ptr);
-        debug_assert!(
-            previous.is_none(),
-            "{old_ptr:?} was evacuated twice; the second move read a vacated slot"
-        );
-
-        new_ptr
-    }
-
-    /// Copy a surviving instance into the inactive cells and return its new
-    /// address. The old cell stays as it was; see the module docs.
-    fn evacuate_instance(
-        &self,
-        old_ptr: HeapPtr,
-        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
-    ) -> HeapPtr {
-        // SAFETY: GC safepoint; the instance has not been evacuated yet.
-        let old = unsafe { InstanceRef::of(old_ptr) }.expect("an instance pointer");
-        let words = ClassLayout::of(Self::class_in_collection(old.class(), forwarding)).words();
-        // SAFETY: GC safepoint, exclusive access to the inactive cells; the
-        // destination is freshly carved, so the two never overlap.
-        let new_ptr = unsafe {
-            let to = (*self.inactive_cells.get()).carve(words);
-            std::ptr::copy_nonoverlapping(old_ptr.cell(), to, words);
-            InstanceRef::from_cell(to).ptr()
-        };
-        let previous = forwarding.insert(old_ptr, new_ptr);
-        debug_assert!(previous.is_none(), "{old_ptr:?} was evacuated twice");
-        new_ptr
-    }
-
-    /// The class `class` names, read where this collection has put it: a
-    /// runtime-created class is itself collectible, so it may have moved
-    /// already, leaving a tombstone at `class`.
-    fn class_in_collection(
-        class: HeapPtr,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-    ) -> &'static Class {
-        let class = forwarding.get(&class).copied().unwrap_or(class);
-        // SAFETY: a forwarded pointer names an initialized destination slot;
-        // an unforwarded one names a slot no evacuation touched.
-        match unsafe { class.get() } {
-            Object::Class(class) => class,
-            other => unreachable!(
-                "an instance's class is a {}",
-                bex_vm_types::ObjectType::of(other)
-            ),
-        }
-    }
-
-    /// Enqueue the outgoing references of the survivor at `ptr`.
-    fn trace(
-        &self,
-        ptr: HeapPtr,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
-        worklist: &mut Vec<HeapPtr>,
-    ) {
-        // SAFETY: GC safepoint; `ptr` names a survivor's new copy.
-        let Some(instance) = (unsafe { InstanceRef::of(ptr) }) else {
-            self.add_references_to_worklist(unsafe { ptr.get() }, worklist);
-            return;
-        };
-        let class = instance.class();
-        worklist.push(class);
-        let layout = ClassLayout::of(Self::class_in_collection(class, forwarding));
-        worklist.extend(
-            layout
-                .value_slots()
-                // SAFETY: the layout names these value slots.
-                .filter_map(|slot| unsafe { instance.slot_value(slot) }.as_object_ptr()),
-        );
-    }
-
-    /// Repoint every surviving instance's class and value slots to where
-    /// this collection put them. Returns how many survived and their words.
+    /// Sizes are read first and the objects dropped after, because a dead
+    /// instance's size comes from its class, which may itself be dying.
     ///
     /// # Safety
-    /// Must be called after every survivor has been copied.
-    unsafe fn fixup_instances(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) -> (usize, usize) {
-        let (mut cells, mut words) = (0, 0);
-        // SAFETY: the caller guarantees the inactive cells are complete.
-        let survivors = unsafe { &*self.inactive_cells.get() };
-        survivors.for_each_cell(|cell| {
-            // SAFETY: every cell in the inactive space is a survivor's copy.
-            let instance = unsafe { InstanceRef::from_cell(cell) };
-            let class = instance.class();
-            if let Some(&moved) = forwarding.get(&class) {
-                instance.set_class(moved);
-            }
-            let layout = ClassLayout::of(Self::class_in_collection(class, forwarding));
-            for slot in layout.value_slots() {
-                // SAFETY: the layout names these value slots.
-                let mut value = unsafe { instance.slot_value(slot) };
-                self.fixup_value(&mut value, forwarding);
+    /// GC safepoint, after the scan and before from-space is released.
+    unsafe fn drop_dead_objects(&self) -> usize {
+        let mut dead_cells = 0;
+        let mut dead_objects = Vec::new();
+        // SAFETY: the caller guarantees exclusive access to from-space.
+        for space in unsafe { [&*self.gen0.get(), &*self.gen2.get()] } {
+            space.for_each_cell(|cell| {
+                // SAFETY: from-space is intact until it is released.
+                if !unsafe { is_forwarded(cell) } {
+                    dead_cells += 1;
+                    if let CellBody::Object(object) = unsafe { CellBody::at(cell) } {
+                        dead_objects.push(object);
+                    }
+                }
                 // SAFETY: as above.
-                unsafe { instance.set_slot_value(slot, value) };
-            }
-            cells += 1;
-            words += layout.words();
-            layout.words()
-        });
-        (cells, words)
-    }
-
-    /// Add object references to the worklist for tracing.
-    fn add_references_to_worklist(&self, obj: &Object, worklist: &mut Vec<HeapPtr>) {
-        match obj {
-            // SAFETY (this match arm): GC traversal runs under STW; all
-            // mutator fibers are parked, so no concurrent writer can race
-            // with these reads. Same for the other Array/Map arms below.
-            Object::Array(arr) => {
-                let data = unsafe { arr.data_unchecked() };
-                for value in data.iter() {
-                    if let Some(ptr) = value.as_object_ptr() {
-                        worklist.push(ptr);
-                    }
-                }
-            }
-            Object::Map(map) => {
-                let data = unsafe { map.data_unchecked() };
-                for value in data.keys().chain(data.values()) {
-                    if let Some(ptr) = value.as_object_ptr() {
-                        worklist.push(ptr);
-                    }
-                }
-            }
-            // An instance's references are traced from its cell (`trace`).
-            Object::Instance => {}
-            Object::Closure(closure) => {
-                worklist.push(closure.function);
-                for value in &closure.captures {
-                    if let Some(ptr) = value.as_object_ptr() {
-                        worklist.push(ptr);
-                    }
-                }
-            }
-            Object::BoundMethod(bm) => {
-                worklist.push(bm.function);
-                if let Some(ptr) = bm.receiver.as_object_ptr() {
-                    worklist.push(ptr);
-                }
-            }
-            Object::Cell(cell) => {
-                if let Some(ptr) = cell.load().as_object_ptr() {
-                    worklist.push(ptr);
-                }
-            }
-            Object::Variant(var) => {
-                worklist.push(var.enm);
-            }
-            Object::Future(fut) => {
-                if let Some(ptr) = future_object_ref(fut) {
-                    worklist.push(ptr);
-                }
-            }
-            Object::Package(package) => {
-                worklist.extend(package.classes.values().copied());
-                worklist.extend(package.enums.values().copied());
-                worklist.extend(package.interfaces.values().copied());
-                worklist.extend(package.type_aliases.values().copied());
-                worklist.extend(package.edges.values().map(|edge| edge.target));
-                worklist.extend(package.init);
-                worklist.extend(package.test_init);
-                for (interface, rules) in &package.impl_rules {
-                    worklist.push(*interface);
-                    worklist.extend(rules.iter().copied());
-                }
-                if let Slots::Own { cells, .. } = &package.slots {
-                    worklist.extend(cells.iter().filter_map(|slot| slot.load().as_object_ptr()));
-                }
-                if let Objects::Own(objects) = &package.objects {
-                    worklist.extend(objects.iter().copied());
-                }
-            }
-            Object::Function(function) => {
-                if !function.owner.as_ptr().is_null() {
-                    worklist.push(function.owner);
-                    worklist.extend(
-                        function
-                            .bytecode
-                            .resolved_constants
-                            .iter()
-                            .filter_map(Value::as_object_ptr),
-                    );
-                }
-            }
-            Object::GenericFunction(function) => {
-                if !function.runtime_package.as_ptr().is_null() {
-                    worklist.push(function.runtime_package);
-                }
-            }
-            // A declaration's own type edges are its heads, traced below for
-            // every object kind; what these two arms add is the back-edge to the
-            // package that owns them, so reaching a member keeps its package —
-            // and so its globals and dependencies — alive.
-            // A class's inherent method bodies are direct pointers, like an
-            // interface's default bodies.
-            Object::Class(class) => {
-                trace_owner(&class.owner, worklist);
-                worklist.extend(
-                    class
-                        .methods
-                        .values()
-                        .map(|method| method.function_ptr)
-                        .filter(|ptr| !ptr.as_ptr().is_null()),
-                );
-            }
-            Object::Enum(enm) => trace_owner(&enm.owner, worklist),
-            // Primitives have no references
-            Object::Tombstone => {}
-            #[cfg(feature = "heap_debug")]
-            Object::Sentinel(_) => {}
-            // `HostClosure` carries only an `Arc<HostValueArc>` (Rust-side
-            // stub, not a heap object) and a `Box<RuntimeTy>` (no `HeapPtr`s).
-            Object::HostClosure(_) => {}
-            // `GenericFunction` references its base function by `GlobalIndex`
-            // (not a `HeapPtr`) and holds only inline `RuntimeTy`s — nothing to trace.
-            // An impl rule points at its interface and at each method body. For
-            // the static image those are compile-time pointers, but a rule a
-            // runtime package or an anonymous-class witness allocated points at
-            // moving objects, so the edges are traced like any other.
-            Object::ImplRule(rule) => {
-                worklist.push(rule.interface_head);
-                worklist.extend(rule.methods.values().map(|method| method.fqn));
-            }
-            // Runtime-declared interfaces/aliases back-reference their owning
-            // package (null for static declarations), and an interface's
-            // default-method bodies are direct pointers.
-            Object::Interface(interface) => {
-                if !interface.owner.as_ptr().is_null() {
-                    worklist.push(interface.owner);
-                }
-                if let Some(default) = &interface.structural_default
-                    && !default.function_ptr.is_null()
-                {
-                    worklist.push(default.function_ptr);
-                }
-                worklist.extend(
-                    interface
-                        .methods
-                        .iter()
-                        .map(|method| method.default_fn)
-                        .filter(|ptr| !ptr.as_ptr().is_null()),
-                );
-            }
-            Object::TypeAlias(alias) => {
-                if !alias.owner.as_ptr().is_null() {
-                    worklist.push(alias.owner);
-                }
-            }
-            Object::String(_)
-            | Object::Bigint(_)
-            | Object::Uint8Array(_)
-            | Object::RustData(_)
-            // A `type` value is exactly the type it denotes: every edge it has
-            // is a head, walked below.
-            | Object::Type(_)
-
-            | Object::Float(_) => {}
+                unsafe { self.cell_words(cell) }
+            });
         }
-
-        // Heads are ordinary references: a type naming a declaration keeps that
-        // declaration alive. An unresolved head has no pointer to trace — emit
-        // mints those, and the loader binds them before the VM exists.
-        bex_vm_types::head_walk::visit_object_heads(obj, &mut |head| {
-            if head.is_resolved() {
-                worklist.push(head.ptr());
-            }
-        });
+        for &object in &dead_objects {
+            // SAFETY: a dead object was never copied, so this is its only
+            // drop; nothing reaches it any more.
+            unsafe { std::ptr::drop_in_place(object) };
+        }
+        // heap_debug: leave a tombstone where each dead object was, so a
+        // read through a stale pointer panics instead of seeing freed storage.
+        #[cfg(feature = "heap_debug")]
+        for object in dead_objects {
+            // SAFETY: the object was dropped, so overwriting it without a
+            // drop is the only right write.
+            unsafe { object.write(Object::Tombstone) };
+        }
+        dead_cells
     }
 
     /// Bug H, check 2 (heap_debug only): after a collection, every Gen2
-    /// object's outgoing heap references must land in compile_time or
-    /// Gen2. Anything else is a reference the fixup missed, now pointing
-    /// into the cleared Gen0.
+    /// cell's outgoing heap references must land in compile_time or Gen2.
+    /// Anything else is a reference the scan missed, now pointing into a
+    /// retired space.
     ///
     /// # Safety
     /// Must be called only at a GC safepoint (all permits parked).
     #[cfg(feature = "heap_debug")]
     unsafe fn debug_assert_post_collection_no_dead_refs(&self) {
-        let assert_survivors = |holder: &dyn std::fmt::Debug, refs: &[HeapPtr]| {
-            for &ref_ptr in refs {
-                let generation = self.generation_of(ref_ptr);
-                assert!(
-                    matches!(
-                        generation,
-                        crate::heap::Generation::CompileTime | crate::heap::Generation::Gen2
-                    ),
-                    "heap_debug: post-collection Gen2 {holder:?} holds a reference to \
-                     {ref_ptr:?} in {generation:?} — the fixup missed this reference",
-                );
+        let mut refs = Vec::new();
+        let mut record = |ptr: &mut HeapPtr| {
+            if !ptr.is_null() {
+                refs.push(*ptr);
             }
         };
-        let mut refs = Vec::new();
-        // SAFETY: caller is at a GC safepoint.
-        unsafe {
-            let gen2 = &*self.gen2.get();
-            for runtime_idx in 0..gen2.len() {
-                let obj = gen2.get(runtime_idx);
-                refs.clear();
-                self.add_references_to_worklist(obj, &mut refs);
-                assert_survivors(&(runtime_idx, bex_vm_types::ObjectType::of(obj)), &refs);
-            }
-            (*self.gen2_cells.get()).for_each_cell(|cell| {
-                let instance = InstanceRef::from_cell(cell);
-                refs.clear();
-                self.trace(instance.ptr(), &HashMap::new(), &mut refs);
-                assert_survivors(&instance, &refs);
-                instance.layout().words()
-            });
-        }
-    }
-
-    /// Visit every survivor of a collection once in the inactive space:
-    /// repoint its references to their forwarded addresses, and measure what it
-    /// keeps alive outside its slot. Returns the total measured, with storage
-    /// shared between survivors counted once.
-    ///
-    /// The census depends on survivors having been moved rather than copied:
-    /// a second copy of each would double every reference count it divides by.
-    ///
-    /// # Safety
-    /// Must be called after all live objects have been moved to inactive.
-    unsafe fn fixup_and_measure_survivors(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) -> usize {
-        let mut census = Meter::census();
-        // SAFETY: All live objects have been moved to inactive, and no VMs are executing.
-        unsafe {
-            let inactive = self.inactive_mut();
-            for obj in inactive.iter_mut() {
-                self.fixup_object_references(obj, forwarding);
-                obj.measure(&mut census);
-            }
-        }
-        census.total()
-    }
-
-    /// Fix up references within a single object.
-    fn fixup_object_references(&self, obj: &mut Object, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        match obj {
-            // SAFETY: GC post-compaction fixup runs under STW with all
-            // mutators parked; no concurrent reader/writer can race.
-            Object::Array(arr) => {
-                let data = unsafe { arr.data_unchecked_mut() };
-                for value in data.iter_mut() {
-                    self.fixup_value(value, forwarding);
+        // SAFETY: caller is at a GC safepoint; the walk does not modify.
+        unsafe { &*self.gen2.get() }.for_each_cell(|cell| {
+            // SAFETY: as above; Gen2 now holds only scanned copies.
+            match unsafe { CellBody::at(cell) } {
+                CellBody::Object(object) => {
+                    visit_refs(unsafe { &mut *object }, &mut record);
+                }
+                CellBody::Instance(instance) => {
+                    visit_instance_refs(instance, &mut record);
                 }
             }
-            Object::Map(map) => {
-                let data = unsafe { map.data_unchecked_mut() };
-                for value in data.trace_values_mut() {
-                    self.fixup_value(value, forwarding);
-                }
-            }
-            // Instances are fixed up from their cells (`fixup_instances`).
-            Object::Instance => {}
-            Object::Closure(closure) => {
-                if let Some(&new_ptr) = forwarding.get(&closure.function) {
-                    closure.function = new_ptr;
-                }
-                for value in &mut closure.captures {
-                    self.fixup_value(value, forwarding);
-                }
-            }
-            Object::BoundMethod(bm) => {
-                if let Some(&new_ptr) = forwarding.get(&bm.function) {
-                    bm.function = new_ptr;
-                }
-                self.fixup_value(&mut bm.receiver, forwarding);
-            }
-            Object::Cell(cell) => {
-                let mut value = cell.load();
-                self.fixup_value(&mut value, forwarding);
-                cell.store(value);
-            }
-            Object::Variant(var) => {
-                // Update enum pointer
-                if let Some(&new_ptr) = forwarding.get(&var.enm) {
-                    var.enm = new_ptr;
-                }
-            }
-            Object::Future(fut) => {
-                // GC runs with all permits parked, so no concurrent access to
-                // the Future's atomic state. `value_mut_for_fixup` returns
-                // `Some(&mut Value)` only for `Ready`/`Error` states.
-                // SAFETY: GC holds exclusive access via the parked HeapGuard.
-                if let Some(value) = unsafe { fut.value_mut_for_fixup() } {
-                    self.fixup_value(value, forwarding);
-                }
-            }
-            Object::Package(package) => {
-                for ptr in package
-                    .classes
-                    .values_mut()
-                    .chain(package.enums.values_mut())
-                    .chain(package.interfaces.values_mut())
-                    .chain(package.type_aliases.values_mut())
-                    .chain(package.edges.values_mut().map(|edge| &mut edge.target))
-                {
-                    if let Some(&new_ptr) = forwarding.get(ptr) {
-                        *ptr = new_ptr;
-                    }
-                }
-                for ptr in package.init.iter_mut().chain(package.test_init.iter_mut()) {
-                    if let Some(&new_ptr) = forwarding.get(ptr) {
-                        *ptr = new_ptr;
-                    }
-                }
-                if let Slots::Own { cells, .. } = &package.slots {
-                    for slot in cells.iter() {
-                        let mut value = slot.load();
-                        self.fixup_value(&mut value, forwarding);
-                        slot.store(value);
-                    }
-                }
-                if let Objects::Own(objects) = &mut package.objects {
-                    for ptr in objects.iter_mut() {
-                        if let Some(&new_ptr) = forwarding.get(ptr) {
-                            *ptr = new_ptr;
-                        }
-                    }
-                }
-                let old_rules = std::mem::take(&mut package.impl_rules);
-                package.impl_rules = old_rules
-                    .into_iter()
-                    .map(|(interface, rules)| {
-                        let interface = forwarding.get(&interface).copied().unwrap_or(interface);
-                        let rules = rules
-                            .into_iter()
-                            .map(|rule| forwarding.get(&rule).copied().unwrap_or(rule))
-                            .collect();
-                        (interface, rules)
-                    })
-                    .collect();
-            }
-            Object::Function(function) => {
-                if let Some(&new_ptr) = forwarding.get(&function.owner) {
-                    function.owner = new_ptr;
-                }
-                if !function.owner.as_ptr().is_null() {
-                    for value in &mut function.bytecode.resolved_constants {
-                        self.fixup_value(value, forwarding);
-                    }
-                }
-            }
-            Object::GenericFunction(function) => {
-                if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
-                    function.runtime_package = new_ptr;
-                }
-            }
-            // Owner back-edges; heads are repointed for every object kind
-            // below, by the same walk that traced them.
-            Object::Class(class) => {
-                forward_owner(&mut class.owner, forwarding);
-                for method in class.methods.values_mut() {
-                    if let Some(&new_ptr) = forwarding.get(&method.function_ptr) {
-                        method.function_ptr = new_ptr;
-                    }
-                }
-            }
-            Object::Enum(enm) => forward_owner(&mut enm.owner, forwarding),
-            // Primitives have no references
-            Object::Tombstone => {}
-            #[cfg(feature = "heap_debug")]
-            Object::Sentinel(_) => {}
-            // `HostClosure` carries no heap references; see
-            // `add_references_to_worklist`.
-            Object::HostClosure(_) => {}
-            Object::ImplRule(rule) => {
-                if let Some(&new_ptr) = forwarding.get(&rule.interface_head) {
-                    rule.interface_head = new_ptr;
-                }
-                for method in rule.methods.values_mut() {
-                    if let Some(&new_ptr) = forwarding.get(&method.fqn) {
-                        method.fqn = new_ptr;
-                    }
-                }
-            }
-            Object::Interface(interface) => {
-                if let Some(&new_ptr) = forwarding.get(&interface.owner) {
-                    interface.owner = new_ptr;
-                }
-                if let Some(default) = &mut interface.structural_default
-                    && let Some(&new_ptr) = forwarding.get(&default.function_ptr)
-                {
-                    default.function_ptr = new_ptr;
-                }
-                for method in &mut interface.methods {
-                    if let Some(&new_ptr) = forwarding.get(&method.default_fn) {
-                        method.default_fn = new_ptr;
-                    }
-                }
-            }
-            Object::TypeAlias(alias) => {
-                if let Some(&new_ptr) = forwarding.get(&alias.owner) {
-                    alias.owner = new_ptr;
-                }
-            }
-            // A `type` value is exactly the type it denotes: every edge it has
-            // is a head, walked below.
-            Object::Type(_)
-            | Object::String(_)
-            | Object::Bigint(_)
-            | Object::Uint8Array(_)
-            | Object::RustData(_)
-            | Object::Float(_) => {}
-        }
-
-        // Repoint every head whose declaration moved. Identity is untouched —
-        // only the access path — so nothing rehashes or reorders.
-        bex_vm_types::head_walk::visit_object_heads_mut(obj, &mut |head| {
-            if head.is_resolved()
-                && let Some(&moved) = forwarding.get(&head.ptr())
-            {
-                head.forward_to(moved);
-            }
+            // SAFETY: as above.
+            unsafe { self.cell_words(cell) }
         });
-    }
-
-    /// Fix up a single Value reference.
-    fn fixup_value(&self, value: &mut Value, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if let Some(ptr) = value.as_object_ptr()
-            && let Some(&new_ptr) = forwarding.get(&ptr)
-        {
-            *value = Value::object(new_ptr);
+        for ptr in refs {
+            let generation = self.generation_of(ptr);
+            assert!(
+                matches!(
+                    generation,
+                    crate::heap::Generation::CompileTime | crate::heap::Generation::Gen2
+                ),
+                "heap_debug: a post-collection Gen2 cell holds a reference to \
+                 {ptr:?} in {generation:?} — the scan missed this reference",
+            );
         }
     }
 }
 
-/// The heap edges a declaration's [`Owner`](bex_vm_types::types::Owner)
-/// carries: its package, or the witness rules an anonymous declaration holds.
-fn owner_edges(owner: &bex_vm_types::types::Owner) -> impl Iterator<Item = HeapPtr> + '_ {
-    owner.edges().iter().copied()
+/// Visit every heap reference `instance` holds: its class and each value
+/// slot. Returns the instance's words.
+pub(crate) fn visit_instance_refs(
+    instance: InstanceRef,
+    visit: &mut impl FnMut(&mut HeapPtr),
+) -> usize {
+    let mut class = instance.class();
+    visit(&mut class);
+    instance.set_class(class);
+    let layout = instance.layout();
+    for slot in layout.value_slots() {
+        // SAFETY: the layout names these value slots.
+        let mut value = unsafe { instance.slot_value(slot) };
+        visit_value(&mut value, visit);
+        // SAFETY: as above.
+        unsafe { instance.set_slot_value(slot, value) };
+    }
+    layout.words()
 }
 
-fn trace_owner(owner: &bex_vm_types::types::Owner, worklist: &mut Vec<HeapPtr>) {
-    worklist.extend(owner_edges(owner));
-}
-
-fn forward_owner(owner: &mut bex_vm_types::types::Owner, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-    for ptr in owner.edges_mut() {
-        if let Some(&new_ptr) = forwarding.get(ptr) {
-            *ptr = new_ptr;
+/// Visit every heap reference `obj` holds, letting `visit` rewrite each.
+/// This is the collector's only per-kind code: the scan forwards through
+/// it, and the debug checks record through it.
+///
+/// Callers run at a GC safepoint or own the object: containers are read
+/// without their locks.
+pub(crate) fn visit_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr)) {
+    match obj {
+        Object::Array(_) | Object::Map(_) | Object::Closure(_) | Object::BoundMethod(_) => {
+            visit_container_refs(obj, visit);
         }
+        Object::Cell(_) | Object::Variant(_) | Object::Future(_) => visit_cell_refs(obj, visit),
+        Object::Package(package) => visit_package_refs(package, visit),
+        Object::Function(_)
+        | Object::GenericFunction(_)
+        | Object::ImplRule(_)
+        | Object::Interface(_) => visit_callable_refs(obj, visit),
+        Object::Class(_) | Object::Enum(_) | Object::TypeAlias(_) => visit_type_refs(obj, visit),
+        // An instance's references live in its cell (`visit_instance_refs`).
+        // `HostClosure` holds only a Rust-side handle and a type. A `type`
+        // value is exactly the type it denotes: every edge it has is a head.
+        Object::Instance
+        | Object::HostClosure(_)
+        | Object::Type(_)
+        | Object::String(_)
+        | Object::Bigint(_)
+        | Object::Uint8Array(_)
+        | Object::RustData(_)
+        | Object::Float(_)
+        | Object::Tombstone => {}
+        #[cfg(feature = "heap_debug")]
+        Object::Sentinel(_) => {}
+    }
+
+    // Heads are ordinary references: a type naming a declaration keeps that
+    // declaration alive. Identity is untouched by a move — only the access
+    // path — so nothing rehashes or reorders. An unresolved head has no
+    // pointer: emit mints those, and the loader binds them before the VM
+    // exists.
+    bex_vm_types::head_walk::visit_object_heads_mut(obj, &mut |head| {
+        if head.is_resolved() {
+            let mut ptr = head.ptr();
+            visit(&mut ptr);
+            head.forward_to(ptr);
+        }
+    });
+}
+
+/// Arrays, maps, closures and bound methods: the values they hold.
+fn visit_container_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr)) {
+    match obj {
+        // SAFETY (Array, Map): every mutator is parked, so nothing races
+        // these unlocked reads and writes.
+        Object::Array(arr) => {
+            for value in unsafe { arr.data_unchecked_mut() }.iter_mut() {
+                visit_value(value, visit);
+            }
+        }
+        Object::Map(map) => {
+            for value in unsafe { map.data_unchecked_mut() }.trace_values_mut() {
+                visit_value(value, visit);
+            }
+        }
+        Object::Closure(closure) => {
+            visit(&mut closure.function);
+            for value in &mut closure.captures {
+                visit_value(value, visit);
+            }
+        }
+        Object::BoundMethod(bm) => {
+            visit(&mut bm.function);
+            visit_value(&mut bm.receiver, visit);
+        }
+        _ => unreachable!("not a container"),
+    }
+}
+
+/// Captured-variable cells, enum values and futures: one reference each.
+fn visit_cell_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr)) {
+    match obj {
+        Object::Cell(cell) => {
+            let mut value = cell.load();
+            visit_value(&mut value, visit);
+            cell.store(value);
+        }
+        Object::Variant(var) => visit(&mut var.enm),
+        // SAFETY: the GC holds exclusive access via the parked HeapGuard;
+        // only a `Ready`/`Error` future holds a value.
+        Object::Future(fut) => {
+            if let Some(value) = unsafe { fut.value_mut_for_fixup() } {
+                visit_value(value, visit);
+            }
+        }
+        _ => unreachable!("not a cell, variant or future"),
+    }
+}
+
+/// Functions, generic functions, impl rules and interfaces: owners and
+/// method bodies. A runtime package or an anonymous-class witness allocates
+/// these with pointers to moving objects; the static image's point at
+/// compile-time objects.
+fn visit_callable_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr)) {
+    match obj {
+        // A function's constants are its own only when it has an owner; a
+        // compile-time function's constants name compile-time objects.
+        Object::Function(function) => {
+            visit(&mut function.owner);
+            if !function.owner.as_ptr().is_null() {
+                for value in &mut function.bytecode.resolved_constants {
+                    visit_value(value, visit);
+                }
+            }
+        }
+        Object::GenericFunction(function) => visit(&mut function.runtime_package),
+        Object::ImplRule(rule) => {
+            visit(&mut rule.interface_head);
+            rule.methods
+                .values_mut()
+                .for_each(|method| visit(&mut method.fqn));
+        }
+        // A runtime-declared interface back-references its owning package
+        // (null for a static one); its default bodies are direct pointers.
+        Object::Interface(interface) => {
+            visit(&mut interface.owner);
+            if let Some(default) = &mut interface.structural_default {
+                visit(&mut default.function_ptr);
+            }
+            interface
+                .methods
+                .iter_mut()
+                .for_each(|method| visit(&mut method.default_fn));
+        }
+        _ => unreachable!("not a callable declaration"),
+    }
+}
+
+/// Classes, enums and type aliases: the back-edge to the package that owns
+/// them, so reaching a member keeps its package — and so its globals and
+/// dependencies — alive, and a class's inherent method bodies. Their own type
+/// edges are heads, which `visit_refs` visits for every kind.
+fn visit_type_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr)) {
+    match obj {
+        Object::Class(class) => {
+            class.owner.edges_mut().iter_mut().for_each(&mut *visit);
+            class
+                .methods
+                .values_mut()
+                .for_each(|method| visit(&mut method.function_ptr));
+        }
+        Object::Enum(enm) => enm.owner.edges_mut().iter_mut().for_each(&mut *visit),
+        Object::TypeAlias(alias) => visit(&mut alias.owner),
+        _ => unreachable!("not a type declaration"),
+    }
+}
+
+fn visit_package_refs(
+    package: &mut bex_vm_types::types::Package,
+    visit: &mut impl FnMut(&mut HeapPtr),
+) {
+    package
+        .classes
+        .values_mut()
+        .chain(package.enums.values_mut())
+        .chain(package.interfaces.values_mut())
+        .chain(package.type_aliases.values_mut())
+        .chain(package.edges.values_mut().map(|edge| &mut edge.target))
+        .chain(package.init.iter_mut())
+        .chain(package.test_init.iter_mut())
+        .for_each(&mut *visit);
+    if let Slots::Own { cells, .. } = &package.slots {
+        for slot in cells.iter() {
+            let mut value = slot.load();
+            visit_value(&mut value, visit);
+            slot.store(value);
+        }
+    }
+    if let Objects::Own(objects) = &mut package.objects {
+        objects.iter_mut().for_each(&mut *visit);
+    }
+    // Rules are keyed by their interface, so a moved interface rebuilds the
+    // map.
+    package.impl_rules = std::mem::take(&mut package.impl_rules)
+        .into_iter()
+        .map(|(mut interface, mut rules)| {
+            visit(&mut interface);
+            rules.iter_mut().for_each(&mut *visit);
+            (interface, rules)
+        })
+        .collect();
+}
+
+/// Visit the heap reference a value holds, if any.
+fn visit_value(value: &mut Value, visit: &mut impl FnMut(&mut HeapPtr)) {
+    if let Some(mut ptr) = value.as_object_ptr() {
+        visit(&mut ptr);
+        *value = Value::object(ptr);
     }
 }
 
@@ -1151,9 +872,11 @@ mod tests {
     #[test]
     fn unhandled_error_scan_covers_chunk_edges_and_preserves_observation() {
         use bex_vm_types::types::{CancellationToken, FutureId};
-        let heap = BexHeap::with_tlab_size(vec![], 1);
+        let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap.clone());
-        for _ in 0..ChunkedVec::<Object>::CHUNK_SIZE - 1 {
+        // Fill the first chunk of cells but one object, so the futures
+        // straddle a chunk boundary. A TLAB's blocks tile a chunk exactly.
+        for _ in 0..crate::cell_space::CHUNK_WORDS / OBJECT_CELL_WORDS - 1 {
             tlab.alloc_float(0.0);
         }
         let mut rooted = None;
@@ -1289,7 +1012,7 @@ mod tests {
             enabled: true,
             verify: HeapVerifyMode::Full,
         };
-        let heap = BexHeap::with_tlab_size_and_debug(compile_time, 4, debug);
+        let heap = BexHeap::with_debug(compile_time, debug);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         let enm_ptr = heap.compile_time_ptr(0);
@@ -1447,7 +1170,7 @@ mod tests {
         assert_eq!(remapped.len(), 1);
 
         // Verify Gen0 is empty and Gen2 has the survivor
-        let (gen0_len, gen2_len) = unsafe { (heap.gen0_ref().len(), heap.gen2_ref().len()) };
+        let [gen0_len, gen2_len] = heap.cell_counts();
         assert_eq!(gen0_len, 0, "Gen0 should be empty after full GC");
         assert_eq!(gen2_len, 1, "Gen2 should contain the survivor");
     }
@@ -1654,7 +1377,7 @@ mod tests {
         // (This is what bex_engine does at lib.rs:780-786)
         for value in &mut simulated_stack {
             if let Some(ptr) = value.as_object_ptr()
-                && let Some(&new_ptr) = forwarding.get(&ptr)
+                && let Some(new_ptr) = forwarding.get(ptr)
             {
                 *value = Value::object(new_ptr);
             }
@@ -1769,7 +1492,7 @@ mod tests {
 
             // Update our root set with forwarding pointers
             for root in &mut persistent_roots {
-                if let Some(&new_ptr) = forwarding.get(root) {
+                if let Some(new_ptr) = forwarding.get(*root) {
                     *root = new_ptr;
                 }
             }
@@ -1809,10 +1532,7 @@ mod tests {
         assert_eq!(stats.live_count, 2);
 
         // Gen0 should be empty, Gen2 should have 2 survivors.
-        unsafe {
-            assert_eq!(heap.gen0_ref().len(), 0);
-            assert_eq!(heap.gen2_ref().len(), 2);
-        }
+        assert_eq!(heap.cell_counts(), [0, 2]);
 
         // Verify objects accessible
         for ptr in &remapped {
@@ -1825,10 +1545,7 @@ mod tests {
         assert_eq!(stats2.live_count, 2);
 
         // Gen0 still empty, Gen2 still has 2 survivors.
-        unsafe {
-            assert_eq!(heap.gen0_ref().len(), 0);
-            assert_eq!(heap.gen2_ref().len(), 2);
-        }
+        assert_eq!(heap.cell_counts(), [0, 2]);
 
         for ptr in &remapped2 {
             assert!(matches!(unsafe { ptr.get() }, Object::String(_)));
@@ -1866,10 +1583,10 @@ mod tests {
         let new1_ptr = heap.resolve_handle_ptr(handle1.slab_key()).unwrap();
         let new2_ptr = heap.resolve_handle_ptr(handle2.slab_key()).unwrap();
 
-        if let Some(&expected) = forwarding.get(&obj1) {
+        if let Some(expected) = forwarding.get(obj1) {
             assert_eq!(new1_ptr, expected);
         }
-        if let Some(&expected) = forwarding.get(&obj2) {
+        if let Some(expected) = forwarding.get(obj2) {
             assert_eq!(new2_ptr, expected);
         }
 
@@ -1934,7 +1651,7 @@ mod tests {
         }
 
         // Gen0 should be empty.
-        let gen0_len = unsafe { heap.gen0_ref().len() };
+        let [gen0_len, _] = heap.cell_counts();
         assert_eq!(gen0_len, 0, "Gen0 should be empty after full GC");
 
         // Invalidate the TLAB so it refills from the now-empty Gen0.
@@ -2959,8 +2676,9 @@ mod tests {
 
         let mut independent = Meter::census();
         // SAFETY: single-threaded test; the collection has finished.
-        for object in unsafe { heap.gen2_mut() }.iter_mut() {
-            object.measure(&mut independent);
+        for object in heap.gen2_objects() {
+            // SAFETY: as above.
+            unsafe { &mut *object }.measure(&mut independent);
         }
         assert_eq!(stats.live_payload_bytes, independent.total());
 
@@ -3110,10 +2828,13 @@ mod tests {
         assert_eq!(FINALIZER_SCAN_VISITS.with(std::cell::Cell::get), 2);
         assert_eq!(
             heap.take_pending_finalizers(),
-            vec![(forwarding[&dead], forwarding[&finalizer])]
+            vec![(
+                forwarding.get(dead).unwrap(),
+                forwarding.get(finalizer).unwrap()
+            )]
         );
         // The live instance and the resurrected dead one stay on the list.
-        let mut expected = vec![forwarding[&live], forwarding[&dead]];
+        let mut expected = vec![forwarding.get(live).unwrap(), forwarding.get(dead).unwrap()];
         expected.sort_unstable();
         assert_eq!(finalizable_entries(&heap), expected);
     }
@@ -3132,8 +2853,8 @@ mod tests {
 
         for _ in 0..2 {
             let (_, _, forwarding) = unsafe { heap.collect_garbage(&[instance]) };
-            instance = forwarding[&instance];
-            finalizer = forwarding[&finalizer];
+            instance = forwarding.get(instance).unwrap();
+            finalizer = forwarding.get(finalizer).unwrap();
             assert!(heap.take_pending_finalizers().is_empty());
             assert_eq!(finalizable_entries(&heap), vec![instance]);
         }
@@ -3142,7 +2863,10 @@ mod tests {
         let pending = heap.take_pending_finalizers();
         assert_eq!(
             pending,
-            vec![(forwarding[&instance], forwarding[&finalizer])]
+            vec![(
+                forwarding.get(instance).unwrap(),
+                forwarding.get(finalizer).unwrap()
+            )]
         );
         // The engine runs `cleanup`, which latches the instance.
         let finalized =
@@ -3177,7 +2901,10 @@ mod tests {
         let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
         assert_eq!(
             heap.take_pending_finalizers(),
-            vec![(forwarding[&older], forwarding[&finalizer])]
+            vec![(
+                forwarding.get(older).unwrap(),
+                forwarding.get(finalizer).unwrap()
+            )]
         );
     }
 
@@ -3185,7 +2912,7 @@ mod tests {
     /// registered in.
     #[test]
     fn finalizer_seeds_come_back_in_from_space_order() {
-        let heap = BexHeap::with_tlab_size(vec![], 4);
+        let heap = BexHeap::new(vec![]);
         let mut low = Tlab::new(Arc::clone(&heap));
         let mut high = Tlab::new(Arc::clone(&heap));
         let finalizer = low.alloc_string("cleanup".to_string());
@@ -3205,6 +2932,12 @@ mod tests {
             .into_iter()
             .map(|(instance, _)| instance)
             .collect();
-        assert_eq!(order, vec![forwarding[&early], forwarding[&late]]);
+        assert_eq!(
+            order,
+            vec![
+                forwarding.get(early).unwrap(),
+                forwarding.get(late).unwrap()
+            ]
+        );
     }
 }

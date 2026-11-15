@@ -17,6 +17,21 @@ pub trait RootVisitor {
     fn visit_weak(&mut self, root: &mut HeapPtr) -> bool;
 }
 
+/// Where a collection moved each object it kept.
+pub trait Forwarding {
+    /// `ptr`'s new address if the collection kept the object it named and
+    /// moved it; `None` if it did not move it (it died, never moves, or
+    /// `ptr` is already a new address).
+    fn forwarded(&self, ptr: HeapPtr) -> Option<HeapPtr>;
+}
+
+/// A plain map from old to new addresses, as tests build by hand.
+impl Forwarding for HashMap<HeapPtr, HeapPtr> {
+    fn forwarded(&self, ptr: HeapPtr) -> Option<HeapPtr> {
+        self.get(&ptr).copied()
+    }
+}
+
 /// Whether a pointer absent from the forwarding map still names a live object.
 ///
 /// Absence alone does not decide it: a compile-time pointer is never in the
@@ -54,12 +69,12 @@ impl RootVisitor for CollectRoots<'_> {
 /// Forwarding after a collection: repoints every root the collection moved
 /// and answers liveness for weak references through the heap.
 pub struct ForwardRoots<'a> {
-    forwarding: &'a HashMap<HeapPtr, HeapPtr>,
+    forwarding: &'a dyn Forwarding,
     survival: &'a dyn Survival,
 }
 
 impl<'a> ForwardRoots<'a> {
-    pub fn new(forwarding: &'a HashMap<HeapPtr, HeapPtr>, survival: &'a dyn Survival) -> Self {
+    pub fn new(forwarding: &'a dyn Forwarding, survival: &'a dyn Survival) -> Self {
         Self {
             forwarding,
             survival,
@@ -69,8 +84,8 @@ impl<'a> ForwardRoots<'a> {
 
 impl RootVisitor for ForwardRoots<'_> {
     fn visit(&mut self, root: &mut HeapPtr) {
-        match self.forwarding.get(root) {
-            Some(&moved) => *root = moved,
+        match self.forwarding.forwarded(*root) {
+            Some(moved) => *root = moved,
             None => debug_assert!(
                 self.survival.survived(*root),
                 "a strong root {root:?} the collection did not reach"
@@ -79,7 +94,7 @@ impl RootVisitor for ForwardRoots<'_> {
     }
 
     fn visit_weak(&mut self, root: &mut HeapPtr) -> bool {
-        if let Some(&moved) = self.forwarding.get(root) {
+        if let Some(moved) = self.forwarding.forwarded(*root) {
             *root = moved;
             true
         } else {
