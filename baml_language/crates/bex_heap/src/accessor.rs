@@ -612,6 +612,7 @@ fn owned_inner(
                     bex_vm_types::ValueKind::Null => Ok(BexExternalValue::Null),
                     bex_vm_types::ValueKind::Int(i) => Ok(BexExternalValue::Int(i)),
                     bex_vm_types::ValueKind::Bool(b) => Ok(BexExternalValue::Bool(b)),
+                    bex_vm_types::ValueKind::Float(f) => Ok(BexExternalValue::Float(f)),
                     bex_vm_types::ValueKind::Object(_) => {
                         unreachable!("object path handled above")
                     }

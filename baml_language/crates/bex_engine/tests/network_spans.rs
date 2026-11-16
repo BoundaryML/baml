@@ -463,3 +463,103 @@ async fn each_request_records_its_span_events_and_end() {
         assert_eq!(holding(secret), 0, "{secret} reached the disk");
     }
 }
+
+const HANDLER_SOURCE: &str = r##"
+    function work() -> int {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(20n));
+        1
+    }
+
+    function handle(req: baml.http.ServerRequest) -> baml.http.Response throws never {
+        let _ = work($trace = trace.span()) catch (e) { _ => 0 };
+        baml.http.Response.new(200, {}, "ok".to_utf8())
+    }
+
+    function main() -> string {
+        let server = baml.http.Server.bind("127.0.0.1:0");
+        let task = spawn { server.serve(handle) };
+        let text = baml.http.fetch("http://" + server.addr + "/").text();
+        let _ = task.cancel();
+        text
+    }
+"##;
+
+/// A request handler runs on a task the server spawns for it. That task
+/// starts running when its body does, not when it completes: the handler's
+/// own calls come after its start.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_request_task_starts_running_before_its_handler_calls() {
+    use proto::span_event::Event;
+    let directory = tempfile::tempdir().unwrap();
+    let engine = Arc::new(
+        BexEngine::new_with_telemetry_recording(
+            baml_test_support::compile_source(HANDLER_SOURCE),
+            Arc::new(sys_native::SysOps::native()),
+            vec![],
+            None,
+            btel_clock::ClockMode::Monotonic,
+            TelemetryRecording::local_files_in(directory.path(), RecordingConfig::default()),
+        )
+        .unwrap(),
+    );
+    let result = tokio::time::timeout(
+        Duration::from_secs(30),
+        engine.call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        ),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(result, BexExternalValue::String("ok".into()));
+    tokio::time::timeout(Duration::from_secs(30), engine.shutdown())
+        .await
+        .unwrap();
+    assert_eq!(engine.telemetry_result(), Some(Ok(())));
+    let read = btel_file::read_directory(engine.telemetry_recording_directory().unwrap()).unwrap();
+    assert!(read.issues.is_empty(), "{:?}", read.issues);
+
+    // Per thread: when it began running, when it completed, and when each
+    // function it ran directly was entered.
+    let mut running = BTreeMap::<u64, u64>::new();
+    let mut completed = BTreeMap::<u64, u64>::new();
+    let mut entered = BTreeMap::<u64, Vec<u64>>::new();
+    for section in read
+        .files
+        .iter()
+        .flat_map(|file| file.spans.iter())
+        .flat_map(|spans| &spans.sections)
+    {
+        for event in &section.events {
+            match &event.event {
+                Some(Event::ThreadRunning(run)) => {
+                    running.entry(section.thread_id).or_insert(run.at_ticks);
+                }
+                Some(Event::ThreadCompletion(done)) => {
+                    completed.insert(section.thread_id, done.completed_at_ticks);
+                }
+                Some(Event::FunctionAnnouncement(call)) if call.parent_id == section.thread_id => {
+                    entered
+                        .entry(section.thread_id)
+                        .or_default()
+                        .push(call.entered_at_ticks);
+                }
+                _ => {}
+            }
+        }
+    }
+    // The handler task is the one that entered `work`, directly under it.
+    let entered = entered.into_iter().collect::<Vec<_>>();
+    let [(thread, calls)] = &entered[..] else {
+        panic!("one thread called `work` directly: {entered:?}")
+    };
+    let started = running[thread];
+    assert!(
+        calls.iter().all(|&at| started <= at),
+        "began running at {started}, after its call entered at {calls:?}"
+    );
+    assert!(started < completed[thread]);
+}

@@ -384,3 +384,110 @@ fn call_ntypeargs_threads_type_arg_into_callee() {
         other => panic!("expected Object::Type, got {other:?}"),
     }
 }
+
+// ─── LoadType cache ── one type object per frame binding ────────────────────
+
+/// Run `function_ptr` as the entry point with `type_args` bound in its frame
+/// and return the `Object::Type` it produced.
+fn run_with_frame_type_args(
+    vm: &mut BexVm,
+    function_ptr: bex_vm_types::HeapPtr,
+    type_args: Vec<RealizedTy>,
+) -> bex_vm_types::HeapPtr {
+    vm.set_entry_point(function_ptr, &[]);
+    {
+        use bex_vm::Frame;
+        let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
+            panic!("entry frame should be Bytecode");
+        };
+        frame.type_args = type_args;
+    }
+    let result = loop {
+        match vm.exec().expect("exec") {
+            VmExecState::Complete(v) => break v,
+            VmExecState::EarlyYield => continue,
+            other => panic!("unexpected state: {other:?}"),
+        }
+    };
+    result.as_object_ptr().expect("LoadType pushes an object")
+}
+
+/// A collection that freed exactly one object.
+struct Freed(bex_vm_types::HeapPtr);
+
+impl bex_vm_types::Survival for Freed {
+    fn survived(&self, ptr: bex_vm_types::HeapPtr) -> bool {
+        ptr != self.0
+    }
+}
+
+fn type_of(vm: &BexVm, ptr: bex_vm_types::HeapPtr) -> RealizedTy {
+    match vm.get_object(ptr) {
+        Object::Type(type_value) => type_value.ty.clone(),
+        other => panic!("expected Object::Type, got {other:?}"),
+    }
+}
+
+/// A template over the frame's type arguments builds one type object per
+/// argument list: running again with equal arguments returns the same object,
+/// running with other arguments returns their own, correctly substituted. The
+/// cache holds its objects weakly: after a collection, a freed object is
+/// rebuilt and a moved one is followed.
+#[test]
+fn load_type_template_reuses_one_object_per_frame_binding() {
+    use std::collections::HashMap;
+
+    use bex_vm_types::{ForwardRoots, RootHaverExt, types::TypeValue};
+
+    let mut program = compile_source(STUB_SOURCE);
+    let (function_index, _) = inject_function(
+        &mut program,
+        "user.test_template_reuse",
+        vec![Instruction::LoadType(0), Instruction::Return],
+        vec![ConstValue::Type(TyTemplate::list(TyTemplate::TypeArgRef(
+            0,
+        )))],
+    );
+    let mut vm =
+        BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
+    let function_ptr = vm.heap.compile_time_ptr(function_index);
+    let int_list = RealizedTy::list(RealizedTy::int());
+    let string_list = RealizedTy::list(RealizedTy::string());
+
+    let ints = run_with_frame_type_args(&mut vm, function_ptr, vec![RealizedTy::int()]);
+    let strings = run_with_frame_type_args(&mut vm, function_ptr, vec![RealizedTy::string()]);
+    assert_ne!(ints, strings, "different bindings build different objects");
+    assert_eq!(type_of(&vm, ints), int_list);
+    assert_eq!(type_of(&vm, strings), string_list);
+    assert_eq!(
+        run_with_frame_type_args(&mut vm, function_ptr, vec![RealizedTy::int()]),
+        ints,
+        "an equal binding reuses its object"
+    );
+    assert_eq!(
+        run_with_frame_type_args(&mut vm, function_ptr, vec![RealizedTy::string()]),
+        strings,
+        "each binding keeps its own object"
+    );
+
+    // A collection that frees the `int[]` object and moves the `string[]` one.
+    let moved = vm.tlab.alloc_type(TypeValue::new(string_list));
+    let forwarding = HashMap::from([(strings, moved)]);
+    vm.forward_roots(&mut ForwardRoots::new(&forwarding, &Freed(ints)));
+
+    assert_eq!(
+        run_with_frame_type_args(&mut vm, function_ptr, vec![RealizedTy::string()]),
+        moved,
+        "a moved object is followed"
+    );
+    let rebuilt = run_with_frame_type_args(&mut vm, function_ptr, vec![RealizedTy::int()]);
+    // The simulated collection frees no memory, so a stale entry would still
+    // read back as `int[]`; only a fresh object proves the entry was dropped.
+    assert_ne!(rebuilt, ints, "a freed object is not returned");
+    assert_eq!(type_of(&vm, rebuilt), int_list, "a freed object is rebuilt");
+    assert_eq!(
+        run_with_frame_type_args(&mut vm, function_ptr, vec![RealizedTy::int()]),
+        rebuilt,
+        "the rebuilt object is cached again"
+    );
+}

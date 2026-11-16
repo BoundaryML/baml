@@ -60,6 +60,14 @@ impl RecordingControl {
         let _ = self.result.failure.set(error);
         self.pool.disable();
     }
+
+    /// Report a failure of export alone, such as a rejected cloud upload.
+    /// Admission stays open: the publisher discards what it is handed, and
+    /// execution keeps its span ids and `$trace` hooks, so losing the export
+    /// never changes what the program observes.
+    pub fn fail_export(&self, error: RuntimeError) {
+        let _ = self.result.failure.set(error);
+    }
 }
 
 static NEXT_RUNTIME: AtomicU64 = AtomicU64::new(0);

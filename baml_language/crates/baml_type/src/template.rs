@@ -865,6 +865,18 @@ impl<N: Clone> TyTemplate<N> {
         <&RealizedTy<N>>::try_from(self).is_ok()
     }
 
+    /// Returns `true` when the template contains an associated-type
+    /// projection at any depth. A projection is the one node whose
+    /// [`Self::substitute`] consults the type context; without one, the
+    /// result is a function of the frame's type arguments alone.
+    pub fn has_projection(&self) -> bool {
+        let mut found = false;
+        visit_template(self, &mut |template| {
+            found |= matches!(template, TyTemplate::AssociatedTypeProjection { .. });
+        });
+        found
+    }
+
     /// Calls `f` with the frame slot of every [`TyTemplate::TypeArgRef`] leaf,
     /// in traversal order. A slot referenced more than once is reported once
     /// per reference.

@@ -135,7 +135,7 @@ function Stack({ shown }: { shown: number[] }) {
               <path d={`M424,${mid}H518`} strokeOpacity="0.6" />
               <text
                 fill="#fff"
-                fontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+                fontFamily="var(--font-mono)"
                 fontSize="17"
                 letterSpacing="2.5"
                 stroke="none"
