@@ -72,6 +72,8 @@ struct ConversionBuffer {
     // Model usage awaiting its node's completion, which the VM writes right
     // after it; kept across files like `unwinds`. Empty without model calls.
     usage: BTreeMap<u64, Vec<proto::ModelUsage>>,
+    /// The error each thread ended with, until the thread's completion, which carries it.
+    thread_errors: BTreeMap<u64, proto::CasId>,
 }
 // Count each newly constructed metadata message once; never rescan the file.
 fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: u32, value: M) {
@@ -81,6 +83,11 @@ fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: 
 impl ConversionBuffer {
     fn event(&mut self, thread: TelemetryId, mut event: proto::span_event::Event) {
         use proto::span_event::Event;
+        if let Event::ThreadCompletion(completion) = &mut event
+            && let Some(error) = self.thread_errors.remove(&thread.get())
+        {
+            completion.error_cas_id = Some(error);
+        }
         if !self.usage.is_empty() {
             match &mut event {
                 Event::FunctionCompletion(completion)
@@ -244,6 +251,7 @@ impl ConversionBuffer {
                         level: level as i32,
                         event_name: event_name.as_deref().map(str::to_owned),
                         data_cas_id: captured_data.as_ref().map(cas_id),
+                        line: self.functions.line(*function, *pc),
                     }),
                 );
             }
@@ -268,6 +276,11 @@ impl ConversionBuffer {
                         *id,
                     ))),
                 );
+            }
+            SpanRecord::ThreadSpanError { captured_error } => {
+                if let Some(error) = captured_error.as_ref().map(cas_id) {
+                    self.thread_errors.insert(thread.get(), error);
+                }
             }
             SpanRecord::SpanUsage(usage) => {
                 self.usage.insert(
@@ -336,6 +349,7 @@ impl ConversionBuffer {
                         outcome: flags::outcome(*outcome) as i32,
                         panicked: *outcome == btel_types::InvocationOutcome::Panicked,
                         usage: Vec::new(),
+                        error_cas_id: None,
                     }),
                 );
                 // A raise that never ended cannot claim anything after its thread.

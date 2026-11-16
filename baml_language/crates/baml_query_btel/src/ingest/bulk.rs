@@ -402,6 +402,8 @@ pub(super) struct Bulk {
     calls: Table<u64, CallRow>,
     /// Futures' names, first one wins; rare next to threads.
     thread_names: FxHashMap<u64, String>,
+    /// The error a thread's first completion carried; rare next to threads.
+    thread_errors: FxHashMap<u64, [u8; 16]>,
     /// Sysop count and ticks per call path.
     sysops: BTreeMap<u32, (u128, u128)>,
     /// The model usage a call's or thread's first completion carried, stored
@@ -662,6 +664,9 @@ impl Bulk {
                             match row.completion() {
                                 None => {
                                     row.complete(completed, outcome, done.panicked);
+                                    if let Some(error) = &done.error_cas_id {
+                                        self.thread_errors.insert(section.thread_id, cas_id(error));
+                                    }
                                     let usage = crate::usage::from_proto(&done.usage);
                                     if !usage.is_empty() {
                                         self.usage.insert(section.thread_id, usage);
@@ -1503,8 +1508,8 @@ impl Bulk {
             tx,
             "thread (rec, thread_id, defined, parent_id, spawn_call_path_id, started_ticks,
                epoch_id, announced, ran_ticks, completed_ticks, outcome, panicked, name,
-               completion_conflict, conflict, entry_call_path_id, usage)",
-            17,
+               completion_conflict, conflict, entry_call_path_id, usage, error_cas)",
+            18,
             &ids,
             |b, thread| {
                 let row = &self.threads[&thread];
@@ -1530,7 +1535,8 @@ impl Bulk {
                     self.usage
                         .get(&thread)
                         .and_then(|u| crate::usage::to_json(u)),
-                )
+                )?;
+                b.bind(self.thread_errors.get(&thread).map(<[u8; 16]>::as_slice))
             },
         )
     }

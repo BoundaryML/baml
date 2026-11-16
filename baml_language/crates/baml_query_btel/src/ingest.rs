@@ -1188,7 +1188,7 @@ impl<'t> Applier<'t> {
                                 .tx
                                 .prepare_cached(
                                     "UPDATE thread SET completed_ticks = ?3, outcome = ?4, panicked = ?5,
-                                       usage = ?6
+                                       usage = ?6, error_cas = ?7
                                      WHERE rec = ?1 AND thread_id = ?2 AND outcome IS NULL",
                                 )?
                                 .execute(params![
@@ -1197,7 +1197,8 @@ impl<'t> Applier<'t> {
                                     completed,
                                     done.outcome,
                                     done.panicked,
-                                    crate::usage::to_json(&usage)
+                                    crate::usage::to_json(&usage),
+                                    done.error_cas_id.as_ref().map(cas_id)
                                 ])?;
                             if changed > 0 && !usage.is_empty() {
                                 self.charged.push((id(section.thread_id), usage));
