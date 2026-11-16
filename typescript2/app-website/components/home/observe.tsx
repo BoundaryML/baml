@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import { Phase } from './phase';
+import { section } from './analytics';
 import { RED } from './story';
 
-// Section 6, Observe: four dashboard tiles, each drawn from the query printed above it.
+// Four dashboard tiles, each drawn from the query printed above it.
 
 const CLOVER = 'var(--color-clover)';
 const LIGHT = 'var(--color-clover-100)';
@@ -179,13 +179,19 @@ function Tile({
 
 export default function Observe() {
   return (
-    <Phase
-      heading="Create dashboards and alerts from your traces."
-      id="observe"
-      intro="Make custom dashboards that are 100% tied to your product by using the SQL-based query API."
-      name="Observe"
+    <section
+      {...section('observe')}
+      aria-labelledby="observe"
+      className="mt-20 md:mt-28"
     >
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <h3 className="v4-h3 text-head scroll-mt-28" id="observe">
+        Turn those traces into dashboards and alerts.
+      </h3>
+      <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
+        Use the SQL-based query API to track the metrics that matter to your
+        product, from function latency to changes in model output.
+      </p>
+      <div className="mt-8 grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Tile
           chart={<CallsChart />}
           footer="last 4 hours"
@@ -221,6 +227,6 @@ export default function Observe() {
           title="Share labelled other"
         />
       </div>
-    </Phase>
+    </section>
   );
 }

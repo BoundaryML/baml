@@ -109,7 +109,7 @@ fn convert_yaml_number(vm: &mut BexVm, n: &serde_yaml::Number) -> Result<Value, 
         )));
     }
 
-    Ok(Value::object(vm.alloc_float(f)))
+    Ok(vm.float_value(f))
 }
 
 fn make_yaml_parse_error(vm: &mut BexVm, message: String) -> Value {
