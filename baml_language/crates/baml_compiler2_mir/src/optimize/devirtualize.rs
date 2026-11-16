@@ -48,6 +48,9 @@ const MAX_SPLIT_WAYS: usize = 4;
 /// How far back a receiver is followed, in definitions and blocks.
 const MAX_TRACE: usize = 64;
 
+/// How many copies from local to local [`only_class`] follows.
+const MAX_COPIES: usize = 8;
+
 /// A class a value is known to be an instance of, with its type arguments.
 pub(super) struct KnownClass<'db> {
     pub(super) class: ClassRef<'db>,
@@ -160,6 +163,7 @@ fn trace<'db>(
 /// copies' size is added to `growth`. The site itself stays where it is.
 pub(super) fn class_of<'db>(
     body: &mut MirFunctionBody<'db>,
+    arity: usize,
     at: (BlockId, usize),
     receiver: &Operand<'db>,
     growth: &mut usize,
@@ -169,29 +173,104 @@ pub(super) fn class_of<'db>(
         return None;
     };
     let preds = predecessors(body);
-    match trace(body, &preds, at, *local) {
+    let (joined, chain) = match trace(body, &preds, at, *local) {
+        Trace::Known(class) => return Some(class),
+        Trace::Unknown => return only_class(body, arity, *local),
+        Trace::Join { local, chain } => (local, chain),
+    };
+    if let Some(class) = only_class(body, arity, *local) {
+        return Some(class);
+    }
+    let (size, own) = split(body, &preds, joined, &chain, budget.saturating_sub(*growth))?;
+    *growth += size;
+    // The site's own way may now build the instance under a local of its
+    // own.
+    let local = if *local == joined {
+        own.unwrap_or(joined)
+    } else {
+        *local
+    };
+    let preds = predecessors(body);
+    match trace(body, &preds, at, local) {
         Trace::Known(class) => Some(class),
-        Trace::Unknown => None,
-        Trace::Join {
-            local: joined,
-            chain,
-        } => {
-            let (size, own) = split(body, &preds, joined, &chain, budget.saturating_sub(*growth))?;
-            *growth += size;
-            // The site's own way may now build the instance under a local of
-            // its own.
-            let local = if *local == joined {
-                own.unwrap_or(joined)
-            } else {
-                *local
-            };
-            let preds = predecessors(body);
-            match trace(body, &preds, at, local) {
-                Trace::Known(class) => Some(class),
-                Trace::Join { .. } | Trace::Unknown => None,
+        Trace::Join { .. } | Trace::Unknown => None,
+    }
+}
+
+/// The class of every instance `local` ever holds, wherever it is read: the
+/// local is written in one place only, with a class literal or with a copy
+/// of a local of which the same is true.
+///
+/// This is what knows the class of a receiver inside a loop that was built
+/// before the loop, such as the iterator a `for` asks for its next element:
+/// the way around the loop reaches the loop's head again without a
+/// definition, which [`trace`] can not follow.
+///
+/// A parameter is written by the caller as well and a captured local by any
+/// closure holding its cell, so neither qualifies. A store into a field of
+/// the instance does not change which instance the local holds.
+fn only_class<'db>(
+    body: &MirFunctionBody<'db>,
+    arity: usize,
+    mut local: Local,
+) -> Option<KnownClass<'db>> {
+    for _ in 0..MAX_COPIES {
+        if local.0 <= arity || body.locals[local.0].is_captured {
+            return None;
+        }
+        let mut only: Option<&Rvalue<'db>> = None;
+        let mut writes = 0;
+        for block in &body.blocks {
+            if block.landing.is_some_and(|landing| {
+                landing.error_local == local || landing.context_local == local
+            }) {
+                return None;
+            }
+            for statement in &block.statements {
+                match &statement.kind {
+                    StatementKind::Assign { destination, value }
+                        if *destination == Place::Local(local) =>
+                    {
+                        only = Some(value);
+                        writes += 1;
+                    }
+                    StatementKind::FreshCell { local: cell, .. } if *cell == local => return None,
+                    _ => {}
+                }
+            }
+            if block
+                .terminator
+                .as_ref()
+                .is_some_and(|terminator| terminator_defines(terminator, local))
+            {
+                return None;
             }
         }
+        if writes != 1 {
+            return None;
+        }
+        match only? {
+            Rvalue::Use(
+                Operand::Copy(Place::Local(source)) | Operand::Move(Place::Local(source)),
+            ) => local = *source,
+            Rvalue::Aggregate {
+                kind:
+                    AggregateKind::Class {
+                        class,
+                        type_arg_templates,
+                        ..
+                    },
+                ..
+            } if type_arg_templates.iter().all(TyTemplate::is_fully_concrete) => {
+                return Some(KnownClass {
+                    class: *class,
+                    args: type_arg_templates.clone(),
+                });
+            }
+            _ => return None,
+        }
     }
+    None
 }
 
 /// Give each way into `chain[0]` its own copy of `chain`, when following

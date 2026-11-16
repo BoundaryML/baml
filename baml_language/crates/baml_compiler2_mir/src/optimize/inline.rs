@@ -92,11 +92,11 @@ fn inline_body<'db>(
     let mut index = 0;
     while index < body.blocks.len() {
         let site = BlockId(index);
-        read_known_fields(db, body, site, &mut growth);
+        read_known_fields(db, body, arity, site, &mut growth);
         // An interface call on a receiver of a known class is tried as the
         // direct call of what that class provides, and put back if the
         // callee turns out to keep its call.
-        let dispatched = resolve_dispatch(db, body, site, &mut growth);
+        let dispatched = resolve_dispatch(db, body, arity, site, &mut growth);
         let inlined = if let Some(callee) = callee_of(db, root, body, arity, site, lambdas, opt)
             && growth + callee.cost <= MAX_GROWTH
             && let Some(binding) = bind_arguments(&callee, &body.blocks[index])
@@ -121,6 +121,7 @@ fn inline_body<'db>(
 fn resolve_dispatch<'db>(
     db: &'db dyn crate::Db,
     body: &mut MirFunctionBody<'db>,
+    arity: usize,
     site: BlockId,
     growth: &mut usize,
 ) -> Option<Terminator<'db>> {
@@ -137,7 +138,7 @@ fn resolve_dispatch<'db>(
         return None;
     };
     let at = (site, body.blocks[site.0].statements.len());
-    let class = devirtualize::class_of(body, at, args.get(self_arg)?, growth, MAX_GROWTH)?;
+    let class = devirtualize::class_of(body, arity, at, args.get(self_arg)?, growth, MAX_GROWTH)?;
     let function = devirtualize::method(db, &class, &iface, &method)?;
     // Finding the class may have renamed the receiver, so the call is
     // rebuilt from the terminator as it is now.
@@ -169,6 +170,7 @@ fn resolve_dispatch<'db>(
 fn read_known_fields<'db>(
     db: &'db dyn crate::Db,
     body: &mut MirFunctionBody<'db>,
+    arity: usize,
     site: BlockId,
     growth: &mut usize,
 ) {
@@ -187,7 +189,7 @@ fn read_known_fields<'db>(
         {
             let (iface, receiver, field) = (iface.clone(), receiver.clone(), field.clone());
             if let Some(class) =
-                devirtualize::class_of(body, (site, index), &receiver, growth, MAX_GROWTH)
+                devirtualize::class_of(body, arity, (site, index), &receiver, growth, MAX_GROWTH)
                 // A slot read names its base's class, and only a class
                 // without type arguments is spelled without a frame.
                 && class.args.is_empty()
