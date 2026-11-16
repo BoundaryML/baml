@@ -100,23 +100,10 @@ test "sha256_digest_is_always_32_bytes" {
     assert.equal(multi_block.finish().length(), 32)
 }
 
-// ─── Interface dispatch ─────────────────────────────────────────────────────
+// ─── Handle semantics ───────────────────────────────────────────────────────
 
-// Takes `Hasher` rather than `Sha256` on purpose: reaching `update` through an
-// interface-typed parameter is what these two tests are checking.
-function feed_hasher(h: baml.crypto.Hasher, data: uint8array) -> void {
+function feed_hasher(h: baml.crypto.Sha256, data: uint8array) -> void {
     h.update(data)
-}
-
-test "sha256_hashes_through_the_hasher_interface" {
-    // Both methods reached through a `Hasher`-typed binding, so the
-    // `VirtualCall` resolves the impl on the runtime class.
-    let h = baml.crypto.Sha256.new().as<baml.crypto.Hasher>;
-    h.update("abc".to_utf8());
-    assert.equal(
-        h.finish().to_hex(),
-        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
-    )
 }
 
 test "sha256_bindings_share_one_hasher" {
@@ -128,7 +115,7 @@ test "sha256_bindings_share_one_hasher" {
     let alias = h;
     h.update("hello".to_utf8());
     alias.update(" ".to_utf8());
-    feed_hasher(h.as<baml.crypto.Hasher>, "world".to_utf8());
+    feed_hasher(h, "world".to_utf8());
     assert.equal(
         h.finish().to_hex(),
         "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",

@@ -1,22 +1,10 @@
-//! `baml.crypto` ciphers and hashes (`$rust_function`).
-//!
-//! The AES-GCM-SIV ciphers are backed by the `aes-gcm-siv` crate and `Sha256` by
-//! the `sha2` crate. Every class here keeps its runtime state in an opaque
-//! `$rust_type` field, which puts that state out of BAML's reach: no BAML
-//! expression produces a `$rust_type`, so the class constructor is the only way
-//! to build one.
-//!
-//! Crate types that share a name with the BAML class wrapping them are written
-//! out in full (`aes_gcm_siv::Aes256GcmSiv`, `sha2::Sha256`) so they are never
-//! ambiguous with the generated `view::crypto::` / `copy::crypto::` shells.
-//!
-//! # Ciphers
+//! AES-GCM-SIV and ChaCha20-Poly1305: `baml.crypto.Aead` implementations.
 //!
 //! A cipher instance holds the expanded cipher, so the AES key schedule is
 //! derived once at `new` rather than per message, and the raw key never becomes
 //! a BAML value. A wrong-length key cannot get past `new`.
 //!
-//! ## Error split
+//! # Error split
 //!
 //! `baml.errors.InvalidArgument` means the call was malformed: a wrong-length
 //! nonce, or an input past an RFC 8452 size cap. That is a bug in the calling
@@ -24,16 +12,8 @@
 //! `baml.crypto.DecryptionFailure` means this ciphertext did not authenticate.
 //! The two never overlap, so a caller can retry the first and must not retry the
 //! second.
-//!
-//! # Hashes
-//!
-//! A hasher instance holds its compression state behind a mutex. Feeding and
-//! finishing both need `&mut` on the hasher, but a BAML value is shared as an
-//! immutable `Object::RustData`, so mutation has to go through interior
-//! mutability, and concurrent `update` calls on one hasher across `spawn` fibers
-//! must be serialized rather than racing on the compression state.
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::Arc;
 
 use aes_gcm_siv::aead::{
     Aead, AeadCore, KeyInit, Payload,
@@ -42,18 +22,15 @@ use aes_gcm_siv::aead::{
 };
 use bex_heap::TlabHolder;
 use bex_vm_types::types::Value;
-use sha2::Digest;
 
 use super::{
-    BamlClassCryptoAead_for_Aes128GcmSiv, BamlClassCryptoAead_for_Aes256GcmSiv,
-    BamlClassCryptoAead_for_ChaCha20Poly1305, BamlClassCryptoAead_for_XChaCha20Poly1305,
-    BamlClassCryptoAes128GcmSiv, BamlClassCryptoAes256GcmSiv, BamlClassCryptoChaCha20Poly1305,
-    BamlClassCryptoHasher_for_Sha256, BamlClassCryptoSha256, BamlClassCryptoXChaCha20Poly1305,
-    BamlNamespaceCrypto, PackageBamlImpl, copy, view,
-};
-use crate::{
-    BexVm,
-    errors::{VmBamlError, VmRustFnError},
+    super::{
+        BamlClassCryptoAead_for_Aes128GcmSiv, BamlClassCryptoAead_for_Aes256GcmSiv,
+        BamlClassCryptoAead_for_ChaCha20Poly1305, BamlClassCryptoAead_for_XChaCha20Poly1305,
+        BamlClassCryptoAes128GcmSiv, BamlClassCryptoAes256GcmSiv, BamlClassCryptoChaCha20Poly1305,
+        BamlClassCryptoXChaCha20Poly1305,
+    },
+    BexVm, PackageBamlImpl, VmRustFnError, copy, invalid_argument, view,
 };
 
 /// Fully-qualified name of the class thrown when a ciphertext is rejected.
@@ -108,10 +85,6 @@ const XCHACHA20_POLY1305: Algorithm = Algorithm {
     max_plaintext: CHACHA_MAX_PLAINTEXT,
     max_aad: u64::MAX,
 };
-
-fn invalid_argument(message: String) -> VmRustFnError {
-    VmRustFnError::BamlError(VmBamlError::InvalidArgument { message })
-}
 
 /// Expand `key` into a cipher, rejecting a key that is not the algorithm's key
 /// length.
@@ -273,20 +246,6 @@ impl<C: Send + Sync + 'static> bex_vm_types::BexRustData for AeadCipher<C> {
     fn measure(&self, _: &mut bex_vm_types::Meter) {}
 }
 
-/// A digest in progress as `$rust_type` data: fixed size.
-struct Sha256State(Mutex<sha2::Sha256>);
-
-impl bex_vm_types::BexRustData for Sha256State {
-    fn measure(&self, _: &mut bex_vm_types::Meter) {}
-}
-
-impl std::ops::Deref for Sha256State {
-    type Target = Mutex<sha2::Sha256>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 macro_rules! impl_aead_class {
     ($class_trait:ident, $aead_trait:ident, $class:ident, $cipher:ty, $algorithm:expr) => {
         impl $class_trait for PackageBamlImpl {
@@ -375,52 +334,3 @@ impl_aead_class!(
     chacha20poly1305::XChaCha20Poly1305,
     XCHACHA20_POLY1305
 );
-
-// =========================================================================
-// Sha256
-// =========================================================================
-
-/// Lock a hasher's state, recovering from a poisoned mutex.
-///
-/// A panic can only reach the mutex through `sha2`'s own compression, which does
-/// not panic, so poisoning means the process is already unwinding. Recovering
-/// keeps a panicking fiber from turning every other holder of the same hasher
-/// into a second panic; the state is a partial digest either way, and a partial
-/// digest is exactly what an interrupted `update` sequence should leave behind.
-fn lock_hasher<'v>(
-    hasher: &view::crypto::Sha256<'_>,
-    vm: &'v BexVm,
-) -> std::sync::MutexGuard<'v, sha2::Sha256> {
-    #[expect(
-        clippy::used_underscore_items,
-        reason = "the `_state` view accessor is generated from the private BAML field"
-    )]
-    hasher
-        ._state::<Sha256State>(vm)
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-}
-
-impl BamlClassCryptoSha256 for PackageBamlImpl {
-    fn new(vm: &mut BexVm) -> Value {
-        let state: Arc<dyn bex_vm_types::BexRustData> =
-            Arc::new(Sha256State(Mutex::new(sha2::Sha256::new())));
-        copy::crypto::Sha256 { _state: state }.to_value(vm)
-    }
-}
-
-impl BamlClassCryptoHasher_for_Sha256 for PackageBamlImpl {
-    fn update(vm: &BexVm, hasher: &view::crypto::Sha256<'_>, data: &[u8]) {
-        lock_hasher(hasher, vm).update(data);
-    }
-
-    fn finish(vm: &BexVm, hasher: &view::crypto::Sha256<'_>) -> Vec<u8> {
-        // `finalize_reset` rather than `finalize` because the BAML contract says
-        // `finish` leaves the hasher ready for a new message. `finalize` would
-        // need to consume the hasher, which the shared `Object::RustData` behind
-        // `_state` cannot give up.
-        lock_hasher(hasher, vm).finalize_reset().to_vec()
-    }
-}
-
-impl BamlNamespaceCrypto for PackageBamlImpl {}
