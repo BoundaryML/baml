@@ -92,12 +92,6 @@ pub struct Package {
     /// guidance-rich error rather than a bare serde "missing field".
     pub name: Option<String>,
 
-    /// Application identity shared by source execution, packed programs, and
-    /// generated bridges. Optional for existing manifests; when present, this
-    /// is a Cargo-style `SemVer`, including prerelease/build identifiers.
-    #[serde(default, deserialize_with = "deserialize_package_version")]
-    pub version: Option<String>,
-
     /// `[package].prelude` — stdlib-only: the package is implicitly reachable
     /// from every package, under its own name, with no `[dependencies]`
     /// entry. The installer honors it for embedded stdlib manifests only; a
@@ -117,18 +111,6 @@ pub struct Package {
 
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
-}
-
-fn deserialize_package_version<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> Result<Option<String>, D::Error> {
-    let version = Option::<String>::deserialize(deserializer)?;
-    if let Some(value) = &version {
-        semver::Version::parse(value).map_err(|error| {
-            serde::de::Error::custom(format!("invalid [package].version: {error}"))
-        })?;
-    }
-    Ok(version)
 }
 
 /// A `[scripts]` entry. Mirrors Cargo's `[alias]`: a bare string is
@@ -353,37 +335,6 @@ pub fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn package_version_is_optional_and_accepts_cargo_semver() {
-        for version in ["0.0.0", "1.2.3", "1.2.3-canary.4+build.abc"] {
-            let text = format!("[package]\nname = \"app\"\nversion = {version:?}\n");
-            let manifest = parse(&text).unwrap();
-            assert_eq!(
-                manifest.package.as_ref().unwrap().version.as_deref(),
-                Some(version)
-            );
-            assert!(unknown_field_warnings(&manifest).is_empty());
-        }
-        assert!(
-            parse("[package]\nname = \"app\"\n")
-                .unwrap()
-                .package
-                .unwrap()
-                .version
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn invalid_package_versions_are_manifest_errors() {
-        for version in ["", "1", "1.2", "v1.2.3", " 1.2.3 ", "next"] {
-            let text = format!("[package]\nname = \"app\"\nversion = {version:?}\n");
-            let error = parse(&text).unwrap_err().to_string();
-            assert!(error.contains("invalid [package].version"), "{error}");
-        }
-        assert!(parse("[package]\nname = \"app\"\nversion = 42\n").is_err());
-    }
 
     #[test]
     fn parses_package_and_scripts() {

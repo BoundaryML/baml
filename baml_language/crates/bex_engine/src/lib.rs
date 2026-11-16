@@ -1928,7 +1928,12 @@ impl BexEngine {
         );
         #[cfg(not(target_arch = "wasm32"))]
         let process_context = launch_context.with_patch(&versions);
-        if let Some(version) = &bytecode_program.app_version {
+        if let Some(version) = bytecode_program
+            .packages
+            .get(bytecode_program.root as usize)
+            .and_then(|package| package.metadata.as_ref())
+            .and_then(|metadata| metadata.claimed.version.as_ref())
+        {
             versions.metadata.insert(
                 "baml.ctx.app_version".into(),
                 Some(btel_types::context::ContextValue::String(version.clone())),

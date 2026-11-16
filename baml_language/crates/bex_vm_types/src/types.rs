@@ -108,10 +108,6 @@ pub struct Program {
     /// linked, even when it declares nothing yet.
     pub root: u32,
 
-    /// The root application's `[package].version`. Persisted in the program
-    /// so every packed/bridge host applies the same metadata before `$init`.
-    pub app_version: Option<String>,
-
     /// Conservative source-content identity of the compiled file set
     /// (streams spec §2.3): SHA-256 over the domain string, compiler
     /// version, and every (path, bytes) pair. `None` when the compiling

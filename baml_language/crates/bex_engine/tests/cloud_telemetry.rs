@@ -52,8 +52,7 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
-    let mut program = baml_test_support::compile_source(trace_context::SOURCE);
-    program.app_version = Some("3.4.5+cloud".into());
+    let program = trace_context::program_with_version(trace_context::SOURCE, "3.4.5+cloud");
     let launch_context = Context::default().with_patch(&ContextPatch {
         metadata: [(
             "root".into(),

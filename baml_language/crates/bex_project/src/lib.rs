@@ -232,13 +232,14 @@ pub fn prepare(
             name: "baml.toml supplied with both relative and absolute paths".to_owned(),
         });
     }
-    let version = manifest
+    let claim = manifest
         .map(|(_, text)| baml_db::manifest::parse(text))
         .transpose()
         .map_err(|error| RuntimeError::InvalidArgument {
             name: format!("baml.toml: {error}"),
         })?
-        .and_then(|manifest| manifest.package.and_then(|package| package.version));
+        .map(|manifest| baml_db::manifest::claimed_identity(&manifest))
+        .unwrap_or_default();
     let mut db = baml_db::ProjectDatabase::new();
     db.ensure_stdlib_sources();
     let root = db
@@ -247,10 +248,7 @@ pub fn prepare(
             baml_base::SourceRootKind::Workspace,
         ))
         .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
-    {
-        use baml_db::Setter as _;
-        root.set_version(&mut db).to(version);
-    }
+    db.set_claimed_identity(root, claim);
     db.add_or_update_files_in(
         root,
         files
@@ -341,12 +339,18 @@ mod bytecode_artifact_tests {
                 ),
                 (
                     FsPath::from_str(path.to_owned()),
-                    "[package]\nname = 'app'\nversion = '1.2.3-beta.4+build.5'".to_owned(),
+                    "[package]\nname = 'app'\nversion = '  1.2.3-beta.4+build.5  '".to_owned(),
                 ),
             ]);
             let prepared = prepare(root.clone(), sys_ops::SysOps::native(), files.clone()).unwrap();
             assert_eq!(
-                prepared.program.app_version.as_deref(),
+                prepared.program.packages[prepared.program.root as usize]
+                    .metadata
+                    .as_ref()
+                    .unwrap()
+                    .claimed
+                    .version
+                    .as_deref(),
                 Some("1.2.3-beta.4+build.5")
             );
             files
@@ -384,7 +388,16 @@ mod bytecode_artifact_tests {
             ]),
         )
         .unwrap();
-        assert_eq!(prepared.program.app_version.as_deref(), Some("4.5.6"));
+        assert_eq!(
+            prepared.program.packages[prepared.program.root as usize]
+                .metadata
+                .as_ref()
+                .unwrap()
+                .claimed
+                .version
+                .as_deref(),
+            Some("4.5.6")
+        );
     }
 
     #[test]

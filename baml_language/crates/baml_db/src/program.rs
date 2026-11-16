@@ -375,7 +375,6 @@ fn compile_program_with(
         .collect::<Result<Vec<_>, CompileProgramError>>()?;
     let packages = program_order(db, root, packages);
     let mut program = link(&link_set(db, &packages, root))?;
-    program.app_version = root.version(db);
     program.source_content_hash = Some(project_source_content_hash(db, root));
     Ok(program)
 }
@@ -513,8 +512,6 @@ mod tests {
 
     #[test]
     fn root_application_version_survives_artifacts_and_metadata_only_updates() {
-        use crate::Setter as _;
-
         let mut db = ProjectDatabase::new();
         db.ensure_stdlib_sources();
         let root = db
@@ -529,14 +526,38 @@ mod tests {
             "function f() -> int { 0 }",
         );
         for version in [None, Some("1.2.3+build.4"), Some("2.0.0-beta.1"), None] {
-            root.set_version(&mut db).to(version.map(str::to_owned));
+            db.set_claimed_identity(
+                root,
+                baml_base::ClaimedIdentity {
+                    version: version.map(str::to_owned),
+                    ..Default::default()
+                },
+            );
             let program = db.get_bytecode(root).unwrap();
-            assert_eq!(program.app_version.as_deref(), version);
+            assert_eq!(
+                program.packages[program.root as usize]
+                    .metadata
+                    .as_ref()
+                    .unwrap()
+                    .claimed
+                    .version
+                    .as_deref(),
+                version
+            );
             let bytes =
                 baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
             let decoded: Program =
                 baml_artifact::decode(baml_artifact::ArtifactKind::Program, &bytes).unwrap();
-            assert_eq!(decoded.app_version.as_deref(), version);
+            assert_eq!(
+                decoded.packages[decoded.root as usize]
+                    .metadata
+                    .as_ref()
+                    .unwrap()
+                    .claimed
+                    .version
+                    .as_deref(),
+                version
+            );
         }
     }
 

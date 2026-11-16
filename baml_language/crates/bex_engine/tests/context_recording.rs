@@ -19,8 +19,7 @@ fn context() -> bex_engine::FunctionCallContext {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn differently_versioned_programs_share_process_context_but_keep_their_own_versions() {
-    let program = baml_test_support::compile_source(
-        r#"
+    let source = r#"
 function version() -> string {
     match (trace.current_context().metadata.get("baml.ctx.app_version")) {
         let value: string => value,
@@ -30,14 +29,12 @@ function version() -> string {
 function main() -> string {
     version($trace = trace.span(inputs = false, output = false, error = false))
 }
-"#,
-    );
+"#;
     let root = tempfile::tempdir().unwrap();
     let engines: Vec<_> = ["1.2.3", "4.5.6"]
         .into_iter()
         .map(|version| {
-            let mut program = program.clone();
-            program.app_version = Some(version.to_owned());
+            let program = trace_context::program_with_version(source, version);
             let directory = root.path().join(version);
             let engine = Arc::new(
                 BexEngine::new_with_telemetry_recording(
@@ -117,8 +114,7 @@ function main() -> string {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn baml_context_reaches_local_files_and_cas_at_entry_and_completion() {
-    let mut program = baml_test_support::compile_source(trace_context::SOURCE);
-    program.app_version = Some("5.6.7+local".into());
+    let program = trace_context::program_with_version(trace_context::SOURCE, "5.6.7+local");
     let root = tempfile::tempdir().unwrap();
     let engine = Arc::new(
         BexEngine::new_with_telemetry_recording(

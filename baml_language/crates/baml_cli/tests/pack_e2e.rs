@@ -127,7 +127,16 @@ function main() -> string {{
             .output()
             .unwrap()
     };
-    for version in [None, Some("1.2.3+build.4"), Some("2.0.0-beta.1"), None] {
+    for version in [
+        None,
+        Some("1.2.3+build.4"),
+        Some("2.0.0-beta.1"),
+        Some(""),
+        Some(" \t "),
+        Some(" 3.4.5+build.6 "),
+        Some("build-canary"),
+        None,
+    ] {
         let setting = version
             .map(|value| format!("version = {value:?}\n"))
             .unwrap_or_default();
@@ -147,7 +156,10 @@ naming_convention = "preserve-case"
             ),
         )
         .unwrap();
-        let expected = version.unwrap_or("<unset>");
+        let expected = version
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("<unset>");
         for _ in 0..2 {
             let output = cli(&["run", "main", "--output-format", "json"]);
             assert!(
@@ -173,7 +185,7 @@ naming_convention = "preserve-case"
             .env("BAML_TELEMETRY", "off")
             .env(
                 "BAML_CONTEXT",
-                if version.is_some() {
+                if expected != "<unset>" {
                     r#"{"metadata":{"baml.ctx.baml_version":"spoofed","baml.ctx.app_version":"spoofed"}}"#
                 } else {
                     r#"{"metadata":{"baml.ctx.baml_version":"spoofed"}}"#

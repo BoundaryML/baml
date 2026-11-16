@@ -7,6 +7,17 @@ use btel_snapshot::{DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
 pub(super) const SOURCE: &str =
     include_str!("../../../baml_tests/baml_src/ns_trace_context/recording.baml");
 
+/// Compile through the shared manifest/claim path so identity hashes also cover
+/// the version, as they do for real CLI and generated SDK programs.
+pub(super) fn program_with_version(source: &str, version: &str) -> bex_vm_types::Program {
+    let mut db = baml_test_support::setup_test_db(source);
+    let root = db.workspace_root().unwrap();
+    let manifest =
+        baml_db::manifest::parse(&format!("[package]\nversion = {version:?}\n")).unwrap();
+    db.set_claimed_identity(root, baml_db::manifest::claimed_identity(&manifest));
+    db.get_bytecode(root).unwrap()
+}
+
 /// The entries of a context map, which must have been captured whole.
 fn whole_map(
     snapshot: &DecodedSnapshot,
