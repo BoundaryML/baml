@@ -419,6 +419,22 @@ impl<'a, 'db> Generator<'a, 'db> {
         }
     }
 
+    /// The struct of each stack object allocated here.
+    fn declare_stack_structs(&mut self) {
+        let Some(plan) = self.plan else {
+            return;
+        };
+        for group in plan.groups.iter().filter(|group| group.allocated) {
+            if let Some(class) = self.stack_classes.get(&group.class) {
+                let name = &class.name;
+                self.emit_line(&format!(
+                    "let mut {}: {name} = {name}::ZERO;",
+                    group.storage
+                ));
+            }
+        }
+    }
+
     fn declare_locals(&mut self, iterations: bool) {
         let analysis = self.analysis;
         let arity = self.body.locals.len().min(self.analysis.arity);
@@ -441,17 +457,7 @@ impl<'a, 'db> Generator<'a, 'db> {
         for iter in &analysis.array_iters {
             self.emit_line(&format!("let mut i{iter}: i64 = 0;"));
         }
-        if let Some(plan) = self.plan {
-            for group in plan.groups.iter().filter(|group| group.allocated) {
-                if let Some(class) = self.stack_classes.get(&group.class) {
-                    let name = &class.name;
-                    self.emit_line(&format!(
-                        "let mut {}: {name} = {name}::ZERO;",
-                        group.storage
-                    ));
-                }
-            }
-        }
+        self.declare_stack_structs();
         if iterations {
             self.emit_line("let mut iterations: u32 = 0;");
         }
@@ -670,7 +676,14 @@ impl<'a, 'db> Generator<'a, 'db> {
                         .filter_map(|block| block.landing)
                         .any(|landing| landing.context_local.0 == i))
         };
-        let mut saved: Vec<String> = (0..self.analysis.reprs.len())
+        let mut saved = self.saved_locals(&kept);
+        saved.extend(self.saved_stack_fields(&kept));
+        saved
+    }
+
+    /// The boxed locals `kept` holds, outside stack objects.
+    fn saved_locals(&self, kept: &impl Fn(usize) -> bool) -> Vec<String> {
+        (0..self.analysis.reprs.len())
             .filter(|&i| {
                 kept(i)
                     && !self.analysis.is_type_local(i)
@@ -678,7 +691,12 @@ impl<'a, 'db> Generator<'a, 'db> {
                     && self.repr(Local(i)) == Repr::Value
             })
             .map(|i| format!("l{i}"))
-            .collect();
+            .collect()
+    }
+
+    /// The heap fields of every stack object a `kept` local holds.
+    fn saved_stack_fields(&self, kept: &impl Fn(usize) -> bool) -> Vec<String> {
+        let mut saved = Vec::new();
         for group in self.plan.iter().flat_map(|plan| &plan.groups) {
             let Some(class) = self.stack_classes.get(&group.class) else {
                 continue;
