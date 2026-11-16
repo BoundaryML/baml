@@ -1,7 +1,7 @@
 //! Reads and writes locals, fields, elements, and captured cells.
 //! Captured locals hold cells; dereferences access their values.
 
-use baml_compiler2_mir::{BlockId, CellId, Operand, Place, Rvalue, RuntimeTy, TypeTest};
+use baml_compiler2_mir::{BlockId, CellId, Operand, Place, RuntimeTy, Rvalue, TypeTest};
 use bex_vm_types::{ClassLayout, SlotKind};
 
 use super::{Expr, Gen, Generator, unsupported};
