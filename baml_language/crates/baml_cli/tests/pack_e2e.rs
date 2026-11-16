@@ -127,7 +127,7 @@ function main() -> string {{
             .output()
             .unwrap()
     };
-    for version in [None, Some("1.2.3+build.4"), Some("2.0.0-beta.1")] {
+    for version in [None, Some("1.2.3+build.4"), Some("2.0.0-beta.1"), None] {
         let setting = version
             .map(|value| format!("version = {value:?}\n"))
             .unwrap_or_default();
@@ -173,7 +173,11 @@ naming_convention = "preserve-case"
             .env("BAML_TELEMETRY", "off")
             .env(
                 "BAML_CONTEXT",
-                r#"{"metadata":{"baml.ctx.baml_version":"spoofed"}}"#,
+                if version.is_some() {
+                    r#"{"metadata":{"baml.ctx.baml_version":"spoofed","baml.ctx.app_version":"spoofed"}}"#
+                } else {
+                    r#"{"metadata":{"baml.ctx.baml_version":"spoofed"}}"#
+                },
             )
             .output()
             .unwrap();

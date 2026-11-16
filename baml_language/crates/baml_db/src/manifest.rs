@@ -94,7 +94,7 @@ pub struct Package {
 
     /// Application identity shared by source execution, packed programs, and
     /// generated bridges. Optional for existing manifests; when present, this
-    /// is a Cargo-style SemVer, including prerelease/build identifiers.
+    /// is a Cargo-style `SemVer`, including prerelease/build identifiers.
     #[serde(default, deserialize_with = "deserialize_package_version")]
     pub version: Option<String>,
 

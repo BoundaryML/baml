@@ -528,7 +528,7 @@ mod tests {
             std::path::Path::new("/version-test/main.baml"),
             "function f() -> int { 0 }",
         );
-        for version in [None, Some("1.2.3+build.4"), Some("2.0.0-beta.1")] {
+        for version in [None, Some("1.2.3+build.4"), Some("2.0.0-beta.1"), None] {
             root.set_version(&mut db).to(version.map(str::to_owned));
             let program = db.get_bytecode(root).unwrap();
             assert_eq!(program.app_version.as_deref(), version);
