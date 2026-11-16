@@ -2363,9 +2363,8 @@ mod tests {
                 BamlType::Generic("V".into()),
             ])))
         );
-        let element = match &entries.return_type {
-            BamlType::List(element) => element,
-            _ => unreachable!(),
+        let BamlType::List(element) = &entries.return_type else {
+            unreachable!();
         };
         let metadata = runtime_ty_expr(element, &["K".into(), "V".into()]);
         assert!(metadata.starts_with("baml_type::RealizedTy::Tuple("));
