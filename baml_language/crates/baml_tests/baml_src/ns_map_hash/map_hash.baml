@@ -141,3 +141,74 @@ class Record {
     name: string
     count: int
 }
+
+class Text {
+    value: string
+
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never {
+            baml.sys.collect_garbage();
+            self.value == other.value
+        }
+    }
+
+    implements baml.Hash {
+        function hash(self, state: baml.hash.Hasher) -> void throws never {
+            self.value.hash(state);
+        }
+    }
+}
+
+test "plain keys sharing a bucket with a custom-equality key still find their entries" {
+    // `Key` hashes as the int 0 does, and `Text` as its string does, so these
+    // keys share buckets and every search compares them through `Equals`.
+    let ints: map<int | Key, string> = {};
+    ints.set(Key { id: 1, label: "key" }, "key");
+    assert.equal(ints.set(0, "zero"), null)
+    ints[1] = "one";
+    assert.equal(ints.length(), 3)
+    assert.equal(ints[0], "zero")
+    assert.equal(ints.set(0, "again"), "zero")
+    assert.equal(ints.get_or_insert(0, "unused"), "again")
+    assert.equal(ints[Key { id: 1, label: "other" }], "key")
+    assert.equal(ints.delete(0), "again")
+    assert.is_true(!ints.has(0))
+    assert.equal(ints.keys()[1], 1)
+    assert.equal(ints.values(), ["key", "one"])
+
+    let texts: map<string | Text, int> = {};
+    texts.set(Text { value: "a" }, 1);
+    assert.equal(texts.set("a", 2), null)
+    assert.equal(texts.length(), 2)
+    assert.equal(texts["a"], 2)
+    assert.equal(texts[Text { value: "a" }], 1)
+    assert.equal(texts.delete("a"), 2)
+    assert.equal(texts.get("a"), null)
+    assert.equal(texts.length(), 1)
+}
+
+test "string and int keys keep insertion order through removal and reinsertion" {
+    let m: map<string, int> = {};
+    for (let i = 0; i < 100; i += 1) {
+        m.set(i.to_string(), i);
+    }
+    for (let i = 0; i < 100; i += 2) {
+        assert.equal(m.delete(i.to_string()), i)
+    }
+    m["0"] = 1000;
+    assert.equal(m.length(), 51)
+    assert.equal(m.keys()[0], "1")
+    assert.equal(m.keys()[50], "0")
+    assert.equal(m["99"], 99)
+    assert.is_true(!m.has("98"))
+
+    let ints: map<int, int> = {};
+    for (let i = 0; i < 100; i += 1) {
+        ints[i * 7] = i;
+    }
+    assert.equal(ints.delete(0), 0)
+    assert.equal(ints.get_or_insert(0, -1), -1)
+    assert.equal(ints.keys()[0], 7)
+    assert.equal(ints.keys()[99], 0)
+    assert.equal(ints[693], 99)
+}

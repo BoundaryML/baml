@@ -187,6 +187,15 @@ struct CallOptions<'a> {
     type_args: &'a [bex_vm_types::RealizedTy],
 }
 
+/// How [`BexVm::call_native_direct`] ended.
+enum NativeDirect {
+    /// The call needs the general path; nothing was changed.
+    NotTaken,
+    /// The native ran: hand this to the engine loop, as the general path
+    /// does.
+    Ran(Option<VmExecState>),
+}
+
 /// An interface bound as the VM checks it: the interface, its type arguments,
 /// and the associated types the bound pins.
 pub type BoundParts = (
@@ -8167,66 +8176,12 @@ impl BexVm {
                 }
                 self.settle();
 
-                // Run Rust native function, converting NativeCallResult → VmError.
                 match native_result {
                     NativeCallResult::Done(v) => {
                         self.push_stack(v)?;
                     }
-                    NativeCallResult::Error(e) => {
-                        return Err(self.native_error_to_vm_error(e));
-                    }
-                    NativeCallResult::YieldToCall {
-                        callee,
-                        args: mut callback_args,
-                        type_args: callback_type_args,
-                        continuation,
-                    } => {
-                        // Push a Native continuation frame, then dispatch the
-                        // callback through ECFLO. The exec loop's continuation
-                        // handler (at the top of the loop) will invoke the
-                        // continuation when the callback completes.
-                        self.reserve_call_frame()?;
-                        self.frames.push_reserved(Frame::Native(NativeFrame {
-                            function: callee_ptr,
-                            continuation,
-                            bytecode_caller: self.level_of(self.bytecode_caller(*frame_idx)),
-                        }));
-
-                        // If callee is a BoundMethod, insert receiver into args.
-                        let real_callee =
-                            self.resolve_bound_method_callee(callee, &mut callback_args)?;
-
-                        let arg_count = callback_args.len();
-                        let cb_locals = StackIndex::from_raw(self.stack.len());
-                        self.extend_stack(callback_args)?;
-
-                        let result = self.execute_call_from_locals_offset_with_type_args(
-                            real_callee,
-                            cb_locals,
-                            arg_count,
-                            CallOptions {
-                                type_args: &callback_type_args,
-                            },
-                            frame_idx,
-                            function,
-                        );
-
-                        // Update *frame_idx to point at the new topmost frame.
-                        // Required so the caller's tight inner-dispatch loop
-                        // detects the frame change (the pushed Native
-                        // continuation frame for the outer native that
-                        // yielded) and breaks out to let exec_compact's
-                        // continuation handler run it.  Without this, when the
-                        // recursive callback was itself a Native that returned
-                        // Done synchronously (no frame_idx update from the
-                        // recursion), the inner loop would continue stepping
-                        // the caller's bytecode with a stale Native frame on
-                        // top — eventually reading past the caller's code end.
-                        if !self.frames.is_empty() {
-                            *frame_idx = self.frames.len() - 1;
-                        }
-
-                        return result;
+                    other => {
+                        return self.finish_native_call(other, callee_ptr, frame_idx, function);
                     }
                 }
             }
@@ -8422,6 +8377,181 @@ impl BexVm {
             return Ok(Some(VmExecState::EarlyYield));
         }
         Ok(None)
+    }
+
+    /// Complete a native call whose result is not a plain value: a thrown
+    /// error, or a callback the native yields to. A yield pushes the native's
+    /// continuation frame and dispatches the callback.
+    fn finish_native_call(
+        &mut self,
+        native_result: NativeCallResult,
+        callee_ptr: HeapPtr,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<VmExecState>, VmError> {
+        match native_result {
+            NativeCallResult::Done(v) => {
+                self.push_stack(v)?;
+                Ok(None)
+            }
+            NativeCallResult::Error(e) => Err(self.native_error_to_vm_error(e)),
+            NativeCallResult::YieldToCall {
+                callee,
+                args: mut callback_args,
+                type_args: callback_type_args,
+                continuation,
+            } => {
+                // Push a Native continuation frame, then dispatch the
+                // callback through ECFLO. The exec loop's continuation
+                // handler (at the top of the loop) will invoke the
+                // continuation when the callback completes.
+                self.reserve_call_frame()?;
+                self.frames.push_reserved(Frame::Native(NativeFrame {
+                    function: callee_ptr,
+                    continuation,
+                    bytecode_caller: self.level_of(self.bytecode_caller(*frame_idx)),
+                }));
+
+                // If callee is a BoundMethod, insert receiver into args.
+                let real_callee = self.resolve_bound_method_callee(callee, &mut callback_args)?;
+
+                let arg_count = callback_args.len();
+                let cb_locals = StackIndex::from_raw(self.stack.len());
+                self.extend_stack(callback_args)?;
+
+                let result = self.execute_call_from_locals_offset_with_type_args(
+                    real_callee,
+                    cb_locals,
+                    arg_count,
+                    CallOptions {
+                        type_args: &callback_type_args,
+                    },
+                    frame_idx,
+                    function,
+                );
+
+                // Update *frame_idx to point at the new topmost frame.
+                // Required so the caller's tight inner-dispatch loop
+                // detects the frame change (the pushed Native
+                // continuation frame for the outer native that
+                // yielded) and breaks out to let exec_compact's
+                // continuation handler run it.  Without this, when the
+                // recursive callback was itself a Native that returned
+                // Done synchronously (no frame_idx update from the
+                // recursion), the inner loop would continue stepping
+                // the caller's bytecode with a stale Native frame on
+                // top — eventually reading past the caller's code end.
+                if !self.frames.is_empty() {
+                    *frame_idx = self.frames.len() - 1;
+                }
+
+                result
+            }
+        }
+    }
+
+    /// Run the native builtin a `Call` site names without the general call
+    /// setup, when nothing about the call needs it: no `$trace`, no type lane
+    /// of an enclosing call, and a site that pushed exactly the native's
+    /// slots. The site's type operands, if any, become the type arguments the
+    /// native reads through [`Self::current_call_type_args`], and leave the
+    /// stack with its values. Returns [`NativeDirect::NotTaken`] without
+    /// touching anything when the call needs the general path.
+    ///
+    /// Every check is in here, out of line: `run_compact` is sensitive to
+    /// what its call arm holds, and code added there slowed unrelated
+    /// instructions.
+    #[inline(never)]
+    fn call_native_direct(
+        &mut self,
+        callee_value: Value,
+        thread_local: bool,
+        ntypeargs: usize,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+        return_pc: usize,
+    ) -> Result<NativeDirect, VmError> {
+        let Some(callee_ptr) = callee_value.as_object_ptr() else {
+            return Ok(NativeDirect::NotTaken);
+        };
+        // SAFETY: a function global lives for the whole program.
+        let Object::Function(callee) = (unsafe { callee_ptr.get() }) else {
+            return Ok(NativeDirect::NotTaken);
+        };
+        let FunctionKind::Native(native, local) = callee.kind else {
+            return Ok(NativeDirect::NotTaken);
+        };
+        if self.pending_call_trace.is_some() || !self.pending_call_type_args.is_empty() {
+            return Ok(NativeDirect::NotTaken);
+        }
+        if Self::recorded_call_layout(function, self.cur_pc)
+            .is_some_and(|layout| !callee.argument_layout_is(layout))
+        {
+            return Ok(NativeDirect::NotTaken);
+        }
+        let operand_count = callee.arity + ntypeargs;
+        let type_start = self
+            .stack
+            .len()
+            .checked_sub(operand_count)
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(operand_count))?;
+        self.thread_local_call = false;
+
+        // The caller's return address and call site, as the general path
+        // records them, for a yield or an unwind out of the native.
+        let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {
+            verifier_unreachable!()
+        };
+        caller.instruction_ptr = return_pc;
+        caller.faulting_pc = self.cur_pc;
+
+        if ntypeargs != 0 {
+            // The lane is empty here; reusing its allocation keeps a generic
+            // builtin call (`xs.push(x)` passes `T`) from allocating.
+            let mut type_args = std::mem::take(&mut self.pending_call_type_args);
+            for slot in type_start..type_start + ntypeargs {
+                let value = self.stack[StackIndex::from_raw(slot)];
+                let ty = match value.as_object_ptr().map(|ptr| self.get_object(ptr)) {
+                    Some(Object::Type(type_value)) => type_value.ty.clone(),
+                    _ => self.type_operand_value(value)?.ty,
+                };
+                type_args.push(ty);
+            }
+            self.pending_call_type_args = type_args;
+        }
+
+        // As in the general path, a native keeps its own roots: the
+        // arguments leave the stack before it runs.
+        let args: SmallVec<[Value; 4]> = self.stack.as_slice()[type_start + ntypeargs..]
+            .iter()
+            .copied()
+            .collect();
+        self.stack.truncate(type_start);
+
+        let func_ptr = match local {
+            Some(local) if thread_local => local,
+            _ => native,
+        };
+        // SAFETY: as in `execute_call_from_locals_offset`, the pointer was
+        // cast from a `NativeFunction` in `attach_builtins`.
+        let func = unsafe { std::mem::transmute::<*const (), NativeFunction>(func_ptr) };
+        let native_result = func(self, &args);
+        // A native reads its type arguments while it runs, never from a
+        // continuation, exactly as the general path restores the lane here.
+        self.pending_call_type_args.clear();
+        self.settle();
+
+        match native_result {
+            NativeCallResult::Done(value) => {
+                self.push_stack(value)?;
+                Ok(NativeDirect::Ran(
+                    self.should_early_yield().then_some(VmExecState::EarlyYield),
+                ))
+            }
+            other => self
+                .finish_native_call(other, callee_ptr, frame_idx, function)
+                .map(NativeDirect::Ran),
+        }
     }
 
     /// Convert a [`VmRustFnError`] into the corresponding [`VmError`].
@@ -10877,6 +11007,24 @@ impl BexVm {
                                 *dispatch_frame_idx = *frame_idx;
                                 continue;
                             }
+                        }
+
+                        // A native builtin skips the general setup: no callee
+                        // unwrapping, no layout remap, no copy of its type
+                        // arguments. It returns to the engine loop as the
+                        // general path does: continuing here instead keeps the
+                        // whole loop state live across the call, and the
+                        // dispatch loop then spills `self` on every
+                        // instruction.
+                        if let NativeDirect::Ran(state) = self.call_native_direct(
+                            callee_value,
+                            op == OpCode::CallLocal,
+                            ntypeargs,
+                            frame_idx,
+                            function,
+                            *pc,
+                        )? {
+                            return Ok(state);
                         }
 
                         let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;

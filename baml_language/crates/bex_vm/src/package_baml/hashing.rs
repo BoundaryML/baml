@@ -273,3 +273,37 @@ pub(super) fn hash_value(vm: &mut BexVm, value: Value, state: Value) -> NativeCa
     }
     .drive(vm)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::hash::Hasher as _;
+
+    use super::framed;
+
+    /// What the driver computes for a primitive: its framing written to a
+    /// fresh `baml.hash.DefaultHasher`, as a map's key hash.
+    fn driver_hash(tag: u8, bytes: &[u8]) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        hasher.write(&framed(tag, bytes));
+        hasher.finish()
+    }
+
+    /// Maps hash string and int keys natively. A key whose `Hash` writes the
+    /// same value must land in the same bucket, so the native hashes keep the
+    /// driver's framing.
+    #[test]
+    fn native_key_hashes_match_the_driver() {
+        for int in [0, 1, -1, 42, i64::from(i32::MAX), -(1 << 62)] {
+            assert_eq!(
+                bex_vm_types::map_int_hash(int),
+                driver_hash(1, &int.to_le_bytes())
+            );
+        }
+        for text in ["", "a", "ggtatt", "a string longer than one SipHash block"] {
+            assert_eq!(
+                bex_vm_types::map_string_hash(text),
+                driver_hash(5, text.as_bytes())
+            );
+        }
+    }
+}
