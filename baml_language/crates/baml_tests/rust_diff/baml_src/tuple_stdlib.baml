@@ -15,9 +15,24 @@ function TupleStdlib() -> void {
     let entries = mapped.entries();
     let escaped = TupleStdlibEntries();
     await spawn { escaped[0].1.push(20); };
+    let original = [10];
+    let shared: map<string, int[]> = {};
+    shared.set("key", original);
+    let extracted = shared.entries()[0].1;
+    let worker = spawn {
+        extracted.push(20);
+    };
+    let from_get: int[] = shared.get("key") else {
+        return;
+    };
+    from_get.push(30);
+    await worker;
+    original.sort();
     values.sort_by_key((x: int?) -> int {
         x ?? 0
     });
-    baml.io.println(`${indexed}:${left}:${right}:${partitioned}:${entries}:${escaped}:${values}`);
+    baml.io.println(
+        `${indexed}:${left}:${right}:${partitioned}:${entries}:${escaped}:${values}:${original}`,
+    );
     baml.io.println(`${reflect.Type.of_value(entries[0]) == reflect.Type.of<(int, int?)>()}`);
 }

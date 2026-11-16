@@ -1061,6 +1061,34 @@ function main() -> int {{
 }
 
 #[test]
+fn map_entry_tuple_slots_alias_values_read_through_get() {
+    assert_locality(
+        r#"
+function main() -> int {
+    let xs = [1];
+    let m: map<string, int[]> = {};
+    m.set("a", xs);
+    let pairs = m.entries();
+    let extracted = pairs[0].1;
+    let worker = spawn { extracted.push(3); };
+    let from_get: int[] = m.get("a") else { return 0; };
+    from_get.push(2);
+    await worker;
+    xs.length()
+}
+"#,
+        "main",
+        &[
+            ("xs", false),
+            ("m", true),
+            ("pairs", true),
+            ("extracted", false),
+            ("from_get", false),
+        ],
+    );
+}
+
+#[test]
 fn class_keyed_maps_stay_opaque() {
     assert_locality(
         r#"

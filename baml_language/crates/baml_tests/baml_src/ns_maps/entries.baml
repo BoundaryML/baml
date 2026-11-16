@@ -69,6 +69,16 @@ test "map from entries uses custom equality and retains the first key" {
 test "map entry children remain shared when the snapshot escapes to a task" {
     let values: map<int, int[]> = { 1: [10] };
     let entry = values.entries()[0];
-    await spawn { entry.1.push(20); };
-    assert.equal(values[1], [10, 20])
+    let extracted = entry.1;
+    let worker = spawn {
+        extracted.push(20);
+    };
+    let original: int[] = values.get(1) else {
+        return;
+    };
+    original.push(30);
+    await worker;
+    assert.equal(values[1].length(), 3);
+    assert.is_true(values[1].includes(20));
+    assert.is_true(values[1].includes(30))
 }

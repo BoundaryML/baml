@@ -60,6 +60,8 @@ interface Iterable {
     /// ends. Pulls the left side first, so an unmatched left element is consumed
     /// when the right side ends. If the right side throws, the pending left
     /// element is retained for the next call. Both sources' errors propagate.
+    /// As with the other adapters, finish each `next()` call before starting
+    /// another call on the same iterator, including across tasks.
     function zip<U, E2>(
         self,
         other: Iterable<Item = U, Error = E2>,
@@ -97,6 +99,10 @@ interface Iterable {
 /// union of the source's and of every callback's, so one fallible step makes
 /// the whole chain fallible and says so in its type. Python and JavaScript
 /// track nothing of the sort — there a throwing callback simply propagates.
+///
+/// A shared iterator is one sequential cursor. Finish a `next()` call before
+/// starting another call on that iterator; adapters do not serialize concurrent
+/// pulls, and a source or callback may suspend while a pull is in progress.
 interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
     /// The type of the elements yielded by the iterator.
     type Item;

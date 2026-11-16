@@ -1347,6 +1347,8 @@ pub enum Returns {
     /// A new container of the receiver's elements and those of these
     /// arguments.
     Fresh(&'static [usize]),
+    /// A new array of fresh key/value tuples holding the receiver's contents.
+    EntryPairs,
 }
 
 /// Effects by native key, with argument 0 the receiver. `keeps` flows the
@@ -1550,7 +1552,7 @@ pub const EFFECTS: &[(&str, Effect)] = &[
         Effect {
             arity: 1,
             keeps: &[],
-            returns: Returns::Fresh(&[]),
+            returns: Returns::EntryPairs,
             compares_keys: false,
             leaks_contents: false,
         },
@@ -2059,6 +2061,13 @@ impl<'a, 'db> Graph<'a, 'db> {
                     self.flow(copy_contents, source_contents);
                 }
                 Some(copy)
+            }
+            Returns::EntryPairs => {
+                let array = self.fresh();
+                let tuples = self.contents_of(Some(array));
+                let slots = self.contents_of(Some(tuples));
+                self.flow(Some(slots), contents);
+                Some(array)
             }
         }
     }
