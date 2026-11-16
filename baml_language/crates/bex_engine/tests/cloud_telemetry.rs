@@ -52,7 +52,7 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
-    let program = baml_test_support::compile_source(trace_context::SOURCE);
+    let program = trace_context::program_with_version(trace_context::SOURCE, "3.4.5+cloud");
     let launch_context = Context::default().with_patch(&ContextPatch {
         metadata: [(
             "root".into(),
@@ -150,6 +150,14 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         );
         let id: btel_snapshot::CasId = header.initial_context_cas_id.unwrap().into();
         let (identity, metadata) = trace_context::metadata(&snapshots[id.as_bytes()]);
+        assert_eq!(
+            metadata["baml.ctx.baml_version"],
+            &btel_snapshot::DecodedValue::String(baml_version::CANONICAL_VERSION.into())
+        );
+        assert!(
+            !metadata.contains_key("baml.ctx.app_version"),
+            "program version is not process-shared metadata"
+        );
         assert_eq!(identity, Some("launch-user"));
         assert_eq!(
             metadata["root"],
@@ -186,6 +194,8 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
                 .as_ref()
         );
         let allowed = [
+            "baml_version",
+            "app_version",
             "os",
             "os_version",
             "os_distro",
@@ -200,7 +210,7 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
                     .is_some_and(|key| allowed.contains(&key))
         }));
     }
-    trace_context::assert_leaf_contexts(&files, &snapshots, 3);
+    trace_context::assert_leaf_contexts(&files, &snapshots, 3, Some("3.4.5+cloud"));
 }
 
 fn engine(server: &MockServer, flush_interval_duration: Duration) -> Arc<BexEngine> {

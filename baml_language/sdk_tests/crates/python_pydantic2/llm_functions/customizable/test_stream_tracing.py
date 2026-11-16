@@ -6,6 +6,13 @@ import pytest
 from replay_harness import replay_server
 
 
+def assert_metadata(actual, expected):
+    """Require native identity while comparing the complete authored context."""
+    version = actual.get("baml.ctx.baml_version")
+    assert isinstance(version, str) and version
+    assert actual == {**expected, "baml.ctx.baml_version": version}
+
+
 # SDK_PARITY_LINT(skip): Python stream lifetime/context regression
 @replay_server(recording_path="replay_extract_string")
 async def test_stream_async_for_keeps_context_after_creator_returns():
@@ -31,7 +38,8 @@ async def test_stream_async_for_keeps_context_after_creator_returns():
     assert len(partials) >= 10
     assert isinstance(await stream.final(), str)
     assert len(contexts) >= 3
-    assert all(context.metadata == {"feature": "creator"} for context in contexts)
+    for context in contexts:
+        assert_metadata(context.metadata, {"feature": "creator"})
     assert all(context.distinct_id == "u1" for context in contexts)
     assert trace.current_context_sync().metadata == {}
 
@@ -57,7 +65,8 @@ async def test_stream_contexts_are_isolated_during_concurrent_iteration():
             await asyncio.sleep(0)
         assert isinstance(await stream.final(), str)
         assert len(seen) >= 3
-        assert all(metadata == {"feature": feature} for metadata in seen)
+        for metadata in seen:
+            assert_metadata(metadata, {"feature": feature})
 
     await asyncio.gather(consume("first"), consume("second"))
     assert trace.current_context_sync().metadata == {}
@@ -81,8 +90,9 @@ def test_stream_final_keeps_context_and_allows_a_step_patch():
     )
     final = stream.final_sync(_baml={"trace": trace.context_sync(metadata={"feature": "step"})})
     assert isinstance(final, str)
-    assert seen[0] == {"feature": "origin", "user": "u1"}
-    assert all(metadata == {"feature": "step", "user": "u1"} for metadata in seen[1:])
+    assert_metadata(seen[0], {"feature": "origin", "user": "u1"})
+    for metadata in seen[1:]:
+        assert_metadata(metadata, {"feature": "step", "user": "u1"})
     assert trace.current_context_sync().metadata == {}
 
 
