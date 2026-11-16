@@ -964,8 +964,8 @@ impl RecordResult for Value {
 }
 
 impl RecordResult for i64 {
-    fn to_value(&self, _: &mut BexVm) -> Value {
-        Value::int(*self)
+    fn to_value(&self, vm: &mut BexVm) -> Value {
+        vm.int_value(*self)
     }
 }
 

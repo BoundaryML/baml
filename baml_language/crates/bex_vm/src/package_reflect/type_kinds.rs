@@ -1270,7 +1270,7 @@ impl BamlClassLiteral for PackageReflectImpl {
         match ty {
             bex_vm_types::RealizedTy::Literal(literal, _) => Ok(match literal {
                 baml_type::Literal::String(s) => Value::object(vm.alloc_string(s)),
-                baml_type::Literal::Int(n) => Value::int(n),
+                baml_type::Literal::Int(n) => vm.int_value(n),
                 baml_type::Literal::Bool(b) => Value::bool(b),
                 baml_type::Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n))?,
                 baml_type::Literal::Float(s) => vm.float_value(

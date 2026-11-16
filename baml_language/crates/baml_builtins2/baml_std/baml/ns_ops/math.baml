@@ -179,6 +179,7 @@ implement Multiply<int> for int {
 
 implement Divide<int> for int {
     type Output = int;
+    //baml:mut_vm
     //baml:fallible
     function div(self, rhs: int) -> int throws never {
         $rust_function
@@ -187,6 +188,7 @@ implement Divide<int> for int {
 
 implement Remainder<int> for int {
     type Output = int;
+    //baml:mut_vm
     //baml:fallible
     function rem(self, rhs: int) -> int throws never {
         $rust_function

@@ -1564,7 +1564,7 @@ pub(super) fn empty_value(
         RealizedTy::String => Value::object(vm.alloc_string("")),
         RealizedTy::Uint8Array => Value::object(vm.alloc_uint8array(Vec::new())),
         RealizedTy::Literal(literal, _) => match literal {
-            Literal::Int(n) => Value::int(*n),
+            Literal::Int(n) => vm.int_value(*n),
             Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n.clone()))?,
             Literal::Float(text) => match text.parse::<f64>() {
                 Ok(f) => vm.float_value(f),

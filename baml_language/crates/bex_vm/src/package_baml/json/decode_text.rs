@@ -221,7 +221,7 @@ impl TextDecoder<'_, '_> {
                 Ok(Value::object(vm.alloc_string(expected.as_str())))
             }
             baml_type::Literal::Int(expected) => match reader.number()?.as_i64() {
-                Some(actual) if actual == *expected => Ok(Value::int(actual)),
+                Some(actual) if actual == *expected => Ok(vm.int_value(actual)),
                 _ => Err(Stop),
             },
             baml_type::Literal::Float(expected) => {

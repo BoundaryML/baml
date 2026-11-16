@@ -1,8 +1,8 @@
 //! Arithmetic over tagged values and unboxed numeric locals.
 
+use baml_type::IntShiftError;
 use bex_vm_types::{BinOp, CmpOp, Object, UnaryOp, Value};
 
-use super::expect_int;
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     vm::BexVm,
@@ -44,7 +44,8 @@ impl BexVm {
 
     pub fn neg(&mut self, val: Value) -> Result<Value, Box<VmError>> {
         if let Some(n) = val.as_int() {
-            return self.neg_i64(n).map(Value::int);
+            let n = self.neg_i64(n)?;
+            return Ok(self.int_value(n));
         }
         if let Some(n) = val.as_float() {
             return Ok(self.float_value(-n));
@@ -68,8 +69,9 @@ impl BexVm {
     #[cold]
     #[inline(never)]
     pub(crate) fn division_by_zero(&mut self, l: i64, r: i64) -> VmError {
+        let left = self.int_value(l);
         VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::DivisionByZero {
-            left: Value::int(l),
+            left,
             right: Value::int(r),
         }))
     }
@@ -94,35 +96,31 @@ impl BexVm {
         Box::new(self.integer_overflow(format!("{l} {op} {r} overflows int")))
     }
 
-    /// `l + r` on raw ints, overflow-checked into the i63 range.
+    /// `l + r` on raw ints, overflow-checked into the int range.
     #[inline]
     pub fn add_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        let v = l.wrapping_add(r);
-        if Value::try_inline_int(v).is_some() {
-            Ok(v)
-        } else {
-            Err(self.int_overflow(l, '+', r))
+        match l.checked_add(r) {
+            Some(v) if baml_type::int::fits(v) => Ok(v),
+            _ => Err(self.int_overflow(l, '+', r)),
         }
     }
 
-    /// `l - r` on raw ints, overflow-checked into the i63 range.
+    /// `l - r` on raw ints, overflow-checked into the int range.
     #[inline]
     pub fn sub_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        let v = l.wrapping_sub(r);
-        if Value::try_inline_int(v).is_some() {
-            Ok(v)
-        } else {
-            Err(self.int_overflow(l, '-', r))
+        match l.checked_sub(r) {
+            Some(v) if baml_type::int::fits(v) => Ok(v),
+            _ => Err(self.int_overflow(l, '-', r)),
         }
     }
 
     /// `l * r` on raw ints, overflow-checked: the i64 product must not
-    /// overflow and must fit the i63 range. Both checks are evaluated and
+    /// overflow and must fit the int range. Both checks are evaluated and
     /// combined without short-circuiting, so the fast path takes one branch.
     #[inline]
     pub fn mul_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         let (v, overflowed) = l.overflowing_mul(r);
-        if !overflowed & Value::try_inline_int(v).is_some() {
+        if !overflowed & baml_type::int::fits(v) {
             Ok(v)
         } else {
             Err(self.int_overflow(l, '*', r))
@@ -130,39 +128,40 @@ impl BexVm {
     }
 
     /// `l / r` on raw ints: `DivisionByZero` for a zero divisor,
-    /// `IntegerOverflow` for `INT_MIN / -1`.
+    /// `IntegerOverflow` for `MIN / -1`.
     #[inline]
     pub fn div_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         if r == 0 {
             return Err(self.division_by_zero_boxed(l, r));
         }
-        let v = l / r;
-        if Value::try_inline_int(v).is_some() {
-            Ok(v)
-        } else {
-            Err(self.int_overflow(l, '/', r))
+        match l.checked_div(r) {
+            Some(v) if baml_type::int::fits(v) => Ok(v),
+            _ => Err(self.int_overflow(l, '/', r)),
         }
     }
 
-    /// `l % r` on raw ints: `DivisionByZero` for a zero divisor.
+    /// `l % r` on raw ints: `DivisionByZero` for a zero divisor; `MIN % -1`
+    /// is `0`.
     #[inline]
     pub fn mod_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         if r == 0 {
             return Err(self.division_by_zero_boxed(l, r));
         }
-        Ok(l % r)
+        Ok(l.wrapping_rem(r))
     }
 
-    /// `l << r` on raw ints with the i63 semantics constant folding uses.
+    /// `l << r` on raw ints with the semantics constant folding uses.
     #[inline]
     pub fn shl_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        expect_int(self.int_shl(l, r)?)
+        baml_type::int::shl(l, r)
+            .map_err(|IntShiftError::NegativeCount(count)| Box::new(self.negative_bit_shift(count)))
     }
 
-    /// `l >> r` on raw ints with the i63 semantics constant folding uses.
+    /// `l >> r` on raw ints with the semantics constant folding uses.
     #[inline]
     pub fn shr_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        expect_int(self.int_shr(l, r)?)
+        baml_type::int::shr(l, r)
+            .map_err(|IntShiftError::NegativeCount(count)| Box::new(self.negative_bit_shift(count)))
     }
 
     #[allow(
@@ -175,14 +174,12 @@ impl BexVm {
         Box::new(self.integer_overflow(format!("-({n}) overflows int")))
     }
 
-    /// `-n` on a raw int: `IntegerOverflow` for `INT_MIN`.
+    /// `-n` on a raw int: `IntegerOverflow` for `MIN`.
     #[inline]
     pub fn neg_i64(&mut self, n: i64) -> Result<i64, Box<VmError>> {
-        let v = n.wrapping_neg();
-        if Value::try_inline_int(v).is_some() {
-            Ok(v)
-        } else {
-            Err(self.neg_overflow(n))
+        match n.checked_neg() {
+            Some(v) if baml_type::int::fits(v) => Ok(v),
+            _ => Err(self.neg_overflow(n)),
         }
     }
 

@@ -6177,13 +6177,12 @@ impl BexVm {
 
     /// Reconstruct the original `Value` for a [`BigintOperand`].
     ///
-    /// Used to populate panic payloads (e.g. `DivisionByZero`) without
-    /// allocating: the `int` operand stays an `int`, the heap operand stays a
-    /// pointer.
-    fn bigint_operand_value(op: BigintOperand) -> Value {
+    /// Used to populate panic payloads (e.g. `DivisionByZero`): the `int`
+    /// operand stays an `int`, the heap operand stays a pointer.
+    fn bigint_operand_value(&mut self, op: BigintOperand) -> Value {
         match op {
             BigintOperand::Heap(ptr) => Value::object(ptr),
-            BigintOperand::Int(n) => Value::int(n),
+            BigintOperand::Int(n) => self.int_value(n),
         }
     }
 
@@ -6235,9 +6234,10 @@ impl BexVm {
                     let lb = self.bigint_operand(l);
                     let rb = self.bigint_operand(r);
                     if *rb == num_bigint::BigInt::ZERO {
+                        drop((lb, rb));
                         Err(VmPanic::DivisionByZero {
-                            left: Self::bigint_operand_value(l),
-                            right: Self::bigint_operand_value(r),
+                            left: self.bigint_operand_value(l),
+                            right: self.bigint_operand_value(r),
                         })
                     } else {
                         Ok(&*lb / &*rb)
@@ -6247,9 +6247,10 @@ impl BexVm {
                     let lb = self.bigint_operand(l);
                     let rb = self.bigint_operand(r);
                     if *rb == num_bigint::BigInt::ZERO {
+                        drop((lb, rb));
                         Err(VmPanic::DivisionByZero {
-                            left: Self::bigint_operand_value(l),
-                            right: Self::bigint_operand_value(r),
+                            left: self.bigint_operand_value(l),
+                            right: self.bigint_operand_value(r),
                         })
                     } else {
                         Ok(&*lb % &*rb)
@@ -6802,7 +6803,7 @@ impl BexVm {
                 #[allow(clippy::cast_possible_wrap)]
                 (
                     PanicClass::IndexOutOfBounds,
-                    vec![Value::int(index), Value::int(length as i64)],
+                    vec![self.int_value(index), Value::int(length as i64)],
                 )
             }
             VmPanic::InvalidFieldAccess {
@@ -6843,7 +6844,7 @@ impl BexVm {
                 let msg = Value::object(self.alloc_string(message));
                 (PanicClass::UserPanic, vec![msg])
             }
-            VmPanic::Exit { code } => (PanicClass::Exit, vec![Value::int(code)]),
+            VmPanic::Exit { code } => (PanicClass::Exit, vec![self.int_value(code)]),
             VmPanic::AllocFailure { message } => {
                 let msg = Value::object(self.alloc_string(message));
                 (PanicClass::AllocFailure, vec![msg])
@@ -6976,27 +6977,10 @@ impl BexVm {
         })
     }
 
-    /// Encode an i64 arithmetic result into the i63 range, or throw
-    /// `IntegerOverflow`.
-    ///
-    /// Use this for `+`, `-`, `/`, `%`, and unary `-`: two operands already in
-    /// the i63 range can never overflow i64 under these ops (the widest case,
-    /// `INT_MAX - INT_MIN = 2^63 - 1`, is exactly `i64::MAX`), so the raw i64
-    /// result is well-defined and only the i63 range needs checking via
-    /// [`Value::try_inline_int`]. The `l`/`op`/`r` context is formatted only on the
-    /// cold overflow path, so the hot path is just one range-checked encode.
-    #[inline]
-    fn finish_int(&mut self, v: i64, l: i64, op: char, r: i64) -> Result<Value, VmError> {
-        match Value::try_inline_int(v) {
-            Some(val) => Ok(val),
-            None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
-        }
-    }
-
-    /// Encode a *checked* `int` result, or throw `IntegerOverflow`. Used for
-    /// `*`, where two i63 operands genuinely can exceed i64 (e.g.
-    /// `INT_MAX * INT_MAX`): `checked` is `None` on i64 overflow, and
-    /// [`Value::try_inline_int`] then enforces the tighter i63 range.
+    /// The `Value` of a *checked* `int` result `l op r`, or an
+    /// `IntegerOverflow` throw: `checked` is `None` when the operation
+    /// overflowed `i64`, and a result outside the int range overflows too.
+    /// The `l`/`op`/`r` context is formatted only on the cold overflow path.
     #[inline]
     fn int_arith_result(
         &mut self,
@@ -7005,10 +6989,54 @@ impl BexVm {
         op: char,
         r: i64,
     ) -> Result<Value, VmError> {
-        match checked.and_then(Value::try_inline_int) {
-            Some(v) => Ok(v),
+        match checked.filter(|v| baml_type::int::fits(*v)) {
+            Some(v) => Ok(self.int_value(v)),
             None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
         }
+    }
+
+    /// `l + r` or `l - r` (`op`) on two ints when the tagged fast path
+    /// declined: an operand is boxed, or the result is outside the inline
+    /// range. Throws `IntegerOverflow` when the result leaves the int range.
+    #[cold]
+    #[inline(never)]
+    fn int_add_sub_slow(&mut self, l: Value, op: char, r: Value) -> Result<Value, VmError> {
+        let (l, r, checked) = Self::int_add_sub(l, op, r);
+        self.int_arith_result(checked, l, op, r)
+    }
+
+    /// [`Self::int_add_sub_slow`] for the `AddInt` / `SubInt` opcodes, whose
+    /// operands are still the top two stack slots: on an overflow they are
+    /// popped before the throw is built, as the opcode consumes them.
+    #[cold]
+    #[inline(never)]
+    fn int_add_sub_slow_on_stack(
+        &mut self,
+        l: Value,
+        op: char,
+        r: Value,
+    ) -> Result<Value, VmError> {
+        let (l, r, checked) = Self::int_add_sub(l, op, r);
+        match checked.filter(|v| baml_type::int::fits(*v)) {
+            Some(v) => Ok(self.int_value(v)),
+            None => {
+                self.stack.truncate_suffix(2);
+                Err(self.integer_overflow(format!("{l} {op} {r} overflows int")))
+            }
+        }
+    }
+
+    /// The operands of an int `+` / `-` and the checked result.
+    fn int_add_sub(l: Value, op: char, r: Value) -> (i64, i64, Option<i64>) {
+        let (Some(l), Some(r)) = (l.as_int(), r.as_int()) else {
+            verifier_unreachable!()
+        };
+        let checked = if op == '+' {
+            l.checked_add(r)
+        } else {
+            l.checked_sub(r)
+        };
+        (l, r, checked)
     }
 
     /// Build a catchable `baml.panics.IntegerOverflow` throw. Cold path only.
@@ -7016,17 +7044,6 @@ impl BexVm {
     #[inline(never)]
     fn integer_overflow(&mut self, message: String) -> VmError {
         VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::IntegerOverflow { message }))
-    }
-
-    /// Cold-path `IntegerOverflow` for the tagged add/sub fast paths: untags the
-    /// operands (which the hot path deliberately skips) only to format the
-    /// message. `l`/`r` are `Int`-tagged Values.
-    #[cold]
-    #[inline(never)]
-    fn tagged_int_overflow(&mut self, l: Value, op: char, r: Value) -> VmError {
-        let lv = l.as_int().unwrap_or(0);
-        let rv = r.as_int().unwrap_or(0);
-        self.integer_overflow(format!("{lv} {op} {rv} overflows int"))
     }
 
     /// Build a catchable `baml.panics.NegativeBitShift` throw. Cold path only.
@@ -7038,7 +7055,7 @@ impl BexVm {
         }))
     }
 
-    /// Evaluate `int << r` with the shared i63 semantics used by constant
+    /// Evaluate `int << r` with the shared semantics used by constant
     /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
     fn int_shl(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
@@ -7046,12 +7063,12 @@ impl BexVm {
             verifier_unreachable!()
         }
         match baml_type::int::shl(l, r) {
-            Ok(value) => Ok(Value::int(value)),
+            Ok(value) => Ok(self.int_value(value)),
             Err(IntShiftError::NegativeCount(count)) => Err(self.negative_bit_shift(count)),
         }
     }
 
-    /// Evaluate `int >> r` with the shared i63 semantics used by constant
+    /// Evaluate `int >> r` with the shared semantics used by constant
     /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
     fn int_shr(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
@@ -7059,7 +7076,7 @@ impl BexVm {
             verifier_unreachable!()
         }
         match baml_type::int::shr(l, r) {
-            Ok(value) => Ok(Value::int(value)),
+            Ok(value) => Ok(self.int_value(value)),
             Err(IntShiftError::NegativeCount(count)) => Err(self.negative_bit_shift(count)),
         }
     }
@@ -10005,19 +10022,18 @@ impl BexVm {
                     return Err(self.division_by_zero(l, r));
                 }
                 // Arithmetic is checked: overflow throws IntegerOverflow rather
-                // than wrapping or raw-Rust-panicking. Only `*` can overflow
-                // i64 from i63 operands (so it needs checked_mul); +, -, /, %
-                // can't, so a plain op + i63 range-check suffices. And/Or/Xor of
-                // two i63 values stay in range, and `<<` truncates back into it
-                // (see `int_shl`); both shifts still reject a negative count.
-                BinOp::Add => self.finish_int(l.wrapping_add(r), l, '+', r)?,
-                BinOp::Sub => self.finish_int(l.wrapping_sub(r), l, '-', r)?,
+                // than wrapping or raw-Rust-panicking. `MIN / -1` overflows;
+                // `MIN % -1` is `0`. And/Or/Xor of two ints stay in range, and
+                // `<<` truncates back into it (see `int_shl`); both shifts still
+                // reject a negative count.
+                BinOp::Add => self.int_arith_result(l.checked_add(r), l, '+', r)?,
+                BinOp::Sub => self.int_arith_result(l.checked_sub(r), l, '-', r)?,
                 BinOp::Mul => self.int_arith_result(l.checked_mul(r), l, '*', r)?,
-                BinOp::Div => self.finish_int(l / r, l, '/', r)?,
-                BinOp::Mod => self.finish_int(l % r, l, '%', r)?,
-                BinOp::BitAnd => Value::int(l & r),
-                BinOp::BitOr => Value::int(l | r),
-                BinOp::BitXor => Value::int(l ^ r),
+                BinOp::Div => self.int_arith_result(l.checked_div(r), l, '/', r)?,
+                BinOp::Mod => self.int_arith_result(Some(l.wrapping_rem(r)), l, '%', r)?,
+                BinOp::BitAnd => self.int_value(l & r),
+                BinOp::BitOr => self.int_value(l | r),
+                BinOp::BitXor => self.int_value(l ^ r),
                 BinOp::Shl => self.int_shl(l, r)?,
                 BinOp::Shr => self.int_shr(l, r)?,
             }
@@ -10303,21 +10319,49 @@ impl BexVm {
         }
     }
 
-    /// `MulInt` of two ints, or `None` when the product leaves the int range.
+    /// `MulInt` of two inline ints, or `None` when the product is not
+    /// inline (it overflowed, or it needs a box): the caller's slow path
+    /// decides.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    fn int_mul(l: i64, r: i64) -> Option<Value> {
+    fn inline_int_mul(l: i64, r: i64) -> Option<Value> {
         l.checked_mul(r).and_then(Value::try_inline_int)
     }
 
-    /// `CmpInt*` (`op`) on two `Int`-tagged values. Both carry the same tag
-    /// bit, so the tagged words, read as signed, order like their ints (see
-    /// `Value::tagged_int_add_checked`).
+    /// `CmpInt*` (`op`) on two inline ints. Both carry the same tag bit, so
+    /// the tagged words, read as signed, order like their ints (see
+    /// `Value::tagged_int_add_checked`). The caller checks
+    /// [`Value::both_inline_ints`] first, or uses [`Self::int_compare`].
     #[allow(clippy::inline_always, clippy::cast_possible_wrap)]
     #[inline(always)]
+    fn inline_int_compare(op: bex_vm_types::bytecode::OpCode, l: Value, r: Value) -> bool {
+        Self::int_order(op, l.bits() as i64, r.bits() as i64)
+    }
+
+    /// `CmpInt*` (`op`) on two ints, inline or boxed.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn int_compare(op: bex_vm_types::bytecode::OpCode, l: Value, r: Value) -> bool {
+        if Value::both_inline_ints(l, r) {
+            Self::inline_int_compare(op, l, r)
+        } else {
+            Self::boxed_int_compare(op, l, r)
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn boxed_int_compare(op: bex_vm_types::bytecode::OpCode, l: Value, r: Value) -> bool {
+        let (Some(l), Some(r)) = (l.as_int(), r.as_int()) else {
+            verifier_unreachable!()
+        };
+        Self::int_order(op, l, r)
+    }
+
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn int_order(op: bex_vm_types::bytecode::OpCode, l: i64, r: i64) -> bool {
         use bex_vm_types::bytecode::OpCode;
-        let (l, r) = (l.bits() as i64, r.bits() as i64);
         match op {
             OpCode::CmpIntEq => l == r,
             OpCode::CmpIntNotEq => l != r,
@@ -10712,11 +10756,12 @@ impl BexVm {
                         pc += 1;
                     }
                     OpCode::MulInt => {
-                        let (Some(l), Some(r)) = (at!(sp - 2).as_int(), at!(sp - 1).as_int())
+                        let (Some(l), Some(r)) =
+                            (at!(sp - 2).as_inline_int(), at!(sp - 1).as_inline_int())
                         else {
-                            std::hint::unreachable_unchecked()
+                            break;
                         };
-                        let Some(result) = Self::int_mul(l, r) else {
+                        let Some(result) = Self::inline_int_mul(l, r) else {
                             break;
                         };
                         sp -= 1;
@@ -10729,7 +10774,11 @@ impl BexVm {
                     | OpCode::CmpIntLtEq
                     | OpCode::CmpIntGt
                     | OpCode::CmpIntGtEq => {
-                        let result = Self::int_compare(op, at!(sp - 2), at!(sp - 1));
+                        let (l, r) = (at!(sp - 2), at!(sp - 1));
+                        if !Value::both_inline_ints(l, r) {
+                            break;
+                        }
+                        let result = Self::inline_int_compare(op, l, r);
                         sp -= 1;
                         at!(sp - 1) = Value::bool(result);
                         pc += 1;
@@ -10773,10 +10822,10 @@ impl BexVm {
                             };
                             constant
                         };
-                        if !self.early_yield.tick_unless_due() {
+                        if !Value::both_inline_ints(l, r) || !self.early_yield.tick_unless_due() {
                             break;
                         }
-                        pc = if Self::int_compare(cmp, l, r) {
+                        pc = if Self::inline_int_compare(cmp, l, r) {
                             Self::branch_target(pc + 14, operand_i32(code, pc + 10))
                         } else {
                             pc + 14
@@ -11238,8 +11287,9 @@ impl BexVm {
                         let src = { read_u32_unchecked(code, pc) as usize };
                         let r = Value::int(i64::from(read_i8_unchecked(code, pc)));
                         let l = self.stack.get_at(Self::local_at(locals_base, src));
-                        let Some(sum) = Value::tagged_int_add_checked(l, r) else {
-                            return Err(self.tagged_int_overflow(l, '+', r));
+                        let sum = match Value::tagged_int_add_checked(l, r) {
+                            Some(sum) => sum,
+                            None => self.int_add_sub_slow(l, '+', r)?,
                         };
                         self.store_local_value(Self::local_at(locals_base, dst), sum);
                     }
@@ -13327,93 +13377,72 @@ impl BexVm {
 
                     // ── Specialized int arithmetic (skip type dispatch) ───────────
                     //
-                    // Operands are statically known to be `int`, so we untag via
-                    // `as_int` and operate on raw `i64`. Every op is checked: a
-                    // result outside the i63 range throws a catchable
-                    // `baml.panics.IntegerOverflow` (via `int_arith_result`)
-                    // rather than silently wrapping (old `tagged_int_add`/`_sub`)
-                    // or raw-Rust-panicking (old `Value::int(l * r)`). The overflow
-                    // branch is cold and ~never taken, so the hot path is the
-                    // checked op plus one predicted-not-taken branch.
+                    // Operands are statically known to be `int`, inline or
+                    // boxed. Every op is checked: a result outside the int range
+                    // throws a catchable `baml.panics.IntegerOverflow` (via
+                    // `int_arith_result`) rather than silently wrapping or
+                    // raw-Rust-panicking. Add and sub first try the tagged fast
+                    // path, which declines (one predicted-not-taken branch) for a
+                    // boxed operand, a result that needs a box, or an overflow.
                     OpCode::AddInt => {
                         let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
                         let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
-                        // Overflow-checked tagged add: hot path stays branchless
-                        // (no untag/retag), cold path untags only for the message.
-                        match Value::tagged_int_add_checked(l, r) {
-                            // SAFETY: the encoder validates two arithmetic operands.
-                            Some(v) => self.stack.replace_top_n::<2>(v),
-                            None => {
-                                // Preserve the old consumed-operand stack before
-                                // constructing and propagating the overflow error.
-                                self.stack.truncate_suffix(2);
-                                return Err(self.tagged_int_overflow(l, '+', r));
-                            }
-                        }
+                        let v = match Value::tagged_int_add_checked(l, r) {
+                            Some(v) => v,
+                            None => self.int_add_sub_slow_on_stack(l, '+', r)?,
+                        };
+                        // SAFETY: the encoder validates two arithmetic operands.
+                        self.stack.replace_top_n::<2>(v);
                     }
                     OpCode::SubInt => {
                         let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
                         let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
-                        match Value::tagged_int_sub_checked(l, r) {
-                            // SAFETY: the encoder validates two arithmetic operands.
-                            Some(v) => self.stack.replace_top_n::<2>(v),
-                            None => {
-                                // Preserve the old error-path stack before error creation.
-                                self.stack.truncate_suffix(2);
-                                return Err(self.tagged_int_overflow(l, '-', r));
-                            }
-                        }
+                        let v = match Value::tagged_int_sub_checked(l, r) {
+                            Some(v) => v,
+                            None => self.int_add_sub_slow_on_stack(l, '-', r)?,
+                        };
+                        // SAFETY: the encoder validates two arithmetic operands.
+                        self.stack.replace_top_n::<2>(v);
                     }
                     OpCode::MulInt => {
                         let Some(r) = self.stack.ensure_pop().as_int() else {
-                            std::hint::unreachable_unchecked()
+                            verifier_unreachable!()
                         };
                         let Some(l) = self.stack.ensure_pop().as_int() else {
-                            std::hint::unreachable_unchecked()
+                            verifier_unreachable!()
                         };
-                        let Some(v) = Self::int_mul(l, r) else {
-                            return Err(self.integer_overflow(format!("{l} * {r} overflows int")));
+                        let v = match Self::inline_int_mul(l, r) {
+                            Some(v) => v,
+                            None => self.int_arith_result(l.checked_mul(r), l, '*', r)?,
                         };
                         self.push_stack(v)?;
                     }
                     OpCode::DivInt => {
                         let Some(r) = self.stack.ensure_pop().as_int() else {
-                            std::hint::unreachable_unchecked()
+                            verifier_unreachable!()
                         };
                         let Some(l) = self.stack.ensure_pop().as_int() else {
-                            std::hint::unreachable_unchecked()
+                            verifier_unreachable!()
                         };
                         if r == 0 {
-                            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                                VmPanic::DivisionByZero {
-                                    left: Value::int(l),
-                                    right: Value::int(r),
-                                },
-                            )));
+                            return Err(self.division_by_zero(l, r));
                         }
-                        // r != 0 guaranteed above; `INT_MIN / -1` = 2^62 fits i64
-                        // (INT_MIN is -2^62, not i64::MIN) but not i63, so the
-                        // range-check in finish_int catches it.
-                        let v = self.finish_int(l / r, l, '/', r)?;
+                        // `MIN / -1` is the one quotient that overflows.
+                        let v = self.int_arith_result(l.checked_div(r), l, '/', r)?;
                         self.push_stack(v)?;
                     }
                     OpCode::ModInt => {
                         let Some(r) = self.stack.ensure_pop().as_int() else {
-                            std::hint::unreachable_unchecked()
+                            verifier_unreachable!()
                         };
                         let Some(l) = self.stack.ensure_pop().as_int() else {
-                            std::hint::unreachable_unchecked()
+                            verifier_unreachable!()
                         };
                         if r == 0 {
-                            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                                VmPanic::DivisionByZero {
-                                    left: Value::int(l),
-                                    right: Value::int(r),
-                                },
-                            )));
+                            return Err(self.division_by_zero(l, r));
                         }
-                        // |l % r| < |r| <= 2^62, always within i63 range.
-                        let v = self.finish_int(l % r, l, '%', r)?;
+                        // `MIN % -1` is `0`, never an overflow.
+                        let v = self.int_arith_result(Some(l.wrapping_rem(r)), l, '%', r)?;
                         self.push_stack(v)?;
                     }
 
@@ -13656,11 +13685,12 @@ impl BexVm {
                     OpCode::Neg => {
                         let val = self.stack.ensure_pop();
                         if let Some(n) = val.as_int() {
-                            // Negating INT_MIN = -2^62 yields 2^62, which fits i64
-                            // (INT_MIN != i64::MIN) but not i63, so the range-check
-                            // in try_inline_int catches it.
-                            match Value::try_inline_int(n.wrapping_neg()) {
-                                Some(v) => self.push_stack(v)?,
+                            // Negating the smallest int overflows.
+                            match n.checked_neg().filter(|v| baml_type::int::fits(*v)) {
+                                Some(v) => {
+                                    let v = self.int_value(v);
+                                    self.push_stack(v)?;
+                                }
                                 None => {
                                     return Err(
                                         self.integer_overflow(format!("-({n}) overflows int"))

@@ -80,7 +80,7 @@ pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {
     use Repr::{Bool, Float, Int, Value};
     match (from, to) {
         (a, b) if a == b => code.to_string(),
-        (Int, Value) => format!("Value::int({code})"),
+        (Int, Value) => format!("vm.int_value({code})"),
         (Bool, Value) => format!("Value::bool({code})"),
         (Float, Value) => format!("vm.float_value({code})"),
         // Reject wrong value kinds instead of silently converting them.
