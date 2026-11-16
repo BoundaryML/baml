@@ -1,6 +1,6 @@
 # Telemetry
 
-For runtime traces from CLI runs/tests, native generated SDKs and packed programs using the standard recording control, set `BAML_TELEMETRY=off` before engine startup to disable recording and cloud uploads, even when logged in or using embedded credentials. Frozen artifact detail levels retain this off-only veto. If a publisher renames the recording variable, use that effective variable instead; a destination binding that owns the name `BAML_TELEMETRY` requires a distinct publisher-provided recording control. See [runtime trace configuration](baml_language/ENV_VARS.md#runtime-traces) for precedence, aliases, caching and platform limits.
+For runtime traces from CLI runs/tests, native generated SDKs and packed programs using the standard recording control, set `BAML_TELEMETRY=off` before engine startup to disable recording and cloud uploads, even when logged in or using embedded credentials. Frozen artifact detail levels retain this off-only veto. If a publisher renames the recording variable, use that effective variable instead; a destination binding that owns the name `BAML_TELEMETRY` requires a distinct publisher-provided recording control. See [runtime trace configuration](baml_language/crates/bcs_api/README.md#embedded-telemetry-in-artifacts) for precedence, aliases, caching and platform limits.
 
 The BAML CLI and toolchain wrappers collect anonymous telemetry about general usage. Participation in this usage-analytics program is optional, and you may opt out if you would not like to share it.
 
