@@ -5,11 +5,11 @@ import argparse
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 from environment import test_environment
 
@@ -24,7 +24,9 @@ parser.add_argument(
 args = parser.parse_args()
 if os.name == "nt":
     parser.error("the delegated CLI fixtures require a POSIX host")
-root = (args.evidence_dir or Path(tempfile.mkdtemp(prefix="wrapper-version-tags-"))).resolve()
+root = (
+    args.evidence_dir or Path(tempfile.mkdtemp(prefix="wrapper-version-tags-"))
+).resolve()
 root.mkdir(mode=0o700, parents=True, exist_ok=True)
 cli = args.cli.resolve()
 host = args.pack_host.resolve()
@@ -57,11 +59,9 @@ def run(name, command, env=base, cwd=root, expected=0):
 compiler = (
     run("compiler-version", [cli, "--version"]).stdout.strip().removeprefix("baml-cli ")
 )
-default_version = re.search(
-    r'^version = "([^"]+)"',
-    (REPO / "baml_language/crates/baml/Cargo.toml").read_text(),
-    re.M,
-)[1]
+default_version = tomllib.loads(
+    (REPO / "baml_language/wrapper/release.toml").read_text()
+)["package"]["version"]
 override = "9.8.7-version-test"
 wrapper = root / "wrapper"
 build = [
@@ -101,7 +101,7 @@ context = {
 }
 scenarios = [
     ("help", wrapper, ["--help"], override, None, 0),
-    ("error", wrapper, ["--project"], override, context, 1),
+    ("error", wrapper, ["--project-dir"], override, context, 2),
     ("older-cli", wrapper, ["--version"], override, context, 0),
     ("newer-cli", wrapper, ["--version"], override, context, 0),
     ("helper", wrapper, ["__flush-wrapper-telemetry"], override, None, 0),
@@ -134,7 +134,7 @@ for name, binary, argv, app_version, caller, exit_code in scenarios:
         (root / f"{name}-{label}.sql").write_text(sql + "\n")
         result = run(
             f"{name}-{label}",
-            [cli, "query", "--local", "--format", "json", sql],
+            [cli, "local", "recordings", "query", "--output-format", "json", sql],
             cwd=project,
         )
         data = json.loads(result.stdout)

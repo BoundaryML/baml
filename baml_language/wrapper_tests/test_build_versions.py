@@ -3,10 +3,10 @@
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 from environment import test_environment
@@ -32,7 +32,7 @@ class BuildVersions(unittest.TestCase):
                 "    assert os.environ['DO_NOT_TRACK'] == '1'\n"
                 f"    print({compiler_version!r})\n"
                 "else:\n"
-                "    source = pathlib.Path(sys.argv[sys.argv.index('--from') + 1])\n"
+                "    source = pathlib.Path(sys.argv[sys.argv.index('--project-dir') + 1])\n"
                 "    (root / 'generated.baml').write_text((source / 'baml_src/build.baml').read_text())\n"
             )
             cli.chmod(0o755)
@@ -73,7 +73,9 @@ class BuildVersions(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('const WRAPPER_APP_VERSION = "1.2.3-test";', source)
-        self.assertIn('const WRAPPER_BAML_VERSION = "7.6.5-canary.test+build.42";', source)
+        self.assertIn(
+            'const WRAPPER_BAML_VERSION = "7.6.5-canary.test+build.42";', source
+        )
         self.assertIn(
             "function wrapper_version() -> string {\n    WRAPPER_APP_VERSION\n}", source
         )
@@ -83,11 +85,9 @@ class BuildVersions(unittest.TestCase):
         self.assertIn("--host-binary", calls[1])
 
     def test_default_app_version_uses_existing_wrapper_manifest(self):
-        expected = re.search(
-            r'^version = "([^"]+)"',
-            (REPO / "baml_language/crates/baml/Cargo.toml").read_text(),
-            re.M,
-        )[1]
+        expected = tomllib.loads(
+            (REPO / "baml_language/wrapper/release.toml").read_text()
+        )["package"]["version"]
         result, _, source = self.build()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(f'const WRAPPER_APP_VERSION = "{expected}";', source)
