@@ -1069,3 +1069,12 @@ Whole speedtest suite, `vm-off` row, fasttest profile, two alternating rounds of
 - Largest: wide-nested-class-create 17.5x, nested-field-access 15.8x, default-method 12.4x, generic-apply-inferred 9.3x, closure-apply 8.6x, polymorphic-dispatch 6.4x, method-call 3.8x, pure-call 2.3x.
 - Programs: richards 1.18x, json-parser 1.18x, bubble-sort 1.29x.
 - The 5 slower ones are all 8 to 10% with overlapping ranges (four spawn workloads and `cycles-into-live`). Not confirmed as real or as noise.
+
+### Compile cost on large functions
+
+The five workloads the harness showed 8 to 10% slower do the same or less work at run time by instruction count. `spawn-fan-out-100` cost more in the compiler: its one function has 100 spawns and runs once.
+
+- Cause: dead-store liveness swept blocks in stored order, which needed over 50 sweeps on a 700-block function after the O2 passes had rearranged it. It now sweeps in postorder.
+- Compile cost of that function, M instructions (canary / merged / fixed): 50 spawns 100 / 468 / 195; 100 spawns 227 / 1112 / 490; 200 spawns 633 / 2878 / 1194.
+- Still superlinear: `inline::type_argument` recounts every definition per generic call; emit's `rematerializable` is quadratic on long expression chains (also on canary).
+- `baml run` startup is 21.7G instructions against canary's 19.3G (the optimizer over the standard library, in parallel; wall time equal). The earlier "+20M" figure was wrong.
