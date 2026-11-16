@@ -131,7 +131,7 @@ fn fold_concat_parts(value: &mut Rvalue<'_>) {
 }
 
 fn fold<'db>(value: &Rvalue<'db>) -> Option<Constant<'db>> {
-    let int = |value| baml_type::Int63::new(value).map(|n| Constant::Int(n.get()));
+    let int = |value| baml_type::int::fits(value).then_some(Constant::Int(value));
     match value {
         Rvalue::UnaryOp {
             op,
@@ -166,8 +166,8 @@ fn fold<'db>(value: &Rvalue<'db>) -> Option<Constant<'db>> {
                 BinOp::BitAnd => int(a & b),
                 BinOp::BitOr => int(a | b),
                 BinOp::BitXor => int(a ^ b),
-                BinOp::Shl => int(baml_type::Int63::new(*a)?.shift_left(*b).ok()?.get()),
-                BinOp::Shr => int(baml_type::Int63::new(*a)?.shift_right(*b).ok()?.get()),
+                BinOp::Shl => int(baml_type::int::shl(*a, *b).ok()?),
+                BinOp::Shr => int(baml_type::int::shr(*a, *b).ok()?),
                 _ => compare(*op, a, b).map(Constant::Bool),
             },
             (Constant::Float(a), Constant::Float(b)) if a.is_finite() && b.is_finite() => {
@@ -641,8 +641,8 @@ mod tests {
 
     #[test]
     fn integer_folding_preserves_overflow_and_zero_divisor_panics() {
-        let min = baml_type::Int63::MIN.get();
-        let max = baml_type::Int63::MAX.get();
+        let min = baml_type::int::MIN;
+        let max = baml_type::int::MAX;
         for (op, left, right) in [
             (BinOp::Div, 1, 0),
             (BinOp::Mod, 1, 0),

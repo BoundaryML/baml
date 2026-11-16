@@ -127,7 +127,7 @@ impl ErrInfo {
 }
 
 fn opt_int_value(o: Option<i64>) -> Value {
-    o.and_then(Value::try_int).unwrap_or(Value::NULL)
+    o.and_then(Value::try_inline_int).unwrap_or(Value::NULL)
 }
 
 fn error_value(vm: &mut BexVm, e: &ErrInfo) -> Result<Value, VmRustFnError> {
@@ -1430,7 +1430,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
             if !is_plain_int_text(text) {
                 return Ok(Conv::Bad(format!("cannot convert {text:?} to int")));
             }
-            match text.parse::<i64>().ok().and_then(Value::try_int) {
+            match text.parse::<i64>().ok().and_then(Value::try_inline_int) {
                 Some(v) => Conv::Ok(v),
                 None => Conv::Bad(format!("integer {text:?} is outside the BAML int range")),
             }

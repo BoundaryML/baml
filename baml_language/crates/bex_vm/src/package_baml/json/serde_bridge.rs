@@ -57,7 +57,7 @@ pub(in crate::package_baml) fn serde_to_value(vm: &mut BexVm, v: &serde_json::Va
         serde_json::Value::Bool(b) => Value::bool(*b),
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64()
-                && let Some(v) = Value::try_int(i)
+                && let Some(v) = Value::try_inline_int(i)
             {
                 v
             } else if let Some(bigint) = parse_json_bigint(v) {

@@ -59,12 +59,12 @@ use crate::{BexVm, errors::VmRustFnError};
 
 /// Encode a checked `int` result, or the catchable `baml.panics.IntegerOverflow`
 /// the int opcodes throw (B-266). `checked` is `None` on i64 overflow (only `*`
-/// can produce that from i63 operands); the `Value::try_int` range check then
+/// can produce that from i63 operands); the `Value::try_inline_int` range check then
 /// catches results (like `INT_MIN / -1` = 2^62) that fit i64 but not a tagged
 /// i63. Mirrors `BexVm::int_arith_result` / `finish_int`, message included.
 fn checked_int(checked: Option<i64>, l: i64, op: char, r: i64) -> Result<i64, VmRustFnError> {
     match checked {
-        Some(v) if Value::try_int(v).is_some() => Ok(v),
+        Some(v) if Value::try_inline_int(v).is_some() => Ok(v),
         _ => Err(VmPanic::IntegerOverflow {
             message: format!("{l} {op} {r} overflows int"),
         }
@@ -405,7 +405,7 @@ impl BamlClassOpsNegate_for_int for PackageBamlImpl {
     // `-INT_MIN` = 2^62 fits i64 but not i63; throw IntegerOverflow with the
     // `Neg` opcode's message.
     fn neg(int: i64) -> Result<i64, VmRustFnError> {
-        match Value::try_int(int.wrapping_neg()) {
+        match Value::try_inline_int(int.wrapping_neg()) {
             Some(_) => Ok(int.wrapping_neg()),
             None => Err(VmPanic::IntegerOverflow {
                 message: format!("-({int}) overflows int"),

@@ -6,7 +6,6 @@
 //! that is an `int` when integral. Nothing else in the crate knows a
 //! language: the walker asks [`Rules::fit`] and ranks the answer.
 
-use baml_type::Int63;
 use num_bigint::BigInt;
 use num_traits::{FromPrimitive, ToPrimitive};
 
@@ -69,12 +68,12 @@ fn python(scalar: &Scalar, slot: ScalarSlot) -> Answer<Scalar> {
     match (scalar, slot) {
         (Scalar::Bool(_), _) => only(scalar, ScalarSlot::Bool, slot),
         (Scalar::Int(_), ScalarSlot::Int | ScalarSlot::Open) => Answer::AsIs(scalar.clone()),
-        (Scalar::Int(int), ScalarSlot::Float) => match exact_float(int.get()) {
+        (Scalar::Int(int), ScalarSlot::Float) => match exact_float(*int) {
             Some(float) => Answer::Converted(Scalar::Float(float)),
             None => Answer::No,
         },
         (Scalar::Int(int), ScalarSlot::Bigint) => {
-            Answer::Converted(Scalar::BigInt(BigInt::from(int.get())))
+            Answer::Converted(Scalar::BigInt(BigInt::from(*int)))
         }
         (Scalar::Int(_), ScalarSlot::Bool | ScalarSlot::String | ScalarSlot::Bytes) => Answer::No,
         // Beyond the VM's integers: a `bigint`, or a `float` when exact.
@@ -121,7 +120,7 @@ fn javascript(scalar: &Scalar, slot: ScalarSlot) -> Answer<Scalar> {
         ) => Answer::No,
         // An integer the host already classified as a VM integer.
         (Scalar::Int(_), ScalarSlot::Int | ScalarSlot::Open) => Answer::AsIs(scalar.clone()),
-        (Scalar::Int(int), ScalarSlot::Float) => match exact_float(int.get()) {
+        (Scalar::Int(int), ScalarSlot::Float) => match exact_float(*int) {
             Some(float) => Answer::Converted(Scalar::Float(float)),
             None => Answer::No,
         },
@@ -130,10 +129,12 @@ fn javascript(scalar: &Scalar, slot: ScalarSlot) -> Answer<Scalar> {
             ScalarSlot::Bigint | ScalarSlot::Bool | ScalarSlot::String | ScalarSlot::Bytes,
         ) => Answer::No,
         (Scalar::BigInt(_), ScalarSlot::Bigint | ScalarSlot::Open) => Answer::AsIs(scalar.clone()),
-        (Scalar::BigInt(big), ScalarSlot::Int) => match big.to_i64().and_then(Int63::new) {
-            Some(int) => Answer::Converted(Scalar::Int(int)),
-            None => Answer::No,
-        },
+        (Scalar::BigInt(big), ScalarSlot::Int) => {
+            match big.to_i64().filter(|int| baml_type::int::fits(*int)) {
+                Some(int) => Answer::Converted(Scalar::Int(int)),
+                None => Answer::No,
+            }
+        }
         (
             Scalar::BigInt(_),
             ScalarSlot::Float | ScalarSlot::Bool | ScalarSlot::String | ScalarSlot::Bytes,
@@ -169,12 +170,12 @@ fn exact_float_big(big: &BigInt) -> Option<f64> {
     clippy::float_cmp,
     reason = "the round trip checks the cast was exact"
 )]
-fn integral(value: f64) -> Option<Int63> {
+fn integral(value: f64) -> Option<i64> {
     if !value.is_finite() || value.fract() != 0.0 {
         return None;
     }
     let int = value as i64;
-    (int as f64 == value).then(|| Int63::new(int)).flatten()
+    (int as f64 == value && baml_type::int::fits(int)).then_some(int)
 }
 
 #[cfg(test)]
@@ -182,7 +183,8 @@ mod tests {
     use super::*;
 
     fn int(value: i64) -> Scalar {
-        Scalar::Int(Int63::new(value).unwrap())
+        assert!(baml_type::int::fits(value));
+        Scalar::Int(value)
     }
 
     #[test]

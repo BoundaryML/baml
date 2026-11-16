@@ -80,7 +80,7 @@ fn convert_yaml_value(vm: &mut BexVm, value: serde_yaml::Value) -> Result<Value,
 
 fn convert_yaml_number(vm: &mut BexVm, n: &serde_yaml::Number) -> Result<Value, VmRustFnError> {
     if let Some(i) = n.as_i64() {
-        return Value::try_int(i).ok_or_else(|| {
+        return Value::try_inline_int(i).ok_or_else(|| {
             VmRustFnError::thrown_fresh(make_yaml_parse_error(
                 vm,
                 "YAML integer is outside BAML int range".to_string(),

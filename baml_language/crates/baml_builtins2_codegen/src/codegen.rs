@@ -622,7 +622,7 @@ fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
         // contract. Fail loudly in *both* debug and release rather than
         // truncating silently via `Value::int`'s `debug_assert`.
         BamlType::Int => format!(
-            "bex_vm_types::Value::try_int(self.{field_name}).unwrap_or_else(|| panic!(\
+            "bex_vm_types::Value::try_inline_int(self.{field_name}).unwrap_or_else(|| panic!(\
                 \"`{field_name}: int` is outside BAML int range [{{}}, {{}}], got {{}}\", \
                 bex_vm_types::Value::INT_MIN, bex_vm_types::Value::INT_MAX, self.{field_name}))"
         ),
@@ -2079,7 +2079,7 @@ fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> Str
         // of silently truncating via the bare `Value::int` constructor's
         // `debug_assert` (which is a no-op in release).
         BamlType::Int => format!(
-            "Value::try_int({name}).ok_or_else(|| VmBamlError::InvalidArgument {{ \
+            "Value::try_inline_int({name}).ok_or_else(|| VmBamlError::InvalidArgument {{ \
                 message: format!(\"native int return value {{}} is outside the BAML int range [{{}}, {{}}]\", \
                     {name}, Value::INT_MIN, Value::INT_MAX) \
             }})?"

@@ -1,6 +1,5 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use baml_type::Int63;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{HeapPtr, Object};
@@ -115,14 +114,18 @@ impl Value {
     pub const TRUE: Value = Value(4);
     pub const OMITTED_ARG: Value = Value(6);
 
-    /// Largest representable BAML integer (`2^62 - 1 = 4_611_686_018_427_387_903`).
-    ///
-    /// Integers in BAML are i63 (low bit reserved for the tag). Values
-    /// outside `[INT_MIN, INT_MAX]` cannot round-trip through `Value::int`.
-    pub const INT_MAX: i64 = Int63::MAX.get();
+    /// Largest BAML `int`.
+    pub const INT_MAX: i64 = baml_type::int::MAX;
 
-    /// Smallest representable BAML integer (`-2^62 = -4_611_686_018_427_387_904`).
-    pub const INT_MIN: i64 = Int63::MIN.get();
+    /// Smallest BAML `int`.
+    pub const INT_MIN: i64 = baml_type::int::MIN;
+
+    /// Largest int with an inline encoding (`2^62 - 1`): the low bit is the
+    /// tag, so an inline int has 63 bits.
+    pub const INLINE_INT_MAX: i64 = (1 << 62) - 1;
+
+    /// Smallest int with an inline encoding (`-2^62`).
+    pub const INLINE_INT_MIN: i64 = -(1 << 62);
 
     // ── Tagged-int fast-path arithmetic ───────────────────────────────────
     //
@@ -191,18 +194,18 @@ impl Value {
 
     // ── Constructors ──────────────────────────────────────────────────────
 
-    /// Build a `Value` carrying an `i63` integer.
+    /// Build an inline `Value` carrying an integer.
     ///
-    /// Debug-asserts that `i` is in `[INT_MIN, INT_MAX]`. Values outside
-    /// that range are truncated by the encoding shift, so passing one
-    /// here is a caller bug. Code that ingests integers from outside the
-    /// VM (deserializers, JSON decoders, etc.) should range-check first
-    /// or use [`Value::try_int`].
+    /// Debug-asserts that `i` is in `[INLINE_INT_MIN, INLINE_INT_MAX]`.
+    /// Values outside that range are truncated by the encoding shift, so
+    /// passing one here is a caller bug. Code that ingests integers from
+    /// outside the VM (deserializers, JSON decoders, etc.) should range-check
+    /// first or use [`Value::try_inline_int`].
     #[inline(always)]
     pub const fn int(i: i64) -> Self {
         debug_assert!(
-            i >= Self::INT_MIN && i <= Self::INT_MAX,
-            "Value::int called with i64 outside the i63 range; use Value::try_int at boundaries"
+            i >= Self::INLINE_INT_MIN && i <= Self::INLINE_INT_MAX,
+            "Value::int called with an i64 outside the inline int range"
         );
         // Cast is well-defined: `(i as u64) << 1` may technically
         // overflow at the i64 boundary but the result is still a valid
@@ -211,12 +214,11 @@ impl Value {
         Value(((i as u64) << 1) | 1)
     }
 
-    /// Build a `Value` carrying an `i63` integer, or `None` if `i` is
-    /// outside the i63 range. Use this at boundaries that accept
-    /// arbitrary `i64`s (JSON decoders, `Deserialize`, FFI).
+    /// The inline encoding of `i`, or `None` if `i` is outside
+    /// `[INLINE_INT_MIN, INLINE_INT_MAX]`.
     #[inline(always)]
-    pub const fn try_int(i: i64) -> Option<Self> {
-        if i >= Self::INT_MIN && i <= Self::INT_MAX {
+    pub const fn try_inline_int(i: i64) -> Option<Self> {
+        if i >= Self::INLINE_INT_MIN && i <= Self::INLINE_INT_MAX {
             Some(Value(((i as u64) << 1) | 1))
         } else {
             None
@@ -671,14 +673,13 @@ impl BorshDeserialize for Value {
         Ok(match proxy {
             ValueWire::Null => Value::NULL,
             ValueWire::OmittedArg => Value::OMITTED_ARG,
-            ValueWire::Int(i) => Value::try_int(i).ok_or_else(|| {
+            ValueWire::Int(i) => Value::try_inline_int(i).ok_or_else(|| {
                 std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     format!(
-                        "Value::Int payload {i} is outside the i63 range [{}, {}]; \
-                         pre-tagged-pointer payloads with |value| >= 2^62 cannot be loaded",
-                        Value::INT_MIN,
-                        Value::INT_MAX,
+                        "Value::Int payload {i} is outside the inline int range [{}, {}]",
+                        Value::INLINE_INT_MIN,
+                        Value::INLINE_INT_MAX,
                     ),
                 )
             })?,
@@ -887,7 +888,7 @@ mod float_encoding_tests {
             assert!(!v.is_inline_float());
             assert_eq!(v.as_inline_float(), None);
         }
-        for i in [0, 1, -1, Value::INT_MAX, Value::INT_MIN, 42] {
+        for i in [0, 1, -1, Value::INLINE_INT_MAX, Value::INLINE_INT_MIN, 42] {
             let v = Value::int(i);
             assert!(!v.is_inline_float());
             assert_eq!(v.as_int(), Some(i));

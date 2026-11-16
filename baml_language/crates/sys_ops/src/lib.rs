@@ -596,8 +596,8 @@ mod schema {
                 SapTy::TypeAlias(head) => self.reference(&DefId::Alias(head.clone())),
                 SapTy::Int => Ok(json!({
                     "type": "integer",
-                    "minimum": baml_type::Int63::MIN.get(),
-                    "maximum": baml_type::Int63::MAX.get(),
+                    "minimum": baml_type::int::MIN,
+                    "maximum": baml_type::int::MAX,
                 })),
                 SapTy::Bigint => Ok(json!({ "type": "string", "pattern": BIGINT_PATTERN })),
                 SapTy::Float => Ok(json!({ "type": "number" })),
@@ -1196,8 +1196,8 @@ mod schema {
                 schema["properties"]["capacity"],
                 json!({
                     "type": "integer",
-                    "minimum": baml_type::Int63::MIN.get(),
-                    "maximum": baml_type::Int63::MAX.get(),
+                    "minimum": baml_type::int::MIN,
+                    "maximum": baml_type::int::MAX,
                 })
             );
             assert_eq!(schema["$defs"]["pkg.Owner"]["description"], "A HYBRD user.");

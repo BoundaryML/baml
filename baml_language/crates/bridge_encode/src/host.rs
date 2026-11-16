@@ -10,7 +10,7 @@
 
 use std::borrow::Cow;
 
-use baml_type::{Int63, MediaKind, TypeName};
+use baml_type::{MediaKind, TypeName};
 use bridge_ctypes::{
     Handle, HostKey, TableKey,
     baml_bridge::cffi::{BamlHandle, BamlValueMedia, BamlValuePromptAst},
@@ -137,13 +137,14 @@ pub enum Shape<C> {
     Other,
 }
 
-/// A scalar value. The host classifies by the VM's integer range: an integer
-/// beyond `Int63` is a `BigInt`. String and byte payloads stay in the host
+/// A scalar value. The host classifies by the VM's integer range: an `Int`
+/// holds a BAML `int` (see `baml_type::int::fits`), and any integer beyond it
+/// is a `BigInt`. String and byte payloads stay in the host
 /// object until the wire is written ([`HostValue::text`], [`HostValue::bytes`]).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Scalar {
     Bool(bool),
-    Int(Int63),
+    Int(i64),
     BigInt(BigInt),
     Float(f64),
     String,

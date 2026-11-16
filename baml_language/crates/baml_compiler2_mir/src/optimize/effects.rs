@@ -4,15 +4,15 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use baml_type::{Int63, Literal, RuntimeTy};
+use baml_type::{Literal, RuntimeTy};
 
 use crate::{
     BinOp, Constant, IndexKind, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
     Terminator, UnaryOp, memory,
 };
 
-const MIN: i64 = Int63::MIN.get();
-const MAX: i64 = Int63::MAX.get();
+const MIN: i64 = baml_type::int::MIN;
+const MAX: i64 = baml_type::int::MAX;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Range {

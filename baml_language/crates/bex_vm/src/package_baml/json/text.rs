@@ -528,7 +528,7 @@ pub(super) fn number_value(vm: &mut BexVm, number: Number<'_>) -> Result<Value, 
         let float = number.as_f64().ok_or(Stop)?;
         return Ok(vm.float_value(float));
     }
-    if let Some(int) = number.as_i64().and_then(Value::try_int) {
+    if let Some(int) = number.as_i64().and_then(Value::try_inline_int) {
         return Ok(int);
     }
     let bigint = number.as_bigint().ok_or(Stop)?;

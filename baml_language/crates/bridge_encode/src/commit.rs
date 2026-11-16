@@ -73,7 +73,7 @@ pub(crate) fn commit<V: HostValue, H: Host<V>>(
             value_type: None,
             value: Some(match scalar {
                 Scalar::Bool(bool) => Value::BoolValue(*bool),
-                Scalar::Int(int) => Value::IntValue(int.get()),
+                Scalar::Int(int) => Value::IntValue(*int),
                 Scalar::BigInt(big) => Value::BigintValue(hex(big)),
                 Scalar::Float(float) => Value::FloatValue(*float),
                 Scalar::String => Value::StringValue(value.value.text()?.into_owned()),

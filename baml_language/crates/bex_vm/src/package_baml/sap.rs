@@ -1232,7 +1232,7 @@ fn parsed_to_heap(
 
 /// The parser's integer, if the VM's `int` holds it.
 fn heap_int(value: i64, mode: Mode) -> Result<Value, VmRustFnError> {
-    Value::try_int(value).ok_or_else(|| {
+    Value::try_inline_int(value).ok_or_else(|| {
         mode.mismatch(format!(
             "integer {value} is outside the BAML integer range [{}, {}]",
             Value::INT_MIN,

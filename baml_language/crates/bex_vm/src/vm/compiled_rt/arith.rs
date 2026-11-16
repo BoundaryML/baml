@@ -90,7 +90,7 @@ impl BexVm {
     #[inline]
     pub fn add_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         let v = l.wrapping_add(r);
-        if Value::try_int(v).is_some() {
+        if Value::try_inline_int(v).is_some() {
             Ok(v)
         } else {
             Err(self.int_overflow(l, '+', r))
@@ -101,7 +101,7 @@ impl BexVm {
     #[inline]
     pub fn sub_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         let v = l.wrapping_sub(r);
-        if Value::try_int(v).is_some() {
+        if Value::try_inline_int(v).is_some() {
             Ok(v)
         } else {
             Err(self.int_overflow(l, '-', r))
@@ -114,7 +114,7 @@ impl BexVm {
     #[inline]
     pub fn mul_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         let (v, overflowed) = l.overflowing_mul(r);
-        if !overflowed & Value::try_int(v).is_some() {
+        if !overflowed & Value::try_inline_int(v).is_some() {
             Ok(v)
         } else {
             Err(self.int_overflow(l, '*', r))
@@ -129,7 +129,7 @@ impl BexVm {
             return Err(self.division_by_zero_boxed(l, r));
         }
         let v = l / r;
-        if Value::try_int(v).is_some() {
+        if Value::try_inline_int(v).is_some() {
             Ok(v)
         } else {
             Err(self.int_overflow(l, '/', r))
@@ -171,7 +171,7 @@ impl BexVm {
     #[inline]
     pub fn neg_i64(&mut self, n: i64) -> Result<i64, Box<VmError>> {
         let v = n.wrapping_neg();
-        if Value::try_int(v).is_some() {
+        if Value::try_inline_int(v).is_some() {
             Ok(v)
         } else {
             Err(self.neg_overflow(n))

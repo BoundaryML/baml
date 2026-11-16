@@ -69,7 +69,7 @@ impl TextDecoder<'_, '_> {
             RealizedTy::Int => reader
                 .number()?
                 .as_i64()
-                .and_then(Value::try_int)
+                .and_then(Value::try_inline_int)
                 .ok_or(Stop),
             RealizedTy::Bigint => {
                 let bigint = self.bigint()?;

@@ -487,7 +487,7 @@ fn copy_leaf(vm: &mut BexVm, value: Value, ptr: HeapPtr) -> Value {
         Object::Bigint(b) => {
             return i64::try_from(&**b)
                 .ok()
-                .and_then(Value::try_int)
+                .and_then(Value::try_inline_int)
                 .unwrap_or(value);
         }
         Object::Variant(variant) => match vm.get_object(variant.enm) {

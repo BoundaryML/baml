@@ -11,7 +11,7 @@ use baml_sdkgen_types::{
     ClassDescriptor, EnumDescriptor, FieldDescriptor, FunctionDescriptor, ParamDescriptor,
     ProgramDescriptor, Ty, TypeAliasDescriptor,
 };
-use baml_type::{Freshness, FunctionParamMode, Int63, Literal, MediaKind, TypeName};
+use baml_type::{Freshness, FunctionParamMode, Literal, MediaKind, TypeName};
 use bridge_ctypes::{
     HostKey, TableKey,
     baml_bridge::cffi::{
@@ -78,9 +78,10 @@ impl HostValue for Mock {
     fn shape(&self) -> Result<HostShape<'_, Self>, String> {
         Ok(match self {
             Mock::Null => HostShape::Null,
-            Mock::Int(int) => HostShape::Scalar(match Int63::new(*int) {
-                Some(int) => Scalar::Int(int),
-                None => Scalar::BigInt(BigInt::from(*int)),
+            Mock::Int(int) => HostShape::Scalar(if baml_type::int::fits(*int) {
+                Scalar::Int(*int)
+            } else {
+                Scalar::BigInt(BigInt::from(*int))
             }),
             Mock::Float(float) => HostShape::Scalar(Scalar::Float(*float)),
             Mock::Bool(bool) => HostShape::Scalar(Scalar::Bool(*bool)),

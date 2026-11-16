@@ -22,7 +22,7 @@
 
 use std::{collections::HashMap, num::NonZeroU64, sync::Arc};
 
-use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
+use baml_type::{IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
@@ -6984,11 +6984,11 @@ impl BexVm {
     /// the i63 range can never overflow i64 under these ops (the widest case,
     /// `INT_MAX - INT_MIN = 2^63 - 1`, is exactly `i64::MAX`), so the raw i64
     /// result is well-defined and only the i63 range needs checking via
-    /// [`Value::try_int`]. The `l`/`op`/`r` context is formatted only on the
+    /// [`Value::try_inline_int`]. The `l`/`op`/`r` context is formatted only on the
     /// cold overflow path, so the hot path is just one range-checked encode.
     #[inline]
     fn finish_int(&mut self, v: i64, l: i64, op: char, r: i64) -> Result<Value, VmError> {
-        match Value::try_int(v) {
+        match Value::try_inline_int(v) {
             Some(val) => Ok(val),
             None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
         }
@@ -6997,7 +6997,7 @@ impl BexVm {
     /// Encode a *checked* `int` result, or throw `IntegerOverflow`. Used for
     /// `*`, where two i63 operands genuinely can exceed i64 (e.g.
     /// `INT_MAX * INT_MAX`): `checked` is `None` on i64 overflow, and
-    /// [`Value::try_int`] then enforces the tighter i63 range.
+    /// [`Value::try_inline_int`] then enforces the tighter i63 range.
     #[inline]
     fn int_arith_result(
         &mut self,
@@ -7006,7 +7006,7 @@ impl BexVm {
         op: char,
         r: i64,
     ) -> Result<Value, VmError> {
-        match checked.and_then(Value::try_int) {
+        match checked.and_then(Value::try_inline_int) {
             Some(v) => Ok(v),
             None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
         }
@@ -7043,11 +7043,11 @@ impl BexVm {
     /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
     fn int_shl(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        let Some(l) = Int63::new(l) else {
+        if !baml_type::int::fits(l) {
             verifier_unreachable!()
-        };
-        match l.shift_left(r) {
-            Ok(value) => Ok(Value::int(value.get())),
+        }
+        match baml_type::int::shl(l, r) {
+            Ok(value) => Ok(Value::int(value)),
             Err(IntShiftError::NegativeCount(count)) => Err(self.negative_bit_shift(count)),
         }
     }
@@ -7056,11 +7056,11 @@ impl BexVm {
     /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
     fn int_shr(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        let Some(l) = Int63::new(l) else {
+        if !baml_type::int::fits(l) {
             verifier_unreachable!()
-        };
-        match l.shift_right(r) {
-            Ok(value) => Ok(Value::int(value.get())),
+        }
+        match baml_type::int::shr(l, r) {
+            Ok(value) => Ok(Value::int(value)),
             Err(IntShiftError::NegativeCount(count)) => Err(self.negative_bit_shift(count)),
         }
     }
@@ -10308,7 +10308,7 @@ impl BexVm {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     fn int_mul(l: i64, r: i64) -> Option<Value> {
-        l.checked_mul(r).and_then(Value::try_int)
+        l.checked_mul(r).and_then(Value::try_inline_int)
     }
 
     /// `CmpInt*` (`op`) on two `Int`-tagged values. Both carry the same tag
@@ -13659,8 +13659,8 @@ impl BexVm {
                         if let Some(n) = val.as_int() {
                             // Negating INT_MIN = -2^62 yields 2^62, which fits i64
                             // (INT_MIN != i64::MIN) but not i63, so the range-check
-                            // in try_int catches it.
-                            match Value::try_int(n.wrapping_neg()) {
+                            // in try_inline_int catches it.
+                            match Value::try_inline_int(n.wrapping_neg()) {
                                 Some(v) => self.push_stack(v)?,
                                 None => {
                                     return Err(

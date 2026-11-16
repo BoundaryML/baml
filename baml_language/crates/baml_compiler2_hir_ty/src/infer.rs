@@ -46,7 +46,7 @@ use baml_compiler2_hir::{
 /// block-scoped binding; the bit itself is defined with `ParamTy`.
 pub(crate) use baml_type::SCOPED_PARAM_BIT;
 use baml_type::{
-    Freshness, Int63, Literal, Name,
+    Freshness, Literal, Name,
     interned::{ClosedTy, InferInterface, InferTy, Ty},
     normalize::canonical_union_interned,
 };
@@ -102,8 +102,8 @@ struct WrittenQualifier<'a> {
 fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
     let negated = match lit {
         Literal::Int(n) => {
-            let v = Int63::new(n.checked_neg()?)?;
-            Literal::Int(v.get())
+            let v = n.checked_neg()?;
+            baml_type::int::fits(v).then_some(Literal::Int(v))?
         }
         Literal::Bigint(n) => Literal::Bigint(-n.clone()),
         // The float's WRITTEN digits are preserved exactly: negation is a
@@ -140,7 +140,7 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
     };
     let lit = |value: Literal| Ty::intern(InferTy::Literal(value, freshness));
     let boolean = |value: bool| Some(lit(Literal::Bool(value)));
-    let int = |value: i64| Int63::new(value).map(|value| lit(Literal::Int(value.get())));
+    let int = |value: i64| baml_type::int::fits(value).then(|| lit(Literal::Int(value)));
     match (a, b) {
         (Literal::Int(a), Literal::Int(b)) => {
             let (a, b) = (*a, *b);
@@ -156,8 +156,8 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
                 // The same semantic value used by the VM defines folding.
                 // Negative counts remain unfolded so runtime dispatch raises
                 // the typed `NegativeBitShift` panic.
-                BinaryOp::Shl => Some(lit(Literal::Int(Int63::new(a)?.shift_left(b).ok()?.get()))),
-                BinaryOp::Shr => Some(lit(Literal::Int(Int63::new(a)?.shift_right(b).ok()?.get()))),
+                BinaryOp::Shl => int(baml_type::int::shl(a, b).ok()?),
+                BinaryOp::Shr => int(baml_type::int::shr(a, b).ok()?),
                 BinaryOp::Eq => boolean(a == b),
                 BinaryOp::Ne => boolean(a != b),
                 BinaryOp::Lt => boolean(a < b),
@@ -2914,7 +2914,7 @@ impl<'db> InferenceContext<'db> {
                 // placeholder so a failed compile can't carry the bad value
                 // forward - TIR's rule verbatim.
                 let lit = if let Literal::Int(v) = lit
-                    && Int63::new(*v).is_none()
+                    && !baml_type::int::fits(*v)
                 {
                     self.pending_diags
                         .push(PendingDiag::IntLiteralOutOfRange { expr, value: *v });

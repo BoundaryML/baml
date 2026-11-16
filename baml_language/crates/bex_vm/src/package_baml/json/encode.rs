@@ -1252,7 +1252,7 @@ impl Sink for ValueSink {
     /// A bigint that fits `int` is an `int` in `json`, as `parse` reads it.
     fn bigint(&mut self, vm: &mut BexVm, value: Value) {
         let small = match value.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
-            Some(Object::Bigint(b)) => i64::try_from(&**b).ok().and_then(Value::try_int),
+            Some(Object::Bigint(b)) => i64::try_from(&**b).ok().and_then(Value::try_inline_int),
             _ => None,
         };
         self.emit(small.unwrap_or(value));
