@@ -112,7 +112,30 @@ function FxDeep(n: int) -> int {
     FxAwaitThrows(n) + 1
 }
 
+// Sibling pending bodies with an interface call at the same pc, on a receiver
+// the VM's cached fallback dispatches: each must key the site cache on itself,
+// not on the caller they share as the nearest linked record.
+interface FxPair {
+    function first(self) -> int throws never
+    function second(self) -> int throws never
+}
+
+// Extra optional parameters leave both methods to the VM.
+class FxPadded {
+    n: int,
+    implements FxPair {
+        function first(self, pad: int = 0) -> int throws never { self.n + pad }
+        function second(self, pad: int = 0) -> int throws never { self.n * 100 + pad }
+    }
+}
+
+function FxFirst(p: FxPair) -> int { p.first() }
+
+function FxSecond(p: FxPair) -> int { p.second() }
+
 function FramelessExits() -> void {
+    let pair: FxPair = FxPadded { n: 2 };
+    baml.io.println(`${FxFirst(pair)} ${FxSecond(pair)}`);
     baml.io.println(`${FxSum(40)}`);
     baml.io.println(FxThrows());
     baml.io.println(FxRuntime());
