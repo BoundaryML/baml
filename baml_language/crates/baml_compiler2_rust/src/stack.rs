@@ -52,7 +52,7 @@ use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
     AggregateKind, Constant, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue, StatementKind,
     Terminator, TypeTest, class_display_name,
-    escape::MASKED_PARAMS,
+    escape::{MASKED_PARAMS, immutable_ty},
     function_display_name,
     memory::{Resources, place_reads, walk_operand_places, walk_rvalue_places},
 };
@@ -393,25 +393,8 @@ fn field_repr(ty: &baml_type::Ty) -> Option<Repr> {
         Ty::Int => Some(Repr::Int),
         Ty::Float => Some(Repr::Float),
         Ty::Bool => Some(Repr::Bool),
-        _ if immutable(ty) => Some(Repr::Value),
+        _ if immutable_ty(ty) => Some(Repr::Value),
         _ => None,
-    }
-}
-
-fn immutable(ty: &baml_type::Ty) -> bool {
-    use baml_type::Ty;
-    match ty {
-        Ty::Int
-        | Ty::Bigint
-        | Ty::Float
-        | Ty::String
-        | Ty::Bool
-        | Ty::Null
-        | Ty::Literal(..)
-        | Ty::Enum(_)
-        | Ty::EnumVariant(..) => true,
-        Ty::Union(members) => members.iter().all(immutable),
-        _ => false,
     }
 }
 
@@ -1049,10 +1032,7 @@ impl Facts {
         let live_in = baml_compiler2_mir::live_in_precise(body);
         for block in &body.blocks {
             let mut live = live_out(body, block, &live_in);
-            let exceptional: Vec<bool> = block.unwind.map_or_else(
-                || vec![false; self.root.len()],
-                |handler| live_in[handler.0].clone(),
-            );
+            let exceptional = block.unwind.map_or(&[][..], |handler| &live_in[handler.0]);
             for statement in block.statements.iter().rev() {
                 if let Some(root) = self.reallocated(&statement.kind, &candidates, &live) {
                     self.escape_root(
@@ -1060,10 +1040,7 @@ impl Facts {
                         "an alias of its previous object is live when it is allocated again",
                     );
                 }
-                transfer(&statement.kind, &mut live);
-                for (live, exceptional) in live.iter_mut().zip(&exceptional) {
-                    *live |= *exceptional;
-                }
+                baml_compiler2_mir::live_transfer(statement, &mut live, exceptional);
             }
         }
     }
@@ -1163,31 +1140,6 @@ fn live_out(
         }
     }
     live
-}
-
-/// Liveness across one statement, backwards: a local store kills, every
-/// mentioned local is read.
-fn transfer(statement: &StatementKind<'_>, live: &mut [bool]) {
-    let mut reads = Resources::default();
-    match statement {
-        StatementKind::Assign { destination, value } => {
-            match destination {
-                Place::Local(local) => live[local.0] = false,
-                other => place_reads(other, &mut reads),
-            }
-            walk_rvalue_places(value, &mut |place| place_reads(place, &mut reads));
-        }
-        StatementKind::Drop(place) => place_reads(place, &mut reads),
-        StatementKind::FreshCell { local, .. } => {
-            live[local.0] = true;
-        }
-        _ => walk_statement_operands(statement, &mut |operand| {
-            walk_operand_places(operand, &mut |place| place_reads(place, &mut reads));
-        }),
-    }
-    for local in reads.locals {
-        live[local.0] = true;
-    }
 }
 
 fn find(parent: &mut [usize], mut node: usize) -> usize {

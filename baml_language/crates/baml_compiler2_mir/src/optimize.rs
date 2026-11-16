@@ -19,7 +19,7 @@ use crate::{
 mod effects;
 mod values;
 
-pub use values::live_in_precise;
+pub use values::{live_in_precise, transfer as live_transfer};
 
 /// Run all optimization passes on a MIR function.
 pub(crate) fn optimize_function(
