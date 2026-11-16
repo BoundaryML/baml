@@ -226,6 +226,9 @@ async fn later_rejection_never_becomes_an_initial_failure_for_any_policy() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cloud_rejection_stops_export_but_keeps_trace_hooks_and_span_ids() {
+    if enabled_recording_child("cloud_rejection_stops_export_but_keeps_trace_hooks_and_span_ids") {
+        return;
+    }
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path_regex(r"/heartbeat$"))
