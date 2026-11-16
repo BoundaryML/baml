@@ -856,7 +856,7 @@ function main() -> void {
     });
     succeeded(
         &local(&built.baml_cli)
-            .args(["pack", "main", "--from"])
+            .args(["pack", "main", "--project-dir"])
             .arg(&child_project)
             .arg("--output")
             .arg(&child)
@@ -891,9 +891,13 @@ function main() -> void {
     std::fs::create_dir(&sentinel_project).unwrap();
     let sentinel_project = sentinel_project.display().to_string();
     for (scenario, args, code) in [
-        ("help", vec!["--project", &sentinel_project, "--help"], 0),
-        ("parse-error", vec!["--project", "--sentinel"], 1),
-        ("project-error", vec!["--project", &missing, "check"], 1),
+        (
+            "help",
+            vec!["--project-dir", &sentinel_project, "--help"],
+            0,
+        ),
+        ("parse-error", vec!["--project-dir", "--sentinel"], 2),
+        ("project-error", vec!["--project-dir", &missing, "check"], 1),
         (
             "selection-error",
             vec!["check", "selection-input-sentinel"],
@@ -902,12 +906,17 @@ function main() -> void {
         (
             "command-error",
             vec!["toolchain", "status", "--sentinel-option"],
+            2,
+        ),
+        (
+            "management-error",
+            vec!["toolchain", "uninstall", "bad-version-sentinel"],
             1,
         ),
         ("preflight-error", vec!["toolchain", "update"], 1),
         ("execute-error", vec!["toolchain", "uninstall", "0.0.77"], 1),
         ("list", vec!["toolchain", "list"], 0),
-        ("self-update", vec!["self-update"], 1),
+        ("self-update", vec!["self", "update"], 1),
         ("helper", vec!["__flush-wrapper-telemetry"], 0),
         ("delegated", vec!["check", "delegated-input-sentinel"], 7),
         ("version", vec!["--version"], 7),
@@ -1015,7 +1024,14 @@ function main() -> void {
     }
     let query = |sql: &str| {
         let output = local(&built.baml_cli)
-            .args(["local", "recordings", "query", "--output-format", "json", "--project-dir"])
+            .args([
+                "local",
+                "recordings",
+                "query",
+                "--output-format",
+                "json",
+                "--project-dir",
+            ])
             .arg(&home)
             .arg(sql)
             .output()
@@ -1054,8 +1070,8 @@ function main() -> void {
         (
             "parse-error",
             "user.WrapperInvocation.parse",
-            "baml.errors.InvalidArgument",
-            "--project requires a path",
+            "user.clap.Error",
+            "--project-dir",
         ),
         (
             "project-error",
@@ -1071,9 +1087,15 @@ function main() -> void {
         ),
         (
             "command-error",
+            "user.WrapperInvocation.parse",
+            "user.clap.Error",
+            "--sentinel-option",
+        ),
+        (
+            "management-error",
             "user.management_command",
-            "user.UnexpectedManagementArgument",
-            "",
+            "user.InvalidToolchainVersion",
+            "bad-version-sentinel",
         ),
         (
             "preflight-error",
@@ -1108,10 +1130,12 @@ function main() -> void {
         assert_eq!(failed[6], "present");
         assert_eq!(span(scenario, "user.dispatch")[0], "user_error");
     }
-    let command_error = span("command-error", "user.management_command");
+    let command_error = span("command-error", "user.WrapperInvocation.parse");
     assert_eq!(command_error[4], "no_value");
-    assert_eq!(
-        command_error[3]["error"]["argument"], "--sentinel-option",
+    assert!(
+        command_error[3]["error"]
+            .to_string()
+            .contains("--sentinel-option"),
         "full errors can quote an argument even though argv is not captured"
     );
     assert_eq!(command_error[7], "baml toolchain status");
@@ -1334,7 +1358,7 @@ function main() -> void {
             json!([["success"]])
         );
     }
-    let automatic = span("high", "user.root_help");
+    let automatic = span("high", "user.WrapperCli.command_name");
     assert_eq!(automatic[0], "return");
     assert_eq!(automatic[4], "no_value");
     assert_eq!(

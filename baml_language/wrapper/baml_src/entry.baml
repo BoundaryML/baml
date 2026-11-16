@@ -45,7 +45,18 @@ function main() -> void throws never {
     // Capture canonical command context and errors without argument snapshots.
     // Helpers must not inherit a foreground command label.
     flush_executable
-        = dispatch(telemetry, $trace = trace.span(inputs = false, output = false, error = true).context(metadata = { "command": if (internal_helper) { null } else { WrapperCli.command_name(args) } })) catch (error) {
+        = dispatch(
+            telemetry,
+            $trace = trace.span(inputs = false, output = false, error = true).context(
+                metadata = {
+                    "command": if (internal_helper) {
+                        null
+                    } else {
+                        WrapperCli.command_name(args)
+                    },
+                },
+            ),
+        ) catch (error) {
             _ => {
                 telemetry_event(telemetry, "wrapper_unhandled_error", fields = { "event_kind": "unhandled_error" });
                 baml.io.eprintln(`error: ${error_message(error)}`);
@@ -122,7 +133,13 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
                     WrapperCli.output_format(action.matches);
                     match (sub.name) {
                         "toolchain" => {
-                            invocation.manage(management_command(action.name, action.matches, $trace = trace.span(inputs = false, output = false, error = true)))
+                            invocation.manage(
+                                management_command(
+                                    action.name,
+                                    action.matches,
+                                    $trace = trace.span(inputs = false, output = false, error = true),
+                                ),
+                            )
                         },
                         _ => {
                             WrapperUpdater.update(

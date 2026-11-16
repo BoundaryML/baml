@@ -15,7 +15,15 @@ fn succeeded(output: &Output) {
 
 fn local_command(binary: &Path, home: &Path) -> Command {
     let mut command = Command::new(binary);
+    command.env_clear();
+    for key in ["PATH", "SystemRoot", "WINDIR", "PATHEXT", "TEMP", "TMP"] {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
+    }
     command
+        .env("HOME", home.parent().unwrap())
+        .env("USERPROFILE", home.parent().unwrap())
         .env("BAML_HOME", home)
         .env("BOUNDARY_API_KEY", "local")
         .env_remove("BOUNDARY_PROJECT")
@@ -79,7 +87,7 @@ fn canonical_commands_join_local_process_outcomes_with_posthog_disabled() {
         ),
         (
             "global-project",
-            vec!["--project", project_path, "check"],
+            vec!["--project-dir", project_path, "check"],
             "baml check",
             0,
             false,
@@ -93,8 +101,15 @@ fn canonical_commands_join_local_process_outcomes_with_posthog_disabled() {
         ),
         (
             "query",
-            vec!["query", "--project", "private-marker-secret", "--help"],
-            "baml query",
+            vec![
+                "cloud",
+                "recordings",
+                "query",
+                "--project",
+                "private-marker-secret",
+                "--help",
+            ],
+            "baml cloud",
             0,
             false,
         ),
@@ -129,7 +144,7 @@ fn canonical_commands_join_local_process_outcomes_with_posthog_disabled() {
         ),
         (
             "status",
-            vec!["toolchain", "status", "--json"],
+            vec!["toolchain", "status", "--output-format", "json"],
             "baml toolchain status",
             0,
             false,
@@ -162,7 +177,33 @@ fn canonical_commands_join_local_process_outcomes_with_posthog_disabled() {
             0,
             false,
         ),
-        ("parse-error", vec!["--project"], "baml", 1, true),
+        (
+            "self-help",
+            vec!["self", "update", "--help"],
+            "baml self update",
+            0,
+            false,
+        ),
+        (
+            "toolchain-unknown",
+            vec!["toolchain", "private-marker-secret"],
+            "baml toolchain",
+            2,
+            true,
+        ),
+        (
+            "invalid-format",
+            vec![
+                "toolchain",
+                "list",
+                "--output-format",
+                "private-marker-secret",
+            ],
+            "baml toolchain list",
+            2,
+            true,
+        ),
+        ("parse-error", vec!["--project-dir"], "baml", 2, true),
         ("selection-error", vec!["check"], "baml check", 1, true),
         (
             "project-selection-error",
@@ -226,7 +267,14 @@ fn canonical_commands_join_local_process_outcomes_with_posthog_disabled() {
     }
     let query = |sql: &str| {
         let output = local_command(&built.baml_cli, &home)
-            .args(["query", "--local", "--format", "json", "--from"])
+            .args([
+                "local",
+                "recordings",
+                "query",
+                "--output-format",
+                "json",
+                "--project-dir",
+            ])
             .arg(temp.path().join("home"))
             .arg(sql)
             .output()
@@ -257,6 +305,8 @@ fn canonical_commands_join_local_process_outcomes_with_posthog_disabled() {
                 } else if [
                     "empty",
                     "help",
+                    "help-stop",
+                    "self-help",
                     "toolchain-help",
                     "nested-help",
                     "use-help",

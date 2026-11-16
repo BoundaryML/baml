@@ -5,7 +5,7 @@ class WrapperInvocation {
     project: string,
 
     function selection(self) -> Selection {
-        let active = self.selection_impl() catch (error) {
+        let active = self.selection_impl($trace = trace.span(inputs = false, output = false, error = true)) catch (error) {
             _ => {
                 telemetry_event(self.telemetry, "wrapper_resolution", fields = { "outcome": "failure" });
                 throw error;
