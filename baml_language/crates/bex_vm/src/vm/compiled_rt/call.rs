@@ -76,10 +76,9 @@ impl BexVm {
     #[inline]
     pub fn reserve_slots(&mut self, frame: &FrameRecord, slots: usize) -> Result<(), Box<VmError>> {
         let end = frame.base() + slots;
-        match self.stack.try_resize(end, Value::NULL) {
-            Ok(()) => Ok(()),
-            Err(panic) => Err(Box::new(self.panic_error(panic))),
-        }
+        self.stack
+            .try_resize(end, Value::NULL)
+            .map_err(|panic| Box::new(self.panic_error(panic)))
     }
 
     #[inline]

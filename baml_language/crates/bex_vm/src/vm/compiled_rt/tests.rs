@@ -246,6 +246,21 @@ fn exec_string(vm: &mut BexVm) -> String {
     }
 }
 
+/// Run `vm` to completion, collecting at every yield as a stressed engine
+/// would.
+#[cfg(not(target_arch = "wasm32"))]
+fn exec_collecting(vm: &mut BexVm) -> Value {
+    loop {
+        match vm.exec().unwrap() {
+            VmExecState::EarlyYield => {
+                collect(vm, &[]);
+            }
+            VmExecState::Complete(value) => break value,
+            other => panic!("unexpected execution state: {other:?}"),
+        }
+    }
+}
+
 // SAFETY: callers own the heap's only mutator and keep its fiber parked.
 #[allow(unsafe_code)]
 /// Collect, forward the VM's roots, and return where each of `watched` went.
@@ -291,15 +306,7 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
         Ok(live)
     }
     let mut vm = vm_with_main(body, 1, true);
-    let out = loop {
-        match vm.exec().unwrap() {
-            VmExecState::EarlyYield => {
-                collect(&mut vm, &[]);
-            }
-            VmExecState::Complete(value) => break value,
-            other => panic!("unexpected execution state: {other:?}"),
-        }
-    };
+    let out = exec_collecting(&mut vm);
     assert_eq!(vm.as_string(&out).unwrap().as_str(), "still live");
 }
 
@@ -1794,21 +1801,6 @@ fn call_safepoints_keep_yielding_under_gc_stress() {
         bex_vm_types::EarlyYieldCheck::with_interval(Arc::new(AtomicBool::new(false)), 3);
     let yields: Vec<_> = (1..=9).filter(|_| vm.yield_at_call(|| true)).collect();
     assert_eq!(yields, [3, 6, 9]);
-}
-
-/// Run `vm` to completion, collecting at every yield as a stressed engine
-/// would.
-#[cfg(not(target_arch = "wasm32"))]
-fn exec_collecting(vm: &mut BexVm) -> Value {
-    loop {
-        match vm.exec().unwrap() {
-            VmExecState::EarlyYield => {
-                collect(vm, &[]);
-            }
-            VmExecState::Complete(value) => break value,
-            other => panic!("unexpected execution state: {other:?}"),
-        }
-    }
 }
 
 const TELEMETRY_LEVELS: [Option<btel_settings::mode::AutoTelemetryLevel>; 2] =

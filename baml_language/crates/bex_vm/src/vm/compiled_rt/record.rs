@@ -346,9 +346,6 @@ impl BexVm {
             let args = args(vm);
             vm.enter_record_receipt(caller, function, callee, &[], type_args, args.as_ref())
         };
-        // The record borrows `type_args` from the caller's call expression,
-        // which outlives it: before this call returns, the record is popped,
-        // or zombified with the borrow cleared.
         self.call_record_in(callee, caller.package.get(), type_args, observe, body)
     }
 
