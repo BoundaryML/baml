@@ -8,7 +8,20 @@ The command line is declared once in `cli.baml` with the parser in `ns_clap`, a 
 
 The code is organized around the data each operation owns: `WrapperInvocation` parses arguments and coordinates selection/management; version, channel, and path selectors implement their own behavior through `ToolchainSelector`; command classes carry only their applicable options. Configuration constructors validate documents before writes, and `ReleaseStore` keeps a validated release source with its cache. `WrapperTelemetry` owns a session and `TelemetryQueue` distinguishes delivered, rejected, and unavailable outcomes. Recoverable I/O/configuration failures are handled at the operation that can recover; the entry point renders remaining errors. Shared wrapper tests use descriptive `test` blocks with their setup and assertions in one place.
 
-Build with `python3 baml_language/wrapper/build --cli /absolute/path/to/baml-cli --output /absolute/path/to/baml`. The compiler and adjacent pack host must come from this checkout. `--no-self-update` produces a package-manager variant. The wrapper version comes from `wrapper/release.toml`. Builds prepare a temporary project with those constants and invoke `baml pack`; no source files are rewritten. For cross-target packaging, pass `--target <triple> --pack-host /path/to/the/matching/baml-pack-host` to embed the host built from the same commit without fetching a released runtime.
+Build the compiler and pack host from this checkout, then pass them to the wrapper build helper. From the repository root:
+
+```sh
+cd baml_language
+cargo build --locked --release -p baml_cli -p baml_pack_host
+cd ..
+python3 baml_language/wrapper/build \
+  --cli baml_language/target/release/baml-cli \
+  --pack-host baml_language/target/release/baml-pack-host \
+  --output build/bin/baml \
+  --no-self-update
+```
+
+`--no-self-update` produces a package-manager variant; omit it to allow self-update. The helper creates missing output directories. The wrapper version comes from `wrapper/release.toml`. Builds prepare a temporary project with those constants and invoke `baml pack`; no source files are rewritten. For cross-target packaging, pass `--target <triple> --pack-host /path/to/the/matching/baml-pack-host` to embed the host built from the same commit without fetching a released runtime.
 
 Release builds pass bare `--embed-telemetry` to this build helper, using `pack.build.embed_telemetry_api_key_from_env_var = "BAML_WRAPPER_BOUNDARY_API_KEY"` from the wrapper manifest. The flag accepts no value; the environment-variable name must be configured in `baml.toml`. Packing embeds that environment variable's value directly as the BCS telemetry API key, after a read-only `POST /v1/auth/verify` request with `{"fullResponse":true}` checks its owning organization/project and exclusive write access to the expected environment. The complete 200 JSON response must include the environment name and parent IDs. A missing, empty, or invalid key, an unsupported verification response, an unavailable verification service, or an ownership or permission mismatch fails the build. Local and test builds omit `--embed-telemetry` and remain usable without BCS credentials. The packed wrapper uses identity bindings for `BAML_TELEMETRY`, `BOUNDARY_API_KEY`, and `BOUNDARY_PROJECT`: `BAML_TELEMETRY=off` disables BCS recording, and the other two variables select caller-owned ingestion instead of the embedded key. `BOUNDARY_API_URL` also overrides the baked endpoint. The wrapper excludes HTTP bodies from network spans. This recording is separate from the wrapper-owned PostHog pipeline described below. The wrapper uses the existing packed-runtime BCS dispatch and shutdown policy, including its normal bounded delivery drain. It sets `on_initial_telemetry_failure = "ignore"` using the existing artifact policy. PostHog delivery retains its independent durable queue and detached helper.
 
