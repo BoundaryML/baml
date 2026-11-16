@@ -488,6 +488,11 @@ const FAST_PATH_OPS: [bool; 256] = {
         Op::JumpIfNotNullOrPop,
         Op::LoadField,
         Op::LoadFieldLocal,
+        Op::AddLocalSmall,
+        Op::LoadVarField,
+        Op::LoadVarFieldLocal,
+        Op::JumpIfLocalsCmp,
+        Op::JumpIfLocalConstCmp,
         Op::CallExactArgs,
         Op::Return,
     ];
@@ -10649,6 +10654,32 @@ impl BexVm {
                         at!(sp - 1) = value;
                         pc += 5;
                     }
+                    OpCode::AddLocalSmall => {
+                        let addend = Value::int(i64::from(*code.get_unchecked(pc + 9) as i8));
+                        let Some(sum) = Value::tagged_int_add_checked(
+                            local!(operand_u32(code, pc + 5)),
+                            addend,
+                        ) else {
+                            break;
+                        };
+                        local!(operand_u32(code, pc + 1)) = sum;
+                        pc += 10;
+                    }
+                    OpCode::LoadVarField | OpCode::LoadVarFieldLocal => {
+                        if sp == cap {
+                            break;
+                        }
+                        let Some(value) = self.instance_field(
+                            local!(operand_u32(code, pc + 1)),
+                            operand_u32(code, pc + 5),
+                            op == OpCode::LoadVarFieldLocal,
+                        ) else {
+                            break;
+                        };
+                        at!(sp) = value;
+                        sp += 1;
+                        pc += 9;
+                    }
                     OpCode::AddInt | OpCode::SubInt => {
                         let (l, r) = (at!(sp - 2), at!(sp - 1));
                         let result = if op == OpCode::AddInt {
@@ -10709,6 +10740,27 @@ impl BexVm {
                             Self::branch_target(pc + BRANCH_LEN, operand_i32(code, pc + 1))
                         } else {
                             pc + BRANCH_LEN
+                        };
+                    }
+                    OpCode::JumpIfLocalsCmp | OpCode::JumpIfLocalConstCmp => {
+                        let cmp: OpCode = std::mem::transmute(*code.get_unchecked(pc + 1));
+                        let l = local!(operand_u32(code, pc + 2));
+                        let rhs = operand_u32(code, pc + 6);
+                        let r = if op == OpCode::JumpIfLocalsCmp {
+                            local!(rhs)
+                        } else {
+                            let Some(&constant) = constants.get(rhs) else {
+                                break;
+                            };
+                            constant
+                        };
+                        if !self.early_yield.tick_unless_due() {
+                            break;
+                        }
+                        pc = if Self::int_compare(cmp, l, r) {
+                            Self::branch_target(pc + 14, operand_i32(code, pc + 10))
+                        } else {
+                            pc + 14
                         };
                     }
                     OpCode::JumpIfFalse => {
@@ -10848,6 +10900,7 @@ impl BexVm {
                 #[cfg(feature = "kperf")]
                 {
                     self.op_count += 1;
+                    crate::op_mix::record(op as u8);
                 }
             }
             self.stack.set_len(sp);
@@ -10995,6 +11048,7 @@ impl BexVm {
             #[cfg(feature = "kperf")]
             {
                 self.op_count += 1;
+                crate::op_mix::record(op_byte);
             }
 
             // Record the innermost frame's current instruction start cheaply (one
@@ -11154,6 +11208,33 @@ impl BexVm {
                         let value_slot = self.stack.ensure_slot_from_top(0);
                         let value = self.stack[value_slot];
                         self.store_local_value(local_var_index, value);
+                    }
+
+                    // ── Local-operand superinstructions ───────────────────────────
+                    // AddLocalSmall(dst, src, k) == `LoadVar(src); LoadIntSmall(k);
+                    // AddInt; StoreVar(dst)`, overflow included: that sequence
+                    // also leaves the stack as it found it when it raises.
+                    OpCode::AddLocalSmall => {
+                        let dst = { read_u32_unchecked(code, pc) as usize };
+                        let src = { read_u32_unchecked(code, pc) as usize };
+                        let r = Value::int(i64::from(read_i8_unchecked(code, pc)));
+                        let l = self.stack.get_at(Self::local_at(locals_base, src));
+                        let Some(sum) = Value::tagged_int_add_checked(l, r) else {
+                            return Err(self.tagged_int_overflow(l, '+', r));
+                        };
+                        self.store_local_value(Self::local_at(locals_base, dst), sum);
+                    }
+                    // LoadVarField(slot, i) == `LoadVar(slot); LoadField(i)`.
+                    OpCode::LoadVarField | OpCode::LoadVarFieldLocal => {
+                        let slot = { read_u32_unchecked(code, pc) as usize };
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let instance = self.stack.get_at(Self::local_at(locals_base, slot));
+                        let Some(value) =
+                            self.instance_field(instance, idx, op == OpCode::LoadVarFieldLocal)
+                        else {
+                            return Err(self.load_field_error(instance, idx));
+                        };
+                        self.push_stack(value)?;
                     }
 
                     // ── LoadGlobal / StoreGlobal ──────────────────────────────────
@@ -12422,6 +12503,29 @@ impl BexVm {
                         let offset = read_i32_unchecked(code, pc);
                         let cond = self.stack.ensure_pop();
                         if Self::pop_jump_taken(op, cond) {
+                            *pc = Self::branch_target(*pc, offset);
+                        }
+                        if self.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
+                    }
+
+                    // JumpIfLocalsCmp(cmp, a, b) == `LoadVar2(a, b); CmpInt*;
+                    // PopJumpIfTrue`, with a `PopJumpIfFalse` stored as the
+                    // negated comparison; the const form loads constant `b`.
+                    OpCode::JumpIfLocalsCmp | OpCode::JumpIfLocalConstCmp => {
+                        let cmp: OpCode = std::mem::transmute(*code.get_unchecked(*pc));
+                        *pc += 1;
+                        let a = { read_u32_unchecked(code, pc) as usize };
+                        let b = { read_u32_unchecked(code, pc) as usize };
+                        let offset = read_i32_unchecked(code, pc);
+                        let l = self.stack.get_at(Self::local_at(locals_base, a));
+                        let r = if op == OpCode::JumpIfLocalsCmp {
+                            self.stack.get_at(Self::local_at(locals_base, b))
+                        } else {
+                            function.bytecode.resolved_constants[b]
+                        };
+                        if Self::int_compare(cmp, l, r) {
                             *pc = Self::branch_target(*pc, offset);
                         }
                         if self.should_early_yield() {
