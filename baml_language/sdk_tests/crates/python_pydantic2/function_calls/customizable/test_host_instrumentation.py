@@ -306,7 +306,7 @@ async def test_coroutine_entry_uses_execution_context_python_only():
 
     coroutine = create()
     assert trace.current_cancel_token() is None
-    assert await consume(coroutine) == {"phase": "consumer"}
+    assert_metadata(await consume(coroutine), {"phase": "consumer"})
 
 
 async def test_concurrent_host_invocations_isolate_context():
@@ -327,7 +327,10 @@ async def test_concurrent_host_invocations_isolate_context():
         await asyncio.wait_for(asyncio.gather(*(event.wait() for event in ready)), 5)
     finally:
         release.set()
-    assert await asyncio.gather(*tasks) == [{"request": 0}, {"request": 1}]
+    results = await asyncio.gather(*tasks)
+    assert len(results) == 2
+    for index, metadata in enumerate(results):
+        assert_metadata(metadata, {"request": index})
     assert trace.current_cancel_token() is None
 
 
@@ -346,7 +349,7 @@ async def test_host_child_outlives_parent():
     task = await parent()
     assert trace.current_cancel_token() is None
     release.set()
-    assert await task == {"request": 7}
+    assert_metadata(await task, {"request": 7})
 
 
 # SDK_PARITY_LINT(skip): covers Python ContextVar handoff to a thread pool
@@ -358,8 +361,8 @@ def test_host_thread_context_handoff_python_only():
     @trace.instrument(trace.context_sync(metadata={"request": 7}))
     def parent(pool):
         copied = contextvars.copy_context()
-        assert pool.submit(copied.run, child).result(timeout=5) == {"request": 7}
-        assert pool.submit(child).result(timeout=5) == {}
+        assert_metadata(pool.submit(copied.run, child).result(timeout=5), {"request": 7})
+        assert_metadata(pool.submit(child).result(timeout=5), {})
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         parent(pool)

@@ -414,7 +414,8 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
             assert_metadata(trace.current_context_sync().metadata, {"request": "A", "keep": 7})
         # A later sibling inherits A, never the earlier child's C override.
         assert await baml.call_int_callback(sibling, value) == value
-        assert sibling_requests == [{"request": "A", "keep": 7}]
+        assert len(sibling_requests) == 1
+        assert_metadata(sibling_requests[0], {"request": "A", "keep": 7})
         return result
 
     async def outer(value):

@@ -117,7 +117,9 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
       return work();
     });
     try { await ready; } finally { unblock(); }
-    expect(await Promise.all(pending)).toEqual([{ request: 0 }, { request: 1 }]);
+    const contexts = await Promise.all(pending);
+    expect(contexts).toHaveLength(2);
+    contexts.forEach((metadata, index) => expectMetadata(metadata, { request: index }));
     expect(trace.current_cancel_token()).toBe(null);
   });
 
@@ -136,7 +138,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     expect(trace.current_cancel_token()).toBe(null);
     const pending = retained!.run(child);
     unblock();
-    expect(await pending).toEqual({ request: 7 });
+    expectMetadata(await pending, { request: 7 });
   });
 
   it('host_errors_preserve_identity_and_restore_context', () => {
