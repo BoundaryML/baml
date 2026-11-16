@@ -214,7 +214,7 @@ impl<'p> ProgramIndex<'p> {
     /// Sound because the orphan rule and coherence stop any later package
     /// from implementing a static interface for a static class: the
     /// assumption `BexVm::virtual_target`'s static cache already makes.
-    pub(crate) fn class_dispatch(&self, interface: usize, method: &str) -> Vec<DispatchArm> {
+    pub(crate) fn class_implementations(&self, interface: usize, method: &str) -> Vec<DispatchArm> {
         let Object::Interface(declaration) =
             &self.program.objects[ObjectIndex::from_raw(interface)]
         else {
