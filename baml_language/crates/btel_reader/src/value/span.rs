@@ -150,6 +150,32 @@ pub fn media_content(
     }
 }
 
+/// What a path that ends in [`MEDIA_CONTENT`] on a media value finds: its content as base64
+/// text, read from its own blob when it is stored there, which spends one of `blobs_left`.
+/// A media value that holds no content, one that only names a URL or a file, has none.
+pub(super) fn media_text(
+    source: &(impl BlobSource + ?Sized),
+    media: &Located,
+    payload: Option<&MediaPayload>,
+    blobs_left: &mut usize,
+) -> Nav {
+    let content = match payload {
+        None => return Nav::Missing,
+        Some(MediaPayload::Inline(text)) => Ok(Arc::clone(text)),
+        Some(MediaPayload::External { child, text_len }) => media
+            .blob
+            .children
+            .get(child.0 as usize)
+            .ok_or(BROKEN_REFERENCE)
+            .and_then(|id| load(source, *id, blobs_left))
+            .and_then(|child| child_content(&child, *text_len).cloned()),
+    };
+    match content {
+        Ok(text) => found(Arc::clone(&media.blob), Found::String(text)),
+        Err(reason) => Nav::Unavailable(reason),
+    }
+}
+
 fn child_node(child: &DecodedSnapshot, node: NodeId) -> Result<NodeId, Unavailable> {
     if (node.0 as usize) < child.objects.len() {
         Ok(node)
