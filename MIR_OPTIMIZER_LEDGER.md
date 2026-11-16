@@ -830,3 +830,106 @@ helper calls inlined adds about 0.1 G. So one cold process running
 `array-pipeline-4k` as committed (5 rounds, about 0.27 G of work) retires
 more instructions in total than before (22.30 G against 22.08 G), while the
 work itself costs about a quarter less.
+
+## for-in loops
+
+### What was there
+
+Lowering always writes `for (let x in xs)` as `Iterable.iter` once and
+`Iterator.next` per element. At O1 and O2 the emitter then recognises the
+pair on an array (`escape::array_walks`) and emits one `array_iter_next`
+instruction per element with a hidden index: no iterator object, no call.
+The test is the declared type of the local `iter` is called on, and that the
+iterator is seen by nothing but its `next`.
+
+So the note above, that `for ... in` in generic standard library code pays an
+interface call per element, was wrong. Checked in the bytecode: a user loop
+over `int[]`, over `Point[]`, over a type alias of an array, over a field,
+inside a lambda, a user generic `f<T>(xs: T[])`, and the standard library's
+own `for_each` and `filter_map` all use `array_iter_next`. A map is not
+iterable at all (`for` over a `map` is a type error).
+
+Two cases did pay per element:
+
+- An optional array parameter narrowed by a null test (`xs: int[]?`,
+  `if (xs != null) { for (let x in xs) ... }`). Copy propagation replaced the
+  narrowed temporary with the parameter, whose type is not an array, and the
+  emitter no longer recognised the walk: three interface calls.
+- A real iterator object. `Iterator.next` through the interface costs about
+  3,300 instructions per element on a small user class and about 4,400 on
+  the generic `ArrayIterator`. The inliner already resolves an interface call
+  on a receiver whose class literal it can follow back, but it followed
+  definitions block by block and gave up at a loop head, which is exactly
+  where a `for` calls `next`.
+
+### What changed
+
+- `optimize::propagate_copies` leaves a copy that narrows a parameter to an
+  array in its own local.
+- `devirtualize::only_class`: a local written in one place only, with a class
+  literal or a copy of a local of which the same holds, has that class
+  wherever it is read. Parameters and captured locals do not qualify; a
+  store into a field of the instance does not count as a write of the local.
+  `class_of` asks it when following definitions fails. With it, `next` on an
+  iterator the function builds is inlined into the loop, and scalar
+  replacement then removes the instance when nothing else sees it.
+
+`crates/baml_tests/tests/for_in.rs` pins what a loop does, at O1 and O2:
+which elements it sees when the body appends, clears, overwrites or rebinds
+the array, that the iterated expression runs once, the calls an iterator
+object receives, a throwing and a suspending body, stack traces, and an
+iterator local that holds two classes or a caller's value.
+
+### Measured
+
+Instructions per element, fasttest build, `baml-cli run --file` of a program
+that loops 1,000 times over 4,000 elements (200 times for the chains), minus
+the same program with zero rounds, best of 3. The "after" binary also has
+the other VM work of the same day in it, which moved the unchanged rows by
+about 8%.
+
+| Loop | Before | After |
+|---|---|---|
+| `for` over `int[]` | 627 | 679 |
+| the same as an index loop | 567 | 620 |
+| `for` over `Point[]`, reads a field | 774 | 819 |
+| user generic `f<T>(xs: T[])` | 491 | 529 |
+| `xs.for_each(closure)` | 639 | 684 |
+| `xs.filter_map(closure)` | 2,375 | 1,993 |
+| `for` over a user iterator class built in place | 3,337 | 1,263 |
+| `for` over `xs.iter()` held in a variable | 4,466 | 4,471 |
+| `xs.iter().count()` | 4,398 | 4,287 |
+| `xs.iter().reduce(f, 0)` | 5,821 | 5,826 |
+| `xs.iter().map(f).reduce(g, 0)` | 14,582 | 14,264 |
+| `xs.iter().filter(p).map(f).reduce(g, 0)` | 19,476 | 19,047 |
+
+The narrowed optional array was checked in the bytecode only (three
+`virtual_call` before, `array_iter_next` after), not timed.
+
+**Tests.** `cargo test --profile fasttest -p baml_compiler2_mir -p baml_tests
+-p baml_compiler2_rust`: 1445 passed, 0 failed, 26 ignored, no snapshot
+changed. Corpus: 6081 pass and the same 16 `root.trace*` failures in the full
+run, the non-trace pass list identical to the baseline, trace-only 51 / 0.
+
+### Left: the adapter chain
+
+Each stage of a chain costs one `next` through the interface (about 4,400)
+and one closure call (about 1,400); a `Map` or `Filter` stage costs more
+than that sum, about 8,700 and 4,900. Three things stand between the chain
+and a plain loop, and none is small:
+
+- `xs.iter()` has an array receiver. `devirtualize` only knows classes, so
+  the call that would produce the `ArrayIterator` literal is not resolved.
+- `Iterator.map` and `filter` build `Map<Self.Item, ...>` in a default
+  method. Inlined, the literal's type arguments are projections of `Self`,
+  which `only_class` and `trace` refuse (not fully concrete).
+- `Map.next` calls `self.source.next()`. The class of what a field holds is
+  only known once scalar replacement has turned the field into a local, and
+  the inliner runs once, before it.
+
+### To undo
+
+Remove the `only_class` call in `class_of` to get the old devirtualization
+back. Remove the `RuntimeTy::List` condition in `propagate_copies` to let
+the narrowed copy be propagated again; the last test in `for_in.rs` then
+fails.
