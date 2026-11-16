@@ -6,19 +6,27 @@ import { BepStatusBadge } from "@/components/bep/bep-status";
 import { buttonVariants } from "@/components/ui/button";
 import { currentViewer } from "@/lib/bcs-auth";
 import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
-import { flattenOutline } from "@/lib/bcs-outline";
+import { flattenOutline, hasContents } from "@/lib/bcs-outline";
 import { renderBcsPage } from "@/lib/bcs-render";
 import {
   addComment,
+  deleteComment,
+  editComment,
   removePage,
   replyToComment,
   setCommentResolved,
+  setPeople,
+  setStance,
+  setStatus,
+  toggleReaction,
   updateProposal,
 } from "../actions";
 import { TeamOnly } from "../team-only";
 import { BcsUnavailable } from "../unavailable";
-import { RemovePageForm, UpdateProposalForm } from "../forms";
+import { HeaderStatus, PeopleForm, RemovePageForm, UpdateProposalForm } from "../forms";
 import { BcsReader } from "./reader";
+import { PageContents } from "./contents";
+import { StancePanel } from "./stances";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +83,19 @@ export default async function BcsProposal({
   );
   // Without its comments the proposal still reads; the panel says why they are missing.
   const { threads, openByPage } = (comments.ok && comments.value) || { threads: [], openByPage: {} };
+  const tracked = await bcsCall((convex, secret) => convex.query(api.bcsTracking.list, { secret, number }));
+  const decisionCount = tracked.ok && tracked.value ? tracked.value.decisions.length : 0;
+  const openIssueCount = tracked.ok && tracked.value ? tracked.value.issues.filter((each) => !each.resolved).length : 0;
+  const stances = await bcsCall((convex, secret) =>
+    convex.query(api.bcsStances.list, { secret, number, version: proposal.version })
+  );
+  const { stances: stanceList, summary } = (stances.ok && stances.value) || {
+    stances: [],
+    summary: { support: 0, neutral: 0, oppose: 0 },
+  };
+  // GitHub logins seen across proposals, suggested when choosing shepherds.
+  const everyone = await bcsCall((convex, secret) => convex.query(api.bcs.list, { secret }));
+  const people = everyone.ok ? everyone.value.people : [];
   const rendered = await renderBcsPage({
     format: page.format,
     content: page.content,
@@ -90,11 +111,47 @@ export default async function BcsProposal({
         </Link>
         <span className="font-mono text-sm text-muted-foreground">{bcsId(proposal.number)}</span>
         <h1 className="text-lg font-semibold">{proposal.title}</h1>
-        <BepStatusBadge status={proposal.status} />
+        {old ? (
+          <BepStatusBadge status={proposal.status} />
+        ) : (
+          <HeaderStatus action={setStatus.bind(null, proposal.number)} status={proposal.status} />
+        )}
         <span className="text-sm text-muted-foreground">
           {proposal.authors.join(", ")} · updated {format(proposal.updatedAt, "PP")}
+          {proposal.shepherds.length > 0 && <> · Shepherds: {proposal.shepherds.join(", ")}</>}
+          {proposal.status === "implemented" && proposal.implementedBy.length > 0 && (
+            <> · Implemented by: {proposal.implementedBy.join(", ")}</>
+          )}
         </span>
         <div className="ml-auto flex items-center gap-2">
+          <StancePanel
+            // A new version starts a fresh panel, so a reason typed for another is never saved here.
+            key={proposal.version}
+            error={stances.ok ? undefined : stances.failure.message}
+            action={setStance.bind(null, proposal.number, proposal.version)}
+            version={proposal.version}
+            stances={stanceList}
+            summary={summary}
+            viewer={viewer.login}
+          />
+          <Link
+            href={`/bcs/${proposal.number}/comments`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            All comments
+          </Link>
+          <Link
+            href={`/bcs/${proposal.number}/decisions`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            Decisions{decisionCount > 0 ? ` · ${decisionCount}` : ""}
+          </Link>
+          <Link
+            href={`/bcs/${proposal.number}/issues`}
+            className={buttonVariants({ variant: openIssueCount > 0 ? "default" : "outline", size: "sm" })}
+          >
+            Issues{openIssueCount > 0 ? ` · ${openIssueCount} open` : ""}
+          </Link>
           <details className="relative">
             <summary className="cursor-pointer list-none text-sm rounded-md border px-3 py-1.5 hover:bg-muted">
               v{proposal.version}
@@ -174,7 +231,15 @@ export default async function BcsProposal({
                   <UpdateProposalForm
                     action={updateProposal.bind(null, proposal.number)}
                     title={proposal.title}
-                    status={proposal.status}
+                  />
+                </div>
+                <div className="border-t pt-4">
+                  <PeopleForm
+                    action={setPeople.bind(null, proposal.number)}
+                    shepherds={proposal.shepherds}
+                    implementedBy={proposal.implementedBy}
+                    showImplemented={proposal.status === "implemented" || proposal.implementedBy.length > 0}
+                    people={people}
                   />
                 </div>
               </div>
@@ -183,33 +248,38 @@ export default async function BcsProposal({
         </div>
       </header>
       <div className="flex flex-1 min-h-0">
-        {outline.length > 1 && (
-          <nav aria-label="Pages" className="w-64 shrink-0 overflow-y-auto border-r p-3 text-sm">
-            <ul className="space-y-0.5">
-              {outline.map((entry) => (
-                <li key={entry.slug}>
-                  <Link
-                    href={bcsPagePath(proposal.number, entry.slug, shownVersion)}
-                    aria-current={entry.slug === page.slug ? "page" : undefined}
-                    style={{ paddingLeft: `${0.5 + entry.depth * 0.75}rem` }}
-                    className={`block rounded py-1 pr-2 hover:bg-muted ${
-                      entry.slug === page.slug ? "bg-muted font-medium" : "text-muted-foreground"
-                    }`}
-                  >
-                    {entry.title}
-                    {openByPage[entry.slug] ? (
-                      <span
-                        className="ml-1.5 rounded-full bg-violet-600/15 px-1.5 text-xs text-violet-700 dark:text-violet-300"
-                        title={`${openByPage[entry.slug]} open comment${openByPage[entry.slug] === 1 ? "" : "s"}`}
+        {(outline.length > 1 || hasContents(rendered.headings)) && (
+          <div className="w-64 shrink-0 overflow-y-auto border-r p-3 text-sm space-y-4">
+            {outline.length > 1 && (
+              <nav aria-label="Pages">
+                <ul className="space-y-0.5">
+                  {outline.map((entry) => (
+                    <li key={entry.slug}>
+                      <Link
+                        href={bcsPagePath(proposal.number, entry.slug, shownVersion)}
+                        aria-current={entry.slug === page.slug ? "page" : undefined}
+                        style={{ paddingLeft: `${0.5 + entry.depth * 0.75}rem` }}
+                        className={`block rounded py-1 pr-2 hover:bg-muted ${
+                          entry.slug === page.slug ? "bg-muted font-medium" : "text-muted-foreground"
+                        }`}
                       >
-                        {openByPage[entry.slug]}
-                      </span>
-                    ) : null}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+                        {entry.title}
+                        {openByPage[entry.slug] ? (
+                          <span
+                            className="ml-1.5 rounded-full bg-violet-600/15 px-1.5 text-xs text-violet-700 dark:text-violet-300"
+                            title={`${openByPage[entry.slug]} open comment${openByPage[entry.slug] === 1 ? "" : "s"}`}
+                          >
+                            {openByPage[entry.slug]}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            )}
+            <PageContents headings={rendered.headings} />
+          </div>
         )}
         <BcsReader
           // A new ?comment= remounts it, so the newly linked thread and block are focused.
@@ -226,6 +296,10 @@ export default async function BcsProposal({
           addComment={addComment.bind(null, proposal.number, page.slug, proposal.version)}
           reply={replyToComment.bind(null, proposal.number, proposal.version)}
           resolve={setCommentResolved.bind(null, proposal.number)}
+          edit={editComment.bind(null, proposal.number)}
+          remove={deleteComment.bind(null, proposal.number)}
+          react={toggleReaction.bind(null, proposal.number)}
+          viewer={viewer.login}
         />
       </div>
     </div>

@@ -881,7 +881,7 @@ mod tests {
         // Fill the first chunk of cells but one object, so the futures
         // straddle a chunk boundary. A TLAB's blocks tile a chunk exactly.
         for _ in 0..crate::cell_space::CHUNK_WORDS / OBJECT_CELL_WORDS - 1 {
-            tlab.alloc_float(0.0);
+            tlab.alloc_string(String::new());
         }
         let mut rooted = None;
         for id in 0..4 {
@@ -1011,6 +1011,7 @@ mod tests {
             other: Default::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         }))];
         let debug = HeapDebuggerConfig {
             enabled: true,
@@ -1759,6 +1760,7 @@ mod tests {
             other: Default::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let var_ptr = tlab.alloc_variant(enum_ptr, 1);
 
@@ -1994,6 +1996,7 @@ mod tests {
             other: Default::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
 
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&[ptr]) };
@@ -2047,6 +2050,7 @@ mod tests {
             type_tag,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let type_ptr = tlab.alloc_type(TypeValue::new(RealizedTy::Enum(TypeHead::new(
             enum_ptr, type_tag,
@@ -2535,6 +2539,7 @@ mod tests {
             other: Default::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let variant_container = tlab.alloc(Object::Variant(Variant {
             enm: enum_ptr,
@@ -2806,7 +2811,7 @@ mod tests {
     }
 
     /// The finalizer scan examines the registered instances only: 10,000 dead
-    /// floats around them are never visited.
+    /// strings around them are never visited.
     #[test]
     fn finalizer_scan_visits_only_finalizable_instances() {
         let heap = BexHeap::new(vec![]);
@@ -2818,7 +2823,7 @@ mod tests {
         let live = tlab.alloc_instance(class, vec![]);
         let dead = tlab.alloc_instance(class, vec![]);
         for i in 0..10_000_u32 {
-            tlab.alloc_float(f64::from(i));
+            tlab.alloc_string(i.to_string());
         }
         assert_eq!(finalizable_entries(&heap), {
             let mut both = vec![live, dead];

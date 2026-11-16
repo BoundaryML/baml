@@ -368,6 +368,13 @@ impl BexVm {
 
     #[inline]
     pub fn new_variant(&mut self, enm: HeapPtr, index: usize) -> Value {
+        // A compile-time enum's variants are permanent shared objects (see
+        // `Enum::shared_variants`); only a runtime enum allocates.
+        if let Object::Enum(declaration) = self.get_object(enm)
+            && let Some(&shared) = declaration.shared_variants.get(index)
+        {
+            return Value::object(shared);
+        }
         Value::object(self.tlab.alloc_variant(enm, index))
     }
 
@@ -423,6 +430,7 @@ mod tests {
             other: IndexMap::default(),
             owner: Owner::default(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         }))
     }
 

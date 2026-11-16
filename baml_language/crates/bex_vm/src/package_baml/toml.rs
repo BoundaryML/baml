@@ -66,7 +66,7 @@ fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmR
                 "BAML `int` is 63 bits. It is unable to parse 64-bit TOML integers.".to_string(),
             ))
         }),
-        toml::Value::Float(f) => Ok(Value::object(vm.alloc_float(f))),
+        toml::Value::Float(f) => Ok(vm.float_value(f)),
         toml::Value::Boolean(b) => Ok(Value::bool(b)),
         toml::Value::Datetime(datetime) => convert_toml_datetime(vm, datetime),
         toml::Value::Array(values) => {
@@ -217,6 +217,7 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
     match value.kind() {
         ValueKind::Bool(b) => return Ok(Node::Scalar(b.into())),
         ValueKind::Int(i) => return Ok(Node::Scalar(i.into())),
+        ValueKind::Float(f) => return Ok(Node::Scalar(f.into())),
         ValueKind::Object(_) => {}
         _ => return Err(invalid_argument("Value is not a TOML item")),
     }

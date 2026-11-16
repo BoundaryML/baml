@@ -8,6 +8,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { slackEvent } from "./bcs";
+import { agentName } from "./bcsAgents";
 
 /** Where proposal links point. */
 const SITE_URL = "https://beps.boundaryml.com";
@@ -61,9 +62,11 @@ export interface Overview {
   title: string;
   status: string;
   authors: string[];
+  shepherds?: string[];
   currentVersion: number;
   updatedAt: number;
   openComments?: number;
+  openIssues?: number;
 }
 
 /** A comment as its Slack reply shows it. */
@@ -77,6 +80,9 @@ export interface SlackComment {
   quote?: string;
   threadAuthor: string;
   threadBody: string;
+  type?: string;
+  /** The coding agent that wrote it on the member's behalf. */
+  agent?: string;
 }
 
 /** A link to a thread; the site finds its page and version, even after a page was removed. */
@@ -84,12 +90,21 @@ function commentUrl(number: number, comment: SlackComment): string {
   return `${SITE_URL}/bcs/${number}?comment=${comment.threadId}`;
 }
 
+/** How a new thread reads in Slack, by its kind. */
+const COMMENT_KINDS: Record<string, { emoji: string; verb: string }> = {
+  discussion: { emoji: "💬", verb: "commented" },
+  concern: { emoji: "⚠️", verb: "raised a concern" },
+  question: { emoji: "❓", verb: "asked a question" },
+};
+
 /** A reply in the thread for a new comment or reply, quoting the block it is on. */
-export function commentBlocks(proposal: Overview, who: string, comment: SlackComment): Block[] {
+export function commentBlocks(proposal: Overview, member: string, comment: SlackComment): Block[] {
+  const who = comment.agent ? `${member}'s agent *${escape(agentName(comment.agent))}*` : member;
   const where = comment.page ? ` on *${escape(clip(comment.pageTitle, 100))}*` : "";
+  const kind = COMMENT_KINDS[comment.type ?? "discussion"] ?? COMMENT_KINDS.discussion;
   const heading = comment.isReply
     ? `↪️ ${who} replied to *${escape(comment.threadAuthor)}*${where}`
-    : `💬 ${who} commented${where}`;
+    : `${kind.emoji} ${who} ${kind.verb}${where}`;
   const quote = comment.isReply ? clip(comment.threadBody, 150) : comment.quote;
   const blocks: Block[] = [
     {
@@ -136,9 +151,15 @@ export function overviewBlocks(proposal: Overview, isNew: boolean): Block[] {
         { type: "mrkdwn", text: `*Status:* ${emoji} ${proposal.status}` },
         { type: "mrkdwn", text: `*Authors:* ${escape(clip(proposal.authors.join(", "), 300))}` },
         { type: "mrkdwn", text: `*Version:* v${proposal.currentVersion}` },
+        ...(proposal.shepherds && proposal.shepherds.length > 0
+          ? [{ type: "mrkdwn", text: `*Shepherds:* ${escape(clip(proposal.shepherds.join(", "), 300))}` }]
+          : []),
         { type: "mrkdwn", text: `*Last updated:* ${slackDate(proposal.updatedAt)}` },
         ...(proposal.openComments !== undefined
           ? [{ type: "mrkdwn", text: `*Open comments:* ${proposal.openComments}` }]
+          : []),
+        ...(proposal.openIssues !== undefined
+          ? [{ type: "mrkdwn", text: `*Open issues:* ${proposal.openIssues}` }]
           : []),
       ],
     },
@@ -165,6 +186,7 @@ export function savedBlocks(
     note?: string;
     changed?: string[];
     status?: { from: string; to: string };
+    shepherds?: string[];
   }
 ): Block[] {
   const blocks: Block[] = [];
@@ -181,6 +203,18 @@ export function savedBlocks(
             ? `\n_Changed: ${escape(clip(change.changed.join(", "), 300))}_`
             : "") +
           (change.note ? `\n>${escape(clip(change.note, 500)).replace(/\n/g, "\n>")}` : ""),
+      },
+    });
+  }
+  if (change.shepherds) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          change.shepherds.length > 0
+            ? `🧭 ${who} made *${escape(clip(change.shepherds.join(", "), 300))}* the shepherds of ${bcsId(proposal.number)}`
+            : `🧭 ${who} removed the shepherds of ${bcsId(proposal.number)}`,
       },
     });
   }
@@ -279,6 +313,8 @@ export const notify = internalAction({
       thread = kept;
     }
 
+    // The overview was brought up to date above; a refresh has nothing to say in the thread.
+    if (args.event.kind === "refresh") return;
     if (args.event.kind === "comment" && proposal.comment) {
       await slack("chat.postMessage", {
         channel,
@@ -308,12 +344,35 @@ export const notify = internalAction({
       });
       return;
     }
+    if (args.event.kind === "decision" || args.event.kind === "issue") {
+      const event = args.event;
+      const tracking = `${SITE_URL}/bcs/${proposal.number}/${event.kind === "decision" ? "decisions" : "issues"}`;
+      const title = `<${tracking}|*${escape(clip(event.title, 200))}*>`;
+      const line =
+        event.kind === "decision"
+          ? `📌 ${who} recorded a decision: ${title}`
+          : event.change === "opened"
+            ? `🚩 ${who} opened an issue: ${title}`
+            : event.change === "resolved"
+              ? `✅ ${who} resolved the issue ${title}` +
+                (event.resolution ? `\n>${escape(clip(event.resolution, 500)).replace(/\n/g, "\n>")}` : "")
+              : `↩️ ${who} reopened the issue ${title}`;
+      await slack("chat.postMessage", {
+        channel,
+        thread_ts: thread,
+        blocks: [{ type: "section", text: { type: "mrkdwn", text: line } }],
+        text: `${event.kind === "decision" ? "Decision" : "Issue"} on ${label}`,
+        unfurl_links: false,
+      });
+      return;
+    }
     if (args.event.kind !== "saved") return;
     const blocks = savedBlocks(proposal, who, {
       version,
       note: proposal.note,
       changed: proposal.changed,
       status: args.event.status,
+      shepherds: args.event.shepherds,
     });
     if (blocks.length === 0) return;
     await slack("chat.postMessage", {

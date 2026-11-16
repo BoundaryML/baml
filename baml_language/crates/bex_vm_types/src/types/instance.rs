@@ -446,10 +446,7 @@ fn slot_bits(kind: SlotKind, value: Value) -> Option<u64> {
         SlotKind::Int => value.as_int().map(i64::cast_unsigned),
         SlotKind::Bool => value.as_bool().map(u64::from),
         SlotKind::Value => Some(value.bits()),
-        // SAFETY: a value being stored is live.
-        SlotKind::Float => match unsafe { value.as_object_ptr()?.get() } {
-            Object::Float(float) => Some(float.to_bits()),
-            _ => None,
-        },
+        // Inline or boxed: a value being stored is live.
+        SlotKind::Float => value.as_float().map(f64::to_bits),
     }
 }

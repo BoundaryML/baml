@@ -13,8 +13,23 @@ A function requesting auto (`null` / no explicit policy) inherits
 - `low`: auto functions are unobserved.
 - `medium` (default): ordinary auto functions produce timing aggregates; auto LLM
   functions produce spans with their default input/output/error captures.
-- `high`: supported auto functions produce spans, without extra value capture.
+- `high`: supported auto functions produce spans, without extra input or output
+  capture.
 - `off`: global kill switch; no telemetry resources are created.
+
+At every level, the innermost span a thrown error or a panic escapes records
+that error, whether or not its function captures anything else, unless the
+call declined it with `error = false` (as `trace.empty_span` does); then the
+next span out records it. The spans the error unwinds through after that
+record only that they failed, unless they request error capture: the error's
+context holds the whole stack trace, so recording it at every frame of a deep
+unwind would cost the square of its depth. An LLM function's default policy
+requests its error, which `error = false` does not decline. A cancelled span
+records only that it was cancelled. An artifact that sets `http_bodies = false`
+records no error value on any span, requested or not, since an error can quote
+a response body; the setting overrides the program's trace options and
+function policies.
+Timing-only and unobserved functions record no values.
 
 Explicit function policies take precedence over every automatic level. In
 particular, `high` does not promote an explicitly configured timing-only function.

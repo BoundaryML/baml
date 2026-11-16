@@ -718,7 +718,8 @@ fn slot_unit_functions(
 }
 
 /// Relocate every pending local of `space` and publish it at its reserved
-/// address, keeping the float constants it boxes in the image.
+/// address, keeping the float constants it boxes (the few with no inline
+/// encoding) in the image.
 fn relocate_all(
     vm: &mut BexVm,
     image: &mut Image,
@@ -1235,8 +1236,8 @@ impl Space {
 
 /// Rewrite `object`'s operands and heads into the package's tables, solve its
 /// switch tables, resolve its constants, and bind the pointers its wire
-/// operands stood for. Returns the boxed float constants it allocated, which
-/// the package's object table must keep alive.
+/// operands stood for. Returns the boxed float constants it allocated (the few
+/// with no inline encoding), which the package's object table must keep alive.
 fn relocate(
     vm: &mut BexVm,
     object: &mut Object,
@@ -1310,9 +1311,13 @@ fn relocate(
                     | ConstValue::ClassWithTypeArgs { .. }
                     | ConstValue::Literal(_) => Value::NULL,
                     ConstValue::Float(value) => {
-                        let boxed = vm.alloc_float(*value);
-                        floats.push(boxed);
-                        Value::object(boxed)
+                        let float = vm.float_value(*value);
+                        // An inline float needs no rooting; a boxed one
+                        // (NaN, `±inf`, extreme magnitudes) lives in the image.
+                        if let Some(boxed) = float.as_object_ptr() {
+                            floats.push(boxed);
+                        }
+                        float
                     }
                     other => other.to_value(|index| image.objects[index.raw()]),
                 });

@@ -22,6 +22,8 @@ export type FormState = {
     note?: string;
     slug?: string;
     parentSlug?: string;
+    shepherds?: string;
+    implementedBy?: string;
   };
   // The version to save over next time, after someone else saved one meanwhile.
   baseVersion?: number;
@@ -200,7 +202,7 @@ export async function removePage(
   redirect(bcsPagePath(number, ""));
 }
 
-/** Saves the title and status, each only when the editor changed it from what the form showed. */
+/** Renames the proposal, when the editor changed the title from what the form showed. */
 export async function updateProposal(
   number: number,
   _previous: FormState,
@@ -208,7 +210,6 @@ export async function updateProposal(
 ): Promise<FormState> {
   const viewer = await viewerOrFail();
   const title = String(form.get("title") ?? "").trim();
-  const newStatus = status(form.get("status"));
   const saved = await bcsCall((convex, secret) =>
     convex.mutation(api.bcs.save, {
       secret,
@@ -216,19 +217,62 @@ export async function updateProposal(
       author: viewer.login,
       authorGithubId: viewer.githubId,
       title: title && title !== form.get("originalTitle") ? title : undefined,
-      status: newStatus !== form.get("originalStatus") ? newStatus : undefined,
     })
   );
-  if (!saved.ok) {
-    return {
-      error: saved.failure.message,
-      values: { title, status: newStatus },
-      attempt: Date.now(),
-    };
-  }
+  if (!saved.ok) return { error: saved.failure.message, values: { title }, attempt: Date.now() };
   revalidatePath(`/bcs/${number}`);
   revalidatePath("/bcs");
   return {};
+}
+
+/** Changes the proposal's status, from the header. */
+export async function setStatus(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const chosen = BCS_STATUSES.find((each) => each === form.get("status"));
+  if (!chosen) return { error: "Choose a status.", attempt: Date.now() };
+  const saved = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcs.save, {
+      secret,
+      number,
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+      status: chosen,
+    })
+  );
+  if (!saved.ok) return { error: saved.failure.message, attempt: Date.now() };
+  revalidatePath(`/bcs/${number}`);
+  revalidatePath("/bcs");
+  return { attempt: Date.now() };
+}
+
+function logins(value: FormDataEntryValue | null): string[] {
+  return String(value ?? "")
+    .split(/[\s,]+/)
+    .map((each) => each.trim())
+    .filter(Boolean);
+}
+
+/** Sets who shepherds the proposal, and who implemented it: GitHub logins, comma-separated. */
+export async function setPeople(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const shepherds = String(form.get("shepherds") ?? "");
+  const implementedBy = String(form.get("implementedBy") ?? "");
+  const saved = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcs.save, {
+      secret,
+      number,
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+      shepherds: logins(shepherds),
+      implementedBy: form.has("implementedBy") ? logins(implementedBy) : undefined,
+    })
+  );
+  if (!saved.ok) {
+    return { error: saved.failure.message, values: { shepherds, implementedBy }, attempt: Date.now() };
+  }
+  revalidatePath(`/bcs/${number}`);
+  revalidatePath("/bcs");
+  return { attempt: Date.now() };
 }
 
 /** What a comment form shows after a submission: why it was refused, with the draft, or that it posted. */
@@ -252,6 +296,7 @@ export async function addComment(
       page,
       version,
       anchor: block ? { block, text: String(form.get("blockText") ?? "") } : undefined,
+      type: commentType(form.get("type")),
       body,
       author: viewer.login,
       authorGithubId: viewer.githubId,
@@ -310,4 +355,205 @@ export async function setCommentResolved(
   if (!changed.ok) return { error: changed.failure.message };
   revalidatePath(`/bcs/${number}`);
   return { posted: Date.now() };
+}
+
+function commentType(value: FormDataEntryValue | null): "discussion" | "concern" | "question" {
+  return value === "concern" || value === "question" ? value : "discussion";
+}
+
+/** Rewrites the viewer's own comment named by the form's commentId. */
+export async function editComment(number: number, _previous: CommentState, form: FormData): Promise<CommentState> {
+  const viewer = await viewerOrFail();
+  const body = String(form.get("body") ?? "");
+  const edited = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsComments.edit, {
+      secret,
+      number,
+      commentId: String(form.get("commentId") ?? ""),
+      body,
+      type: form.has("type") ? commentType(form.get("type")) : undefined,
+      author: viewer.login,
+    })
+  );
+  if (!edited.ok) return { error: edited.failure.message, body };
+  revalidatePath(`/bcs/${number}`);
+  return { posted: Date.now() };
+}
+
+/** Deletes the viewer's own comment named by the form's commentId. */
+export async function deleteComment(number: number, _previous: CommentState, form: FormData): Promise<CommentState> {
+  const viewer = await viewerOrFail();
+  const removed = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsComments.remove, {
+      secret,
+      number,
+      commentId: String(form.get("commentId") ?? ""),
+      author: viewer.login,
+    })
+  );
+  if (!removed.ok) return { error: removed.failure.message };
+  revalidatePath(`/bcs/${number}`);
+  return { posted: Date.now() };
+}
+
+const REACTIONS = ["thumbsUp", "thumbsDown", "heart", "thinking"] as const;
+
+/** Adds or takes back the viewer's reaction (the form's reaction) on the form's commentId. */
+export async function toggleReaction(number: number, _previous: CommentState, form: FormData): Promise<CommentState> {
+  const viewer = await viewerOrFail();
+  const reaction = REACTIONS.find((each) => each === form.get("reaction"));
+  if (!reaction) return { error: "Unknown reaction." };
+  const toggled = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsComments.toggleReaction, {
+      secret,
+      number,
+      commentId: String(form.get("commentId") ?? ""),
+      reaction,
+      author: viewer.login,
+    })
+  );
+  if (!toggled.ok) return { error: toggled.failure.message };
+  revalidatePath(`/bcs/${number}`);
+  return { posted: Date.now() };
+}
+
+/** Takes or changes the viewer's stance on a version; "clear" withdraws it. */
+export async function setStance(
+  number: number,
+  version: number,
+  _previous: FormState,
+  form: FormData
+): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const choice = form.get("stance");
+  const comment = String(form.get("comment") ?? "");
+  const saved =
+    choice === "clear"
+      ? await bcsCall((convex, secret) =>
+          convex.mutation(api.bcsStances.clear, { secret, number, version, author: viewer.login })
+        )
+      : choice === "support" || choice === "neutral" || choice === "oppose"
+        ? await bcsCall((convex, secret) =>
+            convex.mutation(api.bcsStances.set, {
+              secret,
+              number,
+              version,
+              stance: choice,
+              comment,
+              author: viewer.login,
+            })
+          )
+        : null;
+  if (!saved) return { error: "Choose support, neutral or oppose.", attempt: Date.now() };
+  if (!saved.ok) return { error: saved.failure.message, values: { note: comment }, attempt: Date.now() };
+  revalidatePath(`/bcs/${number}`);
+  return { attempt: Date.now() };
+}
+
+/** Records a decision on the proposal, from the comment thread named by sourceCommentId if any. */
+export async function recordDecision(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const title = String(form.get("title") ?? "");
+  const description = String(form.get("description") ?? "");
+  const rationale = String(form.get("rationale") ?? "");
+  const saved = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsTracking.decide, {
+      secret,
+      number,
+      title,
+      description,
+      rationale: rationale || undefined,
+      sourceCommentId: optional(form.get("sourceCommentId")),
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!saved.ok) {
+    return { error: saved.failure.message, values: { title, content: description, note: rationale }, attempt: Date.now() };
+  }
+  revalidatePath(`/bcs/${number}`);
+  redirect(`/bcs/${number}/decisions`);
+}
+
+export async function removeDecision(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  await viewerOrFail();
+  const removed = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsTracking.removeDecision, {
+      secret,
+      number,
+      decisionId: String(form.get("decisionId") ?? ""),
+    })
+  );
+  if (!removed.ok) return { error: removed.failure.message, attempt: Date.now() };
+  revalidatePath(`/bcs/${number}/decisions`);
+  return { attempt: Date.now() };
+}
+
+/** Opens an issue on the proposal, from the comment thread named by sourceCommentId if any. */
+export async function openIssue(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const title = String(form.get("title") ?? "");
+  const description = String(form.get("description") ?? "");
+  const assignedTo = String(form.get("assignedTo") ?? "").trim();
+  const saved = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsTracking.openIssue, {
+      secret,
+      number,
+      title,
+      description: description || undefined,
+      assignedTo: assignedTo || undefined,
+      sourceCommentId: optional(form.get("sourceCommentId")),
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!saved.ok) {
+    return { error: saved.failure.message, values: { title, content: description, shepherds: assignedTo }, attempt: Date.now() };
+  }
+  revalidatePath(`/bcs/${number}`);
+  redirect(`/bcs/${number}/issues`);
+}
+
+/** Resolves (with the form's resolution), reopens, or reassigns the form's issueId, per its `change`. */
+export async function updateIssue(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const change = form.get("change");
+  const resolution = String(form.get("resolution") ?? "");
+  const assignedTo = String(form.get("assignedTo") ?? "");
+  const saved = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsTracking.updateIssue, {
+      secret,
+      number,
+      issueId: String(form.get("issueId") ?? ""),
+      resolved: change === "resolve" ? true : change === "reopen" ? false : undefined,
+      resolution: change === "resolve" ? resolution : undefined,
+      assignedTo: change === "assign" ? assignedTo : undefined,
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!saved.ok) {
+    // What was typed comes back, so a refused resolution or assignee can be corrected.
+    return { error: saved.failure.message, values: { content: resolution, shepherds: assignedTo }, attempt: Date.now() };
+  }
+  revalidatePath(`/bcs/${number}/issues`);
+  revalidatePath(`/bcs/${number}`);
+  return { attempt: Date.now() };
+}
+
+export async function removeIssue(number: number, _previous: FormState, form: FormData): Promise<FormState> {
+  const viewer = await viewerOrFail();
+  const removed = await bcsCall((convex, secret) =>
+    convex.mutation(api.bcsTracking.removeIssue, {
+      secret,
+      number,
+      issueId: String(form.get("issueId") ?? ""),
+      author: viewer.login,
+      authorGithubId: viewer.githubId,
+    })
+  );
+  if (!removed.ok) return { error: removed.failure.message, attempt: Date.now() };
+  revalidatePath(`/bcs/${number}/issues`);
+  revalidatePath(`/bcs/${number}`);
+  return { attempt: Date.now() };
 }

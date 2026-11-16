@@ -50,7 +50,7 @@ fn string_map_entries(
 ///
 /// JSON numbers: i63-representable integers become integers, larger integral
 /// tokens become bigints, and tokens with a fraction or exponent become
-/// heap-boxed floats.
+/// floats.
 pub(in crate::package_baml) fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
     match v {
         serde_json::Value::Null => Value::NULL,
@@ -64,12 +64,12 @@ pub(in crate::package_baml) fn serde_to_value(vm: &mut BexVm, v: &serde_json::Va
                 // `parse_json_bigint` already enforces the VM's bit limit.
                 Value::object(vm.tlab.alloc(Object::Bigint(Arc::new(bigint))))
             } else if let Some(f) = n.as_f64() {
-                Value::object(vm.alloc_float(f))
+                vm.float_value(f)
             } else {
                 // With `arbitrary_precision`, a non-integral number whose
                 // magnitude cannot fit in an f64 reaches here. NaN preserves
                 // the existing sentinel for a number we cannot represent.
-                Value::object(vm.alloc_float(f64::NAN))
+                vm.float_value(f64::NAN)
             }
         }
         serde_json::Value::String(s) => Value::object(vm.alloc_string(s.clone())),
@@ -138,6 +138,7 @@ fn value_to_serde_at(
         ValueKind::Null => serde_json::Value::Null,
         ValueKind::Bool(b) => serde_json::Value::Bool(b),
         ValueKind::Int(i) => serde_json::Value::Number(i.into()),
+        ValueKind::Float(f) => float_to_serde(f),
         ValueKind::OmittedArg => serde_json::Value::Null,
         ValueKind::Object(ptr) => {
             let is_container = matches!(vm.get_object(ptr), Object::Array(_) | Object::Map(_));
@@ -159,6 +160,13 @@ fn value_to_serde_at(
     })
 }
 
+/// A float as JSON: a number, or `null` for a non-finite float.
+fn float_to_serde(f: f64) -> serde_json::Value {
+    serde_json::Number::from_f64(f)
+        .map(serde_json::Value::Number)
+        .unwrap_or(serde_json::Value::Null)
+}
+
 /// The heap object at `ptr` as JSON ([`value_to_serde_at`]'s object arm).
 fn object_to_serde_at(
     vm: &BexVm,
@@ -167,9 +175,7 @@ fn object_to_serde_at(
     active: &mut Vec<HeapPtr>,
 ) -> Result<serde_json::Value, ValueToSerdeError> {
     Ok(match vm.get_object(ptr) {
-        Object::Float(f) => serde_json::Number::from_f64(*f)
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
+        Object::Float(f) => float_to_serde(*f),
         Object::String(s) => serde_json::Value::String(s.to_string()),
         Object::Array(arr) => {
             let arr = arr.to_vec();

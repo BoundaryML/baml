@@ -2181,6 +2181,7 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::UnionMemberAssociatedTypeConflict { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnknownClassField { .. } | TirTypeError::UnknownClassPatternField { .. } => {
             DiagnosticId::NoSuchField
         }

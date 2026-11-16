@@ -76,7 +76,7 @@ impl TextDecoder<'_, '_> {
                 // A fraction or exponent past `f64` is a syntax error; an
                 // integer that large is a bigint, which no `float` holds.
                 let float = reader.number()?.as_f64().ok_or(Stop)?;
-                Ok(Value::object(vm.alloc_float(float)))
+                Ok(vm.float_value(float))
             }
             RealizedTy::String => {
                 let text = reader.string()?;
@@ -225,7 +225,7 @@ impl TextDecoder<'_, '_> {
                 let actual = reader.number()?.as_f64().ok_or(Stop)?;
                 match expected.parse::<f64>() {
                     Ok(expected) if (expected - actual).abs() < f64::EPSILON => {
-                        Ok(Value::object(vm.alloc_float(actual)))
+                        Ok(vm.float_value(actual))
                     }
                     _ => Err(Stop),
                 }

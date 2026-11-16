@@ -6,10 +6,22 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { byNumber, fail, outlineOf, tellSlack, versionRow } from "./bcs";
+import { AGENT_ID, KNOWN_AGENT_IDS, normalizeAgent } from "./bcsAgents";
+import { commentType } from "./schema";
 import { requireServerSecret } from "./serverSecret";
 
 /** The longest comment, which keeps a thread readable and a Slack reply within its limits. */
 export const MAX_COMMENT_CHARS = 10_000;
+
+/** An agent's id (`normalizeAgent`), or a refusal when it is not one an id can be. */
+function checkAgent(agent: string | undefined): string | undefined {
+  if (agent === undefined) return undefined;
+  const id = normalizeAgent(agent);
+  if (!AGENT_ID.test(id)) {
+    fail("invalid", `An agent is named by 1 to 32 letters, digits or hyphens: ${KNOWN_AGENT_IDS}, or your own.`);
+  }
+  return id;
+}
 
 function checkBody(body: string): string {
   const trimmed = body.trim();
@@ -25,7 +37,12 @@ function shown(comment: Doc<"bcsComments">) {
     version: comment.version,
     anchor: comment.anchor,
     author: comment.author,
-    body: comment.body,
+    agent: comment.agent,
+    body: comment.deleted ? "" : comment.body,
+    type: comment.type ?? "discussion",
+    reactions: comment.reactions ?? {},
+    editedAt: comment.editedAt,
+    deleted: comment.deleted ?? false,
     resolved: comment.resolved,
     resolvedBy: comment.resolvedBy,
     resolvedAt: comment.resolvedAt,
@@ -56,14 +73,40 @@ export const list = query({
         openByPage[comment.page] = (openByPage[comment.page] ?? 0) + 1;
       }
     }
-    const threads = all
-      .filter((comment) => !comment.parentId && comment.page === args.page)
-      .sort((a, b) => a.createdAt - b.createdAt)
-      .map((comment) => ({
-        ...shown(comment),
-        replies: (replies.get(comment._id) ?? []).sort((a, b) => a.createdAt - b.createdAt).map(shown),
-      }));
-    return { threads, openByPage };
+    return { threads: withReplies(all, replies, args.page), openByPage };
+  },
+});
+
+/** The threads among `all` (on `page`, or on every page), oldest first, each with its replies. */
+function withReplies(all: Doc<"bcsComments">[], replies: Map<string, Doc<"bcsComments">[]>, page?: string) {
+  return all
+    .filter((comment) => !comment.parentId && (page === undefined || comment.page === page))
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .map((comment) => ({
+      ...shown(comment),
+      replies: (replies.get(comment._id) ?? []).sort((a, b) => a.createdAt - b.createdAt).map(shown),
+    }));
+}
+
+/**
+ * Every thread of a proposal on every page, oldest first, each with all its replies: what the
+ * agent route (`bep bcs comments`) hands out.
+ */
+export const threads = query({
+  args: { secret: v.string(), number: v.number() },
+  handler: async (ctx, args) => {
+    requireServerSecret(args.secret);
+    const doc = await byNumber(ctx, args.number);
+    if (!doc) return null;
+    const all = await ctx.db
+      .query("bcsComments")
+      .withIndex("by_doc", (q) => q.eq("docId", doc._id))
+      .collect();
+    const replies = new Map<string, Doc<"bcsComments">[]>();
+    for (const comment of all) {
+      if (comment.parentId) replies.set(comment.parentId, [...(replies.get(comment.parentId) ?? []), comment]);
+    }
+    return withReplies(all, replies);
   },
 });
 
@@ -84,6 +127,34 @@ export const locate = query({
   },
 });
 
+/**
+ * Keeps the proposal's open-thread count and commenters up to date for the board: `opened` threads
+ * opened (negative when resolved), and the comment's author. A proposal from before they were kept
+ * gets them counted from its comments once, here.
+ */
+async function recount(ctx: MutationCtx, docId: Id<"bcsDocs">, opened: number, author?: string) {
+  const doc = await ctx.db.get(docId);
+  if (!doc) return;
+  let open = doc.openComments;
+  let commenters = doc.commenters;
+  if (open === undefined || commenters === undefined) {
+    // Counted after this mutation's own write, so `opened` is already included.
+    const comments = await ctx.db
+      .query("bcsComments")
+      .withIndex("by_doc", (q) => q.eq("docId", docId))
+      .collect();
+    open = comments.filter((each) => !each.parentId && !each.resolved).length;
+    commenters = [...new Set(comments.map((each) => each.author))];
+  } else {
+    open = Math.max(0, open + opened);
+  }
+  if (author && !commenters.includes(author)) commenters = [...commenters, author];
+  await ctx.db.patch(docId, {
+    openComments: open,
+    commenters: [...commenters].sort((a, b) => a.localeCompare(b)),
+  });
+}
+
 async function commentOrFail(ctx: MutationCtx, id: string, docId: Id<"bcsDocs">) {
   const normalized = ctx.db.normalizeId("bcsComments", id);
   const comment = normalized ? await ctx.db.get(normalized) : null;
@@ -99,9 +170,12 @@ export const add = mutation({
     page: v.string(),
     version: v.number(),
     anchor: v.optional(v.object({ block: v.string(), text: v.string() })),
+    type: v.optional(commentType),
     body: v.string(),
     author: v.string(),
     authorGithubId: v.optional(v.string()),
+    /** The coding agent writing it for the author, from the agent routes only. */
+    agent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     requireServerSecret(args.secret);
@@ -121,11 +195,14 @@ export const add = mutation({
       page: args.page,
       version: args.version,
       anchor,
+      type: args.type ?? "discussion",
       author: args.author,
+      agent: checkAgent(args.agent),
       body,
       resolved: false,
       createdAt: Date.now(),
     });
+    await recount(ctx, doc._id, 1, args.author);
     await tellSlack(ctx, doc._id, { kind: "comment", commentId }, args.author, args.authorGithubId);
     return commentId;
   },
@@ -144,6 +221,8 @@ export const reply = mutation({
     body: v.string(),
     author: v.string(),
     authorGithubId: v.optional(v.string()),
+    /** The coding agent writing it for the author, from the agent routes only. */
+    agent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     requireServerSecret(args.secret);
@@ -154,7 +233,8 @@ export const reply = mutation({
     const body = checkBody(args.body);
     const version = args.version ?? doc.currentVersion;
     if (!(await versionRow(ctx, doc._id, version))) fail("missing", "No such version.");
-    if (thread.resolved) {
+    const reopens = thread.resolved;
+    if (reopens) {
       await ctx.db.patch(thread._id, { resolved: false, resolvedBy: undefined, resolvedAt: undefined });
     }
     const replyId = await ctx.db.insert("bcsComments", {
@@ -163,10 +243,12 @@ export const reply = mutation({
       version,
       parentId: thread._id,
       author: args.author,
+      agent: checkAgent(args.agent),
       body,
       resolved: false,
       createdAt: Date.now(),
     });
+    await recount(ctx, doc._id, reopens ? 1 : 0, args.author);
     await tellSlack(ctx, doc._id, { kind: "comment", commentId: replyId }, args.author, args.authorGithubId);
     return replyId;
   },
@@ -194,6 +276,7 @@ export const setResolved = mutation({
       resolvedBy: args.resolved ? args.author : undefined,
       resolvedAt: args.resolved ? Date.now() : undefined,
     });
+    await recount(ctx, doc._id, args.resolved ? -1 : 1);
     await tellSlack(
       ctx,
       doc._id,
@@ -201,5 +284,138 @@ export const setResolved = mutation({
       args.author,
       args.authorGithubId
     );
+  },
+});
+
+async function ownComment(ctx: MutationCtx, number: number, commentId: string, author: string) {
+  const doc = await byNumber(ctx, number);
+  if (!doc) fail("missing", "No such proposal.");
+  const comment = await commentOrFail(ctx, commentId, doc._id);
+  if (comment.author !== author) fail("invalid", "Only its author can change a comment.");
+  if (comment.deleted) fail("invalid", "That comment was deleted.");
+  return { doc, comment };
+}
+
+/** Rewrites one's own comment. */
+export const edit = mutation({
+  args: {
+    secret: v.string(),
+    number: v.number(),
+    commentId: v.string(),
+    body: v.string(),
+    type: v.optional(commentType),
+    author: v.string(),
+  },
+  handler: async (ctx, args) => {
+    requireServerSecret(args.secret);
+    const { comment } = await ownComment(ctx, args.number, args.commentId, args.author);
+    const body = checkBody(args.body);
+    await ctx.db.patch(comment._id, {
+      body,
+      editedAt: Date.now(),
+      // A thread's kind belongs to its first comment.
+      ...(args.type && !comment.parentId ? { type: args.type } : {}),
+    });
+  },
+});
+
+/**
+ * Deletes one's own comment. A thread's first comment that has replies stays as "deleted", so the
+ * replies keep their thread; a reply, or a thread with no replies, goes away. A deleted first
+ * comment whose last reply goes away goes with it.
+ */
+export const remove = mutation({
+  args: { secret: v.string(), number: v.number(), commentId: v.string(), author: v.string() },
+  handler: async (ctx, args) => {
+    requireServerSecret(args.secret);
+    const { doc, comment } = await ownComment(ctx, args.number, args.commentId, args.author);
+    if (comment.parentId) {
+      await ctx.db.delete(comment._id);
+      const thread = await ctx.db.get(comment.parentId);
+      const left = await ctx.db
+        .query("bcsComments")
+        .withIndex("by_parent", (q) => q.eq("parentId", comment.parentId))
+        .first();
+      if (thread?.deleted && !left) {
+        await ctx.db.delete(thread._id);
+        await recount(ctx, doc._id, thread.resolved ? 0 : -1);
+        await tellSlack(ctx, doc._id, { kind: "refresh" }, args.author, undefined);
+      }
+      return;
+    }
+    const reply = await ctx.db
+      .query("bcsComments")
+      .withIndex("by_parent", (q) => q.eq("parentId", comment._id))
+      .first();
+    if (reply) {
+      await ctx.db.patch(comment._id, { deleted: true, body: "", reactions: undefined });
+      return;
+    }
+    await ctx.db.delete(comment._id);
+    await recount(ctx, doc._id, comment.resolved ? 0 : -1);
+    await tellSlack(ctx, doc._id, { kind: "refresh" }, args.author, undefined);
+  },
+});
+
+const REACTIONS = ["thumbsUp", "thumbsDown", "heart", "thinking"] as const;
+
+/** Adds the member's reaction to a comment, or takes it back. */
+export const toggleReaction = mutation({
+  args: {
+    secret: v.string(),
+    number: v.number(),
+    commentId: v.string(),
+    reaction: v.union(...REACTIONS.map((each) => v.literal(each))),
+    author: v.string(),
+  },
+  handler: async (ctx, args) => {
+    requireServerSecret(args.secret);
+    const doc = await byNumber(ctx, args.number);
+    if (!doc) fail("missing", "No such proposal.");
+    const comment = await commentOrFail(ctx, args.commentId, doc._id);
+    if (comment.deleted) fail("invalid", "That comment was deleted.");
+    const reactions = { ...(comment.reactions ?? {}) };
+    const who = reactions[args.reaction] ?? [];
+    reactions[args.reaction] = who.includes(args.author)
+      ? who.filter((login) => login !== args.author)
+      : [...who, args.author];
+    await ctx.db.patch(comment._id, { reactions });
+  },
+});
+
+/**
+ * Every thread of a proposal across its pages, the most recently active first, for the
+ * all-comments page: what it says, where it is, and how many replies it has.
+ */
+export const feed = query({
+  args: { secret: v.string(), number: v.number() },
+  handler: async (ctx, args) => {
+    requireServerSecret(args.secret);
+    const doc = await byNumber(ctx, args.number);
+    if (!doc) return null;
+    const all = await ctx.db
+      .query("bcsComments")
+      .withIndex("by_doc", (q) => q.eq("docId", doc._id))
+      .collect();
+    const row = await versionRow(ctx, doc._id, doc.currentVersion);
+    const titles = new Map(outlineOf(row ?? {}, doc.title).map((page) => [page.slug, page.title]));
+    const replies = new Map<string, Doc<"bcsComments">[]>();
+    for (const comment of all) {
+      if (comment.parentId) replies.set(comment.parentId, [...(replies.get(comment.parentId) ?? []), comment]);
+    }
+    return all
+      .filter((comment) => !comment.parentId)
+      .map((thread) => {
+        const answers = (replies.get(thread._id) ?? []).sort((a, b) => a.createdAt - b.createdAt);
+        const last = answers[answers.length - 1];
+        return {
+          ...shown(thread),
+          pageTitle: thread.page === "" ? doc.title : titles.get(thread.page) ?? thread.page,
+          replyCount: answers.length,
+          lastReply: last ? shown(last) : undefined,
+          activeAt: Math.max(thread.createdAt, last?.createdAt ?? 0),
+        };
+      })
+      .sort((a, b) => b.activeAt - a.activeAt);
   },
 });

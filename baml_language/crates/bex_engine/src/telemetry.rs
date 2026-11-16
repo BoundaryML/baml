@@ -18,9 +18,10 @@ mod environment;
 
 /// One recording per engine, delivered to local files or BCS. Cloud payload
 /// failures discard that payload and allow later delivery. Initial cloud authorization
-/// failure warns and disables recording by default; artifacts can explicitly opt into
-/// aborting execution. Later revocation only disables recording. Local storage
-/// and fatal worker failures disable recording. Delivery errors remain available through
+/// failure warns and stops the export by default; artifacts can explicitly opt into
+/// aborting execution. Later revocation only stops the export. A stopped export
+/// never disables recording, so span ids and `$trace` hooks keep working. Local
+/// storage and fatal worker failures disable recording. Delivery errors remain available through
 /// `BexEngine::telemetry_result` and initial refusal through
 /// `BexEngine::initial_cloud_authorization_error`.
 pub struct TelemetryRecording {
@@ -718,7 +719,8 @@ impl TelemetryRecording {
                                 InitialFailureAction::Ignore => {}
                             }
                         }
-                        failure.disable(btel_processor::RuntimeError(error.to_string()));
+                        // Only the export stops: execution keeps its spans and hooks.
+                        failure.fail_export(btel_processor::RuntimeError(error.to_string()));
                         if !matches!(
                             error,
                             btel_bcs::delivery::DeliveryError::InitialAuthorization(_)
@@ -743,7 +745,7 @@ impl TelemetryRecording {
                         handle
                     }
                     Err(error) => {
-                        control.disable(btel_processor::RuntimeError(error.to_string()));
+                        control.fail_export(btel_processor::RuntimeError(error.to_string()));
                         btel_bcs::delivery::BcsDeliveryHandle::disabled(error, delivery_config)
                     }
                 };

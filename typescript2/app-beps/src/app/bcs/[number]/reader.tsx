@@ -3,19 +3,34 @@
 // A proposal page and its comments: the sandboxed frame, and beside it the page's threads. A
 // thread is on the whole page or on one block of a Markdown page; hovering a block in the frame
 // offers to start one, and a block's badge or a thread's quote brings the other into view.
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useActionState, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { AlertCircle, Brain, Heart, HelpCircle, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { CommentState } from "../actions";
+import { CommentAuthor } from "../avatar";
 import { BcsFrame, type BcsFrameHandle } from "./frame";
+
+export type Reactions = {
+  thumbsUp?: string[];
+  thumbsDown?: string[];
+  heart?: string[];
+  thinking?: string[];
+};
 
 export type Comment = {
   id: string;
   version: number;
   anchor?: { block: string; text: string };
   author: string;
+  /** The coding agent that wrote it for the author, when one said so. */
+  agent?: string;
   body: string;
+  type: "discussion" | "concern" | "question";
+  reactions: Reactions;
+  editedAt?: number;
+  deleted: boolean;
   resolved: boolean;
   resolvedBy?: string;
   createdAt: number;
@@ -40,7 +55,22 @@ type Props = {
   /** Server actions that read the thread from the form's commentId (and resolved). */
   reply: CommentAction;
   resolve: CommentAction;
+  /** Server actions on one comment, named by the form's commentId. */
+  edit: CommentAction;
+  remove: CommentAction;
+  react: CommentAction;
+  /** The viewer's GitHub login: their own comments can be edited and deleted. */
+  viewer: string;
 };
+
+/** What every comment needs to offer reactions, and editing and deleting to its author. */
+const CommentTools = createContext<{
+  edit: CommentAction;
+  remove: CommentAction;
+  react: CommentAction;
+  viewer: string;
+  number: number;
+} | null>(null);
 
 export function BcsReader(props: Props) {
   const frame = useRef<BcsFrameHandle>(null);
@@ -67,10 +97,21 @@ export function BcsReader(props: Props) {
     pendingFocus.current = undefined;
   };
 
+  const tools = useMemo(
+    () => ({
+      edit: props.edit,
+      remove: props.remove,
+      react: props.react,
+      viewer: props.viewer,
+      number: props.number,
+    }),
+    [props.edit, props.remove, props.react, props.viewer, props.number]
+  );
   const openThreads = props.threads.filter((thread) => !thread.resolved);
   const resolvedThreads = props.threads.filter((thread) => thread.resolved);
 
   return (
+    <CommentTools.Provider value={tools}>
     <div className="flex flex-1 min-w-0">
       <BcsFrame
         ref={frame}
@@ -182,6 +223,7 @@ export function BcsReader(props: Props) {
         </button>
       )}
     </div>
+    </CommentTools.Provider>
   );
 }
 
@@ -229,6 +271,7 @@ function Composer({
       <Refused error={state.error} />
       <input type="hidden" name="block" value={block ?? ""} />
       <input type="hidden" name="blockText" value={text ?? ""} />
+      <TypeSelect />
       <Textarea
         name="body"
         required
@@ -251,13 +294,193 @@ function Composer({
   );
 }
 
-function Meta({ comment, version }: { comment: Comment; version: number }) {
+/** A thread's kind badge, as BEP comments show it. */
+export function KindBadge({ type }: { type: Comment["type"] }) {
+  if (type === "concern") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/40">
+        <AlertCircle className="h-3 w-3" /> Concern
+      </span>
+    );
+  }
+  if (type === "question") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-blue-600 bg-blue-50 dark:bg-blue-950/40">
+        <HelpCircle className="h-3 w-3" /> Question
+      </span>
+    );
+  }
+  return null;
+}
+
+/** A new thread's kind, as on BEPs. */
+function TypeSelect({ value = "discussion" }: { value?: string }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
-      <span className="font-medium text-foreground">{comment.author}</span>
+    <select
+      name="type"
+      defaultValue={value}
+      aria-label="Kind"
+      className="h-8 rounded-md border bg-background px-2 text-xs"
+    >
+      <option value="discussion">Discussion</option>
+      <option value="concern">Concern (blocks acceptance)</option>
+      <option value="question">Question</option>
+    </select>
+  );
+}
+
+function Meta({ comment, version, thread }: { comment: Comment; version: number; thread?: boolean }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+      <CommentAuthor login={comment.author} agent={comment.agent} size={thread ? "md" : "sm"} />
+      {thread && <KindBadge type={comment.type} />}
       <span>{formatDistanceToNow(comment.createdAt, { addSuffix: true })}</span>
+      {comment.editedAt && <span title={new Date(comment.editedAt).toLocaleString()}>edited</span>}
       {comment.version !== version && <span>on v{comment.version}</span>}
     </div>
+  );
+}
+
+/**
+ * The reactions BEP comments offer, with their icons and the color of one's own; "thinking", which
+ * BCS offered before, shows only on comments that still have it, so it can be taken back.
+ */
+const REACTIONS = [
+  { key: "thumbsUp", Icon: ThumbsUp, mine: "text-blue-500", label: "Thumbs up", always: true },
+  { key: "thumbsDown", Icon: ThumbsDown, mine: "text-blue-500", label: "Thumbs down", always: true },
+  { key: "heart", Icon: Heart, mine: "text-red-500", label: "Heart", always: true },
+  { key: "thinking", Icon: Brain, mine: "text-blue-500", label: "Thinking", always: false },
+] as const;
+
+/** A comment's reactions, and the buttons to add or take back the viewer's. */
+function ReactionBar({ comment }: { comment: Comment }) {
+  const tools = useContext(CommentTools)!;
+  const [state, submit, pending] = useActionState(tools.react, {});
+  return (
+    <form action={submit} className="flex flex-wrap items-center gap-1">
+      <input type="hidden" name="commentId" value={comment.id} />
+      {REACTIONS.map(({ key, Icon, mine: mineColor, label, always }) => {
+        const who = comment.reactions[key] ?? [];
+        const mine = who.includes(tools.viewer);
+        if (!always && who.length === 0) return null;
+        return (
+          <Button
+            key={key}
+            type="submit"
+            name="reaction"
+            value={key}
+            variant="ghost"
+            size="sm"
+            disabled={pending}
+            aria-pressed={mine}
+            aria-label={who.length > 0 ? `${label}, ${who.length}` : label}
+            title={who.length > 0 ? who.join(", ") : label}
+            className={`h-7 px-2 ${mine ? mineColor : "text-muted-foreground"}`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {who.length > 0 && <span>{who.length}</span>}
+          </Button>
+        );
+      })}
+      <Refused error={state.error} />
+    </form>
+  );
+}
+
+/** A comment's text, with editing and deleting for its author. */
+function CommentBody({ comment, thread }: { comment: Comment; thread?: boolean }) {
+  const tools = useContext(CommentTools)!;
+  const [editing, setEditing] = useState(false);
+  const [editState, submitEdit, editPending] = useActionState(tools.edit, {});
+  const [removeState, submitRemove, removePending] = useActionState(tools.remove, {});
+  useEffect(() => {
+    if (editState.posted) setEditing(false);
+  }, [editState.posted]);
+  if (comment.deleted) {
+    return <p className="text-sm italic text-muted-foreground">This comment was deleted.</p>;
+  }
+  if (editing) {
+    return (
+      <form action={submitEdit} className="space-y-2">
+        <input type="hidden" name="commentId" value={comment.id} />
+        <Refused error={editState.error} />
+        {thread && <TypeSelect value={comment.type} />}
+        <Textarea
+          name="body"
+          required
+          autoFocus
+          rows={3}
+          defaultValue={editState.body ?? comment.body}
+          aria-label="Edit comment"
+          className="text-sm"
+        />
+        <div className="flex gap-2">
+          <Button type="submit" size="sm" disabled={editPending}>
+            {editPending ? "Saving…" : "Save"}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    );
+  }
+  const own = comment.author === tools.viewer;
+  return (
+    <div className="space-y-1">
+      <p className="text-sm whitespace-pre-wrap break-words">{comment.body}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <ReactionBar comment={comment} />
+        {own && (
+          <>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Edit
+            </button>
+            <form
+              action={submitRemove}
+              onSubmit={(event) => {
+                if (!confirm("Delete this comment?")) event.preventDefault();
+              }}
+            >
+              <input type="hidden" name="commentId" value={comment.id} />
+              <button
+                type="submit"
+                disabled={removePending}
+                className="text-xs text-muted-foreground hover:text-destructive"
+              >
+                Delete
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+      <Refused error={removeState.error} />
+    </div>
+  );
+}
+
+/** Turning a thread into a recorded decision or an open issue, on their pages. */
+function ThreadLinks({ threadId }: { threadId: string }) {
+  const tools = useContext(CommentTools)!;
+  return (
+    <>
+      <a
+        href={`/bcs/${tools.number}/decisions?from=${threadId}`}
+        className="inline-flex h-8 items-center px-2 text-xs text-muted-foreground hover:text-foreground"
+      >
+        Record decision
+      </a>
+      <a
+        href={`/bcs/${tools.number}/issues?from=${threadId}`}
+        className="inline-flex h-8 items-center px-2 text-xs text-muted-foreground hover:text-foreground"
+      >
+        Open issue
+      </a>
+    </>
   );
 }
 
@@ -304,12 +527,12 @@ function ThreadCard({
           {stale && <p className="text-xs text-muted-foreground">This text changed in a later version.</p>}
         </div>
       )}
-      <Meta comment={thread} version={version} />
-      <p className="text-sm whitespace-pre-wrap break-words">{thread.body}</p>
+      <Meta comment={thread} version={version} thread />
+      <CommentBody comment={thread} thread />
       {thread.replies.map((each) => (
         <div key={each.id} className="border-l pl-2 space-y-1">
           <Meta comment={each} version={version} />
-          <p className="text-sm whitespace-pre-wrap break-words">{each.body}</p>
+          <CommentBody comment={each} />
         </div>
       ))}
       {thread.resolved && thread.resolvedBy && (
@@ -340,7 +563,7 @@ function ThreadCard({
           </div>
         </form>
       ) : (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-x-2">
           <Button type="button" size="sm" variant="ghost" onClick={() => setReplying(true)}>
             Reply
           </Button>
@@ -351,6 +574,7 @@ function ThreadCard({
               {thread.resolved ? "Reopen" : "Resolve"}
             </Button>
           </form>
+          <ThreadLinks threadId={thread.id} />
         </div>
       )}
     </div>

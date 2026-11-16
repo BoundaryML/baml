@@ -11,8 +11,11 @@
 import type * as analysisJobs from "../analysisJobs.js";
 import type * as analysisJobsNode from "../analysisJobsNode.js";
 import type * as bcs from "../bcs.js";
+import type * as bcsAgents from "../bcsAgents.js";
 import type * as bcsComments from "../bcsComments.js";
 import type * as bcsSlack from "../bcsSlack.js";
+import type * as bcsStances from "../bcsStances.js";
+import type * as bcsTracking from "../bcsTracking.js";
 import type * as beps from "../beps.js";
 import type * as comments from "../comments.js";
 import type * as decisions from "../decisions.js";
@@ -37,8 +40,11 @@ declare const fullApi: ApiFromModules<{
   analysisJobs: typeof analysisJobs;
   analysisJobsNode: typeof analysisJobsNode;
   bcs: typeof bcs;
+  bcsAgents: typeof bcsAgents;
   bcsComments: typeof bcsComments;
   bcsSlack: typeof bcsSlack;
+  bcsStances: typeof bcsStances;
+  bcsTracking: typeof bcsTracking;
   beps: typeof beps;
   comments: typeof comments;
   decisions: typeof decisions;

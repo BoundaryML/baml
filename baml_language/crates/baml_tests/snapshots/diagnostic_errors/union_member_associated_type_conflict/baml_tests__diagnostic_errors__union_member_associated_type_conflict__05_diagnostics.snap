@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × member `take` cannot be used on `Count | Text`: a parameter's type depends on an associated type its members bind differently (`int`, `string`); narrow the union first
+    ╭─[main.baml:44:5]
+ 44 │     x.take(y.get())
+    ·     ──────
+    ╰────
+
+  [type] E0001
+
+  × member `item` cannot be used on `Count | Text`: its type depends on an associated type its members bind differently (`int`, `string`); narrow the union first
+    ╭─[main.baml:48:5]
+ 48 │     x.item
+    ·     ──────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:51:69]
+ 51 │ ╭─▶ function return_is_the_union_of_the_arms(x: Text | Count) -> string {
+ 52 │ │       x.get()
+ 53 │ ├─▶ }
+    · ╰──── expected `string`, found `int | string`
+    ╰────

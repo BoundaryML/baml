@@ -133,21 +133,71 @@ export async function byNumber(ctx: QueryCtx, number: number) {
     .unique();
 }
 
+/**
+ * Every proposal, with what the board shows (shepherds, open comments, page count), newest first;
+ * and every GitHub login seen across proposals, to suggest when choosing shepherds.
+ */
 export const list = query({
   args: { secret: v.string() },
   handler: async (ctx, args) => {
     guard(args.secret);
     const docs = await ctx.db.query("bcsDocs").withIndex("by_number").order("desc").collect();
-    return docs.map((doc) => ({
-      number: doc.number,
-      title: doc.title,
-      status: doc.status,
-      authors: doc.authors,
-      currentVersion: doc.currentVersion,
-      updatedAt: doc.updatedAt,
-    }));
+    const people = new Set<string>();
+    const proposals = [];
+    for (const doc of docs) {
+      // The comment mutations keep these on the proposal; only one from before they did is counted
+      // from its comments (until its next comment, which stores them).
+      let openComments = doc.openComments;
+      let commenters = doc.commenters;
+      if (openComments === undefined || commenters === undefined) {
+        const comments = await ctx.db
+          .query("bcsComments")
+          .withIndex("by_doc", (q) => q.eq("docId", doc._id))
+          .collect();
+        openComments = comments.filter((each) => !each.parentId && !each.resolved).length;
+        commenters = comments.map((each) => each.author);
+      }
+      const row = await versionRow(ctx, doc._id, doc.currentVersion);
+      for (const login of [
+        ...doc.authors,
+        ...(doc.shepherds ?? []),
+        ...(doc.implementedBy ?? []),
+        ...commenters,
+      ]) {
+        people.add(login);
+      }
+      proposals.push({
+        number: doc.number,
+        title: doc.title,
+        status: doc.status,
+        authors: doc.authors,
+        shepherds: doc.shepherds ?? [],
+        implementedBy: doc.implementedBy ?? [],
+        currentVersion: doc.currentVersion,
+        updatedAt: doc.updatedAt,
+        openComments,
+        openIssues: doc.openIssues ?? 0,
+        pageCount: row ? outlineOf(row, doc.title).length : 1,
+      });
+    }
+    return { proposals, people: [...people].sort((a, b) => a.localeCompare(b)) };
   },
 });
+
+const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+
+/** GitHub logins from an editor: trimmed, without a leading @, unique, each a valid login. */
+export function checkLogins(logins: string[], what: string): string[] {
+  const result: string[] = [];
+  for (const raw of logins) {
+    const login = raw.trim().replace(/^@/, "");
+    if (!login) continue;
+    if (!LOGIN.test(login)) fail("invalid", `"${raw.trim()}" is not a GitHub login (${what}).`);
+    if (!result.some((each) => each.toLowerCase() === login.toLowerCase())) result.push(login);
+  }
+  if (result.length > 20) fail("invalid", `At most 20 ${what}.`);
+  return result;
+}
 
 export async function versionRow(ctx: QueryCtx, docId: Id<"bcsDocs">, version: number) {
   return ctx.db
@@ -226,6 +276,8 @@ export const get = query({
       title: doc.title,
       status: doc.status,
       authors: doc.authors,
+      shepherds: doc.shepherds ?? [],
+      implementedBy: doc.implementedBy ?? [],
       currentVersion: doc.currentVersion,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
@@ -422,6 +474,8 @@ export const save = mutation({
     note: v.optional(v.string()),
     title: v.optional(v.string()),
     status: v.optional(bepStatus),
+    shepherds: v.optional(v.array(v.string())),
+    implementedBy: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     guard(args.secret);
@@ -438,6 +492,11 @@ export const save = mutation({
     const title = args.title?.trim() || undefined;
     const newTitle = title !== undefined && title !== doc.title;
     const newStatus = args.status !== undefined && args.status !== doc.status;
+    const shepherds = args.shepherds && checkLogins(args.shepherds, "shepherds");
+    const implementedBy = args.implementedBy && checkLogins(args.implementedBy, "implementers");
+    const same = (a: string[] | undefined, b: string[]) => (a ?? []).join("\n") === b.join("\n");
+    const newShepherds = shepherds !== undefined && !same(doc.shepherds, shepherds);
+    const newImplementers = implementedBy !== undefined && !same(doc.implementedBy, implementedBy);
     let version = doc.currentVersion;
     const touchesPages =
       args.pages !== undefined ||
@@ -460,13 +519,18 @@ export const save = mutation({
       }
     }
     const newVersion = version !== doc.currentVersion;
-    if (newVersion || newTitle || newStatus) {
+    if (newVersion || newTitle || newStatus || newShepherds || newImplementers) {
       await ctx.db.patch(doc._id, {
         currentVersion: version,
         updatedAt: now,
         ...(newTitle ? { title } : {}),
         ...(newStatus ? { status: args.status } : {}),
-        authors: doc.authors.includes(args.author) ? doc.authors : [...doc.authors, args.author],
+        ...(newShepherds ? { shepherds } : {}),
+        ...(newImplementers ? { implementedBy } : {}),
+        // Writing a version or renaming makes the editor an author; status and shepherds do not.
+        ...((newVersion || newTitle) && !doc.authors.includes(args.author)
+          ? { authors: [...doc.authors, args.author] }
+          : {}),
       });
       await tellSlack(
         ctx,
@@ -475,6 +539,7 @@ export const save = mutation({
           kind: "saved",
           version: newVersion ? version : undefined,
           status: newStatus ? { from: doc.status, to: args.status! } : undefined,
+          shepherds: newShepherds ? shepherds : undefined,
         },
         args.author,
         args.authorGithubId
@@ -495,9 +560,19 @@ export const slackEvent = v.union(
     kind: v.literal("saved"),
     version: v.optional(v.number()),
     status: v.optional(v.object({ from: bepStatus, to: bepStatus })),
+    shepherds: v.optional(v.array(v.string())),
   }),
   v.object({ kind: v.literal("comment"), commentId: v.id("bcsComments") }),
-  v.object({ kind: v.literal("resolved"), commentId: v.id("bcsComments"), resolved: v.boolean() })
+  v.object({ kind: v.literal("resolved"), commentId: v.id("bcsComments"), resolved: v.boolean() }),
+  // Only the thread's overview changes (an open thread was deleted): no reply.
+  v.object({ kind: v.literal("refresh") }),
+  v.object({ kind: v.literal("decision"), title: v.string() }),
+  v.object({
+    kind: v.literal("issue"),
+    title: v.string(),
+    change: v.union(v.literal("opened"), v.literal("resolved"), v.literal("reopened")),
+    resolution: v.optional(v.string()),
+  })
 );
 
 export async function tellSlack(
@@ -527,7 +602,9 @@ export const slackView = internalQuery({
       .collect();
     // Shown once a proposal has threads, then kept, so resolving the last one shows 0.
     const threads = comments.filter((each) => !each.parentId);
-    const openComments = threads.length > 0 ? threads.filter((each) => !each.resolved).length : undefined;
+    // The stored count once kept (it stays at 0 after the last thread goes), else counted here.
+    const openComments =
+      doc.openComments ?? (threads.length > 0 ? threads.filter((each) => !each.resolved).length : undefined);
     const comment = args.commentId ? comments.find((each) => each._id === args.commentId) : undefined;
     const thread = comment?.parentId ? comments.find((each) => each._id === comment.parentId) : comment;
     const outline = outlineOf((await versionRow(ctx, doc._id, doc.currentVersion)) ?? {}, doc.title);
@@ -552,6 +629,7 @@ export const slackView = internalQuery({
       title: doc.title,
       status: doc.status,
       authors: doc.authors,
+      shepherds: doc.shepherds ?? [],
       currentVersion: doc.currentVersion,
       updatedAt: doc.updatedAt,
       slackThreadTs: doc.slackThreadTs,
@@ -559,6 +637,7 @@ export const slackView = internalQuery({
       changed: version?.changed,
       slackUserId: user?.slackUserId,
       openComments,
+      openIssues: doc.openIssues,
       comment:
         comment && thread
           ? {
@@ -571,6 +650,8 @@ export const slackView = internalQuery({
               quote: thread.anchor?.text,
               threadAuthor: thread.author,
               threadBody: thread.body,
+              type: thread.type,
+              agent: comment.agent,
             }
           : undefined,
     };

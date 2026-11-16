@@ -19,6 +19,11 @@ impl<'db> Generator<'_, 'db> {
         let code = match rvalue {
             Rvalue::Use(operand) => return self.operand(block, operand),
             Rvalue::BinaryOp { op, left, right } => {
+                if let Some((tested, negate)) = rvalue.null_test() {
+                    let value = self.value_operand(block, tested)?;
+                    let not = if negate { "!" } else { "" };
+                    return Ok(Expr::new(format!("({not}({value}).is_null())"), Repr::Bool));
+                }
                 let left = self.operand(block, left)?;
                 let right = self.operand(block, right)?;
                 return self.binary(block, *op, &left, &right);

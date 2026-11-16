@@ -10,7 +10,9 @@ import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
 import rehypeRaw from "rehype-raw";
 import rehypeStringify from "rehype-stringify";
+import { bundledLanguages, codeToHast } from "shiki";
 import type { Element, ElementContent, Root, RootContent } from "hast";
+import { SHIKI_THEMES } from "./shiki-themes";
 
 export type BcsPageFormat = "markdown" | "html";
 
@@ -30,6 +32,10 @@ export type RenderedPage = {
   document: string;
   /** The ids of the blocks comments can be attached to, in reading order: none for HTML pages. */
   blocks: string[];
+  /** Each block's Markdown source, by id, where the parser knows it: what a comment's agent edits. */
+  sources: Record<string, string>;
+  /** The page's h1 to h3 headings, for a table of contents: none for HTML pages. */
+  headings: { id: string; text: string; depth: number }[];
 };
 
 /** Renders a page for the sandboxed frame. */
@@ -42,20 +48,38 @@ export async function renderBcsPage(options: RenderOptions): Promise<RenderedPag
       : `<!doctype html>\n${options.content}`;
     // Keep its #links inside the frame (see FRAGMENT_SCRIPT). Appended rather than placed before
     // </body>, which could be text inside the page's own script; browsers run it in the body.
-    return { document: `${page}\n<script>${FRAGMENT_SCRIPT}</script>`, blocks: [] };
+    return {
+      document: `${page}\n<script>${FRAGMENT_SCRIPT}</script>`,
+      blocks: [],
+      sources: {},
+      headings: [],
+    };
   }
   const blocks: string[] = [];
+  const sources: Record<string, string> = {};
   // A page that brings its own stylesheet is laid out by it alone: the defaults would fight it.
-  const state = { mermaid: false, ownStyles: false };
+  const state = {
+    mermaid: false,
+    ownStyles: false,
+    highlighted: false,
+    headings: [] as RenderedPage["headings"],
+  };
   const body = String(
     await unified()
       .use(remarkParse)
       .use(remarkGfm)
       .use(remarkRehype, { allowDangerousHtml: true })
       .use(rehypeRaw)
-      .use(() => (tree: Root) => {
+      .use(() => async (tree: Root) => {
         adjust(tree, options.pageHref, state);
-        blocks.push(...markBlocks(tree));
+        for (const block of markBlocks(tree)) {
+          blocks.push(block.id);
+          if (block.start !== undefined && block.end !== undefined) {
+            sources[block.id] = options.content.slice(block.start, block.end);
+          }
+        }
+        // After the ids: coloring keeps each block's text, so its id, the same.
+        state.highlighted = await highlight(tree);
       })
       .use(rehypeStringify)
       .process(options.content)
@@ -68,6 +92,7 @@ export async function renderBcsPage(options: RenderOptions): Promise<RenderedPag
 <title>${escapeHtml(options.title)}</title>
 <base target="_blank">
 ${state.ownStyles ? "" : `<style>${DEFAULT_CSS}</style>`}
+${state.highlighted ? `<style>${HIGHLIGHT_CSS}</style>` : ""}
 </head>
 <body>
 <article${state.ownStyles ? "" : ' class="bcs-page"'}>
@@ -82,7 +107,7 @@ ${
 }
 </body>
 </html>`;
-  return { document, blocks };
+  return { document, blocks, sources, headings: state.headings };
 }
 
 function escapeHtml(text: string): string {
@@ -123,9 +148,18 @@ function headingId(value: string): string {
 function adjust(
   tree: Root,
   pageHref: (slug: string) => string,
-  state: { mermaid: boolean; ownStyles: boolean }
+  state: { mermaid: boolean; ownStyles: boolean; headings: RenderedPage["headings"] }
 ) {
-  const used = new Map<string, number>();
+  // Every id on the page, given or made, so a made one never repeats another.
+  const used = new Set<string>();
+  const collect = (node: Root | Element) => {
+    for (const child of node.children) {
+      if (child.type !== "element") continue;
+      if (typeof child.properties.id === "string") used.add(child.properties.id);
+      collect(child);
+    }
+  };
+  collect(tree);
   const walk = (node: Root | Element) => {
     node.children.forEach((child, index) => {
       if (child.type !== "element") return;
@@ -140,11 +174,19 @@ function adjust(
           child.properties.dataBcsPage = "";
         }
       }
-      if (/^h[1-6]$/.test(child.tagName) && child.properties.id === undefined) {
-        const base = headingId(text(child)) || "section";
-        const seen = used.get(base) ?? 0;
-        used.set(base, seen + 1);
-        child.properties.id = seen === 0 ? base : `${base}-${seen}`;
+      if (/^h[1-6]$/.test(child.tagName)) {
+        if (child.properties.id === undefined) {
+          const base = headingId(text(child)) || "section";
+          let id = base;
+          for (let n = 1; used.has(id); n++) id = `${base}-${n}`;
+          used.add(id);
+          child.properties.id = id;
+        }
+        const depth = Number(child.tagName[1]);
+        const words = text(child).replace(/\s+/g, " ").trim();
+        if (depth <= 3 && words) {
+          state.headings.push({ id: String(child.properties.id), text: words.slice(0, 120), depth });
+        }
       }
       const code = child.tagName === "pre" ? child.children.find((each) => each.type === "element") : undefined;
       if (
@@ -159,6 +201,8 @@ function adjust(
           tagName: "pre",
           properties: { className: ["mermaid"] },
           children: [{ type: "text", value: text(code) }],
+          // Where the fence is in the Markdown, so a comment on the diagram finds its source.
+          position: child.position,
         };
         node.children[index] = diagram;
         return;
@@ -168,6 +212,68 @@ function adjust(
   };
   walk(tree);
 }
+
+/**
+ * Colors each fenced code block whose language Shiki knows, with the themes BEP pages use, in both
+ * light and dark: the colors are CSS variables, and HIGHLIGHT_CSS picks the pair for the system's
+ * scheme. Only the code's children change, so its text, id and source position stay. Returns
+ * whether any block was colored.
+ */
+async function highlight(tree: Root): Promise<boolean> {
+  const blocks: { pre: Element; code: Element; lang: string }[] = [];
+  const walk = (node: Root | Element) => {
+    for (const child of node.children) {
+      if (child.type !== "element") continue;
+      if (child.tagName === "pre") {
+        const code = child.children.find(
+          (each): each is Element => each.type === "element" && each.tagName === "code"
+        );
+        const classes = Array.isArray(code?.properties.className) ? code.properties.className.map(String) : [];
+        const lang = classes.find((each) => each.startsWith("language-"))?.slice("language-".length);
+        // Own names only: "in" would also match Object.prototype's, such as "constructor".
+        if (code && lang && Object.hasOwn(bundledLanguages, lang)) blocks.push({ pre: child, code, lang });
+        continue;
+      }
+      walk(child);
+    }
+  };
+  walk(tree);
+  for (const block of blocks) {
+    // A block Shiki cannot color stays as written rather than failing the page.
+    const colored = await codeToHast(text(block.code).replace(/\n$/, ""), {
+      lang: block.lang,
+      themes: SHIKI_THEMES,
+      defaultColor: false,
+    }).catch(() => null);
+    if (!colored) continue;
+    const pre = colored.children.find((each): each is Element => each.type === "element" && each.tagName === "pre");
+    const code = pre?.children.find((each): each is Element => each.type === "element" && each.tagName === "code");
+    if (!pre || !code) continue;
+    // Added to the block's own classes and style (a page may give a <pre> its own), not replacing them.
+    const classes = Array.isArray(block.pre.properties.className) ? block.pre.properties.className : [];
+    block.pre.properties.className = [...classes.map(String), "shiki"];
+    const own = typeof block.pre.properties.style === "string" ? block.pre.properties.style.trim() : "";
+    const theme = typeof pre.properties.style === "string" ? pre.properties.style : "";
+    block.pre.properties.style = own ? `${theme};${own}` : theme;
+    block.code.children = code.children;
+  }
+  return blocks.length > 0;
+}
+
+/**
+ * Shiki's colors for the system's scheme, on pages with their own stylesheet too (theirs come
+ * after). The block takes the page's code background (`--code`) when it has one: GitHub's light
+ * theme is white, which would vanish on a white page.
+ */
+const HIGHLIGHT_CSS = `
+pre.shiki { color: var(--shiki-light); background-color: var(--code, var(--shiki-light-bg)); border: 1px solid rgba(128, 128, 128, 0.25); padding: 14px 16px; border-radius: 8px; overflow-x: auto; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre.shiki code { background: none; border: 0; border-radius: 0; padding: 0; font: inherit; overflow-wrap: normal; }
+pre.shiki span { color: var(--shiki-light); }
+@media (prefers-color-scheme: dark) {
+  pre.shiki { color: var(--shiki-dark); background-color: var(--code, var(--shiki-dark-bg)); }
+  pre.shiki span { color: var(--shiki-dark); }
+}
+`;
 
 /** Elements a comment can be attached to; one inside another belongs to the outer one. */
 const BLOCK_TAGS = new Set([
@@ -197,9 +303,10 @@ function withoutPositions(node: unknown): unknown {
 
 /**
  * Gives each commentable block a `data-bcs-block` id from its tag and text, so a comment finds its
- * block again in later versions as long as the block's text is unchanged. Returns the ids.
+ * block again in later versions as long as the block's text is unchanged. Returns the ids, with
+ * where each block starts and ends in the Markdown when the parser recorded it.
  */
-function markBlocks(tree: Root): string[] {
+function markBlocks(tree: Root): { id: string; start?: number; end?: number }[] {
   const found: { node: Element; key: string }[] = [];
   const walk = (node: Root | Element) => {
     for (const child of node.children) {
@@ -219,7 +326,7 @@ function markBlocks(tree: Root): string[] {
   walk(tree);
   const repeats = new Map<string, number>();
   for (const block of found) repeats.set(block.key, (repeats.get(block.key) ?? 0) + 1);
-  const ids: string[] = [];
+  const ids: { id: string; start?: number; end?: number }[] = [];
   const used = new Map<string, number>();
   found.forEach((block, index) => {
     // A block whose text repeats ("TBD" twice) is told apart by its neighbours, so inserting
@@ -233,7 +340,7 @@ function markBlocks(tree: Root): string[] {
     used.set(base, count + 1);
     const id = count === 0 ? base : `${base}-${count + 1}`;
     block.node.properties.dataBcsBlock = id;
-    ids.push(id);
+    ids.push({ id, start: block.node.position?.start.offset, end: block.node.position?.end.offset });
   });
   return ids;
 }
@@ -271,7 +378,8 @@ const FRAGMENT_SCRIPT = `
  * pages asks the site to open it (the site checks it is one of this proposal's pages). Hovering a
  * block (or, from the keyboard, picking one) offers a Comment button, which asks the site to start
  * a thread on it; the site sends back how many open threads each block has, shown as badges, and
- * asks the frame to scroll to a block (FRAGMENT_SCRIPT handles #fragments). Shown on its own (the
+ * asks the frame to scroll to a block (FRAGMENT_SCRIPT handles #fragments); the frame reports which
+ * heading is being read, for the table of contents. Shown on its own (the
  * raw route), the page has no site around it and does none of this. Its own styles cannot restyle
  * these controls: they reset every property inline.
  */
@@ -327,7 +435,7 @@ const BRIDGE_SCRIPT = `
     Object.keys(counts).forEach(function (id) {
       var block = find(id);
       if (!block || !counts[id]) return;
-      var badge = control("\u{1F4AC} " + counts[id], "background:#6a45bf;color:#ffffff;border:1px solid #6a45bf;");
+      var badge = control(counts[id] + (counts[id] === 1 ? " comment" : " comments"), "background:#6a45bf;color:#ffffff;border:1px solid #6a45bf;");
       badge.title = counts[id] + " open comment" + (counts[id] === 1 ? "" : "s");
       badge.addEventListener("click", function () { send({ type: "bcs-show-thread", block: id }); });
       place(badge, block, 0);
@@ -350,11 +458,21 @@ const BRIDGE_SCRIPT = `
       return;
     }
     current = block;
-    place(add, block, counts[block.getAttribute("data-bcs-block")] ? 58 : 0);
+    place(add, block, counts[block.getAttribute("data-bcs-block")] ? 96 : 0);
   });
+  // The text a thread quotes. An SVG has no innerText, and its textContent runs every label into
+  // the next ("Control planeData plane"), so its text pieces are joined with spaces instead.
+  function quoteOf(block) {
+    var svg = block instanceof SVGElement || block.querySelector("svg");
+    if (!svg) return block.innerText || block.textContent || "";
+    var parts = [];
+    var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) parts.push(walker.currentNode.nodeValue);
+    return parts.join(" ");
+  }
   add.addEventListener("click", function () {
     if (!current) return;
-    var words = (current.innerText || current.textContent || "").replace(/\\s+/g, " ").trim();
+    var words = quoteOf(current).replace(/\\s+/g, " ").trim();
     send({ type: "bcs-comment", block: current.getAttribute("data-bcs-block"), text: words.slice(0, 280) });
   });
 
@@ -386,7 +504,7 @@ const BRIDGE_SCRIPT = `
     var block = blockOf(event.target);
     if (!block) return;
     current = block;
-    place(add, block, counts[block.getAttribute("data-bcs-block")] ? 58 : 0);
+    place(add, block, counts[block.getAttribute("data-bcs-block")] ? 96 : 0);
   });
   document.addEventListener("keydown", function (event) {
     if (!picking) return;
@@ -424,6 +542,31 @@ const BRIDGE_SCRIPT = `
       }
     }
   });
+  // The heading being read, for the site's table of contents: the last one scrolled past the top.
+  var headings = document.querySelectorAll("h1[id], h2[id], h3[id]");
+  var lastActive = null;
+  var scheduled = false;
+  function reportActive() {
+    scheduled = false;
+    var active = headings.length ? headings[0].id : null;
+    for (var i = 0; i < headings.length; i++) {
+      if (headings[i].getBoundingClientRect().top <= 96) active = headings[i].id;
+      else break;
+    }
+    // At the bottom a short last section never reaches the top: it is the one being read.
+    var bottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+    if (bottom && headings.length && window.scrollY > 0) active = headings[headings.length - 1].id;
+    if (active !== lastActive) {
+      lastActive = active;
+      send({ type: "bcs-active-heading", id: active });
+    }
+  }
+  window.addEventListener("scroll", function () {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(reportActive);
+  }, { passive: true });
+  window.addEventListener("load", reportActive);
   window.addEventListener("resize", drawBadges);
   window.addEventListener("load", drawBadges);
   if (window.ResizeObserver) new ResizeObserver(drawBadges).observe(document.body);

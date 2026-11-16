@@ -386,6 +386,7 @@ impl BexEngine {
             ValueKind::Null => BexExternalValue::Null,
             ValueKind::Int(i) => BexExternalValue::Int(i),
             ValueKind::Bool(b) => BexExternalValue::Bool(b),
+            ValueKind::Float(f) => BexExternalValue::Float(f),
             ValueKind::Object(idx) => {
                 self.convert_heap_ptr_to_external_with_type(idx, effective_type, vm, permit)?
             }
@@ -762,8 +763,9 @@ impl BexEngine {
 // SysOp Argument Conversion
 // ============================================================================
 
-/// If `ptr` references an `Object::Float`, return its `BexExternalValue::Float`
-/// projection so callers can surface a primitive instead of an opaque handle.
+/// If `ptr` references a boxed `Object::Float` (NaN, ±inf, extreme
+/// magnitudes), return its `BexExternalValue::Float` projection so callers can
+/// surface a primitive instead of an opaque handle.
 ///
 /// # Safety
 ///
@@ -890,6 +892,7 @@ impl BexEngine {
             ValueKind::Null => BexExternalValue::Null,
             ValueKind::Int(i) => BexExternalValue::Int(i),
             ValueKind::Bool(b) => BexExternalValue::Bool(b),
+            ValueKind::Float(f) => BexExternalValue::Float(f),
             ValueKind::Object(ptr) => {
                 // SAFETY: caller holds the engine permit (heap is borrowed).
                 if let Some(v) = unsafe { unbox_float_object(ptr) } {
@@ -930,6 +933,7 @@ pub(crate) fn owned_external_value(
         ValueKind::Null => BexExternalValue::Null,
         ValueKind::Int(i) => BexExternalValue::Int(i),
         ValueKind::Bool(b) => BexExternalValue::Bool(b),
+        ValueKind::Float(f) => BexExternalValue::Float(f),
         ValueKind::Object(ptr) => {
             // SAFETY: `permit` witnesses GC liveness for the deref.
             if let Some(v) = unsafe { unbox_float_object(ptr) } {
@@ -1729,6 +1733,24 @@ fn find_implemented_interface_union_member<'a>(
     }
 }
 
+/// The union member a float selects: a float literal it equals, else `float`.
+fn find_float_union_member(
+    value: f64,
+    members: &[bex_vm_types::RealizedTy],
+) -> Option<&bex_vm_types::RealizedTy> {
+    members
+        .iter()
+        .find(|member| {
+            matches!(member, bex_vm_types::RealizedTy::Literal(Literal::Float(expected), _)
+                if float_literal_matches(value, expected))
+        })
+        .or_else(|| {
+            members
+                .iter()
+                .find(|member| matches!(member, bex_vm_types::RealizedTy::Float))
+        })
+}
+
 /// Find the union member that matches the runtime value's type.
 fn find_matching_union_member(
     value: Value,
@@ -1757,20 +1779,11 @@ fn find_matching_union_member(
                     .iter()
                     .find(|member| matches!(member, bex_vm_types::RealizedTy::Bool))
             }),
+        ValueKind::Float(value) => find_float_union_member(value, members),
         ValueKind::Object(ptr) => {
             let obj = unsafe { ptr.get() };
             match obj {
-                Object::Float(value) => members
-                    .iter()
-                    .find(|member| {
-                        matches!(member, bex_vm_types::RealizedTy::Literal(Literal::Float(expected), _)
-                            if float_literal_matches(*value, expected))
-                    })
-                    .or_else(|| {
-                        members
-                            .iter()
-                            .find(|member| matches!(member, bex_vm_types::RealizedTy::Float))
-                    }),
+                Object::Float(value) => find_float_union_member(*value, members),
                 Object::String(value) => members
                     .iter()
                     .find(|member| {
@@ -1997,6 +2010,7 @@ mod outbound_selection_tests {
             other: indexmap::IndexMap::new(),
             owner: bex_vm_types::types::Owner::Package(user),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let head =
             bex_vm_types::TypeHead::new(enum_ptr, baml_type::typetag::TypeTag::from_i64(200));

@@ -31,17 +31,11 @@
 //! 3. **Thread safety:** The pointer can be copied across threads (it's just
 //!    8 bytes). Dereferencing only happens within a single VM.
 
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::Object;
-
-/// The pointer bits that mark a reference to an instance cell rather than an
-/// [`Object`] slot. Both are 8-byte aligned, so the bits are free, and a
-/// [`Value`](crate::Value) keeps them: telling an instance apart needs no
-/// memory read.
-pub const INSTANCE_TAG: usize = 0b010;
+use crate::{OBJECT_BODY, Object};
 
 /// What [`HeapPtr::get`] returns for an instance, whose cell is not an
 /// [`Object`]: enough for code that only asks what kind of object it holds.
@@ -124,9 +118,7 @@ impl HeapPtr {
     #[cfg(not(feature = "heap_debug"))]
     #[inline]
     pub unsafe fn from_cell(cell: *mut AtomicU64) -> Self {
-        Self {
-            ptr: cell.map_addr(|addr| addr | INSTANCE_TAG).cast(),
-        }
+        Self { ptr: cell.cast() }
     }
 
     /// A reference to the instance cell starting at `cell`.
@@ -138,29 +130,39 @@ impl HeapPtr {
     #[inline]
     pub unsafe fn from_cell(cell: *mut AtomicU64, epoch: u32) -> Self {
         Self {
-            ptr: cell.map_addr(|addr| addr | INSTANCE_TAG).cast(),
+            ptr: cell.cast(),
             epoch,
         }
     }
 
-    /// Get the raw pointer. For an instance it carries [`INSTANCE_TAG`] and
-    /// must not be dereferenced; use [`Self::cell`].
+    /// Get the raw pointer: the first word of the cell this names. For an
+    /// instance that word is not an [`Object`]; read it through
+    /// [`Self::cell`].
     #[inline]
     pub fn as_ptr(self) -> *mut Object {
         self.ptr
     }
 
-    /// Whether this names an instance cell rather than an [`Object`].
+    /// Whether this names an instance cell rather than an [`Object`]: its
+    /// header lacks [`OBJECT_BODY`], which a forwarded cell keeps. A pointer
+    /// carries no tag of its own: every low bit a [`Value`](crate::Value)
+    /// leaves free of a pointer encodes an inline float.
+    ///
+    /// The pointer must name a live cell (or a forwarded one, during a
+    /// collection), as for [`Self::get`].
     #[inline]
     pub fn is_instance(self) -> bool {
-        self.ptr.addr() & INSTANCE_TAG != 0
+        // SAFETY: a non-null `HeapPtr` names a cell, whose first word is its
+        // header; the allocator writes it before the pointer escapes.
+        let header = unsafe { (*self.ptr.cast::<AtomicU64>()).load(Ordering::Relaxed) };
+        header & OBJECT_BODY == 0
     }
 
     /// The first word of the instance cell this names.
     #[inline]
     pub fn cell(self) -> *mut AtomicU64 {
         debug_assert!(self.is_instance(), "{self:?} is not an instance");
-        self.ptr.map_addr(|addr| addr & !INSTANCE_TAG).cast()
+        self.ptr.cast()
     }
 
     /// The first word of the object cell this names: the [`Object`]'s tag,
@@ -175,11 +177,7 @@ impl HeapPtr {
     /// The first word of the cell this names, whichever kind it is.
     #[inline]
     pub fn cell_start(self) -> *mut AtomicU64 {
-        if self.is_instance() {
-            self.cell()
-        } else {
-            self.object_cell()
-        }
+        self.ptr.cast()
     }
 
     /// Whether this is the inert compile-time/runtime-owner sentinel.

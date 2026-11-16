@@ -1108,7 +1108,7 @@ fn to_heap(
         BamlValue::String(s) => Value::object(vm.alloc_string(s.value.as_ref())),
         BamlValue::Int(i) => heap_int(i.value, mode)?,
         BamlValue::Bigint(b) => vm.try_alloc_bigint(Arc::new(b.value.clone()))?,
-        BamlValue::Float(f) => Value::object(vm.alloc_float(f.value)),
+        BamlValue::Float(f) => vm.float_value(f.value),
         BamlValue::Bool(b) => Value::bool(b.value),
         BamlValue::Null(_) => Value::NULL,
         BamlValue::Media(_) => {
@@ -1187,7 +1187,7 @@ fn parsed_to_heap(
         Parsed::String(s) => Value::object(vm.alloc_string(s.as_ref())),
         Parsed::Int(i) => heap_int(*i, mode)?,
         Parsed::Bigint(b) => vm.try_alloc_bigint(Arc::new(b.clone()))?,
-        Parsed::Float(f) => Value::object(vm.alloc_float(*f)),
+        Parsed::Float(f) => vm.float_value(*f),
         Parsed::Bool(b) => Value::bool(*b),
         Parsed::Null => Value::NULL,
         Parsed::List { element, items } => {
@@ -1554,7 +1554,7 @@ pub(super) fn empty_value(
         RealizedTy::Null | RealizedTy::Unknown => Value::NULL,
         RealizedTy::Int => Value::int(0),
         RealizedTy::Bigint => vm.try_alloc_bigint(Arc::new(num_bigint::BigInt::default()))?,
-        RealizedTy::Float => Value::object(vm.alloc_float(0.0)),
+        RealizedTy::Float => vm.float_value(0.0),
         RealizedTy::Bool => Value::bool(false),
         RealizedTy::String => Value::object(vm.alloc_string("")),
         RealizedTy::Uint8Array => Value::object(vm.alloc_uint8array(Vec::new())),
@@ -1562,7 +1562,7 @@ pub(super) fn empty_value(
             Literal::Int(n) => Value::int(*n),
             Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n.clone()))?,
             Literal::Float(text) => match text.parse::<f64>() {
-                Ok(f) => Value::object(vm.alloc_float(f)),
+                Ok(f) => vm.float_value(f),
                 Err(_) => return Ok(None),
             },
             Literal::String(s) => Value::object(vm.alloc_string(s.as_str())),

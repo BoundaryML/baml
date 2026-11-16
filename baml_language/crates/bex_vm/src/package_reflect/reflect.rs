@@ -2099,7 +2099,7 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
 
 /// `reflect.call_any` mirrors the ordinary call boundary's one numeric
 /// conversion: an exactly representable `int` may enter a `float` (or
-/// `float?`) slot. Materialize the boxed float before dispatch so the callee
+/// `float?`) slot. Materialize the float before dispatch so the callee
 /// receives the runtime representation its signature promises.
 #[expect(
     clippy::cast_precision_loss,
@@ -2127,7 +2127,7 @@ fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy
         if widened as i64 != number {
             return None;
         }
-        return Some(Value::object(vm.tlab.alloc(Object::Float(widened))));
+        return Some(vm.float_value(widened));
     }
     value_fits(vm, value, expected).then_some(value)
 }

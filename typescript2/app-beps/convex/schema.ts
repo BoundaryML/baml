@@ -437,6 +437,15 @@ export default defineSchema({
     updatedAt: v.number(),
     // The proposal's thread in BCS_SLACK_CHANNEL, once its first message was posted.
     slackThreadTs: v.optional(v.string()),
+    // GitHub logins of who shepherds it through review, and of who implemented it.
+    shepherds: v.optional(v.array(v.string())),
+    implementedBy: v.optional(v.array(v.string())),
+    // Kept by the comment mutations, so the board never reads comment histories: how many threads
+    // are open, and who has commented. Absent on proposals from before they were kept.
+    openComments: v.optional(v.number()),
+    commenters: v.optional(v.array(v.string())),
+    // Kept by the issue mutations, for the board.
+    openIssues: v.optional(v.number()),
   }).index("by_number", ["number"]),
 
   // A version's metadata and its pages' outline, listed without their content so that reading a
@@ -477,7 +486,24 @@ export default defineSchema({
     anchor: v.optional(v.object({ block: v.string(), text: v.string() })),
     parentId: v.optional(v.id("bcsComments")),
     author: v.string(),
+    // The coding agent that wrote it on the author's behalf (`bcsAgents.ts`), when one said so
+    // through the agent routes; the author is still the member whose token posted it.
+    agent: v.optional(v.string()),
     body: v.string(),
+    // A thread's kind, as on BEPs: discussion (the default), a blocking concern, or a question.
+    type: v.optional(commentType),
+    // GitHub logins per reaction.
+    reactions: v.optional(
+      v.object({
+        thumbsUp: v.optional(v.array(v.string())),
+        thumbsDown: v.optional(v.array(v.string())),
+        heart: v.optional(v.array(v.string())),
+        thinking: v.optional(v.array(v.string())),
+      })
+    ),
+    editedAt: v.optional(v.number()),
+    // A thread's first comment deleted by its author while it had replies: the replies stay.
+    deleted: v.optional(v.boolean()),
     resolved: v.boolean(),
     resolvedBy: v.optional(v.string()),
     resolvedAt: v.optional(v.number()),
@@ -485,4 +511,48 @@ export default defineSchema({
   })
     .index("by_doc", ["docId"])
     .index("by_parent", ["parentId"]),
+
+  // Decisions made on a proposal, as on BEPs: what was decided and why, and the comment threads it
+  // came from, whose authors are its participants.
+  bcsDecisions: defineTable({
+    docId: v.id("bcsDocs"),
+    title: v.string(),
+    description: v.string(),
+    rationale: v.optional(v.string()),
+    sourceCommentIds: v.array(v.id("bcsComments")),
+    participants: v.array(v.string()),
+    decidedBy: v.string(),
+    decidedAt: v.number(),
+    createdAt: v.number(),
+  }).index("by_doc", ["docId"]),
+
+  // Open issues on a proposal, as on BEPs: something to settle before it moves on, raised by a
+  // member, possibly from a comment thread, assigned to one, and resolved with a resolution.
+  bcsIssues: defineTable({
+    docId: v.id("bcsDocs"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    raisedBy: v.string(),
+    assignedTo: v.optional(v.string()),
+    sourceCommentId: v.optional(v.id("bcsComments")),
+    resolved: v.boolean(),
+    resolution: v.optional(v.string()),
+    resolvedBy: v.optional(v.string()),
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("by_doc", ["docId"]),
+
+  // Where each member stands on a version of a proposal, as BEP stances do: support, neutral or
+  // oppose, with an optional reason. One per member per version.
+  bcsStances: defineTable({
+    docId: v.id("bcsDocs"),
+    version: v.number(),
+    author: v.string(),
+    stance: userStance,
+    comment: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_doc_version", ["docId", "version"])
+    .index("by_doc_version_author", ["docId", "version", "author"]),
 });

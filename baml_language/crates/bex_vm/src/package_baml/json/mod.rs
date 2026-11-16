@@ -28,7 +28,8 @@ use bex_vm_types::{
     BexStr, HeapPtr, RealizedTy, TypeHead, Value, ValueKind,
     types::{Array, Map, Object},
 };
-use decode::{Decoder, Root};
+pub use decode::DecodeCache;
+use decode::{Decoder, Lookups, Root};
 use encode::{Finish, WriteOptions};
 pub(super) use serde_bridge::{json_value_to_serde, serde_to_value};
 use sys_types::JsonNaming;
@@ -85,17 +86,22 @@ impl BamlNamespaceJson for PackageBamlImpl {
             Err(error) => return NativeCallResult::Error(error),
         };
         let s = s.as_str();
-        let mut decoder = Decoder::new(JsonNaming::new(aliased));
+        let naming = JsonNaming::new(aliased);
+        let mut lookups = Lookups::take(vm, naming);
         // With no override in reach, `T` reads the text in one pass.
-        if !decoder.lookups.reaches_override(vm, &ty)
-            && let Some(value) = decode_text::decode(vm, s, &ty, &mut decoder.lookups.plans)
+        if !lookups.reaches_override(vm, &ty)
+            && let Some(value) = decode_text::decode(vm, s, &ty, &mut lookups.plans)
         {
+            lookups.store(vm);
             return NativeCallResult::Done(value);
         }
         // `to<T>(parse(s))`: the text decode failed, or an override can run.
         match text::parse(vm, s) {
-            Ok(json) => decoder.decode(vm, json, &ty, Root::Dispatch),
-            Err(text::Stop) => NativeCallResult::Error(text::syntax_error(vm, s)),
+            Ok(json) => Decoder::new(naming).run(vm, json, &ty, Root::Dispatch, lookups),
+            Err(text::Stop) => {
+                lookups.store(vm);
+                NativeCallResult::Error(text::syntax_error(vm, s))
+            }
         }
     }
 
@@ -127,7 +133,11 @@ impl BamlNamespaceJson for PackageBamlImpl {
 
     fn _to(vm: &mut BexVm, j: &Value, aliased: bool) -> NativeCallResult {
         match type_arg(vm, "_to") {
-            Ok(ty) => Decoder::new(JsonNaming::new(aliased)).decode(vm, *j, &ty, Root::Dispatch),
+            Ok(ty) => {
+                let naming = JsonNaming::new(aliased);
+                let lookups = Lookups::take(vm, naming);
+                Decoder::new(naming).run(vm, *j, &ty, Root::Dispatch, lookups)
+            }
             Err(error) => NativeCallResult::Error(error),
         }
     }
@@ -173,7 +183,10 @@ pub(super) use encode::structural_json_text;
 /// values honor theirs.
 pub(super) fn json_to_structural_default(vm: &mut BexVm, j: Value) -> NativeCallResult {
     match type_arg(vm, "to") {
-        Ok(ty) => Decoder::new(JsonNaming::Declared).decode(vm, j, &ty, Root::Structural),
+        Ok(ty) => {
+            let lookups = Lookups::take(vm, JsonNaming::Declared);
+            Decoder::new(JsonNaming::Declared).run(vm, j, &ty, Root::Structural, lookups)
+        }
         Err(error) => NativeCallResult::Error(error),
     }
 }
@@ -376,7 +389,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
         if let Some(value) = next.take() {
             let copied = match value.kind() {
                 ValueKind::Null | ValueKind::OmittedArg => Some(Value::NULL),
-                ValueKind::Bool(_) | ValueKind::Int(_) => Some(value),
+                ValueKind::Bool(_) | ValueKind::Int(_) | ValueKind::Float(_) => Some(value),
                 ValueKind::Object(ptr) => {
                     let children = match vm.get_object(ptr) {
                         Object::Array(array) => Some((
