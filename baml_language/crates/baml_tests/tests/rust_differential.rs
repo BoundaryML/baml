@@ -97,8 +97,6 @@ const PROBES: &[&str] = &[
     "DispatchDefault",
     "DispatchDefaultChain",
     "Frameless",
-    "FramelessRec",
-    "FramelessExits",
     "GenericChains",
     "HookedDeep",
     "LogsDeep",

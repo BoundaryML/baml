@@ -266,7 +266,6 @@ impl BexVm {
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
-        // A pending caller's chain is linked before anything extends it.
         self.materialize(caller);
         caller.note_pc(pc);
         self.check_compiled_call()?;
@@ -289,7 +288,6 @@ impl BexVm {
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
-        // A pending caller's chain is linked before anything extends it.
         self.materialize(caller);
         if self.direct_calls() {
             let (function, type_args): (HeapPtr, &[RealizedTy]) = match self.get_object(callee) {

@@ -342,7 +342,6 @@ impl BexVm {
                 .iter()
                 .all(crate::reachable::is_statically_declared)
         );
-        // A pending caller's chain is linked before anything extends it.
         self.materialize(caller);
         caller.note_pc(pc);
         let observe = |vm: &mut BexVm, type_args: &[RealizedTy]| {
@@ -364,7 +363,6 @@ impl BexVm {
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
-        // A pending caller's chain is linked before anything extends it.
         self.materialize(caller);
         caller.note_pc(pc);
         let package = self.frame_package(callee);
