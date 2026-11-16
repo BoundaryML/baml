@@ -295,6 +295,29 @@ impl MonitorTable {
         }
     }
 
+    /// Every (waiting task, holding task) pair right now: a task queued for
+    /// a key that another task holds. A waiter queued for several keys gets a
+    /// pair for each one held; one queued only on free keys, waiting for
+    /// others to come free with them, gets pairs from those others.
+    pub fn blocked_by(&self) -> Vec<(NonZeroU64, NonZeroU64)> {
+        let mut pairs = Vec::new();
+        for shard in &self.shards {
+            for monitor in lock(&shard.0).values() {
+                let Some(owner) = monitor.owner else {
+                    continue;
+                };
+                for waiter in &monitor.waiters {
+                    if waiter.state.load(Ordering::Acquire) == WAITING {
+                        pairs.push((waiter.task, owner));
+                    }
+                }
+            }
+        }
+        pairs.sort_unstable();
+        pairs.dedup();
+        pairs
+    }
+
     /// How many tasks wait for `key`'s lock right now.
     pub fn waiting_count(&self, key: HeapPtr) -> usize {
         self.one(key)

@@ -105,12 +105,20 @@ fn leak_message(leaks: &[bex_engine::LeakedFuture]) -> String {
     } else {
         "futures"
     };
-    format!(
+    let mut message = format!(
         "abandoned {} leaked background {futures} spawned in: {listed} — the owning \
          test or call finished without cleaning them up (--shutdown-timeout \
          adjusts the wait; `none` waits forever)",
         leaks.len()
-    )
+    );
+    // Where each one was stuck when the deadline passed.
+    for task in leaks.iter().filter_map(|leak| leak.task.as_ref()) {
+        for line in task.to_string().lines() {
+            message.push_str("\n  ");
+            message.push_str(line);
+        }
+    }
+    message
 }
 
 #[cfg(test)]
@@ -141,6 +149,7 @@ mod tests {
     fn leak_message_groups_by_origin_most_frequent_first() {
         let leak = |origin: &str| bex_engine::LeakedFuture {
             origin: origin.into(),
+            task: None,
         };
         let msg = leak_message(&[
             leak("user.b.serve"),

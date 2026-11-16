@@ -548,6 +548,7 @@ mod tests {
         assert!(
             !engine
                 .park_requested
+                .raised
                 .load(std::sync::atomic::Ordering::Acquire)
         );
         advance(PARK_WAIT).await;

@@ -143,11 +143,13 @@ namespace baml.fs:
 namespace baml.future:
   class AllFailed<E> { methods: [] }
   class Failure<E> { methods: [] }
-  class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state] }
+  class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state, stack_trace, _id] }
   class Panicked { methods: [] }
   enum State
   class Success<T> { methods: [] }
   function __await_any<T, E>
+  function _task_report
+  function _task_stack
   function all<T, E>
   function all_settled<T, E>
   function any<T, Err>
