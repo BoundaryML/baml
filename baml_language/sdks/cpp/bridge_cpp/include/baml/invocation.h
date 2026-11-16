@@ -60,6 +60,7 @@ class value {
 };
 template <>
 struct codec<value> {
+  static detail::pb::BamlTy baml_ty() { return detail::unknown_baml_ty(); }
   static value decode(const detail::pb::BamlOutboundValue& wire) {
     return value(wire);
   }

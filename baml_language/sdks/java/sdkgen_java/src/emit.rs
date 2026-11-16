@@ -1502,7 +1502,7 @@ fn typed_callable_expr(
 
 fn needs_inbound_descriptor(ty: &Ty, ctx: &TranslateCtx<'_>) -> bool {
     match ty {
-        Ty::List(..) | Ty::Map { .. } | Ty::Union(..) | Ty::Literal(..) => true,
+        Ty::List(..) | Ty::Map { .. } | Ty::Union(..) | Ty::Literal(..) | Ty::Tuple(..) => true,
         Ty::Class(_, args) => !args.is_empty(),
         Ty::TypeAlias(name) => ctx.aliases.get(name).is_none_or(|(resolved, recursive)| {
             *recursive || needs_inbound_descriptor(resolved, ctx)
@@ -1653,6 +1653,108 @@ fn render_opts_bag(optionals: &[(String, String)]) -> String {
         ));
     }
     out.push_str("    }\n");
+    out
+}
+
+pub(crate) fn render_tuple_record(
+    decl: &crate::tuples::TupleDecl,
+    ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
+) -> String {
+    let ident = &decl.ident;
+    let tuple = Ty::Tuple(decl.items.clone().into_boxed_slice());
+    let mut out = render_javadoc(
+        Some(&format!(
+            "The BAML tuple type `{tuple}`: one component per slot, in order (`item0` is `t.0`)."
+        )),
+        "",
+    );
+    let fields: Vec<(String, String)> = decl
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| {
+            (
+                format!("item{i}"),
+                translate_ty(item, TyPosition::TopLevel, ctx, sink),
+            )
+        })
+        .collect();
+    let components: Vec<String> = decl
+        .items
+        .iter()
+        .zip(&fields)
+        .map(|(item, (f_ident, raw))| {
+            let ty = if crate::translate_ty::is_nullable(item, ctx.aliases) {
+                crate::translate_ty::annotate_nullable(raw)
+            } else {
+                raw.clone()
+            };
+            format!("{ty} {f_ident}")
+        })
+        .collect();
+    out.push_str(&format!(
+        "public record {ident}({}) {{",
+        components.join(", ")
+    ));
+    if !fields
+        .iter()
+        .any(|(_, ty)| matches!(field_eq(ty), FieldEq::ByteArray))
+    {
+        out.push_str(
+            "}
+",
+        );
+        return out;
+    }
+    let clauses: Vec<String> = fields
+        .iter()
+        .map(|(f_ident, f_ty)| match field_eq(f_ty) {
+            FieldEq::Primitive => format!("this.{f_ident} == other.{f_ident}"),
+            FieldEq::Double => {
+                format!("java.lang.Double.compare(this.{f_ident}, other.{f_ident}) == 0")
+            }
+            FieldEq::ByteArray => {
+                format!("java.util.Arrays.equals(this.{f_ident}, other.{f_ident})")
+            }
+            FieldEq::Reference => {
+                format!("java.util.Objects.equals(this.{f_ident}, other.{f_ident})")
+            }
+        })
+        .collect();
+    let hash_members: Vec<String> = fields
+        .iter()
+        .map(|(f_ident, f_ty)| match field_eq(f_ty) {
+            FieldEq::ByteArray => format!("java.util.Arrays.hashCode(this.{f_ident})"),
+            FieldEq::Double => format!("java.lang.Double.hashCode(this.{f_ident})"),
+            _ => format!("this.{f_ident}"),
+        })
+        .collect();
+    out.push_str(&format!(
+        "
+    @Override
+    public boolean equals(java.lang.Object o) {{
+        if (this == o) {{
+            return true;
+        }}
+        if (!(o instanceof {ident} other)) {{
+            return false;
+        }}
+        return {};
+    }}
+
+    @Override
+    public int hashCode() {{
+        return java.util.Objects.hash({});
+    }}
+}}
+",
+        clauses.join(
+            "
+            && "
+        ),
+        hash_members.join(", ")
+    ));
     out
 }
 

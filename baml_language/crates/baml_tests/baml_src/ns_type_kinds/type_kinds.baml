@@ -51,6 +51,7 @@ function classify(t: reflect.Type) -> string {
         reflect.Interface => "interface",
         reflect.Primitive => "primitive",
         reflect.Function => "function",
+        reflect.Tuple => "tuple",
     }
 }
 
@@ -71,6 +72,13 @@ function walk(t: reflect.Type) -> int {
         let interface_view: reflect.Interface => 1,
         let primitive_view: reflect.Primitive => 1,
         let function_view: reflect.Function => 1,
+        let tuple_view: reflect.Tuple => {
+            let count = 1;
+            for (let element in tuple_view.element_types()) {
+                count += walk(element);
+            }
+            count
+        },
     }
 }
 

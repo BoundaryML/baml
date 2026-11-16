@@ -616,6 +616,7 @@ internal static class PrimitiveProtocol
                 BigintValue = FormatBigInt(value.ReadBigInt()),
             },
             PrimitiveCarrierKind.List => EncodeList(value, api, ownership, functionCallId),
+            PrimitiveCarrierKind.Tuple => EncodeTuple(value, api, ownership, functionCallId),
             PrimitiveCarrierKind.Map => EncodeMap(value, api, ownership, functionCallId),
             PrimitiveCarrierKind.Class => EncodeClass(value, api, ownership, functionCallId),
             PrimitiveCarrierKind.Enum => EncodeEnum(value),
@@ -702,6 +703,8 @@ internal static class PrimitiveProtocol
                 DecodeLiteral(value.LiteralValue, path),
             BamlOutboundValue.ValueOneofCase.ListValue =>
                 DecodeList(value.ListValue, path, ownership, api, budget, depth),
+            BamlOutboundValue.ValueOneofCase.TupleValue =>
+                DecodeTuple(value.TupleValue, path, ownership, api, budget, depth),
             BamlOutboundValue.ValueOneofCase.MapValue =>
                 DecodeMap(value.MapValue, path, ownership, api, budget, depth),
             BamlOutboundValue.ValueOneofCase.ClassValue =>
@@ -755,6 +758,34 @@ internal static class PrimitiveProtocol
                     Item = ParseTypeMetadata(value.ItemTypeMetadata, "list item"),
                 },
             },
+        };
+    }
+
+    private static InboundValue EncodeTuple(
+        BamlGeneratedValue value,
+        NativeApi? api,
+        EncodedCallArguments? ownership,
+        ulong functionCallId)
+    {
+        if (value.TupleTypeMetadata is not { Length: > 0 } tupleType)
+        {
+            throw new BamlTypeMappingException(
+                typeof(global::Baml.BamlValue),
+                "tuple",
+                "$",
+                "A tuple whose BAML type was not carried cannot be sent back; state it through its generated tuple type first.");
+        }
+
+        var list = new InboundListValue();
+        foreach (BamlGeneratedValue item in value.ReadTuple())
+        {
+            list.Values.Add(Encode(item, api, ownership, functionCallId));
+        }
+
+        return new InboundValue
+        {
+            ListValue = list,
+            ValueType = ParseTypeMetadata(tupleType, "tuple"),
         };
     }
 
@@ -898,6 +929,71 @@ internal static class PrimitiveProtocol
         return BamlGeneratedValue.CreateList(
             items.AsReadOnly(),
             Metadata(list.ItemType, path, "list item"),
+            path);
+    }
+
+    private static BamlGeneratedValue DecodeTuple(
+        BamlValueTuple tuple,
+        string path,
+        OutboundOwnershipScope ownership,
+        NativeApi? api,
+        BamlDecodeBudget budget,
+        int depth)
+    {
+        ArgumentNullException.ThrowIfNull(tuple);
+        BamlDecodeBudget.RequireCollection(tuple.Items.Count, path);
+        if (tuple.Items.Count == 0)
+        {
+            throw new BamlProtocolException(
+                "The native bridge returned an empty BAML tuple.",
+                $"A tuple at {path} had no slots.");
+        }
+
+        if (tuple.TupleType is { TyCase: BamlTy.TyOneofCase.Tuple } carried
+            && carried.Tuple.Items.Count != tuple.Items.Count)
+        {
+            throw new BamlProtocolException(
+                "The native bridge returned a tuple of the wrong arity for its type.",
+                $"A tuple at {path} carried {carried.Tuple.Items.Count} slot types for {tuple.Items.Count} slots.");
+        }
+
+        if (tuple.TupleType is { } stated
+            && stated.TyCase is not BamlTy.TyOneofCase.Tuple and not BamlTy.TyOneofCase.None)
+        {
+            throw new BamlProtocolException(
+                "The native bridge returned a tuple whose type is not a tuple.",
+                $"A tuple at {path} carried a {stated.TyCase} type.");
+        }
+
+        byte[] tupleType = Metadata(tuple.TupleType, path, "tuple");
+        var items = new List<BamlGeneratedValue>(tuple.Items.Count);
+        try
+        {
+            for (int index = 0; index < tuple.Items.Count; index++)
+            {
+                items.Add(Decode(
+                    tuple.Items[index],
+                    $"{path}[{index}]",
+                    ownership,
+                    api,
+                    budget,
+                    depth + 1));
+            }
+        }
+        catch
+        {
+            var disposed = new HashSet<global::Baml.BamlHandle>(ReferenceEqualityComparer.Instance);
+            foreach (BamlGeneratedValue item in items)
+            {
+                item.DisposeOwnedHandles(disposed);
+            }
+
+            throw;
+        }
+
+        return BamlGeneratedValue.CreateTuple(
+            items.AsReadOnly(),
+            tupleType,
             path);
     }
 

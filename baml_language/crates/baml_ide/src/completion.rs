@@ -684,6 +684,63 @@ function f() -> int throws never {
     }
 
     #[test]
+    fn tuple_dot_offers_slots_with_their_types() {
+        let test = CursorTest::new("function f(t: (int, string)) -> int { t.<[CURSOR] }\n");
+        let items = complete(&test);
+        for (label, detail) in [("0", "int"), ("1", "string")] {
+            let item = items
+                .iter()
+                .find(|item| item.label == label)
+                .expect("tuple slot offered");
+            assert_eq!(item.detail.as_deref(), Some(detail));
+        }
+        assert!(!labels(&items).contains(&"2"));
+    }
+
+    #[test]
+    fn tuple_union_offers_no_slots() {
+        let test = CursorTest::new(
+            "function f(t: (int, string) | (float, string)) -> int { t.<[CURSOR] }\n",
+        );
+        let items = complete(&test);
+        assert!(
+            items
+                .iter()
+                .all(|item| !item.label.chars().all(|c| c.is_ascii_digit()))
+        );
+    }
+
+    #[test]
+    fn optional_tuple_offers_payload_slots() {
+        let test = CursorTest::new("function f(t: (int, string)?) -> int { t?.<[CURSOR] }\n");
+        let items = complete(&test);
+        assert!(["0", "1"].iter().all(|slot| labels(&items).contains(slot)));
+    }
+
+    #[test]
+    fn chained_tuple_completion_offers_slots() {
+        for source in [
+            "function f(t: ((int, string), bool)) -> int { t.0.<[CURSOR] }\n",
+            "function f(t: ((int, string), bool)) -> int { t.0.1<[CURSOR] }\n",
+            "function f(t: ((int, string)?, bool)) -> int { t.0?.<[CURSOR] }\n",
+        ] {
+            let test = CursorTest::new(source);
+            let items = complete(&test);
+            for (label, detail) in [("0", "int"), ("1", "string")] {
+                let item = items
+                    .iter()
+                    .find(|item| item.label == label)
+                    .unwrap_or_else(|| {
+                        panic!("missing slot {label} in {source}: {:?}", labels(&items))
+                    });
+                assert_eq!(item.detail.as_deref(), Some(detail));
+                let fragment = &test.cursor.file.text(&test.db)[item.source_range];
+                assert!(fragment.is_empty() || fragment == "1", "{fragment}");
+            }
+        }
+    }
+
+    #[test]
     fn a_field_type_is_a_type_position() {
         let test = CursorTest::new("class Foo {\n    bar: <[CURSOR]\n}\n");
         let items = complete(&test);

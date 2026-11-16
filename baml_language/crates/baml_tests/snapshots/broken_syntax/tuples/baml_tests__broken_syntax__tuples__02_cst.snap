@@ -1,0 +1,463 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== tuples.baml ===
+SourceFile@0..747
+  items: FunctionDef@0..61
+    kw: Function "function" @0..8
+    name: Name@9..26
+      token: Word "empty_tuple_value" @9..26
+    params: ParamList@26..28
+      l: LParen "(" @26..27
+      r: RParen ")" @27..28
+    ret: ReturnType@29..35
+      arrow: Arrow "->" @29..31
+      ty: PathType@32..35
+        head: Name@32..35
+          token: Word "int" @32..35
+    body: Block@36..61
+      l: LBrace "{" @36..37
+      stmts: LetStmt@42..53
+        introducer: Let "let" @42..45
+        pattern: BindingPattern@46..47
+          name: Name@46..47
+            token: Word "e" @46..47
+        eq: Equals "=" @48..49
+        init: ParenExpr@50..52
+          l: LParen "(" @50..51
+          inner: <missing @51>
+          r: RParen ")" @51..52
+        semi: Semicolon ";" @52..53
+      tail: LiteralExpr@58..59
+        token: Integer "0" @58..59
+      r: RBrace "}" @60..61
+  items: FunctionDef@63..112
+    kw: Function "function" @63..71
+    name: Name@72..88
+      token: Word "empty_tuple_type" @72..88
+    params: ParamList@88..95
+      l: LParen "(" @88..89
+      params: Param@89..94
+        name: Name@89..90
+          token: Word "x" @89..90
+        ascription: TypeAscription@90..94
+          colon: Colon ":" @90..91
+          ty: Bogus@92..94
+            tokens: LParen "(" @92..93
+            tokens: RParen ")" @93..94
+      r: RParen ")" @94..95
+    ret: ReturnType@96..102
+      arrow: Arrow "->" @96..98
+      ty: PathType@99..102
+        head: Name@99..102
+          token: Word "int" @99..102
+    body: Block@103..112
+      l: LBrace "{" @103..104
+      tail: LiteralExpr@109..110
+        token: Integer "0" @109..110
+      r: RBrace "}" @111..112
+  items: FunctionDef@114..216
+    kw: Function "function" @114..122
+    name: Name@123..142
+      token: Word "empty_tuple_pattern" @123..142
+    params: ParamList@142..150
+      l: LParen "(" @142..143
+      params: Param@143..149
+        name: Name@143..144
+          token: Word "x" @143..144
+        ascription: TypeAscription@144..149
+          colon: Colon ":" @144..145
+          ty: PathType@146..149
+            head: Name@146..149
+              token: Word "int" @146..149
+      r: RParen ")" @149..150
+    ret: ReturnType@151..157
+      arrow: Arrow "->" @151..153
+      ty: PathType@154..157
+        head: Name@154..157
+          token: Word "int" @154..157
+    body: Block@158..216
+      l: LBrace "{" @158..159
+      tail: MatchExpr@164..214
+        kw: Match "match" @164..169
+        scrutinee: MatchParen@170..173
+          l: LParen "(" @170..171
+          expr: PathExpr@171..172
+            head: Name@171..172
+              token: Word "x" @171..172
+          r: RParen ")" @172..173
+        l: LBrace "{" @174..175
+        arms: MatchArm@184..192
+          pattern: ParenPattern@184..186
+            l: LParen "(" @184..185
+            inner: <missing @185>
+            r: RParen ")" @185..186
+          arrow: FatArrow "=>" @187..189
+          body: LiteralExpr@190..191
+            token: Integer "1" @190..191
+          comma: Comma "," @191..192
+        arms: MatchArm@201..208
+          pattern: WildcardPattern@201..202
+            underscore: Underscore "_" @201..202
+          arrow: FatArrow "=>" @203..205
+          body: LiteralExpr@206..207
+            token: Integer "0" @206..207
+          comma: Comma "," @207..208
+        r: RBrace "}" @213..214
+      r: RBrace "}" @215..216
+  items: FunctionDef@218..284
+    kw: Function "function" @218..226
+    name: Name@227..243
+      token: Word "labeled_elements" @227..243
+    params: ParamList@243..267
+      l: LParen "(" @243..244
+      params: Param@244..266
+        name: Name@244..245
+          token: Word "p" @244..245
+        ascription: TypeAscription@245..266
+          colon: Colon ":" @245..246
+          ty: Bogus@247..266
+            tokens: LParen "(" @247..248
+            tokens: Word "x" @248..249
+            tokens: Colon ":" @249..250
+            tokens: Whitespace " " @250..251
+            tokens: Word "int" @251..254
+            tokens: Comma "," @254..255
+            tokens: Whitespace " " @255..256
+            tokens: Word "y" @256..257
+            tokens: Colon ":" @257..258
+            tokens: Whitespace " " @258..259
+            tokens: Word "string" @259..265
+            tokens: RParen ")" @265..266
+      r: RParen ")" @266..267
+    ret: ReturnType@268..274
+      arrow: Arrow "->" @268..270
+      ty: PathType@271..274
+        head: Name@271..274
+          token: Word "int" @271..274
+    body: Block@275..284
+      l: LBrace "{" @275..276
+      tail: LiteralExpr@281..282
+        token: Integer "0" @281..282
+      r: RBrace "}" @283..284
+  items: FunctionDef@286..372
+    kw: Function "function" @286..294
+    name: Name@295..310
+      token: Word "labeled_pattern" @295..310
+    params: ParamList@310..312
+      l: LParen "(" @310..311
+      r: RParen ")" @311..312
+    ret: ReturnType@313..319
+      arrow: Arrow "->" @313..315
+      ty: PathType@316..319
+        head: Name@316..319
+          token: Word "int" @316..319
+    body: Block@320..372
+      l: LBrace "{" @320..321
+      stmts: LetStmt@326..335
+        introducer: Let "let" @326..329
+        pattern: BindingPattern@330..335
+          name: Name@330..331
+            token: Word "q" @330..331
+          colon: Colon ":" @331..332
+          pattern: ParenPattern@333..335
+            l: LParen "(" @333..334
+            inner: TypePattern@334..335
+              ty: PathType@334..335
+                head: Name@334..335
+                  token: Word "x" @334..335
+            r: <missing @335>
+        eq: <missing @335>
+        init: <missing @335>
+      stmts: Bogus@335..336
+        tokens: Colon ":" @335..336
+      stmts: ExprStmt@337..340
+        expr: PathExpr@337..340
+          head: Name@337..340
+            token: Word "int" @337..340
+      stmts: Bogus@340..341
+        tokens: Comma "," @340..341
+      stmts: ExprStmt@342..343
+        expr: PathExpr@342..343
+          head: Name@342..343
+            token: Word "y" @342..343
+      stmts: Bogus@343..344
+        tokens: Colon ":" @343..344
+      stmts: ExprStmt@345..351
+        expr: PathExpr@345..351
+          head: Name@345..351
+            token: Word "string" @345..351
+      stmts: Bogus@351..352
+        tokens: RParen ")" @351..352
+      stmts: Bogus@353..354
+        tokens: Equals "=" @353..354
+      stmts: ExprStmt@355..364
+        expr: TupleExpr@355..363
+          l: LParen "(" @355..356
+          elements: LiteralExpr@356..357
+            token: Integer "1" @356..357
+          elements: Comma "," @357..358
+          elements: StringLit@359..362
+            token: String "\"a\"" @359..362
+          r: RParen ")" @362..363
+        semi: Semicolon ";" @363..364
+      tail: LiteralExpr@369..370
+        token: Integer "0" @369..370
+      r: RBrace "}" @371..372
+  items: FunctionDef@374..462
+    kw: Function "function" @374..382
+    name: Name@383..404
+      token: Word "labeled_function_type" @383..404
+    params: ParamList@404..436
+      l: LParen "(" @404..405
+      params: Param@405..435
+        name: Name@405..406
+          token: Word "f" @405..406
+        ascription: TypeAscription@406..435
+          colon: Colon ":" @406..407
+          ty: FunctionType@408..435
+            l: LParen "(" @408..409
+            params: FunctionTypeParam@409..415
+              name: Name@409..410
+                token: Word "x" @409..410
+              colon: Colon ":" @410..411
+              ty: PathType@412..415
+                head: Name@412..415
+                  token: Word "int" @412..415
+            params: Comma "," @415..416
+            params: FunctionTypeParam@417..426
+              name: Name@417..418
+                token: Word "y" @417..418
+              colon: Colon ":" @418..419
+              ty: PathType@420..426
+                head: Name@420..426
+                  token: Word "string" @420..426
+            r: RParen ")" @426..427
+            arrow: Arrow "->" @428..430
+            ret: PathType@431..435
+              head: Name@431..435
+                token: Word "bool" @431..435
+      r: RParen ")" @435..436
+    ret: ReturnType@437..444
+      arrow: Arrow "->" @437..439
+      ty: PathType@440..444
+        head: Name@440..444
+          token: Word "bool" @440..444
+    body: Block@445..462
+      l: LBrace "{" @445..446
+      tail: CallExpr@451..460
+        callee: PathExpr@451..452
+          head: Name@451..452
+            token: Word "f" @451..452
+        args: ArgList@452..460
+          l: LParen "(" @452..453
+          args: Arg@453..454
+            value: LiteralExpr@453..454
+              token: Integer "1" @453..454
+          args: Comma "," @454..455
+          args: Arg@456..459
+            value: StringLit@456..459
+              token: String "\"a\"" @456..459
+          r: RParen ")" @459..460
+      r: RBrace "}" @461..462
+  items: FunctionDef@464..564
+    kw: Function "function" @464..472
+    name: Name@473..485
+      token: Word "rest_pattern" @473..485
+    params: ParamList@485..505
+      l: LParen "(" @485..486
+      params: Param@486..504
+        name: Name@486..487
+          token: Word "t" @486..487
+        ascription: TypeAscription@487..504
+          colon: Colon ":" @487..488
+          ty: TupleType@489..504
+            l: LParen "(" @489..490
+            elements: PathType@490..493
+              head: Name@490..493
+                token: Word "int" @490..493
+            elements: Comma "," @493..494
+            elements: PathType@495..498
+              head: Name@495..498
+                token: Word "int" @495..498
+            elements: Comma "," @498..499
+            elements: PathType@500..503
+              head: Name@500..503
+                token: Word "int" @500..503
+            r: RParen ")" @503..504
+      r: RParen ")" @504..505
+    ret: ReturnType@506..512
+      arrow: Arrow "->" @506..508
+      ty: PathType@509..512
+        head: Name@509..512
+          token: Word "int" @509..512
+    body: Block@513..564
+      l: LBrace "{" @513..514
+      tail: MatchExpr@519..562
+        kw: Match "match" @519..524
+        scrutinee: MatchParen@525..528
+          l: LParen "(" @525..526
+          expr: PathExpr@526..527
+            head: Name@526..527
+              token: Word "t" @526..527
+          r: RParen ")" @527..528
+        l: LBrace "{" @529..530
+        arms: MatchArm@539..546
+          pattern: TuplePattern@539..546
+            l: LParen "(" @539..540
+            elements: BindingPattern@540..545
+              introducer: Let "let" @540..543
+              name: Name@544..545
+                token: Word "a" @544..545
+            elements: Comma "," @545..546
+            r: <missing @547>
+          arrow: <missing @547>
+          body: <missing @547>
+        arms: MatchArm@554..556
+          pattern: TypePattern@554..555
+            ty: PathType@554..555
+              head: Name@554..555
+                token: Word "a" @554..555
+          arrow: <missing @555>
+          body: <missing @555>
+          comma: Comma "," @555..556
+        r: RBrace "}" @561..562
+      r: RBrace "}" @563..564
+  items: FunctionDef@566..669
+    kw: Function "function" @566..574
+    name: Name@575..593
+      token: Word "postfix_annotation" @575..593
+    params: ParamList@593..608
+      l: LParen "(" @593..594
+      params: Param@594..607
+        name: Name@594..595
+          token: Word "t" @594..595
+        ascription: TypeAscription@595..607
+          colon: Colon ":" @595..596
+          ty: TupleType@597..607
+            l: LParen "(" @597..598
+            elements: PathType@598..601
+              head: Name@598..601
+                token: Word "int" @598..601
+            elements: Comma "," @601..602
+            elements: PathType@603..606
+              head: Name@603..606
+                token: Word "int" @603..606
+            r: RParen ")" @606..607
+      r: RParen ")" @607..608
+    ret: ReturnType@609..615
+      arrow: Arrow "->" @609..611
+      ty: PathType@612..615
+        head: Name@612..615
+          token: Word "int" @612..615
+    body: Block@616..669
+      l: LBrace "{" @616..617
+      stmts: LetStmt@622..640
+        introducer: Let "let" @622..625
+        pattern: TuplePattern@626..640
+          l: LParen "(" @626..627
+          elements: BindingPattern@627..632
+            introducer: Let "let" @627..630
+            name: Name@631..632
+              token: Word "a" @631..632
+          elements: Comma "," @632..633
+          elements: BindingPattern@634..639
+            introducer: Let "let" @634..637
+            name: Name@638..639
+              token: Word "b" @638..639
+          r: RParen ")" @639..640
+        eq: <missing @640>
+        init: <missing @640>
+      stmts: Bogus@640..641
+        tokens: Colon ":" @640..641
+      stmts: AssignStmt@642..657
+        target: TupleExpr@642..652
+          l: LParen "(" @642..643
+          elements: PathExpr@643..646
+            head: Name@643..646
+              token: Word "int" @643..646
+          elements: Comma "," @646..647
+          elements: PathExpr@648..651
+            head: Name@648..651
+              token: Word "int" @648..651
+          r: RParen ")" @651..652
+        op: Equals "=" @653..654
+        value: PathExpr@655..656
+          head: Name@655..656
+            token: Word "t" @655..656
+        semi: Semicolon ";" @656..657
+      tail: BinaryExpr@662..667
+        lhs: PathExpr@662..663
+          head: Name@662..663
+            token: Word "a" @662..663
+        op: Plus "+" @664..665
+        rhs: PathExpr@666..667
+          head: Name@666..667
+            token: Word "b" @666..667
+      r: RBrace "}" @668..669
+  items: FunctionDef@671..717
+    kw: Function "function" @671..679
+    name: Name@680..702
+      token: Word "destructured_parameter" @680..702
+    params: ParamList@702..717
+      l: LParen "(" @702..703
+      params: Param@703..717
+        name: <missing @703>
+        ascription: TypeAscription@703..717
+          ty: ParenType@703..717
+            l: LParen "(" @703..704
+            inner: <missing @704>
+            r: RParen ")" @716..717
+      r: <missing @717>
+    ret: <missing @717>
+    body: <missing @717>
+  items: Bogus@717..747
+    tokens: Colon ":" @717..718
+    tokens: Whitespace " " @718..719
+    tokens: LParen "(" @719..720
+    tokens: Word "int" @720..723
+    tokens: Comma "," @723..724
+    tokens: Whitespace " " @724..725
+    tokens: Word "int" @725..728
+    tokens: RParen ")" @728..729
+    tokens: RParen ")" @729..730
+    tokens: Whitespace " " @730..731
+    tokens: Arrow "->" @731..733
+    tokens: Whitespace " " @733..734
+    tokens: Word "int" @734..737
+    tokens: Whitespace " " @737..738
+    tokens: LBrace "{" @738..739
+    tokens: Newline "\n" @739..740
+    tokens: Whitespace "    " @740..744
+    tokens: Integer "0" @744..745
+    tokens: Newline "\n" @745..746
+    tokens: RBrace "}" @746..747
+error @51..52: expected expression, found ')'
+error @94..95: a parenthesized type holds one type; a parameter list needs `->` to form a function type
+error @185..186: expected pattern, found ')'
+error @266..267: Named parameters in type expression require `->` to form a function type
+error @335..336: expected ')', found ':'
+error @335..336: expected initializer (=), found ':'
+error @335..336: expected expression, found ':'
+error @340..341: expected expression, found ','
+error @343..344: expected expression, found ':'
+error @351..352: expected expression, found ')'
+error @353..354: expected expression, found '='
+error @547..549: expected pattern, found '..'
+error @547..549: expected ')', found '..'
+error @547..549: expected '=>' after pattern, found '..'
+error @547..549: expected expression, found '..'
+error @547..549: expected pattern, found '..'
+error @549..550: expected pattern, found ')'
+error @551..553: expected pattern, found '=>'
+error @555..556: expected '=>' after pattern, found ','
+error @555..556: expected expression, found ','
+error @640..641: expected initializer (=), found ':'
+error @640..641: expected expression, found ':'
+error @703..704: expected parameter name, found '('
+error @704..707: expected type, found let
+error @704..707: Unexpected 'let' in type expression
+error @717..718: expected ')', found ':'
+error @717..718: expected return type (->), found ':'
+error @717..718: expected function body, found ':'
+error @717..718: expected top-level declaration, found ':'

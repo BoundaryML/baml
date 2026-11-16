@@ -171,6 +171,17 @@ pub(super) const BYTECODE: &[Example] = &[
         functions: &["user.fixtures.json_parse_stringify_intrinsics.parse_and_roundtrip"],
         reason: "JSON intrinsic call lowering.",
     },
+    Example {
+        path: "ns_tuples/emit.baml",
+        functions: &[
+            "user.tuples.tpe_carried_calls",
+            "user.tuples.tpe_carried_prefix",
+            "user.tuples.tpe_slot_sum",
+            "user.tuples.tpe_union_slot_sum",
+            "user.tuples.tpe_union_slot_mixed",
+        ],
+        reason: "Tuple elements stack-carried beneath the descriptor's LoadType into AllocTuple, and slot reads typed per constant index (joined across union arms) for arithmetic specialization.",
+    },
 ];
 
 pub(super) const FORMATTER: &[Example] = &[

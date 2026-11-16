@@ -120,6 +120,8 @@ inline std::size_t baml_ty_depth(const pb::BamlTy& ty) {
       return 1 + deepest(ty.type_alias().type_args());
     case pb::BamlTy::kList:
       return 1 + (ty.list().has_item() ? nested(ty.list().item()) : 0);
+    case pb::BamlTy::kTuple:
+      return 1 + deepest(ty.tuple().items());
     case pb::BamlTy::kMap:
       return 1 +
              (std::max)(ty.map().has_key() ? nested(ty.map().key()) : 0,
@@ -335,6 +337,9 @@ void for_each_nominal(pb::BamlTy& ty, const Visit& visit) {
     case pb::BamlTy::kList:
       if (ty.list().has_item()) walk(*ty.mutable_list()->mutable_item());
       return;
+    case pb::BamlTy::kTuple:
+      walk_all(*ty.mutable_tuple()->mutable_items());
+      return;
     case pb::BamlTy::kMap:
       if (ty.map().has_key()) walk(*ty.mutable_map()->mutable_key());
       if (ty.map().has_value()) walk(*ty.mutable_map()->mutable_value());
@@ -424,6 +429,10 @@ void for_each_type_value(pb::BamlOutboundValue& value, const Visit& visit) {
       for (auto& item : *value.mutable_list_value()->mutable_items())
         for_each_type_value(item, visit);
       return;
+    case pb::BamlOutboundValue::kTupleValue:
+      for (auto& item : *value.mutable_tuple_value()->mutable_items())
+        for_each_type_value(item, visit);
+      return;
     case pb::BamlOutboundValue::kMapValue:
       for (auto& entry : *value.mutable_map_value()->mutable_entries())
         for_each_type_value(*entry.mutable_value(), visit);
@@ -469,6 +478,10 @@ inline void release_control_value(const pb::BamlOutboundValue& value) {
       break;
     case pb::BamlOutboundValue::kListValue:
       for (const auto& v : value.list_value().items()) release_control_value(v);
+      break;
+    case pb::BamlOutboundValue::kTupleValue:
+      for (const auto& v : value.tuple_value().items())
+        release_control_value(v);
       break;
     case pb::BamlOutboundValue::kMapValue:
       for (const auto& v : value.map_value().entries())
@@ -540,6 +553,9 @@ inline pb::BamlOutboundValue clone_control_value(
         if (item->has_list_value())
           for (auto& child : *item->mutable_list_value()->mutable_items())
             visit(&child);
+        if (item->has_tuple_value())
+          for (auto& child : *item->mutable_tuple_value()->mutable_items())
+            visit(&child);
         if (item->has_map_value())
           for (auto& child : *item->mutable_map_value()->mutable_entries())
             visit(child.mutable_value());
@@ -604,6 +620,8 @@ inline const char* arm_name(pb::BamlOutboundValue::ValueCase c) {
       return "literal";
     case pb::BamlOutboundValue::kListValue:
       return "list";
+    case pb::BamlOutboundValue::kTupleValue:
+      return "tuple";
     case pb::BamlOutboundValue::kMapValue:
       return "map";
     case pb::BamlOutboundValue::kUnionVariantValue:

@@ -111,7 +111,7 @@ function source_4() -> string {
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-                    let prompt = input.prompt(ai.internal.build_output_format(input.output_type)).text();
+                    let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type)).text();
                     let _ = self.requests.push(prompt);
                     baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: prompt }
                 }
@@ -174,7 +174,7 @@ function source_5() -> string {
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-                    let prompt = input.prompt(ai.internal.build_output_format(input.output_type)).text();
+                    let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type)).text();
                     let _ = self.requests.push(prompt);
                     baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: prompt }
                 }
