@@ -1094,6 +1094,11 @@ fn build_group(
         };
         class.fields = class_fields;
     }
+    // A VM that read a placeholder before its fields were written (the race
+    // above) may have cached what it saw, such as a JSON decode plan. Moving
+    // the generation makes every VM drop those answers, also for a group
+    // with no witness rules, whose registration below bumps nothing.
+    vm.dynamic_dispatch.bump_generation();
 
     register_class_witnesses(vm, plans[&start_id].ptr, rules);
 

@@ -55,7 +55,8 @@ fn user.checked(t: reflect.Type) -> bool {
     }
 
     bb5: {
-        _5 = call const fn baml.ops.equals_equals(const null, const null) -> [bb6];
+        _5 = const true;
+        goto -> bb6;
     }
 
     bb6: {

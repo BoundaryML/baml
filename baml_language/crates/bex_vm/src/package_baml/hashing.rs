@@ -33,6 +33,19 @@ fn framed(tag: u8, bytes: &[u8]) -> Vec<u8> {
     result
 }
 
+/// The framed hash bytes of a float, by value class: every NaN hashes alike
+/// and `-0.0` hashes as `0.0`, matching float equality (`float_order::eq`).
+fn hash_float(value: f64) -> Vec<u8> {
+    let bits = if value.is_nan() {
+        f64::NAN.to_bits()
+    } else if value == 0.0 {
+        0
+    } else {
+        value.to_bits()
+    };
+    framed(3, &bits.to_le_bytes())
+}
+
 impl HashDriver {
     fn drive(mut self, vm: &mut BexVm) -> NativeCallResult {
         while let Some(work) = self.pending.pop() {
@@ -116,17 +129,9 @@ impl HashDriver {
                         ValueKind::Int(value) => framed(1, &value.to_le_bytes()),
                         ValueKind::Bool(value) => vec![2, u8::from(value)],
                         ValueKind::OmittedArg => return panic("Cannot hash an omitted argument"),
+                        ValueKind::Float(value) => hash_float(value),
                         ValueKind::Object(ptr) => match vm.get_object(ptr) {
-                            Object::Float(value) => {
-                                let bits = if value.is_nan() {
-                                    f64::NAN.to_bits()
-                                } else if *value == 0.0 {
-                                    0
-                                } else {
-                                    value.to_bits()
-                                };
-                                framed(3, &bits.to_le_bytes())
-                            }
+                            Object::Float(value) => hash_float(*value),
                             Object::Bigint(value) => framed(4, &value.to_signed_bytes_le()),
                             Object::String(value) => framed(5, value.as_bytes()),
                             Object::Uint8Array(value) => framed(6, &value.lock()),

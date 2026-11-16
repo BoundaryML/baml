@@ -384,6 +384,10 @@ impl BexHeap {
         tlab_size: usize,
         debug: HeapDebuggerConfig,
     ) -> Self {
+        // Append each enum's shared variants before any pointer into the
+        // compile-time `Vec` is taken: they grow it.
+        Self::add_shared_variants(&mut compile_time_objects);
+
         // Resolve bytecode constants for all Function objects before sealing.
         // This converts ConstValue (with ObjectIndex) to Value (with HeapPtr).
         Self::resolve_function_constants(&mut compile_time_objects);
@@ -474,6 +478,69 @@ impl BexHeap {
     /// Panics if `index` is out of bounds.
     pub fn compile_time_object_mut(&mut self, index: usize) -> &mut Object {
         &mut self.compile_time[index]
+    }
+
+    /// Give every compile-time enum one permanent variant object per variant,
+    /// appended after the image (so no image index moves) and listed in
+    /// [`bex_vm_types::Enum::shared_variants`]. A variant carries nothing
+    /// but its enum and index and is never mutated, so evaluating
+    /// `Status.Todo` can hand out the same object every time instead of
+    /// allocating one; equality never depends on which object a variant is.
+    ///
+    /// Must run before any pointer into `objects` is taken: it grows the
+    /// `Vec`, and the pointers it stores are into its final buffer.
+    fn add_shared_variants(objects: &mut Vec<Object>) {
+        let enums: Vec<(usize, usize)> = objects
+            .iter()
+            .enumerate()
+            .filter_map(|(index, object)| match object {
+                Object::Enum(enm) => Some((index, enm.variants.len())),
+                _ => None,
+            })
+            .collect();
+        let total: usize = enums.iter().map(|&(_, count)| count).sum();
+        if total == 0 {
+            return;
+        }
+        let first = objects.len();
+        objects.reserve_exact(total);
+        for &(_, count) in &enums {
+            objects.extend((0..count).map(|index| {
+                Object::Variant(bex_vm_types::types::Variant {
+                    enm: HeapPtr::null(),
+                    index,
+                })
+            }));
+        }
+
+        // The `Vec` no longer grows, so its addresses are final.
+        let base = objects.as_mut_ptr();
+        let ptr_at = |index: usize| -> HeapPtr {
+            // SAFETY: `index` is in bounds, and the compile-time `Vec` is
+            // never reallocated after construction.
+            let ptr = unsafe { base.add(index) };
+            #[cfg(feature = "heap_debug")]
+            unsafe {
+                HeapPtr::from_ptr(ptr, 0)
+            }
+            #[cfg(not(feature = "heap_debug"))]
+            unsafe {
+                HeapPtr::from_ptr(ptr)
+            }
+        };
+        let mut next = first;
+        for (enum_index, count) in enums {
+            let enm = ptr_at(enum_index);
+            for object in &mut objects[next..next + count] {
+                if let Object::Variant(variant) = object {
+                    variant.enm = enm;
+                }
+            }
+            if let Object::Enum(declaration) = &mut objects[enum_index] {
+                declaration.shared_variants = (next..next + count).map(ptr_at).collect();
+            }
+            next += count;
+        }
     }
 
     /// Resolve every pooled `ObjectIndex` operand into a `HeapPtr` before the
