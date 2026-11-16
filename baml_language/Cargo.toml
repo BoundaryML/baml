@@ -104,6 +104,7 @@ baml_compiler2_metrics = { path = "crates/baml_compiler2_metrics" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_rust = { path = "crates/baml_compiler2_rust" }
+baml_compiler2_native = { path = "crates/baml_compiler2_native" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
@@ -189,6 +190,12 @@ console = "0.16"
 console_error_panic_hook = "0.1"
 miette = { version = "7.6", default-features = false, features = [ "fancy-no-syscall" ] }
 owo-colors = "4"
+# Code generator for the ahead-of-time native backend (`baml_compiler2_native`).
+cranelift-codegen = { version = "0.130", default-features = false, features = [ "std", "host-arch" ] }
+cranelift-frontend = { version = "0.130" }
+cranelift-module = { version = "0.130" }
+cranelift-native = { version = "0.130" }
+cranelift-object = { version = "0.130" }
 crossbeam-channel = { version = "0.5" }
 derive_more = { version = "2.1.1", features = [ "from" ] }
 dirs = "7.0.0"
