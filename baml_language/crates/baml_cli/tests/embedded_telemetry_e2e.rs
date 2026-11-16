@@ -789,7 +789,7 @@ async fn wrapper_build_embeds_named_api_key_for_both_release_variants() {
 }
 
 #[test]
-fn wrapper_boundaries_capture_errors_and_exit_status_without_inputs() {
+fn wrapper_boundaries_record_sanitized_errors_and_exit_status_without_inputs() {
     let built = common::ensure_built();
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let temp = tempfile::tempdir().unwrap();
@@ -925,7 +925,7 @@ function main() -> void {
         ("passive-errors", vec!["check", "exit-zero"], 0),
         ("high", vec!["--help"], 0),
         ("on", vec!["--help"], 0),
-        ("off", vec!["--help"], 0),
+        ("off", vec!["--project-dir", "--sentinel"], 2),
     ] {
         let toolchain = match scenario {
             "delegated" | "version" => child.to_str().unwrap(),
@@ -1043,152 +1043,193 @@ function main() -> void {
         baml_value_state(input_args), baml_value_state(output_value), baml_value_state(error_value),
         context_metadata['command'] FROM spans WHERE span_type = 'function'");
     let span = |scenario: &str, name: &str| {
-        let rows: Vec<_> = spans
+        let rows = spans
             .as_array()
             .unwrap()
             .iter()
             .filter(|row| row[0] == scenario && row[1] == name)
-            .collect();
+            .collect::<Vec<_>>();
         assert_eq!(rows.len(), 1, "{scenario}/{name}: {rows:?}");
         Value::Array(rows[0].as_array().unwrap()[2..].to_vec())
     };
-    let parsed = span("help", "user.WrapperInvocation.parse");
-    assert_eq!(parsed[0], "return");
-    assert_eq!(parsed[4], "no_value");
-    assert_eq!(
-        parsed[5], "no_value",
-        "parser results must not reintroduce argv or project paths"
+    let markers = query(
+        "SELECT context_metadata['scenario'], context_metadata['wrapper.error.stage'],
+        context_metadata['wrapper.error.category'], context_metadata['wrapper.error.disposition'],
+        context_metadata['command'], context_metadata, status,
+        baml_value_state(input_args), baml_value_state(output_value), baml_value_state(error_value)
+        FROM spans WHERE span_name = 'user.wrapper_error'",
     );
-    assert_eq!(parsed[7], "baml");
-    let returned = span("help", "user.dispatch");
-    assert_eq!(returned[0], "return");
-    assert_eq!(
-        returned[5], "no_value",
-        "null returns need no value snapshot"
-    );
-    for (scenario, name, class, message) in [
+    let assert_marker = |scenario: &str,
+                         stage: &str,
+                         category: &str,
+                         disposition: &str,
+                         count: usize| {
+        let rows = markers
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|row| {
+                row[0] == scenario && row[1] == stage && row[2] == category && row[3] == disposition
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            rows.len(),
+            count,
+            "{scenario}/{stage}/{category}/{disposition}: {markers}"
+        );
+    };
+    assert!(!markers.as_array().unwrap().is_empty());
+    for marker in markers.as_array().unwrap() {
+        let scenario = marker[0].as_str().unwrap();
+        assert!(
+            [
+                "dispatch",
+                "parse",
+                "management_command",
+                "preflight",
+                "execute",
+                "selection",
+                "acquisition",
+                "status_acquisition",
+                "freshness",
+                "refresh",
+                "version",
+                "self_update",
+                "child_launch"
+            ]
+            .contains(&marker[1].as_str().unwrap()),
+            "{marker}"
+        );
+        assert!(
+            [
+                "usage",
+                "invalid_selection",
+                "project_not_found",
+                "configuration",
+                "io",
+                "timeout",
+                "invalid_argument",
+                "other"
+            ]
+            .contains(&marker[2].as_str().unwrap()),
+            "{marker}"
+        );
+        assert!(
+            ["propagated", "recovered", "terminal"].contains(&marker[3].as_str().unwrap()),
+            "{marker}"
+        );
+        assert_eq!(
+            marker[4],
+            span(scenario, "user.dispatch")[7],
+            "terminal markers restore bounded command context"
+        );
+        assert_eq!(marker[6], "return");
+        for index in [7, 8, 9] {
+            assert_eq!(marker[index], "no_value", "{marker}");
+        }
+        let keys = marker[5]
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|key| key.starts_with("wrapper.error."))
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            keys.len(),
+            3,
+            "only stage/category/disposition are added: {marker}"
+        );
+        for forbidden in [
+            "--sentinel",
+            "bad-version-sentinel",
+            "invalid-version-sentinel",
+            "missing-project-sentinel",
+            "delegated-input-sentinel",
+            "launch-input-sentinel",
+            "launch-failure-sentinel",
+            "bad-config-sentinel",
+            "delegated-output-sentinel",
+        ] {
+            assert!(
+                !marker[5].to_string().contains(forbidden),
+                "raw diagnostic escaped into metadata: {marker}"
+            );
+        }
+    }
+    for (scenario, name, stage, category) in [
         (
             "parse-error",
             "user.WrapperInvocation.parse",
-            "user.clap.Error",
-            "--project-dir",
+            "parse",
+            "usage",
         ),
         (
             "project-error",
             "user.WrapperInvocation.parse",
-            "baml.errors.InvalidArgument",
-            "missing-project-sentinel",
+            "parse",
+            "invalid_argument",
         ),
         (
             "selection-error",
             "user.WrapperInvocation.selection_impl",
-            "user.InvalidToolchainVersion",
-            "invalid-version-sentinel",
+            "selection",
+            "invalid_selection",
         ),
         (
             "command-error",
             "user.WrapperInvocation.parse",
-            "user.clap.Error",
-            "--sentinel-option",
+            "parse",
+            "usage",
         ),
         (
             "management-error",
             "user.management_command",
-            "user.InvalidToolchainVersion",
-            "bad-version-sentinel",
+            "management_command",
+            "invalid_selection",
         ),
         (
             "preflight-error",
             "user.<(user.UpdateCommand as user.ManagementCommand)>.preflight",
-            "user.InvalidToolchainVersion",
-            "invalid-version-sentinel",
+            "preflight",
+            "invalid_selection",
         ),
         (
             "execute-error",
             "user.<(user.UninstallCommand as user.ManagementCommand)>.execute",
-            "baml.errors.InvalidArgument",
-            "toolchain 0.0.77 is not installed",
+            "execute",
+            "invalid_argument",
         ),
         (
             "self-update",
             "user.WrapperUpdater.update",
-            "baml.errors.InvalidArgument",
-            "HTTPS",
+            "self_update",
+            "invalid_argument",
         ),
     ] {
         let failed = span(scenario, name);
         assert_eq!(failed[0], "user_error", "{scenario}: {failed}");
         assert_eq!(
-            failed[3]["$class"], "baml.errors.Context",
-            "{scenario}: {failed}"
+            failed[6], "no_value",
+            "HTTP-body exclusion vetoes raw error snapshots"
         );
-        assert_eq!(failed[3]["error"]["$class"], class, "{scenario}: {failed}");
-        assert!(
-            failed[3]["error"].to_string().contains(message),
-            "{scenario}: {failed}"
-        );
-        assert_eq!(failed[6], "present");
+        assert_marker(scenario, stage, category, "propagated", 1);
+        assert_marker(scenario, "dispatch", category, "terminal", 1);
         assert_eq!(span(scenario, "user.dispatch")[0], "user_error");
     }
-    let command_error = span("command-error", "user.WrapperInvocation.parse");
-    assert_eq!(command_error[4], "no_value");
-    assert!(
-        command_error[3]["error"]
-            .to_string()
-            .contains("--sentinel-option"),
-        "full errors can quote an argument even though argv is not captured"
-    );
-    assert_eq!(command_error[7], "baml toolchain status");
-    let command = span("execute-error", "user.management_command");
-    assert_eq!(
-        command[5], "no_value",
-        "typed command options can contain input values"
-    );
-    let executed = span(
-        "list",
-        "user.<(user.ListCommand as user.ManagementCommand)>.execute",
-    );
-    assert_eq!(executed[0], "return");
-    assert_eq!(executed[5], "no_value");
-    assert_eq!(
-        span("list", "user.dispatch")[0],
-        "return",
-        "local inventory needs no acquisition"
-    );
-    assert_eq!(
-        query(
-            "SELECT COUNT(*) FROM spans WHERE context_metadata['scenario'] = 'list'
-            AND span_name LIKE '%ensure_installed%'"
+    for (scenario, stage, category) in [
+        (
+            "version-acquisition-error",
+            "acquisition",
+            "invalid_argument",
         ),
-        json!([[0]])
-    );
-    let acquired = span(
-        "version-acquisition-error",
-        "user.<(user.VersionSelector as user.ToolchainSelector)>.ensure_installed",
-    );
-    assert_eq!(
-        acquired[0], "user_error",
-        "best-effort acquisition errors remain visible before recovery"
-    );
-    assert_eq!(
-        acquired[3]["error"]["$class"],
-        "baml.errors.InvalidArgument"
-    );
-    assert!(
-        acquired[3]["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("HTTPS")
-    );
-    assert_eq!(acquired[4], "no_value");
-    assert_eq!(acquired[5], "no_value");
-    assert_eq!(acquired[7], "baml");
-    for scenario in ["version-acquisition-error", "version-selection-error"] {
-        let reported = span(scenario, "user.WrapperInvocation.run_cli_version");
-        assert_eq!(reported[0], "user_error");
-        assert_eq!(reported[4], "no_value");
-        assert_eq!(reported[5], "no_value");
-        assert_eq!(reported[6], "present");
+        ("version-selection-error", "selection", "invalid_selection"),
+    ] {
+        assert_marker(scenario, stage, category, "propagated", 1);
+        assert_marker(scenario, "version", category, "recovered", 1);
+        assert_eq!(
+            span(scenario, "user.WrapperInvocation.run_cli_version")[0],
+            "user_error"
+        );
         assert_eq!(span(scenario, "user.dispatch")[0], "cancel_error");
         assert_eq!(
             query(&format!(
@@ -1197,66 +1238,69 @@ function main() -> void {
             json!([["success"]])
         );
     }
+    assert_eq!(span("help", "user.WrapperInvocation.parse")[0], "return");
+    assert_eq!(span("help", "user.dispatch")[0], "return");
     assert_eq!(
         span(
             "list",
-            "user.<(user.ListCommand as user.ManagementCommand)>.preflight"
+            "user.<(user.ListCommand as user.ManagementCommand)>.execute"
         )[0],
         "return"
     );
-    let selected = span("delegated", "user.WrapperInvocation.selection_impl");
-    assert_eq!(selected[0], "return");
+    assert_eq!(span("list", "user.dispatch")[0], "return");
     assert_eq!(
-        selected[5], "no_value",
-        "selection results can contain selectors and paths"
+        query(
+            "SELECT COUNT(*) FROM spans WHERE context_metadata['scenario'] = 'list'
+        AND span_name LIKE '%ensure_installed%'"
+        ),
+        json!([[0]])
     );
     for (scenario, command, code) in [
         ("delegated", "baml check", 7),
         ("version", "baml", 7),
         ("passive-errors", "baml check", 0),
     ] {
-        let child_result = span(scenario, "user.run_toolchain");
-        assert_eq!(child_result[0], "return");
-        assert_eq!(child_result[4], "no_value");
-        assert_eq!(child_result[2]["$class"], "baml.sys.ProcessExit");
-        assert_eq!(child_result[2]["exit_code"], code);
-        assert_eq!(child_result[2]["signal"], Value::Null);
-        // Query results also carry $class/$definition type metadata. Only the
-        // data fields may hold returned values, never argv or stdio buffers.
-        let mut data_fields = child_result[2]
+        let child = span(scenario, "user.run_toolchain");
+        assert_eq!(child[0], "return");
+        assert_eq!(child[4], "no_value");
+        assert_eq!(child[2]["$class"], "baml.sys.ProcessExit");
+        assert_eq!(child[2]["exit_code"], code);
+        assert_eq!(child[2]["signal"], Value::Null);
+        let mut fields = child[2]
             .as_object()
             .unwrap()
             .keys()
             .filter(|key| !key.starts_with('$'))
             .map(String::as_str)
             .collect::<Vec<_>>();
-        data_fields.sort_unstable();
-        assert_eq!(data_fields, ["exit_code", "signal"]);
-        assert_eq!(child_result[7], command);
+        fields.sort_unstable();
+        assert_eq!(fields, ["exit_code", "signal"]);
+        assert_eq!(child[7], command);
+        let dispatch = span(scenario, "user.dispatch");
+        assert_eq!(dispatch[0], "cancel_error");
+        assert_eq!(dispatch[5], "no_value", "sys.exit has no returned output");
+        assert_eq!(dispatch[6], "no_value", "cancellation has no error payload");
     }
-    let refreshed = span(
+    assert_marker(
         "passive-errors",
-        "user.ChannelSelector.refresh_channel_impl",
+        "freshness",
+        "invalid_argument",
+        "recovered",
+        2,
     );
-    assert_eq!(refreshed[0], "user_error");
+    assert_marker(
+        "passive-errors",
+        "refresh",
+        "invalid_argument",
+        "recovered",
+        1,
+    );
     assert_eq!(
-        refreshed[3]["error"]["$class"],
-        "baml.errors.InvalidArgument"
-    );
-    assert!(
-        refreshed[3]["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("config.toml")
-    );
-    assert_eq!(refreshed[7], "baml check");
-    assert_eq!(query("SELECT COUNT(*) FROM spans WHERE span_name = 'user.ChannelSelector.warn_if_outdated_impl'
-        AND context_metadata['scenario'] = 'passive-errors' AND status = 'user_error'
-        AND baml_value_state(error_value) = 'present'"), json!([[2]]));
-    assert_eq!(
-        span("passive-errors", "user.dispatch")[0],
-        "cancel_error",
-        "recovered passive errors do not change the successful child exit"
+        span(
+            "passive-errors",
+            "user.ChannelSelector.refresh_channel_impl"
+        )[0],
+        "user_error"
     );
     assert_eq!(
         query(
@@ -1264,14 +1308,17 @@ function main() -> void {
         ),
         json!([["success"]])
     );
-    let exited = span("delegated", "user.dispatch");
-    assert_eq!(exited[0], "cancel_error");
-    assert_eq!(exited[5], "no_value", "sys.exit does not return an output");
-    assert_eq!(exited[6], "present");
-    assert_eq!(exited[3]["error"]["$class"], "baml.panics.Exit");
-    assert_eq!(exited[3]["error"]["code"], 7);
-    // Verify the persisted recording, not just the source flags: no function
-    // receives an input snapshot, and only the child status has a result value.
+    for scenario in ["delegated", "version"] {
+        assert!(
+            !markers
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row[0] == scenario),
+            "a child exit status is not a thrown wrapper failure"
+        );
+    }
+    // Query the entire recording: diagnostics never smuggle values into snapshots.
     assert_eq!(
         query(
             "SELECT COUNT(*) FROM spans WHERE span_type = 'function'
@@ -1284,6 +1331,10 @@ function main() -> void {
             "SELECT COUNT(*) FROM spans WHERE span_type = 'function'
         AND span_name != 'user.run_toolchain' AND baml_value_state(output_value) != 'no_value'"
         ),
+        json!([[0]])
+    );
+    assert_eq!(
+        query("SELECT COUNT(*) FROM spans WHERE baml_value_state(error_value) != 'no_value'"),
         json!([[0]])
     );
     assert_eq!(
@@ -1300,10 +1351,12 @@ function main() -> void {
     let on = span("on", "user.WrapperInvocation.parse");
     assert_eq!(on[4], "no_value");
     assert_eq!(on[5], "no_value");
-    assert_eq!(
-        on[7], "baml",
-        "on keeps the packed default and canonical context without inputs"
-    );
+    assert_eq!(on[7], "baml");
+    let automatic = span("high", "user.WrapperCli.command_name");
+    assert_eq!(automatic[0], "return");
+    for index in [4, 5, 6] {
+        assert_eq!(automatic[index], "no_value", "high does not request values");
+    }
     #[cfg(unix)]
     {
         let signaled = span("signal", "user.run_toolchain");
@@ -1311,46 +1364,42 @@ function main() -> void {
         assert_eq!(signaled[2]["$class"], "baml.sys.ProcessExit");
         assert_eq!(signaled[2]["exit_code"], 143);
         assert_eq!(signaled[2]["signal"], 15);
-        assert_eq!(signaled[4], "no_value");
-        assert_eq!(signaled[7], "baml check");
-        assert_eq!(span("signal", "user.dispatch")[0], "cancel_error");
+        let dispatch = span("signal", "user.dispatch");
+        assert_eq!(dispatch[0], "cancel_error");
+        assert_eq!(dispatch[6], "no_value");
         assert_eq!(
             query(
                 "SELECT DISTINCT status FROM processes WHERE context_metadata['scenario'] = 'signal'"
             ),
             json!([["error"]])
         );
+        assert!(
+            !markers
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row[0] == "signal")
+        );
         let panicked = span("panic", "user.dispatch");
         assert_eq!(panicked[0], "panic_error");
-        assert_eq!(
-            panicked[3]["error"]["$class"],
-            "baml.panics.HostUnavailable"
-        );
-        assert_eq!(panicked[6], "present");
-        assert_eq!(panicked[5], "no_value");
-        let launch = span("launch-error", "user.run_toolchain");
-        assert_eq!(launch[0], "user_error");
-        assert_eq!(launch[3]["error"]["$class"], "baml.errors.Io");
+        assert_eq!(panicked[6], "no_value");
         assert!(
-            launch[3]["error"]["message"]
-                .as_str()
+            !markers
+                .as_array()
                 .unwrap()
-                .contains("launch-failure-sentinel")
+                .iter()
+                .any(|row| row[0] == "panic"),
+            "VM panics retain their runtime status and bypass catch handlers"
         );
-        assert_eq!(launch[4], "no_value");
-        assert_eq!(launch[5], "no_value");
-        assert_eq!(launch[7], "baml check");
-        let recovered_launch = span("version-launch-error", "user.run_toolchain");
-        assert_eq!(recovered_launch[0], "user_error");
-        assert_eq!(recovered_launch[3]["error"]["$class"], "baml.errors.Io");
-        assert_eq!(recovered_launch[5], "no_value");
-        assert_eq!(
-            span(
-                "version-launch-error",
-                "user.WrapperInvocation.run_cli_version"
-            )[0],
-            "user_error"
-        );
+        for scenario in ["launch-error", "version-launch-error"] {
+            let launch = span(scenario, "user.run_toolchain");
+            assert_eq!(launch[0], "user_error");
+            assert_eq!(launch[5], "no_value");
+            assert_eq!(launch[6], "no_value");
+            assert_marker(scenario, "child_launch", "io", "propagated", 1);
+        }
+        assert_marker("launch-error", "dispatch", "io", "terminal", 1);
+        assert_marker("version-launch-error", "version", "io", "recovered", 1);
         assert_eq!(
             query(
                 "SELECT DISTINCT status FROM processes WHERE context_metadata['scenario'] = 'version-launch-error'"
@@ -1358,14 +1407,6 @@ function main() -> void {
             json!([["success"]])
         );
     }
-    let automatic = span("high", "user.WrapperCli.command_name");
-    assert_eq!(automatic[0], "return");
-    assert_eq!(automatic[4], "no_value");
-    assert_eq!(
-        automatic[5], "no_value",
-        "high promotes spans without enabling value capture"
-    );
-    assert_eq!(automatic[6], "no_value");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

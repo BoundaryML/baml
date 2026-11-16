@@ -20,8 +20,18 @@ class Selection {
         self.selector.ensure_installed(
             self.source,
             telemetry,
-            $trace = trace.span(inputs = false, output = false, error = true),
-        )
+            $trace = trace.span(inputs = false, output = false, error = false),
+        ) catch (error) {
+            _ => {
+                record_wrapper_error(
+                    "acquisition",
+                    wrapper_error_category(error, $trace = trace.hidden()),
+                    "propagated",
+                    $trace = trace.hidden(),
+                );
+                throw error;
+            }
+        }
     }
 
     function warn_if_outdated(self) -> bool {

@@ -400,11 +400,17 @@ fn canonical_commands_join_local_process_outcomes_with_posthog_disabled() {
         AND baml_value_state(output_value) != 'no_value'"), json!([[0]]));
     assert_eq!(
         query(
-            "SELECT COUNT(*) FROM spans WHERE span_name = 'user.WrapperInvocation.parse'
-        AND context_metadata['scenario'] = 'parse-error' AND status = 'user_error'
-        AND baml_value_state(error_value) = 'present'"
+            "SELECT COUNT(*) FROM spans WHERE span_name = 'user.wrapper_error'
+        AND context_metadata['scenario'] = 'parse-error'
+        AND context_metadata['wrapper.error.stage'] = 'parse'
+        AND context_metadata['wrapper.error.category'] = 'usage'
+        AND context_metadata['wrapper.error.disposition'] = 'propagated'"
         ),
         json!([[1]])
+    );
+    assert_eq!(
+        query("SELECT COUNT(*) FROM spans WHERE baml_value_state(error_value) != 'no_value'"),
+        json!([[0]])
     );
     assert!(
         !home.join("wrapper-telemetry.toml").exists(),

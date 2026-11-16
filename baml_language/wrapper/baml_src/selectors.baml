@@ -144,17 +144,33 @@ class ChannelSelector {
 
         function warn_if_outdated(self) -> bool {
             self.warn_if_outdated_impl(
-                $trace = trace.span(inputs = false, output = false, error = true),
+                $trace = trace.span(inputs = false, output = false, error = false),
             ) catch (error) {
-                WrapperFailure => false
+                WrapperFailure => {
+                    record_wrapper_error(
+                        "freshness",
+                        wrapper_error_category(error, $trace = trace.hidden()),
+                        "recovered",
+                        $trace = trace.hidden(),
+                    );
+                    false
+                }
             }
         }
 
         function refresh_channel(self) -> null {
             self.refresh_channel_impl(
-                $trace = trace.span(inputs = false, output = false, error = true),
+                $trace = trace.span(inputs = false, output = false, error = false),
             ) catch (error) {
-                WrapperFailure => null
+                WrapperFailure => {
+                    record_wrapper_error(
+                        "refresh",
+                        wrapper_error_category(error, $trace = trace.hidden()),
+                        "recovered",
+                        $trace = trace.hidden(),
+                    );
+                    null
+                }
             }
         }
     }
