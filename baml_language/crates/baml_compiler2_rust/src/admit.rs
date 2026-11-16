@@ -365,22 +365,20 @@ fn admission_fixpoint(
                 masks: &masks,
                 stack: &stack,
             };
-            let mut variants = String::new();
-            let mut variant_failure = None;
-            for (&(_, params), _) in stack.bodies.range((object, 1)..=(object, u64::MAX)) {
-                let mut generator = Generator::new(&program, object, unit, params);
-                match generator.function(&symbols[&object]) {
-                    Ok(code) => variants.push_str(&code),
-                    Err(rejection) => {
-                        variant_failure = Some(rejection);
-                        break;
-                    }
+            let variants: Result<String, Rejection> = stack
+                .bodies
+                .range((object, 1)..=(object, u64::MAX))
+                .map(|(&(_, params), _)| {
+                    Generator::new(&program, object, unit, params).function(&symbols[&object])
+                })
+                .collect();
+            let variants = match variants {
+                Ok(variants) => variants,
+                Err(rejection) => {
+                    failed.push((object, rejection));
+                    continue;
                 }
-            }
-            if let Some(rejection) = variant_failure {
-                failed.push((object, rejection));
-                continue;
-            }
+            };
             let mut generator = Generator::new(&program, object, unit, 0);
             match generator.function(&symbols[&object]) {
                 Ok(code) => {

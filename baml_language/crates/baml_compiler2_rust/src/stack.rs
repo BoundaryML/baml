@@ -421,7 +421,7 @@ struct Call {
 }
 
 /// The local a bare-local operand reads.
-fn bare_local(operand: &Operand<'_>) -> Option<usize> {
+pub(crate) fn bare_local(operand: &Operand<'_>) -> Option<usize> {
     match operand {
         Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => Some(local.0),
         _ => None,

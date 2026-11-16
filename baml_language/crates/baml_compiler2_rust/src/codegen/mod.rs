@@ -26,7 +26,7 @@ use crate::{
     },
     index::ProgramIndex,
     render::coerce,
-    stack::{BodyPlan, Group, StackClass, StackPlans, takes_param},
+    stack::{BodyPlan, Group, StackClass, StackPlans, bare_local, takes_param},
     structure::{Structured, structurize},
 };
 
@@ -200,12 +200,7 @@ impl<'a, 'db> Generator<'a, 'db> {
 
     /// The stack object a bare-local operand holds.
     pub(super) fn stack_operand(&self, operand: &Operand<'db>) -> Option<&'a Group> {
-        match operand {
-            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-                self.stack_group(local.0)
-            }
-            _ => None,
-        }
+        bare_local(operand).and_then(|local| self.stack_group(local))
     }
 
     pub(super) fn stack_class(&self, group: &Group) -> Gen<&'a StackClass> {
@@ -699,21 +694,17 @@ impl<'a, 'db> Generator<'a, 'db> {
 
     /// The heap fields of every stack object a `kept` local holds.
     fn saved_stack_fields(&self, kept: &impl Fn(usize) -> bool) -> Vec<String> {
-        let mut saved = Vec::new();
-        for group in self.plan.iter().flat_map(|plan| &plan.groups) {
-            let Some(class) = self.stack_classes.get(&group.class) else {
-                continue;
-            };
-            if !group.members.iter().any(|&member| kept(member)) {
-                continue;
-            }
-            for (field, repr) in class.fields.iter().enumerate() {
-                if *repr == Repr::Value {
-                    saved.push(format!("{}.f{field}", group.storage));
-                }
-            }
-        }
-        saved
+        self.plan
+            .iter()
+            .flat_map(|plan| &plan.groups)
+            .filter(|group| group.members.iter().any(|&member| kept(member)))
+            .filter_map(|group| Some((group, self.stack_classes.get(&group.class)?)))
+            .flat_map(|(group, class)| {
+                (0..class.fields.len())
+                    .filter(|&field| class.fields[field] == Repr::Value)
+                    .map(move |field| format!("{}.f{field}", group.storage))
+            })
+            .collect()
     }
 
     pub(super) fn suspension(&mut self, block: BlockId) -> Gen<()> {
