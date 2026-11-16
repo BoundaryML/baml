@@ -4,14 +4,14 @@ source: crates/baml_tests/src/corpus.rs
 function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn() -> int {
     make_closure .<lambda(multiple_awaits_on_same_future_return_cached_value_fn, 0)>, 0
     load_const null
-    load_type baml.spawn.Limit
+    load_type baml.sync.Semaphore
     alloc_array 0
     load_type baml.spawn.CancelToken
     alloc_array 0
     load_const false
     load_type int
     load_type never
-    init_instance<2> baml.spawn.Plan .body, .name, .limits, .cancel_tokens, .root
+    init_instance<2> baml.spawn.Plan .body, .name, .semaphores, .cancel_tokens, .root
     spawn
     store_var f
     load_var f
@@ -23,7 +23,9 @@ function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn()
     load_var f
     await
     store_var c
-    add_int a b
-    add_int c
+    load_var2 2 3
+    add_int
+    load_var c
+    add_int
     return
 }

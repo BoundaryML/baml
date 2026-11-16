@@ -18,7 +18,6 @@ fn user.checked(t: reflect.Type) -> bool {
     let _2: reflect.Type
     let _3: bool
     let _4: bool
-    let _5: bool
 
     bb0: {
         bind_type(0, copy _1);
@@ -38,12 +37,7 @@ fn user.checked(t: reflect.Type) -> bool {
     }
 
     bb3: {
-        _5 = is_type_tag(const null, NULL);
-        goto -> bb4;
-    }
-
-    bb4: {
-        _0 = copy _5;
+        _0 = const true;
         return;
     }
 }

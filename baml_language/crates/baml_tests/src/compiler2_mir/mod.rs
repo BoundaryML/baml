@@ -1082,38 +1082,6 @@ fn o2_instructions(db: &ProjectDatabase, name: &str) -> Vec<bex_vm_types::Instru
 }
 
 #[test]
-fn null_literal_comparison_is_a_tag_test_at_o2() {
-    let mut db = make_db();
-    let file = db.file(
-        "test.baml",
-        r#"
-class Link { next: Link?, value: int }
-function null_probe(link: Link?) -> int {
-  if (link == null) { return 0; }
-  if (null != link.next) { 1 } else { 2 }
-}
-"#,
-    );
-    assert_no_diagnostic_errors(&db);
-    let output = render_mir(&db, file);
-    let mir = function_mir(&output, "null_probe");
-    assert_eq!(mir.matches("is_type_tag(").count(), 2, "{mir}");
-    assert!(!mir.contains("equals_equals"), "{mir}");
-    // The negation is folded into its branch rather than computed.
-    assert!(!mir.contains(" = !"), "{mir}");
-
-    // Below O2 the comparison stays the general driver call.
-    let loc = file_functions(&db, file)[0];
-    let unoptimized = lower_function(&db, loc, OptLevel::One).as_ref().unwrap();
-    let unoptimized = display_function(&db, unoptimized);
-    assert_eq!(
-        unoptimized.matches("equals_equals").count(),
-        2,
-        "{unoptimized}"
-    );
-}
-
-#[test]
 fn counting_loop_tests_at_the_bottom() {
     use bex_vm_types::Instruction;
     let mut db = make_db();
@@ -1138,7 +1106,8 @@ function rotation_probe(n: int) -> int {
                 instruction,
                 Instruction::PopJumpIfTrue(_)
                     | Instruction::PopJumpIfFalse(_)
-                    | Instruction::IntCmpJump { .. }
+                    | Instruction::JumpIfLocalsCmp { .. }
+                    | Instruction::JumpIfLocalConstCmp { .. }
             )
         })
         .count();
@@ -1170,16 +1139,7 @@ function reuse_probe(x: int) -> int {
     let instructions = o2_instructions(&db, "reuse_probe");
     let remainders = instructions
         .iter()
-        .filter(|instruction| {
-            matches!(
-                instruction,
-                Instruction::ModInt
-                    | Instruction::IntArith {
-                        op: bex_vm_types::IntArithOp::Mod,
-                        ..
-                    }
-            )
-        })
+        .filter(|instruction| matches!(instruction, Instruction::ModInt))
         .count();
     assert_eq!(remainders, 1, "{instructions:?}");
     // Every arm returns where it would have jumped to a shared return.

@@ -1011,3 +1011,52 @@ old lookup. The buffer reuse has no behaviour of its own.
 Test: `crates/baml_tests/tests/generic_type_args.rs` pins that one site in a
 generic function that stays a call reads the type of the frame it runs in,
 across frames bound to different types in turn.
+
+## Merge with canary (2026-11-16)
+
+Canary gained a set of VM changes that solve the same problems as some of the
+work above. Where both sides had an answer, canary's was kept and ours was
+removed: canary's is merged upstream, runs inside its register-resident
+dispatch loop (`run_fast_path`), and was measured on release builds. The
+removed work stays in history under the commits named here.
+
+**Dropped.**
+
+- Fused instructions (`030fcd1c71`, `3adde41c44`, `15c620ef5f`): the
+  instructions `IntArith`, `IntCmpJump`, `LoadVarField`, `LoadVarElement`,
+  `MoveVar` and their compact opcodes, the pass in
+  `baml_compiler2_emit/src/fuse.rs`, the VM handlers, and
+  `baml_tests/tests/fused_instructions.rs`. Canary fuses at emit time
+  (`fuse_tail` in `emit.rs`) into `AddLocalSmall`, `LoadVarField`,
+  `LoadVarFieldLocal`, `JumpIfLocalsCmp` and `JumpIfLocalConstCmp`. With our
+  pass gone, so is the relaxation in "Lines of fused instructions" above:
+  canary's fusion never drops a sequence point or moves one to another span,
+  so a failure reports its own line again. `MIR_OPTIMIZER_LEDGER.fused.md`
+  describes the removed pass.
+- The push-path fix (`56e4ec71c9`): canary's `try_reserve` builds its error
+  only on failure and its `push_stack` is a single compare.
+- Native calls with type arguments (`8f30ffe1bc`, `2c231cfd66`): the recycled
+  type-argument buffers, `call_named_native` and `slot_load_type_cache`.
+  Canary's `call_native_direct` and its per-site `LoadType` cache cover them.
+  The test `baml_tests/tests/generic_type_args.rs` stays: it pins behaviour.
+- The null tag test (`b2e99ab27c`): canary lowers `x == null` as a primitive
+  comparison at every level and emits `IsNull` / `IsNotNull`. A comparison
+  with a `null` operand no longer reaches the driver path our rule lived in:
+  it fired zero times over the test corpus at O2, so the rule and its test
+  were removed.
+
+**Kept.** Everything else: the inliner and its frames in stack traces
+(`Bytecode::inline_frames`, `inline_table`), scalar replacement, the
+redundancy and loop passes, devirtualization, the array loop forms and their
+private natives, the finalizer fix, the speedtest Go row and workloads.
+
+**One change for the two to agree.** Canary's `fuse_tail` replaces
+instructions without going through `emit`, which is where the inline table is
+written. It now drops the replaced instructions' inline table entries and
+records the superinstruction under the inlined call of the step whose span it
+takes, with line 0 when that call is a function written in Rust. A test in
+`baml_tests/tests/inliner.rs` raises an overflow from an `AddLocalSmall`
+inside an inlined callee and checks both frames.
+
+**Format versions.** Artifact 33, cache 30. 32 and 29 were only ever written
+by builds of this branch with the removed instruction set.

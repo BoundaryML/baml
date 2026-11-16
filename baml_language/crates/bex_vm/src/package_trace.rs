@@ -137,11 +137,12 @@ fn patch_from_values(
                     Some(ContextValue::Bool(value))
                 } else if let Some(value) = value.as_int() {
                     Some(ContextValue::Int(value))
+                } else if let Some(value) = value.as_float() {
+                    Some(ContextValue::Float(value))
                 } else {
                     Some(
                         match vm.get_object(value.as_object_ptr().expect("context primitive")) {
                             Object::String(value) => ContextValue::String(value.to_string()),
-                            Object::Float(value) => ContextValue::Float(*value),
                             _ => unreachable!("context metadata must be primitive"),
                         },
                     )
@@ -165,7 +166,7 @@ fn alloc_metadata<'a>(
                 None => Value::NULL,
                 Some(ContextValue::String(value)) => Value::object(vm.alloc_string(value.as_str())),
                 Some(ContextValue::Int(value)) => Value::int(*value),
-                Some(ContextValue::Float(value)) => Value::object(vm.alloc_float(*value)),
+                Some(ContextValue::Float(value)) => vm.float_value(*value),
                 Some(ContextValue::Bool(value)) => Value::bool(*value),
             };
             (key.as_str().into(), value)

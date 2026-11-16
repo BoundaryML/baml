@@ -36,8 +36,9 @@ class Row:
 
     def command(self, workload, artifact, jobs, warmup):
         if self.is_baml:
-            # A packed program prints a human-readable value unless asked for JSON.
-            return [str(artifact), "--output-format", "json", "--jobs", str(jobs), "--warmup", str(warmup)]
+            # A packed executable prints its result as text by default; the
+            # harness reads one JSON report line.
+            return [str(artifact), "--jobs", str(jobs), "--warmup", str(warmup), "--output-format", "json"]
         if self.kind == "go":
             return [str(artifact), str(jobs), str(warmup)]
         if self.kind == "python":

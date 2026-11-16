@@ -486,6 +486,9 @@ export default defineSchema({
     anchor: v.optional(v.object({ block: v.string(), text: v.string() })),
     parentId: v.optional(v.id("bcsComments")),
     author: v.string(),
+    // The coding agent that wrote it on the author's behalf (`bcsAgents.ts`), when one said so
+    // through the agent routes; the author is still the member whose token posted it.
+    agent: v.optional(v.string()),
     body: v.string(),
     // A thread's kind, as on BEPs: discussion (the default), a blocking concern, or a question.
     type: v.optional(commentType),

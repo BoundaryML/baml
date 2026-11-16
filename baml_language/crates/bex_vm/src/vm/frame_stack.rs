@@ -42,6 +42,11 @@ impl ThreadStackBudget {
         }
     }
     /// Reserve additional live elements without exceeding the shared byte budget.
+    ///
+    /// The fit test is one subtraction and compare (`len <= capacity`, so
+    /// `capacity - len` cannot underflow). Everything that can fail, including
+    /// building a `VmPanic`, lives in the cold growth path: an eagerly built
+    /// error value would be dropped on every successful call.
     #[inline]
     pub(crate) fn try_reserve<T>(
         &self,
@@ -49,18 +54,12 @@ impl ThreadStackBudget {
         additional: usize,
         #[cfg(test)] refuse_next_growth: &mut bool,
     ) -> Result<(), VmPanic> {
-        // The error is built only on the failing path: an eager `ok_or` value
-        // is constructed and dropped on every push when its drop glue is not
-        // inlined.
-        let Some(needed) = storage.len().checked_add(additional) else {
-            return Err(VmPanic::StackOverflow);
-        };
-        if needed <= storage.capacity() {
+        if additional <= storage.capacity() - storage.len() {
             return Ok(());
         }
         self.grow(
             storage,
-            needed,
+            additional,
             #[cfg(test)]
             refuse_next_growth,
         )
@@ -69,12 +68,17 @@ impl ThreadStackBudget {
     /// Allocate a replacement safely, validate its actual capacity, then move
     /// live elements. The old array stays intact on allocation/budget failure.
     #[cold]
+    #[inline(never)]
     fn grow<T>(
         &self,
         storage: &mut Vec<T>,
-        needed: usize,
+        additional: usize,
         #[cfg(test)] refuse_next_growth: &mut bool,
     ) -> Result<(), VmPanic> {
+        let needed = storage
+            .len()
+            .checked_add(additional)
+            .ok_or(VmPanic::StackOverflow)?;
         let old_bytes = storage.capacity() * size_of::<T>();
         let used = self.0.load(Ordering::Relaxed);
         let maximum = (THREAD_STACK_BUDGET_BYTES - used + old_bytes) / size_of::<T>();

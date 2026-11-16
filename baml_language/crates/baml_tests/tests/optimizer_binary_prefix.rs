@@ -77,7 +77,7 @@ fn inlined_binary_prefixes_do_not_spill_call_results() {
         ("prefix_template", 8),
         ("prefix_subtract", 5),
         ("prefix_divide", 5),
-        ("prefix_nested", 6),
+        ("prefix_nested", 7),
         ("prefix_call_arg", 6),
     ] {
         let index = baml_tests::engine::function_index(&program, &format!("user.{name}")).unwrap();

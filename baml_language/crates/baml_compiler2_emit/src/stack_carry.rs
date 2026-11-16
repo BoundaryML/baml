@@ -1474,6 +1474,14 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
+    fn null_test(&mut self, _negate: bool) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
     fn concat_strings(&mut self, len: usize) -> Result<(), Self::Error> {
         if !self.sim.pop_n(len) {
             return Err(());

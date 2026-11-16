@@ -8,6 +8,7 @@ import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { slackEvent } from "./bcs";
+import { agentName } from "./bcsAgents";
 
 /** Where proposal links point. */
 const SITE_URL = "https://beps.boundaryml.com";
@@ -80,6 +81,8 @@ export interface SlackComment {
   threadAuthor: string;
   threadBody: string;
   type?: string;
+  /** The coding agent that wrote it on the member's behalf. */
+  agent?: string;
 }
 
 /** A link to a thread; the site finds its page and version, even after a page was removed. */
@@ -95,7 +98,8 @@ const COMMENT_KINDS: Record<string, { emoji: string; verb: string }> = {
 };
 
 /** A reply in the thread for a new comment or reply, quoting the block it is on. */
-export function commentBlocks(proposal: Overview, who: string, comment: SlackComment): Block[] {
+export function commentBlocks(proposal: Overview, member: string, comment: SlackComment): Block[] {
+  const who = comment.agent ? `${member}'s agent *${escape(agentName(comment.agent))}*` : member;
   const where = comment.page ? ` on *${escape(clip(comment.pageTitle, 100))}*` : "";
   const kind = COMMENT_KINDS[comment.type ?? "discussion"] ?? COMMENT_KINDS.discussion;
   const heading = comment.isReply

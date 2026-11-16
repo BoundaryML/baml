@@ -1203,7 +1203,30 @@ pub enum Rvalue<'db> {
     CurrentPackage,
 }
 
-impl Rvalue<'_> {
+impl<'db> Rvalue<'db> {
+    /// For `x == null` / `x != null` (a `==`/`!=` with a `null` constant on
+    /// either side): `x`, and whether the test is negated. `null` is the one
+    /// value of its type and equals itself alone, so the comparison is a test
+    /// of `x` against the `null` word, with only `x` to evaluate.
+    pub fn null_test(&self) -> Option<(&Operand<'db>, bool)> {
+        let Self::BinaryOp { op, left, right } = self else {
+            return None;
+        };
+        let negate = match op {
+            BinOp::Eq => false,
+            BinOp::Ne => true,
+            _ => return None,
+        };
+        let is_null = |operand: &Operand<'db>| matches!(operand, Operand::Constant(Constant::Null));
+        if is_null(right) {
+            Some((left, negate))
+        } else if is_null(left) {
+            Some((right, negate))
+        } else {
+            None
+        }
+    }
+
     /// Whether an unused evaluation can be erased, including its operand reads.
     /// Allocation identity is unobservable when the result does not escape, but
     /// evaluating an initializer can still fail (checked arithmetic or indexing).

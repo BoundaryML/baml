@@ -143,11 +143,13 @@ namespace baml.fs:
 namespace baml.future:
   class AllFailed<E> { methods: [] }
   class Failure<E> { methods: [] }
-  class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state] }
+  class Future<T, E> { methods: [cancel, is_settled, is_cancelled, is_result, is_error, state, stack_trace, _id] }
   class Panicked { methods: [] }
   enum State
   class Success<T> { methods: [] }
   function __await_any<T, E>
+  function _task_report
+  function _task_stack
   function all<T, E>
   function all_settled<T, E>
   function any<T, Err>
@@ -319,11 +321,22 @@ namespace baml.sap:
   function parse_type
 namespace baml.spawn:
   class CancelToken { methods: [new, any, cancel, is_cancelled] }
-  class Limit { methods: [new, capacity, active_count, queued_count] }
   type Modifier
   class Plan<T, E> { methods: [new, wrap, with] }
   class Root { methods: [new] }
   function __spawn<T, E>
+namespace baml.sync:
+  class Permit { methods: [release] }
+  class Semaphore { methods: [new, capacity, active_count, queued_count, acquire, with, _admit] }
+  function _admitted
+  function _enter
+  function _exit
+  function _held<K>
+  function _permit
+  function _release_permit
+  function _wait
+  function _wait_permit
+  function atomic<R, E>
 namespace baml.sys:
   class HostInfo { methods: [] }
   class ProcessExit { methods: [ok] }

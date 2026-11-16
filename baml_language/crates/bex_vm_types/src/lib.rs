@@ -22,6 +22,7 @@ pub mod lazy_biased_mutex;
 pub mod limit;
 pub mod media;
 pub mod meter;
+pub mod monitor;
 pub mod prompt;
 pub mod relink;
 mod roots;
@@ -33,16 +34,15 @@ pub mod types;
 
 pub use bex_str::BexStr;
 pub use btel_types::{DefinitionCell, FunctionRegistration, TelemetryPolicyId};
-pub use bytecode::{
-    BinOp, Bytecode, CmpOp, Instruction, IntArithOp, IntDst, IntLhs, IntRhs, JumpTableData, UnaryOp,
-};
+pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
 pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
-pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
+pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet, PermitState};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};
+pub use monitor::{MonitorTable, Waiter};
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{
     CollectRoots, ForwardRoots, NothingCollected, PermitProof, RootHaver, RootHaverExt,
@@ -173,10 +173,11 @@ pub use types::{
     EnumVariant, FnPath, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
     GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, Instance,
     InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
-    MapContainer, MapData, MapEntry, MapEpochChanged, MapReadGuard, MapWriteGuard, Object,
-    ObjectType, PanicClass, Program, RenderedCallable, SpelledBound, SysOp, SysOpErrorCategory,
-    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value,
-    ValueKind, Variant, format_float, map_string_hash, sys_op_for_path, type_tags,
+    MapContainer, MapData, MapEntry, MapEpochChanged, MapKeyUndecided, MapReadGuard, MapWriteGuard,
+    Object, ObjectType, PanicClass, Program, RenderedCallable, SpelledBound, SysOp,
+    SysOpErrorCategory, SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard,
+    Uint8ArrayWriteGuard, Value, ValueKind, Variant, format_float, map_int_hash, map_string_hash,
+    sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.
@@ -281,6 +282,20 @@ impl EarlyYieldCheck {
     pub fn tick(&mut self) -> bool {
         self.counter -= 1;
         self.counter == 0
+    }
+
+    /// [`Self::tick`] when that tick leaves the interval running; false, and
+    /// no tick, when it would elapse it. A dispatch fast path that cannot
+    /// poll uses this, then hands the elapsing tick to the full check.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub fn tick_unless_due(&mut self) -> bool {
+        if self.counter > 1 {
+            self.counter -= 1;
+            true
+        } else {
+            false
+        }
     }
 
     /// Make the next [`Self::tick`] elapse, so the flags are polled at the

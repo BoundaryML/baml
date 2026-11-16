@@ -7,7 +7,9 @@ function fixtures.function_call.Bar() -> int {
 }
 
 function fixtures.function_call.Foo(x: int) -> int {
-    add_int x 1
+    load_var x
+    load_const 1
+    add_int
     return
 }
 

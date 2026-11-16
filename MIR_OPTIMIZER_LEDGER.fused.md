@@ -1,5 +1,10 @@
 # MIR optimizer ledger: fused instructions
 
+> Removed on 2026-11-16 when canary was merged: canary's emit-time
+> superinstructions and its push-path change replaced this work. See "Merge
+> with canary" in `MIR_OPTIMIZER_LEDGER.md`. The code is in commits
+> `030fcd1c71`, `3adde41c44`, `15c620ef5f` and `56e4ec71c9`.
+
 Scope: a bytecode pass in `baml_language/crates/baml_compiler2_emit/src/fuse.rs`, the
 instructions it emits (`bex_vm_types/src/bytecode.rs`), their handlers in `bex_vm/src/vm.rs`,
 and one fix to the VM's push path found while profiling.

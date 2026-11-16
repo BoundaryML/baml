@@ -29,10 +29,7 @@ use std::fmt::Write;
 
 use bex_vm_types::{
     ConstValue, HeapPtr,
-    bytecode::{
-        CompactCode, Instruction, IntDst, IntLhs, IntRhs, OpCode, read_i8, read_i32, read_u16,
-        read_u32,
-    },
+    bytecode::{CompactCode, Instruction, OpCode, read_i8, read_i32, read_u16, read_u32},
     indexable::{GlobalIndex, ObjectPool},
     types::{Function, Object, Value},
 };
@@ -148,6 +145,7 @@ pub(crate) fn display_instruction(
         Instruction::Call { callee, .. }
         | Instruction::CallLocal { callee, .. }
         | Instruction::CallHooked { callee, .. }
+        | Instruction::CallEquals(callee)
         | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
@@ -165,10 +163,21 @@ pub(crate) fn display_instruction(
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
-        | Instruction::StoreVarLoadVar(index) => match function.local_names.get(*index) {
+        | Instruction::StoreVarLoadVar(index)
+        | Instruction::LoadVarField(index, _)
+        | Instruction::LoadVarFieldLocal(index, _) => match function.local_names.get(*index) {
             Some(name) => format!("({name})"),
             None => "(?)".to_string(),
         },
+        Instruction::AddLocalSmall(dst, src, value) => {
+            let name = |index: &usize| {
+                function
+                    .local_names
+                    .get(*index)
+                    .map_or_else(|| "?".to_string(), ToString::to_string)
+            };
+            format!("({} = {} + {value})", name(dst), name(src))
+        }
         Instruction::LoadField(_)
         | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
@@ -198,10 +207,41 @@ pub(crate) fn display_instruction(
         | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
-        Instruction::IntCmpJump { offset, .. } => {
+        Instruction::JumpIfLocalsCmp { cmp, a, b, offset } => {
+            let name = |index: &usize| {
+                function
+                    .local_names
+                    .get(*index)
+                    .map_or_else(|| "?".to_string(), ToString::to_string)
+            };
             format!(
-                "(to {})",
-                instruction_ptr.wrapping_add_signed(*offset as isize)
+                "(if {} {cmp} {}, to {})",
+                name(a),
+                name(b),
+                instruction_ptr.wrapping_add_signed(*offset)
+            )
+        }
+        Instruction::JumpIfLocalConstCmp {
+            cmp,
+            a,
+            constant,
+            offset,
+        } => {
+            let name = function
+                .local_names
+                .get(*a)
+                .map_or_else(|| "?".to_string(), ToString::to_string);
+            let constant = function
+                .bytecode
+                .resolved_constants
+                .get(*constant)
+                .map_or_else(
+                    || format!("const {constant}"),
+                    |value| display_value(*value),
+                );
+            format!(
+                "(if {name} {cmp} {constant}, to {})",
+                instruction_ptr.wrapping_add_signed(*offset)
             )
         }
         Instruction::AllocInstance {
@@ -263,10 +303,6 @@ pub(crate) fn display_instruction(
         | Instruction::ArrayIterNextLocal { .. }
         | Instruction::LoadVar2(..)
         | Instruction::StoreVar2(..)
-        | Instruction::IntArith { .. }
-        | Instruction::LoadVarField { .. }
-        | Instruction::LoadVarElement { .. }
-        | Instruction::MoveVar { .. }
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::ConcatStrings(_)
@@ -301,6 +337,8 @@ pub(crate) fn display_instruction(
         | Instruction::SendEvent
         | Instruction::ContainerLen
         | Instruction::ContainerLenLocal
+        | Instruction::IsNull
+        | Instruction::IsNotNull
         | Instruction::Spawn
         | Instruction::LoadType(_)
         | Instruction::BindType(_)
@@ -413,8 +451,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::ArrayIterNext { .. }
         | Instruction::ArrayIterNextLocal { .. }
         | Instruction::LoadVar2(..)
-        | Instruction::LoadVarField { .. }
-        | Instruction::LoadVarElement { .. }
+        | Instruction::LoadVarField(..)
+        | Instruction::LoadVarFieldLocal(..)
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::LoadFieldLocal(_)
@@ -425,7 +463,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::StoreVar(_)
         | Instruction::StoreVarLoadVar(_)
         | Instruction::StoreVar2(..)
-        | Instruction::MoveVar { .. }
+        | Instruction::AddLocalSmall(..)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
         | Instruction::StoreFieldLocal(_)
@@ -459,7 +497,6 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::CmpIntOp(_)
         | Instruction::CmpFloatOp(_)
         | Instruction::CmpBigintOp(_)
-        | Instruction::IntArith { .. }
         | Instruction::UnaryOp(_) => Style::new().blue().bright(),
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
@@ -468,12 +505,14 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpIfTrueOrPop(_)
         | Instruction::JumpIfNotNullOrPop(_)
         | Instruction::JumpIfFalse(_)
-        | Instruction::IntCmpJump { .. }
+        | Instruction::JumpIfLocalsCmp { .. }
+        | Instruction::JumpIfLocalConstCmp { .. }
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. }
         | Instruction::CallLocal { .. }
         | Instruction::CallHooked { .. }
+        | Instruction::CallEquals(_)
         | Instruction::BeginTraceHook(_)
         | Instruction::EndTraceHook
         | Instruction::TraceHookHidden
@@ -520,6 +559,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Style::new().green(),
         Instruction::SendEvent => Style::new().green().bright(),
         Instruction::ContainerLen | Instruction::ContainerLenLocal => Style::new().cyan(),
+        Instruction::IsNull | Instruction::IsNotNull => Style::new().yellow(),
     }
 }
 
@@ -724,12 +764,11 @@ fn display_bytecode_textual(function: &Function) -> String {
             | Instruction::JumpIfFalseOrPop(offset)
             | Instruction::JumpIfTrueOrPop(offset)
             | Instruction::JumpIfNotNullOrPop(offset)
-            | Instruction::JumpIfFalse(offset) => {
+            | Instruction::JumpIfFalse(offset)
+            | Instruction::JumpIfLocalsCmp { offset, .. }
+            | Instruction::JumpIfLocalConstCmp { offset, .. } => {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
-            }
-            Instruction::IntCmpJump { offset, .. } => {
-                jump_targets.insert(ip.wrapping_add_signed(*offset as isize));
             }
             Instruction::JumpTable(table_idx) => {
                 // Default target.
@@ -787,36 +826,6 @@ fn display_bytecode_textual(function: &Function) -> String {
     output
 }
 
-/// The name of local `slot`, as a `LoadVar` of it is listed.
-fn local_name(function: &Function, slot: usize) -> String {
-    match function.local_names.get(slot) {
-        Some(name) if !name.is_empty() => sanitize_operand_text(name),
-        _ => format!("?{slot}"),
-    }
-}
-
-/// The operands a fused `int` instruction names, each preceded by a space:
-/// a local by name, an immediate as its value. Stack operands are not listed.
-fn int_operands(function: &Function, lhs: IntLhs, rhs: IntRhs) -> String {
-    let mut text = String::new();
-    if let IntLhs::Var(slot) = lhs {
-        text.push(' ');
-        text.push_str(&local_name(function, usize::from(slot)));
-    }
-    match rhs {
-        IntRhs::Stack => {}
-        IntRhs::Var(slot) => {
-            text.push(' ');
-            text.push_str(&local_name(function, usize::from(slot)));
-        }
-        IntRhs::Imm(value) => {
-            text.push(' ');
-            text.push_str(&value.to_string());
-        }
-    }
-    text
-}
-
 /// Render a single instruction in textual format.
 ///
 /// Reads resolved operand names from `InstructionMeta` (populated by the compiler).
@@ -855,65 +864,15 @@ fn display_instruction_textual(
             format!("array_iter_next_local {iterator} {index}")
         }
         Instruction::StoreVar2(a, b) => format!("store_var2 {a} {b}"),
-
-        // --- Fused instructions: the operands they name, by local name ---
-        Instruction::IntArith { op, lhs, rhs, dst } => {
-            let mut text = format!("{}{}", op.mnemonic(), int_operands(function, *lhs, *rhs));
-            if let IntDst::Var(slot) = dst {
-                text.push_str(" -> ");
-                text.push_str(&local_name(function, usize::from(*slot)));
-            }
-            text
+        Instruction::AddLocalSmall(dst, src, value) => {
+            format!("add_local_small {dst} {src} {value}")
         }
-        Instruction::IntCmpJump {
-            op,
-            lhs,
-            rhs,
-            offset,
-        } => {
-            let target = ip.wrapping_add_signed(*offset as isize);
-            let label = label_map
-                .get(&target)
-                .cloned()
-                .unwrap_or_else(|| format!("?{target}"));
-            format!(
-                "jump_if_int_{}{} {label}",
-                op.mnemonic(),
-                int_operands(function, *lhs, *rhs)
-            )
+        Instruction::LoadVarField(slot, field) => {
+            format!("load_var_field {slot} .{}", meta_str(field))
         }
-        Instruction::LoadVarField {
-            var,
-            field,
-            thread_local,
-        } => {
-            let suffix = if *thread_local { "_local" } else { "" };
-            format!(
-                "load_var_field{suffix} {} .{}",
-                local_name(function, *var),
-                meta_str(field)
-            )
+        Instruction::LoadVarFieldLocal(slot, field) => {
+            format!("load_var_field_local {slot} .{}", meta_str(field))
         }
-        Instruction::LoadVarElement {
-            array,
-            index,
-            thread_local,
-        } => {
-            let suffix = if *thread_local { "_local" } else { "" };
-            format!(
-                "load_var_element{suffix} {} {}",
-                local_name(function, *array),
-                local_name(function, *index)
-            )
-        }
-        Instruction::MoveVar {
-            source,
-            destination,
-        } => format!(
-            "move_var {} -> {}",
-            local_name(function, *source),
-            local_name(function, *destination)
-        ),
 
         // --- Globals ---
         Instruction::LoadGlobal(idx) => format!("load_global {}", meta_str(&idx.raw())),
@@ -997,6 +956,31 @@ fn display_instruction_textual(
                 .cloned()
                 .unwrap_or_else(|| format!("?{target}"));
             format!("{name} {label}")
+        }
+        Instruction::JumpIfLocalsCmp { cmp, a, b, offset } => {
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            format!("jump_if_locals_cmp {a} {cmp} {b} {label}")
+        }
+        Instruction::JumpIfLocalConstCmp {
+            cmp,
+            a,
+            constant,
+            offset,
+        } => {
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            let constant = match function.bytecode.constants.get(*constant) {
+                Some(ConstValue::Int(value)) => value.to_string(),
+                _ => format!("const {constant}"),
+            };
+            format!("jump_if_local_const_cmp {a} {cmp} {constant} {label}")
         }
         Instruction::JumpTable(table_idx) => {
             let default_target =
@@ -1105,6 +1089,7 @@ fn display_instruction_textual(
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallHooked { .. } => format!("call_hooked {}", meta_str(&"")),
         Instruction::CallLocal { .. } => format!("call_local {}", meta_str(&"")),
+        Instruction::CallEquals(_) => format!("call_equals {}", meta_str(&"")),
         Instruction::BeginTraceHook(value) => format!("begin_trace_hook {value}"),
         Instruction::EndTraceHook => "end_trace_hook".into(),
         Instruction::TraceHookHidden => "trace_hook_hidden".into(),
@@ -1214,6 +1199,8 @@ fn display_instruction_textual(
         Instruction::SendEvent => "send_event".to_string(),
         Instruction::ContainerLen => "container_len".to_string(),
         Instruction::ContainerLenLocal => "container_len_local".to_string(),
+        Instruction::IsNull => "is_null".to_string(),
+        Instruction::IsNotNull => "is_not_null".to_string(),
     }
 }
 
@@ -1380,6 +1367,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::Call { .. }
         | Instruction::CallLocal { .. }
         | Instruction::CallHooked { .. }
+        | Instruction::CallEquals(_)
         | Instruction::BeginTraceHook(_)
         | Instruction::EndTraceHook
         | Instruction::TraceHookHidden
@@ -1405,13 +1393,6 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
             let target = ip.wrapping_add_signed(*offset);
             format!("(to {target})")
         }
-        Instruction::IntCmpJump { offset, .. } => {
-            let target = ip.wrapping_add_signed(*offset as isize);
-            format!("(to {target})")
-        }
-        Instruction::LoadVarField { .. } => meta
-            .map(|m| format!("({})", sanitize_operand_text(m.as_str())))
-            .unwrap_or_default(),
 
         // Jump tables: show all target addresses.
         Instruction::JumpTable(table_idx) => {
@@ -1510,6 +1491,8 @@ pub fn display_compact_bytecode(
             | OpCode::SendEvent
             | OpCode::ContainerLen
             | OpCode::ContainerLenLocal
+            | OpCode::IsNull
+            | OpCode::IsNotNull
             | OpCode::Spawn
             | OpCode::Add
             | OpCode::Sub
@@ -1609,6 +1592,7 @@ pub fn display_compact_bytecode(
             | OpCode::InitInstance
             | OpCode::AllocVariant
             | OpCode::SysOp
+            | OpCode::CallEquals
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType
@@ -1696,55 +1680,30 @@ pub fn display_compact_bytecode(
             | OpCode::ArrayIterNext
             | OpCode::ArrayIterNextLocal
             | OpCode::LoadVarField
-            | OpCode::LoadVarFieldLocal
-            | OpCode::LoadVarElement
-            | OpCode::LoadVarElementLocal
-            | OpCode::MoveVar => {
+            | OpCode::LoadVarFieldLocal => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;
             }
 
-            // Fused int forms: the operation byte, a u32 or i32 per named
-            // operand, then a destination slot or a jump offset.
-            OpCode::IntVarVar
-            | OpCode::IntVarImm
-            | OpCode::IntStackVar
-            | OpCode::IntStackImm
-            | OpCode::IntVarVarStore
-            | OpCode::IntVarImmStore
-            | OpCode::IntStackVarStore
-            | OpCode::IntStackImmStore
-            | OpCode::IntStackStackStore
-            | OpCode::JumpIfIntVarVar
-            | OpCode::JumpIfIntVarImm
-            | OpCode::JumpIfIntStackVar
-            | OpCode::JumpIfIntStackImm
-            | OpCode::JumpIfIntStackStack => {
-                let operation = code[pc];
+            // u8 comparison + u32 local + u32 local/constant + i32 offset
+            OpCode::JumpIfLocalsCmp | OpCode::JumpIfLocalConstCmp => {
+                let cmp = OpCode::try_from(code[pc]).map_err(|_| std::fmt::Error)?;
                 pc += 1;
-                write!(f, "op={operation}")?;
-                let jumps = matches!(
-                    op,
-                    OpCode::JumpIfIntVarVar
-                        | OpCode::JumpIfIntVarImm
-                        | OpCode::JumpIfIntStackVar
-                        | OpCode::JumpIfIntStackImm
-                        | OpCode::JumpIfIntStackStack
-                );
-                // Everything between the operation and a jump offset is a
-                // slot or an immediate, four bytes each.
-                let operands = (op.encoded_size() - 2) / 4 - usize::from(jumps);
-                for _ in 0..operands {
-                    write!(f, " {}", read_i32(code, &mut pc))?;
-                }
-                if jumps {
-                    let offset_val = read_i32(code, &mut pc);
-                    let target = (pc as i64 + offset_val as i64) as usize;
-                    writeln!(f, " {offset_val:+}  (-> {target:04})")?;
-                } else {
-                    writeln!(f)?;
-                }
+                let a = read_u32(code, &mut pc);
+                let b = read_u32(code, &mut pc);
+                let offset_val = read_i32(code, &mut pc);
+                let target = (pc as i64 + offset_val as i64) as usize;
+                writeln!(f, "{cmp:?} {a} {b} {offset_val:+}  (-> {target:04})")?;
+            }
+
+            // u32 destination + u32 source + i8 addend
+            OpCode::AddLocalSmall => {
+                let dst = read_u32(code, &mut pc);
+                let src = read_u32(code, &mut pc);
+                let value = code[pc] as i8;
+                pc += 1;
+                writeln!(f, "{dst} {src} {value}")?;
             }
         }
     }

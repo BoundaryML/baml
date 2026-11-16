@@ -25,10 +25,10 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     load_type int
     alloc_array 0
     store_var items
-    move_var _3 -> tags
+    load_var _3
+    store_var tags
     load_var items
-    load_const null
-    cmp_op ==
+    is_null
     pop_jump_if_true L0
     load_var items
     container_len_local
@@ -51,8 +51,7 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
 
   L4:
     load_var tags
-    load_const null
-    cmp_op ==
+    is_null
     pop_jump_if_true L5
     load_var tags
     container_len_local
@@ -108,7 +107,8 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
     store_var x
     load_const 0
     store_var hits
-    move_var items -> _6
+    load_var items
+    store_var _6
     load_const 0
     store_var ?8
     array_iter_next 6 8
@@ -118,7 +118,7 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
     pop_jump_if_true L4
 
   L0:
-    jump_if_int_le _7 0 L2
+    jump_if_local_const_cmp 7 <= 0 L2
     load_var a
     jump_if_false_or_pop L1
     load_var b
@@ -129,7 +129,7 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
   L2:
     load_var x
     pop_jump_if_false L3
-    add_int hits 1 -> hits
+    add_local_small 5 5 1
 
   L3:
     array_iter_next 6 8
@@ -146,7 +146,8 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
 function fixtures.short_circuit_locals.initialized_local_in_branch_loop(items: int[]) -> int {
     load_const 0
     store_var total
-    move_var items -> _3
+    load_var items
+    store_var _3
     load_const 0
     store_var ?5
     array_iter_next 3 5
@@ -156,7 +157,7 @@ function fixtures.short_circuit_locals.initialized_local_in_branch_loop(items: i
     pop_jump_if_true L3
 
   L0:
-    jump_if_int_gt _4 0 L1
+    jump_if_local_const_cmp 4 > 0 L1
     load_const 2
     jump L2
 

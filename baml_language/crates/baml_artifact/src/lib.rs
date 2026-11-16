@@ -142,10 +142,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// calls the optimizer inlined into a function and the PCs each one covers,
 /// which a stack trace expands back into frames.
 ///
-/// Version 32: appended the fused instructions `IntArith`, `IntCmpJump`,
-/// `LoadVarField`, `LoadVarElement` and `MoveVar` to the instruction/opcode
-/// sets, which `O2` emits in place of the runs they stand for.
-pub const FORMAT_VERSION: u32 = 32;
+/// Version 33: the instruction and opcode sets gained `IsNull`, `IsNotNull`,
+/// `CallEquals`, `AddLocalSmall`, `LoadVarField`, `LoadVarFieldLocal`,
+/// `JumpIfLocalsCmp` and `JumpIfLocalConstCmp`. Version 32 is skipped:
+/// unreleased builds wrote a different instruction set under it.
+pub const FORMAT_VERSION: u32 = 33;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

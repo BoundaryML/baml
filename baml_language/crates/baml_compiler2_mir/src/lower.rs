@@ -7180,6 +7180,12 @@ impl<'db> LoweringContext<'db> {
     /// Literals widen to their base primitive; everything else (mixed primitives,
     /// `uint8array`, enums, classes, containers, unions, interfaces, `unknown`)
     /// goes through the driver.
+    ///
+    /// A `null` operand is the exception: `null` is the one value of its type
+    /// and the driver finds it equal to `null` alone, never running a custom
+    /// `Equals` (that needs two operands of one type). So `x == null` for any
+    /// `x` is a test of `x` against the `null` word, which the emitter turns
+    /// into `IsNull` / `IsNotNull`.
     fn equality_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> Lowered<bool> {
         fn prim_class(ty: &RuntimeTy) -> Option<u8> {
             use baml_base::Literal;
@@ -7193,8 +7199,13 @@ impl<'db> LoweringContext<'db> {
                 _ => return None,
             })
         }
-        let l = prim_class(&self.expr_ty(lhs)?);
-        Ok(l.is_some() && l == prim_class(&self.expr_ty(rhs)?))
+        let lhs_ty = self.expr_ty(lhs)?;
+        let rhs_ty = self.expr_ty(rhs)?;
+        if matches!(lhs_ty, RuntimeTy::Null) || matches!(rhs_ty, RuntimeTy::Null) {
+            return Ok(true);
+        }
+        let l = prim_class(&lhs_ty);
+        Ok(l.is_some() && l == prim_class(&rhs_ty))
     }
 
     /// Lower `==`/`!=` through the `baml.ops.equals_equals` driver — the general
@@ -7221,40 +7232,9 @@ impl<'db> LoweringContext<'db> {
         let structural = lhs_ty
             .filter(|lhs_ty| Some(*lhs_ty) == rhs_ty)
             .and_then(|ty| self.structural_witness(ty, &self.baml_decl("ops", "Equals")));
-        let bool_ty = RuntimeTy::Bool;
-        // Against the `null` literal the driver has one answer: whether the
-        // other operand is null. No `Equals` impl is consulted for operands of
-        // different runtime kinds, so the tag test is the whole comparison and
-        // needs no call.
-        let is_null_literal = |expr: AstExprId| matches!(self.body.exprs[expr], AstExpr::Null);
-        if self.opt >= crate::OptLevel::Two
-            && let Some(value) = match (is_null_literal(lhs), is_null_literal(rhs)) {
-                (false, true) => Some(lhs),
-                (true, false) => Some(rhs),
-                _ => None,
-            }
-        {
-            let is_null = Rvalue::IsTypeTag {
-                operand: self.lower_to_operand(value)?,
-                tag: baml_type::typetag::NULL,
-            };
-            if matches!(op, AstBinaryOp::Eq) {
-                self.builder.assign(dest, is_null);
-            } else {
-                let result = Place::local(self.builder.temp(bool_ty));
-                self.builder.assign(result.clone(), is_null);
-                self.builder.assign(
-                    dest,
-                    Rvalue::UnaryOp {
-                        op: crate::UnaryOp::Not,
-                        operand: Operand::Copy(result),
-                    },
-                );
-            }
-            return Ok(());
-        }
         let lhs_op = self.lower_to_operand(lhs)?;
         let rhs_op = self.lower_to_operand(rhs)?;
+        let bool_ty = RuntimeTy::Bool;
         if let Some(kind) = structural {
             let result = if matches!(op, AstBinaryOp::Eq) {
                 dest.clone()

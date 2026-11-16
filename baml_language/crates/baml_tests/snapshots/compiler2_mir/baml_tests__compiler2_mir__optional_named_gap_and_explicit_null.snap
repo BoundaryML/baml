@@ -32,7 +32,7 @@ fn user.score(query: string, max_results: int, filter: string | null) -> int {
     }
 
     bb4: {
-        _6 = is_type_tag(copy _3, NULL);
+        _6 = copy _3 == const null;
         branch copy _6 -> [bb6, bb5];
     }
 
@@ -64,7 +64,7 @@ fn user.is_null(value: int | null) -> bool {
     }
 
     bb2: {
-        _0 = is_type_tag(copy _1, NULL);
+        _0 = copy _1 == const null;
         return;
     }
 }
@@ -79,7 +79,7 @@ fn user.omitted_middle() -> int {
     }
 
     bb1 [inlined user.score]: {
-        _1 = is_type_tag(const "recent", NULL);
+        _1 = const "recent" == const null;
         branch copy _1 -> [bb3, bb2];
     }
 
@@ -103,7 +103,7 @@ fn user.explicit_null() -> bool {
     }
 
     bb1 [inlined user.is_null]: {
-        _0 = is_type_tag(const null, NULL);
+        _0 = const true;
         return;
     }
 }

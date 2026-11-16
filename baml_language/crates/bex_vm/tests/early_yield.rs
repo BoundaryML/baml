@@ -157,3 +157,43 @@ fn flag_written_by_another_thread_yields() {
         "expected EarlyYield after cross-thread flag store, got {state:?}"
     );
 }
+
+/// Run `spin` to completion with the flag set and the given interval,
+/// returning how many times it yielded.
+fn yields_at_interval(interval: u64) -> usize {
+    let flag = Arc::new(AtomicBool::new(true));
+    let mut vm = make_vm(Arc::clone(&flag));
+    vm.early_yield = bex_vm_types::EarlyYieldCheck::with_interval(flag, interval);
+    let mut yields = 0;
+    loop {
+        match vm.exec().expect("exec") {
+            VmExecState::EarlyYield => yields += 1,
+            VmExecState::Complete(v) => {
+                assert_eq!(v.as_int(), Some(LOOP_ITERATIONS));
+                return yields;
+            }
+            other => panic!("unexpected state: {other:?}"),
+        }
+    }
+}
+
+/// Every control-flow instruction counts exactly one tick, whether the
+/// dispatch loop's scalar fast path or the full dispatch runs it, and the
+/// tick that elapses the interval is the one that polls. With the flag set
+/// every poll yields, so interval 1 counts the ticks and a longer interval
+/// yields once per full interval.
+#[test]
+fn every_control_flow_instruction_ticks_once() {
+    let ticks = yields_at_interval(1);
+    assert!(
+        ticks >= usize::try_from(LOOP_ITERATIONS).unwrap(),
+        "each iteration branches at least once, got {ticks} ticks"
+    );
+    for interval in [2_u64, 3, 7, 64] {
+        assert_eq!(
+            yields_at_interval(interval),
+            ticks / usize::try_from(interval).unwrap(),
+            "interval {interval}"
+        );
+    }
+}

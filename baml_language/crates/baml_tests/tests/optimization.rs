@@ -148,8 +148,8 @@ fn constant_fold_int_comparison() {
 
 #[test]
 fn constant_fold_mixed_not_foldable() {
-    // x is a runtime variable — the addition cannot be folded. The
-    // optimized build fuses its operands into it.
+    // x is a runtime variable — the addition cannot be folded.
+    // Both outputs should be identical.
     let source = r#"
         function main(x: int) -> int {
             x + 1
@@ -165,7 +165,9 @@ fn constant_fold_mixed_not_foldable() {
     ");
     insta::assert_snapshot!(optimized(source), @"
     function main(x: int) -> int {
-        add_int x 1
+        load_var x
+        load_const 1
+        add_int
         return
     }
     ");
