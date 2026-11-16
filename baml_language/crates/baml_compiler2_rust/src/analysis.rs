@@ -772,7 +772,6 @@ const VM_PACKAGES: &[&str] = &["baml", "testing", "ai", "reflect", "trace"];
 /// What the Rust emitter knows about a VM builtin, from the stdlib source
 /// the VM's own dispatch is generated from.
 pub(crate) struct BuiltinMeta {
-    may_yield: bool,
     pub(crate) entry: baml_builtins2_codegen::NativeEntry,
 }
 
@@ -788,7 +787,6 @@ fn builtin_metadata() -> Result<&'static HashMap<String, BuiltinMeta>, &'static 
                     })?;
                 for builtin in builtins {
                     let meta = BuiltinMeta {
-                        may_yield: builtin.may_yield,
                         entry: baml_builtins2_codegen::NativeEntry::of(&builtin, package),
                     };
                     table.insert(builtin.path, meta);
@@ -805,7 +803,10 @@ pub(crate) fn validate_builtin_metadata() -> Result<(), String> {
 }
 
 fn builtin_may_yield(key: &str) -> Option<bool> {
-    builtin_metadata().ok()?.get(key).map(|meta| meta.may_yield)
+    builtin_metadata()
+        .ok()?
+        .get(key)
+        .map(|meta| meta.entry.may_yield)
 }
 
 /// The generated entry point compiled code calls for builtin `key`.

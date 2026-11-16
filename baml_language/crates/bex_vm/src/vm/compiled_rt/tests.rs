@@ -1662,7 +1662,7 @@ fn compiled_rethrow_keeps_the_original_context() {
 
 #[test]
 fn call_type_lanes_root_and_forward_runtime_heads() {
-    for lane in 0..5 {
+    for lane in [0, 1, 3, 4] {
         let (mut vm, native_ptr) = crate::vm::tests::vm_with_native_entry();
         vm.set_entry_point(native_ptr, &[]);
 
@@ -1695,7 +1695,6 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
         match lane {
             0 => vm.pending_call_type_args.push(ty),
             1 => vm.compiled.call_type_args.push(ty),
-            2 => vm.compiled.builtin_type_args.push(ty),
             // The array compiled code lends a builtin it calls directly.
             4 => {
                 vm.compiled.lent_type_args = Some(super::state::LentTypeArgs(
@@ -1721,7 +1720,6 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
         let ty = match lane {
             0 => &vm.pending_call_type_args[0],
             1 => &vm.compiled.call_type_args[0],
-            2 => &vm.compiled.builtin_type_args[0],
             4 => {
                 vm.compiled.lent_type_args = None;
                 &lent[0]

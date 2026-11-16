@@ -10,9 +10,7 @@ use bex_vm_types::ConstValue;
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     Rejection,
-    analysis::{
-        CallShape, Repr, builtin_entry, builtin_is_callable, reads_frame, static_realized,
-    },
+    analysis::{CallShape, Repr, builtin_entry, builtin_is_callable, reads_frame, static_realized},
     render::{binop_name, class_ptr, cmp_name, object_value},
 };
 
@@ -467,31 +465,15 @@ impl<'db> Generator<'_, 'db> {
     }
 
     /// A call to builtin `key`'s generated entry point, or with `local` its
-    /// lock-free twin, finished as [`bex_vm::BexVm::call_builtin`] finishes
-    /// one: an `R<Value>` expression.
+    /// lock-free twin, finished by [`bex_vm::BexVm::finish_builtin`] or
+    /// `finish_result`: an `R<Value>` expression.
     pub(super) fn builtin_call(
         key: &str,
         local: bool,
         args: &[String],
         types: &[String],
     ) -> Gen<String> {
-        let Some(entry) = builtin_entry(key) else {
-            return Err(Rejection::Invalid(format!(
-                "builtin `{key}` has no generated entry point"
-            )));
-        };
-        if args.len() != entry.arity {
-            return Err(Rejection::Invalid(format!(
-                "builtin `{key}` takes {} arguments, given {}",
-                entry.arity,
-                args.len()
-            )));
-        }
-        if local && !entry.local_twin {
-            return Err(Rejection::Invalid(format!(
-                "builtin `{key}` has no thread-local twin"
-            )));
-        }
+        let entry = checked_builtin_entry(key, local, args.len())?;
         let path = if local {
             format!("{}_local", entry.path)
         } else {
@@ -504,8 +486,11 @@ impl<'db> Generator<'_, 'db> {
         } else {
             format!("{path}(vm, {})", names.join(", "))
         };
-        let bind = format!("let ({},) = ({},);", names.join(", "), args.join(", "));
-        let bind = if args.is_empty() { String::new() } else { bind };
+        let bind = if args.is_empty() {
+            String::new()
+        } else {
+            format!("let ({},) = ({},);", names.join(", "), args.join(", "))
+        };
         // A builtin that cannot read type arguments is not given them.
         let call = if types.is_empty() || !entry.reads_type_args {
             call
@@ -520,7 +505,9 @@ impl<'db> Generator<'_, 'db> {
         } else {
             "finish_result"
         };
-        Ok(format!("{{ {bind} let __result = {call}; vm.{finish}(__result) }}"))
+        Ok(format!(
+            "{{ {bind} let __result = {call}; vm.{finish}(__result) }}"
+        ))
     }
 
     fn binary(&mut self, block: BlockId, op: BinOp, left: &Expr, right: &Expr) -> Gen<Expr> {
@@ -600,4 +587,30 @@ impl<'db> Generator<'_, 'db> {
             }
         })
     }
+}
+
+/// Builtin `key`'s generated entry point, if a call with `arity` arguments
+/// (to its thread-local twin when `local`) can use it.
+fn checked_builtin_entry(
+    key: &str,
+    local: bool,
+    arity: usize,
+) -> Gen<&'static baml_builtins2_codegen::NativeEntry> {
+    let Some(entry) = builtin_entry(key) else {
+        return Err(Rejection::Invalid(format!(
+            "builtin `{key}` has no generated entry point"
+        )));
+    };
+    if arity != entry.arity {
+        return Err(Rejection::Invalid(format!(
+            "builtin `{key}` takes {} arguments, given {arity}",
+            entry.arity
+        )));
+    }
+    if local && !entry.local_twin {
+        return Err(Rejection::Invalid(format!(
+            "builtin `{key}` has no thread-local twin"
+        )));
+    }
+    Ok(entry)
 }
