@@ -29,7 +29,7 @@ use baml_type::{
 };
 
 use super::{
-    Expectation, InferenceContext,
+    Expectation, InferenceContext, Suppress,
     flow::{CondFacts, TestPosition},
 };
 use crate::exhaustiveness::{Ctor, DPat, PatCtx, compute_match_usefulness};
@@ -311,15 +311,13 @@ impl<'db> InferenceContext<'db> {
         // gets - probe silently. A branch condition on a narrowable local
         // is the exception: there the test is dead code, and it reports.
         let silent = binding.is_none() || position == TestPosition::Value;
-        if silent {
-            self.or_probe_depth += 1;
-            self.silent_test_depth += 1;
-        }
-        let outcome = self.lower_pattern(body, pattern, &scrut);
-        if silent {
-            self.or_probe_depth -= 1;
-            self.silent_test_depth -= 1;
-        }
+        let outcome = if silent {
+            self.with_suppressed(Suppress::SilentTest, |this| {
+                this.lower_pattern(body, pattern, &scrut)
+            })
+        } else {
+            self.lower_pattern(body, pattern, &scrut)
+        };
         let mut facts = CondFacts::default();
         if let Some(binding) = binding {
             // Subtraction only when the pattern is refutable by type
@@ -639,14 +637,14 @@ impl<'db> InferenceContext<'db> {
             }
             Pattern::Or(alts) => {
                 let alts = alts.clone();
-                self.or_probe_depth += 1;
-                let outcomes: Vec<PatternOutcome> = alts
-                    .iter()
-                    // Every alternative is tried on the value that reached
-                    // the whole pattern.
-                    .map(|&alt| self.lower_pattern_reaching(body, alt, scrut, reaching))
-                    .collect();
-                self.or_probe_depth -= 1;
+                let outcomes: Vec<PatternOutcome> =
+                    self.with_suppressed(Suppress::OrPattern, |this| {
+                        alts.iter()
+                            // Every alternative is tried on the value that
+                            // reached the whole pattern.
+                            .map(|&alt| this.lower_pattern_reaching(body, alt, scrut, reaching))
+                            .collect()
+                    });
                 // The dead-pattern rule at the CHAIN level: one alt that
                 // can't match is just never taken, but a chain where no
                 // alternative overlaps the scrutinee is dead outright.
@@ -986,7 +984,10 @@ impl<'db> InferenceContext<'db> {
         }
         if !outcome.covers_type {
             if self.tuple_type_test_never_matches(scrut, pat_ty) {
-                if self.or_probe_depth == self.silent_test_depth && self.rest_reject_depth == 0 {
+                // Quiet inside an or-pattern alternative (the chain judges
+                // itself; under a silent test the chain is quiet too) and a
+                // rejected rest, reported for a plain test, silent or not.
+                if !self.suppressed(Suppress::OrPattern) && !self.suppressed(Suppress::RestReject) {
                     self.report(super::PendingDiag::TupleTypeTestNeverMatches {
                         pat,
                         scrutinee: scrut.clone(),
@@ -1015,13 +1016,22 @@ impl<'db> InferenceContext<'db> {
             && self.provably_disjoint(scrut, pat_ty)
     }
 
+    /// Whether the dead-pattern rule is quiet here: inside an or-pattern
+    /// alternative, under a silent `is` test or in a rejected rest's
+    /// subtree.
+    fn dead_pattern_is_quiet(&self) -> bool {
+        self.suppressed(Suppress::OrPattern)
+            || self.suppressed(Suppress::SilentTest)
+            || self.suppressed(Suppress::RestReject)
+    }
+
     /// The dead-pattern rule: a pattern TYPE provably sharing no value
     /// with its scrutinee reports like any concrete mismatch. Ground
     /// pairs the oracle decides by unification; rigid/projection pairs
     /// ask the reachability oracle, whose `No` is trusted only when it
     /// can see every variable (the `all_typevars_within` obligation).
     fn check_pattern_type_overlap(&mut self, pat: PatId, scrut: &Ty, pat_ty: &Ty) {
-        if self.or_probe_depth > 0 || self.rest_reject_depth > 0 {
+        if self.dead_pattern_is_quiet() {
             return;
         }
         if self.provably_disjoint(scrut, pat_ty) {
@@ -1588,13 +1598,13 @@ impl<'db> InferenceContext<'db> {
                 let mut consumes = true;
                 let single = claimed.len() == 1;
                 for (member, slots) in &claimed {
-                    if !single {
-                        self.or_probe_depth += 1;
-                    }
-                    let outcome = self.lower_tuple_elements(body, elements, slots, member);
-                    if !single {
-                        self.or_probe_depth -= 1;
-                    }
+                    let outcome = if single {
+                        self.lower_tuple_elements(body, elements, slots, member)
+                    } else {
+                        self.with_suppressed(Suppress::OrPattern, |this| {
+                            this.lower_tuple_elements(body, elements, slots, member)
+                        })
+                    };
                     consumes &= outcome.consumes_matched && !tuple_pattern_is_open(member);
                     matched.push(outcome.matched_ty);
                     alts.push(DPat::union_member(
@@ -1629,14 +1639,10 @@ impl<'db> InferenceContext<'db> {
             }
         }
         let error_slots = vec![Ty::error(); arity];
-        self.or_probe_depth += 1;
-        self.lower_tuple_elements(body, elements, &error_slots, &Ty::error());
-        self.or_probe_depth -= 1;
-        if self.or_probe_depth == 0
-            && self.rest_reject_depth == 0
-            && !structure.has_error()
-            && !structure.has_infer()
-        {
+        self.with_suppressed(Suppress::OrPattern, |this| {
+            this.lower_tuple_elements(body, elements, &error_slots, &Ty::error());
+        });
+        if !self.dead_pattern_is_quiet() && !structure.has_error() && !structure.has_infer() {
             self.report(super::PendingDiag::PatternScrutMismatch {
                 pat,
                 expected: scrut.clone(),
@@ -1754,8 +1760,7 @@ impl<'db> InferenceContext<'db> {
             // the elements are the sentinel; unreported, they are what a
             // dead binding holds, nothing.
             let reported = ascribed.is_none()
-                && self.or_probe_depth == 0
-                && self.rest_reject_depth == 0
+                && !self.dead_pattern_is_quiet()
                 && !matches!(effective.kind(), InferTy::Never);
             if reported {
                 self.report(super::PendingDiag::ListPatternNeverMatches {
@@ -1808,7 +1813,7 @@ impl<'db> InferenceContext<'db> {
             // have no sliced-middle semantics (E0001's rest-sub-pattern
             // rule) - including a bind CHAIN whose tail is structural.
             let shape_ok = rest_pattern_shape_ok(body, rest_pat);
-            if !shape_ok && self.rest_reject_depth == 0 {
+            if !shape_ok && !self.suppressed(Suppress::RestReject) {
                 self.report(super::PendingDiag::RestNotBinding { pat: rest_pat });
             }
             // The rest binds the sliced middle: a list of the element.
@@ -1819,9 +1824,9 @@ impl<'db> InferenceContext<'db> {
             if shape_ok {
                 self.lower_pattern(body, rest_pat, &rest_ty);
             } else {
-                self.rest_reject_depth += 1;
-                self.lower_pattern(body, rest_pat, &rest_ty);
-                self.rest_reject_depth -= 1;
+                self.with_suppressed(Suppress::RestReject, |this| {
+                    this.lower_pattern(body, rest_pat, &rest_ty)
+                });
             }
         }
         for &sub in suffix {

@@ -730,8 +730,10 @@ enum InferVarOrigin {
     },
 }
 
-/// The append-only accumulators the walk writes through, which a probe
-/// marks and truncates as one value.
+/// The accumulators the walk writes through, which a probe marks and
+/// truncates as one value: each grows at its end, so a mark is a length
+/// and the rollback a truncation (an entry may be amended in place before
+/// finish; none is removed from the middle).
 ///
 /// A probe relates types to learn whether they COULD relate and must leave
 /// no trace of the attempt. The table's snapshot covers the union-find and
@@ -831,9 +833,39 @@ struct ProbeCheckpoint {
     type_mismatches: usize,
 }
 
+/// What a channel's contributions are judged against: the `throws` clause
+/// of the callable that owns the channel - written on the owner or a lambda,
+/// taken from the expected function type for a lambda without one - or
+/// nothing, for a channel that only collects (a `catch` base, a tagged
+/// template's flatten block).
+#[derive(Debug, Clone, Default)]
+enum ThrowsClause {
+    /// No closed clause: the effect is inferred from the contributions.
+    #[default]
+    Inferred,
+    /// `throws T | _` (spec Functions rule 3): `named` joins the inferred
+    /// remainder on the surface, and the contract check is suspended.
+    Open { named: Ty },
+    /// `throws T`: the contract every contribution is checked against, and
+    /// the surface verbatim.
+    Closed(Ty),
+}
+
+impl ThrowsClause {
+    /// The clause as a contract, when it is one.
+    fn closed(&self) -> Option<&Ty> {
+        match self {
+            ThrowsClause::Closed(declared) => Some(declared),
+            ThrowsClause::Inferred | ThrowsClause::Open { .. } => None,
+        }
+    }
+}
+
+/// The effects one callable (or one `catch` base) accumulates: `throw`
+/// sites and callee throws contribute into the innermost open channel.
 #[derive(Debug, Clone, Default)]
 struct ThrowsChannel {
-    expected: Option<Ty>,
+    clause: ThrowsClause,
     contributions: Vec<(ExprId, Ty)>,
 }
 
@@ -842,6 +874,69 @@ struct ThrowsContract {
     declared: Ty,
     contributions: Vec<(ExprId, Ty)>,
     at: ExprId,
+}
+
+/// A kind of report the walk holds quiet while inside a construct that
+/// will judge it later, or that makes it noise.
+#[derive(Debug, Clone, Copy)]
+enum Suppress {
+    /// A member lookup that is a PROBE (TIR's `suppress_member_lookup_errors`
+    /// discipline): a failed lookup reports only when no fallback tier
+    /// remains - probes stay silent, the committed frame reports.
+    MemberProbe,
+    /// An optional-call callee inferred as an ordinary expression. Its
+    /// arguments still provide specialization evidence after the callee
+    /// has been typed, so a generic value diagnostic must remain
+    /// conditional until the whole call has been checked.
+    OptionalCallee,
+    /// An or-pattern alternative, where the dead-pattern overlap check
+    /// probes SILENTLY: one alt that can't match is fine (rustc's rule);
+    /// only the whole `|` chain failing to overlap reports, from the chain's
+    /// own frame.
+    OrPattern,
+    /// A silent `is` test: a disjoint runtime type test is legal and
+    /// answers `false`, so the dead-pattern checks are quiet under it too -
+    /// except the tuple type test, which reports for a plain test, silent
+    /// or not, and is quiet only inside an alternative or a rejected rest.
+    SilentTest,
+    /// The subtree of an already-REJECTED rest sub-pattern. The subtree
+    /// still lowers (bindings must record, no unresolved-name cascades)
+    /// but further rest-shape reports and dead-pattern mismatches inside
+    /// it are noise after the one rejection at the outermost structural
+    /// link.
+    RestReject,
+}
+
+/// How many constructs of each [`Suppress`] kind enclose the current point.
+#[derive(Debug, Default)]
+struct Suppressions {
+    member_probe: u32,
+    optional_callee: u32,
+    or_pattern: u32,
+    silent_test: u32,
+    rest_reject: u32,
+}
+
+impl Suppressions {
+    fn depth(&self, what: Suppress) -> u32 {
+        match what {
+            Suppress::MemberProbe => self.member_probe,
+            Suppress::OptionalCallee => self.optional_callee,
+            Suppress::OrPattern => self.or_pattern,
+            Suppress::SilentTest => self.silent_test,
+            Suppress::RestReject => self.rest_reject,
+        }
+    }
+
+    fn depth_mut(&mut self, what: Suppress) -> &mut u32 {
+        match what {
+            Suppress::MemberProbe => &mut self.member_probe,
+            Suppress::OptionalCallee => &mut self.optional_callee,
+            Suppress::OrPattern => &mut self.or_pattern,
+            Suppress::SilentTest => &mut self.silent_test,
+            Suppress::RestReject => &mut self.rest_reject,
+        }
+    }
 }
 
 /// Why a written constructor head yields no class to construct.
@@ -1868,8 +1963,6 @@ fn infer_body_impl<'db>(
 ) -> InferenceResult<'db> {
     BODY_INFERENCES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let body = baml_compiler2_hir::body::body(db, owner);
-    let index = baml_compiler2_hir::file_semantic_index(db, owner.file(db));
-    let owner_scope = baml_compiler2_hir::body::body_scope(db, owner).map(|s| s.file_scope_id(db));
     // The owner's generic frame makes `T` in body annotations resolve; the
     // signature gives parameter references their types and the body its
     // return expectation.
@@ -1961,51 +2054,16 @@ fn infer_body_impl<'db>(
         .with_bounds(owner_declared_bounds(db, owner))
         .with_self_ty(concrete_self)
         .with_impl_target(impl_target);
-    let type_refs = baml_compiler2_hir::body_type_refs::body_type_refs(db, owner);
-    let plain_bounds = owner_declared_bounds(db, owner);
-    // The declared clause's named part and openness (spec rule 3:
-    // `throws T | _` names T and opens the remainder to inference).
-    let (declared_throws, declared_throws_open) = match declared {
+    let clause = match declared {
         Some(crate::lower::DeclaredThrows::Closed(declared)) => {
-            (Some(Ty::from_plain(declared)), false)
+            ThrowsClause::Closed(Ty::from_plain(declared))
         }
-        Some(crate::lower::DeclaredThrows::Partial { named }) => {
-            (Some(Ty::from_plain(named)), true)
-        }
-        Some(crate::lower::DeclaredThrows::Omitted) | None => (None, false),
+        Some(crate::lower::DeclaredThrows::Partial { named }) => ThrowsClause::Open {
+            named: Ty::from_plain(named),
+        },
+        Some(crate::lower::DeclaredThrows::Omitted) | None => ThrowsClause::Inferred,
     };
-    let mut ctx = InferenceContext::new(
-        db,
-        index,
-        owner.file(db),
-        owner_scope,
-        lower,
-        param_tys,
-        return_ty,
-        type_refs,
-        plain_bounds,
-    );
-    if !declared_throws_open {
-        ctx.throws_channels[0].expected.clone_from(&declared_throws);
-    }
-    ctx.declared_throws = declared_throws;
-    ctx.declared_throws_open = declared_throws_open;
-    ctx.body_owner_id = Some(owner);
-    ctx.body_owner = match owner {
-        BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
-            Some(function)
-        }
-        BodyOwnerId::Let(_) => None,
-    };
-    ctx.body_owner_id = Some(owner);
-    ctx.defaults_owner = matches!(owner, BodyOwnerId::ParameterDefaults(_));
-    if let BodyOwnerId::Let(binding) = owner {
-        ctx.global_initializer = crate::globals::is_source_global(db, binding).then(|| {
-            baml_compiler2_hir::item_data::let_data(db, binding)
-                .name
-                .clone()
-        });
-    }
+    let mut ctx = InferenceContext::new(db, owner, lower, param_tys, return_ty, clause);
     if let BodyOwnerId::ParameterDefaults(function) = owner {
         // The defaults arena has no single root: each parameter's default
         // checks against that parameter's declared type (its expectation
@@ -2200,16 +2258,13 @@ struct InferenceContext<'db> {
     /// into the semantic index's per-file tables, and the guard that keeps
     /// parameter lookups from crossing into lambda scopes.
     owner_scope: Option<FileScopeId>,
-    /// Expression spans, for locating the `ScopeKind::Lambda` scope that a
-    /// `Expr::Lambda` node opened (scopes are keyed by source range).
     /// Parameter types for each lambda scope this run has walked, deduced by
     /// `infer_lambda`; the lambda-scope analog of `param_tys`.
     lambda_params: FxHashMap<FileScopeId, Vec<Ty>>,
-    /// The flow-narrowing overlay: refined types for bindings, consulted
-    /// before `type_of_pat`. S10a populates it per match arm only;
-    /// the S10b condition/branch machinery grows it into the full
-    /// environment (design: eager-forward on the structured walk).
-    flow: FxHashMap<BindingId, Ty>,
+    /// The flow-narrowing overlay: a binding's refined type where a fact
+    /// about it is in force, consulted before `type_of_pat`. Grown eagerly
+    /// along the structured walk; see [`flow`].
+    flow: flow::Flow,
     /// Lowering for body-position type annotations, carrying the owner's
     /// generic frame.
     lower: LowerCtx<'db>,
@@ -2217,14 +2272,11 @@ struct InferenceContext<'db> {
     /// lowering context remains immutable; body-owned type lowering forks it
     /// with these rigid parameters.
     scoped_type_bindings: Vec<ScopedTypeBinding>,
-    /// Full owner identity for the Session top-level-let value tier. Keeping
-    /// this lets a malformed self-reference fail closed instead of recursively
-    /// asking Salsa for the inference result currently being built.
-    body_owner_id: Option<BodyOwnerId<'db>>,
-    /// The global's name when this run checks a source global variable's
-    /// initializer (not a client's, not a Session binding's): the owner
-    /// whose top-level `return` is refused.
-    global_initializer: Option<baml_type::Name>,
+    /// The body this run infers. The full identity, not just its function,
+    /// lets a Session top-level let's malformed self-reference fail closed
+    /// instead of recursively asking Salsa for the inference result being
+    /// built, and tells a defaults arena from its function's body.
+    owner: BodyOwnerId<'db>,
     /// The owner's parameter types, from its lowered signature, indexed by
     /// declaration position.
     param_tys: Vec<Ty>,
@@ -2234,18 +2286,10 @@ struct InferenceContext<'db> {
     /// The control frames the walk is inside, innermost last; the bottom
     /// frame is the body owner's. See [`frames::ControlFrame`].
     frames: nunny::Vec<frames::ControlFrame>,
-    /// The owner's DECLARED throws clause's NAMED part, when written: the
-    /// contract every throw site and callee effect is checked against.
-    /// `None` means the effect is inferred instead (from the channel
-    /// below).
-    declared_throws: Option<Ty>,
-    /// Whether the declared clause carried an open slot (`throws T | _`,
-    /// spec rule 3): the contract check is suspended and the final effect
-    /// is the named part unioned with the inferred set.
-    declared_throws_open: bool,
     /// The effect-channel stack: contributions from `throw` sites and
     /// callee throws accumulate into the top. The bottom entry is the
-    /// owner's channel; lambdas and `catch` bases push their own.
+    /// owner's channel, carrying its declared clause; lambdas and `catch`
+    /// bases push their own.
     throws_channels: Vec<ThrowsChannel>,
     /// Explicit, closed contracts whose coverage is checked after inference.
     throws_contracts: Vec<ThrowsContract>,
@@ -2264,28 +2308,8 @@ struct InferenceContext<'db> {
     /// Per-body memoization of ground canonical forms. Inference-bearing types
     /// bypass it because their meaning changes as the table solves variables.
     canonical_cache: baml_type::normalize::InternedCanonicalCache,
-    /// Member-lookup PROBE depth (TIR's `suppress_member_lookup_errors`
-    /// discipline): a failed lookup reports only when no fallback tier
-    /// remains - probes increment, the committed frame reports.
-    member_probe_depth: u32,
-    /// Nonzero while an optional-call callee is inferred as an ordinary
-    /// expression. Its arguments still provide specialization evidence after
-    /// the callee has been typed, so a generic value diagnostic must remain
-    /// conditional until the whole call has been checked.
-    optional_call_callee_depth: u32,
-    /// Depth of pattern lowering where the dead-pattern overlap check
-    /// probes SILENTLY: or-pattern alternatives (one alt that can't
-    /// match is fine - rustc's rule - only the whole `|` chain failing
-    /// to overlap reports, from the chain's own frame) and `is` tests
-    /// (a disjoint runtime type test is legal and answers `false`).
-    pub(crate) or_probe_depth: u32,
-    pub(crate) silent_test_depth: u32,
-    /// Nonzero while lowering the subtree of an already-REJECTED rest
-    /// sub-pattern. The subtree still lowers (bindings must record, no
-    /// unresolved-name cascades) but further rest-shape reports and
-    /// dead-pattern mismatches inside it are noise after the one
-    /// rejection at the outermost structural link.
-    pub(crate) rest_reject_depth: u32,
+    /// The reports held quiet at the current point; see [`Suppress`].
+    suppressions: Suppressions,
     table: InferenceTable,
     /// The accumulators a probe rolls back; see [`Journals`].
     journals: Journals<'db>,
@@ -2293,17 +2317,6 @@ struct InferenceContext<'db> {
     /// `ObligationCause`: obligations born inside a structural `sub`
     /// recursion anchor their eventual diagnostic here.
     obligation_anchor: Option<ExprId>,
-    /// The function whose body this run infers, when the owner IS a
-    /// function - the resolver for owner-scoped receivers (`default`
-    /// inside an `implements` block, like `self`).
-    body_owner: Option<baml_compiler2_hir::loc::FunctionLoc<'db>>,
-    /// Whether this run infers a parameter-default arena: the semantic
-    /// index keys those expressions under
-    /// `ExprMetadataScope::ParameterDefault` (the builder's
-    /// `walk_parameter_defaults`), so metadata lookups at the OWNER scope
-    /// switch variant. Lambda descents swap `current_scope` and key
-    /// `Body` as everywhere else.
-    defaults_owner: bool,
     /// One frame per enclosing `OptionalChain` (chains nest through
     /// arguments): a `?.` link whose base was nullable sets the top
     /// frame, and the chain BOUNDARY unions `null` back into its
@@ -2325,8 +2338,7 @@ struct InferenceContext<'db> {
     /// extraneous-throws warning has no arena node of its own).
     body_root: Option<ExprId>,
     /// Conditions and `!` operands whose type still carried an inference
-    /// variable at check time (B-1563 truthiness); decided at finish on
-    /// the final type.
+    /// variable at check time; decided at finish on the final type.
     pending_truthy_conditions: Vec<crate::infer::truthy::PendingCondition>,
     /// Expressions checked where only the unit type is admitted, with the
     /// expression that produces their value and why the position is unit.
@@ -2339,17 +2351,17 @@ struct InferenceContext<'db> {
     /// unit values carries its branches'. [`Self::join_units`] reports one
     /// that joins any other value.
     unjudged_units: FxHashMap<ExprId, Vec<UnitSite>>,
-    /// The body's file, for package-scoped lookups (the overlap oracle's
-    /// alias map enumerates the owning package plus its dependency closure).
-    /// The file whose body this context infers; its package is the viewer
-    /// every visibility question is asked from.
+    /// The file whose body this context infers: the viewer every visibility
+    /// question is asked from, and the home of package-scoped lookups (the
+    /// overlap oracle's alias map enumerates its package plus the
+    /// dependency closure).
     owner_file: baml_base::SourceFile,
-    /// The pattern-reachability oracle's pre-folded alias map, built once
     /// The enclosing scope's PLAIN bound env for the written-type
     /// well-formedness judgment on body annotations, built lazily like
     /// the overlap aliases.
     wf_scope_env:
         std::cell::OnceCell<rustc_hash::FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>>,
+    /// The pattern-reachability oracle's pre-folded alias map, built once
     /// per inference on first use (TIR's `normalized_overlap_aliases`).
     overlap_aliases:
         std::cell::OnceCell<std::collections::HashMap<baml_type::DeclName, baml_type::Ty>>,
@@ -2361,50 +2373,46 @@ struct InferenceContext<'db> {
 }
 
 impl<'db> InferenceContext<'db> {
-    #[allow(clippy::too_many_arguments)]
+    /// A context for `owner`'s body, typed in `lower`'s environment with
+    /// its signature's parameter types, return expectation and `throws`
+    /// clause.
     fn new(
         db: &'db dyn baml_compiler2_hir::Db,
-        index: &'db FileSemanticIndex<'db>,
-        owner_file: baml_base::SourceFile,
-        owner_scope: Option<FileScopeId>,
+        owner: BodyOwnerId<'db>,
         lower: LowerCtx<'db>,
         param_tys: Vec<Ty>,
         return_ty: Option<Ty>,
-        type_refs: Arc<BodyTypeRefs>,
-        bounds: FxHashMap<baml_type::ParamTy, Vec<baml_type::Interface>>,
+        clause: ThrowsClause,
     ) -> InferenceContext<'db> {
+        let owner_file = owner.file(db);
+        let owner_scope =
+            baml_compiler2_hir::body::body_scope(db, owner).map(|scope| scope.file_scope_id(db));
         InferenceContext {
             db,
-            facts: Facts::with_bounds(db, bounds),
-            index,
+            facts: Facts::with_bounds(db, owner_declared_bounds(db, owner)),
+            index: baml_compiler2_hir::file_semantic_index(db, owner_file),
             owner_scope,
             lambda_params: FxHashMap::default(),
             flow: FxHashMap::default(),
             lower,
             scoped_type_bindings: Vec::new(),
-            body_owner_id: None,
-            global_initializer: None,
+            owner,
             param_tys,
-            type_refs,
+            type_refs: baml_compiler2_hir::body_type_refs::body_type_refs(db, owner),
             frames: nunny::Vec::of(frames::ControlFrame::owner(return_ty, owner_scope)),
-            declared_throws: None,
-            declared_throws_open: false,
-            throws_channels: vec![ThrowsChannel::default()],
+            throws_channels: vec![ThrowsChannel {
+                clause,
+                contributions: Vec::new(),
+            }],
             throws_contracts: Vec::new(),
             hole_vars: Vec::new(),
             diagnosed_infer_vars: rustc_hash::FxHashSet::default(),
             annotation_cache: FxHashMap::default(),
             canonical_cache: baml_type::normalize::InternedCanonicalCache::default(),
-            member_probe_depth: 0,
-            optional_call_callee_depth: 0,
-            or_probe_depth: 0,
-            silent_test_depth: 0,
-            rest_reject_depth: 0,
+            suppressions: Suppressions::default(),
             table: InferenceTable::new(),
             journals: Journals::default(),
             obligation_anchor: None,
-            body_owner: None,
-            defaults_owner: false,
             chain_nullable: Vec::new(),
             property_shorthand_values: FxHashMap::default(),
             block_defer_writes: Vec::new(),
@@ -2423,11 +2431,13 @@ impl<'db> InferenceContext<'db> {
 
     /// The semantic-index key for an expression under the CURRENT scope:
     /// `ParameterDefault` when this run infers a default arena and the
-    /// walk sits at the owner scope, `Body` everywhere else (lambda
-    /// bodies included - their frame names their scope).
+    /// walk sits at the owner scope (the builder's `walk_parameter_defaults`
+    /// keys those expressions so), `Body` everywhere else (lambda bodies
+    /// included - their frame names their scope).
     fn metadata_key(&self, expr: ExprId) -> Option<ExprMetadataKey> {
         let scope = self.current_scope()?;
-        let metadata_scope = if self.defaults_owner && Some(scope) == self.owner_scope {
+        let defaults_owner = matches!(self.owner, BodyOwnerId::ParameterDefaults(_));
+        let metadata_scope = if defaults_owner && Some(scope) == self.owner_scope {
             ExprMetadataScope::ParameterDefault(scope)
         } else {
             ExprMetadataScope::Body(scope)
@@ -2577,7 +2587,7 @@ impl<'db> InferenceContext<'db> {
         let expected = self
             .throws_channels
             .last()
-            .and_then(|channel| channel.expected.clone());
+            .and_then(|channel| channel.clause.closed().cloned());
         let thrown = self.infer_expr_with_hint(body, value, expected.as_ref());
         self.record_throw(value, &thrown);
     }
@@ -2592,7 +2602,7 @@ impl<'db> InferenceContext<'db> {
         // A `return` in the initializer itself leaves the global; one inside
         // a lambda the initializer builds is ordinary.
         if self.returns_from_owner()
-            && let Some(name) = self.global_initializer.clone()
+            && let Some(name) = self.global_initializer()
         {
             self.report(PendingDiag::ReturnInGlobalInitializer {
                 at: at.clone(),
@@ -2920,6 +2930,46 @@ impl<'db> InferenceContext<'db> {
              and the map is keyed rather than journalled, so the entry would outlive it"
         );
         self.table.rollback_to(probe.table);
+    }
+
+    /// The function whose body this run infers, when the owner is one (a
+    /// defaults arena types in its function's environment too) - the
+    /// resolver for owner-scoped receivers (`default` inside an
+    /// `implements` block, like `self`).
+    fn owner_function(&self) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
+        match self.owner {
+            BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
+                Some(function)
+            }
+            BodyOwnerId::Let(_) => None,
+        }
+    }
+
+    /// The global's name when this run checks a source global variable's
+    /// initializer (not a client's, not a Session binding's): the owner
+    /// whose top-level `return` is refused.
+    fn global_initializer(&self) -> Option<baml_type::Name> {
+        let BodyOwnerId::Let(binding) = self.owner else {
+            return None;
+        };
+        crate::globals::is_source_global(self.db, binding).then(|| {
+            baml_compiler2_hir::item_data::let_data(self.db, binding)
+                .name
+                .clone()
+        })
+    }
+
+    /// Whether reports of `what`'s kind stay quiet at the current point.
+    fn suppressed(&self, what: Suppress) -> bool {
+        self.suppressions.depth(what) > 0
+    }
+
+    /// Runs `f` with reports of `what`'s kind held quiet; nesting counts.
+    fn with_suppressed<R>(&mut self, what: Suppress, f: impl FnOnce(&mut Self) -> R) -> R {
+        *self.suppressions.depth_mut(what) += 1;
+        let out = f(self);
+        *self.suppressions.depth_mut(what) -= 1;
+        out
     }
 
     /// Queues a diagnostic; it is finalized at finish.
@@ -3462,9 +3512,9 @@ impl<'db> InferenceContext<'db> {
                 self.field_access(expr, &nonnull, member)
             }
             Expr::OptionalCall { callee, args } => {
-                self.optional_call_callee_depth += 1;
-                let callee_ty = self.infer_expr(body, *callee, &Expectation::None);
-                self.optional_call_callee_depth -= 1;
+                let callee_ty = self.with_suppressed(Suppress::OptionalCallee, |this| {
+                    this.infer_expr(body, *callee, &Expectation::None)
+                });
                 self.report_mounted_reserved_call(expr, *callee);
                 self.check_needless_chain(body, expr, *callee, &callee_ty);
                 let nonnull = self.peel_chain_null(&callee_ty);
@@ -7180,7 +7230,7 @@ impl<'db> InferenceContext<'db> {
                     is_method,
                     types,
                 } => {
-                    if self.member_probe_depth == 0 {
+                    if !self.suppressed(Suppress::MemberProbe) {
                         self.report(PendingDiag::UnionAssociatedTypeConflict {
                             expr: member_expr,
                             base: resolved.clone(),
@@ -7192,7 +7242,7 @@ impl<'db> InferenceContext<'db> {
                     return (Ty::error(), false, None);
                 }
                 crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
-                    if self.member_probe_depth == 0 {
+                    if !self.suppressed(Suppress::MemberProbe) {
                         self.report(PendingDiag::AmbiguousMember {
                             expr: member_expr,
                             base: resolved.clone(),
@@ -7207,7 +7257,7 @@ impl<'db> InferenceContext<'db> {
                     interface,
                     position,
                 } => {
-                    if self.member_probe_depth == 0 {
+                    if !self.suppressed(Suppress::MemberProbe) {
                         self.report(PendingDiag::SelfRestrictedMember {
                             expr: member_expr,
                             interface,
@@ -7232,7 +7282,7 @@ impl<'db> InferenceContext<'db> {
                 member,
             )
         {
-            if self.member_probe_depth == 0 {
+            if !self.suppressed(Suppress::MemberProbe) {
                 self.report(PendingDiag::AmbiguousMember {
                     expr: member_expr,
                     base: resolved.clone(),
@@ -7273,7 +7323,7 @@ impl<'db> InferenceContext<'db> {
                     sources,
                     is_field,
                 } => {
-                    if self.member_probe_depth == 0 {
+                    if !self.suppressed(Suppress::MemberProbe) {
                         self.report(PendingDiag::AmbiguousMember {
                             expr: member_expr,
                             base: resolved.clone(),
@@ -7287,7 +7337,7 @@ impl<'db> InferenceContext<'db> {
                 crate::method_resolution::InterfaceMemberLookup::FieldRequiresProjection {
                     interface,
                 } => {
-                    if self.member_probe_depth == 0 {
+                    if !self.suppressed(Suppress::MemberProbe) {
                         self.report(PendingDiag::FieldRequiresProjection {
                             expr: member_expr,
                             base: resolved.clone(),
@@ -7303,7 +7353,7 @@ impl<'db> InferenceContext<'db> {
                     interface,
                     position,
                 } => {
-                    if self.member_probe_depth == 0 {
+                    if !self.suppressed(Suppress::MemberProbe) {
                         self.report(PendingDiag::SelfRestrictedMember {
                             expr: member_expr,
                             interface,
@@ -7326,9 +7376,9 @@ impl<'db> InferenceContext<'db> {
                 let (ty, bound) = self.interface_member_callee(interface_member, call, true);
                 return (ty, bound, None);
             }
-            self.member_probe_depth += 1;
-            let (field, field_resolution) = self.field_access_resolved(call, &resolved, member);
-            self.member_probe_depth -= 1;
+            let (field, field_resolution) = self.with_suppressed(Suppress::MemberProbe, |this| {
+                this.field_access_resolved(call, &resolved, member)
+            });
             if matches!(
                 field_resolution,
                 Some(
@@ -7342,7 +7392,8 @@ impl<'db> InferenceContext<'db> {
             // here (probes above stayed silent). A union base says "no
             // common interface" - each arm may well declare `member` via
             // different interfaces, so the bare "no member" would mislead.
-            if field.has_error() && self.member_probe_depth == 0 && !resolved.has_error() {
+            if field.has_error() && !self.suppressed(Suppress::MemberProbe) && !resolved.has_error()
+            {
                 if resolved.has_infer() {
                     // Not a cascade: nothing failed, the receiver is just
                     // not inferred yet. The call is already typed `Error`
@@ -7410,7 +7461,7 @@ impl<'db> InferenceContext<'db> {
     /// surface. `None` anywhere else; the caller falls back to ordinary
     /// resolution.
     fn default_receiver_target(&mut self) -> Option<(InferInterface, Ty)> {
-        let function = self.body_owner?;
+        let function = self.owner_function()?;
         let target =
             baml_compiler2_hir::item_data::method_interface_target(self.db, function).as_ref()?;
         let target_ty = self.lower.lower_type_ref_at(
@@ -7572,7 +7623,8 @@ impl<'db> InferenceContext<'db> {
             return;
         };
         let reference = body.display_expr(expr);
-        let had_context = expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
+        let had_context =
+            expected.only_has_type().is_some() || self.suppressed(Suppress::OptionalCallee);
         let callable = match &resolution {
             MemberResolution::Method { callee, receiver } => callee
                 .callable(self.db)
@@ -7696,7 +7748,7 @@ impl<'db> InferenceContext<'db> {
         )) = self.lower.resolve_value(head, segments)
         {
             let had_context =
-                expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
+                expected.only_has_type().is_some() || self.suppressed(Suppress::OptionalCallee);
             let signature = function_signature(self.db, function);
             let instantiation: Vec<Ty> = signature
                 .generic_params
@@ -7799,7 +7851,7 @@ impl<'db> InferenceContext<'db> {
         }
         if let Some(ResolvedValue::External(function)) = self.lower.resolve_value(head, segments) {
             let had_context =
-                expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
+                expected.only_has_type().is_some() || self.suppressed(Suppress::OptionalCallee);
             let callable = DeclRef::External(function);
             let row = extern_function_row(self.db, function);
             let instantiation: Vec<Ty> = row
@@ -8341,7 +8393,7 @@ impl<'db> InferenceContext<'db> {
             });
         }
         let unresolved_member = |this: &mut Self| {
-            if this.member_probe_depth == 0 {
+            if !this.suppressed(Suppress::MemberProbe) {
                 this.report(PendingDiag::UnresolvedMember {
                     expr,
                     base: interface.clone(),
@@ -8353,7 +8405,7 @@ impl<'db> InferenceContext<'db> {
         let realized = match determination {
             crate::interfaces::Determination::Determined(realized) => realized,
             crate::interfaces::Determination::SubjectDoesNotImplementQualifier { .. } => {
-                if self.member_probe_depth == 0 {
+                if !self.suppressed(Suppress::MemberProbe) {
                     self.report(PendingDiag::DoesNotImplement {
                         expr,
                         value: qself,
@@ -8658,7 +8710,7 @@ impl<'db> InferenceContext<'db> {
         let realized = match determination {
             crate::interfaces::Determination::Determined(realized) => realized,
             crate::interfaces::Determination::Ambiguous(candidates) => {
-                if self.member_probe_depth == 0 {
+                if !self.suppressed(Suppress::MemberProbe) {
                     self.report(PendingDiag::AmbiguousMember {
                         expr: anchor,
                         base: qself,
@@ -9127,7 +9179,10 @@ impl<'db> InferenceContext<'db> {
         };
         let written_throws = written_throws.or(contextual_throws);
         self.throws_channels.push(ThrowsChannel {
-            expected: written_throws.clone().filter(|ty| !ty.has_infer()),
+            clause: written_throws
+                .clone()
+                .filter(|ty| !ty.has_infer())
+                .map_or(ThrowsClause::Inferred, ThrowsClause::Closed),
             contributions: Vec::new(),
         });
         let ret_ty = match def.body {
@@ -10270,7 +10325,7 @@ impl<'db> InferenceContext<'db> {
                 &resolved,
                 member,
             ) {
-                if self.member_probe_depth == 0 {
+                if !self.suppressed(Suppress::MemberProbe) {
                     self.report(PendingDiag::AmbiguousMember {
                         expr: at,
                         base: resolved.clone(),
@@ -10285,7 +10340,7 @@ impl<'db> InferenceContext<'db> {
             if self.reject_selfless_inherent_method(method, member, at) {
                 return (Ty::error(), None);
             }
-            if self.member_probe_depth == 0 {
+            if !self.suppressed(Suppress::MemberProbe) {
                 self.report_bare_output_format_reference(at, method);
             }
             let class_count = class_args.len();
@@ -10305,7 +10360,7 @@ impl<'db> InferenceContext<'db> {
             // VALUE obligates its own generics' bounds exactly as a
             // call would (add_required_obligations_for_value_path).
             self.register_callable_instantiation(method, &instantiation, at);
-            if has_own && self.member_probe_depth == 0 {
+            if has_own && !self.suppressed(Suppress::MemberProbe) {
                 // The bound value carries its own instantiation: the
                 // receiver supplies the owner prefix at run time.
                 self.write_call_type_args(at, &instantiation, class_count);
@@ -10341,7 +10396,7 @@ impl<'db> InferenceContext<'db> {
                 );
             }
             crate::method_resolution::InterfaceMemberLookup::Ambiguous { sources, is_field } => {
-                if self.member_probe_depth == 0 {
+                if !self.suppressed(Suppress::MemberProbe) {
                     self.report(PendingDiag::AmbiguousMember {
                         expr: at,
                         base: resolved.clone(),
@@ -10355,7 +10410,7 @@ impl<'db> InferenceContext<'db> {
             crate::method_resolution::InterfaceMemberLookup::FieldRequiresProjection {
                 interface,
             } => {
-                if self.member_probe_depth == 0 {
+                if !self.suppressed(Suppress::MemberProbe) {
                     self.report(PendingDiag::FieldRequiresProjection {
                         expr: at,
                         base: resolved.clone(),
@@ -10371,7 +10426,7 @@ impl<'db> InferenceContext<'db> {
                 interface,
                 position,
             } => {
-                if self.member_probe_depth == 0 {
+                if !self.suppressed(Suppress::MemberProbe) {
                     self.report(PendingDiag::SelfRestrictedMember {
                         expr: at,
                         interface,
@@ -10391,7 +10446,7 @@ impl<'db> InferenceContext<'db> {
         // so it must report (rustc's E0282) rather than reach lowering.
         // `unknown` reports too: it is a first-class user type that must
         // be narrowed before member access, not an error sentinel.
-        if self.member_probe_depth == 0 && !resolved.has_error() {
+        if !self.suppressed(Suppress::MemberProbe) && !resolved.has_error() {
             // The report owns the receiver's open classes.
             self.table.taint_vars_in(&resolved);
             self.report(if resolved.has_infer() {
@@ -10451,7 +10506,7 @@ impl<'db> InferenceContext<'db> {
                 is_method,
                 types,
             } => {
-                if self.member_probe_depth == 0 {
+                if !self.suppressed(Suppress::MemberProbe) {
                     self.report(PendingDiag::UnionAssociatedTypeConflict {
                         expr: at,
                         base: union_ty.clone(),
@@ -10463,7 +10518,7 @@ impl<'db> InferenceContext<'db> {
                 (Ty::error(), None)
             }
             crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
-                if self.member_probe_depth == 0 {
+                if !self.suppressed(Suppress::MemberProbe) {
                     self.report(PendingDiag::AmbiguousMember {
                         expr: at,
                         base: union_ty.clone(),
@@ -10478,7 +10533,7 @@ impl<'db> InferenceContext<'db> {
                 interface,
                 position,
             } => {
-                if self.member_probe_depth == 0 {
+                if !self.suppressed(Suppress::MemberProbe) {
                     self.report(PendingDiag::SelfRestrictedMember {
                         expr: at,
                         interface,
@@ -10491,7 +10546,7 @@ impl<'db> InferenceContext<'db> {
             crate::method_resolution::UnionMemberLookup::NoCommonInterface => {
                 // An unsolved arm contributes no interfaces, so the miss may
                 // only mean "not inferred yet" - still a permanent `Error`.
-                if self.member_probe_depth == 0 && !union_ty.has_error() {
+                if !self.suppressed(Suppress::MemberProbe) && !union_ty.has_error() {
                     // The report owns the receiver's open classes.
                     self.table.taint_vars_in(union_ty);
                     self.report(if union_ty.has_infer() {
@@ -10757,7 +10812,7 @@ impl<'db> InferenceContext<'db> {
         if callable_takes_self(self.db, method) {
             return false;
         }
-        if self.member_probe_depth == 0 {
+        if !self.suppressed(Suppress::MemberProbe) {
             // An in-class `implements` method resolves as an ordinary class
             // candidate, so this road — not the member-lookup one — is where a
             // CONCRETE receiver's interface static lands. Name its interface
@@ -10862,7 +10917,7 @@ impl<'db> InferenceContext<'db> {
         if !member.is_method || self.interface_member_takes_self(member) {
             return false;
         }
-        if self.member_probe_depth == 0 {
+        if !self.suppressed(Suppress::MemberProbe) {
             let interface_name = self.member_declaring_interface(&member.declarer);
             self.report(PendingDiag::SelflessInstanceMember {
                 expr: at,
@@ -10897,7 +10952,7 @@ impl<'db> InferenceContext<'db> {
             let mut instantiation = prefix;
             instantiation.extend(own);
             self.register_callable_instantiation(callable, &instantiation, at);
-            if has_own && self.member_probe_depth == 0 {
+            if has_own && !self.suppressed(Suppress::MemberProbe) {
                 // The bound value carries its own instantiation, as the
                 // inherent method value road records it: the receiver (or
                 // `default`'s adopted frame) supplies the owner prefix.
@@ -11241,16 +11296,16 @@ impl<'db> InferenceContext<'db> {
         if let Some(declared) = crate::lower::let_declared_type(self.db, binding) {
             return Some(Ty::from_plain(declared));
         }
-        if self.body_owner_id == Some(BodyOwnerId::Let(binding))
-            || let_owner_is_in_flight(self.db, binding)
-        {
+        if self.owner == BodyOwnerId::Let(binding) || let_owner_is_in_flight(self.db, binding) {
             // A source global's type can only depend on itself through
             // references its initializer (or a function it reaches) makes,
             // and each of those is an initialization edge: the cycle is
             // reported once, deterministically, as E0181 by
             // `crate::globals`. Reporting it here too would be order-
             // dependent and would advise an annotation that cannot help.
-            if self.member_probe_depth == 0 && !crate::globals::is_source_global(self.db, binding) {
+            if !self.suppressed(Suppress::MemberProbe)
+                && !crate::globals::is_source_global(self.db, binding)
+            {
                 self.report(PendingDiag::TopLevelLetCycle { expr });
             }
             return None;
@@ -11416,12 +11471,14 @@ impl<'db> InferenceContext<'db> {
         // declared bounds. Hole-carrying annotations skip - their holes
         // solve first and the instantiation sites judge them.
         if !lowered.contains_hole() {
-            let owner_env = self.wf_scope_env.get_or_init(|| match self.body_owner {
-                Some(function) => crate::lower::function_generic_bounds(self.db, function)
-                    .into_iter()
-                    .collect(),
-                None => rustc_hash::FxHashMap::default(),
-            });
+            let owner_env = self
+                .wf_scope_env
+                .get_or_init(|| match self.owner_function() {
+                    Some(function) => crate::lower::function_generic_bounds(self.db, function)
+                        .into_iter()
+                        .collect(),
+                    None => rustc_hash::FxHashMap::default(),
+                });
             // A bounded `let type` binding in scope carries its own bounds.
             let mut scoped_bounds = self
                 .scoped_type_bindings
@@ -12330,12 +12387,15 @@ impl<'db> InferenceContext<'db> {
         // widens (the provider's conversion): `reflect.signature` on a
         // `throw "negative"` lambda reconstructs `string`.
         let contribution = ty;
-        // An OPEN clause (`throws T | _`) admits every contribution; the
-        // remainder joins the surface at finalize instead of erroring.
-        if let Some(declared) = self.declared_throws.clone()
-            && !self.declared_throws_open
-            && self.throws_channels.len() == 1
-        {
+        // The owner's closed clause judges each contribution as it comes;
+        // an OPEN clause (`throws T | _`) admits every contribution and the
+        // remainder joins the surface at finalize instead. A lambda's clause
+        // judges its channel when it closes.
+        let owner_contract = match self.throws_channels.as_slice() {
+            [owner] => owner.clause.closed().cloned(),
+            _ => None,
+        };
+        if let Some(declared) = owner_contract {
             self.check_throws_contribution(at, &contribution, &declared);
         }
         self.throws_channels
@@ -13015,17 +13075,22 @@ impl<'db> InferenceContext<'db> {
         let mut unresolved_infer_diagnostics = self.take_unsolved_hole_diagnostics();
         unresolved_infer_diagnostics.extend(self.take_unresolved_infer_diagnostics());
         unresolved_infer_diagnostics.extend(self.take_writeback_backstop_diagnostics());
-        let throws = match self.declared_throws.clone() {
+        let owner_clause = self.throws_channels[0].clause.clone();
+        let throws = match owner_clause {
             // A closed clause IS the surface (declared wins, rule 1),
             // VERBATIM - the written member order is render fidelity
             // (ruling 3's record-what-the-user-wrote), so no finalize
             // pass here; the sweep proved canonical reordering breaks
             // agreement on the written surface.
-            Some(declared) if !self.declared_throws_open => declared,
+            ThrowsClause::Closed(declared) => declared,
             // Open or omitted: the inferred set, with an open clause's
             // named part joining the union (spec rule 3 - callers see
             // declared + inferred).
-            declared => {
+            ThrowsClause::Inferred | ThrowsClause::Open { .. } => {
+                let declared = match owner_clause {
+                    ThrowsClause::Open { named } => Some(named),
+                    ThrowsClause::Inferred | ThrowsClause::Closed(_) => None,
+                };
                 let contributions = self.throws_channels[0].contributions.clone();
                 // Every block has closed: a contribution still typed by a
                 // scoped binding would be published as the owner's surface.
@@ -13047,8 +13112,7 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         };
-        if let Some(declared) = self.declared_throws.clone()
-            && !self.declared_throws_open
+        if let ThrowsClause::Closed(declared) = self.throws_channels[0].clause.clone()
             && let Some(root) = self.body_root
         {
             self.throws_contracts.push(ThrowsContract {
@@ -15270,7 +15334,7 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         effect: &baml_type::ParamTy,
     ) -> Option<baml_type::Name> {
-        let function = self.body_owner?;
+        let function = self.owner_function()?;
         let data = baml_compiler2_hir::item_data::function_data(self.db, function);
         let param_tys = self.param_tys.clone();
         for (index, param_ty) in param_tys.iter().enumerate() {
