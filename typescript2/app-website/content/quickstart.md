@@ -158,7 +158,7 @@ Inputs, outputs, and multi-project setups are documented at https://github.com/B
 
 Boundary's cloud traces every BAML call and adds dashboards, alerts, and experiments on top. It is in early access. To use it, book a call with the founders and they will set it up with you:
 
-https://calendly.com/boundary-founders/boundary-unified-stack-set-up
+https://boundaryml.com/eap
 
 ## Keeping BAML updated
 

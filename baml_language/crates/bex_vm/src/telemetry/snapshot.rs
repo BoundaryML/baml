@@ -66,6 +66,7 @@ impl Scratch {
             ValueKind::OmittedArg => return SnapshotValue::OmittedArg,
             ValueKind::Int(v) => return SnapshotValue::Int(v),
             ValueKind::Bool(v) => return SnapshotValue::Bool(v),
+            ValueKind::Float(v) => return SnapshotValue::Float(v),
             ValueKind::Object(ptr) => ptr,
         };
         // SAFETY: capture holds the heap permit and never allocates in the VM heap.
@@ -581,7 +582,8 @@ mod tests {
             "b".repeat(1024).into(),
         ));
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
-        let float = vm.tlab.alloc_float(2.5);
+        let float = vm.tlab.float_value(2.5);
+        let boxed_float = vm.tlab.float_value(f64::INFINITY);
         let opaque: Arc<dyn bex_vm_types::BexRustData> = Arc::new(bex_vm_types::TestRustData(7));
         let weak = Arc::downgrade(&opaque);
         let first = vm.tlab.alloc_rust_data(opaque.clone());
@@ -594,9 +596,10 @@ mod tests {
             Value::int(-3),
             Value::object(string),
             Value::object(big),
-            Value::object(float),
+            float,
             Value::object(first),
             Value::object(second),
+            boxed_float,
         ]);
         unsafe { vm.heap.collect_garbage(&[]) };
         drop(vm);
@@ -623,6 +626,8 @@ mod tests {
             captured_object(&snapshot, roots[8]),
             Obj::NonSnapshotableValue {}
         ));
+        // Inline and boxed floats capture alike.
+        assert!(matches!(roots[9], Val::Float(f) if f == f64::INFINITY));
     }
     #[test]
     fn media_is_captured_by_content_without_retaining_sources() {
@@ -929,6 +934,7 @@ mod tests {
             other: indexmap::IndexMap::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let instance = vm.tlab.alloc_instance_with_type_args(
             class_ptr,
@@ -1276,7 +1282,7 @@ mod tests {
             .tlab
             .alloc_array(RealizedTy::int(), (0..10_000).map(Value::int).collect());
         let float_values = (0..10_000)
-            .map(|i| Value::object(vm.tlab.alloc_float(f64::from(i))))
+            .map(|i| vm.tlab.float_value(f64::from(i)))
             .collect();
         let floats = vm.tlab.alloc_array(ty(), float_values);
         let map = vm.tlab.alloc_map(

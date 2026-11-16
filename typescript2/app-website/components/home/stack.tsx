@@ -191,7 +191,7 @@ function SlabArt({
       <text
         fill={t.color}
         fillOpacity={t.label}
-        fontFamily="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+        fontFamily="var(--font-mono)"
         fontSize="16"
         fontWeight={t.weight}
         x="362"

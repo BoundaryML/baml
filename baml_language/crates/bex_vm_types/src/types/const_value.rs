@@ -77,10 +77,12 @@ impl ConstValue {
             ConstValue::OmittedArg => Value::OMITTED_ARG,
             ConstValue::Null => Value::NULL,
             ConstValue::Int(v) => Value::int(*v),
-            ConstValue::Float(_) => panic!(
-                "ConstValue::Float must be heap-boxed at engine load time — \
-                 use the float-allocating conversion path, not to_value"
-            ),
+            ConstValue::Float(f) => Value::try_inline_float(*f).unwrap_or_else(|| {
+                panic!(
+                    "ConstValue::Float {f} has no inline encoding and must be heap-boxed \
+                     at engine load time (box_compile_time_floats), not resolved via to_value"
+                )
+            }),
             ConstValue::Bool(v) => Value::bool(*v),
             ConstValue::Object(idx) => Value::object(resolve(*idx)),
             ConstValue::Type(_) => {

@@ -8,9 +8,8 @@ import { useEffect, useRef, useState } from 'react';
 // links to real pages in labeled columns, no icons or descriptions. Only pages that exist are
 // listed; a column or link goes in once its page does.
 
-// The third entry marks a link that's only in the menu on a phone, where the bar has no room for it.
 const COLUMNS: {
-  links: [label: string, href: string, phoneOnly?: boolean][];
+  links: [label: string, href: string][];
   title: string;
 }[] = [
   {
@@ -18,7 +17,6 @@ const COLUMNS: {
       ['Overview', '/'],
       ['Adopt', '/adopt'],
       ['How BAML works', '/how-baml-works'],
-      ['Pricing', '/pricing', true],
     ],
     title: 'Platform',
   },
@@ -102,17 +100,14 @@ export function PlatformMenu() {
               className={`min-w-0 flex-1 sm:min-w-[180px] ${i ? 'border-l border-rule pl-2' : ''}`}
               key={c.title}
             >
-              <p className="px-3 pt-1 pb-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-muted">
+              <p className="px-3 pt-1 pb-1.5 v4-caption text-muted">
                 {c.title}
               </p>
               <ul>
-                {c.links.map(([label, href, phoneOnly]) => (
-                  <li
-                    className={phoneOnly ? 'sm:hidden' : undefined}
-                    key={href}
-                  >
+                {c.links.map(([label, href]) => (
+                  <li key={href}>
                     <Link
-                      className="focus-ring block whitespace-nowrap rounded-md px-3 py-1.5 text-[14px] text-ink transition-colors hover:bg-white/[0.06] hover:text-head"
+                      className="focus-ring block font-sans whitespace-nowrap rounded-md px-3 py-1.5 text-[14px] text-ink transition-colors hover:bg-white/[0.06] hover:text-head"
                       href={href}
                       onClick={() => setOpen(false)}
                     >

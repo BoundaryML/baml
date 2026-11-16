@@ -2,7 +2,7 @@ import type { MDXComponents } from 'mdx/types';
 import dynamic from 'next/dynamic';
 import NextImage from 'next/image';
 import { PostDrawing } from '@/app/(home)/blog/_lib/art';
-import NewsletterForm from '@/components/NewsletterForm';
+import NewsletterForm from '@/components/newsletter-form';
 import BamlBlock from './baml-block/BamlBlockClient';
 import { CodeBlocks } from './code-blocks';
 import { DevSpotlight } from './dev-spotlight';

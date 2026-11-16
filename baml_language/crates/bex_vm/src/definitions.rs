@@ -231,6 +231,7 @@ mod tests {
             other: IndexMap::new(),
             owner: Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         };
 
         let definition = enum_definition(&enm);
