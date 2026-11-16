@@ -56,6 +56,10 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
                 field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
                 must_exist: false,
                 stream_done: false,
+                json_rename: None,
+                json_flatten: false,
+                json_fallback: false,
+                json_omit_null: false,
                 description: None,
                 alias: None,
                 docstring: None,
@@ -70,6 +74,10 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
                 field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
                 must_exist: false,
                 stream_done: false,
+                json_rename: None,
+                json_flatten: false,
+                json_fallback: false,
+                json_omit_null: false,
                 description: None,
                 alias: None,
                 docstring: None,
@@ -103,6 +111,7 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
                 docstring: None,
                 other: indexmap::IndexMap::default(),
                 skip: false,
+                json_rename: None,
             },
             bex_vm_types::EnumVariant {
                 name: "Green".to_string(),
@@ -111,6 +120,7 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
                 docstring: None,
                 other: indexmap::IndexMap::default(),
                 skip: false,
+                json_rename: None,
             },
             bex_vm_types::EnumVariant {
                 name: "Blue".to_string(),
@@ -119,6 +129,7 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
                 docstring: None,
                 other: indexmap::IndexMap::default(),
                 skip: false,
+                json_rename: None,
             },
         ],
         description: None,
@@ -127,6 +138,7 @@ fn rt_captures_match_vm_content_ids_and_definition_blobs() {
         other: indexmap::IndexMap::default(),
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        shared_variants: Box::default(),
     })));
 
     assert!(CLASS.set(frozen(class_ptr)).is_ok());
