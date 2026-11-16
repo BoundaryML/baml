@@ -1,0 +1,17 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/tool/Cargo.toml
+[package]
+name = "cargo-app"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+name_exceptions = { "tool" = "cargo-app" }
+--- exit
+0
+--- stdout
+ok

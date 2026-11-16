@@ -1,0 +1,17 @@
+--- args
+--graph
+graph.mmd
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = []
+
+[workspace.dependencies]
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+0
+--- stdout
+--- expect graph.mmd
+flowchart TB

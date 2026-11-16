@@ -1,0 +1,24 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_core_tests/Cargo.toml
+[package]
+name = "app_core_tests"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+ignore_crates = ["app_core"]
+
+[[namespaces]]
+name = "app"
+--- exit
+1
+--- stdout
+error[orphan-test-crate]: app_core_tests: crates/app_core_tests/Cargo.toml: test crate requires crate `app_core`
+1 error(s)

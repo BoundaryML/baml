@@ -1,0 +1,39 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+serde = "1"
+tokio = "1"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+
+[target.'cfg(unix)'.build-dependencies]
+serde = { workspace = true }
+tokio = { workspace = true }
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+1
+--- stdout
+error[unsorted-deps]: app_core: crates/app_core/Cargo.toml: [dev-dependencies] is not sorted: internal dependencies first, then external, each alphabetical
+error[unsorted-deps]: app_core: crates/app_core/Cargo.toml: [target.'cfg(unix)'.dependencies] is not sorted: internal dependencies first, then external, each alphabetical
+2 error(s)

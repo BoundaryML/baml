@@ -1,0 +1,22 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.metadata.stow]
+namespaces = [{ name = "app" }]
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file crates/other_core/Cargo.toml
+[package]
+name = "other_core"
+version = "0.1.0"
+edition = "2021"
+--- exit
+1
+--- stdout
+error[naming]: other_core: crates/other_core/Cargo.toml: name must start with a namespace prefix; known namespaces: app
+1 error(s)

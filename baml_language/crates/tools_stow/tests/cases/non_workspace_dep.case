@@ -1,0 +1,33 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+serde = "1"
+tokio = "1"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt"] }
+
+[build-dependencies]
+other = "2"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+1
+--- stdout
+error[non-workspace-dep]: app_core: crates/app_core/Cargo.toml: [build-dependencies] `other` must use `workspace = true`
+error[non-workspace-dep]: app_core: crates/app_core/Cargo.toml: [dependencies] `serde` must use `workspace = true`
+error[non-workspace-dep]: app_core: crates/app_core/Cargo.toml: [dev-dependencies] `tokio` must use `workspace = true`
+3 error(s)

@@ -1,0 +1,52 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+serde = "1"
+tokio = "1"
+unused = "1"
+--- file crates/app_bad_name_here_x/Cargo.toml
+[package]
+name = "app_bad_name_here_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file crates/zeta_folder/Cargo.toml
+[package]
+name = "app_zeta"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+serde = "1"
+app_core = { workspace = true }
+
+[dev-dependencies]
+tokio = "1"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+
+[[dependency_rules]]
+pattern = "tokio"
+reason = "No async here."
+--- exit
+1
+--- stdout
+error[naming]: app_bad_name_here_x: crates/app_bad_name_here_x/Cargo.toml: too many parts after `app_`
+error[name-mismatch]: app_zeta: crates/zeta_folder/Cargo.toml: package name `app_zeta` does not match folder `zeta_folder`
+error[non-workspace-dep]: app_zeta: crates/zeta_folder/Cargo.toml: [dependencies] `serde` must use `workspace = true`
+error[non-workspace-dep]: app_zeta: crates/zeta_folder/Cargo.toml: [dev-dependencies] `tokio` must use `workspace = true`
+error[restricted-dep]: app_zeta: crates/zeta_folder/Cargo.toml: [dependencies] `tokio` is not allowed here: No async here.
+error[restricted-dep]: app_zeta: crates/zeta_folder/Cargo.toml: [dev-dependencies] `tokio` is not allowed here: No async here.
+error[unsorted-deps]: app_zeta: crates/zeta_folder/Cargo.toml: [dependencies] is not sorted: internal dependencies first, then external, each alphabetical
+error[unused-workspace-dep]: workspace: Cargo.toml: workspace dependency `unused` is not used by any crate
+8 error(s)

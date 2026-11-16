@@ -16,7 +16,7 @@ The pre-commit hook automatically runs before each commit and:
 
 1. **Runs `cargo fmt --all`** in the `baml_language` directory to automatically format code
 2. **Runs `cargo clippy --fix`** to automatically fix clippy warnings where possible
-3. **Runs `cargo stow --check`** to validate workspace crate organization
+3. **Runs `cargo stow --fix`** to sort dependency tables, then validate workspace crate organization
 4. **Updates BEP README** if any BEP files changed
 
 If there are issues that can't be auto-fixed, the commit will be aborted with instructions.

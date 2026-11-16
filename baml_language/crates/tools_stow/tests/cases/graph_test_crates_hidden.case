@@ -1,0 +1,54 @@
+--- args
+--graph
+graph.mmd
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+app_core_tests = { path = "crates/app_core_tests" }
+app_util_test = { path = "crates/app_util_test" }
+app_util = { path = "crates/app_util" }
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_core_tests/Cargo.toml
+[package]
+name = "app_core_tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+app_core = { workspace = true }
+--- file crates/app_util/Cargo.toml
+[package]
+name = "app_util"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_util_test/Cargo.toml
+[package]
+name = "app_util_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+app_util = { workspace = true }
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+0
+--- stdout
+--- expect graph.mmd
+flowchart TB
+  subgraph ns_app ["app"]
+    c_app_core["app_core"]
+    c_app_util["app_util"]
+  end
+  style ns_app fill:#dbe9f6,stroke:#1f77b4
+  style c_app_core fill:#ffffff,stroke:#1f77b4
+  style c_app_util fill:#ffffff,stroke:#1f77b4

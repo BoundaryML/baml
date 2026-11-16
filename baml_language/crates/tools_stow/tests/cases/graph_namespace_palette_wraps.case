@@ -1,0 +1,196 @@
+--- args
+--graph
+graph.mmd
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+a_x = { path = "crates/a_x" }
+b_x = { path = "crates/b_x" }
+c_x = { path = "crates/c_x" }
+d_x = { path = "crates/d_x" }
+e_x = { path = "crates/e_x" }
+f_x = { path = "crates/f_x" }
+g_x = { path = "crates/g_x" }
+h_x = { path = "crates/h_x" }
+i_x = { path = "crates/i_x" }
+j_x = { path = "crates/j_x" }
+k_x = { path = "crates/k_x" }
+l_x = { path = "crates/l_x" }
+m_x = { path = "crates/m_x" }
+--- file crates/a_x/Cargo.toml
+[package]
+name = "a_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/b_x/Cargo.toml
+[package]
+name = "b_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/c_x/Cargo.toml
+[package]
+name = "c_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/d_x/Cargo.toml
+[package]
+name = "d_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/e_x/Cargo.toml
+[package]
+name = "e_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/f_x/Cargo.toml
+[package]
+name = "f_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/g_x/Cargo.toml
+[package]
+name = "g_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/h_x/Cargo.toml
+[package]
+name = "h_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/i_x/Cargo.toml
+[package]
+name = "i_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/j_x/Cargo.toml
+[package]
+name = "j_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/k_x/Cargo.toml
+[package]
+name = "k_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/l_x/Cargo.toml
+[package]
+name = "l_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/m_x/Cargo.toml
+[package]
+name = "m_x"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "a"
+
+[[namespaces]]
+name = "b"
+
+[[namespaces]]
+name = "c"
+
+[[namespaces]]
+name = "d"
+
+[[namespaces]]
+name = "e"
+
+[[namespaces]]
+name = "f"
+
+[[namespaces]]
+name = "g"
+
+[[namespaces]]
+name = "h"
+
+[[namespaces]]
+name = "i"
+
+[[namespaces]]
+name = "j"
+
+[[namespaces]]
+name = "k"
+
+[[namespaces]]
+name = "l"
+
+[[namespaces]]
+name = "m"
+--- exit
+0
+--- stdout
+--- expect graph.mmd
+flowchart TB
+  subgraph ns_a ["a"]
+    c_a_x["a_x"]
+  end
+  subgraph ns_b ["b"]
+    c_b_x["b_x"]
+  end
+  subgraph ns_c ["c"]
+    c_c_x["c_x"]
+  end
+  subgraph ns_d ["d"]
+    c_d_x["d_x"]
+  end
+  subgraph ns_e ["e"]
+    c_e_x["e_x"]
+  end
+  subgraph ns_f ["f"]
+    c_f_x["f_x"]
+  end
+  subgraph ns_g ["g"]
+    c_g_x["g_x"]
+  end
+  subgraph ns_h ["h"]
+    c_h_x["h_x"]
+  end
+  subgraph ns_i ["i"]
+    c_i_x["i_x"]
+  end
+  subgraph ns_j ["j"]
+    c_j_x["j_x"]
+  end
+  subgraph ns_k ["k"]
+    c_k_x["k_x"]
+  end
+  subgraph ns_l ["l"]
+    c_l_x["l_x"]
+  end
+  subgraph ns_m ["m"]
+    c_m_x["m_x"]
+  end
+  style ns_a fill:#dbe9f6,stroke:#1f77b4
+  style ns_b fill:#fde3cf,stroke:#d95f02
+  style ns_c fill:#dcf0dc,stroke:#2ca02c
+  style ns_d fill:#e9e0f3,stroke:#9467bd
+  style ns_e fill:#eadfdc,stroke:#8c564b
+  style ns_f fill:#f8d7e3,stroke:#c2185b
+  style ns_g fill:#d3eef0,stroke:#00838f
+  style ns_h fill:#eeeecc,stroke:#7f7f00
+  style ns_i fill:#dde3e6,stroke:#37474f
+  style ns_j fill:#f6ecc9,stroke:#b8860b
+  style ns_k fill:#d9dcf2,stroke:#283593
+  style ns_l fill:#fbd9d8,stroke:#e53935
+  style ns_m fill:#dbe9f6,stroke:#1f77b4
+  style c_a_x fill:#ffffff,stroke:#1f77b4
+  style c_b_x fill:#ffffff,stroke:#d95f02
+  style c_c_x fill:#ffffff,stroke:#2ca02c
+  style c_d_x fill:#ffffff,stroke:#9467bd
+  style c_e_x fill:#ffffff,stroke:#8c564b
+  style c_f_x fill:#ffffff,stroke:#c2185b
+  style c_g_x fill:#ffffff,stroke:#00838f
+  style c_h_x fill:#ffffff,stroke:#7f7f00
+  style c_i_x fill:#ffffff,stroke:#37474f
+  style c_j_x fill:#ffffff,stroke:#b8860b
+  style c_k_x fill:#ffffff,stroke:#283593
+  style c_l_x fill:#ffffff,stroke:#e53935
+  style c_m_x fill:#ffffff,stroke:#1f77b4

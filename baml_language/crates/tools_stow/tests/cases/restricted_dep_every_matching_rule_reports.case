@@ -1,0 +1,57 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+anyhow = "1"
+app_core = { path = "crates/app_core" }
+app_internal_db = { path = "crates/app_internal_db" }
+serde = "1"
+--- file crates/app_cli/Cargo.toml
+[package]
+name = "app_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+--- file crates/app_internal_db/Cargo.toml
+[package]
+name = "app_internal_db"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+
+--- file stow.toml
+[[namespaces]]
+name = "app"
+approved_prefixes = ["internal"]
+
+[[dependency_rules]]
+pattern = "any*"
+allowed_crates = ["app_cli", "app_internal_db"]
+reason = "First."
+
+[[dependency_rules]]
+pattern = "*how"
+allowed_crates = ["app_cli", "app_internal_db"]
+reason = "Second."
+--- exit
+1
+--- stdout
+error[restricted-dep]: app_core: crates/app_core/Cargo.toml: [dependencies] `anyhow` is not allowed here: First.
+error[restricted-dep]: app_core: crates/app_core/Cargo.toml: [dependencies] `anyhow` is not allowed here: Second.
+2 error(s)

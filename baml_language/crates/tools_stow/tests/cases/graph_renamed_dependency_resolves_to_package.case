@@ -1,0 +1,48 @@
+--- args
+--graph
+graph.mmd
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_a = { path = "crates/app_a" }
+core_alias = { path = "crates/app_core", package = "app_core" }
+json = { version = "1", package = "serde_json" }
+--- file crates/app_a/Cargo.toml
+[package]
+name = "app_a"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+core_alias = { workspace = true }
+json = { workspace = true }
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[graph]
+external_deps = ["serde_json"]
+
+[[namespaces]]
+name = "app"
+--- exit
+0
+--- stdout
+--- expect graph.mmd
+flowchart TB
+  subgraph ns_app ["app"]
+    c_app_a["app_a"]
+    c_app_core["app_core"]
+    x_app__serde_json["serde_json"]
+  end
+  c_app_a --> c_app_core
+  c_app_a --> x_app__serde_json
+  style ns_app fill:#dbe9f6,stroke:#1f77b4
+  style c_app_a fill:#ffffff,stroke:#1f77b4
+  style c_app_core fill:#ffffff,stroke:#1f77b4
+  style x_app__serde_json fill:#d0d0d0,stroke:#606060

@@ -35,3 +35,6 @@ telemetry.toml
 # can survive a crashed run. They land here rather than in the package because
 # the suite is run from this directory (`baml-cli test --project-dir tools/type_quiz`).
 .type-quiz-scratch-*/
+
+# Dependency graph written by architecture/generate.sh; generated on demand, not committed
+/architecture/architecture.mmd

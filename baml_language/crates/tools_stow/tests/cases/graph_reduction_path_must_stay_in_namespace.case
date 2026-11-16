@@ -1,0 +1,72 @@
+--- args
+--graph
+graph.mmd
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_a = { path = "crates/app_a" }
+app_b = { path = "crates/app_b" }
+app_c = { path = "crates/app_c" }
+lib_x = { path = "crates/lib_x" }
+--- file crates/app_a/Cargo.toml
+[package]
+name = "app_a"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+app_b = { workspace = true }
+app_c = { workspace = true }
+--- file crates/app_b/Cargo.toml
+[package]
+name = "app_b"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lib_x = { workspace = true }
+--- file crates/app_c/Cargo.toml
+[package]
+name = "app_c"
+version = "0.1.0"
+edition = "2021"
+--- file crates/lib_x/Cargo.toml
+[package]
+name = "lib_x"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+app_c = { workspace = true }
+--- file stow.toml
+[[namespaces]]
+name = "app"
+
+[[namespaces]]
+name = "lib"
+--- exit
+0
+--- stdout
+--- expect graph.mmd
+flowchart TB
+  subgraph ns_app ["app"]
+    c_app_a["app_a"]
+    c_app_b["app_b"]
+    c_app_c["app_c"]
+  end
+  subgraph ns_lib ["lib"]
+    c_lib_x["lib_x"]
+  end
+  c_app_a --> c_app_b
+  c_app_a --> c_app_c
+  c_app_b -.-> c_lib_x
+  c_lib_x -.-> c_app_c
+  style ns_app fill:#dbe9f6,stroke:#1f77b4
+  style ns_lib fill:#fde3cf,stroke:#d95f02
+  style c_app_a fill:#ffffff,stroke:#1f77b4
+  style c_app_b fill:#ffffff,stroke:#1f77b4
+  style c_app_c fill:#ffffff,stroke:#1f77b4
+  style c_lib_x fill:#ffffff,stroke:#d95f02

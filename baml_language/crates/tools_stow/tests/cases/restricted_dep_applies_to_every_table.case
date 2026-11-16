@@ -1,0 +1,47 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+anyhow = "1"
+app_core = { path = "crates/app_core" }
+app_internal_db = { path = "crates/app_internal_db" }
+serde = "1"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+
+[target.'cfg(unix)'.build-dependencies]
+anyhow = { workspace = true }
+--- file crates/app_internal_db/Cargo.toml
+[package]
+name = "app_internal_db"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+--- file stow.toml
+[[namespaces]]
+name = "app"
+approved_prefixes = ["internal"]
+
+[[dependency_rules]]
+pattern = "anyhow"
+allowed_crates = ["app_internal_db"]
+reason = "Not anywhere."
+--- exit
+1
+--- stdout
+error[restricted-dep]: app_core: crates/app_core/Cargo.toml: [dev-dependencies] `anyhow` is not allowed here: Not anywhere.
+error[restricted-dep]: app_core: crates/app_core/Cargo.toml: [target.'cfg(unix)'.build-dependencies] `anyhow` is not allowed here: Not anywhere.
+2 error(s)

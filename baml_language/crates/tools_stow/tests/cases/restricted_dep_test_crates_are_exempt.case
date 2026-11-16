@@ -1,0 +1,55 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+anyhow = "1"
+app_core = { path = "crates/app_core" }
+app_internal_db = { path = "crates/app_internal_db" }
+serde = "1"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+--- file crates/app_core_test/Cargo.toml
+[package]
+name = "app_core_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+--- file crates/app_core_tests/Cargo.toml
+[package]
+name = "app_core_tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+--- file crates/app_internal_db/Cargo.toml
+[package]
+name = "app_internal_db"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+--- file stow.toml
+[[namespaces]]
+name = "app"
+approved_prefixes = ["internal"]
+
+[[dependency_rules]]
+pattern = "anyhow"
+allowed_crates = ["app_internal_db"]
+reason = "Not in libraries."
+--- exit
+0
+--- stdout
+ok

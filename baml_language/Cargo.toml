@@ -200,7 +200,6 @@ ena = "0.14"
 flate2 = { version = "1" }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
-graphviz-rust = { version = "0.9" }
 hex = "0.4"
 httpdate = "1.0.3"
 hmac = "0.12"
@@ -289,7 +288,6 @@ strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
 tar = "0.4"
 zip = { version = "2", default-features = false, features = [ "deflate" ] }
-taplo = { version = "0.13" }
 tempfile = { version = "3" }
 time = { version = "0.3", features = [ "formatting", "macros", "parsing" ] }
 text-size = { version = "1.1", features = [ "serde" ] }

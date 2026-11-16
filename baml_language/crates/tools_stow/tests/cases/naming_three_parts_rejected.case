@@ -1,0 +1,24 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/app_api_client_extra/Cargo.toml
+[package]
+name = "app_api_client_extra"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_web_client_types/Cargo.toml
+[package]
+name = "app_web_client_types"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+approved_prefixes = ["api"]
+--- exit
+1
+--- stdout
+error[naming]: app_api_client_extra: crates/app_api_client_extra/Cargo.toml: expected `app_<approved prefix>_<word>_<types|test|tests>`
+error[naming]: app_web_client_types: crates/app_web_client_types/Cargo.toml: expected `app_<approved prefix>_<word>_<types|test|tests>`
+2 error(s)

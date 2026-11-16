@@ -1,0 +1,21 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*", "tools/deep/app_tool"]
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- file tools/deep/app_tool/Cargo.toml
+[package]
+name = "app_tool"
+version = "0.1.0"
+edition = "2021"
+--- exit
+0
+--- stdout
+ok

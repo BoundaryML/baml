@@ -1,0 +1,17 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/app_integration_tests/Cargo.toml
+[package]
+name = "app_integration_tests"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+test_crate_exceptions = ["app_integration_tests"]
+--- exit
+0
+--- stdout
+ok

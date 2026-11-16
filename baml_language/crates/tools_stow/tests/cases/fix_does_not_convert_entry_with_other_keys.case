@@ -1,0 +1,46 @@
+--- args
+--fix
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+app_util = { path = "crates/app_util" }
+serde = { version = "1", features = ["derive"] }
+tokio = "1"
+zebra = "1"
+--- file crates/app_cli/Cargo.toml
+[package]
+name = "app_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", package = "serde_fork" }
+tokio = { version = "1", features = ["rt"], public = true }
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_util/Cargo.toml
+[package]
+name = "app_util"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+tokio = { workspace = true }
+zebra = { workspace = true }
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+1
+--- stdout
+error[non-workspace-dep]: app_cli: crates/app_cli/Cargo.toml: [dependencies] `serde` must use `workspace = true`
+error[non-workspace-dep]: app_cli: crates/app_cli/Cargo.toml: [dependencies] `tokio` must use `workspace = true`
+2 error(s)

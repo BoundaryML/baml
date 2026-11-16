@@ -1,0 +1,40 @@
+--- args
+--graph
+graph.mmd
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+serde = "1"
+tokio = "1"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+tokio = { workspace = true }
+--- file stow.toml
+[graph]
+external_deps = ["serde"]
+
+[[namespaces]]
+name = "app"
+--- exit
+0
+--- stdout
+--- expect graph.mmd
+flowchart TB
+  subgraph ns_app ["app"]
+    c_app_core["app_core"]
+    x_app__serde["serde"]
+  end
+  c_app_core --> x_app__serde
+  style ns_app fill:#dbe9f6,stroke:#1f77b4
+  style c_app_core fill:#ffffff,stroke:#1f77b4
+  style x_app__serde fill:#d0d0d0,stroke:#606060

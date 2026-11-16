@@ -1,0 +1,94 @@
+--- args
+init
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- exit
+0
+--- stdout
+created stow.toml
+--- expect stow.toml
+# cargo-stow configuration
+# Documentation: https://github.com/boundaryml/baml/tree/main/baml_language/crates/tools_stow
+#
+# Run `cargo stow` to validate and `cargo stow --fix` to repair dependency tables.
+
+# =============================================================================
+# NAMESPACES
+# =============================================================================
+# A namespace is a crate name prefix: crates named `myapp_*` belong to `myapp`.
+#
+# Crate names must be `<namespace>_<word>`, `<namespace>_<approved prefix>_<word>`,
+# an approved suffix, or end in `_types`, `_test` or `_tests`.
+
+[[namespaces]]
+name = "myapp"
+
+# Words allowed as the first of several name parts: "api" allows myapp_api_client.
+approved_prefixes = ["api", "cli"]
+
+# Whole tails accepted as they are: "python_v2" allows myapp_python_v2.
+# approved_suffixes = ["python_v2"]
+
+# Test crates that need no base crate: myapp_integration_tests without myapp_integration.
+# test_crate_exceptions = ["myapp_integration_tests"]
+
+# Folders whose package name differs, or does not follow the convention.
+# name_exceptions = { "myapp_tool" = "cargo-myapp" }
+
+# Dependency rules for crates in this namespace only (syntax below).
+# [[namespaces.dependency_rules]]
+# pattern = "myapp_internal_*"
+# allowed_crates = ["myapp_core"]
+# reason = "Only core uses the internal crates directly."
+
+# Graph: draw these crates of other namespaces as proxy nodes inside this one.
+# link_crates = ["other_types"]
+# embed_crates = ["other_project"]
+
+# =============================================================================
+# DEPENDENCY RULES
+# =============================================================================
+# A rule restricts who may depend on what. It applies to every crate here, or
+# to one namespace when written under [[namespaces.dependency_rules]].
+#
+#   pattern            dependency name; `*` matches any run of characters.
+#                      Or { select = "bex_*", exclude = ["bex_types"] }.
+#   allowed_crates     crate name patterns that may use it
+#   allowed_prefixes   allows <namespace>_<prefix> and <namespace>_<prefix>_*
+#   regular_deps_only  if true, dev- and build-dependencies are not restricted
+#   reason             appended to the error
+#
+# Test crates (`*_test`, `*_tests`) are always allowed.
+
+# [[dependency_rules]]
+# pattern = "anyhow"
+# allowed_crates = ["*_cli"]
+# regular_deps_only = true
+# reason = "Use thiserror for error types in library crates."
+
+# =============================================================================
+# IGNORED CRATES
+# =============================================================================
+# Crates left out of every check, of `--fix` and of the graph.
+
+# ignore_crates = ["vendored_*"]
+
+# =============================================================================
+# GRAPH
+# =============================================================================
+# `cargo stow --graph FILE` writes the dependency graph as Mermaid text.
+
+# [graph]
+# External packages to draw. Only workspace crates are drawn by default.
+# external_deps = ["tokio", "serde"]
+
+# Hide the edge to a listed crate when the crate also depends on the key.
+# [graph.implied_deps]
+# myapp_core = ["myapp_base"]
