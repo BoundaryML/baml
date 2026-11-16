@@ -824,9 +824,7 @@ function Boundary() -> int { let map = { "present": 1 }; map["missing"] }
     }
 }
 
-/// Escape to stack: per test, a program, the function whose allocation sites
-/// it checks, and for each site in order `None` for a stack object or the
-/// start of the reason it stays on the heap.
+/// Escape to stack: the module of `source` at `-O2`, checked to parse.
 fn stack_module(source: &str) -> RustModule {
     let db = baml_test_support::setup_test_db(source);
     let program = lower(&db, OptLevel::Two);
@@ -835,6 +833,8 @@ fn stack_module(source: &str) -> RustModule {
     module
 }
 
+/// `function`'s allocation sites in order: `None` for a stack object, else
+/// the start of the reason it stays on the heap.
 #[track_caller]
 fn assert_sites(module: &RustModule, function: &str, expected: &[Option<&str>]) {
     let report = module
@@ -865,17 +865,32 @@ class Vec {
 }
 "#;
 
+fn symbol_of<'a>(module: &'a RustModule, name: &str) -> &'a str {
+    &module
+        .functions
+        .iter()
+        .find(|f| f.display == name)
+        .unwrap_or_else(|| panic!("{name} should compile: {:?}", module.rejected))
+        .symbol
+}
+
 #[test]
-fn scalar_object_in_a_loop_becomes_a_stack_struct() {
+fn scalar_objects_in_a_loop_become_stack_structs() {
     let module = stack_module(&format!(
         "{STACK_VEC}
+function dot(a: Vec, b: Vec) -> int {{ a.x * b.x + a.y * b.y }}
 function main() -> int {{
   let acc = 0;
-  for (let i = 0; i < 100; i += 1) {{ let v = Vec {{ x: i, y: i + 1 }}; acc += v.x + v.y; }}
+  for (let i = 0; i < 100; i += 1) {{
+    let v = Vec {{ x: i, y: i + 1 }};
+    let w = Vec {{ x: 3, y: i }};
+    acc += v.x + v.y + v.norm2() + dot(v, w);
+  }}
   acc
 }}"
     ));
-    assert_sites(&module, "user.main", &[None]);
+    assert_sites(&module, "user.main", &[None, None]);
+    assert!(module.source.contains("struct user_Vec_stack_"));
     let main = body_of(&module, "user.main");
     assert!(
         !main.contains("vm.new_plain_instance(") && !main.contains("vm.new_instance("),
@@ -883,26 +898,8 @@ function main() -> int {{
     );
     assert!(main.contains("let mut s0: user_Vec_stack_"), "{main}");
     assert!(main.contains("s0.f0"), "{main}");
-    assert!(module.source.contains("struct user_Vec_stack_"));
-}
-
-#[test]
-fn method_on_a_stack_object_calls_its_stack_variant() {
-    let module = stack_module(&format!(
-        "{STACK_VEC}
-function main() -> int {{
-  let acc = 0;
-  for (let i = 0; i < 100; i += 1) {{ let v = Vec {{ x: i, y: i + 1 }}; acc += v.norm2(); }}
-  acc
-}}"
-    ));
-    assert_sites(&module, "user.main", &[None]);
-    let norm2 = &module
-        .functions
-        .iter()
-        .find(|f| f.display == "user.Vec.norm2")
-        .unwrap()
-        .symbol;
+    // A method on a stack object calls its stack variant.
+    let norm2 = symbol_of(&module, "user.Vec.norm2");
     let variant = format!(
         "pub fn {norm2}_stack1(vm: &mut BexVm, fr: &FrameRecord, arg0: &mut user_Vec_stack_"
     );
@@ -910,7 +907,6 @@ function main() -> int {{
         module.source.contains(&variant),
         "no stack variant of norm2"
     );
-    let main = body_of(&module, "user.main");
     assert!(
         main.contains(&format!("{norm2}_stack1(vm, fr, &mut s0, ")),
         "{main}"
@@ -918,6 +914,13 @@ function main() -> int {{
     // The VM-frame fallback materializes the object and reads it back.
     assert!(
         main.contains("s0.heap(vm, fr)") && main.contains("s0.reload(vm, "),
+        "{main}"
+    );
+    // A pure callee takes both objects as stack parameters.
+    let dot = symbol_of(&module, "user.dot");
+    assert!(module.source.contains(&format!("pub fn {dot}_stack3(")));
+    assert!(
+        main.contains(&format!("{dot}_stack3(vm, fr, &mut s0, &mut s1, ")),
         "{main}"
     );
 }
@@ -986,34 +989,6 @@ function main() -> int { let into: Vec[] = []; let v = Vec { x: 1, y: 2 }; keep(
         let module = stack_module(&format!("{STACK_VEC}\n{program}"));
         assert_sites(&module, function, sites);
     }
-}
-
-#[test]
-fn pure_callee_keeps_the_object_on_the_stack() {
-    let module = stack_module(&format!(
-        "{STACK_VEC}
-function dot(a: Vec, b: Vec) -> int {{ a.x * b.x + a.y * b.y }}
-function main() -> int {{
-  let total = 0;
-  for (let i = 0; i < 10; i += 1) {{
-    let a = Vec {{ x: i, y: 2 }};
-    let b = Vec {{ x: 3, y: i }};
-    total += dot(a, b);
-  }}
-  total
-}}"
-    ));
-    assert_sites(&module, "user.main", &[None, None]);
-    let dot = &module
-        .functions
-        .iter()
-        .find(|f| f.display == "user.dot")
-        .unwrap()
-        .symbol;
-    assert!(module.source.contains(&format!("pub fn {dot}_stack3(")));
-    assert!(
-        body_of(&module, "user.main").contains(&format!("{dot}_stack3(vm, fr, &mut s0, &mut s1, "))
-    );
 }
 
 #[test]
