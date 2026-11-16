@@ -290,9 +290,9 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj, 'w> {
     /// The instruction performing the terminator being emitted (a call, a
     /// suspension, a raise, a return), for `Bytecode::block_pcs`.
     terminator_pc: Option<usize>,
-    /// The `block_pcs` statement slots set while emitting the current block,
-    /// as `(block, statement)`: the only ones that can point at instructions
-    /// a superinstruction fusion replaces (see `fuse_tail`).
+    /// The `block_pcs` statement slots set in the current block since its
+    /// start or the last superinstruction fusion, as `(block, statement)`:
+    /// the only ones a later fusion can still replace (see `fuse_tail`).
     current_block_statement_pcs: Vec<(usize, usize)>,
 
     /// MIR local types, for field-name resolution and instruction
@@ -1321,6 +1321,10 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 }
             }
         }
+        // No later fusion reaches back past the superinstruction at `first`:
+        // every fused shape is made of plain instructions only. The slots
+        // seen so far are settled, so each is visited at most once.
+        self.current_block_statement_pcs.clear();
         if let Some(pc) = &mut self.terminator_pc
             && replaced_pcs.contains(pc)
         {
