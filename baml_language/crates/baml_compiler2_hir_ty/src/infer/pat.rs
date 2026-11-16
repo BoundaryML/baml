@@ -1553,9 +1553,9 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// Array destructure: elements lower against the scrutinee's element
-    /// type (ascription intersects when written); a rest binding takes the
-    /// list type. A length-constrained shape never covers by type alone.
+    /// Tuple destructuring tests shape and slot values, preserving every
+    /// possible carried instantiation. Open holders may contain tuples of
+    /// any slot types; their bindings start at `unknown`.
     fn lower_tuple_pattern(
         &mut self,
         body: &ExprBody,
@@ -1567,87 +1567,78 @@ impl<'db> InferenceContext<'db> {
         let structure = self.structurally_resolve(scrut);
         let tuple_slots = |ty: &Ty| match ty.kind() {
             InferTy::Tuple(slots) if slots.len() == arity => Some(slots.to_vec()),
+            _ if tuple_pattern_is_open(ty) => Some(vec![Ty::intern(InferTy::Unknown); arity]),
             _ => None,
         };
         if let Some(slots) = tuple_slots(&structure) {
-            return self.lower_tuple_elements(body, elements, &slots, &structure);
+            let mut outcome = self.lower_tuple_elements(body, elements, &slots, &structure);
+            if tuple_pattern_is_open(&structure) {
+                // Even irrefutable slot patterns do not consume an open
+                // holder: it can also contain non-tuples or other arities.
+                outcome.covers_type = false;
+                outcome.consumes_matched = false;
+            }
+            return outcome;
         }
-        match structure.kind() {
-            InferTy::Unknown => {
-                let unknown = Ty::intern(InferTy::Unknown);
-                let refined: Vec<Ty> = elements
-                    .iter()
-                    .map(|&sub| self.lower_pattern(body, sub, &unknown).matched_ty)
-                    .collect();
+        if let InferTy::Union(members) = structure.kind() {
+            let members: Vec<Ty> = members
+                .iter()
+                .map(|member| self.structurally_resolve(member))
+                .collect();
+            let mut claimed: Vec<(Ty, Vec<Ty>)> = Vec::new();
+            for member in &members {
+                if let Some(slots) = tuple_slots(member)
+                    && self.pattern_fits(body, pat, member)
+                {
+                    claimed.push((member.clone(), slots));
+                }
+            }
+            if !claimed.is_empty() {
+                let scrut_plain = dpat_ty(scrut);
+                let mut alts = Vec::new();
+                let mut matched = Vec::new();
+                let mut consumes = true;
+                let single = claimed.len() == 1;
+                for (member, slots) in &claimed {
+                    if !single {
+                        self.or_probe_depth += 1;
+                    }
+                    let outcome = self.lower_tuple_elements(body, elements, slots, member);
+                    if !single {
+                        self.or_probe_depth -= 1;
+                    }
+                    consumes &= outcome.consumes_matched && !tuple_pattern_is_open(member);
+                    matched.push(outcome.matched_ty);
+                    alts.push(DPat::union_member(
+                        dpat_ty(member),
+                        outcome.dpat,
+                        scrut_plain.clone(),
+                    ));
+                }
+                if !single {
+                    let joined: Vec<Ty> = (0..arity)
+                        .map(|i| {
+                            let at_i: Vec<Ty> =
+                                claimed.iter().map(|(_, slots)| slots[i].clone()).collect();
+                            self.union_of(&at_i)
+                        })
+                        .collect();
+                    let joined_ty = Ty::tuple(joined.clone());
+                    self.lower_tuple_elements(body, elements, &joined, &joined_ty);
+                }
+                let dpat = if single {
+                    alts.pop().expect("one claim")
+                } else {
+                    DPat::or(alts, scrut_plain)
+                };
                 return PatternOutcome {
-                    dpat: DPat::type_test(dpat_ty(&Ty::tuple(refined)), dpat_ty(scrut)),
-                    matched_ty: scrut.clone(),
+                    dpat,
+                    matched_ty: self.union_of(&matched),
                     recorded_ty: None,
                     covers_type: false,
-                    consumes_matched: false,
+                    consumes_matched: consumes,
                 };
             }
-            InferTy::Union(members) => {
-                let members: Vec<Ty> = members
-                    .iter()
-                    .map(|member| self.structurally_resolve(member))
-                    .collect();
-                let mut claimed: Vec<(Ty, Vec<Ty>)> = Vec::new();
-                for member in &members {
-                    if let Some(slots) = tuple_slots(member)
-                        && self.pattern_fits(body, pat, member)
-                    {
-                        claimed.push((member.clone(), slots));
-                    }
-                }
-                if !claimed.is_empty() {
-                    let scrut_plain = dpat_ty(scrut);
-                    let mut alts = Vec::new();
-                    let mut matched = Vec::new();
-                    let mut consumes = true;
-                    let single = claimed.len() == 1;
-                    for (member, slots) in &claimed {
-                        if !single {
-                            self.or_probe_depth += 1;
-                        }
-                        let outcome = self.lower_tuple_elements(body, elements, slots, member);
-                        if !single {
-                            self.or_probe_depth -= 1;
-                        }
-                        consumes &= outcome.consumes_matched;
-                        matched.push(outcome.matched_ty);
-                        alts.push(DPat::union_member(
-                            dpat_ty(member),
-                            outcome.dpat,
-                            scrut_plain.clone(),
-                        ));
-                    }
-                    if !single {
-                        let joined: Vec<Ty> = (0..arity)
-                            .map(|i| {
-                                let at_i: Vec<Ty> =
-                                    claimed.iter().map(|(_, slots)| slots[i].clone()).collect();
-                                self.union_of(&at_i)
-                            })
-                            .collect();
-                        let joined_ty = Ty::tuple(joined.clone());
-                        self.lower_tuple_elements(body, elements, &joined, &joined_ty);
-                    }
-                    let dpat = if single {
-                        alts.pop().expect("one claim")
-                    } else {
-                        DPat::or(alts, scrut_plain)
-                    };
-                    return PatternOutcome {
-                        dpat,
-                        matched_ty: self.union_of(&matched),
-                        recorded_ty: None,
-                        covers_type: false,
-                        consumes_matched: consumes,
-                    };
-                }
-            }
-            _ => {}
         }
         let error_slots = vec![Ty::error(); arity];
         self.or_probe_depth += 1;
@@ -2220,6 +2211,22 @@ fn scrut_members(scrut: &Ty) -> Vec<&Ty> {
         InferTy::Union(members) => members.iter().collect(),
         _ => vec![scrut],
     }
+}
+
+/// These types may hold tuples of any carried instantiation, as well as
+/// non-tuples. A shape test cannot give their slots concrete types or
+/// consume the entire holder during negative narrowing.
+fn tuple_pattern_is_open(ty: &Ty) -> bool {
+    matches!(
+        ty.kind(),
+        InferTy::Unknown
+            | InferTy::Interface(..)
+            | InferTy::TypeVar(_)
+            | InferTy::AssociatedTypeProjection { .. }
+            | InferTy::InferVar { .. }
+            | InferTy::TypeAlias(_)
+            | InferTy::Error
+    )
 }
 
 /// The lists a list pattern can match among one type's values.

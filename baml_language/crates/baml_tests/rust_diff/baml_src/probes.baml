@@ -57,10 +57,29 @@ function TupleProject(value: ((int, string), bool)) -> string {
     }
 }
 
+function TupleOpenShape<T>(value: T) -> string {
+    match value {
+        (let n: int, _) => `${n + 1}`,
+        (let s: string, _) => s,
+        _ => "other",
+    }
+}
+
+function TupleOpenUnion<T>(value: T | (int, bool)) -> string {
+    match value {
+        (let n: int, _) => `${n + 1}`,
+        (let s: string, _) => s,
+        _ => "other",
+    }
+}
+
 function TupleAccess() -> void {
     let whole: (let a, (let b, let c)) = (1, ("two", 3));
     baml.io.println(
         `${TupleFirst((4, "x")) ?? -1}:${TupleFirst(null) ?? -1}:${TupleHead((5, true))}:${TupleHead(("six", false, 7))}:${TupleProject(((8, "y"), true))}:${TupleProject(((9, "z"), false))}:${a}:${b}:${c}:${whole.1.0}`,
+    );
+    baml.io.println(
+        `${TupleOpenShape((10, true))}:${TupleOpenShape(("open", false))}:${TupleOpenShape([1, 2])}:${TupleOpenUnion<(string, bool)>(("union", true))}:${TupleOpenUnion<string>((11, false))}:${TupleOpenUnion<string>("other")}`,
     );
 }
 

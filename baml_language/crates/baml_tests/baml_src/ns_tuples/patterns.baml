@@ -111,3 +111,74 @@ test "tuple_arm_selection" {
     assert.equal(tpp_carried_arm((1, true)), "narrow")
     assert.equal(tpp_carried_arm(tpp_wide_row()), "wide")
 }
+
+function tpp_generic_shape<T>(value: T) -> string {
+    match value {
+        (let a: int, let b: string) => `${b}${a}`,
+        (let a, let b) => "pair",
+        (let a,) => "single",
+        _ => "other",
+    }
+}
+
+function tpp_generic_union<T>(value: T | (int, bool)) -> string {
+    match value {
+        (let a: int, _) => `${a + 1}`,
+        (let a: string, _) => a,
+        _ => "other",
+    }
+}
+
+function tpp_generic_optional<T>(value: T?) -> string {
+    match value {
+        (let a, let b) => "pair",
+        null => "null",
+        _ => "other",
+    }
+}
+
+function tpp_generic_nested<T>(value: (T, string)) -> string {
+    match value {
+        ((let a: int, _), _) => `${a + 1}`,
+        ((let a: string, _), _) => a,
+        _ => "other",
+    }
+}
+
+function tpp_interface_shape(value: baml.ToString) -> string {
+    match value {
+        (let a: int, _) => `${a + 1}`,
+        _ => "other",
+    }
+}
+
+function tpp_type_before_value_shape(value: unknown) -> int {
+    match value {
+        (int, unknown) => 1,
+        (let n: int, _) => 2,
+        _ => 3,
+    }
+}
+
+test "tuple_shape_patterns_preserve_open_generic_alternatives" {
+    assert.equal(tpp_generic_shape((1, "a")), "a1")
+    assert.equal(tpp_generic_shape(("a", 1)), "pair")
+    assert.equal(tpp_generic_shape((true,)), "single")
+    assert.equal(tpp_generic_shape([1, 2]), "other")
+    assert.equal(tpp_generic_shape(1), "other")
+    assert.equal(tpp_generic_union<(string, bool)>(("a", true)), "a")
+    assert.equal(tpp_generic_union<string>((1, true)), "2")
+    assert.equal(tpp_generic_union<string>("a"), "other")
+    assert.equal(tpp_generic_union<(string,)>(("a",)), "other")
+    assert.equal(tpp_generic_optional<(int, bool)>((1, true)), "pair")
+    assert.equal(tpp_generic_optional<string>(null), "null")
+    assert.equal(tpp_generic_optional<string>("a"), "other")
+    assert.equal(tpp_generic_nested(((1, true), "a")), "2")
+    assert.equal(tpp_generic_nested((("a", true), "a")), "a")
+    assert.equal(tpp_generic_nested((1, "a")), "other")
+    assert.equal(tpp_interface_shape((1, true)), "2")
+    assert.equal(tpp_interface_shape([1, 2]), "other")
+    assert.equal(tpp_type_before_value_shape((1, true)), 2)
+    let carried: (int, unknown) = (1, true);
+    assert.equal(tpp_type_before_value_shape(carried), 1)
+}

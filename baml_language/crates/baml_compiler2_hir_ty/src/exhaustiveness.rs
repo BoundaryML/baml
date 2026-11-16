@@ -1745,7 +1745,9 @@ fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col_ty: &Ty) -> Vec<Ty> {
         Ctor::Slice(shape) => cx.slice_field_types(shape, col_ty),
         Ctor::Tuple(arity) => match col_ty {
             Ty::Tuple(elements) if elements.len() == *arity => elements.to_vec(),
-            _ => vec![Ty::Error; *arity],
+            // In an open column this ctor establishes only tuple kind and
+            // arity, never membership in a tuple of `unknown` slots.
+            _ => vec![Ty::Unknown; *arity],
         },
         // UnionMember projects a column from the union type down to the
         // member type. Specialise recurses with that single sub-column.
@@ -1825,6 +1827,33 @@ mod tests {
     }
     fn int_ty() -> Ty {
         Ty::Int
+    }
+
+    #[test]
+    fn open_tuple_shapes_compare_slot_patterns_without_consuming_other_values() {
+        let shape = |first| {
+            DPat::tuple(
+                vec![
+                    DPat::type_test(first, Ty::Unknown),
+                    DPat::wildcard(Ty::Unknown),
+                ],
+                Ty::Unknown,
+            )
+        };
+        let arms = vec![
+            shape(bool_lit(true)),
+            shape(bool_lit(true)),
+            shape(bool_lit(false)),
+        ];
+        let report = compute_match_usefulness(&StubCtx, &arms, Ty::Unknown);
+        assert_eq!(report.unreachable_arms, vec![ArmId(1)]);
+        assert!(!report.missing.is_empty(), "non-tuples still need coverage");
+
+        let mut arms = arms;
+        arms.push(DPat::wildcard(Ty::Unknown));
+        let report = compute_match_usefulness(&StubCtx, &arms, Ty::Unknown);
+        assert_eq!(report.unreachable_arms, vec![ArmId(1)]);
+        assert!(report.missing.is_empty());
     }
 
     #[test]

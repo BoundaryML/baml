@@ -14777,6 +14777,11 @@ impl<'db> LoweringContext<'db> {
                         slot(member, index, arity, out);
                     }
                 }
+                RuntimeTy::Unknown
+                | RuntimeTy::Interface(..)
+                | RuntimeTy::TypeVar(_)
+                | RuntimeTy::AssociatedTypeProjection { .. }
+                | RuntimeTy::TypeAlias(_) => out.push(RuntimeTy::Unknown),
                 _ => {}
             }
         }
