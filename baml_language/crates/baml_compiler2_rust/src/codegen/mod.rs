@@ -62,6 +62,8 @@ pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) pausing: &'a BTreeSet<usize>,
     /// Functions whose bodies run with a VM frame, never a frame record.
     pub(crate) framed: &'a BTreeSet<usize>,
+    /// Functions a compiled caller runs without linking a record for them.
+    pub(crate) frameless: &'a BTreeSet<usize>,
     /// Typed signatures of the direct entries of compiled bodies.
     pub(crate) signatures: &'a HashMap<usize, Signature>,
     /// Per compiled body: the locality-mask bits some compiled caller can
@@ -79,6 +81,8 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) pausing: &'a BTreeSet<usize>,
     /// Functions whose bodies run with a VM frame, never a frame record.
     pub(crate) framed: &'a BTreeSet<usize>,
+    /// Functions a compiled caller runs without linking a record for them.
+    pub(crate) frameless: &'a BTreeSet<usize>,
     pub(crate) signatures: &'a HashMap<usize, Signature>,
     /// The locality-mask bits some caller can set ([`ProgramContext::masks`]).
     pub(crate) mask_bits: u64,
@@ -130,6 +134,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             symbols: program.symbols,
             pausing: program.pausing,
             framed: program.framed,
+            frameless: program.frameless,
             signatures: program.signatures,
             mask_bits: program.masks.get(&object).copied().unwrap_or(0),
             spill_base: 0,
@@ -282,8 +287,16 @@ impl<'db> Generator<'_, 'db> {
         // Every closure exit records the current PC before returning an error.
         // `mask` has bit `i` set when the caller proved argument `i`, and all
         // it reaches, thread-local (`escape::EscapeFacts::needs`).
+        // A recursive entry stays a function of its own, so its body closure
+        // inlines into it and the recursion passes arguments in registers
+        // rather than through the closure's captures.
+        let inline = if self.recursive {
+            "#[inline(never)]"
+        } else {
+            "#[inline]"
+        };
         self.emit_line(&format!(
-            "#[inline]\n#[allow(unused_variables)]\npub fn {symbol}_d(vm: &mut BexVm, fr: &FrameRecord{typed}, mask: u64) -> R<{ret}> {{"
+            "{inline}\n#[allow(unused_variables)]\npub fn {symbol}_d(vm: &mut BexVm, fr: &FrameRecord{typed}, mask: u64) -> R<{ret}> {{"
         ));
         self.emit_line("let mut pc: u32 = 0;");
         // A scalar closure argument keeps LLVM from reloading a captured mask
@@ -500,7 +513,7 @@ impl<'db> Generator<'_, 'db> {
 
     fn recursion_check(&mut self) {
         let live = self.header_locals(self.body.entry.0);
-        let call = self.rooted(&live, "vm.suspend(Step::Yield)");
+        let call = self.rooted(&live, "vm.suspend_from(fr, Step::Yield)");
         self.emit_line(&format!("if vm.should_yield_at_call() {{ {call}?; }}"));
     }
 
@@ -591,7 +604,7 @@ impl<'db> Generator<'_, 'db> {
             let _ = write!(out, "vm.push_type_arg({ty}); ");
         }
         let site = self.site_pc(block);
-        let _ = write!(out, "fr.note_pc({site}); vm.suspend({step}) }}");
+        let _ = write!(out, "fr.note_pc({site}); vm.suspend_from(fr, {step}) }}");
         self.attach_trace(&out)
     }
 

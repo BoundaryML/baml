@@ -324,7 +324,7 @@ type ShapeCase = (
 #[rustfmt::skip]
 const CONSTRUCTS: &[ShapeCase] = &[
     ("compute.fib", FIXTURE,
-        &["vm.should_yield_at_call()", "vm.suspend(Step::Yield)"], &[]),
+        &["vm.should_yield_at_call()", "vm.suspend_from(fr, Step::Yield)"], &[]),
     ("containers.Color", r#"enum Color { Red Green }"#,
         &[], &[]),
     ("containers.Circle", r#"class Circle { r: int }"#,
@@ -542,11 +542,11 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
     ("catch.all_panics", r#"function all_panics(n: int) -> int { (1 / n) catch_all_panics (e) { _ => -1 } }"#,
         &[], &["vm.is_panic("]),
     ("unwind.caught_loop", r#"function caught_loop(n: int) -> int { (1 / n) catch (e) { baml.panics.DivisionByZero => { let i = 0; while (i < n) { i += 1; } i } } }"#,
-        &["vm.should_yield()", "vm.suspend(Step::Yield)"], &[]),
+        &["vm.should_yield()", "vm.suspend_from(fr, Step::Yield)"], &[]),
     ("recursive.left", r#"function left(s: string, n: int) -> string { if (n == 0) { s } else { right(s, n - 1) } }"#,
-        &["vm.should_yield_at_call()", "vm.suspend(Step::Yield)", "vm.set_slot(fr,", "vm.slot(fr,"], &[]),
+        &["vm.should_yield_at_call()", "vm.suspend_from(fr, Step::Yield)", "vm.set_slot(fr,", "vm.slot(fr,"], &[]),
     ("recursive.right", r#"function right(s: string, n: int) -> string { if (n == 0) { s } else { left(s, n - 1) } }"#,
-        &["vm.should_yield_at_call()", "vm.suspend(Step::Yield)", "vm.set_slot(fr,", "vm.slot(fr,"], &[]),
+        &["vm.should_yield_at_call()", "vm.suspend_from(fr, Step::Yield)", "vm.set_slot(fr,", "vm.slot(fr,"], &[]),
     ("recursive.caller", r#"function caller(s: string, n: int) -> string { left(s, n) + s }"#,
         &["vm.set_slot(fr,", "vm.slot(fr,"], &["vm.should_yield_at_call()"]),
     ("recursive.plain", r#"function plain(n: int) -> int { n + 1 }"#,
@@ -571,9 +571,9 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
     ("megamorphic.nine", r#"function nine(x: Nine) -> int { x.n() }"#,
         &["vm.virtual_target("], &["vm.instance_class("]),
     ("compute.uses_closure", "",
-        &["vm.suspend("], &[]),
+        &["vm.suspend_from("], &[]),
     ("<lambda(uses_closure, 0)>", "",
-        &[], &["vm.suspend(", "vm.should_yield()"]),
+        &[], &["vm.suspend_from(", "vm.should_yield()"]),
 ];
 
 #[test]
@@ -638,7 +638,7 @@ fn constructs_and_generated_shapes() {
         ("trace.traced", "vm.load_array_element(", "vm.set_call_trace("),
         ("trace.traced", "vm.virtual_target(", "vm.set_call_trace("),
         ("trace.traced", "vm.push_virtual_args(", "vm.set_call_trace("),
-        ("trace.traced", "vm.set_call_trace(", "vm.suspend(Step::Call"),
+        ("trace.traced", "vm.set_call_trace(", "vm.suspend_from(fr, Step::Call"),
     ];
     for (name, before, after) in orderings {
         let body = body_of(&module, &format!("user.{name}"));
@@ -713,6 +713,34 @@ function make_kept(i: int) -> Kept { Kept { n: i } }
     let kept = body_of(&module, "user.make_kept");
     assert!(kept.contains("vm.new_instance_of("), "{kept}");
     assert!(!kept.contains("vm.new_plain_instance("), "{kept}");
+}
+
+/// Calls between compiled bodies link no record: a callee that cannot
+/// pause runs on its caller's record, one that can on a pending record of
+/// its own, and a default method on one carrying `Self`.
+#[test]
+fn compiled_calls_link_records_on_demand() {
+    let workload = |name: &str| {
+        let path = format!(
+            "{}/../../tools/speedtest/workloads/{name}/main.baml",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let db = baml_test_support::setup_test_db(&std::fs::read_to_string(path).unwrap());
+        let program = lower(&db, OptLevel::Two);
+        render(&db, &program, OptLevel::Two, None)
+    };
+    let module = workload("classes/method-call-100k");
+    let main = body_of(&module, "user.main");
+    assert!(
+        main.contains("vm.call_frameless(fr, ObjectIndex::from_raw("),
+        "{main}"
+    );
+    let module = workload("interfaces/default-method-100k");
+    let run = body_of(&module, "user.run");
+    assert_eq!(run.matches("vm.call_pending_typed(fr,").count(), 2, "{run}");
+    let module = workload("compute/fib32-recursive");
+    let fib = body_of(&module, "user.fib");
+    assert_eq!(fib.matches("vm.call_pending_self(fr,").count(), 2, "{fib}");
 }
 
 #[test]

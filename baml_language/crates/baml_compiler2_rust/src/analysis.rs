@@ -665,6 +665,31 @@ pub(crate) fn suspends_directly<'db>(
     }
 }
 
+/// Whether a body may run without a record linked for it: it has no
+/// handler (whose slots and landing level are its frame's) and calls no
+/// `trace` builtin (which reads or scopes to the innermost frame).
+pub(crate) fn frameless_body<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    index: &ProgramIndex,
+    body: &MirFunctionBody<'db>,
+) -> bool {
+    body.blocks.iter().all(|block| {
+        block.handling.is_none()
+            && block.landing.is_none()
+            && !matches!(
+                &block.terminator,
+                Some(Terminator::Call {
+                    callee: Operand::Constant(Constant::Function(func)),
+                    ..
+                }) if index.function(db, *func).is_some_and(|(_, info)| {
+                    info.native_key
+                        .as_deref()
+                        .is_some_and(|key| key.starts_with("trace."))
+                })
+            )
+    })
+}
+
 pub(crate) fn user_callee<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,

@@ -314,6 +314,18 @@ fn admission_fixpoint(
             })
             .map(|(&object, _)| object)
             .collect();
+        // Bodies a compiled caller runs without linking a record for them
+        // (`frameless` in bex_vm): no VM-frame state, no handler, no trace
+        // builtin. One that cannot pause runs on its caller's record; one that
+        // can runs on a pending record, which anything that suspends or
+        // extends the chain links first.
+        let frameless: BTreeSet<usize> = units
+            .iter()
+            .filter(|&(&object, unit)| {
+                !framed.contains(&object) && crate::analysis::frameless_body(db, index, &unit.body)
+            })
+            .map(|(&object, _)| object)
+            .collect();
         let signatures: HashMap<usize, Signature> = units
             .iter()
             .map(|(&object, unit)| (object, unit.analysis.signature(&unit.body)))
@@ -333,6 +345,7 @@ fn admission_fixpoint(
                 symbols: &symbols,
                 pausing: &pausing,
                 framed: &framed,
+                frameless: &frameless,
                 signatures: &signatures,
                 masks: &masks,
             };
