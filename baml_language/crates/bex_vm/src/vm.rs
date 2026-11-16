@@ -437,6 +437,69 @@ fn forward_weak_heads(tys: &mut [bex_vm_types::RealizedTy], visitor: &mut dyn Ro
     live
 }
 
+/// The running frame's dispatch state, handed to [`BexVm::run_fast_path`]
+/// and back.
+#[derive(Clone, Copy)]
+struct DispatchState {
+    pc: usize,
+    code: &'static [u8],
+    function: &'static Function,
+    frame_idx: usize,
+    /// `locals_offset - 1` of the frame; see `BexVm::local_at`.
+    locals_base: usize,
+    runtime_package: HeapPtr,
+}
+
+/// Opcodes [`BexVm::run_fast_path`] can run. The full dispatch enters that
+/// fast path only in front of one of these; a wrong entry costs time, never
+/// correctness, since the fast path stops before anything it does not run.
+const FAST_PATH_OPS: [bool; 256] = {
+    use bex_vm_types::bytecode::OpCode as Op;
+    let ops = [
+        Op::LoadNull,
+        Op::LoadTrue,
+        Op::LoadFalse,
+        Op::LoadIntSmall,
+        Op::LoadConst,
+        Op::LoadVar,
+        Op::LoadVar2,
+        Op::StoreVar,
+        Op::StoreVar2,
+        Op::StoreVarLoadVar,
+        Op::Pop,
+        Op::Copy,
+        Op::AddInt,
+        Op::SubInt,
+        Op::MulInt,
+        Op::CmpIntEq,
+        Op::CmpIntNotEq,
+        Op::CmpIntLt,
+        Op::CmpIntLtEq,
+        Op::CmpIntGt,
+        Op::CmpIntGtEq,
+        Op::Not,
+        Op::Truthy,
+        Op::Jump,
+        Op::PopJumpIfFalse,
+        Op::PopJumpIfTrue,
+        Op::JumpIfFalse,
+        Op::JumpIfFalseOrPop,
+        Op::JumpIfTrueOrPop,
+        Op::JumpIfNotNullOrPop,
+        Op::LoadField,
+        Op::LoadFieldLocal,
+        Op::CallExactArgs,
+        Op::Return,
+    ];
+    let mut table = [false; 256];
+    let mut i = 0;
+    while i < ops.len() {
+        table[ops[i] as usize] = true;
+        i += 1;
+    }
+    table
+};
+
 /// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
 pub struct BytecodeFrame {
@@ -729,6 +792,7 @@ pub(crate) mod tests {
             cur_pc: 0,
             heap: Arc::clone(&heap),
             early_yield: early_yield_for_test(),
+            dispatch_fast_path: true,
             tlab: Tlab::new(heap),
             globals: VmGlobals::Owned(GlobalPool::new()),
             pending_globals: None,
@@ -1770,6 +1834,12 @@ pub struct BexVm {
 
     pub early_yield: EarlyYieldCheck,
 
+    /// Whether the dispatch loop runs eligible instructions through
+    /// `run_fast_path` (the default). Turning it off runs every
+    /// instruction through the full dispatch; results must not change,
+    /// which `dispatch_fast_path_equivalence` checks.
+    pub dispatch_fast_path: bool,
+
     /// Thread-local allocation buffer (exclusive to this VM).
     pub tlab: Tlab,
 
@@ -2613,6 +2683,7 @@ impl BexVm {
             cur_pc: 0,
             heap,
             early_yield,
+            dispatch_fast_path: true,
             tlab,
             globals,
             pending_globals: None,
@@ -4041,6 +4112,7 @@ impl BexVm {
             .unwrap_or_else(HeapPtr::null)
     }
 
+    #[inline]
     fn load_global_in(&self, package: HeapPtr, index: GlobalIndex) -> Value {
         if package.as_ptr().is_null() {
             return self.globals.get(self.proof(), index);
@@ -4236,21 +4308,20 @@ impl BexVm {
     /// never touches the heap; only strings, containers, and the boxed
     /// numerics dereference.
     pub fn is_truthy(&self, value: Value) -> bool {
-        use bex_vm_types::ValueKind;
-        match value.kind() {
-            ValueKind::Null | ValueKind::OmittedArg => false,
-            ValueKind::Bool(b) => b,
-            ValueKind::Int(v) => v != 0,
-            ValueKind::Float(f) => f != 0.0,
-            ValueKind::Object(ptr) => match self.get_object(ptr) {
-                Object::String(s) => !s.is_empty(),
-                Object::Array(arr) => !arr.is_empty(),
-                Object::Map(map) => !map.is_empty(),
-                Object::Uint8Array(bytes) => !bytes.is_empty(),
-                Object::Float(f) => *f != 0.0,
-                Object::Bigint(n) => n.sign() != num_bigint::Sign::NoSign,
-                _ => true,
-            },
+        if let Some(truthiness) = Self::scalar_truthiness(value) {
+            return truthiness;
+        }
+        let Some(ptr) = value.as_object_ptr() else {
+            unreachable!("scalar_truthiness covers every value that is not an object")
+        };
+        match self.get_object(ptr) {
+            Object::String(s) => !s.is_empty(),
+            Object::Array(arr) => !arr.is_empty(),
+            Object::Map(map) => !map.is_empty(),
+            Object::Uint8Array(bytes) => !bytes.is_empty(),
+            Object::Float(f) => *f != 0.0,
+            Object::Bigint(n) => n.sign() != num_bigint::Sign::NoSign,
+            _ => true,
         }
     }
 
@@ -6481,6 +6552,61 @@ impl BexVm {
         Ok(real_local_count)
     }
 
+    /// Context of the frame `run_compact` is dispatching, which is the top
+    /// frame: the same value [`Self::current_context`] finds by walking the
+    /// frame stack.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn dispatch_frame_context(&self, frame_idx: usize) -> &Context {
+        debug_assert_eq!(frame_idx + 1, self.frames.len());
+        let Some(Frame::Bytecode(frame)) = self.frames.get(frame_idx) else {
+            verifier_unreachable!()
+        };
+        &frame.context
+    }
+
+    /// Pop the returning bytecode frame and drop its owning fields in line
+    /// (the rest are `Copy`). Through `Option<Frame>`'s drop glue, every
+    /// return paid an out-of-line call even though a typical frame owns
+    /// nothing that needs freeing.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn pop_finished_bytecode_frame(&mut self) {
+        match self.frames.pop() {
+            Some(Frame::Bytecode(BytecodeFrame {
+                type_args, context, ..
+            })) => {
+                drop(type_args);
+                drop(context);
+            }
+            other => drop(other),
+        }
+    }
+
+    /// `locals_offset - 1` of the bytecode frame at `frame_idx`; see
+    /// [`Self::local_at`].
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn frame_locals_base(&self, frame_idx: usize) -> usize {
+        let Some(Frame::Bytecode(frame)) = self.frames.get(frame_idx) else {
+            verifier_unreachable!()
+        };
+        frame.locals_offset.raw().wrapping_sub(1)
+    }
+
+    /// Stack index of local `slot` (1-based) for a frame whose
+    /// `locals_offset - 1` is `locals_base`. Wrapping arithmetic keeps the
+    /// result exact for a frame at stack index 0 (`locals_base == usize::MAX`).
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn local_at(locals_base: usize, slot: usize) -> StackIndex {
+        debug_assert!(
+            slot > 0,
+            "local slot 0 is reserved and should never be materialized on stack"
+        );
+        StackIndex::from_raw(locals_base.wrapping_add(slot))
+    }
+
     #[inline]
     fn local_slot_stack_index(locals_offset: StackIndex, slot: usize) -> StackIndex {
         debug_assert!(
@@ -7918,7 +8044,7 @@ impl BexVm {
         caller_frame.faulting_pc = self.cur_pc;
         self.reserve_call_frame()?;
         self.reserve_stack(callee.real_local_count)?;
-        let context = self.current_context().clone();
+        let context = self.dispatch_frame_context(frame_idx).clone();
         if let Some(telemetry) = &mut self.telemetry {
             telemetry.set_context(context.clone());
         }
@@ -9360,22 +9486,39 @@ impl BexVm {
             .as_ref()
             .is_some_and(TelemetryState::is_disabled)
         {
-            self.telemetry.take().unwrap().abandon();
-            self.pending_telemetry_wait = None;
-            for frame in &mut self.frames {
-                if let Frame::Bytecode(frame) = frame {
-                    frame.telemetry = None;
-                }
+            self.drop_telemetry();
+        }
+    }
+
+    /// Stop observing this VM's execution, as when recording is off
+    /// (`BAML_TELEMETRY=off`): release its telemetry state and every frame's.
+    /// Frames remain executable. Execution then takes the same paths it
+    /// takes with recording off, including the dispatch loop's fast path for
+    /// plain calls and returns.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn disable_telemetry(&mut self) {
+        if self.telemetry.is_some() {
+            self.drop_telemetry();
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn drop_telemetry(&mut self) {
+        self.telemetry.take().unwrap().abandon();
+        self.pending_telemetry_wait = None;
+        for frame in &mut self.frames {
+            if let Frame::Bytecode(frame) = frame {
+                frame.telemetry = None;
             }
-            for frame in self.stack_view() {
-                if let FrameAt::Record(record) = frame {
-                    compiled_rt::record_ref(record).receipt.set(None);
-                }
+        }
+        for frame in self.stack_view() {
+            if let FrameAt::Record(record) = frame {
+                compiled_rt::record_ref(record).receipt.set(None);
             }
-            // An active `Span.run` scope observes through the same state.
-            for active in &mut self.manual_activations {
-                active.telemetry = None;
-            }
+        }
+        // An active `Span.run` scope observes through the same state.
+        for active in &mut self.manual_activations {
+            active.telemetry = None;
         }
     }
 
@@ -9479,8 +9622,24 @@ impl BexVm {
     }
 
     /// Push an operand with fallible backing growth.
-    #[inline]
+    ///
+    /// The common case writes into spare capacity behind one compare; only a
+    /// push that must grow the stack takes the out-of-line budgeted path.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn push_stack(&mut self, value: Value) -> Result<(), VmError> {
+        if self.stack.push_within_capacity(value) {
+            Ok(())
+        } else {
+            self.push_stack_grow(value)
+        }
+    }
+
+    /// [`Self::push_stack`] when the operand stack is full: grow it within the
+    /// thread's stack budget, or raise the allocation failure.
+    #[cold]
+    #[inline(never)]
+    fn push_stack_grow(&mut self, value: Value) -> Result<(), VmError> {
         self.stack
             .try_push(value)
             .map_err(|panic| VmError::thrown_fresh(self.panic_to_exception_value(panic)))
@@ -10073,6 +10232,636 @@ impl BexVm {
         }
     }
 
+    // ── Opcode semantics shared by `run_compact` and `run_fast_path` ──────
+    //
+    // Each instruction the fast path runs is defined once, here, and both
+    // loops call these. They differ only in what happens when a helper
+    // declines: the fast path hands the instruction back unexecuted, and
+    // the full dispatch raises the error or takes its general path.
+
+    /// Target of a branch whose `offset` is relative to `next_pc`, the end
+    /// of the branch instruction.
+    #[allow(
+        clippy::inline_always,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
+    #[inline(always)]
+    fn branch_target(next_pc: usize, offset: i32) -> usize {
+        (next_pc as i64 + i64::from(offset)) as usize
+    }
+
+    /// Whether `JumpIfFalse` jumps on `cond` (which it leaves on the stack).
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn jump_if_false_taken(cond: Value) -> bool {
+        cond == Value::bool(false)
+    }
+
+    /// Whether `PopJumpIfFalse` / `PopJumpIfTrue` (`op`) jumps on `cond`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn pop_jump_taken(op: bex_vm_types::bytecode::OpCode, cond: Value) -> bool {
+        cond == Value::bool(op == bex_vm_types::bytecode::OpCode::PopJumpIfTrue)
+    }
+
+    /// Whether `JumpIfFalseOrPop` / `JumpIfTrueOrPop` / `JumpIfNotNullOrPop`
+    /// (`op`) jumps on `cond`; when it does not, it pops `cond`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn jump_or_pop_taken(op: bex_vm_types::bytecode::OpCode, cond: Value) -> bool {
+        use bex_vm_types::bytecode::OpCode;
+        match op {
+            OpCode::JumpIfFalseOrPop => Self::jump_if_false_taken(cond),
+            OpCode::JumpIfTrueOrPop => cond == Value::bool(true),
+            _ => !cond.is_null(),
+        }
+    }
+
+    /// `MulInt` of two ints, or `None` when the product leaves the int range.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn int_mul(l: i64, r: i64) -> Option<Value> {
+        l.checked_mul(r).and_then(Value::try_int)
+    }
+
+    /// `CmpInt*` (`op`) on two `Int`-tagged values. Both carry the same tag
+    /// bit, so the tagged words, read as signed, order like their ints (see
+    /// `Value::tagged_int_add_checked`).
+    #[allow(clippy::inline_always, clippy::cast_possible_wrap)]
+    #[inline(always)]
+    fn int_compare(op: bex_vm_types::bytecode::OpCode, l: Value, r: Value) -> bool {
+        use bex_vm_types::bytecode::OpCode;
+        let (l, r) = (l.bits() as i64, r.bits() as i64);
+        match op {
+            OpCode::CmpIntEq => l == r,
+            OpCode::CmpIntNotEq => l != r,
+            OpCode::CmpIntLt => l < r,
+            OpCode::CmpIntLtEq => l <= r,
+            OpCode::CmpIntGt => l > r,
+            _ => {
+                debug_assert_eq!(op, OpCode::CmpIntGtEq);
+                l >= r
+            }
+        }
+    }
+
+    /// Truthiness of a value that needs no heap inspection: `false`, `null`,
+    /// an omitted argument and zero are falsy. `None` for a heap object; see
+    /// [`Self::is_truthy`].
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn scalar_truthiness(value: Value) -> Option<bool> {
+        use bex_vm_types::ValueKind;
+        match value.kind() {
+            ValueKind::Null | ValueKind::OmittedArg => Some(false),
+            ValueKind::Bool(b) => Some(b),
+            ValueKind::Int(v) => Some(v != 0),
+            // An inline float is a scalar too; a boxed one (NaN, inf, out of
+            // range) is an object and `is_truthy` reads it.
+            ValueKind::Float(f) => Some(f != 0.0),
+            ValueKind::Object(_) => None,
+        }
+    }
+
+    /// What `Not` / `Truthy` (`op`) push for an operand of `truthiness`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn truthiness_result(op: bex_vm_types::bytecode::OpCode, truthiness: bool) -> Value {
+        Value::bool(truthiness == (op == bex_vm_types::bytecode::OpCode::Truthy))
+    }
+
+    /// The field `LoadField` / `LoadFieldLocal` reads when `value` is an
+    /// instance with field `index` (`relaxed`: the instance is thread-local,
+    /// so the slot needs no ordering). `None` for any other operand, which
+    /// [`Self::load_field_error`] reports.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn instance_field(&self, value: Value, index: usize, relaxed: bool) -> Option<Value> {
+        let Object::Instance(instance) = self.get_object(value.as_object_ptr()?) else {
+            return None;
+        };
+        if relaxed {
+            instance.try_load_field_relaxed(index)
+        } else {
+            instance.try_load_field(index)
+        }
+    }
+
+    /// The error `LoadField` raises when [`Self::instance_field`] declines.
+    #[cold]
+    #[inline(never)]
+    fn load_field_error(&mut self, value: Value, index: usize) -> VmError {
+        let obj_ptr = match self.as_object_ptr(value, ObjectType::Instance) {
+            Ok(ptr) => ptr,
+            Err(error) => return error.into(),
+        };
+        match self.get_object(obj_ptr) {
+            Object::Instance(instance) => {
+                let length = instance.field_len();
+                self.invalid_field_access_error(index, length)
+            }
+            other => VmInternalError::TypeError {
+                expected: ObjectType::Instance.into(),
+                got: ObjectType::of(other).into(),
+            }
+            .into(),
+        }
+    }
+
+    /// Enter the plain bytecode callee of an exact call: record the caller's
+    /// return PC and call-site PC, push the callee frame with the caller's
+    /// context, and initialize the callee's locals to null.
+    ///
+    /// The caller is the top frame. A frame slot and `callee.real_local_count`
+    /// stack slots must already be reserved, and the arguments must be the
+    /// top `callee.arity` stack values, starting at `locals_offset`.
+    ///
+    /// The frame is pushed with an empty context and the caller's written
+    /// in after: with a cloned context live across the push's capacity
+    /// assertion, unwinding needs a landing pad, which in the fast path made
+    /// every entry save ten registers. The locals are filled with volatile
+    /// stores for the same reason: LLVM turns a plain fill into a `memset`
+    /// call.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn enter_exact_callee(
+        &mut self,
+        call_pc: usize,
+        return_pc: usize,
+        callee_ptr: HeapPtr,
+        callee: &Function,
+        locals_offset: StackIndex,
+        telemetry: Option<FrameTelemetry>,
+    ) {
+        let Some(Frame::Bytecode(caller)) = self.frames.last_mut() else {
+            verifier_unreachable!()
+        };
+        caller.instruction_ptr = return_pc;
+        caller.faulting_pc = call_pc;
+        self.frames.push_reserved_with(|| {
+            Frame::Bytecode(BytecodeFrame {
+                function: callee_ptr,
+                instruction_ptr: 0,
+                locals_offset,
+                type_args: Vec::new(),
+                faulting_pc: 0,
+                telemetry,
+                context: Context::default(),
+            })
+        });
+        let [.., Frame::Bytecode(caller), Frame::Bytecode(frame)] = &mut self.frames[..] else {
+            verifier_unreachable!()
+        };
+        let (base, len, capacity) = self.stack.raw_parts();
+        debug_assert!(capacity - len >= callee.real_local_count);
+        // SAFETY: the slot holds `Context::default()`, which owns nothing,
+        // so overwriting it without a drop leaks nothing. The locals fit in
+        // the reserved capacity, and `Value` is `Copy`.
+        unsafe {
+            std::ptr::write(&raw mut frame.context, caller.context.clone());
+            for slot in len..len + callee.real_local_count {
+                base.add(slot).write_volatile(Value::NULL);
+            }
+            self.stack.set_len(len + callee.real_local_count);
+        }
+    }
+
+    /// Replace the returning frame's slots, from `locals_offset` up, with
+    /// its result, the top stack value.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn leave_returning_frame_slots(&mut self, locals_offset: StackIndex) {
+        let result = self.stack.get_at(self.stack.ensure_stack_top());
+        // SAFETY: the compiler guarantees a result at or above the callee's
+        // locals base. That base is therefore an existing initialized slot,
+        // even for a zero-argument function with no locals. Value is Copy, so
+        // discarded slots need no drop. No allocation or GC point occurs
+        // between writing the result and shortening the stack to the caller's
+        // new top.
+        let consumed = self.stack.len() - locals_offset.raw();
+        unsafe { self.stack.replace_top_n_dynamic(consumed, result) };
+    }
+
+    /// Where dispatch continues in the bytecode frame at `frame_idx`, which
+    /// runs `function`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn resume_state(&self, frame_idx: usize, function: &'static Function) -> DispatchState {
+        let Some(Frame::Bytecode(frame)) = self.frames.get(frame_idx) else {
+            verifier_unreachable!()
+        };
+        DispatchState {
+            pc: frame.instruction_ptr,
+            code: &function
+                .bytecode
+                .compact
+                .as_ref()
+                .expect("a bytecode frame's function has compact code")
+                .code,
+            function,
+            frame_idx,
+            locals_base: frame.locals_offset.raw().wrapping_sub(1),
+            runtime_package: self.runtime_package_of(function),
+        }
+    }
+
+    /// Run instructions from `state.pc` in the dispatch loop's fast path
+    /// until one it does not handle, then return with `state` describing the
+    /// frame and instruction the full dispatch continues with.
+    ///
+    /// The fast path covers what tight scalar loops and plain calls execute:
+    /// local and constant loads and stores, instance field loads, int
+    /// arithmetic and comparisons, truthiness, branches, and, when `CALLS`,
+    /// exact calls into and returns out of plain bytecode functions. It is
+    /// small and out of line so the program counter, stack top, and locals
+    /// base stay in registers; inside [`Self::run_compact`] they were
+    /// reloaded from spill slots on every instruction. It never allocates on
+    /// the VM heap, reaches a GC safepoint, runs native code, or polls for an
+    /// early yield, so nothing can observe the stack length it keeps in a
+    /// register; it publishes that length before returning. It does not
+    /// record `cur_pc`: nothing reads it during these instructions, and the
+    /// full dispatch records it for the instruction it runs next.
+    ///
+    /// The two variants trade entry cost against reach. Without `CALLS` the
+    /// loop is a leaf that saves almost nothing on entry, which matters for
+    /// code that alternates between it and the full dispatch (array and
+    /// float operations, allocation). With `CALLS` it also switches frames,
+    /// which needs more registers and a costlier entry, but keeps call-heavy
+    /// code out of the full dispatch entirely.
+    ///
+    /// Each arm runs only its common case. When an instruction would grow
+    /// the stack or frame stack, overflow, poll for an early yield, meet an
+    /// operand it does not handle, or involve telemetry, trace hooks, generic
+    /// type arguments, or a native frame, the loop stops *before* that
+    /// instruction, with no effect, and the full dispatch runs it. Every
+    /// result is therefore what the full dispatch alone would produce.
+    #[inline(never)]
+    #[allow(
+        unsafe_code,
+        clippy::too_many_lines,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::inline_always
+    )]
+    fn run_fast_path<const CALLS: bool>(&mut self, state: &mut DispatchState) {
+        use bex_vm_types::bytecode::OpCode;
+
+        #[inline(always)]
+        fn operand_u32(code: &[u8], at: usize) -> usize {
+            debug_assert!(at + 4 <= code.len());
+            // SAFETY: the encoder emits every operand in full.
+            u32::from_le(unsafe { code.as_ptr().add(at).cast::<u32>().read_unaligned() }) as usize
+        }
+        #[inline(always)]
+        fn operand_u16(code: &[u8], at: usize) -> usize {
+            debug_assert!(at + 2 <= code.len());
+            // SAFETY: the encoder emits every operand in full.
+            usize::from(u16::from_le(unsafe {
+                code.as_ptr().add(at).cast::<u16>().read_unaligned()
+            }))
+        }
+        #[inline(always)]
+        fn operand_i32(code: &[u8], at: usize) -> i32 {
+            debug_assert!(at + 4 <= code.len());
+            // SAFETY: the encoder emits every operand in full.
+            i32::from_le(unsafe { code.as_ptr().add(at).cast::<i32>().read_unaligned() })
+        }
+        // Branches: opcode and an i32 offset from the end of the instruction.
+        const BRANCH_LEN: usize = 5;
+        // `CallExactArgs`: opcode, u32 callee global, u16 type-arg count.
+        const CALL_EXACT_LEN: usize = 7;
+
+        let DispatchState {
+            mut pc,
+            mut code,
+            mut function,
+            mut frame_idx,
+            mut locals_base,
+            mut runtime_package,
+        } = *state;
+        let mut constants: &[Value] = &function.bytecode.resolved_constants;
+        let (base, mut sp, cap) = self.stack.raw_parts();
+        // SAFETY (every arm): the encoder validates each instruction's stack
+        // effect and local slots, so operand reads stay within `0..sp` and
+        // local slots within the frame. Pushes check `sp < cap` first, and
+        // nothing below grows the stack, so `base` stays valid.
+        unsafe {
+            macro_rules! at {
+                ($index:expr) => {
+                    *base.add($index)
+                };
+            }
+            macro_rules! local {
+                ($slot:expr) => {
+                    *base.add(Self::local_at(locals_base, $slot).raw())
+                };
+            }
+            loop {
+                let op: OpCode = std::mem::transmute(*code.get_unchecked(pc));
+                match op {
+                    OpCode::LoadNull | OpCode::LoadTrue | OpCode::LoadFalse => {
+                        if sp == cap {
+                            break;
+                        }
+                        at!(sp) = match op {
+                            OpCode::LoadNull => Value::NULL,
+                            OpCode::LoadTrue => Value::bool(true),
+                            _ => Value::bool(false),
+                        };
+                        sp += 1;
+                        pc += 1;
+                    }
+                    OpCode::LoadIntSmall => {
+                        if sp == cap {
+                            break;
+                        }
+                        let value = *code.get_unchecked(pc + 1) as i8;
+                        at!(sp) = Value::int(i64::from(value));
+                        sp += 1;
+                        pc += 2;
+                    }
+                    OpCode::LoadConst => {
+                        let Some(&value) = constants.get(operand_u32(code, pc + 1)) else {
+                            break;
+                        };
+                        if sp == cap {
+                            break;
+                        }
+                        at!(sp) = value;
+                        sp += 1;
+                        pc += 5;
+                    }
+                    OpCode::LoadVar => {
+                        if sp == cap {
+                            break;
+                        }
+                        at!(sp) = local!(operand_u32(code, pc + 1));
+                        sp += 1;
+                        pc += 5;
+                    }
+                    OpCode::LoadVar2 => {
+                        if cap - sp < 2 {
+                            break;
+                        }
+                        at!(sp) = local!(operand_u32(code, pc + 1));
+                        at!(sp + 1) = local!(operand_u32(code, pc + 5));
+                        sp += 2;
+                        pc += 9;
+                    }
+                    OpCode::StoreVar => {
+                        sp -= 1;
+                        local!(operand_u32(code, pc + 1)) = at!(sp);
+                        pc += 5;
+                    }
+                    OpCode::StoreVar2 => {
+                        local!(operand_u32(code, pc + 1)) = at!(sp - 1);
+                        local!(operand_u32(code, pc + 5)) = at!(sp - 2);
+                        sp -= 2;
+                        pc += 9;
+                    }
+                    OpCode::StoreVarLoadVar => {
+                        local!(operand_u32(code, pc + 1)) = at!(sp - 1);
+                        pc += 5;
+                    }
+                    OpCode::Pop => {
+                        sp -= operand_u32(code, pc + 1);
+                        pc += 5;
+                    }
+                    OpCode::Copy => {
+                        if sp == cap {
+                            break;
+                        }
+                        at!(sp) = at!(sp - 1 - operand_u32(code, pc + 1));
+                        sp += 1;
+                        pc += 5;
+                    }
+                    OpCode::LoadField | OpCode::LoadFieldLocal => {
+                        let Some(value) = self.instance_field(
+                            at!(sp - 1),
+                            operand_u32(code, pc + 1),
+                            op == OpCode::LoadFieldLocal,
+                        ) else {
+                            break;
+                        };
+                        at!(sp - 1) = value;
+                        pc += 5;
+                    }
+                    OpCode::AddInt | OpCode::SubInt => {
+                        let (l, r) = (at!(sp - 2), at!(sp - 1));
+                        let result = if op == OpCode::AddInt {
+                            Value::tagged_int_add_checked(l, r)
+                        } else {
+                            Value::tagged_int_sub_checked(l, r)
+                        };
+                        let Some(result) = result else { break };
+                        sp -= 1;
+                        at!(sp - 1) = result;
+                        pc += 1;
+                    }
+                    OpCode::MulInt => {
+                        let (Some(l), Some(r)) = (at!(sp - 2).as_int(), at!(sp - 1).as_int())
+                        else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Some(result) = Self::int_mul(l, r) else {
+                            break;
+                        };
+                        sp -= 1;
+                        at!(sp - 1) = result;
+                        pc += 1;
+                    }
+                    OpCode::CmpIntEq
+                    | OpCode::CmpIntNotEq
+                    | OpCode::CmpIntLt
+                    | OpCode::CmpIntLtEq
+                    | OpCode::CmpIntGt
+                    | OpCode::CmpIntGtEq => {
+                        let result = Self::int_compare(op, at!(sp - 2), at!(sp - 1));
+                        sp -= 1;
+                        at!(sp - 1) = Value::bool(result);
+                        pc += 1;
+                    }
+                    OpCode::Not | OpCode::Truthy => {
+                        let Some(truthiness) = Self::scalar_truthiness(at!(sp - 1)) else {
+                            break;
+                        };
+                        at!(sp - 1) = Self::truthiness_result(op, truthiness);
+                        pc += 1;
+                    }
+                    // A branch that ticks the early-yield interval leaves the
+                    // tick that would elapse it to the full dispatch, which
+                    // polls.
+                    OpCode::Jump => {
+                        if !self.early_yield.tick_unless_due() {
+                            break;
+                        }
+                        pc = Self::branch_target(pc + BRANCH_LEN, operand_i32(code, pc + 1));
+                    }
+                    OpCode::PopJumpIfFalse | OpCode::PopJumpIfTrue => {
+                        if !self.early_yield.tick_unless_due() {
+                            break;
+                        }
+                        sp -= 1;
+                        pc = if Self::pop_jump_taken(op, at!(sp)) {
+                            Self::branch_target(pc + BRANCH_LEN, operand_i32(code, pc + 1))
+                        } else {
+                            pc + BRANCH_LEN
+                        };
+                    }
+                    OpCode::JumpIfFalse => {
+                        pc = if Self::jump_if_false_taken(at!(sp - 1)) {
+                            Self::branch_target(pc + BRANCH_LEN, operand_i32(code, pc + 1))
+                        } else {
+                            pc + BRANCH_LEN
+                        };
+                    }
+                    OpCode::JumpIfFalseOrPop
+                    | OpCode::JumpIfTrueOrPop
+                    | OpCode::JumpIfNotNullOrPop => {
+                        if !self.early_yield.tick_unless_due() {
+                            break;
+                        }
+                        if Self::jump_or_pop_taken(op, at!(sp - 1)) {
+                            pc = Self::branch_target(pc + BRANCH_LEN, operand_i32(code, pc + 1));
+                        } else {
+                            sp -= 1;
+                            pc += BRANCH_LEN;
+                        }
+                    }
+                    // `run_compact`'s `CallExactArgs` arm, for a plain,
+                    // non-generic bytecode callee with telemetry off. Both
+                    // enter the callee through `enter_exact_callee`.
+                    OpCode::CallExactArgs if CALLS => {
+                        if self.telemetry.is_some()
+                            || self.pending_call_trace.is_some()
+                            || !self.pending_call_type_args.is_empty()
+                            || operand_u16(code, pc + 5) != 0
+                        {
+                            break;
+                        }
+                        let callee_value = self.load_global_in(
+                            runtime_package,
+                            bex_vm_types::GlobalIndex::from_raw(operand_u32(code, pc + 1)),
+                        );
+                        let Some(callee_ptr) = callee_value.as_object_ptr() else {
+                            break;
+                        };
+                        let Object::Function(callee) = callee_ptr.get() else {
+                            break;
+                        };
+                        let Some(callee_code) = callee.bytecode.compact.as_ref() else {
+                            break;
+                        };
+                        if !matches!(callee.kind, FunctionKind::Bytecode)
+                            || callee.compiled_body.is_some()
+                            || sp < callee.arity
+                            || cap - sp < callee.real_local_count
+                            || self.frames.len() == self.frames.capacity()
+                            // Last check, so a handed-back call has not ticked.
+                            || !self.early_yield.tick_unless_due()
+                        {
+                            break;
+                        }
+                        self.thread_local_call = false;
+                        let locals_offset = sp - callee.arity;
+                        self.stack.set_len(sp);
+                        self.enter_exact_callee(
+                            pc,
+                            pc + CALL_EXACT_LEN,
+                            callee_ptr,
+                            callee,
+                            StackIndex::from_raw(locals_offset),
+                            None,
+                        );
+                        sp = self.stack.len();
+                        frame_idx += 1;
+                        function = callee;
+                        runtime_package = self.runtime_package_of(function);
+                        code = &callee_code.code;
+                        constants = &function.bytecode.resolved_constants;
+                        locals_base = locals_offset.wrapping_sub(1);
+                        pc = 0;
+                    }
+                    // `run_compact`'s `Return` arm, back into a plain bytecode
+                    // caller, with telemetry off and no model usage or trace
+                    // scope to settle. Both share `leave_returning_frame_slots`
+                    // and `resume_state`; only the frame pop differs (see
+                    // below).
+                    OpCode::Return if CALLS => {
+                        if self.telemetry.is_some()
+                            || frame_idx == 0
+                            || self.trace_scope_frame == frame_idx
+                            || matches!(
+                                function.body_meta,
+                                Some(bex_vm_types::FunctionMeta::ModelInvoke)
+                            )
+                        {
+                            break;
+                        }
+                        let (Some(Frame::Bytecode(caller)), Some(Frame::Bytecode(returning))) =
+                            (self.frames.get(frame_idx - 1), self.frames.get(frame_idx))
+                        else {
+                            break;
+                        };
+                        // Only a frame that owns nothing is popped here; see
+                        // the `mem::forget` below.
+                        if returning.telemetry.is_some()
+                            || returning.type_args.capacity() != 0
+                            || !returning.context.is_empty()
+                        {
+                            break;
+                        }
+                        let Object::Function(caller_function) = caller.function.get() else {
+                            break;
+                        };
+                        if !self.early_yield.tick_unless_due() {
+                            break;
+                        }
+                        let returned_locals = returning.locals_offset;
+                        self.stack.set_len(sp);
+                        self.leave_returning_frame_slots(returned_locals);
+                        sp = self.stack.len();
+                        // KEEP IN SYNC with `pop_finished_bytecode_frame`,
+                        // which the `Return` arm uses: the same pop, minus
+                        // the drops. Checked above: no type arguments
+                        // allocated and no context, and the other fields are
+                        // `Copy`. Dropping here would put calls that return
+                        // in this loop, which costs every entry a
+                        // register-saving prologue.
+                        std::mem::forget(self.frames.pop());
+                        frame_idx -= 1;
+                        DispatchState {
+                            pc,
+                            code,
+                            function,
+                            frame_idx,
+                            locals_base,
+                            runtime_package,
+                        } = self.resume_state(frame_idx, caller_function);
+                        constants = &function.bytecode.resolved_constants;
+                    }
+                    _ => break,
+                }
+                #[cfg(feature = "kperf")]
+                {
+                    self.op_count += 1;
+                }
+            }
+            self.stack.set_len(sp);
+        }
+        *state = DispatchState {
+            pc,
+            code,
+            function,
+            frame_idx,
+            locals_base,
+            runtime_package,
+        };
+    }
+
     /// Run compact instructions, switching directly on exact calls and returns
     /// to bytecode callers. Native continuations and other frame transitions
     /// return to `exec_compact`, which retains PC writeback and error handling.
@@ -10104,18 +10893,15 @@ impl BexVm {
         // by our own encoder which guarantees correct sizes (verified by
         // debug_assert_eq!(code.len(), byte_offset) in lower_to_compact pass 2).
         // The PC always stays in bounds during well-formed execution.
+        // Each reader is one unaligned load: assembling the value from single
+        // bytes left LLVM emitting one `ldrb` per byte on some arms.
         #[inline(always)]
         unsafe fn read_u32_unchecked(code: &[u8], pc: &mut usize) -> u32 {
             unsafe {
                 let p = *pc;
-                let bytes = [
-                    *code.get_unchecked(p),
-                    *code.get_unchecked(p + 1),
-                    *code.get_unchecked(p + 2),
-                    *code.get_unchecked(p + 3),
-                ];
+                debug_assert!(p + 4 <= code.len());
                 *pc = p + 4;
-                u32::from_le_bytes(bytes)
+                u32::from_le(code.as_ptr().add(p).cast::<u32>().read_unaligned())
             }
         }
 
@@ -10123,9 +10909,9 @@ impl BexVm {
         unsafe fn read_u16_unchecked(code: &[u8], pc: &mut usize) -> u16 {
             unsafe {
                 let p = *pc;
-                let bytes = [*code.get_unchecked(p), *code.get_unchecked(p + 1)];
+                debug_assert!(p + 2 <= code.len());
                 *pc = p + 2;
-                u16::from_le_bytes(bytes)
+                u16::from_le(code.as_ptr().add(p).cast::<u16>().read_unaligned())
             }
         }
 
@@ -10133,14 +10919,9 @@ impl BexVm {
         unsafe fn read_i32_unchecked(code: &[u8], pc: &mut usize) -> i32 {
             unsafe {
                 let p = *pc;
-                let bytes = [
-                    *code.get_unchecked(p),
-                    *code.get_unchecked(p + 1),
-                    *code.get_unchecked(p + 2),
-                    *code.get_unchecked(p + 3),
-                ];
+                debug_assert!(p + 4 <= code.len());
                 *pc = p + 4;
-                i32::from_le_bytes(bytes)
+                i32::from_le(code.as_ptr().add(p).cast::<i32>().read_unaligned())
             }
         }
 
@@ -10156,10 +10937,56 @@ impl BexVm {
         // The current function's runtime package, derived once per function
         // switch rather than on every instruction that addresses an operand.
         let mut runtime_package = self.runtime_package_of(function);
+        // The current frame's `locals_offset - 1`, so local `slot` (1-based)
+        // lives at stack index `locals_base + slot`. Locals never move while a
+        // frame runs, so this stays in a register instead of re-reading the
+        // frame on every local access; it is refreshed wherever dispatch
+        // switches frames without returning.
+        let mut locals_base = self.frame_locals_base(*frame_idx);
 
         loop {
-            // Read opcode byte and advance PC past it.
+            // Run straight-line scalar code in the register-resident fast
+            // path; it stops before the first instruction it does not run,
+            // which the match below then executes.
             // SAFETY: PC is always in bounds (bytecode invariant).
+            #[allow(unsafe_code)]
+            let mut next = unsafe { *code.get_unchecked(*pc) };
+            if FAST_PATH_OPS[usize::from(next)] && self.dispatch_fast_path {
+                let mut state = DispatchState {
+                    pc: *pc,
+                    code,
+                    function,
+                    frame_idx: *frame_idx,
+                    locals_base,
+                    runtime_package,
+                };
+                // Straight-line code runs in the variant without calls: it
+                // is a leaf, so entering it is cheap for code that keeps
+                // switching between it and the match below. A call or
+                // return, reached directly or where that variant stops,
+                // enters the variant that switches frames, which then keeps
+                // running call-heavy code without coming back here.
+                let is_frame_switch =
+                    |byte: u8| byte == OpCode::CallExactArgs as u8 || byte == OpCode::Return as u8;
+                if !is_frame_switch(next) {
+                    self.run_fast_path::<false>(&mut state);
+                    *pc = state.pc;
+                    next = unsafe { *code.get_unchecked(*pc) };
+                }
+                if is_frame_switch(next) {
+                    self.run_fast_path::<true>(&mut state);
+                    // It may have entered or left frames; it stops at an
+                    // instruction boundary of whichever frame is on top.
+                    *pc = state.pc;
+                    *code = state.code;
+                    *function = state.function;
+                    *frame_idx = state.frame_idx;
+                    *dispatch_frame_idx = state.frame_idx;
+                    locals_base = state.locals_base;
+                    runtime_package = state.runtime_package;
+                }
+            }
+
             // Read opcode byte and advance PC past it.
             // SAFETY: PC is always in bounds (bytecode invariant).
             #[allow(unsafe_code)]
@@ -10190,15 +11017,6 @@ impl BexVm {
             // float order, so these stay identical to the `exec_cmpop` fallback and
             // to `baml.ops.Compare for float`. Both operands are guaranteed Float by
             // the bytecode encoder, so the `else` arms are unreachable.
-            macro_rules! cmp_int_op {
-            ($op:tt) => {{
-                let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
-                let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
-                // SAFETY: the encoder validates two comparison operands.
-                self.stack
-                    .replace_top_n::<2>(Value::bool((l.bits() as i64) $op (r.bits() as i64)));
-            }};
-        }
             macro_rules! cmp_float_op {
                 ($op:expr) => {{
                     let Some(r) = self
@@ -10252,43 +11070,21 @@ impl BexVm {
                     // ── LoadVar / StoreVar ────────────────────────────────────────
                     OpCode::LoadVar => {
                         let slot = { read_u32_unchecked(code, pc) as usize };
-                        // SAFETY: dispatch loop always runs with a Bytecode frame on top.
-                        #[allow(unsafe_code)]
-                        let Frame::Bytecode(bf) =
-                            (unsafe { self.frames.get_unchecked(*frame_idx) })
-                        else {
-                            unreachable!()
-                        };
-                        let stack_slot = Self::local_slot_stack_index(bf.locals_offset, slot);
-                        let value = self.stack.get_at(stack_slot);
+                        let value = self.stack.get_at(Self::local_at(locals_base, slot));
                         self.push_stack(value)?;
                     }
 
                     OpCode::StoreVar => {
                         let slot = { read_u32_unchecked(code, pc) as usize };
-                        // SAFETY: dispatch loop always runs with a Bytecode frame on top.
-                        #[allow(unsafe_code)]
-                        let Frame::Bytecode(bf) =
-                            (unsafe { self.frames.get_unchecked(*frame_idx) })
-                        else {
-                            unreachable!()
-                        };
-                        let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
                         let value = self.stack.ensure_pop();
-                        self.store_local_value(local_var_index, value);
+                        self.store_local_value(Self::local_at(locals_base, slot), value);
                     }
 
                     OpCode::ArrayIterNext | OpCode::ArrayIterNextLocal => {
                         let iterator = { read_u32_unchecked(code, pc) as usize };
                         let index = { read_u32_unchecked(code, pc) as usize };
-                        #[allow(unsafe_code)]
-                        let Frame::Bytecode(bf) =
-                            (unsafe { self.frames.get_unchecked(*frame_idx) })
-                        else {
-                            unreachable!()
-                        };
-                        let iterator = Self::local_slot_stack_index(bf.locals_offset, iterator);
-                        let index = Self::local_slot_stack_index(bf.locals_offset, index);
+                        let iterator = Self::local_at(locals_base, iterator);
+                        let index = Self::local_at(locals_base, index);
                         let array = self.stack.get_at(iterator);
                         let Some(i) = self.stack.get_at(index).as_int() else {
                             return Err(VmInternalError::TypeError {
@@ -10334,15 +11130,8 @@ impl BexVm {
                     OpCode::LoadVar2 => {
                         let a = { read_u32_unchecked(code, pc) as usize };
                         let b = { read_u32_unchecked(code, pc) as usize };
-                        #[allow(unsafe_code)]
-                        let Frame::Bytecode(bf) =
-                            (unsafe { self.frames.get_unchecked(*frame_idx) })
-                        else {
-                            unreachable!()
-                        };
-                        let off = bf.locals_offset;
-                        let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
-                        let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
+                        let va = self.stack.get_at(Self::local_at(locals_base, a));
+                        let vb = self.stack.get_at(Self::local_at(locals_base, b));
                         self.push_stack(va)?;
                         self.push_stack(vb)?;
                     }
@@ -10351,15 +11140,8 @@ impl BexVm {
                     OpCode::StoreVar2 => {
                         let a = { read_u32_unchecked(code, pc) as usize };
                         let b = { read_u32_unchecked(code, pc) as usize };
-                        #[allow(unsafe_code)]
-                        let Frame::Bytecode(bf) =
-                            (unsafe { self.frames.get_unchecked(*frame_idx) })
-                        else {
-                            unreachable!()
-                        };
-                        let off = bf.locals_offset;
-                        let sa = Self::local_slot_stack_index(off, a);
-                        let sb = Self::local_slot_stack_index(off, b);
+                        let sa = Self::local_at(locals_base, a);
+                        let sb = Self::local_at(locals_base, b);
                         let va = self.stack.ensure_pop();
                         let vb = self.stack.ensure_pop();
                         self.store_local_value(sa, va);
@@ -10368,10 +11150,7 @@ impl BexVm {
 
                     OpCode::StoreVarLoadVar => {
                         let slot = { read_u32_unchecked(code, pc) as usize };
-                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                            unreachable!()
-                        };
-                        let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
+                        let local_var_index = Self::local_at(locals_base, slot);
                         let value_slot = self.stack.ensure_slot_from_top(0);
                         let value = self.stack[value_slot];
                         self.store_local_value(local_var_index, value);
@@ -10414,27 +11193,10 @@ impl BexVm {
                     OpCode::LoadField | OpCode::LoadFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let top = self.stack.ensure_pop();
-                        let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
-                        let load_result = {
-                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Instance.into(),
-                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                                }
-                                .into());
-                            };
-                            if op == OpCode::LoadFieldLocal {
-                                instance.try_load_field_relaxed(idx)
-                            } else {
-                                instance.try_load_field(idx)
-                            }
-                            .ok_or_else(|| instance.field_len())
-                        };
-                        let value = match load_result {
-                            Ok(value) => value,
-                            Err(length) => {
-                                return Err(self.invalid_field_access_error(idx, length));
-                            }
+                        let Some(value) =
+                            self.instance_field(top, idx, op == OpCode::LoadFieldLocal)
+                        else {
+                            return Err(self.load_field_error(top, idx));
                         };
                         self.push_stack(value)?;
                     }
@@ -10890,6 +11652,12 @@ impl BexVm {
                         let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                         let callee_value = self.load_global_in(runtime_package, callee_global);
 
+                        // `run_fast_path` runs the plain case of this exact
+                        // call itself (non-generic bytecode callee, telemetry
+                        // off) and hands every other case back here. A step
+                        // added to this path that applies to plain calls must
+                        // go into `enter_exact_callee`, which both share, or
+                        // become one of the fast path's hand-back guards.
                         if op == OpCode::CallExactArgs
                             && self.pending_call_trace.is_none()
                             && self.pending_call_type_args.is_empty()
@@ -10925,9 +11693,13 @@ impl BexVm {
                                 );
                                 self.reserve_call_frame()?;
                                 self.reserve_stack(callee.real_local_count)?;
-                                let context = self.current_context().clone();
-                                if let Some(telemetry) = &mut self.telemetry {
-                                    telemetry.set_context(context.clone());
+                                if self.telemetry.is_some() {
+                                    // The dispatching frame is the top frame, so its
+                                    // context is `current_context()` without the walk.
+                                    let context = self.dispatch_frame_context(*frame_idx).clone();
+                                    if let Some(telemetry) = &mut self.telemetry {
+                                        telemetry.set_context(context);
+                                    }
                                 }
                                 let frame_telemetry = if self.telemetry.is_some() {
                                     let actual_caller = self.frame_function_identity(*frame_idx);
@@ -10965,32 +11737,21 @@ impl BexVm {
                                 } else {
                                     None
                                 };
-                                let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {
-                                    verifier_unreachable!()
-                                };
-                                caller.instruction_ptr = *pc;
-                                caller.faulting_pc = self.cur_pc;
-                                self.frames.push_reserved_with(|| {
-                                    Frame::Bytecode(BytecodeFrame {
-                                        function: callee_ptr,
-                                        instruction_ptr: 0,
-                                        locals_offset,
-                                        type_args: Vec::new(),
-                                        faulting_pc: 0,
-                                        telemetry: frame_telemetry,
-                                        context,
-                                    })
-                                });
+                                // The fast path enters plain callees the same way.
+                                self.enter_exact_callee(
+                                    self.cur_pc,
+                                    *pc,
+                                    callee_ptr,
+                                    callee,
+                                    locals_offset,
+                                    frame_telemetry,
+                                );
                                 // Attached after the push so the frame of a
                                 // non-generic call is built exactly as before.
                                 if !type_args.is_empty()
                                     && let Some(Frame::Bytecode(frame)) = self.frames.last_mut()
                                 {
                                     frame.type_args = type_args;
-                                }
-                                if callee.real_local_count != 0 {
-                                    let new_len = self.stack.len() + callee.real_local_count;
-                                    self.resize_stack(new_len, Value::NULL)?;
                                 }
                                 *frame_idx = self.frames.len() - 1;
                                 *function = callee;
@@ -11005,6 +11766,7 @@ impl BexVm {
                                 *pc = 0;
                                 *code = &callee.bytecode.compact.as_ref().unwrap().code;
                                 *dispatch_frame_idx = *frame_idx;
+                                locals_base = locals_offset.raw().wrapping_sub(1);
                                 continue;
                             }
                         }
@@ -11271,6 +12033,7 @@ impl BexVm {
                             *pc = 0;
                             *code = &callee.bytecode.compact.as_ref().unwrap().code;
                             *dispatch_frame_idx = *frame_idx;
+                            locals_base = self.frame_locals_base(*frame_idx);
                             continue;
                         }
                         let obj = self.get_object(callee_ptr);
@@ -11400,6 +12163,13 @@ impl BexVm {
                     }
 
                     // ── Return ────────────────────────────────────────────────────
+                    // `run_fast_path` runs the plain case of this return
+                    // itself (bytecode caller, telemetry off, no model usage,
+                    // trace scope or owned frame state) and hands every
+                    // other case back here. A step added here that applies to
+                    // plain returns must go into the helpers both share
+                    // (`leave_returning_frame_slots`, `resume_state`) or
+                    // become one of the fast path's hand-back guards.
                     OpCode::Return => {
                         let result = self.stack.get_at(self.stack.ensure_stack_top());
 
@@ -11429,20 +12199,17 @@ impl BexVm {
                             self.end_manual_activation(*frame_idx);
                         }
 
-                        // SAFETY: the compiler guarantees a result at or above the
-                        // callee's locals base. That base is therefore an existing
-                        // initialized slot, even for a zero-argument function with
-                        // no locals. Value is Copy, so discarded slots need no drop.
-                        // No allocation or GC point occurs between writing the
-                        // result and shortening the stack to the caller's new top.
-                        let consumed = self.stack.len() - locals_offset.raw();
-                        self.stack.replace_top_n_dynamic(consumed, result);
-                        // SAFETY: this instruction is executing the bytecode frame
-                        // accessed above; stack operations cannot remove that frame.
-                        self.frames.pop();
-                        let context = self.current_context().clone();
-                        if let Some(telemetry) = &mut self.telemetry {
-                            telemetry.set_context(context);
+                        // The fast path's `Return` shares this step and the
+                        // caller's `resume_state` below.
+                        self.leave_returning_frame_slots(locals_offset);
+                        // KEEP IN SYNC with the fast path's `Return`, which
+                        // pops a frame that owns nothing without the drops.
+                        self.pop_finished_bytecode_frame();
+                        if self.telemetry.is_some() {
+                            let context = self.current_context().clone();
+                            if let Some(telemetry) = &mut self.telemetry {
+                                telemetry.set_context(context);
+                            }
                         }
                         // Select the restored caller. Native continuations and
                         // early yields still hand this frame back to the outer loop.
@@ -11457,10 +12224,16 @@ impl BexVm {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                         if let Frame::Bytecode(caller) = &self.frames[*frame_idx] {
-                            *pc = caller.instruction_ptr;
-                            *function = self.load_function(*frame_idx)?;
-                            runtime_package = self.runtime_package_of(function);
-                            *code = &function.bytecode.compact.as_ref().unwrap().code;
+                            let caller_function = match caller.function.get() {
+                                Object::Function(caller_fn) => caller_fn,
+                                _ => self.load_function(*frame_idx)?,
+                            };
+                            let next = self.resume_state(*frame_idx, caller_function);
+                            *pc = next.pc;
+                            *code = next.code;
+                            *function = next.function;
+                            locals_base = next.locals_base;
+                            runtime_package = next.runtime_package;
                             *dispatch_frame_idx = *frame_idx;
                             continue;
                         }
@@ -11639,8 +12412,7 @@ impl BexVm {
                     // ── Jump opcodes ──────────────────────────────────────────────
                     OpCode::Jump => {
                         let offset = read_i32_unchecked(code, pc);
-                        // offset is relative to instruction end (current pc)
-                        *pc = (*pc as i64 + offset as i64) as usize;
+                        *pc = Self::branch_target(*pc, offset);
                         if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
@@ -11649,8 +12421,8 @@ impl BexVm {
                     OpCode::PopJumpIfFalse | OpCode::PopJumpIfTrue => {
                         let offset = read_i32_unchecked(code, pc);
                         let cond = self.stack.ensure_pop();
-                        if cond == Value::bool(op == OpCode::PopJumpIfTrue) {
-                            *pc = (*pc as i64 + offset as i64) as usize;
+                        if Self::pop_jump_taken(op, cond) {
+                            *pc = Self::branch_target(*pc, offset);
                         }
                         if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
@@ -11661,8 +12433,8 @@ impl BexVm {
                         let offset = read_i32_unchecked(code, pc);
                         let top_slot = self.stack.ensure_stack_top();
                         let cond = self.stack[top_slot];
-                        if cond == Value::bool(false) {
-                            *pc = (*pc as i64 + offset as i64) as usize;
+                        if Self::jump_if_false_taken(cond) {
+                            *pc = Self::branch_target(*pc, offset);
                         }
                     }
 
@@ -11671,14 +12443,8 @@ impl BexVm {
                     | OpCode::JumpIfNotNullOrPop => {
                         let offset = read_i32_unchecked(code, pc);
                         let cond = self.stack[self.stack.ensure_stack_top()];
-                        let taken = match op {
-                            OpCode::JumpIfFalseOrPop => cond == Value::bool(false),
-                            OpCode::JumpIfTrueOrPop => cond == Value::bool(true),
-                            OpCode::JumpIfNotNullOrPop => !cond.is_null(),
-                            _ => unreachable!(),
-                        };
-                        if taken {
-                            *pc = (*pc as i64 + offset as i64) as usize;
+                        if Self::jump_or_pop_taken(op, cond) {
+                            *pc = Self::branch_target(*pc, offset);
                         } else {
                             self.stack.ensure_pop();
                         }
@@ -12482,7 +13248,9 @@ impl BexVm {
                         let Some(l) = self.stack.ensure_pop().as_int() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = self.int_arith_result(l.checked_mul(r), l, '*', r)?;
+                        let Some(v) = Self::int_mul(l, r) else {
+                            return Err(self.integer_overflow(format!("{l} * {r} overflows int")));
+                        };
                         self.push_stack(v)?;
                     }
                     OpCode::DivInt => {
@@ -12575,12 +13343,18 @@ impl BexVm {
                     }
 
                     // ── Specialized int comparison (skip type dispatch) ───────────
-                    OpCode::CmpIntEq => cmp_int_op!(==),
-                    OpCode::CmpIntNotEq => cmp_int_op!(!=),
-                    OpCode::CmpIntLt => cmp_int_op!(<),
-                    OpCode::CmpIntLtEq => cmp_int_op!(<=),
-                    OpCode::CmpIntGt => cmp_int_op!(>),
-                    OpCode::CmpIntGtEq => cmp_int_op!(>=),
+                    OpCode::CmpIntEq
+                    | OpCode::CmpIntNotEq
+                    | OpCode::CmpIntLt
+                    | OpCode::CmpIntLtEq
+                    | OpCode::CmpIntGt
+                    | OpCode::CmpIntGtEq => {
+                        let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
+                        let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
+                        // SAFETY: the encoder validates two comparison operands.
+                        self.stack
+                            .replace_top_n::<2>(Value::bool(Self::int_compare(op, l, r)));
+                    }
 
                     // ── Specialized float comparison (skip type dispatch) ─────────
                     OpCode::CmpFloatEq => cmp_float_op!(CmpOp::Eq),
@@ -12691,19 +13465,14 @@ impl BexVm {
                     }
 
                     // ── Expanded unary ────────────────────────────────────────────
-                    OpCode::Not => {
-                        // `!` negates TRUTHINESS (B-1563) - `!0` and `if (0)`
-                        // agree, closing B-1071's asymmetry.
+                    // `!` negates TRUTHINESS (B-1563) - `!0` and `if (0)`
+                    // agree, closing B-1071's asymmetry.
+                    OpCode::Not | OpCode::Truthy => {
                         let val = self.stack.get_at(self.stack.ensure_stack_top());
                         let truthy = self.is_truthy(val);
                         // SAFETY: the encoder validates one input value.
-                        self.stack.replace_top_n::<1>(Value::bool(!truthy));
-                    }
-                    OpCode::Truthy => {
-                        let val = self.stack.get_at(self.stack.ensure_stack_top());
-                        let truthy = self.is_truthy(val);
-                        // SAFETY: the encoder validates one input value.
-                        self.stack.replace_top_n::<1>(Value::bool(truthy));
+                        self.stack
+                            .replace_top_n::<1>(Self::truthiness_result(op, truthy));
                     }
                     OpCode::IsNull => {
                         let val = self.stack.get_at(self.stack.ensure_stack_top());
@@ -12869,6 +13638,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             cur_pc: _,
             heap: _,
             early_yield: _,
+            dispatch_fast_path: _,
             // Its cached cursor is layout, not a pointer; see `relocated`.
             tlab: _,
             globals,
