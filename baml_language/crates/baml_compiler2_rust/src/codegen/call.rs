@@ -215,42 +215,39 @@ impl<'db> Generator<'_, 'db> {
             format!("vm.direct_calls_typed({type_args})")
         };
         let body = format!("{symbol}_d(vm, fr{direct_args}, {callee_mask})");
-        let call = self.frameless_or(
-            object, &site, &body, types, &type_args, &allowed, &direct, &boxed,
-        );
+        let recorded = format!("if {allowed} {{ {direct} }} else {{ {boxed} }}");
+        let typed = (!types.is_empty()).then_some(type_args.as_str());
+        let call = self.frameless_or(object, &site, &body, typed, &allowed, &recorded);
         Ok((call, signature.ret))
     }
 
     /// A call to `object` that runs `body` without linking a record when the
-    /// callee is frameless and the VM allows it: on the caller's record when
-    /// the callee cannot pause, else on a pending record of its own (with
-    /// the call's type arguments). Otherwise `direct` with a record when
-    /// `allowed`, else `boxed` in a VM frame.
-    #[allow(clippy::too_many_arguments)]
+    /// callee is frameless and `allowed`: on the caller's record when the
+    /// callee cannot pause, else on a pending record of its own (with the
+    /// call's `typed` arguments). Otherwise `recorded`.
     fn frameless_or(
         &self,
         object: usize,
         site: &str,
         body: &str,
-        types: &[String],
-        type_args: &str,
+        typed: Option<&str>,
         allowed: &str,
-        direct: &str,
-        boxed: &str,
+        recorded: &str,
     ) -> String {
-        let recorded = format!("if {allowed} {{ {direct} }} else {{ {boxed} }}");
         if !self.frameless.contains(&object) {
             return format!("({recorded})");
         }
         let callee = format!("ObjectIndex::from_raw({object})");
-        let frameless = if !types.is_empty() {
-            format!("vm.call_pending_typed(fr, {callee}, {type_args}, {site}, |vm, fr| {body})")
-        } else if !self.pausing.contains(&object) {
+        let frameless = if typed.is_none() && !self.pausing.contains(&object) {
             format!("vm.call_frameless(fr, {callee}, {site}, |vm| {body})")
-        } else if object == self.object {
-            format!("vm.call_pending_self(fr, {callee}, {site}, |vm, fr| {body})")
         } else {
-            format!("vm.call_pending(fr, {callee}, {site}, |vm, fr| {body})")
+            let function = if typed.is_none() && object == self.object {
+                format!("vm.own_callable(fr, {callee})")
+            } else {
+                format!("vm.record_object(fr, {callee})")
+            };
+            let type_args = typed.unwrap_or("&[]");
+            format!("vm.call_pending(fr, {function}, {type_args}, {site}, |vm, fr| {body})")
         };
         format!("(if {allowed} && vm.frameless_calls() {{ {frameless} }} else {recorded})")
     }

@@ -1,80 +1,35 @@
 //! Frameless calls: a compiled call that links no frame record.
 //!
-//! **Condition.** The compiler (`baml_compiler2_rust::admit`) calls a callee
-//! frameless when it is a compiled function that keeps no VM-frame state
-//! (not framed), has no catch handler or `defer` (so no handler slots), and
-//! calls no `trace` builtin (which reads or scopes to the innermost frame).
-//! It may pause.
+//! The compiler (`baml_compiler2_rust::admit`) decides which callees qualify
+//! (`analysis::frameless_body`). A body that cannot pause runs on its
+//! caller's record ([`BexVm::call_frameless`]). One that may pause runs on a
+//! *pending* record ([`BexVm::call_pending`]): the record the record path
+//! would build, held in the call's Rust frame but not linked into the chain
+//! or counted. The body uses it as its own `fr`; its slots start at that
+//! record's base, where the record path puts them.
 //!
-//! **Two shapes.** A body that cannot pause runs on its caller's record,
-//! `fr` ([`BexVm::call_frameless`]): it writes only `fr`'s pc and has no
-//! slots. A body that may pause runs on a *pending* record
-//! ([`BexVm::call_pending`], or [`BexVm::call_pending_typed`] with the
-//! call's type arguments): the record it would have had, built in the
-//! call's Rust frame (callee, package, anchor, base at the call, `prev` =
-//! the caller's record, pending or not), but not linked into the chain and
-//! not counted, so the call costs no chain or count updates and no telemetry
-//! check. The body sees it as its own `fr`: it notes its pcs there, and its
-//! slots (spills) start at that base, above the caller's, exactly where the
-//! record path puts them. The caller notes its call site before the call,
-//! as the record path does.
+//! **Materialization.** A pending record is linked as soon as anything
+//! outside the body could see the chain: before every suspension
+//! ([`BexVm::suspend_from`]) and at the start of every runtime call that
+//! extends the chain. [`BexVm::materialize`] links the pending ancestors
+//! above the nearest linked record, oldest first, so the chain matches the
+//! record path's (functions, pcs, levels, anchors, bases), and the engine,
+//! GC root scan, cancellation and resume see every active function.
 //!
-//! **Materialization.** A pending record is linked when something outside
-//! the body could see the chain: before every suspension
-//! ([`BexVm::suspend_from`]: a yield poll, an await, a log, a call the VM
-//! runs, a dispatch fallback), and at the start of every call that extends
-//! the chain from a compiled body (`call_record*`, `call_compiled`,
-//! `call_closure_compiled`, `call_inline`, `log_event`).
-//! [`BexVm::materialize`] walks `prev` from `fr` through the pending
-//! ancestors to the nearest linked record `L`, and links them above `L`
-//! oldest first, each one level above its `prev`, so the chain is the one the
-//! record path would have built: same functions, pcs (each caller's call
-//! site), levels, anchors and bases. The engine, GC root scan, `stack_view`,
-//! cancellation delivery and resume therefore see every active function.
-//! After that the records stay linked; each is still owned by its call's
-//! Rust frame, which pops it (top back to `prev`, count down by one) when it
-//! returns, or when a fiber dropped while parked unwinds it. A later
-//! materialization links only what is still pending, so a return pops
-//! exactly what was linked for its own call.
+//! **Spills.** A pausing body spills its live heap values to its own slots,
+//! reserved at entry. A pending record's base never changes when it is linked
+//! late, so every ancestor's live values sit in VM stack slots below the
+//! suspended body's, and a moving collection forwards them in place. A
+//! callee that cannot pause writes no slots.
 //!
-//! **Spills.** A body that may pause spills its live heap values at its
-//! suspensions and around calls to callees that may pause, as any pausing
-//! body does, to its own slots: `fr.base() + i`, reserved at entry (`reserve_slots`). The
-//! base of a pending record is the stack height at the call, the base the
-//! record path gives the same call, and it does not change when the record is
-//! linked late: materialization only links. So every ancestor's live values
-//! are in VM stack slots below the suspended body's, inside the slot range
-//! of the record linked for it, and a moving collection forwards them in
-//! place. A callee that cannot pause writes no slots, so running it on its
-//! caller's record (pending or linked) disturbs none.
+//! **Depth.** Every frameless call keeps the record path's native-stack
+//! check ([`BexVm::stack_room`]) at the same point, so `StackOverflow` fires
+//! at the same call.
 //!
-//! **Depth.** Every frameless call keeps the native-stack check of a record
-//! call ([`BexVm::stack_room`]) at the same point, so `StackOverflow` fires at
-//! the same call as on the record path; levels (`level_count`, `stack_view`)
-//! never count a frameless body that has not been materialized, as nothing
-//! can observe it.
-//!
-//! **Errors.** A frameless callee that returns `Err` leaves the zombie record
-//! it would have had. For a body on a pending record that record is linked
-//! as before a suspension (with its pending ancestors), then boxed in place
-//! ([`BexVm::zombify`]); a materialized one is only boxed. For a body on its
-//! caller's record, [`BexVm::call_frameless`] builds the zombie: function,
-//! the pc the body reported (its exit writes it into `fr`), anchor and base as
-//! at the call, and links it above `fr` (materializing `fr` first if it is
-//! pending); `fr` then notes the call site, as the record path noted it
-//! before the call. Both link through one routine, which places the new
-//! records directly above their linked ancestor, below the zombies their
-//! own callees left, whose levels rise by the number linked. The unwinder,
-//! `catch (e, ctx)` and uncaught traces therefore see the same chain as with
-//! records.
-//!
-//! **Telemetry.** A call records its visible caller, the caller's pc, and the
-//! span its callees nest in from the record chain, so with telemetry on
-//! ([`BexVm::frameless_calls`] is false) every call takes the record path and
-//! records exactly what it did before.
-//!
-//! **Escape hatch.** `BAML_COMPILED_FRAMES=1` turns off direct calls, frameless
-//! ones included: every compiled call then runs in a VM frame.
+//! **Errors.** A frameless callee that fails leaves the zombie record it
+//! would have had, linked above its nearest linked ancestor (see
+//! `link_above`), so unwinding, `catch (e, ctx)` and uncaught traces
+//! see the record path's chain.
 
 use std::{cell::Cell, ptr};
 
@@ -86,12 +41,6 @@ use crate::{
     vm::{BexVm, Frame},
 };
 
-#[cfg(test)]
-thread_local! {
-    /// Take the record path at frameless call sites, to compare the two.
-    pub(crate) static FORCE_RECORDS: Cell<bool> = const { Cell::new(false) };
-}
-
 impl BexVm {
     /// Whether a frameless callee may run without a record: direct calls
     /// are on and telemetry is off.
@@ -99,10 +48,6 @@ impl BexVm {
     #[inline(always)]
     #[must_use]
     pub fn frameless_calls(&self) -> bool {
-        #[cfg(test)]
-        if FORCE_RECORDS.with(Cell::get) {
-            return false;
-        }
         self.direct_calls() && self.telemetry.is_none()
     }
 
@@ -118,51 +63,11 @@ impl BexVm {
         pc: u32,
         body: impl FnOnce(&mut BexVm) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
-        let result = match self.stack_room() {
-            Ok(()) => {
-                let result = body(self);
-                if result.is_err() {
-                    self.frameless_unwound(caller, callee);
-                }
-                result
-            }
-            Err(error) => Err(error),
-        };
+        let result = self
+            .stack_room()
+            .and_then(|()| body(self).inspect_err(|_| self.frameless_unwound(caller, callee)));
         caller.note_pc(pc);
         result
-    }
-
-    /// Run `body`, a frameless callee that may poll (object `callee` of
-    /// `caller`'s package), called at `pc`, on a pending record of its own.
-    /// See the module notes.
-    #[allow(clippy::inline_always, reason = "the frameless call is the fast path")]
-    #[inline(always)]
-    pub fn call_pending<T>(
-        &mut self,
-        caller: &FrameRecord,
-        callee: ObjectIndex,
-        pc: u32,
-        body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
-    ) -> Result<T, Box<VmError>> {
-        let function = self.record_object(caller, callee);
-        self.call_pending_to(caller, function, &[], pc, body)
-    }
-
-    /// [`Self::call_pending`] for a callee whose frame starts with the
-    /// call's type arguments, borrowed from the caller's call expression as
-    /// [`Self::call_record_typed`] borrows them.
-    #[allow(clippy::inline_always, reason = "the frameless call is the fast path")]
-    #[inline(always)]
-    pub fn call_pending_typed<T>(
-        &mut self,
-        caller: &FrameRecord,
-        callee: ObjectIndex,
-        type_args: &[RealizedTy],
-        pc: u32,
-        body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
-    ) -> Result<T, Box<VmError>> {
-        let function = self.record_object(caller, callee);
-        self.call_pending_to(caller, function, type_args, pc, body)
     }
 
     /// Link `fr`'s pending records, then suspend: what every suspension in
@@ -173,26 +78,24 @@ impl BexVm {
         self.suspend(step)
     }
 
-    /// [`Self::call_pending`] for a call of the caller's own function: a
-    /// record other than an entry record holds the callable its call
-    /// resolved in the same package, so it needs no lookup.
+    /// The callable a call of `caller`'s own function `callee` runs: a
+    /// record other than an entry record holds it already, so it needs no
+    /// lookup.
     #[allow(clippy::inline_always, reason = "the frameless call is the fast path")]
     #[inline(always)]
-    pub fn call_pending_self<T>(
-        &mut self,
-        caller: &FrameRecord,
-        callee: ObjectIndex,
-        pc: u32,
-        body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
-    ) -> Result<T, Box<VmError>> {
-        let function = if caller.entry {
+    #[must_use]
+    pub fn own_callable(&self, caller: &FrameRecord, callee: ObjectIndex) -> HeapPtr {
+        if caller.entry {
             self.record_object(caller, callee)
         } else {
             caller.function()
-        };
-        self.call_pending_to(caller, function, &[], pc, body)
+        }
     }
 
+    /// Run `body`, a frameless callee that may poll, called at `pc`, on a
+    /// pending record of its own that runs `function` with `type_args`
+    /// (borrowed from the caller's call expression, as
+    /// [`Self::call_record_typed`] borrows them). See the module notes.
     #[allow(
         clippy::inline_always,
         clippy::cast_possible_truncation,
@@ -200,7 +103,7 @@ impl BexVm {
                   by the thread stack budget, so they fit u32"
     )]
     #[inline(always)]
-    fn call_pending_to<T>(
+    pub fn call_pending<T>(
         &mut self,
         caller: &FrameRecord,
         function: HeapPtr,

@@ -324,7 +324,7 @@ type ShapeCase = (
 #[rustfmt::skip]
 const CONSTRUCTS: &[ShapeCase] = &[
     ("compute.fib", FIXTURE,
-        &["vm.should_yield_at_call()", "vm.suspend_from(fr, Step::Yield)"], &[]),
+        &["vm.should_yield_at_call()", "vm.suspend_from(fr, Step::Yield)", "vm.call_pending(fr, vm.own_callable(fr, "], &[]),
     ("containers.Color", r#"enum Color { Red Green }"#,
         &[], &[]),
     ("containers.Circle", r#"class Circle { r: int }"#,
@@ -434,7 +434,7 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
     ("interfaces.total", r#"function total(shapes: Shape[]) -> int { let sum = 0; for (let s in shapes) { sum += s.area(); } sum }"#,
         &["vm.instance_class(", "Square_as_user_interfaces_Shape___area_", "Rect_as_user_interfaces_Shape___area_", "vm.virtual_target("], &[]),
     ("interfaces.scaled", r#"function scaled(s: Shape, by: int) -> int { s.scaled(by) }"#,
-        &["vm.instance_class(", "vm.class_type(", "user_interfaces_Shape_scaled_", "vm.virtual_target("], &[]),
+        &["vm.instance_class(", "vm.class_type(", "user_interfaces_Shape_scaled_", "vm.virtual_target(", "vm.call_pending(fr, vm.record_object(fr, "], &[]),
     ("interfaces.area_fn", r#"function area_fn(s: Shape) -> () -> int throws never { s.area }"#,
         &[], &[]),
     ("interfaces.rename", r#"function rename(n: Named, to: string) -> string { n.name = to; n.name }"#,
@@ -572,6 +572,8 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
         &["vm.virtual_target("], &["vm.instance_class("]),
     ("compute.uses_closure", "",
         &["vm.suspend_from("], &[]),
+    ("compute.main", "",
+        &["vm.call_frameless(fr, "], &[]),
     ("<lambda(uses_closure, 0)>", "",
         &[], &["vm.suspend_from(", "vm.should_yield()"]),
 ];
@@ -713,34 +715,6 @@ function make_kept(i: int) -> Kept { Kept { n: i } }
     let kept = body_of(&module, "user.make_kept");
     assert!(kept.contains("vm.new_instance_of("), "{kept}");
     assert!(!kept.contains("vm.new_plain_instance("), "{kept}");
-}
-
-/// Calls between compiled bodies link no record: a callee that cannot
-/// pause runs on its caller's record, one that can on a pending record of
-/// its own, and a default method on one carrying `Self`.
-#[test]
-fn compiled_calls_link_records_on_demand() {
-    let workload = |name: &str| {
-        let path = format!(
-            "{}/../../tools/speedtest/workloads/{name}/main.baml",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let db = baml_test_support::setup_test_db(&std::fs::read_to_string(path).unwrap());
-        let program = lower(&db, OptLevel::Two);
-        render(&db, &program, OptLevel::Two, None)
-    };
-    let module = workload("classes/method-call-100k");
-    let main = body_of(&module, "user.main");
-    assert!(
-        main.contains("vm.call_frameless(fr, ObjectIndex::from_raw("),
-        "{main}"
-    );
-    let module = workload("interfaces/default-method-100k");
-    let run = body_of(&module, "user.run");
-    assert_eq!(run.matches("vm.call_pending_typed(fr,").count(), 2, "{run}");
-    let module = workload("compute/fib32-recursive");
-    let fib = body_of(&module, "user.fib");
-    assert_eq!(fib.matches("vm.call_pending_self(fr,").count(), 2, "{fib}");
 }
 
 #[test]
