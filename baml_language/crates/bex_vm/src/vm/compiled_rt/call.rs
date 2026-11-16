@@ -78,19 +78,8 @@ impl BexVm {
         let end = frame.base() + slots;
         match self.stack.try_resize(end, Value::NULL) {
             Ok(()) => Ok(()),
-            Err(panic) => Err(self.slots_refused(panic)),
+            Err(panic) => Err(Box::new(self.panic_error(panic))),
         }
-    }
-
-    /// Out of line: every compiled body with slots reserves them on entry.
-    #[allow(
-        clippy::unnecessary_box_returns,
-        reason = "boxing out of line keeps the allocation off the inlined fast path"
-    )]
-    #[cold]
-    #[inline(never)]
-    fn slots_refused(&mut self, panic: VmPanic) -> Box<VmError> {
-        Box::new(VmError::thrown_fresh(self.panic_to_exception_value(panic)))
     }
 
     #[inline]

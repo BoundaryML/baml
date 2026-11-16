@@ -121,7 +121,9 @@ impl FrameRecord {
             entry: _,
             scoped: _,
             receipt: _,
-            type_args,
+            // Only statically declared types, which never move; see
+            // `call_record_typed`. A closure's are visited through it.
+            type_args: _,
         } = self;
         let visit = |cell: &Cell<HeapPtr>, visitor: &mut dyn RootVisitor| {
             let mut ptr = cell.get();
@@ -133,12 +135,6 @@ impl FrameRecord {
         if !package.get().as_ptr().is_null() {
             visit(package, visitor);
         }
-        // Records take only statically declared type arguments, which name
-        // nothing a collection moves; a closure's are visited through it.
-        // SAFETY: a linked record's `type_args` is live or empty.
-        #[allow(unsafe_code)]
-        let passed = unsafe { &**type_args };
-        debug_assert!(passed.iter().all(crate::reachable::is_statically_declared));
     }
 }
 
@@ -320,6 +316,11 @@ impl BexVm {
 
     /// [`Self::call_record`] for a generic callee, whose frame starts with
     /// the call's type arguments.
+    ///
+    /// `type_args` must name only statically declared types: the record
+    /// borrows them and a collection does not visit them, so a type a
+    /// collection could move would go stale. Callers check
+    /// `direct_calls_typed` first.
     #[allow(
         clippy::inline_always,
         reason = "also specializes the untyped call fast path"
@@ -334,6 +335,11 @@ impl BexVm {
         args: impl FnOnce(&mut BexVm) -> A,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
+        debug_assert!(
+            type_args
+                .iter()
+                .all(crate::reachable::is_statically_declared)
+        );
         caller.note_pc(pc);
         let observe = |vm: &mut BexVm, type_args: &[RealizedTy]| {
             let function = vm.observed_callee(callee)?;
