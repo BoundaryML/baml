@@ -34,6 +34,7 @@ PROCESS_ENV_KEYS = {
     "LANG",
     "LC_ALL",
     "__CF_USER_TEXT_ENCODING",
+    "PIP_CERT",
 }
 PROBE = """
 import json, os, signal, sys
@@ -140,7 +141,7 @@ class WrapperLauncherTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 payload = json.loads(result.stdout)
                 self.assertEqual(payload["args"], args)
-                self.assertEqual(Path(payload["cwd"]), self.root.resolve())
+                self.assertTrue(os.path.samefile(payload["cwd"], self.root))
                 expected = dict(
                     self.environment, BAML_TELEMETRY=default, **{MARKER: default}
                 )

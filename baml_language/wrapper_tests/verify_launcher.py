@@ -31,6 +31,7 @@ PROCESS_ENV_KEYS = {
     "LANG",
     "LC_ALL",
     "__CF_USER_TEXT_ENCODING",
+    "PIP_CERT",
 }
 
 
@@ -209,7 +210,7 @@ class PackedLauncherTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 37, result.stderr)
                     payload = json.loads(result.stdout)
                     self.assertEqual(payload["args"], args)
-                    self.assertEqual(Path(payload["cwd"]), root.resolve())
+                    self.assertTrue(os.path.samefile(payload["cwd"], root))
                     self.assertNotIn(MARKER, payload["env"])
                     expected = dict(environment, BAML_CLI_ALLOW_DIRECT="1")
                     self.assertEqual(payload["env"], expected)
