@@ -289,15 +289,7 @@ impl BexVm {
                 self.is_zombie(record),
                 "only zombies stand above a running caller"
             );
-            let old = record.level();
-            record.level.set(record.level.get() + added);
-            if record.scoped.get() {
-                for active in &mut self.manual_activations {
-                    if active.record == Some(old) {
-                        active.record = Some(old + added as usize);
-                    }
-                }
-            }
+            raise_zombie(record, added, &mut self.manual_activations);
             above = Some(record);
         }
         for &record in records {
@@ -403,4 +395,19 @@ fn pop_materialized(chain: &RecordChain, record: &FrameRecord) {
     );
     chain.top.set(record.prev());
     chain.count.set(chain.count.get() - 1);
+}
+
+/// Move a zombie `added` levels up, with the manual span activations scoped
+/// to it.
+fn raise_zombie(record: &FrameRecord, added: u32, activations: &mut [crate::vm::ManualActivation]) {
+    let old = record.level();
+    record.level.set(record.level.get() + added);
+    if !record.scoped.get() {
+        return;
+    }
+    for active in activations {
+        if active.record == Some(old) {
+            active.record = Some(old + added as usize);
+        }
+    }
 }
