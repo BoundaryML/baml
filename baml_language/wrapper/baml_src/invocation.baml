@@ -5,8 +5,14 @@ class WrapperInvocation {
     project: string,
 
     function selection(self) -> Selection {
-        let active = self.selection_impl() catch (error) {
+        let active = self.selection_impl($trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
             _ => {
+                record_wrapper_error(
+                    "selection",
+                    wrapper_error_category(error, $trace = trace.hidden()),
+                    "propagated",
+                    $trace = trace.hidden(),
+                );
                 telemetry_event(self.telemetry, "wrapper_resolution", fields = { "outcome": "failure" });
                 throw error;
             }
@@ -218,6 +224,12 @@ class WrapperInvocation {
             if (!is_path(active.selector.to_string())) {
                 active.ensure_installed(telemetry = self.telemetry) catch (error) {
                     WrapperFailure => {
+                        record_wrapper_error(
+                            "status_acquisition",
+                            wrapper_error_category(error, $trace = trace.hidden()),
+                            "recovered",
+                            $trace = trace.hidden(),
+                        );
                         baml.io.eprintln(
                             `warning: could not ensure active baml-cli is installed: ${error_message(error)}`,
                         );
@@ -281,8 +293,17 @@ class WrapperInvocation {
 
     function print_version(self, flag: string) -> null {
         baml.io.println(`baml wrapper ${wrapper_version()}`);
-        let exit_code = self.run_cli_version(flag) catch (error) {
+        let exit_code = self.run_cli_version(
+            flag,
+            $trace = trace.span(inputs = false, output = false, error = false),
+        ) catch (error) {
             WrapperFailure => {
+                record_wrapper_error(
+                    "version",
+                    wrapper_error_category(error, $trace = trace.hidden()),
+                    "recovered",
+                    $trace = trace.hidden(),
+                );
                 baml.io.eprintln(
                     `warning: could not report selected baml-cli version: ${error_message(error)}`,
                 );
@@ -295,13 +316,33 @@ class WrapperInvocation {
     function run_cli_version(self, flag: string) -> int {
         let binary = self.selection().ensure_installed(telemetry = self.telemetry);
         WrapperTelemetry.finish(self.telemetry);
-        let result = baml.sys.run(binary, args = [flag], env = { "BAML_CLI_ALLOW_DIRECT": "1" });
+        let result = run_toolchain(binary, [flag], $trace = trace.span(inputs = false, output = true, error = false));
         result.exit_code
     }
 
     function manage(self, command: ManagementCommand) -> null {
-        command.preflight(self, $trace = trace.span(inputs = false, output = false, error = false));
-        command.execute(self, $trace = trace.span(inputs = false, output = false, error = false))
+        command.preflight(self, $trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
+            _ => {
+                record_wrapper_error(
+                    "preflight",
+                    wrapper_error_category(error, $trace = trace.hidden()),
+                    "propagated",
+                    $trace = trace.hidden(),
+                );
+                throw error;
+            }
+        };
+        command.execute(self, $trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
+            _ => {
+                record_wrapper_error(
+                    "execute",
+                    wrapper_error_category(error, $trace = trace.hidden()),
+                    "propagated",
+                    $trace = trace.hidden(),
+                );
+                throw error;
+            }
+        }
     }
 
     // Hands the invocation to the selected toolchain's CLI, tokens untouched.
@@ -311,7 +352,7 @@ class WrapperInvocation {
         let warned = active.warn_if_outdated();
         let refresh = spawn { active.refresh_channel() };
         WrapperTelemetry.finish(self.telemetry);
-        let result = baml.sys.run(binary, args = forwarded, env = { "BAML_CLI_ALLOW_DIRECT": "1" });
+        let result = run_toolchain(binary, forwarded, $trace = trace.span(inputs = false, output = true, error = false));
         await refresh;
         if (!warned) {
             active.warn_if_outdated();
