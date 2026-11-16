@@ -134,14 +134,19 @@ struct Backend {
 }
 
 impl Backend {
+    /// A backend for the machine the compiler runs on, using every CPU
+    /// feature that machine has.
     fn new() -> Result<Self, CompileError> {
         let mut flags = settings::builder();
         flags.set("opt_level", "speed").map_err(internal)?;
         flags.set("is_pic", "true").map_err(internal)?;
-        let isa = cranelift_native::builder()
-            .map_err(internal)?
-            .finish(settings::Flags::new(flags))
-            .map_err(internal)?;
+        let mut isa = cranelift_native::builder().map_err(internal)?;
+        if cfg!(all(target_arch = "aarch64", target_vendor = "apple")) {
+            // The host defaults sign return addresses, which the platform's
+            // ABI for ordinary (not arm64e) code does not ask for.
+            isa.set("sign_return_address", "false").map_err(internal)?;
+        }
+        let isa = isa.finish(settings::Flags::new(flags)).map_err(internal)?;
         let builder =
             ObjectBuilder::new(isa, "baml_program", default_libcall_names()).map_err(internal)?;
         Ok(Self {
@@ -542,10 +547,8 @@ impl<'a, 'db> Translator<'a, 'db> {
     fn require_int_range(&mut self, value: ir::Value, panic: Panic) -> Result<(), CompileError> {
         let doubled = self.builder.ins().ishl_imm(value, 1);
         let top_bits_differ = self.builder.ins().bxor(value, doubled);
-        let out_of_range = self
-            .builder
-            .ins()
-            .icmp_imm(IntCC::SignedLessThan, top_bits_differ, 0);
+        // A single-bit mask as the branch condition is one test-bit branch.
+        let out_of_range = self.builder.ins().band_imm(top_bits_differ, i64::MIN);
         self.panic_if(out_of_range, panic)
     }
 
@@ -634,10 +637,16 @@ impl<'a, 'db> Translator<'a, 'db> {
             // `2 * left` is exact in 64 bits, and `(2 * left) * right`
             // overflows 64 bits exactly when `left * right` leaves 63.
             BinOp::Mul => {
+                // The 128-bit product fits 64 bits when its high half is the
+                // sign extension of its low half; comparing the two feeds the
+                // branch directly.
                 let doubled = self.builder.ins().ishl_imm(left, 1);
-                let (product, overflow) = self.builder.ins().smul_overflow(doubled, right);
+                let low = self.builder.ins().imul(doubled, right);
+                let high = self.builder.ins().smulhi(doubled, right);
+                let sign = self.builder.ins().sshr_imm(low, 63);
+                let overflow = self.builder.ins().icmp(IntCC::NotEqual, high, sign);
                 self.panic_if(overflow, Panic::IntOverflow(left, '*', right))?;
-                Ok(self.builder.ins().sshr_imm(product, 1))
+                Ok(self.builder.ins().sshr_imm(low, 1))
             }
             BinOp::Div => {
                 self.require_nonzero_divisor(left, right, right_constant)?;
