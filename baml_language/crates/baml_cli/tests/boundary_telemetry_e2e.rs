@@ -49,12 +49,7 @@ fn diagnostic(output: &std::process::Output) -> String {
 }
 
 /// Pin credential recovery text for fail-open CLI warnings and fatal query/artifact errors.
-fn assert_api_key_rejection(
-    output: &std::process::Output,
-    endpoint: &str,
-    query: bool,
-    recording_off_allowed: bool,
-) {
+fn assert_api_key_rejection(output: &std::process::Output, endpoint: &str, query: bool) {
     let actual = diagnostic(output);
     let prefix = if !query && output.status.success() {
         "warning"
@@ -70,13 +65,9 @@ fn assert_api_key_rejection(
     • Disable recording: rerun with BAML_TELEMETRY=off.
 
   Cloud telemetry disabled. Program execution continues."#
-    } else if recording_off_allowed {
-        r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
-    • Disable recording: rerun with BAML_TELEMETRY=off.
-
-  Execution cancelled."#
     } else {
         r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
+    • Disable recording: rerun with BAML_TELEMETRY=off.
 
   Execution cancelled."#
     };
@@ -380,7 +371,7 @@ async fn initial_rejection_warns_even_if_execution_finishes_before_authorization
         assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
         let stderr = String::from_utf8_lossy(&output.stderr);
         if status == 401 {
-            assert_api_key_rejection(&output, &server.uri(), false, true);
+            assert_api_key_rejection(&output, &server.uri(), false);
         } else {
             assert_ingest_forbidden(&output, &server.uri());
         }
@@ -523,7 +514,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let endpoint = server.uri();
         if status == 401 {
-            assert_api_key_rejection(&output, &endpoint, true, true);
+            assert_api_key_rejection(&output, &endpoint, true);
         } else {
             let expected = match status {
                 403 => format!(
@@ -793,7 +784,7 @@ function main() -> int {
         String::from_utf8_lossy(&output.stdout),
         "execution-started\n7\n"
     );
-    assert_api_key_rejection(&output, &server.uri(), false, true);
+    assert_api_key_rejection(&output, &server.uri(), false);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -880,7 +871,7 @@ async fn standalone_binary_reports_initial_refusal_after_a_fast_main() {
         .output()
         .unwrap();
     assert!(!output.status.success(), "{output:?}");
-    assert_api_key_rejection(&output, &server.uri(), false, true);
+    assert_api_key_rejection(&output, &server.uri(), false);
 }
 
 #[test]
