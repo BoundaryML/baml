@@ -16,7 +16,7 @@ use super::{CompiledFn, FrameRecord, Step};
 use crate::{
     errors::{VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::EvalStackTrait,
-    package_baml::{NativeCallResult, NativeFunction, NativeFunctionResult},
+    package_baml::{NativeCallResult, NativeFunctionResult},
     types::ObjectTrait as _,
     vm::{BexVm, Frame, VmExecState},
 };
@@ -36,32 +36,9 @@ impl BexVm {
             .map_err(|error| Box::new(error.into()))
     }
 
-    /// Call a builtin through its function pointer.
-    pub fn call_builtin(
-        &mut self,
-        builtin: NativeFunction,
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        let outcome = builtin(self, args);
-        self.finish_builtin(outcome)
-    }
-
-    /// Call a generic builtin through its function pointer, with type
-    /// arguments available through `current_call_type_args()`.
-    pub fn call_builtin_typed(
-        &mut self,
-        builtin: NativeFunction,
-        type_args: &mut [RealizedTy],
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        let outcome = self.with_call_type_args(type_args, |vm| builtin(vm, args));
-        self.finish_builtin(outcome)
-    }
-
     /// The result of a builtin call: what generated code does after calling a
     /// builtin's entry point (`package_baml::builtins::Array::push`, …) by
-    /// name, as [`Self::call_builtin`] does after calling one through its
-    /// pointer.
+    /// name.
     #[inline]
     pub fn finish_builtin(&mut self, outcome: NativeCallResult) -> Result<Value, Box<VmError>> {
         self.settle();
@@ -107,11 +84,13 @@ impl BexVm {
         let previous = self
             .compiled
             .lent_type_args
-            .replace(super::state::LentTypeArgs(std::ptr::NonNull::from(type_args)));
-        let restore = RestoreLoan(&raw mut self.compiled.lent_type_args, previous);
-        let result = call(self);
-        drop(restore);
-        result
+            .replace(super::state::LentTypeArgs(std::ptr::NonNull::from(
+                type_args,
+            )));
+        // Restores the loan even if the call unwinds, so no collection ever
+        // visits the lender's array once it is gone.
+        let guard = RestoreLoan { vm: self, previous };
+        call(&mut *guard.vm)
     }
 
     #[allow(
@@ -479,17 +458,13 @@ impl BexVm {
 
 /// Restores the previous type-argument loan when dropped, even if the
 /// builtin unwinds, so no loan outlives the array it names.
-struct RestoreLoan(
-    *mut Option<super::state::LentTypeArgs>,
-    Option<super::state::LentTypeArgs>,
-);
+struct RestoreLoan<'a> {
+    vm: &'a mut BexVm,
+    previous: Option<super::state::LentTypeArgs>,
+}
 
-impl Drop for RestoreLoan {
+impl Drop for RestoreLoan<'_> {
     fn drop(&mut self) {
-        // SAFETY: the slot outlives this guard, which the call cannot reach.
-        #[allow(unsafe_code)]
-        unsafe {
-            *self.0 = self.1;
-        }
+        self.vm.compiled.lent_type_args = self.previous;
     }
 }

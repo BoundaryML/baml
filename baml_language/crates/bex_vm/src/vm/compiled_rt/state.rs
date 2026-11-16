@@ -20,7 +20,6 @@ pub(crate) struct CompiledState {
     )]
     pub(crate) yielder: Option<YielderPtr>,
     pub(crate) on_fiber: bool,
-    pub(crate) builtin_type_args: Vec<RealizedTy>,
     /// The type arguments compiled code lends a builtin it calls directly,
     /// for that call only ([`BexVm::with_call_type_args`]). Rooted through
     /// the pointer, so a collection during the call updates the lender's
@@ -58,7 +57,6 @@ impl Default for CompiledState {
             fiber_floor: 0,
             yielder: None,
             on_fiber: false,
-            builtin_type_args: Vec::new(),
             lent_type_args: None,
             call_type_args: Vec::new(),
             saved_call_types: Vec::new(),
@@ -86,7 +84,6 @@ impl RootHaver for CompiledState {
             fiber_floor: _,
             yielder: _,
             on_fiber: _,
-            builtin_type_args,
             lent_type_args,
             call_type_args,
             saved_call_types,
@@ -97,7 +94,6 @@ impl RootHaver for CompiledState {
         } = self;
         static_type_cache.retain(|_, ty| ty.visit(visitor));
         records.visit_roots(visitor);
-        builtin_type_args.visit_roots(visitor);
         if let Some(LentTypeArgs(lent)) = lent_type_args {
             // SAFETY: set only while `with_call_type_args` runs a call with
             // the lender's array exclusively borrowed for it.

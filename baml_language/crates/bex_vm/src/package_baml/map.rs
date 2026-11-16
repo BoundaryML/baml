@@ -354,7 +354,12 @@ impl BamlClassMap for PackageBamlImpl {
         MapDriver::start(vm, &[map, key, value], Operation::Set, false)
     }
 
-    fn __entry_set__local(vm: &mut BexVm, map: Value, key: Value, value: Value) -> NativeCallResult {
+    fn __entry_set__local(
+        vm: &mut BexVm,
+        map: Value,
+        key: Value,
+        value: Value,
+    ) -> NativeCallResult {
         MapDriver::start(vm, &[map, key, value], Operation::Set, true)
     }
 
@@ -374,11 +379,21 @@ impl BamlClassMap for PackageBamlImpl {
         unreachable!("Map.delete uses custom glue")
     }
 
-    fn __entry_get_or_insert(vm: &mut BexVm, map: Value, key: Value, default: Value) -> NativeCallResult {
+    fn __entry_get_or_insert(
+        vm: &mut BexVm,
+        map: Value,
+        key: Value,
+        default: Value,
+    ) -> NativeCallResult {
         MapDriver::start(vm, &[map, key, default], Operation::GetOrInsert, false)
     }
 
-    fn __entry_get_or_insert__local(vm: &mut BexVm, map: Value, key: Value, default: Value) -> NativeCallResult {
+    fn __entry_get_or_insert__local(
+        vm: &mut BexVm,
+        map: Value,
+        key: Value,
+        default: Value,
+    ) -> NativeCallResult {
         MapDriver::start(vm, &[map, key, default], Operation::GetOrInsert, true)
     }
 

@@ -840,10 +840,16 @@ fn entry_params(b: &NativeBuiltin) -> Vec<String> {
         .map(receiver_param_name);
     let names: Vec<String> = receiver
         .into_iter()
-        .chain(b.params.iter().map(|param| rust_field_ident(&param.name).to_string()))
+        .chain(
+            b.params
+                .iter()
+                .map(|param| rust_field_ident(&param.name).to_string()),
+        )
         .collect();
     let mut seen = std::collections::HashSet::new();
-    let clean = names.iter().all(|name| name != "vm" && seen.insert(name.as_str()));
+    let clean = names
+        .iter()
+        .all(|name| name != "vm" && seen.insert(name.as_str()));
     if clean {
         names
     } else {
@@ -857,7 +863,13 @@ fn entry_params(b: &NativeBuiltin) -> Vec<String> {
 /// glue through its dispatch table.
 fn emit_entry_module(out: &mut String, root: &NamespaceNode, package: &str) {
     let mut modules: BTreeMap<Vec<String>, String> = BTreeMap::new();
-    collect_entries(&mut modules, root, "", package, &package_trait_name(package));
+    collect_entries(
+        &mut modules,
+        root,
+        "",
+        package,
+        &package_trait_name(package),
+    );
     let impl_ty = format!("Package{}Impl", to_pascal_case(package));
     let impl_ty = impl_ty.as_str();
 
@@ -866,7 +878,9 @@ fn emit_entry_module(out: &mut String, root: &NamespaceNode, package: &str) {
          /// `builtins::Array::push`. Each is the builtin's `__entry_*`, whose\n\
          /// body the interpreter's glue runs too.\n",
     );
-    out.push_str("#[allow(non_snake_case, clippy::used_underscore_items, clippy::too_many_arguments)]\n");
+    out.push_str(
+        "#[allow(non_snake_case, clippy::used_underscore_items, clippy::too_many_arguments)]\n",
+    );
     out.push_str("pub mod builtins {\n    #[allow(unused_imports)]\n    use super::*;\n");
     emit_entry_tree(out, &modules, &[], impl_ty, 1);
     out.push_str("}\n");
@@ -883,11 +897,23 @@ fn collect_entries(
     for (class_name, entries) in &node.classes {
         let trait_name = class_trait_name(namespace_prefix, class_name);
         for entry in entries {
-            push_entry(modules, entry.builtin, package, &trait_name, &entry.rust_method_name);
+            push_entry(
+                modules,
+                entry.builtin,
+                package,
+                &trait_name,
+                &entry.rust_method_name,
+            );
         }
     }
     for entry in &node.free_fns {
-        push_entry(modules, entry.builtin, package, free_fn_trait, &entry.rust_method_name);
+        push_entry(
+            modules,
+            entry.builtin,
+            package,
+            free_fn_trait,
+            &entry.rust_method_name,
+        );
     }
     for (ns_name, sub_node) in &node.sub_namespaces {
         let child_prefix = if namespace_prefix.is_empty() {
@@ -1360,16 +1386,24 @@ fn emit_thread_local_twin(
     out.push_str(
         "    // SAFETY: selected only for a receiver escape analysis proved thread-local.\n    #[allow(unsafe_code)]\n",
     );
-    out.push_str(&entry_from_glue_body(&body, trait_name, method_name, "__local", b));
+    out.push_str(&entry_from_glue_body(
+        &body,
+        trait_name,
+        method_name,
+        "__local",
+        b,
+    ));
     emit_glue_adapter(out, trait_name, method_name, "__local", b);
 }
 
 /// `, a: Value, b: Value`: an entry point's parameters after `vm`.
 fn entry_signature(b: &NativeBuiltin) -> String {
-    entry_params(b).iter().fold(String::new(), |mut signature, param| {
-        write!(signature, ", {param}: Value").unwrap();
-        signature
-    })
+    entry_params(b)
+        .iter()
+        .fold(String::new(), |mut signature, param| {
+            write!(signature, ", {param}: Value").unwrap();
+            signature
+        })
 }
 
 /// Turn a body from [`emit_glue_body`] into a builtin's entry point. The
@@ -1385,10 +1419,14 @@ fn entry_from_glue_body(
     suffix: &str,
     b: &NativeBuiltin,
 ) -> String {
-    let header =
-        format!("    fn __glue_{method_name}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n");
+    let header = format!(
+        "    fn __glue_{method_name}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n"
+    );
     let rest = body.strip_prefix(&header).unwrap_or_else(|| {
-        panic!("baml codegen error: {} glue body has an unexpected header", b.path)
+        panic!(
+            "baml codegen error: {} glue body has an unexpected header",
+            b.path
+        )
     });
     let (result_ty, ok) = if b.may_yield {
         ("Result<NativeCallResult, VmRustFnError>", "r")
@@ -1397,10 +1435,16 @@ fn entry_from_glue_body(
     };
     let opening = format!("        let __result: {result_ty} = (|| {{\n");
     let rest = rest.strip_prefix(&opening).unwrap_or_else(|| {
-        panic!("baml codegen error: {} glue body has no result closure", b.path)
+        panic!(
+            "baml codegen error: {} glue body has no result closure",
+            b.path
+        )
     });
     let (work, _) = rest.split_once("        })();\n").unwrap_or_else(|| {
-        panic!("baml codegen error: {} glue body's closure does not close", b.path)
+        panic!(
+            "baml codegen error: {} glue body's closure does not close",
+            b.path
+        )
     });
     let params = entry_params(b);
     let n = params.len();
@@ -2851,21 +2895,29 @@ mod tests {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
         let (_, entries) = output.split_once("pub mod builtins").unwrap();
-        assert!(entries.contains(
-            "pub mod Array {\n        #[allow(unused_imports)]\n        use super::*;"
-        ));
+        assert!(
+            entries.contains(
+                "pub mod Array {\n        #[allow(unused_imports)]\n        use super::*;"
+            )
+        );
         assert!(entries.contains(
             "pub fn push(vm: &mut BexVm, array: Value, item: Value) -> NativeFunctionResult {\n            \
              <PackageBamlImpl as BamlClassArray>::__body_push(vm, [array, item])"
         ));
         assert!(entries.contains("pub fn push_local(vm: &mut BexVm, array: Value, item: Value)"));
-        let push = builtins.iter().find(|b| b.path == "baml.Array.push").unwrap();
+        let push = builtins
+            .iter()
+            .find(|b| b.path == "baml.Array.push")
+            .unwrap();
         let entry = NativeEntry::of(push, "baml");
         assert_eq!(entry.path, "bex_vm::package_baml::builtins::Array::push");
         assert_eq!(entry.arity, 2);
         assert!(entry.local_twin);
         assert!(!entry.may_yield);
-        assert!(!entry.reads_type_args, "push's body takes no vm and its glue reads no type args");
+        assert!(
+            !entry.reads_type_args,
+            "push's body takes no vm and its glue reads no type args"
+        );
     }
 
     #[test]
