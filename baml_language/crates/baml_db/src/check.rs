@@ -2274,6 +2274,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::IrrefutablePatternInWhileLet => DiagnosticId::IrrefutablePatternInWhileLet,
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::DeferControlFlowEscape { .. } => DiagnosticId::DeferControlFlowEscape,
+        TirTypeError::LoopControlOutsideLoop { .. } => DiagnosticId::LoopControlOutsideLoop,
+        TirTypeError::ContinueInLoopUpdate => DiagnosticId::ContinueInLoopUpdate,
         TirTypeError::ThrowsContractViolation { .. }
         | TirTypeError::CallbackThrowsContractViolation { .. } => {
             DiagnosticId::ThrowsContractViolation

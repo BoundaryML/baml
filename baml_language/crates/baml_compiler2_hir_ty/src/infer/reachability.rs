@@ -6,7 +6,8 @@ use baml_compiler2_ast::{BinaryOp, Expr, ExprBody, ExprId, Stmt, StmtId, UnaryOp
 use baml_type::interned::{ClosedTy, InferTy, Ty};
 
 use super::{
-    InferenceContext, WorkingResult,
+    WorkingResult,
+    flow::LoopVerdicts,
     truthy::{Truthiness, truthiness},
 };
 use crate::diagnostics::{
@@ -17,9 +18,14 @@ use crate::diagnostics::{
 pub(super) fn add_diagnostics<'db>(
     body: &ExprBody,
     result: &WorkingResult<'db>,
+    loop_verdicts: &LoopVerdicts,
     diagnostics: &mut Vec<TirDiagnostic<'db>>,
 ) {
-    let reachability = Reachability { body, result };
+    let reachability = Reachability {
+        body,
+        result,
+        loop_verdicts,
+    };
     for (_, expr) in body.exprs.iter() {
         match expr {
             Expr::If {
@@ -140,6 +146,9 @@ pub(super) fn add_diagnostics<'db>(
 struct Reachability<'a, 'db> {
     body: &'a ExprBody,
     result: &'a WorkingResult<'db>,
+    /// Inference's verdicts about loops without an exit and jumps without a
+    /// loop.
+    loop_verdicts: &'a LoopVerdicts,
 }
 
 impl<'db> Reachability<'_, 'db> {
@@ -287,21 +296,24 @@ impl<'db> Reachability<'_, 'db> {
 
     fn stmt_exits(&self, stmt: StmtId) -> bool {
         match &self.body.stmts[stmt] {
-            Stmt::Return(_) | Stmt::Throw { .. } | Stmt::Break | Stmt::Continue => true,
+            Stmt::Return(_) | Stmt::Throw { .. } => true,
+            // A jump inference rejected (no loop takes it) is not a jump.
+            Stmt::Break | Stmt::Continue => !self.loop_verdicts.rejected_jumps.contains(&stmt),
             Stmt::Expr(expr) => self.expr_exits(*expr),
             Stmt::Let { initializer, .. } => initializer.is_some_and(|expr| self.expr_exits(expr)),
             Stmt::Assign { value, .. } | Stmt::AssignOp { value, .. } => self.expr_exits(*value),
-            Stmt::While {
-                condition,
-                body,
-                after,
-                ..
-            } => {
-                self.expr_exits(*condition)
-                    || (self.condition(*condition) == Some(true)
-                        && !InferenceContext::loop_body_breaks(self.body, *body, *after))
+            // A loop with no exit edge never completes: a header that never
+            // misses (a statically true condition, a header that always
+            // returns) and no live `break` that binds to the loop. Inference
+            // records that verdict from its walk of the loop, where every
+            // `break` registers with the loop it leaves - a `break` in the
+            // header leaves THIS loop, so the header's own exits say nothing
+            // about the code after it.
+            Stmt::While { .. } | Stmt::WhileLet { .. } => {
+                self.loop_verdicts.diverging_loops.contains(&stmt)
             }
-            Stmt::WhileLet { scrutinee, .. } => self.expr_exits(*scrutinee),
+            // A `for let` collection runs before the loop opens: its exits
+            // leave the enclosing code.
             Stmt::For { collection, .. } => self.expr_exits(*collection),
             _ => false,
         }

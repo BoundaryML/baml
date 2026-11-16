@@ -465,6 +465,14 @@ pub enum DiagnosticId {
     /// `baml.FromJson` override, on the wrong field, or on a union whose
     /// `@json.fallback` member another member would shadow.
     InvalidJsonAttribute,
+    /// `break`/`continue` with no loop to leave: written outside every loop,
+    /// or inside a lambda body or template interpolation, which cannot leave
+    /// a loop enclosing it.
+    LoopControlOutsideLoop,
+    /// `continue` inside a C-style `for` loop's update expression. The update
+    /// is where a `continue` lands, so one written there would loop on the
+    /// update itself.
+    ContinueInLoopUpdate,
 }
 
 impl DiagnosticId {
@@ -687,6 +695,8 @@ impl DiagnosticId {
             DiagnosticId::LlmOutputMemberDropped => "E0184",
             DiagnosticId::LlmOutputFieldAlwaysNull => "E0185",
             DiagnosticId::InvalidJsonAttribute => "E0186",
+            DiagnosticId::LoopControlOutsideLoop => "E0187",
+            DiagnosticId::ContinueInLoopUpdate => "E0188",
         }
     }
 }

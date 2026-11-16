@@ -228,6 +228,7 @@ loom = { version = "0.7" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
 notify = "7.0"
+nunny = { version = "0.2", default-features = false, features = [ "alloc" ] }
 once_cell = "1.19"
 ouroboros = "0.18.5"
 parking_lot = { version = "0.12" }

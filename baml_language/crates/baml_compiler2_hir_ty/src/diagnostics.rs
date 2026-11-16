@@ -148,6 +148,20 @@ impl UnitContext {
     }
 }
 
+/// Why a `break`/`continue` has no loop to take it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoopControlBarrier {
+    /// No loop encloses the statement anywhere in the body.
+    NoLoop,
+    /// The statement is in a lambda body; the loop around the lambda cannot
+    /// be left from inside it.
+    Lambda,
+    /// The statement is in a template interpolation, which runs as a
+    /// closure when the template is rendered; the loop around the template
+    /// cannot be left from inside it.
+    Template,
+}
+
 /// The syntactic context an irrefutable-pattern rule fires in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IrrefutableContextKind {
@@ -667,6 +681,14 @@ pub enum TirTypeError {
     DeferControlFlowEscape {
         keyword: &'static str,
     },
+    /// `break`/`continue` that no loop can take: `barrier` is what stands
+    /// between the statement and any loop.
+    LoopControlOutsideLoop {
+        keyword: &'static str,
+        barrier: LoopControlBarrier,
+    },
+    /// `continue` inside a C-style `for` loop's update expression.
+    ContinueInLoopUpdate,
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType {
         type_name: String,
@@ -2143,6 +2165,21 @@ impl TirTypeError {
                 TirTypeError::DeferControlFlowEscape { keyword } => write!(
                     f,
                     "`{keyword}` cannot leave a `defer` body; only `throw` may propagate out of a defer"
+                ),
+                TirTypeError::LoopControlOutsideLoop { keyword, barrier } => match barrier {
+                    LoopControlBarrier::NoLoop => write!(f, "`{keyword}` outside of a loop"),
+                    LoopControlBarrier::Lambda => write!(
+                        f,
+                        "`{keyword}` cannot leave a loop from inside a lambda body"
+                    ),
+                    LoopControlBarrier::Template => write!(
+                        f,
+                        "`{keyword}` cannot leave a loop from inside a template interpolation"
+                    ),
+                },
+                TirTypeError::ContinueInLoopUpdate => write!(
+                    f,
+                    "`continue` cannot appear in a `for` loop's update expression; the update already runs before the condition is tested again"
                 ),
                 TirTypeError::InvalidCatchBindingType { type_name } => write!(
                     f,

@@ -275,12 +275,11 @@ impl<'db> InferenceContext<'db> {
             Truthiness::AlwaysFalsy => false,
             Truthiness::Runtime => return,
         };
-        self.pending_diags
-            .push(super::PendingDiag::ConditionAlwaysConst {
-                expr: condition,
-                ty: resolved,
-                always_true,
-            });
+        self.report(super::PendingDiag::ConditionAlwaysConst {
+            expr: condition,
+            ty: resolved,
+            always_true,
+        });
     }
 }
 

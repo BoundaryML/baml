@@ -21,22 +21,86 @@
 //! - Branch merges are divergence-aware: a diverged branch contributes
 //!   nothing, so guard-with-early-return narrowing is the ordinary merge
 //!   rule, not a special case.
-//! - Loops havoc the bindings their bodies assign, and the post-loop
-//!   environment restarts from loop ENTRY (zero-iteration soundness,
-//!   B-735 - the TS/pyright structural rule) plus the condition's false
-//!   facts.
+//! - A loop drops the facts about every binding its condition, body or
+//!   update slot assigns before typing each of them once (a `for let`
+//!   collection runs once, before the loop, so it is typed in the entry
+//!   flow and not dropped), and the post-loop environment is the merge of
+//!   its exit edges, each with the flow where it is taken: every `break`,
+//!   plus the header's miss edge (a `while` condition's false edge, a
+//!   `while let` pattern's failure), which leaves that havoced flow
+//!   (zero-iteration soundness, B-735 - the TS/pyright structural rule). A
+//!   `for let` ends at its header too, so its exits are loop entry, the
+//!   body's end and every `continue`, plus its `break`s. A jump written
+//!   where the flow has already diverged is no edge. A loop with no exit
+//!   edge diverges.
 //! - Assignments check against the DECLARED binding type, never the
 //!   overlay (B-618), then re-narrow the overlay to the assigned value.
 //! - Else-side subtraction is gated on [`super::pat::PatternOutcome::
 //!   consumes_matched`]: only a pattern refutable by type alone may be
 //!   subtracted (B-1069).
 
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, StmtId};
+use baml_compiler2_ast::{Expr, ExprBody, ExprId, Stmt, StmtId, traverse::BodyNode};
 use baml_compiler2_hir::semantic_index::BindingId;
 use baml_type::interned::{InferTy, Ty};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::{Expectation, InferenceContext};
+use super::{Diverges, Expectation, InferenceContext};
+
+/// The narrowing overlay: a binding's flow type where a fact about it is in
+/// force. A binding with no entry has its declared type.
+pub(super) type Flow = FxHashMap<BindingId, Ty>;
+
+/// One enclosing loop while its header, body and update slot are typed: the
+/// flows at the `break`s and `continue`s that bind to it. MIR lowers all
+/// three under the loop's own break and continue targets, so a `break` in a
+/// condition block or in a C-style step leaves THIS loop.
+pub(super) struct LoopFrame {
+    /// The flow at each `break`: an exit edge of the loop.
+    pub breaks: Vec<Flow>,
+    /// The flow at each `continue`: an edge into a C-style loop's update
+    /// slot, and an exit edge of a `for let`, whose header may end the
+    /// loop. A `while` and a `while let` re-test their header in the
+    /// havoced flow, which covers these edges, so theirs go unread.
+    pub continues: Vec<Flow>,
+    /// Whether the loop's C-style update expression is being typed. A
+    /// `continue` there would re-enter the update itself and is rejected.
+    pub in_update_slot: bool,
+    /// `block_defer_writes.len()` at loop entry. The defers armed in the
+    /// blocks opened inside the loop run on every `break`/`continue` edge.
+    defer_floor: usize,
+}
+
+/// The edge a `break` or `continue` takes.
+#[derive(Clone, Copy)]
+pub(super) enum LoopEdge {
+    Break,
+    Continue,
+}
+
+impl LoopEdge {
+    pub(super) fn keyword(self) -> &'static str {
+        match self {
+            LoopEdge::Break => "break",
+            LoopEdge::Continue => "continue",
+        }
+    }
+}
+
+/// The verdicts about a body's loops and jumps that the reachability pass
+/// reads from inference instead of re-deriving from syntax.
+#[derive(Default)]
+pub(super) struct LoopVerdicts {
+    /// The `while` and `while let` statements with no exit edge: a header
+    /// that never misses (a statically true condition, a header that always
+    /// returns or `continue`s) and no live `break` that binds to the loop.
+    /// The code after one is unreachable.
+    pub diverging_loops: FxHashSet<StmtId>,
+    /// The `break`/`continue` statements that bind to no loop and were
+    /// rejected (E0141, E0187, E0188). A rejected jump does not end the
+    /// flow, so the code after it is not reported unreachable on top of the
+    /// rejection.
+    pub rejected_jumps: FxHashSet<StmtId>,
+}
 
 /// A condition's narrowing consequences for each polarity.
 #[derive(Default)]
@@ -169,7 +233,7 @@ impl InferenceContext<'_> {
         });
         let (rhs_ty, right) = self.check_truthy_operand(body, rhs, true, position);
         let taken_flow = std::mem::replace(&mut self.flow, skipped_flow);
-        let reassigned = self.assigned_bindings(body, rhs, None);
+        let reassigned = self.assigned_bindings(body, rhs);
         for binding in &reassigned {
             match (taken_flow.get(binding), self.flow.get(binding)) {
                 (Some(taken), Some(skipped)) if taken == skipped => {}
@@ -380,58 +444,142 @@ impl InferenceContext<'_> {
         }
     }
 
-    /// The divergence-aware branch merge: a diverged branch contributes
-    /// nothing (early-return narrowing IS this rule); with both branches
-    /// live, a binding keeps an overlay only when both narrowed it, joined.
-    pub(super) fn merge_branch_flows(
+    /// The divergence-aware merge of the live paths into one point. A path
+    /// that diverged is not among them and contributes nothing, which is
+    /// why early-return narrowing is the ordinary merge rule and not a
+    /// special case. A binding keeps an overlay only when EVERY path
+    /// narrowed it, joined: narrowed on one path only, the other path keeps
+    /// the wider type, so the join is the declared type - no overlay.
+    pub(super) fn merge_flows(
         &mut self,
-        base: FxHashMap<BindingId, Ty>,
-        then_flow: Option<FxHashMap<BindingId, Ty>>,
-        else_flow: Option<FxHashMap<BindingId, Ty>>,
-    ) {
-        self.flow = match (then_flow, else_flow) {
-            // Both diverged: everything after is unreachable; keep entry.
-            (None, None) => base,
-            (Some(live), None) | (None, Some(live)) => live,
-            (Some(then_flow), Some(else_flow)) => {
-                // Facts invalidated on both paths must not reappear from base.
-                let mut merged = FxHashMap::default();
-                let keys: FxHashSet<BindingId> =
-                    then_flow.keys().chain(else_flow.keys()).copied().collect();
-                for binding in keys {
-                    match (then_flow.get(&binding), else_flow.get(&binding)) {
-                        (Some(a), Some(b)) if a == b => {
-                            merged.insert(binding, a.clone());
-                        }
-                        (Some(a), Some(b)) => {
-                            let joined = self.join(&[a.clone(), b.clone()]);
-                            merged.insert(binding, joined);
-                        }
-                        // Narrowed on one path only: the other path keeps
-                        // the wider type, so the join is the declared type
-                        // - no overlay.
-                        _ => {
-                            merged.remove(&binding);
-                        }
-                    }
-                }
-                merged
+        first: Flow,
+        rest: impl IntoIterator<Item = Flow>,
+    ) -> Flow {
+        let mut merged = first;
+        for flow in rest {
+            let mut next = Flow::default();
+            for (binding, ty) in merged {
+                let Some(other) = flow.get(&binding) else {
+                    continue;
+                };
+                let joined = if ty == *other {
+                    ty
+                } else {
+                    self.join(&[ty, other.clone()])
+                };
+                next.insert(binding, joined);
             }
-        };
+            merged = next;
+        }
+        merged
     }
 
-    /// Every narrowable binding the subtree assigns - the loop havoc set.
-    pub(super) fn assigned_bindings(
+    /// [`Self::merge_flows`] over paths that may all have diverged: `None`
+    /// when nothing reaches the point, which is then unreachable.
+    pub(super) fn merge_reaching(&mut self, mut flows: Vec<Flow>) -> Option<Flow> {
+        let first = flows.pop()?;
+        Some(self.merge_flows(first, flows))
+    }
+
+    /// Opens the frame of a loop whose header is about to be typed.
+    pub(super) fn enter_loop(&mut self) {
+        let defer_floor = self.block_defer_writes.len();
+        self.control_frame_mut().loops.push(LoopFrame {
+            breaks: Vec::new(),
+            continues: Vec::new(),
+            in_update_slot: false,
+            defer_floor,
+        });
+    }
+
+    /// The innermost loop of the frame, between `enter_loop` and
+    /// `leave_loop`.
+    fn innermost_loop_mut(&mut self) -> &mut LoopFrame {
+        self.control_frame_mut()
+            .loops
+            .last_mut()
+            .unwrap_or_else(|| unreachable!("called between `enter_loop` and `leave_loop`"))
+    }
+
+    /// Marks whether the innermost loop's update slot is being typed.
+    pub(super) fn set_in_update_slot(&mut self, in_update_slot: bool) {
+        self.innermost_loop_mut().in_update_slot = in_update_slot;
+    }
+
+    /// Whether the innermost loop's update slot is being typed, so a
+    /// `continue` here would re-enter the update itself.
+    pub(super) fn in_update_slot(&self) -> bool {
+        self.control_frame()
+            .loops
+            .last()
+            .is_some_and(|frame| frame.in_update_slot)
+    }
+
+    /// Closes the innermost loop's frame and hands back its edges.
+    pub(super) fn leave_loop(&mut self) -> LoopFrame {
+        self.control_frame_mut()
+            .loops
+            .pop()
+            .unwrap_or_else(|| unreachable!("`leave_loop` pairs with `enter_loop`"))
+    }
+
+    /// Takes the innermost loop's `continue` edges, for its update slot.
+    pub(super) fn take_continues(&mut self) -> Vec<Flow> {
+        std::mem::take(&mut self.innermost_loop_mut().continues)
+    }
+
+    /// Records the flow at a `break`/`continue` as an edge of the innermost
+    /// loop, which the caller has checked is open
+    /// ([`Self::loop_control_escape`]). The defers armed inside the loop so
+    /// far run before the jump, and their writes end the facts about the
+    /// bindings they assign. A jump the flow cannot reach - after a
+    /// `return`, in the body of a header that never completes - is no edge:
+    /// recording it would keep the code after the loop alive.
+    pub(super) fn record_loop_edge(&mut self, edge: LoopEdge) {
+        if self.diverges() == Diverges::Always {
+            return;
+        }
+        let defer_floor = self
+            .control_frame()
+            .loops
+            .last()
+            .unwrap_or_else(|| unreachable!("the caller checked that a loop is open"))
+            .defer_floor;
+        let mut flow = self.flow.clone();
+        for writes in &self.block_defer_writes[defer_floor..] {
+            for binding in writes {
+                flow.remove(binding);
+            }
+        }
+        let frame = self.innermost_loop_mut();
+        match edge {
+            LoopEdge::Break => frame.breaks.push(flow),
+            LoopEdge::Continue => frame.continues.push(flow),
+        }
+    }
+
+    /// Every narrowable binding the subtree assigns - the havoc set of a
+    /// `catch`, a `defer`, an `&&`/`||` operand or a `for let` body.
+    pub(super) fn assigned_bindings(&self, body: &ExprBody, root: ExprId) -> FxHashSet<BindingId> {
+        self.assigned_bindings_in(body, [BodyNode::Expr(root)])
+    }
+
+    /// [`Self::assigned_bindings`] over several roots - a loop's havoc set,
+    /// which spans its condition, body and update slot.
+    pub(super) fn assigned_bindings_in(
         &self,
         body: &ExprBody,
-        root: ExprId,
-        after: Option<StmtId>,
+        roots: impl IntoIterator<Item = BodyNode>,
     ) -> FxHashSet<BindingId> {
-        use baml_compiler2_ast::{Stmt, traverse::BodyNode};
         let mut out = FxHashSet::default();
-        let mut stack = vec![BodyNode::Expr(root)];
-        stack.extend(after.map(BodyNode::Stmt));
+        // The arena is a DAG (templates share `ExprId`s between their
+        // segments and desugared payload), so the walk dedupes.
+        let mut seen: FxHashSet<BodyNode> = FxHashSet::default();
+        let mut stack: Vec<BodyNode> = roots.into_iter().collect();
         while let Some(node) = stack.pop() {
+            if !seen.insert(node) {
+                continue;
+            }
             let mut children = Vec::new();
             match node {
                 BodyNode::Expr(expr) => body.expr_children(expr, &mut children),
@@ -448,61 +596,5 @@ impl InferenceContext<'_> {
             stack.extend(children);
         }
         out
-    }
-
-    /// Whether a loop contains a `break` that binds to THAT loop.
-    ///
-    /// `root` is the loop body and `after` its C-style update slot. Both are
-    /// searched: `for (let i = 0; 1 == 1; i = break) {}` puts a real exit edge
-    /// in the update slot, so missing it would call an escapable loop
-    /// divergent.
-    ///
-    /// TIR keeps no break-target machinery — `loop_depth` is a bare counter
-    /// and the `Stmt::Break` arm only sets `Diverges::Always`, which the
-    /// enclosing loop then discards — so the binding is recovered
-    /// syntactically here: descend everything except the BODIES of nested
-    /// loops, whose `break`s bind to the inner loop. A nested loop's
-    /// condition and C-style update slot still belong to this loop, so they
-    /// are still descended. Lambda bodies are already excluded by
-    /// `expr_children`, which is right: a `break` cannot leave a lambda.
-    /// `continue` is deliberately not counted — it re-enters the loop.
-    ///
-    /// A `break` under `defer` or `spawn` is counted even though both are
-    /// rejected elsewhere; counting keeps the answer on the conservative
-    /// side, where the loop simply does not diverge.
-    pub(super) fn loop_body_breaks(body: &ExprBody, root: ExprId, after: Option<StmtId>) -> bool {
-        use baml_compiler2_ast::{Stmt, traverse::BodyNode};
-        // The arena is a DAG (templates share `ExprId`s between their
-        // segments and desugared payload), so the walk must dedupe.
-        let mut seen: FxHashSet<BodyNode> = FxHashSet::default();
-        let mut stack = vec![BodyNode::Expr(root)];
-        stack.extend(after.map(BodyNode::Stmt));
-        while let Some(node) = stack.pop() {
-            if !seen.insert(node) {
-                continue;
-            }
-            let mut children = Vec::new();
-            match node {
-                BodyNode::Expr(expr) => body.expr_children(expr, &mut children),
-                BodyNode::Stmt(stmt) => match &body.stmts[stmt] {
-                    Stmt::Break => return true,
-                    Stmt::While {
-                        condition, after, ..
-                    } => {
-                        children.push(BodyNode::Expr(*condition));
-                        children.extend(after.map(BodyNode::Stmt));
-                    }
-                    Stmt::WhileLet { scrutinee, .. } => {
-                        children.push(BodyNode::Expr(*scrutinee));
-                    }
-                    Stmt::For { collection, .. } => {
-                        children.push(BodyNode::Expr(*collection));
-                    }
-                    _ => body.stmt_children(stmt, &mut children),
-                },
-            }
-            stack.extend(children);
-        }
-        false
     }
 }

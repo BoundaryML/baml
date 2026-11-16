@@ -250,7 +250,7 @@ fn checked_declaration<'db>(
             body.exprs.alloc(Expr::Path(baml_base::Path::bare(name))),
         ));
     }
-    context.template_params.push(inputs);
+    context.enter_frame(super::frames::FrameKind::Template { params: inputs });
     let result = context.check_call_args(&body, call, callee, &hook_ty, bound, &args);
     // Defaults have a separate inference owner and are not part of the
     // callable's body throws type. This synthetic call omits every optional

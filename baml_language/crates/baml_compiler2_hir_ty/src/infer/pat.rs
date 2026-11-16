@@ -114,11 +114,10 @@ impl<'db> InferenceContext<'db> {
             }
             if owed {
                 let full_type = self.plain_finalized(&scrut_resolved);
-                self.pending_diags
-                    .push(super::PendingDiag::ScrutineeTypeMustBeKnown {
-                        expr: scrutinee,
-                        full_type,
-                    });
+                self.report(super::PendingDiag::ScrutineeTypeMustBeKnown {
+                    expr: scrutinee,
+                    full_type,
+                });
             }
         }
         let scrut_binding = self.narrowable_binding(body, scrutinee);
@@ -129,13 +128,13 @@ impl<'db> InferenceContext<'db> {
         for &arm in arms {
             let arm = &body.match_arms[arm];
             for root in arm.guard.into_iter().chain(std::iter::once(arm.body)) {
-                for binding in self.assigned_bindings(body, root, None) {
+                for binding in self.assigned_bindings(body, root) {
                     self.flow.remove(&binding);
                 }
             }
         }
 
-        let entry_diverges = self.diverges;
+        let entry_diverges = self.diverges();
         let mut arm_tys = Vec::new();
         let mut matrix_arms: Vec<DPat> = Vec::new();
         let mut matrix_arm_bodies: Vec<ExprId> = Vec::new();
@@ -146,7 +145,7 @@ impl<'db> InferenceContext<'db> {
         // catch-all arm sees the complement - the catch-residual
         // mechanism generalized to match.
         let mut residual = scrut_resolved.clone();
-        let pending_before = self.pending_diags.len();
+        let pending_before = self.journals.pending_diags.len();
         for &arm_id in arms {
             let arm = &body.match_arms[arm_id];
             // The arm's own catch-all bindings read the same way as the
@@ -168,13 +167,13 @@ impl<'db> InferenceContext<'db> {
             if let Some(binding) = scrut_binding {
                 self.flow.insert(binding, narrow_ty);
             }
-            self.diverges = super::Diverges::Maybe;
+            self.set_diverges(super::Diverges::Maybe);
             if let Some(guard) = arm.guard {
                 let (_, guard_facts) = self.check_condition(body, guard);
                 self.apply_facts(&guard_facts.when_true);
             }
             let arm_ty = self.infer_branch(body, arm.body, &branch_expectation);
-            all_diverge = all_diverge.and(self.diverges);
+            all_diverge = all_diverge.and(self.diverges());
             self.flow = saved_flow;
             arm_tys.push(arm_ty);
             if arm.guard.is_none() {
@@ -185,7 +184,7 @@ impl<'db> InferenceContext<'db> {
                 matrix_arm_bodies.push(arm.body);
             }
         }
-        self.diverges = entry_diverges.or(all_diverge);
+        self.set_diverges(entry_diverges.or(all_diverge));
         let parts = arms
             .iter()
             .zip(&arm_tys)
@@ -195,7 +194,7 @@ impl<'db> InferenceContext<'db> {
         // An unknown-FIELD in some arm's class pattern makes that arm's
         // matrix row a lie (the bad field dropped out), so usefulness
         // verdicts are noise - same suppression as an errored pattern.
-        any_pattern_error |= self.pending_diags[pending_before..]
+        any_pattern_error |= self.journals.pending_diags[pending_before..]
             .iter()
             .any(|pending| matches!(pending, super::PendingDiag::UnknownPatternField { .. }));
 
@@ -216,17 +215,16 @@ impl<'db> InferenceContext<'db> {
             // With every arm guarded, a value whose guards all fail reaches
             // no arm, and nothing names a narrower witness than `_`.
             let Some((_, later)) = matrix_arm_bodies.split_first() else {
-                self.pending_diags
-                    .push(super::PendingDiag::NonExhaustiveMatch {
-                        expr: match_expr,
-                        scrutinee: scrut_resolved.clone(),
-                        missing: vec!["_".to_string()],
-                    });
+                self.report(super::PendingDiag::NonExhaustiveMatch {
+                    expr: match_expr,
+                    scrutinee: scrut_resolved.clone(),
+                    missing: vec!["_".to_string()],
+                });
                 self.result.non_exhaustive_matches.insert(match_expr);
                 return Ty::error();
             };
             for &arm_body in later {
-                self.pending_diags.push(super::PendingDiag::UnreachableArm {
+                self.report(super::PendingDiag::UnreachableArm {
                     expr: arm_body,
                     warning: false,
                 });
@@ -246,7 +244,7 @@ impl<'db> InferenceContext<'db> {
                 break;
             }
             if let Some(&arm_body) = matrix_arm_bodies.get(arm.0) {
-                self.pending_diags.push(super::PendingDiag::UnreachableArm {
+                self.report(super::PendingDiag::UnreachableArm {
                     expr: arm_body,
                     warning: false,
                 });
@@ -260,12 +258,11 @@ impl<'db> InferenceContext<'db> {
                 .iter()
                 .map(|w| crate::exhaustiveness::render_witness_pat(self.db, &self.viewpoint(), w))
                 .collect();
-            self.pending_diags
-                .push(super::PendingDiag::NonExhaustiveMatch {
-                    expr: match_expr,
-                    scrutinee: scrut_resolved.clone(),
-                    missing,
-                });
+            self.report(super::PendingDiag::NonExhaustiveMatch {
+                expr: match_expr,
+                scrutinee: scrut_resolved.clone(),
+                missing,
+            });
             self.result.non_exhaustive_matches.insert(match_expr);
             return Ty::error();
         }
@@ -389,7 +386,7 @@ impl<'db> InferenceContext<'db> {
             && !resolved.has_error()
             && !resolved.has_infer()
         {
-            self.pending_diags.push(super::PendingDiag::RefutableLet {
+            self.report(super::PendingDiag::RefutableLet {
                 pat: pattern,
                 context: crate::diagnostics::IrrefutableContextKind::Let,
             });
@@ -683,14 +680,12 @@ impl<'db> InferenceContext<'db> {
                                 }
                                 Some(existing) if *existing == ty => {}
                                 Some(existing) => {
-                                    self.pending_diags.push(
-                                        super::PendingDiag::OrBindingConflict {
-                                            pat,
-                                            name: name.clone(),
-                                            first: existing.clone(),
-                                            other: ty.clone(),
-                                        },
-                                    );
+                                    self.report(super::PendingDiag::OrBindingConflict {
+                                        pat,
+                                        name: name.clone(),
+                                        first: existing.clone(),
+                                        other: ty.clone(),
+                                    });
                                 }
                             }
                         }
@@ -829,11 +824,10 @@ impl<'db> InferenceContext<'db> {
                 && !self.open_classes_owned(scrut)
             {
                 for param in &data.generic_params {
-                    self.pending_diags
-                        .push(super::PendingDiag::UninferredPatternTypeParam {
-                            pat,
-                            name: param.name.clone(),
-                        });
+                    self.report(super::PendingDiag::UninferredPatternTypeParam {
+                        pat,
+                        name: param.name.clone(),
+                    });
                 }
             }
             let adopted = adopted.unwrap_or_else(|| super::obligations::InterfaceInstantiation {
@@ -867,11 +861,10 @@ impl<'db> InferenceContext<'db> {
                 continue;
             }
             if !scrut.has_error() && !self.open_classes_owned(scrut) {
-                self.pending_diags
-                    .push(super::PendingDiag::UninferredPatternAssociatedType {
-                        pat,
-                        name: assoc.name.clone(),
-                    });
+                self.report(super::PendingDiag::UninferredPatternAssociatedType {
+                    pat,
+                    name: assoc.name.clone(),
+                });
             }
             pins.push((assoc.name.clone(), Ty::error()));
         }
@@ -994,12 +987,11 @@ impl<'db> InferenceContext<'db> {
         if !outcome.covers_type {
             if self.tuple_type_test_never_matches(scrut, pat_ty) {
                 if self.or_probe_depth == self.silent_test_depth && self.rest_reject_depth == 0 {
-                    self.pending_diags
-                        .push(super::PendingDiag::TupleTypeTestNeverMatches {
-                            pat,
-                            scrutinee: scrut.clone(),
-                            tested: pat_ty.clone(),
-                        });
+                    self.report(super::PendingDiag::TupleTypeTestNeverMatches {
+                        pat,
+                        scrutinee: scrut.clone(),
+                        tested: pat_ty.clone(),
+                    });
                 }
             } else {
                 self.check_pattern_type_overlap(pat, scrut, pat_ty);
@@ -1033,12 +1025,11 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         if self.provably_disjoint(scrut, pat_ty) {
-            self.pending_diags
-                .push(super::PendingDiag::PatternScrutMismatch {
-                    pat,
-                    expected: scrut.clone(),
-                    found: pat_ty.clone(),
-                });
+            self.report(super::PendingDiag::PatternScrutMismatch {
+                pat,
+                expected: scrut.clone(),
+                found: pat_ty.clone(),
+            });
         }
     }
 
@@ -1386,18 +1377,17 @@ impl<'db> InferenceContext<'db> {
             // E0002 at the pattern, as for a type pattern; fields lower
             // against the sentinel.
             if definition.is_none() {
-                self.pending_diags
-                    .push(super::PendingDiag::UnresolvedPatternName {
-                        pat,
-                        name: baml_type::Name::new(
-                            class_path
-                                .iter()
-                                .map(baml_type::Name::as_str)
-                                .collect::<Vec<_>>()
-                                .join("."),
-                        ),
-                        suggestions: self.lower.type_suggestions(class_path),
-                    });
+                self.report(super::PendingDiag::UnresolvedPatternName {
+                    pat,
+                    name: baml_type::Name::new(
+                        class_path
+                            .iter()
+                            .map(baml_type::Name::as_str)
+                            .collect::<Vec<_>>()
+                            .join("."),
+                    ),
+                    suggestions: self.lower.type_suggestions(class_path),
+                });
             }
             for &(_, field_pat) in field_pats {
                 self.lower_pattern(body, field_pat, &Ty::error());
@@ -1415,11 +1405,10 @@ impl<'db> InferenceContext<'db> {
         // A generic class destructure must WRITE its type arguments (the
         // ratified rule; inference from the scrutinee is not offered).
         if generic_count > 0 && !self.type_refs.pattern_class_args.contains_key(&pat) {
-            self.pending_diags
-                .push(super::PendingDiag::GenericDestructureNoArgs {
-                    pat,
-                    class_name: qtn.name().clone(),
-                });
+            self.report(super::PendingDiag::GenericDestructureNoArgs {
+                pat,
+                class_name: qtn.name().clone(),
+            });
         }
 
         let written: Vec<Ty> = self
@@ -1472,13 +1461,12 @@ impl<'db> InferenceContext<'db> {
                 None => {
                     // Unknown field (E0007); sub-bindings still record
                     // (as Error).
-                    self.pending_diags
-                        .push(super::PendingDiag::UnknownPatternField {
-                            pat,
-                            class_name: qtn.clone(),
-                            field_name: name.clone(),
-                            declared: declared.iter().map(|(field, _)| field.clone()).collect(),
-                        });
+                    self.report(super::PendingDiag::UnknownPatternField {
+                        pat,
+                        class_name: qtn.clone(),
+                        field_name: name.clone(),
+                        declared: declared.iter().map(|(field, _)| field.clone()).collect(),
+                    });
                     self.lower_pattern(body, *field_pat, &Ty::error());
                 }
             }
@@ -1649,12 +1637,11 @@ impl<'db> InferenceContext<'db> {
             && !structure.has_error()
             && !structure.has_infer()
         {
-            self.pending_diags
-                .push(super::PendingDiag::PatternScrutMismatch {
-                    pat,
-                    expected: scrut.clone(),
-                    found: Ty::tuple(vec![Ty::intern(InferTy::Unknown); arity]),
-                });
+            self.report(super::PendingDiag::PatternScrutMismatch {
+                pat,
+                expected: scrut.clone(),
+                found: Ty::tuple(vec![Ty::intern(InferTy::Unknown); arity]),
+            });
         }
         PatternOutcome {
             dpat: DPat::wildcard(dpat_ty(scrut)),
@@ -1771,11 +1758,10 @@ impl<'db> InferenceContext<'db> {
                 && self.rest_reject_depth == 0
                 && !matches!(effective.kind(), InferTy::Never);
             if reported {
-                self.pending_diags
-                    .push(super::PendingDiag::ListPatternNeverMatches {
-                        pat,
-                        scrutinee: scrut.clone(),
-                    });
+                self.report(super::PendingDiag::ListPatternNeverMatches {
+                    pat,
+                    scrutinee: scrut.clone(),
+                });
                 Ty::error()
             } else {
                 Ty::never()
@@ -1823,8 +1809,7 @@ impl<'db> InferenceContext<'db> {
             // rule) - including a bind CHAIN whose tail is structural.
             let shape_ok = rest_pattern_shape_ok(body, rest_pat);
             if !shape_ok && self.rest_reject_depth == 0 {
-                self.pending_diags
-                    .push(super::PendingDiag::RestNotBinding { pat: rest_pat });
+                self.report(super::PendingDiag::RestNotBinding { pat: rest_pat });
             }
             // The rest binds the sliced middle: a list of the element.
             // A rejected subtree still lowers so its bindings record
