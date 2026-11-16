@@ -11,8 +11,16 @@ pub(crate) fn create_engine(
     argv: Vec<String>,
     project_root: &Path,
     sources: Vec<(String, String)>,
+    build: Option<bex_engine::BuildProvider>,
 ) -> Result<BexEngine, EngineError> {
-    create_engine_with_context(program, argv, project_root, sources, Default::default())
+    create_engine_with_context(
+        program,
+        argv,
+        project_root,
+        sources,
+        build,
+        Default::default(),
+    )
 }
 
 pub(crate) fn create_engine_with_context(
@@ -20,10 +28,27 @@ pub(crate) fn create_engine_with_context(
     argv: Vec<String>,
     project_root: &Path,
     sources: Vec<(String, String)>,
+    build: Option<bex_engine::BuildProvider>,
     launch_context: btel_types::context::Context,
 ) -> Result<BexEngine, EngineError> {
     let boundary = crate::cloud_config::Boundary::read(project_root)
         .map_err(|error| EngineError::Other(error.to_string()))?;
+    let recording = TelemetryRecording::from_boundary_defaults(
+        boundary.project.as_deref(),
+        boundary.api_url.as_deref(),
+    )
+    .unwrap_or_else(|| {
+        TelemetryRecording::local_files(
+            project_root,
+            btel_settings::publisher::RecordingConfig::default(),
+        )
+    })
+    .with_host("baml")
+    .with_sources(sources);
+    let recording = match build {
+        Some(build) => recording.with_build(build),
+        None => recording,
+    };
     BexEngine::new_with_config(
         program,
         Arc::new(sys_native::SysOps::native()),
@@ -31,20 +56,7 @@ pub(crate) fn create_engine_with_context(
         bex_engine::EngineConfig {
             launch_context,
             runtime_compiler: Some(bex_project::runtime_compiler()),
-            recording: Some(
-                TelemetryRecording::from_boundary_defaults(
-                    boundary.project.as_deref(),
-                    boundary.api_url.as_deref(),
-                )
-                .unwrap_or_else(|| {
-                    TelemetryRecording::local_files(
-                        project_root,
-                        btel_settings::publisher::RecordingConfig::default(),
-                    )
-                })
-                .with_host("baml")
-                .with_sources(sources),
-            ),
+            recording: Some(recording),
             ..bex_engine::EngineConfig::default()
         },
     )

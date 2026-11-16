@@ -137,7 +137,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 ///
 /// Version 30: a class field and an enum variant carry their `@json`
 /// attributes.
-pub const FORMAT_VERSION: u32 = 30;
+///
+/// Version 31: a package interface opens with the package's claimed identity
+/// and the compiler version, both covered by its digest, and a
+/// `ProgramPackage` carries the package's `metadata` (BEP-085).
+pub const FORMAT_VERSION: u32 = 31;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.
