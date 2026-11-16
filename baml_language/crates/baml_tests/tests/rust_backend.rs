@@ -877,7 +877,10 @@ function main() -> int {{
     ));
     assert_sites(&module, "user.main", &[None]);
     let main = body_of(&module, "user.main");
-    assert!(!main.contains("vm.new_plain_instance(") && !main.contains("vm.new_instance("), "{main}");
+    assert!(
+        !main.contains("vm.new_plain_instance(") && !main.contains("vm.new_instance("),
+        "{main}"
+    );
     assert!(main.contains("let mut s0: user_Vec_stack_"), "{main}");
     assert!(main.contains("s0.f0"), "{main}");
     assert!(module.source.contains("struct user_Vec_stack_"));
@@ -920,95 +923,69 @@ function main() -> int {{
 }
 
 #[test]
-fn stored_into_an_array_stays_on_the_heap() {
-    let module = stack_module(&format!(
-        "{STACK_VEC}
-function main() -> int {{
+fn objects_that_escape_stay_on_the_heap() {
+    // Per case: the program after `STACK_VEC`, the function, and its sites.
+    let cases: &[(&str, &str, &[Option<&str>])] = &[
+        (
+            "function main() -> int {
   let kept: Vec[] = [];
-  let v = Vec {{ x: 1, y: 2 }};
+  let v = Vec { x: 1, y: 2 };
   kept.push(v);
-  let w = Vec {{ x: 3, y: 4 }};
+  let w = Vec { x: 3, y: 4 };
   let all = [w];
   kept.length() + all.length()
-}}"
-    ));
-    assert_sites(
-        &module,
-        "user.main",
-        &[
-            Some("passed to baml.Array.push"),
-            Some("stored into a container"),
-        ],
-    );
-    let main = body_of(&module, "user.main");
-    assert!(main.contains("vm.new_plain_instance("), "{main}");
-}
-
-#[test]
-fn returned_object_stays_on_the_heap() {
-    let module = stack_module(&format!(
-        "{STACK_VEC}
-function make(x: int) -> Vec {{ let v = Vec {{ x: x, y: x }}; v.y = 2; v }}
-function main() -> int {{ make(3).x }}"
-    ));
-    assert_sites(&module, "user.make", &[Some("returned")]);
-}
-
-#[test]
-fn compared_object_stays_on_the_heap() {
-    // BAML has no `===`: `==` compares deeply through the `==` driver, and
-    // identity shows only through by-reference builtins such as `includes`.
-    let module = stack_module(&format!(
-        "{STACK_VEC}
-function main() -> bool {{
-  let a = Vec {{ x: 1, y: 2 }};
-  let b = Vec {{ x: 1, y: 2 }};
-  let c = Vec {{ x: 1, y: 2 }};
-  let d = Vec {{ x: 1, y: 2 }};
+}",
+            "user.main",
+            &[
+                Some("passed to baml.Array.push"),
+                Some("stored into a container"),
+            ],
+        ),
+        (
+            "function make(x: int) -> Vec { let v = Vec { x: x, y: x }; v.y = 2; v }
+function main() -> int { make(3).x }",
+            "user.make",
+            &[Some("returned")],
+        ),
+        // BAML has no `===`: `==` compares deeply through the `==` driver,
+        // and identity shows only through by-reference builtins such as
+        // `includes`.
+        (
+            "function main() -> bool {
+  let a = Vec { x: 1, y: 2 };
+  let b = Vec { x: 1, y: 2 };
+  let c = Vec { x: 1, y: 2 };
+  let d = Vec { x: 1, y: 2 };
   a == b && [c].includes(d) && c != null
-}}"
-    ));
-    assert_sites(
-        &module,
-        "user.main",
-        &[
-            Some("passed to baml.ops.equals_equals"),
-            Some("passed to baml.ops.equals_equals"),
-            Some("stored into a container"),
-            Some("passed to baml.Array.includes"),
-        ],
-    );
-}
-
-#[test]
-fn class_with_cleanup_stays_on_the_heap() {
-    let module = stack_module(
-        r#"
-class Res {
+}",
+            "user.main",
+            &[
+                Some("passed to baml.ops.equals_equals"),
+                Some("passed to baml.ops.equals_equals"),
+                Some("stored into a container"),
+                Some("passed to baml.Array.includes"),
+            ],
+        ),
+        (
+            "class Res {
   n: int
   function cleanup(self) -> void { }
 }
-function main() -> int { let r = Res { n: 1 }; r.n += 1; r.n }"#,
-    );
-    assert_sites(
-        &module,
-        "user.main",
-        &[Some("`user.Res` has a cleanup finalizer")],
-    );
-}
-
-#[test]
-fn callee_that_keeps_its_parameter_keeps_the_object_on_the_heap() {
-    let module = stack_module(&format!(
-        "{STACK_VEC}
-function keep(v: Vec, into: Vec[]) -> int {{ into.push(v); into.length() }}
-function main() -> int {{ let into: Vec[] = []; let v = Vec {{ x: 1, y: 2 }}; keep(v, into) }}"
-    ));
-    assert_sites(
-        &module,
-        "user.main",
-        &[Some("passed to user.keep, whose parameter 1 escapes")],
-    );
+function main() -> int { let r = Res { n: 1 }; r.n += 1; r.n }",
+            "user.main",
+            &[Some("`user.Res` has a cleanup finalizer")],
+        ),
+        (
+            "function keep(v: Vec, into: Vec[]) -> int { into.push(v); into.length() }
+function main() -> int { let into: Vec[] = []; let v = Vec { x: 1, y: 2 }; keep(v, into) }",
+            "user.main",
+            &[Some("passed to user.keep, whose parameter 1 escapes")],
+        ),
+    ];
+    for (program, function, sites) in cases {
+        let module = stack_module(&format!("{STACK_VEC}\n{program}"));
+        assert_sites(&module, function, sites);
+    }
 }
 
 #[test]
