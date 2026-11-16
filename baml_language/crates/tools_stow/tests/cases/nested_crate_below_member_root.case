@@ -1,0 +1,17 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*/*"]
+--- file crates/group/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+1
+--- stdout
+error[nested-crate]: app_core: crates/group/app_core/Cargo.toml: `crates/group/app_core` must be directly under `crates`
+1 error(s)

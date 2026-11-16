@@ -1,0 +1,70 @@
+--- args
+--graph
+graph.mmd
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+app_api_client = { path = "crates/app_api_client" }
+app_api_server = { path = "crates/app_api_server" }
+app_core_types = { path = "crates/app_core_types" }
+app_db_x = { path = "crates/app_db_x" }
+app_python_gen = { path = "crates/app_python_gen" }
+--- file crates/app_api_client/Cargo.toml
+[package]
+name = "app_api_client"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_api_server/Cargo.toml
+[package]
+name = "app_api_server"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_core_types/Cargo.toml
+[package]
+name = "app_core_types"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_db_x/Cargo.toml
+[package]
+name = "app_db_x"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_python_gen/Cargo.toml
+[package]
+name = "app_python_gen"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+approved_prefixes = ["api", "db"]
+approved_suffixes = ["python_gen"]
+--- exit
+0
+--- stdout
+--- expect graph.mmd
+flowchart TB
+  subgraph ns_app ["app"]
+    c_app_api_client["app_api_client"]
+    c_app_api_server["app_api_server"]
+    c_app_core["app_core"]
+    c_app_core_types["app_core_types"]
+    c_app_db_x["app_db_x"]
+    c_app_python_gen["app_python_gen"]
+  end
+  style ns_app fill:#dbe9f6,stroke:#1f77b4
+  style c_app_api_client fill:#bebada,stroke:#1f77b4
+  style c_app_api_server fill:#bebada,stroke:#1f77b4
+  style c_app_core fill:#ffffff,stroke:#1f77b4
+  style c_app_core_types fill:#fccde5,stroke:#1f77b4
+  style c_app_db_x fill:#b3de69,stroke:#1f77b4
+  style c_app_python_gen fill:#ffffff,stroke:#1f77b4

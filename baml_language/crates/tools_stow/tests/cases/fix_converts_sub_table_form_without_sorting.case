@@ -1,0 +1,67 @@
+--- args
+--fix
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+app_util = { path = "crates/app_util" }
+serde = { version = "1", features = ["derive"] }
+tokio = "1"
+zebra = "1"
+--- file crates/app_cli/Cargo.toml
+[package]
+name = "app_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zebra = { workspace = true }
+
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+
+[dependencies.app_core]
+path = "../app_core"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_util/Cargo.toml
+[package]
+name = "app_util"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+tokio = { workspace = true }
+zebra = { workspace = true }
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+1
+--- stdout
+fixed crates/app_cli/Cargo.toml
+error[unsorted-deps]: app_cli: crates/app_cli/Cargo.toml: [dependencies] is not sorted: internal dependencies first, then external, each alphabetical
+1 error(s)
+--- expect crates/app_cli/Cargo.toml
+[package]
+name = "app_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zebra = { workspace = true }
+
+[dependencies.serde]
+features = ["derive"]
+workspace = true
+
+[dependencies.app_core]
+workspace = true

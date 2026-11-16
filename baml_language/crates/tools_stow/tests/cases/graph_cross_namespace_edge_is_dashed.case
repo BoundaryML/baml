@@ -1,0 +1,58 @@
+--- args
+--graph
+graph.mmd
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+app_cli = { path = "crates/app_cli" }
+lib_util = { path = "crates/lib_util" }
+--- file crates/app_cli/Cargo.toml
+[package]
+name = "app_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+app_core = { workspace = true }
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lib_util = { workspace = true }
+--- file crates/lib_util/Cargo.toml
+[package]
+name = "lib_util"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+
+[[namespaces]]
+name = "lib"
+--- exit
+0
+--- stdout
+--- expect graph.mmd
+flowchart TB
+  subgraph ns_app ["app"]
+    c_app_cli["app_cli"]
+    c_app_core["app_core"]
+  end
+  subgraph ns_lib ["lib"]
+    c_lib_util["lib_util"]
+  end
+  c_app_cli --> c_app_core
+  c_app_core -.-> c_lib_util
+  style ns_app fill:#dbe9f6,stroke:#1f77b4
+  style ns_lib fill:#fde3cf,stroke:#d95f02
+  style c_app_cli fill:#ffffff,stroke:#1f77b4
+  style c_app_core fill:#ffffff,stroke:#1f77b4
+  style c_lib_util fill:#ffffff,stroke:#d95f02

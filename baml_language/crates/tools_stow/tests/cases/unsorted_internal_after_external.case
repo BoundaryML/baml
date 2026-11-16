@@ -1,0 +1,32 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+serde = "1"
+tokio = "1"
+--- file crates/app_cli/Cargo.toml
+[package]
+name = "app_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+app_core = { workspace = true }
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+1
+--- stdout
+error[unsorted-deps]: app_cli: crates/app_cli/Cargo.toml: [dependencies] is not sorted: internal dependencies first, then external, each alphabetical
+error[unused-workspace-dep]: workspace: Cargo.toml: workspace dependency `tokio` is not used by any crate
+2 error(s)

@@ -1,0 +1,28 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+serde = "1"
+tokio = "1"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.serde]
+version = "1"
+
+[dependencies.tokio]
+workspace = true
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+1
+--- stdout
+error[non-workspace-dep]: app_core: crates/app_core/Cargo.toml: [dependencies] `serde` must use `workspace = true`
+1 error(s)

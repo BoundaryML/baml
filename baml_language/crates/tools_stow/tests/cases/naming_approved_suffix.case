@@ -1,0 +1,17 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/app_python_pydantic_v_two/Cargo.toml
+[package]
+name = "app_python_pydantic_v_two"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+approved_suffixes = ["python_pydantic_v_two"]
+--- exit
+0
+--- stdout
+ok

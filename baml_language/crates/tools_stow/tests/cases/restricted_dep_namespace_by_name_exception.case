@@ -1,0 +1,39 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+anyhow = "1"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+--- file crates/tools_x/Cargo.toml
+[package]
+name = "cargo-x"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+--- file stow.toml
+[[namespaces]]
+name = "app"
+
+[[namespaces]]
+name = "tools"
+name_exceptions = { "tools_x" = "cargo-x" }
+
+[[namespaces.dependency_rules]]
+pattern = "anyhow"
+reason = "Not in tools."
+--- exit
+1
+--- stdout
+error[restricted-dep]: cargo-x: crates/tools_x/Cargo.toml: [dependencies] `anyhow` is not allowed here: Not in tools.
+1 error(s)

@@ -20,6 +20,8 @@ typescript2/pkg-playground/src/__fixtures__/*.json text eol=lf
 *.snap.sse text eol=lf
 # The C# union generator emits and byte-checks LF deterministically.
 baml_language/sdks/csharp/bridge_csharp/src/Values/BamlUnion.cs text eol=lf
+# cargo-stow cases specify exact output bytes, for every implementation.
+baml_language/crates/tools_stow/tests/cases/*.case text eol=lf
 typescript2/app-website/**/*.avif filter=lfs diff=lfs merge=lfs -text
 typescript2/app-website/**/*.eot filter=lfs diff=lfs merge=lfs -text
 typescript2/app-website/**/*.gif filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,32 @@
+--- args
+--graph
+../../out/graph.mmd
+--- cwd
+crates/app_core
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file out/keep.txt
+keep
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+0
+--- stdout
+--- expect out/graph.mmd
+flowchart TB
+  subgraph ns_app ["app"]
+    c_app_core["app_core"]
+  end
+  style ns_app fill:#dbe9f6,stroke:#1f77b4
+  style c_app_core fill:#ffffff,stroke:#1f77b4

@@ -1,0 +1,27 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/app_api_client/Cargo.toml
+[package]
+name = "app_api_client"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_api_client_tests/Cargo.toml
+[package]
+name = "app_api_client_tests"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_api_client_types/Cargo.toml
+[package]
+name = "app_api_client_types"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+approved_prefixes = ["api"]
+--- exit
+0
+--- stdout
+ok

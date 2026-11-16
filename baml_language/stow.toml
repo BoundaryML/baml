@@ -3,8 +3,9 @@
 #
 # Stow validates crate naming conventions and dependency rules in the workspace.
 # Install: cargo install --path crates/tools_stow
-# Usage:   cargo stow --check    (validate)
-#          cargo stow --fix      (auto-fix sorting issues)
+# Usage:   cargo stow            (validate)
+#          cargo stow --fix      (convert and sort dependency tables, then validate)
+# Spec:    crates/tools_stow/SPEC.md
 #
 # Namespaces ([[namespaces]]):
 #   name                 - Crate prefix (e.g., "baml" for baml_* crates)
@@ -44,7 +45,7 @@
 ignore_crates = ["sdk_test_*"]
 
 # Graph visualization settings
-# Run: cargo stow --graph /tmp/deps.svg
+# Run: cargo stow --graph /tmp/deps.mmd
 [graph]
 external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "reqwest"]
 

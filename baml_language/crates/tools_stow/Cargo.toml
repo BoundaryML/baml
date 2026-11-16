@@ -1,8 +1,8 @@
 [package]
 name = "cargo-stow"
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.75"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.88"
 license = "MIT"
 publish = true
 description = "Workspace linting and structure validation for Rust monorepos"
@@ -22,11 +22,13 @@ workspace = true
 [dependencies]
 cargo_metadata = { workspace = true }
 clap = { workspace = true, features = [ "derive" ] }
-graphviz-rust = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
-taplo = { workspace = true }
+thiserror = { workspace = true }
 toml = { workspace = true }
 toml_edit = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

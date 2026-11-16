@@ -1,0 +1,17 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/app_core2/Cargo.toml
+[package]
+name = "app_core2"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+1
+--- stdout
+error[naming]: app_core2: crates/app_core2/Cargo.toml: `core2` must be lowercase letters or an approved prefix
+1 error(s)

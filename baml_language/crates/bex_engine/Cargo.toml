@@ -39,23 +39,23 @@ web-time = { workspace = true }
 
 # Native-only: tokio runtime for spawning async tasks
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+baml_version = { workspace = true }
 bcs_api = { workspace = true, features = [ "auth" ] }
 btel_bcs = { workspace = true }
-btel_recorder = { workspace = true }
 btel_file = { workspace = true }
+btel_recorder = { workspace = true }
 btel_snapshot = { workspace = true }
-baml_version = { workspace = true }
 os_info = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt", "macros", "time" ] }
 
 # WASM-only: wasm-bindgen-futures for spawning async tasks
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen-futures = { workspace = true }
 gloo-timers = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-btel_reader = { workspace = true }
 btel_file = { workspace = true, features = [ "test-support" ] }
+btel_reader = { workspace = true }
 btel_snapshot = { workspace = true }
 
 [dev-dependencies]

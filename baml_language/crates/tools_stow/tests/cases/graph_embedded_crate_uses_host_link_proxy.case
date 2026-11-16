@@ -1,0 +1,73 @@
+--- args
+--graph
+graph.mmd
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_a = { path = "crates/app_a" }
+lib_x = { path = "crates/lib_x" }
+sys_core = { path = "crates/sys_core" }
+--- file crates/app_a/Cargo.toml
+[package]
+name = "app_a"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sys_core = { workspace = true }
+--- file crates/lib_x/Cargo.toml
+[package]
+name = "lib_x"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sys_core = { workspace = true }
+--- file crates/sys_core/Cargo.toml
+[package]
+name = "sys_core"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+embed_crates = ["lib_x"]
+link_crates = ["sys_core"]
+
+[[namespaces]]
+name = "lib"
+link_crates = ["sys_core"]
+
+[[namespaces]]
+name = "sys"
+--- exit
+0
+--- stdout
+--- expect graph.mmd
+flowchart TB
+  subgraph ns_app ["app"]
+    c_app_a["app_a"]
+    p_app__lib_x["lib_x"]
+    p_app__sys_core["sys_core"]
+  end
+  subgraph ns_lib ["lib"]
+    c_lib_x["lib_x"]
+  end
+  subgraph ns_sys ["sys"]
+    c_sys_core["sys_core"]
+  end
+  c_app_a -.-> p_app__sys_core
+  c_lib_x -.-> p_app__lib_x
+  p_app__lib_x -.-> p_app__sys_core
+  p_app__sys_core -.-> c_sys_core
+  style ns_app fill:#dbe9f6,stroke:#1f77b4
+  style ns_lib fill:#fde3cf,stroke:#d95f02
+  style ns_sys fill:#dcf0dc,stroke:#2ca02c
+  style c_app_a fill:#ffffff,stroke:#1f77b4
+  style c_lib_x fill:#ffffff,stroke:#d95f02
+  style c_sys_core fill:#ffffff,stroke:#2ca02c
+  style p_app__lib_x fill:#fde3cf,stroke:#d95f02,stroke-dasharray:5 5
+  style p_app__sys_core fill:#dcf0dc,stroke:#2ca02c,stroke-dasharray:5 5

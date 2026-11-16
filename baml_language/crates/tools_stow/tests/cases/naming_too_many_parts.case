@@ -1,0 +1,18 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/app_api_a_b_types/Cargo.toml
+[package]
+name = "app_api_a_b_types"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+approved_prefixes = ["api"]
+--- exit
+1
+--- stdout
+error[naming]: app_api_a_b_types: crates/app_api_a_b_types/Cargo.toml: too many parts after `app_`
+1 error(s)

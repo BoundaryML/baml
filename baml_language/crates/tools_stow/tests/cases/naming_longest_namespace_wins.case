@@ -1,0 +1,24 @@
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/app_web/Cargo.toml
+[package]
+name = "app_web"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_web_ui/Cargo.toml
+[package]
+name = "app_web_ui"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+
+[[namespaces]]
+name = "app_web"
+--- exit
+0
+--- stdout
+ok

@@ -1,0 +1,25 @@
+--- args
+--verbose
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+--- file crates/app_cli/Cargo.toml
+[package]
+name = "app_cli"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+0
+--- stdout
+checking app_cli
+checking app_core
+ok

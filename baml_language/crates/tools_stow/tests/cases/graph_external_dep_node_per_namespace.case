@@ -1,0 +1,58 @@
+--- args
+--graph
+graph.mmd
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+lib_core = { path = "crates/lib_core" }
+serde = "1"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+--- file crates/lib_core/Cargo.toml
+[package]
+name = "lib_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+--- file stow.toml
+[graph]
+external_deps = ["serde"]
+
+[[namespaces]]
+name = "app"
+
+[[namespaces]]
+name = "lib"
+--- exit
+0
+--- stdout
+--- expect graph.mmd
+flowchart TB
+  subgraph ns_app ["app"]
+    c_app_core["app_core"]
+    x_app__serde["serde"]
+  end
+  subgraph ns_lib ["lib"]
+    c_lib_core["lib_core"]
+    x_lib__serde["serde"]
+  end
+  c_app_core --> x_app__serde
+  c_lib_core --> x_lib__serde
+  style ns_app fill:#dbe9f6,stroke:#1f77b4
+  style ns_lib fill:#fde3cf,stroke:#d95f02
+  style c_app_core fill:#ffffff,stroke:#1f77b4
+  style c_lib_core fill:#ffffff,stroke:#d95f02
+  style x_app__serde fill:#d0d0d0,stroke:#606060
+  style x_lib__serde fill:#d0d0d0,stroke:#606060

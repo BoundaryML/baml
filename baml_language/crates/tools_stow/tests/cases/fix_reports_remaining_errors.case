@@ -1,0 +1,58 @@
+--- args
+--fix
+--- file Cargo.toml
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.dependencies]
+app_core = { path = "crates/app_core" }
+app_util = { path = "crates/app_util" }
+serde = { version = "1", features = ["derive"] }
+tokio = "1"
+zebra = "1"
+--- file crates/app_cli/Cargo.toml
+[package]
+name = "app_wrong"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zebra = { workspace = true }
+serde = { workspace = true }
+unknown = "2"
+--- file crates/app_core/Cargo.toml
+[package]
+name = "app_core"
+version = "0.1.0"
+edition = "2021"
+--- file crates/app_util/Cargo.toml
+[package]
+name = "app_util"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+tokio = { workspace = true }
+zebra = { workspace = true }
+--- file stow.toml
+[[namespaces]]
+name = "app"
+--- exit
+1
+--- stdout
+fixed crates/app_cli/Cargo.toml
+error[name-mismatch]: app_wrong: crates/app_cli/Cargo.toml: package name `app_wrong` does not match folder `app_cli`
+error[non-workspace-dep]: app_wrong: crates/app_cli/Cargo.toml: [dependencies] `unknown` must use `workspace = true`
+2 error(s)
+--- expect crates/app_cli/Cargo.toml
+[package]
+name = "app_wrong"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { workspace = true }
+unknown = "2"
+zebra = { workspace = true }
