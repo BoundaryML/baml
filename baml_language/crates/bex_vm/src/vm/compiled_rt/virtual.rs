@@ -111,6 +111,8 @@ impl BexVm {
         args: &[Value],
         pc: u32,
     ) -> Result<Option<Value>, Box<VmError>> {
+        // A pending caller's chain is linked before anything extends it.
+        self.materialize(caller);
         if !self.compiled.call_type_args.is_empty() {
             return Ok(None);
         }

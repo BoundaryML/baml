@@ -229,6 +229,8 @@ impl BexVm {
         event_name: Value,
         pc: u32,
     ) -> Result<(), Box<VmError>> {
+        // A pending body's log names its frame, so its chain is linked first.
+        self.materialize(frame);
         let name = if event_name.is_null() || event_name.is_omitted() {
             None
         } else {
@@ -264,6 +266,8 @@ impl BexVm {
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
+        // A pending caller's chain is linked before anything extends it.
+        self.materialize(caller);
         caller.note_pc(pc);
         self.check_compiled_call()?;
         if self.telemetry.is_some() {
@@ -285,6 +289,8 @@ impl BexVm {
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
+        // A pending caller's chain is linked before anything extends it.
+        self.materialize(caller);
         if self.direct_calls() {
             let (function, type_args): (HeapPtr, &[RealizedTy]) = match self.get_object(callee) {
                 Object::Closure(closure) => (closure.function, &closure.captured_type_args),

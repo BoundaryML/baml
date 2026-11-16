@@ -9,6 +9,7 @@ mod fiber;
 pub use fiber::STACKFUL_FIBERS_SUPPORTED;
 mod field;
 mod frame;
+mod frameless;
 pub(crate) use frame::attach_compiled_bodies;
 pub(in crate::vm) use frame::validate_compiled_program;
 pub use frame::{CompiledBodies, CompiledBodyTable};

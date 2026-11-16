@@ -214,8 +214,45 @@ impl<'db> Generator<'_, 'db> {
         } else {
             format!("vm.direct_calls_typed({type_args})")
         };
-        let call = format!("(if {allowed} {{ {direct} }} else {boxed})");
+        let body = format!("{symbol}_d(vm, fr{direct_args}, {callee_mask})");
+        let call = self.frameless_or(
+            object, &site, &body, types, &type_args, &allowed, &direct, &boxed,
+        );
         Ok((call, signature.ret))
+    }
+
+    /// A call to `object` that runs `body` without linking a record when the
+    /// callee is frameless and the VM allows it: on the caller's record when
+    /// the callee cannot pause, else on a pending record of its own (with
+    /// the call's type arguments). Otherwise `direct` with a record when
+    /// `allowed`, else `boxed` in a VM frame.
+    #[allow(clippy::too_many_arguments)]
+    fn frameless_or(
+        &self,
+        object: usize,
+        site: &str,
+        body: &str,
+        types: &[String],
+        type_args: &str,
+        allowed: &str,
+        direct: &str,
+        boxed: &str,
+    ) -> String {
+        let recorded = format!("if {allowed} {{ {direct} }} else {{ {boxed} }}");
+        if !self.frameless.contains(&object) {
+            return format!("({recorded})");
+        }
+        let callee = format!("ObjectIndex::from_raw({object})");
+        let frameless = if !types.is_empty() {
+            format!("vm.call_pending_typed(fr, {callee}, {type_args}, {site}, |vm, fr| {body})")
+        } else if !self.pausing.contains(&object) {
+            format!("vm.call_frameless(fr, {callee}, {site}, |vm| {body})")
+        } else if object == self.object {
+            format!("vm.call_pending_self(fr, {callee}, {site}, |vm, fr| {body})")
+        } else {
+            format!("vm.call_pending(fr, {callee}, {site}, |vm, fr| {body})")
+        };
+        format!("(if {allowed} && vm.frameless_calls() {{ {frameless} }} else {recorded})")
     }
 
     /// Route a compiled call's error, rooting the caller's live values when
@@ -400,7 +437,7 @@ impl<'db> Generator<'_, 'db> {
         let site = self.site_pc(block);
         let values = values.join(", ");
         let suspend = if traced {
-            let call = self.attach_trace("vm.suspend(Step::Call { callee, argc })");
+            let call = self.attach_trace("vm.suspend_from(fr, Step::Call { callee, argc })");
             format!(
                 "match vm.push_virtual_args(callee, {layout}, &[{values}]) {{ \
                  Ok(argc) => {{ fr.note_pc({site}); {call} }}, Err(e) => Err(e) }}"
@@ -408,7 +445,7 @@ impl<'db> Generator<'_, 'db> {
         } else {
             format!(
                 "{{ let argc = vm.push_virtual_args(callee, {layout}, &[{values}])?; \
-                 fr.note_pc({site}); vm.suspend(Step::Call {{ callee, argc }}) }}"
+                 fr.note_pc({site}); vm.suspend_from(fr, Step::Call {{ callee, argc }}) }}"
             )
         };
         // The VM must apply trace attachments, so traced calls cannot run inline.
