@@ -933,3 +933,81 @@ Remove the `only_class` call in `class_of` to get the old devirtualization
 back. Remove the `RuntimeTy::List` condition in `propagate_copies` to let
 the narrowed copy be propagated again; the last test in `for_in.rs` then
 fails.
+
+## Native calls with type arguments
+
+### What the cost was
+
+The "about 2,000 instructions per `push`" above was not special to generic
+standard library code. Plain user code (`let xs: int[] = []; xs.push(i)`) paid
+it too, because every call of an array method passes the element type as a
+type argument. Measured on packed programs (fasttest build, telemetry off,
+instructions retired, 10 million pushes, minus the same loop without the
+push):
+
+| Case | Before | After |
+|---|---|---|
+| user code, `int[]` | 2,549 | 1,014 |
+| user code, class instances | 2,646 | 1,065 |
+| `f<T>(xs: T[], v: T)` kept a call, per push | 3,971 | 1,264 |
+| `filter_map`, per kept element | 3,841 | 2,318 |
+| a generic bytecode call on its own | 3,571 | 1,845 |
+| loop with no calls (count, index sum, for-in sum) | 412 / 586 / 654 | 413 / 587 / 655 |
+
+The `filter_map` row also contains the `let y: U` type test, which only runs
+for a kept element, so it overstates the push.
+
+No single allocation dominated. A profile of the old path showed the cost
+spread over the general call path: two vectors of type arguments allocated
+and freed per call (a quarter of the samples in a packed program, which uses
+the system allocator), a drain and collect of the arguments, the call layout
+lookup and compare, the pending type lane saved and restored, and a return to
+the outer loop after every native call. In a generic frame, `LoadType` of `T`
+also cloned the template and the frame's type arguments, substituted, and
+allocated a new type object every time.
+
+### What changed (all in `crates/bex_vm/src/vm.rs`)
+
+- Type-argument buffers are reused. A call takes an emptied buffer, the
+  pending lane owns it for the call, a bytecode frame that carries nothing
+  takes it whole, and a returning generic frame gives it back.
+- A native function called by name (`Call` on a plain native `Function`, no
+  `$trace`, argument layout already the callee's) runs from the `Call` handler
+  through `call_named_native`, and the loop goes on to the next instruction.
+  Type operands are read where they sit instead of being drained. Every other
+  callee takes the general path as before. The native body of the general
+  path and of this one is the same function, `call_native`.
+- `LoadType` of a constant that is one frame slot, in a static function whose
+  frame binds no runtime declaration, keeps the type object it built with the
+  slot type it was built from (`slot_load_type_cache`), and reuses it while
+  the slot holds the same type naming the same declaration objects. A hit on
+  the existing cache for realized constants no longer walks the constant.
+
+The new code is out of line (`#[inline(never)]`). Inlined into the dispatch
+loop it made loops that make no calls about 4 to 8% heavier; out of line they
+measure the same as before (last row of the table).
+
+### What remains
+
+About 1,000 instructions per push is still far from a few hundred. From a
+profile of the new path, per push, roughly: 250 for the type lane of a native
+that never reads it (read and clone the type, save, restore, clear), 100 to
+150 for the call layout lookup and compare on every call, 75 for the
+`LoadType` cache lookup, 100 for copying arguments and settling, 150 in the
+push itself and array growth. Two changes would remove most of that and were
+not made: mark natives that never read their type arguments so the lane is
+skipped, and pick a native call opcode once at link time, as
+`call_specialize.rs` does for exact bytecode calls, so the layout is not
+looked up per call. A generic bytecode call still goes through the general
+path and costs about 1,850.
+
+### To revert
+
+Each part stands alone. Removing the early `call_named_native` branch in the
+`Call` handler restores the general path for natives. Removing the
+`built_load_type` and `keep_slot_load_type` calls in `LoadType` restores the
+old lookup. The buffer reuse has no behaviour of its own.
+
+Test: `crates/baml_tests/tests/generic_type_args.rs` pins that one site in a
+generic function that stays a call reads the type of the frame it runs in,
+across frames bound to different types in turn.

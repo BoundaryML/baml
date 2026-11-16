@@ -3243,10 +3243,12 @@ impl BexVm {
         count: usize,
         tys: &mut Vec<bex_vm_types::RealizedTy>,
     ) -> Result<(), VmError> {
+        // Built only on failure: the error is costly to make and drop.
+        #[expect(clippy::unnecessary_lazy_evaluations)]
         let end = start
             .checked_add(count)
             .filter(|end| *end <= self.stack.len())
-            .ok_or(VmInternalError::NotEnoughItemsOnStack(count))?;
+            .ok_or_else(|| VmInternalError::NotEnoughItemsOnStack(count))?;
         for slot in start..end {
             let value = self.stack[StackIndex::from_raw(slot)];
             // A `LoadType` operand is a `type` value already, which is every
@@ -7772,8 +7774,7 @@ impl BexVm {
                 if let NativeCalled::Dispatched(state) = self.call_native(
                     func,
                     callee_ptr,
-                    locals_offset.raw(),
-                    locals_offset.raw(),
+                    locals_offset.raw()..locals_offset.raw(),
                     carried_type_args,
                     frame_idx,
                     function,
@@ -7975,9 +7976,146 @@ impl BexVm {
         Ok(None)
     }
 
+    /// Run the callee of a `Call` instruction here if it is a native function
+    /// called with the slots it declares, and say how the call ended; `None`
+    /// if it is any other callee or a site whose arguments need reshaping,
+    /// with nothing done. `return_pc` is the instruction after the call. The
+    /// caller has checked that no `$trace` is pending. This must agree with
+    /// the general call path, which such a call would otherwise take.
+    ///
+    /// Kept out of line so the dispatch loop does not carry its code.
+    #[inline(never)]
+    fn call_named_native(
+        &mut self,
+        callee_value: Value,
+        ntypeargs: usize,
+        return_pc: usize,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<NativeCalled>, VmError> {
+        let Some(callee_ptr) = callee_value.as_object_ptr() else {
+            return Ok(None);
+        };
+        // SAFETY: setup cannot collect, as in `execute_call_from_locals_offset`.
+        let Object::Function(callee) = (unsafe { callee_ptr.get() }) else {
+            return Ok(None);
+        };
+        let FunctionKind::Native(func_ptr, local) = callee.kind else {
+            return Ok(None);
+        };
+        if Self::recorded_call_layout(function, self.cur_pc)
+            .is_some_and(|layout| !callee.argument_layout_is(layout))
+        {
+            return Ok(None);
+        }
+        let func_ptr = match local {
+            Some(local) if std::mem::take(&mut self.thread_local_call) => local,
+            _ => func_ptr,
+        };
+        self.thread_local_call = false;
+        // SAFETY: as in `execute_call_from_locals_offset`.
+        let func = unsafe { std::mem::transmute::<*const (), NativeFunction>(func_ptr) };
+        let input_count = callee.arity + ntypeargs;
+        // Built only on failure: the error is costly to make and drop.
+        #[expect(clippy::unnecessary_lazy_evaluations)]
+        let args_offset = self
+            .stack
+            .len()
+            .checked_sub(input_count)
+            .ok_or_else(|| VmInternalError::NotEnoughItemsOnStack(input_count))?;
+        let Some(Frame::Bytecode(caller)) = self.frames.get_mut(*frame_idx) else {
+            unreachable!("a Call instruction runs in a bytecode frame")
+        };
+        caller.instruction_ptr = return_pc;
+        caller.faulting_pc = self.cur_pc;
+        // The native reads exactly the type arguments this call passes, so
+        // an outer call's must be set aside even when it passes none.
+        let sets_type_args = ntypeargs != 0 || !self.pending_call_type_args.is_empty();
+        if sets_type_args {
+            let mut type_args = self.spare_type_args();
+            self.read_type_args_into(args_offset, ntypeargs, &mut type_args)?;
+            self.save_call_types();
+            self.pending_call_type_args = type_args;
+        }
+        // The type operands sit below the values and go with them.
+        let called = self.call_native(
+            func,
+            callee_ptr,
+            args_offset..args_offset + ntypeargs,
+            &[],
+            frame_idx,
+            function,
+        );
+        if sets_type_args {
+            let type_args = self.restore_call_types();
+            self.recycle_type_args(type_args);
+        }
+        called.map(Some)
+    }
+
+    /// The type object a `LoadType` of constant `constant` in the static
+    /// function `function` can take without building one: the object built
+    /// for a realized constant, or the one last built for a constant that is
+    /// one frame slot if the frame's slot still holds the type it was built
+    /// from. A frame that binds a runtime declaration takes neither.
+    ///
+    /// Kept out of line so the dispatch loop does not carry its code.
+    #[inline(never)]
+    fn built_load_type(
+        &self,
+        function: &Function,
+        frame_idx: usize,
+        constant: usize,
+    ) -> Option<Value> {
+        let Frame::Bytecode(frame) = &self.frames[frame_idx] else {
+            return None;
+        };
+        if !frame.type_args.is_empty() && frame.binds_runtime_declaration(&self.heap) {
+            return None;
+        }
+        let key = (std::ptr::from_ref(function) as usize, constant);
+        // An entry is made only for a realized constant.
+        if let Some(ty) = self.static_load_type_cache.get(&key) {
+            return Some(Value::object(ty.ptr()));
+        }
+        let (built_from, ty) = self.slot_load_type_cache.get(&key)?;
+        let ConstValue::Type(bex_vm_types::TyTemplate::TypeArgRef(slot)) =
+            &function.bytecode.constants[constant]
+        else {
+            return None;
+        };
+        same_realized_ty(frame.type_args.get(*slot as usize)?, built_from)
+            .then(|| Value::object(ty.ptr()))
+    }
+
+    /// Remember the type object `value` a `LoadType` just built in the static
+    /// function `function`, if its constant is one frame slot and the frame
+    /// binds no runtime declaration; see [`Self::built_load_type`].
+    #[inline(never)]
+    fn keep_slot_load_type(
+        &mut self,
+        function: &Function,
+        frame_idx: usize,
+        constant: usize,
+        value: Value,
+    ) {
+        if let ConstValue::Type(bex_vm_types::TyTemplate::TypeArgRef(slot)) =
+            &function.bytecode.constants[constant]
+            && let Frame::Bytecode(frame) = &self.frames[frame_idx]
+            && !frame.binds_runtime_declaration(&self.heap)
+            && let Some(slot_ty) = frame.type_args.get(*slot as usize)
+            && let Some(ptr) = value.as_object_ptr()
+        {
+            self.slot_load_type_cache.insert(
+                (std::ptr::from_ref(function) as usize, constant),
+                (slot_ty.clone(), Weak::new(ptr)),
+            );
+        }
+    }
+
     /// Run the native `func`, the function of the callable `callee_ptr`, on
-    /// the values from `args_offset` to the top of the stack. The stack is
-    /// cut back to `result_offset`, at or below the values, before the call;
+    /// the values from `inputs.end` to the top of the stack. The stack is
+    /// cut back to `inputs.start`, at or below the values, before the call;
     /// then the result is pushed, or the callback the native asked for is
     /// entered with the native's continuation frame below it.
     ///
@@ -7992,18 +8130,26 @@ impl BexVm {
         &mut self,
         func: NativeFunction,
         callee_ptr: HeapPtr,
-        args_offset: usize,
-        result_offset: usize,
+        inputs: std::ops::Range<usize>,
         carried_type_args: &[bex_vm_types::RealizedTy],
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<NativeCalled, VmError> {
         // Native functions should manage their own gc roots (or never yield).
         // They have no data on the stack.
-        // SmallVec avoids heap allocation for calls with ≤4 args (the common case).
-        let args: SmallVec<[Value; 4]> =
-            SmallVec::from_slice(&self.stack.as_slice()[args_offset..]);
-        self.stack.truncate(result_offset);
+        // Up to four arguments, the common case, are copied without allocating.
+        let args_offset = inputs.end;
+        let count = self.stack.len() - args_offset;
+        let mut few = [Value::NULL; 4];
+        let many: Vec<Value>;
+        let args: &[Value] = if count <= few.len() {
+            few[..count].copy_from_slice(&self.stack.as_slice()[args_offset..]);
+            &few[..count]
+        } else {
+            many = self.stack.as_slice()[args_offset..].to_vec();
+            &many
+        };
+        self.stack.truncate(inputs.start);
 
         let restore_pending = !carried_type_args.is_empty();
         if restore_pending {
@@ -8012,7 +8158,7 @@ impl BexVm {
             self.save_call_types();
             self.pending_call_type_args = carried;
         }
-        let native_result = func(self, &args);
+        let native_result = func(self, args);
         if restore_pending {
             let carried = self.restore_call_types();
             self.recycle_type_args(carried);
@@ -10669,67 +10815,17 @@ impl BexVm {
                             }
                         }
 
-                        // A native function called by name, with the slots it
-                        // declares and no `$trace`: run it here and go on to
-                        // the next instruction. Any other callee, and a site
-                        // whose arguments need reshaping, takes the general
-                        // path below, which this must agree with.
-                        if self.pending_call_trace.is_none()
-                            && let Some(callee_ptr) = callee_value.as_object_ptr()
-                            // SAFETY: as for the bytecode callee above.
-                            && let Object::Function(callee) = unsafe { callee_ptr.get() }
-                            && let FunctionKind::Native(func_ptr, local) = callee.kind
-                            && Self::recorded_call_layout(function, self.cur_pc)
-                                .is_none_or(|layout| callee.argument_layout_is(layout))
-                        {
-                            let func_ptr = match local {
-                                Some(local) if op == OpCode::CallLocal => local,
-                                _ => func_ptr,
-                            };
-                            self.thread_local_call = false;
-                            // SAFETY: as in `execute_call_from_locals_offset`.
-                            let func = unsafe {
-                                std::mem::transmute::<*const (), NativeFunction>(func_ptr)
-                            };
-                            let input_count = callee.arity + ntypeargs;
-                            #[expect(clippy::unnecessary_lazy_evaluations)]
-                            let args_offset =
-                                self.stack.len().checked_sub(input_count).ok_or_else(|| {
-                                    VmInternalError::NotEnoughItemsOnStack(input_count)
-                                })?;
-                            let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {
-                                verifier_unreachable!()
-                            };
-                            caller.instruction_ptr = *pc;
-                            caller.faulting_pc = self.cur_pc;
-                            // The native reads exactly the type arguments
-                            // this call passes, so an outer call's must be
-                            // set aside even when it passes none.
-                            let sets_type_args =
-                                ntypeargs != 0 || !self.pending_call_type_args.is_empty();
-                            if sets_type_args {
-                                let mut type_args = self.spare_type_args();
-                                self.read_type_args_into(args_offset, ntypeargs, &mut type_args)?;
-                                self.save_call_types();
-                                self.pending_call_type_args = type_args;
-                            }
-                            // The type operands sit below the values and go
-                            // with them.
-                            let called = self.call_native(
-                                func,
-                                callee_ptr,
-                                args_offset + ntypeargs,
-                                args_offset,
-                                &[],
+                        // A native function called by name runs here, and
+                        // the loop goes on to the next instruction.
+                        if self.pending_call_trace.is_none() {
+                            match self.call_named_native(
+                                callee_value,
+                                ntypeargs,
+                                *pc,
                                 frame_idx,
                                 function,
-                            );
-                            if sets_type_args {
-                                let type_args = self.restore_call_types();
-                                self.recycle_type_args(type_args);
-                            }
-                            match called? {
-                                NativeCalled::Returned => {
+                            )? {
+                                Some(NativeCalled::Returned) => {
                                     if self.should_early_yield() {
                                         return Ok(Some(VmExecState::EarlyYield));
                                     }
@@ -10737,7 +10833,8 @@ impl BexVm {
                                     runtime_package = self.runtime_package_of(function);
                                     continue;
                                 }
-                                NativeCalled::Dispatched(state) => return Ok(state),
+                                Some(NativeCalled::Dispatched(state)) => return Ok(state),
+                                None => {}
                             }
                         }
 
@@ -11150,14 +11247,15 @@ impl BexVm {
                         self.stack.replace_top_n_dynamic(consumed, result);
                         // A generic frame's type arguments arrived in a buffer
                         // the next call that passes any can use.
-                        let type_args = match &mut self.frames[*frame_idx] {
-                            Frame::Bytecode(frame) => std::mem::take(&mut frame.type_args),
-                            Frame::Native(_) => Vec::new(),
-                        };
+                        if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx]
+                            && frame.type_args.capacity() != 0
+                        {
+                            let type_args = std::mem::take(&mut frame.type_args);
+                            self.recycle_type_args(type_args);
+                        }
                         // SAFETY: this instruction is executing the bytecode frame
                         // accessed above; stack operations cannot remove that frame.
                         self.frames.pop();
-                        self.recycle_type_args(type_args);
                         let context = self.current_context().clone();
                         if let Some(telemetry) = &mut self.telemetry {
                             telemetry.set_context(context);
@@ -11553,6 +11651,12 @@ impl BexVm {
                     // ── LoadType ──────────────────────────────────────────────────
                     OpCode::LoadType => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
+                        if runtime_package.is_null()
+                            && let Some(value) = self.built_load_type(function, *frame_idx, idx)
+                        {
+                            self.push_stack(value)?;
+                            continue;
+                        }
                         let static_cache_key = match &function.bytecode.constants[idx] {
                             ConstValue::Type(template)
                                 if runtime_package.is_null()
@@ -11568,31 +11672,8 @@ impl BexVm {
                             }
                             _ => None,
                         };
-                        // A constant that is one frame slot, in a static
-                        // function whose frame binds no runtime declaration.
-                        let slot_cache_key = match &function.bytecode.constants[idx] {
-                            ConstValue::Type(bex_vm_types::TyTemplate::TypeArgRef(slot))
-                                if runtime_package.is_null()
-                                    && matches!(&self.frames[*frame_idx],
-                                    Frame::Bytecode(frame)
-                                        if !frame.binds_runtime_declaration(&self.heap)) =>
-                            {
-                                Some((std::ptr::from_ref(*function) as usize, idx, *slot as usize))
-                            }
-                            _ => None,
-                        };
                         let cached_value = static_cache_key
                             .and_then(|key| self.static_load_type_cache.get(&key).copied())
-                            .or_else(|| {
-                                let (function, constant, slot) = slot_cache_key?;
-                                let (built_from, ty) =
-                                    self.slot_load_type_cache.get(&(function, constant))?;
-                                let Frame::Bytecode(frame) = &self.frames[*frame_idx] else {
-                                    return None;
-                                };
-                                same_realized_ty(frame.type_args.get(slot)?, built_from)
-                                    .then_some(*ty)
-                            })
                             .map(|ty| Value::object(ty.ptr()));
                         let value = if let Some(value) = cached_value {
                             value
@@ -11638,15 +11719,8 @@ impl BexVm {
                                 self.static_load_type_cache
                                     .insert(cache_key, Weak::new(ptr));
                             }
-                            if let Some((function, constant, slot)) = slot_cache_key
-                                && let Some(ptr) = value.as_object_ptr()
-                                && let Frame::Bytecode(frame) = &self.frames[*frame_idx]
-                                && let Some(slot_ty) = frame.type_args.get(slot)
-                            {
-                                self.slot_load_type_cache.insert(
-                                    (function, constant),
-                                    (slot_ty.clone(), Weak::new(ptr)),
-                                );
+                            if runtime_package.is_null() {
+                                self.keep_slot_load_type(function, *frame_idx, idx, value);
                             }
                             value
                         };
