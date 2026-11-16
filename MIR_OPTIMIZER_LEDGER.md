@@ -1060,3 +1060,12 @@ inside an inlined callee and checks both frames.
 
 **Format versions.** Artifact 33, cache 30. 32 and 29 were only ever written
 by builds of this branch with the removed instruction set.
+
+### Merged build against canary alone
+
+Whole speedtest suite, `vm-off` row, fasttest profile, two alternating rounds of three trials (canary `0bb3b9fe6f` vs merge `c06ccda2d7`). Table: `baml_language/target/mir-opt/ab-canary.table`.
+
+- 78 workloads, geomean 1.43x faster than canary. 35 faster by more than 7%, 38 within 7%, 5 slower.
+- Largest: wide-nested-class-create 17.5x, nested-field-access 15.8x, default-method 12.4x, generic-apply-inferred 9.3x, closure-apply 8.6x, polymorphic-dispatch 6.4x, method-call 3.8x, pure-call 2.3x.
+- Programs: richards 1.18x, json-parser 1.18x, bubble-sort 1.29x.
+- The 5 slower ones are all 8 to 10% with overlapping ranges (four spawn workloads and `cycles-into-live`). Not confirmed as real or as noise.
