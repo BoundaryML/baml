@@ -46,22 +46,33 @@
 //! null`, a parameter, a call result). Everything else stays a heap object
 //! with no change in the generated code.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+mod reason;
+
+use std::collections::{BTreeMap, BTreeSet, HashMap, btree_map::Entry};
 
 use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
     AggregateKind, Constant, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue, StatementKind,
-    Terminator, TypeTest, class_display_name, function_display_name,
+    Terminator, TypeTest, class_display_name,
+    escape::MASKED_PARAMS,
+    function_display_name,
     memory::{Resources, place_reads, walk_operand_places, walk_rvalue_places},
 };
 use bex_vm_types::{Object, ObjectIndex};
+use reason::HeapReason;
 
 use crate::{
     admit::Unit,
-    analysis::{EQUALS_EQUALS, Repr, Signature, operand_ty, user_callee},
+    analysis::{Repr, Signature, null_compared, operand_ty, user_callee},
     index::ProgramIndex,
     operands::{walk_statement_operands, walk_terminator_operands},
 };
+
+/// Whether parameter mask `mask` takes parameter `i` (0-based) as a stack
+/// struct. A parameter beyond the mask's width never is.
+pub(crate) fn takes_param(mask: u64, i: usize) -> bool {
+    i < MASKED_PARAMS && mask & (1 << i) != 0
+}
 
 /// A class whose instances can live in a Rust struct.
 #[derive(Debug, Clone)]
@@ -150,7 +161,6 @@ pub(crate) struct Inputs<'a> {
     pub(crate) framed: &'a BTreeSet<usize>,
     pub(crate) signatures: &'a HashMap<usize, Signature>,
 }
-
 /// Plan the stack objects of every unit.
 pub(crate) fn plan<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
@@ -166,90 +176,124 @@ pub(crate) fn plan<'db>(
             (object, facts)
         })
         .collect();
-    // Why each callee cannot take stack arguments, if it cannot.
-    let callable = |callee: usize| -> Result<(), String> {
-        let name = index.display(callee);
-        if !units.contains_key(&callee) {
-            return Err(format!("passed to {name}, which is not compiled"));
-        }
-        if inputs.pausing.contains(&callee) {
-            return Err(format!("passed to {name}, which may suspend"));
-        }
-        if inputs.framed.contains(&callee) {
-            return Err(format!("passed to {name}, which runs in a VM frame"));
-        }
-        if !inputs.signatures.contains_key(&callee) {
-            return Err(format!("passed to {name}, which has no direct entry"));
-        }
-        Ok(())
-    };
-    // Greatest fixpoint: every group the body allows starts as a stack
-    // object; a group falls back to the heap when a call it reaches cannot
-    // take it, and a variant dies when one of its stack parameters does.
-    let mut states: BTreeMap<(usize, u64), State> = BTreeMap::new();
-    for (&object, facts) in &facts {
-        states.insert((object, 0), State::new(facts, 0));
+    let states = Fixpoint {
+        index,
+        units,
+        inputs,
+        facts: &facts,
+        states: BTreeMap::new(),
+        changed: false,
     }
-    loop {
-        let mut changed = false;
-        let keys: Vec<(usize, u64)> = states.keys().copied().collect();
-        for key in keys {
-            let (object, _) = key;
-            let body_facts = &facts[&object];
-            if states[&key].dead.is_some() {
+    .run();
+    collect_plans(&facts, &states, &classes)
+}
+
+/// Why `callee` cannot take stack arguments, if it cannot.
+fn callee_rejection(
+    index: &ProgramIndex,
+    units: &BTreeMap<usize, Unit<'_>>,
+    inputs: &Inputs<'_>,
+    callee: usize,
+) -> Option<HeapReason> {
+    let name = || index.display(callee).to_string();
+    if !units.contains_key(&callee) {
+        return Some(HeapReason::NotCompiled { callee: name() });
+    }
+    if inputs.pausing.contains(&callee) {
+        return Some(HeapReason::MaySuspend { callee: name() });
+    }
+    if inputs.framed.contains(&callee) {
+        return Some(HeapReason::VmFrame { callee: name() });
+    }
+    if !inputs.signatures.contains_key(&callee) {
+        return Some(HeapReason::NoDirectEntry { callee: name() });
+    }
+    None
+}
+
+/// Greatest fixpoint: every group the body allows starts as a stack object;
+/// a group falls back to the heap when a call it reaches cannot take it, and
+/// a variant dies when one of its stack parameters does.
+struct Fixpoint<'a, 'db> {
+    index: &'a ProgramIndex<'a>,
+    units: &'a BTreeMap<usize, Unit<'db>>,
+    inputs: &'a Inputs<'a>,
+    facts: &'a BTreeMap<usize, Facts>,
+    /// Per (function object, stack parameters), its state.
+    states: BTreeMap<(usize, u64), State>,
+    changed: bool,
+}
+
+impl Fixpoint<'_, '_> {
+    fn run(mut self) -> BTreeMap<(usize, u64), State> {
+        for (&object, facts) in self.facts {
+            self.states.insert((object, 0), State::new(facts, 0));
+        }
+        loop {
+            self.changed = false;
+            let keys: Vec<(usize, u64)> = self.states.keys().copied().collect();
+            for key in keys {
+                self.visit(key);
+            }
+            if !self.changed {
+                return self.states;
+            }
+        }
+    }
+
+    /// One pass over the calls of one body under one set of stack parameters.
+    fn visit(&mut self, key: (usize, u64)) {
+        let facts = &self.facts[&key.0];
+        if self.states[&key].dead.is_some() {
+            return;
+        }
+        for call in &facts.calls {
+            let mask = self.states[&key].mask(call);
+            if mask == 0 {
                 continue;
             }
-            for call in &body_facts.calls {
-                let state = &states[&key];
-                let roots: Vec<(usize, usize)> = call
-                    .args
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, root)| root.filter(|&root| state.stack(root)).map(|r| (i, r)))
-                    .collect();
-                if roots.is_empty() {
-                    continue;
-                }
-                let mask = roots.iter().fold(0u64, |mask, &(i, _)| mask | (1 << i));
-                let failure = match &call.callee {
-                    Err(reason) => Some(reason.clone()),
-                    Ok(callee) => match callable(*callee) {
-                        Err(reason) => Some(reason),
-                        Ok(()) => {
-                            let variant = (*callee, mask);
-                            if let std::collections::btree_map::Entry::Vacant(entry) =
-                                states.entry(variant)
-                            {
-                                entry.insert(State::new(&facts[callee], mask));
-                                changed = true;
-                            }
-                            states[&variant].dead.as_ref().map(|reason| {
-                                format!("passed to {}, whose {reason}", index.display(*callee))
-                            })
-                        }
-                    },
-                };
-                if let Some(reason) = failure {
-                    let state = states.get_mut(&key).expect("present");
-                    for &(_, root) in &roots {
-                        state.invalid[root].get_or_insert_with(|| reason.clone());
-                    }
-                    changed = true;
-                }
+            let Some(reason) = self.call_failure(call.callee, mask) else {
+                continue;
+            };
+            let state = self.states.get_mut(&key).expect("present");
+            let roots: Vec<usize> = state.stack_args(call).map(|(_, root)| root).collect();
+            for root in roots {
+                state.invalid[root].get_or_insert_with(|| reason.clone());
             }
-            let state = states.get_mut(&key).expect("present");
-            if state.dead.is_none()
-                && let Some(reason) = state.dead_param(body_facts)
-            {
-                state.dead = Some(reason);
-                changed = true;
-            }
+            self.changed = true;
         }
-        if !changed {
-            break;
+        let state = self.states.get_mut(&key).expect("present");
+        if let Some(reason) = state.dead_param(facts) {
+            state.dead = Some(reason);
+            self.changed = true;
         }
     }
-    // Keep the variants the functions reach.
+
+    /// Why `callee` cannot take the stack parameters `mask`, if it cannot;
+    /// creates the variant it would call.
+    fn call_failure(&mut self, callee: usize, mask: u64) -> Option<HeapReason> {
+        if let Some(reason) = callee_rejection(self.index, self.units, self.inputs, callee) {
+            return Some(reason);
+        }
+        let variant = (callee, mask);
+        if let Entry::Vacant(entry) = self.states.entry(variant) {
+            entry.insert(State::new(&self.facts[&callee], mask));
+            self.changed = true;
+        }
+        let dead = self.states[&variant].dead.clone()?;
+        Some(HeapReason::CalleeVariant {
+            callee: self.index.display(callee).to_string(),
+            dead: Box::new(dead),
+        })
+    }
+}
+
+/// The plans of the variants the functions reach, with each function's report.
+fn collect_plans(
+    facts: &BTreeMap<usize, Facts>,
+    states: &BTreeMap<(usize, u64), State>,
+    classes: &Classes,
+) -> StackPlans {
     let mut plans = StackPlans::default();
     let mut pending: Vec<(usize, u64)> = facts.keys().map(|&object| (object, 0)).collect();
     while let Some(key) = pending.pop() {
@@ -260,9 +304,7 @@ pub(crate) fn plan<'db>(
         let body_facts = &facts[&object];
         let state = &states[&key];
         let plan = state.plan(body_facts);
-        for &(callee, mask) in plan.calls.values() {
-            pending.push((callee, mask));
-        }
+        pending.extend(plan.calls.values().copied());
         for group in &plan.groups {
             if let Some(Ok(class)) = classes.by_object.get(&group.class) {
                 plans.classes.insert(group.class, class.clone());
@@ -272,18 +314,7 @@ pub(crate) fn plan<'db>(
             let sites = body_facts
                 .sites
                 .iter()
-                .map(|site| SiteReport {
-                    class: site.class.clone(),
-                    heap_because: match site.root {
-                        Some(root) if state.stack(root) => None,
-                        Some(root) => Some(
-                            state.invalid[root]
-                                .clone()
-                                .unwrap_or_else(|| "not a stack object".into()),
-                        ),
-                        None => Some(site.direct.clone().unwrap_or_default()),
-                    },
-                })
+                .map(|site| state.site_report(site))
                 .collect();
             plans.reports.insert(object, sites);
         }
@@ -295,27 +326,25 @@ pub(crate) fn plan<'db>(
 /// The stack classes resolved so far, by class object.
 #[derive(Default)]
 struct Classes {
-    by_object: HashMap<usize, Result<StackClass, String>>,
+    by_object: HashMap<usize, Result<StackClass, HeapReason>>,
 }
 
 impl Classes {
-    /// The class's object and how it lives on the stack.
+    /// How the class lives on the stack.
     fn resolve<'db>(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
         index: &ProgramIndex,
         class: ClassRef<'db>,
-    ) -> (Option<usize>, Result<StackClass, String>) {
-        let Some((object, _)) = index.class(db, class) else {
-            let name = class_display_name(db, class);
-            return (None, Err(format!("class `{name}` is not in the program")));
+    ) -> Result<StackClass, HeapReason> {
+        let Some((object, field_count)) = index.class(db, class) else {
+            let class = class_display_name(db, class);
+            return Err(HeapReason::NotInProgram { class });
         };
-        let resolved = self
-            .by_object
+        self.by_object
             .entry(object)
-            .or_insert_with(|| stack_class(db, index, class))
-            .clone();
-        (Some(object), resolved)
+            .or_insert_with(|| stack_class(db, index, class, object, field_count))
+            .clone()
     }
 }
 
@@ -323,30 +352,30 @@ fn stack_class<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,
     class: ClassRef<'db>,
-) -> Result<StackClass, String> {
+    object: usize,
+    field_count: usize,
+) -> Result<StackClass, HeapReason> {
     let name = class_display_name(db, class);
-    let Some((object, field_count)) = index.class(db, class) else {
-        return Err(format!("class `{name}` is not in the program"));
-    };
     let Object::Class(decl) = &index.program.objects[ObjectIndex::from_raw(object)] else {
-        return Err(format!("`{name}` is not a class object"));
+        return Err(HeapReason::NotClassObject { class: name });
     };
     if decl.cleanup.is_some() {
-        return Err(format!("`{name}` has a cleanup finalizer"));
+        return Err(HeapReason::Cleanup { class: name });
     }
     if decl.generic_param_count != 0 {
-        return Err(format!("`{name}` is generic"));
+        return Err(HeapReason::Generic { class: name });
     }
     let declared = baml_compiler2_hir_ty::layout::class_fields(db, class);
     if declared.len() != field_count {
-        return Err(format!(
-            "`{name}` has fields the program lays out differently"
-        ));
+        return Err(HeapReason::LaidOutDifferently { class: name });
     }
     let mut fields = Vec::with_capacity(declared.len());
     for (field, ty) in &declared {
         let Some(repr) = field_repr(ty) else {
-            return Err(format!("`{name}.{field}` holds a mutable value"));
+            return Err(HeapReason::MutableField {
+                class: name,
+                field: field.to_string(),
+            });
         };
         fields.push(repr);
     }
@@ -395,20 +424,162 @@ fn immutable(ty: &baml_type::Ty) -> bool {
 /// A class allocation site of a body.
 struct Site {
     class: String,
-    /// The group its destination local joins; `None` when it is not
-    /// assigned to a local.
-    root: Option<usize>,
-    /// Why a site with no group stays on the heap.
-    direct: Option<String>,
+    at: SiteAt,
+}
+
+enum SiteAt {
+    /// Assigned to a local: the group it joins.
+    Group(usize),
+    /// Not assigned to a local, so on the heap.
+    Heap(HeapReason),
 }
 
 /// A direct call that may pass objects.
 struct Call {
     block: usize,
-    /// The compiled callee, or why the call cannot take a stack object.
-    callee: Result<usize, String>,
-    /// Per value argument, the group of a bare local.
+    /// The compiled callee.
+    callee: usize,
+    /// Per value argument within the mask width, the group of a bare local.
     args: Vec<Option<usize>>,
+}
+
+/// The local a bare-local operand reads.
+fn bare_local(operand: &Operand<'_>) -> Option<usize> {
+    match operand {
+        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => Some(local.0),
+        _ => None,
+    }
+}
+
+/// Per local, the root of its group: locals joined by copies and narrowing
+/// binds.
+fn copy_roots(body: &MirFunctionBody<'_>) -> Vec<usize> {
+    let n = body.locals.len();
+    let mut parent: Vec<usize> = (0..n).collect();
+    for block in &body.blocks {
+        for statement in &block.statements {
+            if let StatementKind::Assign {
+                destination: Place::Local(destination),
+                value: Rvalue::Use(source),
+            } = &statement.kind
+                && let Some(source) = bare_local(source)
+            {
+                union(&mut parent, destination.0, source);
+            }
+        }
+        if let Some(Terminator::NarrowBind {
+            source,
+            destination,
+            ..
+        }) = &block.terminator
+            && let Some(source) = bare_local(source)
+        {
+            union(&mut parent, destination.0, source);
+        }
+    }
+    (0..n).map(|local| find(&mut parent, local)).collect()
+}
+
+/// The stack class a local of type `ty` holds.
+fn local_class(
+    db: &dyn baml_compiler2_mir::Db,
+    index: &ProgramIndex,
+    classes: &mut Classes,
+    ty: &RuntimeTy,
+) -> Result<StackClass, HeapReason> {
+    let RuntimeTy::Class(name, args) = ty else {
+        return Err(HeapReason::NotThisClass);
+    };
+    if !args.is_empty() {
+        return Err(HeapReason::GenericClass);
+    }
+    let class =
+        baml_compiler2_hir_ty::layout::class_ref_of(db, name).ok_or(HeapReason::OutsideSource)?;
+    classes.resolve(db, index, class)
+}
+
+/// Why a terminator without its own rule keeps an object it uses on the heap.
+fn opaque_reason(terminator: &Terminator<'_>) -> HeapReason {
+    match terminator {
+        Terminator::VirtualCall { method, .. } => HeapReason::InterfaceCall {
+            method: method.clone(),
+        },
+        Terminator::SysOp { .. } => HeapReason::SysOp,
+        Terminator::Spawn { .. } => HeapReason::Spawned,
+        Terminator::Await { .. } | Terminator::AwaitAny { .. } => HeapReason::Awaited,
+        Terminator::Throw { .. } | Terminator::Rethrow { .. } => HeapReason::Thrown,
+        Terminator::Branch { .. } | Terminator::Switch { .. } => HeapReason::BranchedOn,
+        _ => HeapReason::UsedByTerminator,
+    }
+}
+
+/// Why an rvalue other than a `Use` keeps the objects it reads on the heap;
+/// `None` for a type test of a bare local, which reads only its tag.
+fn rvalue_reason(value: &Rvalue<'_>) -> Option<HeapReason> {
+    Some(match value {
+        Rvalue::IsType {
+            operand,
+            test: TypeTest::Class { args, .. },
+        } if args.is_empty() && bare_local(operand).is_some() => return None,
+        Rvalue::TypeTag(Place::Local(_)) => return None,
+        Rvalue::Array(..) | Rvalue::Map(..) => HeapReason::StoredIntoContainer,
+        Rvalue::MakeClosure { .. } => HeapReason::Captured,
+        Rvalue::MakeBoundMethod { .. } | Rvalue::MakeVirtualBoundMethod { .. } => {
+            HeapReason::BoundAsReceiver
+        }
+        Rvalue::BinaryOp { .. } => HeapReason::OperatedOn,
+        _ => HeapReason::UsedAsValue,
+    })
+}
+
+/// The callee a call can pass stack objects to, or why it cannot.
+fn call_target<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    index: &ProgramIndex,
+    terminator: &Terminator<'db>,
+    name: &str,
+) -> Result<usize, HeapReason> {
+    let Terminator::Call {
+        has_trace,
+        argument_layout,
+        callee,
+        args,
+        ntypeargs,
+        ..
+    } = terminator
+    else {
+        unreachable!("a call terminator");
+    };
+    let callee_name = name.to_string();
+    let Some(object) = user_callee(db, index, callee) else {
+        return Err(HeapReason::PassedTo {
+            callee: callee_name,
+        });
+    };
+    let positional = argument_layout
+        .as_ref()
+        .is_none_or(|layout| layout.0.iter().all(Option::is_none));
+    if *has_trace {
+        return Err(HeapReason::PassedWithTrace {
+            callee: callee_name,
+        });
+    }
+    if !positional {
+        return Err(HeapReason::PassedByName {
+            callee: callee_name,
+        });
+    }
+    if *ntypeargs != 0 {
+        return Err(HeapReason::PassedToGeneric {
+            callee: callee_name,
+        });
+    }
+    if index.info(object).arity != args.len() {
+        return Err(HeapReason::PassedWithDefaults {
+            callee: callee_name,
+        });
+    }
+    Ok(object)
 }
 
 /// What one body allows of each group, whatever its callees do.
@@ -419,7 +590,7 @@ struct Facts {
     /// Per root, its stack class when every member holds that class.
     class: Vec<Option<StackClass>>,
     /// Per root, why the body itself keeps it on the heap.
-    invalid: Vec<Option<String>>,
+    invalid: Vec<Option<HeapReason>>,
     /// Per root, whether some allocation site defines it.
     allocated: Vec<bool>,
     /// Per root, the parameters (locals `1..=arity`) it holds.
@@ -436,36 +607,11 @@ impl Facts {
         body: &MirFunctionBody<'db>,
         arity: usize,
     ) -> Self {
-        let n = body.locals.len();
-        let mut parent: Vec<usize> = (0..n).collect();
-        // Copies join groups.
-        for block in &body.blocks {
-            for statement in &block.statements {
-                if let StatementKind::Assign {
-                    destination: Place::Local(destination),
-                    value:
-                        Rvalue::Use(
-                            Operand::Copy(Place::Local(source))
-                            | Operand::Move(Place::Local(source)),
-                        ),
-                } = &statement.kind
-                {
-                    union(&mut parent, destination.0, source.0);
-                }
-            }
-            if let Some(Terminator::NarrowBind {
-                source: Operand::Copy(Place::Local(source)) | Operand::Move(Place::Local(source)),
-                destination,
-                ..
-            }) = &block.terminator
-            {
-                union(&mut parent, destination.0, source.0);
-            }
-        }
-        let root: Vec<usize> = (0..n).map(|local| find(&mut parent, local)).collect();
+        let root = copy_roots(body);
+        let n = root.len();
         let mut facts = Self {
             arity,
-            root: root.clone(),
+            root,
             class: vec![None; n],
             invalid: vec![None; n],
             allocated: vec![false; n],
@@ -473,224 +619,88 @@ impl Facts {
             sites: Vec::new(),
             calls: Vec::new(),
         };
-        // A group is a candidate when a member is of a class type; every
-        // member must be of that one class.
-        let mut class_of: Vec<Option<usize>> = vec![None; n];
-        let mut candidate = vec![false; n];
-        for (local, decl) in body.locals.iter().enumerate() {
-            if matches!(decl.ty, RuntimeTy::Class(..)) {
-                candidate[root[local]] = true;
-            }
-        }
-        for (local, decl) in body.locals.iter().enumerate() {
-            let group = root[local];
-            if !candidate[group] {
-                continue;
-            }
-            let reason = match &decl.ty {
-                RuntimeTy::Class(name, args) if args.is_empty() => {
-                    match baml_compiler2_hir_ty::layout::class_ref_of(db, name) {
-                        None => Some("class declared outside the source".into()),
-                        Some(class) => match classes.resolve(db, index, class) {
-                            (None, Err(reason)) => Some(reason),
-                            (Some(object), resolved) => match class_of[group] {
-                                Some(known) if known != object => {
-                                    Some("holds objects of two classes".into())
-                                }
-                                Some(_) => None,
-                                None => {
-                                    class_of[group] = Some(object);
-                                    match resolved {
-                                        Ok(stack) => {
-                                            facts.class[group] = Some(stack);
-                                            None
-                                        }
-                                        Err(reason) => Some(reason),
-                                    }
-                                }
-                            },
-                            (None, Ok(_)) => unreachable!("a resolved class has an object"),
-                        },
-                    }
-                }
-                RuntimeTy::Class(..) => Some("generic class".into()),
-                _ => Some("may also hold a value that is not this class".into()),
-            };
-            if let Some(reason) = reason {
-                facts.escape(local, reason);
-            }
-            if decl.is_captured {
-                facts.escape(local, "captured by a closure".into());
-            }
-            if local == 0 {
-                facts.escape(local, "returned".into());
-            } else if local <= arity {
-                facts.params[group].push(local);
-            }
-        }
-        for (_, landing) in body.handlers() {
-            facts.escape(landing.error_local.0, "caught error".into());
-            facts.escape(landing.context_local.0, "caught error".into());
-        }
-        let builtins_equals = |callee: &Operand<'db>| match callee {
-            Operand::Constant(Constant::Function(func)) => index
-                .function(db, *func)
-                .is_some_and(|(_, info)| info.native_key.as_deref() == Some(EQUALS_EQUALS)),
-            _ => false,
-        };
+        facts.classify_locals(db, index, classes, body);
+        facts.escape_handlers(body);
         for (b, block) in body.blocks.iter().enumerate() {
             for statement in &block.statements {
                 facts.statement(db, index, classes, body, &statement.kind);
             }
-            let Some(terminator) = &block.terminator else {
-                continue;
-            };
-            match terminator {
-                Terminator::Goto { .. } | Terminator::Unreachable => {}
-                Terminator::Return => facts.escape(0, "returned".into()),
-                Terminator::NarrowBind {
-                    source,
-                    test,
-                    destination,
-                    ..
-                } => match source {
-                    Operand::Copy(Place::Local(_)) | Operand::Move(Place::Local(_)) => {
-                        if !matches!(test, TypeTest::Class { args, .. } if args.is_empty()) {
-                            facts.use_operand(source, "type-tested against a non-class type");
-                        }
-                    }
-                    _ => {
-                        facts.use_operand(source, "narrowed");
-                        facts.escape(destination.0, "holds a narrowed value".into());
-                    }
-                },
-                Terminator::Call {
-                    has_trace,
-                    argument_layout,
-                    callee,
-                    args,
-                    ntypeargs,
-                    destination,
-                    ..
-                } => {
-                    facts.define(destination, "holds a call result");
-                    let null_side = args.len() == 2
-                        && *ntypeargs == 0
-                        && builtins_equals(callee)
-                        && args
-                            .iter()
-                            .any(|arg| operand_ty(body, arg).is_some_and(|ty| ty.is_null()));
-                    if null_side {
-                        // `x == null` folds: a stack object is never null.
-                        for arg in args {
-                            if !matches!(
-                                arg,
-                                Operand::Copy(Place::Local(_)) | Operand::Move(Place::Local(_))
-                            ) {
-                                facts.use_operand(arg, "compared");
-                            }
-                        }
-                        continue;
-                    }
-                    let name = match callee {
-                        Operand::Constant(Constant::Function(func)) => {
-                            function_display_name(db, *func)
-                        }
-                        _ => "a function value".into(),
-                    };
-                    let positional = argument_layout
-                        .as_ref()
-                        .is_none_or(|layout| layout.0.iter().all(Option::is_none));
-                    let target = match user_callee(db, index, callee) {
-                        None => Err(format!("passed to {name}")),
-                        Some(_) if *has_trace => Err(format!("passed to {name} with a trace")),
-                        Some(_) if !positional => Err(format!("passed to {name} by name")),
-                        Some(_) if *ntypeargs != 0 => Err(format!("passed to generic {name}")),
-                        Some(object) if index.info(object).arity == args.len() => Ok(object),
-                        Some(_) => Err(format!("passed to {name} with defaulted arguments")),
-                    };
-                    facts.use_operand(callee, "called");
-                    let mut seen = Vec::new();
-                    let mut values = Vec::with_capacity(args.len());
-                    for arg in args {
-                        match arg {
-                            Operand::Copy(Place::Local(local))
-                            | Operand::Move(Place::Local(local)) => {
-                                let group = facts.root[local.0];
-                                if seen.contains(&group) {
-                                    facts.escape(local.0, format!("passed twice to {name}"));
-                                }
-                                seen.push(group);
-                                values.push(Some(group));
-                            }
-                            other => {
-                                facts.use_operand(other, "passed");
-                                values.push(None);
-                            }
-                        }
-                    }
-                    match &target {
-                        Ok(_) => facts.calls.push(Call {
-                            block: b,
-                            callee: target,
-                            args: values,
-                        }),
-                        Err(reason) => {
-                            for group in values.into_iter().flatten() {
-                                facts.escape_root(group, reason.clone());
-                            }
-                        }
-                    }
-                }
-                other => {
-                    let reason = match other {
-                        Terminator::VirtualCall { method, .. } => {
-                            format!("interface call .{method}")
-                        }
-                        Terminator::SysOp { .. } => "passed to a sys-op".into(),
-                        Terminator::Spawn { .. } => "spawned".into(),
-                        Terminator::Await { .. } | Terminator::AwaitAny { .. } => "awaited".into(),
-                        Terminator::Throw { .. } | Terminator::Rethrow { .. } => "thrown".into(),
-                        Terminator::Branch { .. } | Terminator::Switch { .. } => {
-                            "branched on".into()
-                        }
-                        _ => "used by a terminator".into(),
-                    };
-                    walk_terminator_operands(other, &mut |operand| {
-                        facts.use_operand(operand, &reason);
-                    });
-                    match other {
-                        Terminator::Await { future, .. } => facts.use_place(future, &reason),
-                        Terminator::Spawn { future, .. } => facts.define(future, "holds a future"),
-                        _ => {}
-                    }
-                    if let Some((destination, _)) = crate::analysis::continuation(other) {
-                        facts.define(destination, "holds a call result");
-                    }
-                    if let Terminator::ShortCircuit { destination, .. } = other {
-                        facts.define(destination, "holds a short-circuit result");
-                    }
-                }
+            if let Some(terminator) = &block.terminator {
+                facts.terminator(db, index, body, b, terminator);
             }
         }
         facts.check_reuse(body);
         facts
     }
 
-    fn escape(&mut self, local: usize, reason: String) {
+    /// A group is a candidate when a member is of a class type; every member
+    /// must be of that one class. The return local is returned; parameters
+    /// join their group's.
+    fn classify_locals<'db>(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        index: &ProgramIndex,
+        classes: &mut Classes,
+        body: &MirFunctionBody<'db>,
+    ) {
+        let mut candidate = vec![false; self.root.len()];
+        for (local, decl) in body.locals.iter().enumerate() {
+            if matches!(decl.ty, RuntimeTy::Class(..)) {
+                candidate[self.root[local]] = true;
+            }
+        }
+        for (local, decl) in body.locals.iter().enumerate() {
+            let group = self.root[local];
+            if !candidate[group] {
+                continue;
+            }
+            match local_class(db, index, classes, &decl.ty) {
+                Err(reason) => self.escape(local, reason),
+                Ok(stack) => self.join_class(group, stack),
+            }
+            if decl.is_captured {
+                self.escape(local, HeapReason::Captured);
+            }
+            if local == 0 {
+                self.escape(local, HeapReason::Returned);
+            } else if local <= self.arity {
+                self.params[group].push(local);
+            }
+        }
+    }
+
+    /// A member of `group` holds `stack`.
+    fn join_class(&mut self, group: usize, stack: StackClass) {
+        match &self.class[group] {
+            Some(known) if known.object != stack.object => {
+                self.escape_root(group, HeapReason::TwoClasses);
+            }
+            Some(_) => {}
+            None => self.class[group] = Some(stack),
+        }
+    }
+
+    fn escape_handlers(&mut self, body: &MirFunctionBody<'_>) {
+        for (_, landing) in body.handlers() {
+            self.escape(landing.error_local.0, HeapReason::CaughtError);
+            self.escape(landing.context_local.0, HeapReason::CaughtError);
+        }
+    }
+
+    fn escape(&mut self, local: usize, reason: HeapReason) {
         let root = self.root[local];
         self.escape_root(root, reason);
     }
 
-    fn escape_root(&mut self, root: usize, reason: String) {
+    fn escape_root(&mut self, root: usize, reason: HeapReason) {
         self.invalid[root].get_or_insert(reason);
     }
 
     /// `operand` is used as a value in a way that lets an object escape.
-    fn use_operand(&mut self, operand: &Operand<'_>, reason: &str) {
+    fn use_operand(&mut self, operand: &Operand<'_>, reason: &HeapReason) {
         match operand {
             Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-                self.escape(local.0, reason.to_string());
+                self.escape(local.0, reason.clone());
             }
             Operand::Copy(place) | Operand::Move(place) => self.use_place(place, reason),
             Operand::Constant(_) => {}
@@ -699,45 +709,175 @@ impl Facts {
 
     /// The locals within `place`: a field's base is read in place, anything
     /// else escapes.
-    fn use_place(&mut self, place: &Place, reason: &str) {
+    fn use_place(&mut self, place: &Place, reason: &HeapReason) {
         match place {
             Place::Field { base, .. } => match base.as_ref() {
                 Place::Local(_) => {}
                 other => self.use_place(other, reason),
             },
-            Place::Local(local) => self.escape(local.0, reason.to_string()),
+            Place::Local(local) => self.escape(local.0, reason.clone()),
             Place::Index { base, index, .. } => {
-                self.use_place(base, "indexed");
-                self.escape(index.0, "used as an index".into());
+                self.use_place(base, &HeapReason::Indexed);
+                self.escape(index.0, HeapReason::UsedAsIndex);
             }
             Place::Deref(baml_compiler2_mir::CellId::Local(local)) => {
-                self.escape(local.0, "held in a cell".into());
+                self.escape(local.0, HeapReason::HeldInCell);
             }
             Place::Capture(_) | Place::Deref(_) => {}
         }
     }
 
     /// `place` is written with something that is not a stack object.
-    fn define(&mut self, place: &Place, reason: &str) {
+    fn define(&mut self, place: &Place, reason: &HeapReason) {
         match place {
-            Place::Local(local) => self.escape(local.0, reason.to_string()),
+            Place::Local(local) => self.escape(local.0, reason.clone()),
             Place::Field { base, field } => {
                 // A boxed result may be an int where the field says float.
-                if let Place::Local(local) = base.as_ref() {
-                    let root = self.root[local.0];
-                    if self.class[root]
-                        .as_ref()
-                        .is_some_and(|class| class.fields.get(*field) == Some(&Repr::Float))
-                    {
-                        self.escape_root(
-                            root,
-                            "a field's value does not fit its declared type".into(),
-                        );
-                    }
+                if let Place::Local(local) = base.as_ref()
+                    && self.field_repr(local.0, *field) == Some(Repr::Float)
+                {
+                    self.escape(local.0, HeapReason::FieldDoesNotFit);
                 }
                 self.use_place(place, reason);
             }
             other => self.use_place(other, reason),
+        }
+    }
+
+    /// How the stack class of `local`'s group holds `field`, if it has one.
+    fn field_repr(&self, local: usize, field: usize) -> Option<Repr> {
+        let class = self.class[self.root[local]].as_ref()?;
+        class.fields.get(field).copied()
+    }
+
+    fn terminator<'db>(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        index: &ProgramIndex,
+        body: &MirFunctionBody<'db>,
+        block: usize,
+        terminator: &Terminator<'db>,
+    ) {
+        match terminator {
+            // `classify_locals` keeps the return local on the heap.
+            Terminator::Goto { .. } | Terminator::Unreachable | Terminator::Return => {}
+            Terminator::NarrowBind {
+                source,
+                test,
+                destination,
+                ..
+            } => self.narrow_bind(source, test, destination.0),
+            Terminator::Call { .. } => self.call(db, index, body, block, terminator),
+            other => self.opaque(other),
+        }
+    }
+
+    /// A narrowing bind of a bare local joins its group (`copy_roots`); a
+    /// class test reads only its tag.
+    fn narrow_bind(&mut self, source: &Operand<'_>, test: &TypeTest, destination: usize) {
+        if bare_local(source).is_none() {
+            self.use_operand(source, &HeapReason::Narrowed);
+            self.escape(destination, HeapReason::HoldsNarrowed);
+        } else if !matches!(test, TypeTest::Class { args, .. } if args.is_empty()) {
+            self.use_operand(source, &HeapReason::TypeTestedNonClass);
+        }
+    }
+
+    fn call<'db>(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        index: &ProgramIndex,
+        body: &MirFunctionBody<'db>,
+        block: usize,
+        terminator: &Terminator<'db>,
+    ) {
+        let Terminator::Call {
+            callee,
+            args,
+            ntypeargs,
+            destination,
+            ..
+        } = terminator
+        else {
+            unreachable!("a call terminator");
+        };
+        self.define(destination, &HeapReason::CallResult);
+        let (native_key, name) = match callee {
+            Operand::Constant(Constant::Function(func)) => (
+                index
+                    .function(db, *func)
+                    .and_then(|(_, info)| info.native_key.clone()),
+                function_display_name(db, *func),
+            ),
+            _ => (None, "a function value".into()),
+        };
+        if null_compared(body, native_key.as_deref(), *ntypeargs, args).is_some() {
+            // `x == null` folds: a stack object is never null.
+            for arg in args.iter().filter(|arg| bare_local(arg).is_none()) {
+                self.use_operand(arg, &HeapReason::Compared);
+            }
+            return;
+        }
+        let target = call_target(db, index, terminator, &name);
+        self.use_operand(callee, &HeapReason::Called);
+        let values = self.call_args(args, &name);
+        match target {
+            Ok(callee) => self.calls.push(Call {
+                block,
+                callee,
+                args: values,
+            }),
+            Err(reason) => {
+                for group in values.into_iter().flatten() {
+                    self.escape_root(group, reason.clone());
+                }
+            }
+        }
+    }
+
+    /// Per argument, the group of a bare local the callee could take as a
+    /// stack parameter; every other argument escapes.
+    fn call_args(&mut self, args: &[Operand<'_>], callee: &str) -> Vec<Option<usize>> {
+        let mut values = Vec::with_capacity(args.len());
+        for (i, arg) in args.iter().enumerate() {
+            let Some(local) = bare_local(arg) else {
+                self.use_operand(arg, &HeapReason::Passed);
+                values.push(None);
+                continue;
+            };
+            if i >= MASKED_PARAMS {
+                let callee = callee.to_string();
+                self.escape(local, HeapReason::PassedPastMask { callee });
+                values.push(None);
+                continue;
+            }
+            let group = self.root[local];
+            if values.contains(&Some(group)) {
+                let callee = callee.to_string();
+                self.escape(local, HeapReason::PassedTwice { callee });
+            }
+            values.push(Some(group));
+        }
+        values
+    }
+
+    /// A terminator without its own rule: what it reads escapes, what it
+    /// defines is not a stack object.
+    fn opaque(&mut self, terminator: &Terminator<'_>) {
+        let reason = opaque_reason(terminator);
+        walk_terminator_operands(terminator, &mut |operand| {
+            self.use_operand(operand, &reason);
+        });
+        match terminator {
+            Terminator::Await { future, .. } => self.use_place(future, &reason),
+            Terminator::Spawn { future, .. } => self.define(future, &HeapReason::HoldsFuture),
+            _ => {}
+        }
+        if let Some((destination, _)) = crate::analysis::continuation(terminator) {
+            self.define(destination, &HeapReason::CallResult);
+        }
+        if let Terminator::ShortCircuit { destination, .. } = terminator {
+            self.define(destination, &HeapReason::ShortCircuitResult);
         }
     }
 
@@ -750,160 +890,171 @@ impl Facts {
         kind: &StatementKind<'db>,
     ) {
         match kind {
+            StatementKind::Assign {
+                destination,
+                value:
+                    value @ Rvalue::Aggregate {
+                        kind: AggregateKind::Class { .. },
+                        ..
+                    },
+            } => self.allocation(db, index, classes, body, destination, value),
             StatementKind::Assign { destination, value } => {
-                if let Rvalue::Aggregate {
-                    kind:
-                        AggregateKind::Class {
-                            class,
-                            type_arg_templates,
-                        },
-                    fields,
-                } = value
-                {
-                    let name = class_display_name(db, *class);
-                    let Place::Local(local) = destination else {
-                        self.sites.push(Site {
-                            class: name,
-                            root: None,
-                            direct: Some("stored into a heap object".into()),
-                        });
-                        for field in fields {
-                            self.use_operand(field, "stored into a field");
-                        }
-                        self.use_place(destination, "stored");
-                        return;
-                    };
-                    let root = self.root[local.0];
-                    self.sites.push(Site {
-                        class: name,
-                        root: Some(root),
-                        direct: None,
-                    });
-                    self.allocated[root] = true;
-                    match classes.resolve(db, index, *class).1 {
-                        Err(reason) => self.escape_root(root, reason),
-                        Ok(_) if !type_arg_templates.is_empty() => {
-                            self.escape_root(root, "generic class".into());
-                        }
-                        Ok(stack) => {
-                            if self.class[root]
-                                .as_ref()
-                                .is_some_and(|known| known.object != stack.object)
-                            {
-                                self.escape_root(root, "holds objects of two classes".into());
-                            }
-                            for (field, repr) in fields.iter().zip(&stack.fields) {
-                                if !fits(body, field, *repr) {
-                                    self.escape_root(
-                                        root,
-                                        "a field's value does not fit its declared type".into(),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    for field in fields {
-                        self.use_operand(field, "stored into a field of another object");
-                    }
-                    return;
-                }
-                match (destination, value) {
-                    // Copies joined the groups.
-                    (
-                        Place::Local(_),
-                        Rvalue::Use(
-                            Operand::Copy(Place::Local(_)) | Operand::Move(Place::Local(_)),
-                        ),
-                    ) => return,
-                    (Place::Local(local), _) => {
-                        self.escape(local.0, "holds a value computed here".into());
-                    }
-                    (Place::Field { base, field }, _) => {
-                        if let Place::Local(local) = base.as_ref() {
-                            // A store into a stack object's field must fit
-                            // the struct's field.
-                            let root = self.root[local.0];
-                            if let (Some(class), Rvalue::Use(operand)) = (&self.class[root], value)
-                                && let Some(&repr) = class.fields.get(*field)
-                                && !fits(body, operand, repr)
-                            {
-                                self.escape_root(
-                                    root,
-                                    "a field's value does not fit its declared type".into(),
-                                );
-                            } else if let (Some(class), false) =
-                                (&self.class[root], matches!(value, Rvalue::Use(_)))
-                                && class.fields.get(*field) == Some(&Repr::Float)
-                                && !float_result(body, value)
-                            {
-                                self.escape_root(
-                                    root,
-                                    "a field's value does not fit its declared type".into(),
-                                );
-                            }
-                        } else {
-                            self.use_place(base, "stored through");
-                        }
-                    }
-                    (other, _) => self.use_place(other, "stored into"),
-                }
-                match value {
-                    Rvalue::IsType {
-                        operand: Operand::Copy(Place::Local(_)) | Operand::Move(Place::Local(_)),
-                        test: TypeTest::Class { args, .. },
-                    } if args.is_empty() => {}
-                    Rvalue::TypeTag(Place::Local(_)) => {}
-                    Rvalue::Use(operand) => {
-                        let reason = match destination {
-                            Place::Local(_) => "copied",
-                            _ => "stored into a heap object",
-                        };
-                        self.use_operand(operand, reason);
-                    }
-                    Rvalue::Array(..) | Rvalue::Map(..) => {
-                        walk_statement_operands(kind, &mut |operand| {
-                            self.use_operand(operand, "stored into a container");
-                        });
-                    }
-                    Rvalue::MakeClosure { .. } => walk_statement_operands(kind, &mut |operand| {
-                        self.use_operand(operand, "captured by a closure");
-                    }),
-                    Rvalue::MakeBoundMethod { .. } | Rvalue::MakeVirtualBoundMethod { .. } => {
-                        walk_statement_operands(kind, &mut |operand| {
-                            self.use_operand(operand, "bound as a method receiver");
-                        });
-                    }
-                    Rvalue::BinaryOp { .. } => walk_statement_operands(kind, &mut |operand| {
-                        self.use_operand(operand, "compared by identity or operated on");
-                    }),
-                    _ => {
-                        walk_statement_operands(kind, &mut |operand| {
-                            self.use_operand(operand, "used as a value");
-                        });
-                        walk_rvalue_places(value, &mut |place| {
-                            if matches!(place, Place::Local(_)) {
-                                self.use_place(place, "inspected");
-                            }
-                        });
-                    }
-                }
+                self.assign(body, kind, destination, value);
             }
             StatementKind::Drop(_) | StatementKind::Nop => {}
             StatementKind::FreshCell { local, .. } => {
-                self.escape(local.0, "captured by a closure".into());
+                self.escape(local.0, HeapReason::Captured);
             }
             StatementKind::Intrinsic { op, .. } => {
                 let reason = match op {
-                    baml_compiler2_mir::IntrinsicOp::Log(_) => "logged",
-                    _ => "passed to a trace hook",
+                    baml_compiler2_mir::IntrinsicOp::Log(_) => HeapReason::Logged,
+                    _ => HeapReason::TraceHook,
                 };
-                walk_statement_operands(kind, &mut |operand| self.use_operand(operand, reason));
+                walk_statement_operands(kind, &mut |operand| self.use_operand(operand, &reason));
             }
             StatementKind::VirtualFieldStore { .. } => {
                 walk_statement_operands(kind, &mut |operand| {
-                    self.use_operand(operand, "accessed through an interface");
+                    self.use_operand(operand, &HeapReason::ThroughInterface);
                 });
             }
+        }
+    }
+
+    /// A class allocation `destination = C { fields }`: a site, and the
+    /// group it defines.
+    fn allocation<'db>(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        index: &ProgramIndex,
+        classes: &mut Classes,
+        body: &MirFunctionBody<'db>,
+        destination: &Place,
+        value: &Rvalue<'db>,
+    ) {
+        let Rvalue::Aggregate {
+            kind:
+                AggregateKind::Class {
+                    class,
+                    type_arg_templates,
+                },
+            fields,
+        } = value
+        else {
+            unreachable!("a class allocation");
+        };
+        let name = class_display_name(db, *class);
+        let Place::Local(local) = destination else {
+            self.sites.push(Site {
+                class: name,
+                at: SiteAt::Heap(HeapReason::StoredIntoHeapObject),
+            });
+            for field in fields {
+                self.use_operand(field, &HeapReason::StoredIntoField);
+            }
+            self.use_place(destination, &HeapReason::Stored);
+            return;
+        };
+        let root = self.root[local.0];
+        self.sites.push(Site {
+            class: name,
+            at: SiteAt::Group(root),
+        });
+        self.allocated[root] = true;
+        let resolved = classes.resolve(db, index, *class);
+        if let Some(reason) =
+            self.allocation_reason(body, root, resolved, !type_arg_templates.is_empty(), fields)
+        {
+            self.escape_root(root, reason);
+        }
+        for field in fields {
+            self.use_operand(field, &HeapReason::StoredIntoAnotherObject);
+        }
+    }
+
+    /// Why an allocation of `resolved` into group `root` keeps it on the heap.
+    fn allocation_reason(
+        &self,
+        body: &MirFunctionBody<'_>,
+        root: usize,
+        resolved: Result<StackClass, HeapReason>,
+        generic: bool,
+        fields: &[Operand<'_>],
+    ) -> Option<HeapReason> {
+        let stack = match resolved {
+            Err(reason) => return Some(reason),
+            Ok(_) if generic => return Some(HeapReason::GenericClass),
+            Ok(stack) => stack,
+        };
+        if self.class[root]
+            .as_ref()
+            .is_some_and(|known| known.object != stack.object)
+        {
+            return Some(HeapReason::TwoClasses);
+        }
+        let fit = fields
+            .iter()
+            .zip(&stack.fields)
+            .all(|(field, repr)| fits(body, field, *repr));
+        (!fit).then_some(HeapReason::FieldDoesNotFit)
+    }
+
+    /// Any assignment but a class allocation.
+    fn assign<'db>(
+        &mut self,
+        body: &MirFunctionBody<'db>,
+        kind: &StatementKind<'db>,
+        destination: &Place,
+        value: &Rvalue<'db>,
+    ) {
+        match (destination, value) {
+            // Copies joined the groups.
+            (Place::Local(_), Rvalue::Use(operand)) if bare_local(operand).is_some() => return,
+            (Place::Local(local), _) => self.escape(local.0, HeapReason::ComputedHere),
+            (Place::Field { base, field }, _) => self.field_store(body, base, *field, value),
+            (other, _) => self.use_place(other, &HeapReason::StoredInto),
+        }
+        self.rvalue_uses(kind, destination, value);
+    }
+
+    /// A store into a stack object's field must fit the struct's field.
+    fn field_store(
+        &mut self,
+        body: &MirFunctionBody<'_>,
+        base: &Place,
+        field: usize,
+        value: &Rvalue<'_>,
+    ) {
+        let Place::Local(local) = base else {
+            self.use_place(base, &HeapReason::StoredThrough);
+            return;
+        };
+        if let Some(repr) = self.field_repr(local.0, field)
+            && !value_fits(body, value, repr)
+        {
+            self.escape(local.0, HeapReason::FieldDoesNotFit);
+        }
+    }
+
+    /// The objects an assigned rvalue reads.
+    fn rvalue_uses(&mut self, kind: &StatementKind<'_>, destination: &Place, value: &Rvalue<'_>) {
+        if let Rvalue::Use(operand) = value {
+            let reason = match destination {
+                Place::Local(_) => HeapReason::Copied,
+                _ => HeapReason::StoredIntoHeapObject,
+            };
+            self.use_operand(operand, &reason);
+            return;
+        }
+        let Some(reason) = rvalue_reason(value) else {
+            return;
+        };
+        walk_statement_operands(kind, &mut |operand| self.use_operand(operand, &reason));
+        if reason == HeapReason::UsedAsValue {
+            walk_rvalue_places(value, &mut |place| {
+                if matches!(place, Place::Local(_)) {
+                    self.use_place(place, &HeapReason::Inspected);
+                }
+            });
         }
     }
 
@@ -924,23 +1075,8 @@ impl Facts {
                 |handler| live_in[handler.0].clone(),
             );
             for statement in block.statements.iter().rev() {
-                if let StatementKind::Assign {
-                    destination: Place::Local(destination),
-                    value: Rvalue::Aggregate { .. },
-                } = &statement.kind
-                {
-                    let root = self.root[destination.0];
-                    if candidates.contains(&root)
-                        && (0..live.len()).any(|local| {
-                            live[local] && local != destination.0 && self.root[local] == root
-                        })
-                    {
-                        self.escape_root(
-                            root,
-                            "an alias of its previous object is live when it is allocated again"
-                                .into(),
-                        );
-                    }
+                if let Some(root) = self.reallocated(&statement.kind, &candidates, &live) {
+                    self.escape_root(root, HeapReason::LiveAlias);
                 }
                 transfer(&statement.kind, &mut live);
                 for (live, exceptional) in live.iter_mut().zip(&exceptional) {
@@ -948,6 +1084,35 @@ impl Facts {
                 }
             }
         }
+    }
+
+    /// The candidate group `statement` allocates while another of its
+    /// members is `live`.
+    fn reallocated(
+        &self,
+        statement: &StatementKind<'_>,
+        candidates: &BTreeSet<usize>,
+        live: &[bool],
+    ) -> Option<usize> {
+        let StatementKind::Assign {
+            destination: Place::Local(destination),
+            value: Rvalue::Aggregate { .. },
+        } = statement
+        else {
+            return None;
+        };
+        let root = self.root[destination.0];
+        let aliased = (0..live.len())
+            .any(|local| live[local] && local != destination.0 && self.root[local] == root);
+        (candidates.contains(&root) && aliased).then_some(root)
+    }
+}
+
+/// Whether `value`'s result can be stored into a field of `repr`.
+fn value_fits(body: &MirFunctionBody<'_>, value: &Rvalue<'_>, repr: Repr) -> bool {
+    match value {
+        Rvalue::Use(operand) => fits(body, operand, repr),
+        _ => repr != Repr::Float || float_result(body, value),
     }
 }
 
@@ -1062,75 +1227,82 @@ fn union(parent: &mut [usize], a: usize, b: usize) {
 /// parameters.
 struct State {
     /// Per root, why it stays on the heap.
-    invalid: Vec<Option<String>>,
-    /// Per root, whether it is a candidate at all.
-    candidate: Vec<bool>,
+    invalid: Vec<Option<HeapReason>>,
     /// Why this variant cannot exist.
-    dead: Option<String>,
+    dead: Option<HeapReason>,
     /// The parameters this variant takes as stack objects.
     params: u64,
 }
 
 impl State {
     fn new(facts: &Facts, params: u64) -> Self {
-        let n = facts.root.len();
-        let mut invalid = facts.invalid.clone();
-        let candidate: Vec<bool> = (0..n)
-            .map(|root| facts.root[root] == root && facts.class[root].is_some())
+        let invalid = (0..facts.root.len())
+            .map(|root| {
+                facts.invalid[root]
+                    .clone()
+                    .or_else(|| param_reason(facts, params, root))
+            })
             .collect();
-        for root in 0..n {
-            if !candidate[root] && facts.root[root] == root {
-                invalid[root].get_or_insert_with(|| "not a stack class".into());
-            }
-            let stack_params: Vec<usize> = facts.params[root]
-                .iter()
-                .copied()
-                .filter(|&local| params & (1 << (local - 1)) != 0)
-                .collect();
-            if facts.params[root].len() > stack_params.len() {
-                invalid[root].get_or_insert_with(|| "may hold a parameter".into());
-            } else if stack_params.len() > 1 {
-                invalid[root].get_or_insert_with(|| "may hold either of two parameters".into());
-            } else if stack_params.len() == 1 && facts.allocated[root] {
-                invalid[root].get_or_insert_with(|| "may hold a parameter or a new object".into());
-            } else if stack_params.is_empty() && !facts.allocated[root] {
-                invalid[root].get_or_insert_with(|| "never allocated here".into());
-            }
-        }
-        let mut state = Self {
-            params,
-            invalid,
-            candidate,
-            dead: None,
-        };
         // A stack parameter must not be a parameter beyond the arity.
-        for i in 0..64 {
-            if params & (1 << i) != 0 && i >= facts.arity {
-                state.dead = Some("no such parameter".into());
-            }
+        let dead = (facts.arity.min(MASKED_PARAMS)..MASKED_PARAMS)
+            .any(|i| takes_param(params, i))
+            .then_some(HeapReason::NoSuchParameter);
+        Self {
+            invalid,
+            dead,
+            params,
         }
-        state
     }
 
+    /// Whether the group of `root` is a stack object.
     fn stack(&self, root: usize) -> bool {
-        self.candidate.get(root).copied().unwrap_or(false) && self.invalid[root].is_none()
+        self.invalid[root].is_none()
     }
 
     /// Why a stack parameter of this variant is not a stack object, if one
     /// is not.
-    fn dead_param(&self, facts: &Facts) -> Option<String> {
-        (0..facts.arity.min(64)).find_map(|i| {
+    fn dead_param(&self, facts: &Facts) -> Option<HeapReason> {
+        (0..facts.arity.min(MASKED_PARAMS)).find_map(|i| {
             let root = facts.root[i + 1];
-            (self.params & (1 << i) != 0 && !self.stack(root)).then(|| {
-                format!(
-                    "parameter {} escapes: {}",
-                    i + 1,
+            (takes_param(self.params, i) && !self.stack(root)).then(|| HeapReason::ParamEscapes {
+                param: i + 1,
+                reason: Box::new(
                     self.invalid[root]
-                        .as_deref()
-                        .unwrap_or("not a stack object")
-                )
+                        .clone()
+                        .unwrap_or(HeapReason::NotStackObject),
+                ),
             })
         })
+    }
+
+    /// The (argument index, group) of each stack object `call` passes.
+    fn stack_args<'a>(&'a self, call: &'a Call) -> impl Iterator<Item = (usize, usize)> + 'a {
+        call.args
+            .iter()
+            .enumerate()
+            .filter_map(|(i, root)| root.filter(|&root| self.stack(root)).map(|root| (i, root)))
+    }
+
+    /// The stack parameters of the variant `call` calls; `0` for none.
+    fn mask(&self, call: &Call) -> u64 {
+        self.stack_args(call)
+            .filter(|&(i, _)| i < MASKED_PARAMS)
+            .fold(0, |mask, (i, _)| mask | (1 << i))
+    }
+
+    fn site_report(&self, site: &Site) -> SiteReport {
+        let heap_because = match &site.at {
+            SiteAt::Group(root) if self.stack(*root) => None,
+            SiteAt::Group(root) => Some(self.invalid[*root].as_ref().map_or_else(
+                || HeapReason::NotStackObject.to_string(),
+                ToString::to_string,
+            )),
+            SiteAt::Heap(reason) => Some(reason.to_string()),
+        };
+        SiteReport {
+            class: site.class.clone(),
+            heap_because,
+        }
     }
 
     fn plan(&self, facts: &Facts) -> BodyPlan {
@@ -1147,14 +1319,12 @@ impl State {
             }
             let id = *ids.entry(root).or_insert_with(|| {
                 let id = plan.groups.len();
-                let class = facts.class[root].as_ref().expect("candidate").object;
-                let storage = match facts.params[root].first() {
-                    Some(&param) => format!("(*arg{})", param - 1),
-                    None => format!("s{id}"),
-                };
                 plan.groups.push(Group {
-                    class,
-                    storage,
+                    class: facts.class[root].as_ref().expect("a stack class").object,
+                    storage: match facts.params[root].first() {
+                        Some(&param) => format!("(*arg{})", param - 1),
+                        None => format!("s{id}"),
+                    },
                     allocated: facts.params[root].is_empty(),
                     members: Vec::new(),
                 });
@@ -1164,17 +1334,31 @@ impl State {
             plan.local_group[local] = Some(id);
         }
         for call in &facts.calls {
-            let Ok(callee) = call.callee else { continue };
-            let mask = call
-                .args
-                .iter()
-                .enumerate()
-                .filter(|(_, root)| root.is_some_and(|root| self.stack(root)))
-                .fold(0u64, |mask, (i, _)| mask | (1 << i));
+            let mask = self.mask(call);
             if mask != 0 {
-                plan.calls.insert(call.block, (callee, mask));
+                plan.calls.insert(call.block, (call.callee, mask));
             }
         }
         plan
+    }
+}
+
+/// Why group `root` cannot be a stack object under stack parameters
+/// `params`, whatever its uses.
+fn param_reason(facts: &Facts, params: u64, root: usize) -> Option<HeapReason> {
+    if facts.root[root] == root && facts.class[root].is_none() {
+        return Some(HeapReason::NotStackClass);
+    }
+    let held = facts.params[root].len();
+    let stack = facts.params[root]
+        .iter()
+        .filter(|&&local| takes_param(params, local - 1))
+        .count();
+    match (held - stack, stack, facts.allocated[root]) {
+        (1.., _, _) => Some(HeapReason::MayHoldParameter),
+        (0, 2.., _) => Some(HeapReason::EitherOfTwoParameters),
+        (0, 1, true) => Some(HeapReason::ParameterOrNew),
+        (0, 0, false) => Some(HeapReason::NeverAllocated),
+        _ => None,
     }
 }
