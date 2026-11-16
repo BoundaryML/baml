@@ -274,41 +274,19 @@ class Array<T> {
             return self;
         }
         let items = self.slice(0, n);
-        // Compute each key exactly once, left to right.
-        let keys: U[] = [];
-        for (let x in items) {
-            keys.push(key(x));
+        // Keep each computed key with its element, including nullable elements.
+        let decorated: (U, T)[] = [];
+        for (let item in items) {
+            decorated.push((key(item), item));
         }
-        // Stably sort the positions `[0, n)` by their keys. `sort_by` is stable, so
-        // equal keys keep their original relative order with no explicit tie-break.
-        let order: int[] = [];
-        let p = 0;
-        while (p < n) {
-            order.push(p);
-            p += 1;
-        }
-        order.sort_by((i: int, j: int) -> root.ops.Ordering throws never {
-            match (keys.at(i)) {
-                null => root.ops.Ordering.Equal,
-                let ki: U => match (keys.at(j)) {
-                    null => root.ops.Ordering.Equal,
-                    let kj: U => ki.cmp(kj),
-                },
-            }
+        // `sort_by` is stable: equal keys retain their original element order.
+        decorated.sort_by((a: (U, T), b: (U, T)) -> root.ops.Ordering throws never {
+            a.0.cmp(b.0)
         });
-        // Materialize the reordered elements, then write them back in place.
-        let sorted: T[] = [];
-        for (let i in order) {
-            match (items.at(i)) {
-                null => {},
-                let item: T => {
-                    sorted.push(item);
-                },
-            }
-        }
+        // Write back only after every key and comparison succeeds.
         self.clear();
-        for (let s in sorted) {
-            self.push(s);
+        for (let pair in decorated) {
+            self.push(pair.1);
         }
         return self;
     }
@@ -503,12 +481,10 @@ class Array<T> {
     /// [10, 20].index_of(99)       // null
     /// ```
     function index_of(self, item: T) -> int? throws never {
-        let index = 0;
-        for (let element in self) {
+        for (let (let index, let element) in self.enumerate()) {
             if (element == item) {
                 return index;
             }
-            index += 1;
         }
         null
     }
@@ -750,6 +726,35 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     //baml:local_twin
     function values(self) -> V[] throws never {
         $rust_function
+    }
+
+    /// Returns `(key, value)` pairs in insertion order, captured together in
+    /// one snapshot. Later map updates do not replace snapshot slots; mutable
+    /// keys and values retain their ordinary sharing with the map.
+    //baml:mut_vm
+    //baml:local_twin
+    function entries(self) -> (K, V)[] throws never {
+        $rust_function
+    }
+
+    /// Builds a map from pairs in source order. A repeated key replaces its
+    /// value while keeping its first insertion position. Source errors propagate.
+    function from_entries<E>(
+        entries: root.iter.Iterable<Item = (K, V), Error = E>,
+    ) -> map<K, V> throws E {
+        let result: map<K, V> = {};
+        let iterator = entries.iter();
+        while (true) {
+            match (iterator.next()) {
+                root.iter.Done => {
+                    break;
+                },
+                let pair: (K, V) => {
+                    result.set(pair.0, pair.1);
+                },
+            }
+        }
+        result
     }
 
     /// Inserts or replaces the entry for `key` and returns the previous value,

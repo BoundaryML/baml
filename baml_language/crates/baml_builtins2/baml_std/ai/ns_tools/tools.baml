@@ -98,8 +98,8 @@ function _typed_arguments(
         },
     };
     let typed: map<string, unknown> = {};
-    for (let name in args.keys()) {
-        let _ = typed.set(name, args.get(name));
+    for (let (let name, let entry_value) in args.entries()) {
+        let _ = typed.set(name, entry_value);
     }
     for (let name in fields.keys()) {
         let value = reflect.Class.get_field<unknown>(aligned, name) catch (e) {

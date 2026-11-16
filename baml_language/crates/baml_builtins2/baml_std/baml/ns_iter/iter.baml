@@ -47,6 +47,30 @@ interface Iterable {
     /// rewind a partly-consumed one, and two callers will pull from the same
     /// cursor.
     function iter(self) -> Iterator<Item = Self.Item, Error = Self.Error> throws never;
+
+    /// Lazily pairs each element with its zero-based position in this traversal.
+    /// Each call creates a new counter; an existing iterator keeps its cursor.
+    /// Source errors propagate without spending a position. Advancing beyond
+    /// the `int` range panics with `baml.panics.IntegerOverflow`.
+    function enumerate(self) -> Iterator<Item = (int, Self.Item), Error = Self.Error> throws never {
+        Enumerate<Self.Item, Self.Error> { source: self.iter(), index: 0 }
+    }
+
+    /// Lazily pairs elements in order, stopping permanently when either side
+    /// ends. Pulls the left side first, so an unmatched left element is consumed
+    /// when the right side ends. If the right side throws, the pending left
+    /// element is retained for the next call. Both sources' errors propagate.
+    function zip<U, E2>(
+        self,
+        other: Iterable<Item = U, Error = E2>,
+    ) -> Iterator<Item = (Self.Item, U), Error = Self.Error | E2> throws never {
+        Zip<Self.Item, U, Self.Error, E2> {
+            left: self.iter(),
+            right: other.iter(),
+            pending: Done {},
+            done: false,
+        }
+    }
 }
 
 /// Implemented by types that produce a sequence of values, often from some
@@ -340,6 +364,32 @@ interface Iterator requires Iterable<Item = Self.Item, Error = Self.Error> {
         r
     }
 
+    /// Consumes this iterator into two arrays: elements accepted by `predicate`
+    /// first, rejected elements second. Both preserve source order and nullable
+    /// elements. Each element is tested once; source and predicate errors propagate.
+    function partition<E2>(
+        self,
+        predicate: (Self.Item) -> bool throws E2,
+    ) -> (Self.Item[], Self.Item[]) throws Self.Error | E2 {
+        let accepted: Self.Item[] = [];
+        let rejected: Self.Item[] = [];
+        while (true) {
+            match (self.next()) {
+                Done => {
+                    break;
+                },
+                let item: Self.Item => {
+                    if (predicate(item)) {
+                        accepted.push(item);
+                    } else {
+                        rejected.push(item);
+                    }
+                },
+            }
+        }
+        (accepted, rejected)
+    }
+
     /// Folds every remaining element into an accumulator, left to right.
     ///
     /// The accumulator starts at `initial` and each call to `fn` replaces it with
@@ -545,6 +595,100 @@ function flatten<R, E, E3, I extends Iterable<Item = R, Error = E3>>(
     src: Iterator<Item = I, Error = E>,
 ) -> Iterator<Item = R, Error = E | E3> throws never {
     Flatten<I, R, E, E3> { source: src, inner: Done {} }
+}
+
+/// Consumes an iterable of pairs into two arrays, preserving order and each
+/// slot's declared type. Source errors propagate and discard partial results.
+function unzip<A, B, E>(source: Iterable<Item = (A, B), Error = E>) -> (A[], B[]) throws E {
+    let left: A[] = [];
+    let right: B[] = [];
+    let iterator = source.iter();
+    while (true) {
+        match (iterator.next()) {
+            Done => {
+                break;
+            },
+            let pair: (A, B) => {
+                left.push(pair.0);
+                right.push(pair.1);
+            },
+        }
+    }
+    (left, right)
+}
+
+/// The lazy adapter returned by `Iterable.enumerate`.
+class Enumerate<T, E> {
+    source: Iterator<Item = T, Error = E>,
+    index: int,
+
+    implements Iterable {
+        type Item = (int, T);
+        type Error = E;
+        function iter(self) -> Iterator<Item = (int, T), Error = E> throws never {
+            self
+        }
+    }
+    implements Iterator {
+        type Item = (int, T);
+        type Error = E;
+        function next(self) -> (int, T) | Done throws E {
+            match (self.source.next()) {
+                Done => Done {},
+                let value: T => {
+                    let pair: (int, T) = (self.index, value);
+                    self.index += 1;
+                    pair
+                },
+            }
+        }
+    }
+}
+
+/// The lazy adapter returned by `Iterable.zip`.
+class Zip<T, U, E, E2> {
+    left: Iterator<Item = T, Error = E>,
+    right: Iterator<Item = U, Error = E2>,
+    pending: T | Done,
+    done: bool,
+
+    implements Iterable {
+        type Item = (T, U);
+        type Error = E | E2;
+        function iter(self) -> Iterator<Item = (T, U), Error = E | E2> throws never {
+            self
+        }
+    }
+    implements Iterator {
+        type Item = (T, U);
+        type Error = E | E2;
+        function next(self) -> (T, U) | Done throws E | E2 {
+            if (self.done) {
+                return Done {};
+            }
+            if (self.pending is Done) {
+                self.pending = self.left.next();
+                if (self.pending is Done) {
+                    self.done = true;
+                    return Done {};
+                }
+            }
+            match (self.right.next()) {
+                Done => {
+                    self.done = true;
+                    self.pending = Done {};
+                    Done {}
+                },
+                let right: U => {
+                    let left: T = self.pending else {
+                        return Done {};
+                    };
+                    self.pending = Done {};
+                    (left, right)
+                },
+            }
+        }
+    }
 }
 
 /// The iterator implementation for an array.

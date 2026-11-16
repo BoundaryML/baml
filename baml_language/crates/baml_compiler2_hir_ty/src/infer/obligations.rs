@@ -846,7 +846,9 @@ impl<'db> InferenceContext<'db> {
                     },
                     |(_, have_pin)| have_pin.clone(),
                 );
-            if self.table.unify(&have_pin, want_pin).is_err() {
+            let have_pin = self.normalize_confirmation_pin(&have_pin);
+            let want_pin = self.normalize_confirmation_pin(want_pin);
+            if self.table.unify(&have_pin, &want_pin).is_err() {
                 return false;
             }
         }
@@ -983,11 +985,29 @@ impl<'db> InferenceContext<'db> {
             else {
                 return false;
             };
-            if self.table.unify(have_pin, want_pin).is_err() {
+            let have_pin = self.normalize_confirmation_pin(have_pin);
+            let want_pin = self.normalize_confirmation_pin(want_pin);
+            if self.table.unify(&have_pin, &want_pin).is_err() {
                 return false;
             }
         }
         true
+    }
+
+    /// A `requires` head can carry `Self.Item` even when the subject pins it
+    /// to a known tuple. Reduce that projection before structurally unifying
+    /// it with `(A, B)`; otherwise inference rejects a head that the ground
+    /// interface resolver accepts. Open pins retain their inference variables.
+    fn normalize_confirmation_pin(&mut self, pin: &Ty) -> Ty {
+        let pin = self.table.resolve_completely(pin);
+        if pin.has_projection()
+            && let Ok(closed) = baml_type::interned::ClosedTy::try_from(&pin)
+        {
+            self.reduce_projections(&closed, super::PROJECTION_FINALIZE_FUEL)
+                .into_ty()
+        } else {
+            pin
+        }
     }
 
     /// The impl's declared bounds at `instantiation` become NESTED

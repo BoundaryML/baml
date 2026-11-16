@@ -277,8 +277,7 @@ function _gm_strip_nulls(value: baml.json.json, opaque: bool) -> baml.json.json 
     match (value) {
         let object: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
-            for (let key in object.keys()) {
-                let entry = object.get(key);
+            for (let (let key, let entry) in object.entries()) {
                 match (entry) {
                     null => null,
                     _ => {
@@ -321,14 +320,13 @@ function _gm_encode_query(value: string) -> string {
 function _gm_apply_query(url: string, params: map<string, string>?) -> string {
     if let items: map<string, string> = params {
         let out = url;
-        for (let name in items.keys()) {
+        for (let (let name, let entry_value) in items.entries()) {
             let separator = if (out.includes("?")) {
                 "&"
             } else {
                 "?"
             };
-            out
-                = `${out}${separator}${_gm_encode_query(name)}=${_gm_encode_query(items.get(name) ?? "")}`;
+            out = `${out}${separator}${_gm_encode_query(name)}=${_gm_encode_query(entry_value)}`;
         }
         out
     } else {
@@ -344,8 +342,8 @@ function _gm_apply_headers(
     extra: map<string, string>?,
 ) -> map<string, string> {
     if let items: map<string, string> = extra {
-        for (let name in items.keys()) {
-            let _ = headers.set(name.to_lower_case(), items.get(name) ?? "");
+        for (let (let name, let entry_value) in items.entries()) {
+            let _ = headers.set(name.to_lower_case(), entry_value);
         }
         headers
     } else {
@@ -493,10 +491,7 @@ function _lower_blocks(
     parts
 }
 
-class Prompt {
-    system_parts: GmPart[],
-    contents: GmContent[],
-}
+type Prompt = (GmPart[], GmContent[]);
 
 /// Gemini spells assistant as `model` and carries system instructions outside
 /// `contents`. Role-less prompt content is an ordinary user turn.
@@ -524,7 +519,7 @@ function lower_prompt(prompt: ai.Prompt, fetch_url: bool = true, preview: bool =
             null
         };
     }
-    Prompt { system_parts: system_parts, contents: contents }
+    (system_parts, contents)
 }
 
 /// (internal) ---------------------------------------------------------------------------
@@ -714,8 +709,7 @@ function gemini_build_body(
     preview: bool = false,
 ) -> string {
     let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
-    let lowered = lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
-    let contents = lowered.contents;
+    let (let system_parts, let contents) = lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
     let journal = ai.wire.sanitize_for_client(input.journal, provider, requested_model);
     for (let item in lower_journal(journal, fetch_url, preview = preview)) {
         contents.push(item);
@@ -727,11 +721,11 @@ function gemini_build_body(
     // keep the authored system role in `systemInstruction`.
     let system: GmContent? = null;
     let first_role = contents.at(0)?.role ?? "";
-    if (first_role != "user" && lowered.system_parts.length() > 0) {
-        contents = [GmContent { role: "user", parts: lowered.system_parts }].concat(contents);
+    if (first_role != "user" && system_parts.length() > 0) {
+        contents = [GmContent { role: "user", parts: system_parts }].concat(contents);
         null
-    } else if (lowered.system_parts.length() > 0) {
-        system = GmContent { role: null, parts: lowered.system_parts };
+    } else if (system_parts.length() > 0) {
+        system = GmContent { role: null, parts: system_parts };
         null
     } else {
         null

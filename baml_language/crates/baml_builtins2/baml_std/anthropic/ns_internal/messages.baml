@@ -219,8 +219,7 @@ function _anth_drop_nulls(j: baml.json.json) -> baml.json.json {
     match (j) {
         let obj: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
-            for (let key in obj.keys()) {
-                let value = obj.get(key);
+            for (let (let key, let value) in obj.entries()) {
                 match (value) {
                     null => null,
                     _ => {
@@ -260,10 +259,7 @@ class Message {
 
 /// Anthropic carries system content outside the alternating messages list.
 /// Keep that split provider-local while preserving the authored prompt roles.
-class Prompt {
-    system: AnthBlock[],
-    messages: Message[],
-}
+type Prompt = (AnthBlock[], Message[]);
 
 /// (internal) Anthropic places a cache breakpoint ON a content block, while a
 /// `${cache(args)}` in the prompt sits BETWEEN parts. The breakpoint goes on
@@ -474,7 +470,7 @@ function _lower_prompt(
             null
         };
     }
-    Prompt { system: system, messages: messages }
+    (system, messages)
 }
 
 // ---------------------------------------------------------------------------
@@ -710,9 +706,7 @@ function messages_request(
     preview: bool = false,
 ) -> MessagesRequest {
     let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
-    let lowered_prompt = _lower_prompt(prompt, params.default_cache_args, preview = preview);
-    let system = lowered_prompt.system;
-    let lowered = lowered_prompt.messages;
+    let (let system, let lowered) = _lower_prompt(prompt, params.default_cache_args, preview = preview);
     // Sanitize BEFORE lowering: foreign-client reasoning, empty turns and
     // orphaned tool calls are repaired once, in ai.wire, for every provider.
     for (
@@ -822,8 +816,8 @@ function _query_suffix(query_params: map<string, string>?) -> string {
         null => "",
         let params: map<string, string> => {
             let pairs: string[] = [];
-            for (let key in params.keys()) {
-                pairs.push(`${key}=${params.get(key) ?? ""}`);
+            for (let (let key, let entry_value) in params.entries()) {
+                pairs.push(`${key}=${entry_value}`);
             }
             if (pairs.length() > 0) {
                 `?${pairs.join("&")}`
@@ -841,8 +835,8 @@ function _query_suffix(query_params: map<string, string>?) -> string {
 function _headers(c: root.Client, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "anthropic-version": "2023-06-01", "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
-        for (let key in extra.keys()) {
-            let _ = headers.set(key.to_lower_case(), extra.get(key) ?? "");
+        for (let (let key, let entry_value) in extra.entries()) {
+            let _ = headers.set(key.to_lower_case(), entry_value);
         }
     }
     if (!preview) {

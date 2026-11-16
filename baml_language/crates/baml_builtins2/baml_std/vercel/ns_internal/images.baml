@@ -49,10 +49,7 @@ class GwImagesFile {
 }
 
 /// The text + files pair a rendered prompt lowers to.
-class GwImagesInput {
-    text: string,
-    files: GwImagesFile[],
-}
+type GwImagesInput = (string, GwImagesFile[]);
 
 /// `usage` — the gateway's token accounting for the call. Absent for providers
 /// that do not report it, and every field is optional so a partial object still
@@ -95,8 +92,7 @@ function _gw_images_drop_nulls(value: baml.json.json) -> baml.json.json {
     match (value) {
         let object: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
-            for (let key in object.keys()) {
-                let entry = object.get(key);
+            for (let (let key, let entry) in object.entries()) {
                 match (entry) {
                     null => null,
                     _ => {
@@ -215,7 +211,7 @@ function _gw_images_input(
             raw_body: null,
         }
     }
-    GwImagesInput { text: joined, files: files }
+    (joined, files)
 }
 
 function _gw_images_trim_slash(url: string) -> string {
@@ -240,10 +236,8 @@ function _gw_images_escape_query(raw: string) -> string {
 function _gw_images_with_query(url: string, params: map<string, string>?) -> string {
     let pairs: string[] = [];
     if let configured: map<string, string> = params {
-        for (let key in configured.keys()) {
-            pairs.push(
-                `${_gw_images_escape_query(key)}=${_gw_images_escape_query(configured.get(key) ?? "")}`,
-            );
+        for (let (let key, let entry_value) in configured.entries()) {
+            pairs.push(`${_gw_images_escape_query(key)}=${_gw_images_escape_query(entry_value)}`);
         }
     }
     if (pairs.length() == 0) {
@@ -271,8 +265,8 @@ function _gw_images_headers(
         "ai-model-id": c.model,
     };
     if let extra: map<string, string> = c.headers {
-        for (let name in extra.keys()) {
-            let _ = headers.set(name.to_lower_case(), extra.get(name) ?? "");
+        for (let (let name, let entry_value) in extra.entries()) {
+            let _ = headers.set(name.to_lower_case(), entry_value);
         }
     }
     if (!preview) {
@@ -298,14 +292,14 @@ function gateway_images_render(
     }
     let journal = ai.wire.sanitize_for_client(input.journal, "ai-gateway-images", c.model);
     // No schema block: the only thing this endpoint can return is an image.
-    let lowered = _gw_images_input((input.prompt)(ai.internal.build_output_format(input.output_type)), journal, preview = preview);
-    let files: GwImagesFile[]? = if (lowered.files.length() == 0) {
+    let (let text, let input_files) = _gw_images_input((input.prompt)(ai.internal.build_output_format(input.output_type)), journal, preview = preview);
+    let files: GwImagesFile[]? = if (input_files.length() == 0) {
         null
     } else {
-        lowered.files
+        input_files
     };
     let request = GwImagesRequest {
-        prompt: lowered.text,
+        prompt: text,
         n: c.n ?? 1,
         size: c.size,
         aspectRatio: c.aspect_ratio,
@@ -335,8 +329,7 @@ function gateway_images_render(
 /// search is structural rather than path-based.
 function _gw_images_find_output_format(value: baml.json.json?) -> string? {
     if let object: map<string, baml.json.json> = value {
-        for (let key in object.keys()) {
-            let entry = object.get(key);
+        for (let (let key, let entry) in object.entries()) {
             if (key == "outputFormat" || key == "output_format") {
                 if let name: string = entry {
                     return name;

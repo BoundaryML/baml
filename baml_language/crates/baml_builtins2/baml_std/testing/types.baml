@@ -40,10 +40,7 @@ class TestSetReport {
 type ChildReport = TestReport | TestSetReport;
 
 /// (internal) A named child report used internally when aggregating testset children.
-class _NamedChildReport {
-    name: string,
-    report: ChildReport,
-}
+type _NamedChildReport = (string, ChildReport);
 
 /// Runner type aliases — lambda transformers.
 /// TestRunner wraps "run test once" into a new execution lambda.

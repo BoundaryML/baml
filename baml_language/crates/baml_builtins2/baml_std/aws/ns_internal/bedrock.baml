@@ -360,8 +360,7 @@ function _prune_nulls(value: baml.json.json) -> baml.json.json {
     match (value) {
         let object: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
-            for (let key in object.keys()) {
-                let member = object.get(key);
+            for (let (let key, let member) in object.entries()) {
                 match (member) {
                     null => null,
                     _ => {
@@ -574,10 +573,7 @@ function _audio_block(audio: baml.media.Audio, preview: bool = false) -> Content
 
 /// Converse splits system content off the alternating message list, the same
 /// shape the Anthropic client uses.
-class BedrockPrompt {
-    system: SystemContentBlock[],
-    messages: Message[],
-}
+type BedrockPrompt = (SystemContentBlock[], Message[]);
 
 /// (internal) One content block -> its Converse `ContentBlock`, or null when it lowers to
 /// nothing. Converse takes every media kind in a conversation message; a tool
@@ -765,7 +761,7 @@ function _lower_prompt(
             null
         };
     }
-    BedrockPrompt { system: system, messages: messages }
+    (system, messages)
 }
 
 // ---------------------------------------------------------------------------
@@ -777,10 +773,7 @@ function _lower_prompt(
 // ---------------------------------------------------------------------------
 
 /// A lowered message plus whether it is an open tool-result group.
-class PendingMessage {
-    message: Message,
-    tool_results: bool,
-}
+type PendingMessage = (Message, bool);
 
 /// (internal) `ToolResultBlock.status` "is only supported by Amazon Nova and Anthropic
 /// Claude 3 and 4 models" (API_runtime_ToolResultBlock). Sending it to any
@@ -829,14 +822,12 @@ function _push_tool_result(
     let block = ContentBlock.of_tool_result(ToolResultBlock { toolUseId: id, content: content, status: status });
     // `.at` is null on an empty list, which covers the no-messages case.
     if let last: PendingMessage = pending.at(pending.length() - 1) {
-        if (last.tool_results) {
-            last.message.content.push(block);
+        if (last.1) {
+            last.0.content.push(block);
             return;
         }
     }
-    pending.push(
-        PendingMessage { message: Message { role: "user", content: [block] }, tool_results: true },
-    );
+    pending.push((Message { role: "user", content: [block] }, true));
 }
 
 /// (internal) `ai.RunStarted` / `ai.ToolRequested` / `ai.Usage` / `ai.FinalProduced` are
@@ -852,12 +843,7 @@ function _lower_journal(
             let user: ai.events.UserMessage => {
                 let content = _lower_blocks(user.content, preview = preview);
                 if (content.length() > 0) {
-                    pending.push(
-                        PendingMessage {
-                            message: Message { role: "user", content: content },
-                            tool_results: false,
-                        },
-                    );
+                    pending.push((Message { role: "user", content: content }, false));
                 }
                 null
             },
@@ -898,12 +884,7 @@ function _lower_journal(
                 // reasoning, so nothing upstream removes it. Mirrors the
                 // Anthropic client's guard in `_lower_journal`.
                 if (content.length() > 0) {
-                    pending.push(
-                        PendingMessage {
-                            message: Message { role: "assistant", content: content },
-                            tool_results: false,
-                        },
-                    );
+                    pending.push((Message { role: "assistant", content: content }, false));
                 }
                 null
             },
@@ -927,8 +908,8 @@ function _lower_journal(
         };
     }
     let out: Message[] = [];
-    for (let entry in pending) {
-        out.push(entry.message);
+    for (let (let message, _) in pending) {
+        out.push(message);
     }
     out
 }
@@ -1076,16 +1057,14 @@ function converse_request(
     input: ai.ModelTurnInput,
     preview: bool = false,
 ) -> ConverseRequest {
-    let prompt = _lower_prompt(
+    let (let system, let messages) = _lower_prompt(
         (input.prompt)(ai.internal.build_output_format(input.output_type)),
         client.default_cache_args(),
         preview = preview,
     );
-    let system = prompt.system;
     if (client.cache_system_prompt && system.length() > 0) {
         system.push(SystemContentBlock.of_cache_point());
     }
-    let messages = prompt.messages;
     let journal_messages = _lower_journal(
         ai.wire.degrade_tool_media(
             ai.wire.sanitize_for_client(input.journal, "aws-bedrock", client.model),
@@ -1191,14 +1170,14 @@ function _merge_headers(
     extra: map<string, string>?,
 ) -> map<string, string> {
     let out: map<string, string> = {};
-    for (let name in base.keys()) {
-        let _ = out.set(name.to_lower_case(), base.get(name) ?? "");
+    for (let (let name, let entry_value) in base.entries()) {
+        let _ = out.set(name.to_lower_case(), entry_value);
     }
     match (extra) {
         null => null,
         let overrides: map<string, string> => {
-            for (let name in overrides.keys()) {
-                let _ = out.set(name.to_lower_case(), overrides.get(name) ?? "");
+            for (let (let name, let entry_value) in overrides.entries()) {
+                let _ = out.set(name.to_lower_case(), entry_value);
             }
             null
         },
@@ -1213,8 +1192,8 @@ function _apply_query(url: string, params: map<string, string>?) -> string {
         null => url,
         let query: map<string, string> => {
             let pairs: string[] = [];
-            for (let name in query.keys()) {
-                pairs.push(`${encode_path_label(name)}=${encode_path_label(query.get(name) ?? "")}`);
+            for (let (let name, let entry_value) in query.entries()) {
+                pairs.push(`${encode_path_label(name)}=${encode_path_label(entry_value)}`);
             }
             if (pairs.length() == 0) {
                 url

@@ -1162,3 +1162,19 @@ test "array_generate_propagates_error" {
         "caught",
     )
 }
+
+test "array_sort_by_key_preserves_nullable_elements" {
+    let values: int?[] = [3, null, 1, null, 2];
+    values.sort_by_key((value: int?) -> int { value ?? 0 });
+    assert.equal(values, [null, null, 1, 2, 3])
+}
+
+test "array_sort_by_key_discards_callback_mutations_after_success" {
+    let values = [3, 1, 2];
+    values.sort_by_key((value: int) -> int {
+        values.clear();
+        values.push(99);
+        value
+    });
+    assert.equal(values, [1, 2, 3])
+}

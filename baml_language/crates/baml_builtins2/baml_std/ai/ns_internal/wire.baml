@@ -35,8 +35,8 @@ function _merge_json(base: baml.json.json, patch: baml.json.json) -> baml.json.j
                 let base_object: map<string, baml.json.json> => {
                     // copy first so the base key order is preserved: `set` on an
                     // existing key keeps that key's original position.
-                    for (let key in base_object.keys()) {
-                        let _ = out.set(key, base_object.get(key));
+                    for (let (let key, let entry_value) in base_object.entries()) {
+                        let _ = out.set(key, entry_value);
                     }
                     null
                 },
@@ -44,8 +44,7 @@ function _merge_json(base: baml.json.json, patch: baml.json.json) -> baml.json.j
                 // loop below still drops its null (delete) entries.
                 _ => null,
             };
-            for (let key in patch_object.keys()) {
-                let value = patch_object.get(key);
+            for (let (let key, let value) in patch_object.entries()) {
                 match (value) {
                     null => {
                         let _ = out.delete(key);

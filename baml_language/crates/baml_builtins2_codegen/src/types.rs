@@ -163,6 +163,7 @@ pub enum BamlType {
     Bool,
     Null,
     List(Box<BamlType>),
+    Tuple(Vec<BamlType>),
     Map(Box<BamlType>, Box<BamlType>),
     Optional(Box<BamlType>),
     /// A generic type parameter like `T`, `K`, `V`.

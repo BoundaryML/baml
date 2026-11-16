@@ -191,9 +191,9 @@ function table_from_json(j: root.json.json) -> Table throws root.json.DecodeErro
     match (j) {
         map<string, root.json.json> => {
             let items: map<string, Item> = map {};
-            for (let key in j.keys()) {
+            for (let (let key, let entry_value) in j.entries()) {
                 items[key]
-                    = match (j[key]) {
+                    = match (entry_value) {
                         null => {
                             continue;
                         }, // skip null values

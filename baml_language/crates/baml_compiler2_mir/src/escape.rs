@@ -1543,6 +1543,18 @@ pub const EFFECTS: &[(&str, Effect)] = &[
             leaks_contents: false,
         },
     ),
+    // Copies receiver entries into fresh tuples in a fresh array. The keys
+    // and values retain the receiver's sharing, as for `keys` and `values`.
+    (
+        "baml.Map.entries",
+        Effect {
+            arity: 1,
+            keeps: &[],
+            returns: Returns::Fresh(&[]),
+            compares_keys: false,
+            leaks_contents: false,
+        },
+    ),
     // Hashes the key and stores key and value in the receiver.
     (
         "baml.Map.set",

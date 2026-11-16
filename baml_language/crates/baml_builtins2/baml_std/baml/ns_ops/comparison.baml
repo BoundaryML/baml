@@ -280,16 +280,10 @@ implement Equals for bool {
 
 implement Compare for bool {
     function cmp(self, other: Self) -> Ordering throws never {
-        // todo: single match once we have tuples
-        match (self) {
-            true => match (other) {
-                true => Ordering.Equal,
-                false => Ordering.Greater,
-            },
-            false => match (other) {
-                true => Ordering.Less,
-                false => Ordering.Equal,
-            },
+        match (self, other) {
+            (true, let _other: false) => Ordering.Greater,
+            (false, let _other: true) => Ordering.Less,
+            _ => Ordering.Equal,
         }
     }
 }

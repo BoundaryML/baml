@@ -605,6 +605,7 @@ fn copy_field_type(ty: &BamlType) -> String {
         | BamlType::Map(_, _)
         | BamlType::Optional(_)
         | BamlType::Generic(_)
+        | BamlType::Tuple(_)
         | BamlType::Named(_)
         | BamlType::Media(_) => "bex_vm_types::Value".to_string(),
     }
@@ -1743,7 +1744,9 @@ fn extraction_expr(
                 format!("vm.as_media({val}, {kind})?")
             }
         }
-        BamlType::Named(_) | BamlType::Null | BamlType::RustType => val.to_string(),
+        BamlType::Tuple(_) | BamlType::Named(_) | BamlType::Null | BamlType::RustType => {
+            val.to_string()
+        }
     }
 }
 
@@ -1860,7 +1863,9 @@ fn call_arg_for_type(name: &str, ty: &BamlType, is_ref: bool) -> String {
         BamlType::Named(class_name) if is_media_class(class_name.as_str()) => {
             format!("&{name}")
         }
-        BamlType::Generic(_) | BamlType::Named(_) | BamlType::RustType => name.to_string(),
+        BamlType::Generic(_) | BamlType::Tuple(_) | BamlType::Named(_) | BamlType::RustType => {
+            name.to_string()
+        }
     }
 }
 
@@ -1927,6 +1932,7 @@ fn return_type_needs_alloc(ty: &BamlType) -> bool {
         | BamlType::Bool
         | BamlType::Null
         | BamlType::Generic(_)
+        | BamlType::Tuple(_)
         | BamlType::Named(_)
         | BamlType::Media(_)
         | BamlType::RustType => false,
@@ -2038,6 +2044,14 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
         },
         BamlType::Media(kind) => format!("baml_type::RealizedTy::Media({})", media_kind_path(kind)),
         BamlType::RustType => "baml_type::RealizedTy::RustType".to_string(),
+        BamlType::Tuple(slots) => format!(
+            "baml_type::RealizedTy::Tuple(vec![{}].into_boxed_slice())",
+            slots
+                .iter()
+                .map(|ty| runtime_ty_expr(ty, generics))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
         // `Named` is a lossy catch-all: the type parser discards a class's
         // generic arguments (`Box<int>` → `Named("Box")`) and also funnels
         // unions/unresolved types through it (`Named("union")`,
@@ -2101,9 +2115,11 @@ fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> Str
             let inner_conversion = result_conversion_expr("v", inner, generics);
             format!("match {name} {{ Some(v) => {inner_conversion}, None => Value::NULL }}")
         }
-        BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => {
-            name.to_string()
-        }
+        BamlType::Generic(_)
+        | BamlType::Tuple(_)
+        | BamlType::Named(_)
+        | BamlType::Media(_)
+        | BamlType::RustType => name.to_string(),
     }
 }
 
@@ -2147,7 +2163,9 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
             format!("Option<{inner_str}>")
         }
         BamlType::Uint8Array => "&[u8]".to_string(),
-        BamlType::Generic(_) | BamlType::Named(_) | BamlType::RustType => "&Value".to_string(),
+        BamlType::Generic(_) | BamlType::Tuple(_) | BamlType::Named(_) | BamlType::RustType => {
+            "&Value".to_string()
+        }
         BamlType::Media(_) => {
             if is_mut {
                 "&mut MediaValue".to_string()
@@ -2176,9 +2194,11 @@ fn baml_type_to_output(ty: &BamlType) -> String {
             format!("Option<{inner_str}>")
         }
         BamlType::Uint8Array => "Vec<u8>".to_string(),
-        BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => {
-            "Value".to_string()
-        }
+        BamlType::Generic(_)
+        | BamlType::Tuple(_)
+        | BamlType::Named(_)
+        | BamlType::Media(_)
+        | BamlType::RustType => "Value".to_string(),
     }
 }
 
@@ -2328,6 +2348,30 @@ fn media_kind_expr(class_name: &str) -> String {
 mod tests {
     use super::*;
     use crate::extract::{extract_native_builtins, extract_native_builtins_for};
+
+    #[test]
+    fn map_entries_keeps_generic_tuple_slots_in_native_return_metadata() {
+        let (builtins, _, _) = extract_native_builtins().unwrap();
+        let entries = builtins
+            .iter()
+            .find(|b| b.path == "baml.Map.entries")
+            .unwrap();
+        assert_eq!(
+            entries.return_type,
+            BamlType::List(Box::new(BamlType::Tuple(vec![
+                BamlType::Generic("K".into()),
+                BamlType::Generic("V".into()),
+            ])))
+        );
+        let element = match &entries.return_type {
+            BamlType::List(element) => element,
+            _ => unreachable!(),
+        };
+        let metadata = runtime_ty_expr(element, &["K".into(), "V".into()]);
+        assert!(metadata.starts_with("baml_type::RealizedTy::Tuple("));
+        assert!(metadata.contains("current_call_type_args().get(0)"));
+        assert!(metadata.contains("current_call_type_args().get(1)"));
+    }
 
     #[test]
     fn trace_free_functions_and_class_methods_use_qualified_dispatch() {

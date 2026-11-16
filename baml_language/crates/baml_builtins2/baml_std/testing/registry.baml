@@ -192,8 +192,7 @@ class TestRegistry {
             }
         }
         // Recurse into expanded sub-registries
-        for (let k in self.expansions.keys()) {
-            let sub = self.expansions[k];
+        for (let (let k, let sub) in self.expansions.entries()) {
             // Check if the name could be in this sub-registry (segment-aware prefix match)
             if (name.starts_with(k + "::")) {
                 return sub.run_test(name);
@@ -213,8 +212,7 @@ class TestRegistry {
                 );
             }
         }
-        for (let k in self.expansions.keys()) {
-            let sub = self.expansions[k];
+        for (let (let k, let sub) in self.expansions.entries()) {
             if (name.starts_with(k + "::")) {
                 return sub.run_testset(name);
             }
@@ -292,8 +290,7 @@ class TestRegistry {
             }
         }
         // Search in expanded sub-registries using segment-aware prefix match
-        for (let k in self.expansions.keys()) {
-            let sub = self.expansions[k];
+        for (let (let k, let sub) in self.expansions.entries()) {
             if (name.starts_with(k + "::")) {
                 return sub.expand_set(name);
             }
@@ -434,10 +431,9 @@ function _aggregate_reports(named_results: _NamedChildReport[]) -> TestSetReport
     let failed_names: string[] = [];
     let results: ChildReport[] = [];
     let result_names: string[] = [];
-    for (let named_result in named_results) {
-        let result = named_result.report;
+    for (let (let child_name, let result) in named_results) {
         results.push(result);
-        result_names.push(named_result.name);
+        result_names.push(child_name);
         let outcome = match (result) {
             let report: TestReport => report.outcome,
             let report: TestSetReport => report.outcome,
@@ -447,12 +443,12 @@ function _aggregate_reports(named_results: _NamedChildReport[]) -> TestSetReport
         } else {
             failed += 1;
             let child_failed_names = match (result) {
-                let report: TestReport => [named_result.name],
+                let report: TestReport => [child_name],
                 let report: TestSetReport => {
                     if (report.failed_names.length() > 0) {
                         report.failed_names
                     } else {
-                        [named_result.name]
+                        [child_name]
                     }
                 },
             };
@@ -552,13 +548,13 @@ function _run_children_parallel(
             // Containers only spawn and await; admitting them freely cannot
             // oversubscribe the machine, and gating them could deadlock the
             // slots their own leaves need.
-            futures.push(spawn { _NamedChildReport { name: child.name, report: (child.run)() } })
+            futures.push(spawn { (child.name, (child.run)()) })
         } else {
             // Acquire on the dispatcher, before the spawn exists: the whole
             // point is that an inadmissible leaf has no thread yet.
             pool.acquire();
             futures.push(spawn {
-                let named = _NamedChildReport { name: child.name, report: (child.run)() };
+                let named = (child.name, (child.run)());
                 // `run` is total: a leaf is `run_test`, whose runner arm
                 // catches middleware panics precisely so this release is
                 // reached on every outcome.

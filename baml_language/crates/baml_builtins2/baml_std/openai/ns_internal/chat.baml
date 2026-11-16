@@ -336,8 +336,8 @@ class ChatExtraPart {
             match (base) {
                 let object: map<string, baml.json.json> => {
                     let out: map<string, baml.json.json> = {};
-                    for (let key in object.keys()) {
-                        let _ = out.set(key, object.get(key));
+                    for (let (let key, let entry_value) in object.entries()) {
+                        let _ = out.set(key, entry_value);
                     }
                     if (self.extra.keys().length() > 0) {
                         let _ = out.set(_chat_directives_key(), baml.json.from(self.extra));
@@ -1047,15 +1047,15 @@ function _chat_apply_directives(j: baml.json.json) -> baml.json.json {
     match (j) {
         let object: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
-            for (let key in object.keys()) {
+            for (let (let key, let entry_value) in object.entries()) {
                 if (key != _chat_directives_key()) {
-                    let _ = out.set(key, _chat_apply_directives(object.get(key)));
+                    let _ = out.set(key, _chat_apply_directives(entry_value));
                 }
             }
             match (object.get(_chat_directives_key())) {
                 let directives: map<string, baml.json.json> => {
-                    for (let key in directives.keys()) {
-                        let _ = out.set(key, directives.get(key));
+                    for (let (let key, let entry_value) in directives.entries()) {
+                        let _ = out.set(key, entry_value);
                     }
                     null
                 },
@@ -1081,8 +1081,7 @@ function _chat_prune_nulls(j: baml.json.json) -> baml.json.json {
     match (j) {
         let object: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
-            for (let key in object.keys()) {
-                let value = object.get(key);
+            for (let (let key, let value) in object.entries()) {
                 match (value) {
                     null => null,
                     _ => {
@@ -1142,12 +1141,12 @@ function _chat_percent_encode(value: string) -> string {
 /// (internal) Endpoint-required query params first, user params merged over them.
 function _chat_url(compat: ChatCompat, params: ChatParams) -> string {
     let query: map<string, string> = {};
-    for (let key in compat.compat_query.keys()) {
-        let _ = query.set(key, compat.compat_query.get(key) ?? "");
+    for (let (let key, let entry_value) in compat.compat_query.entries()) {
+        let _ = query.set(key, entry_value);
     }
     if let user_query: map<string, string> = params.query_params {
-        for (let key in user_query.keys()) {
-            let _ = query.set(key, user_query.get(key) ?? "");
+        for (let (let key, let entry_value) in user_query.entries()) {
+            let _ = query.set(key, entry_value);
         }
     }
     let url = `${compat.base_url}${compat.path}`;
@@ -1155,8 +1154,8 @@ function _chat_url(compat: ChatCompat, params: ChatParams) -> string {
         return url;
     }
     let pairs: string[] = [];
-    for (let key in query.keys()) {
-        pairs.push(`${_chat_percent_encode(key)}=${_chat_percent_encode(query.get(key) ?? "")}`);
+    for (let (let key, let entry_value) in query.entries()) {
+        pairs.push(`${_chat_percent_encode(key)}=${_chat_percent_encode(entry_value)}`);
     }
     `${url}?${pairs.join("&")}`
 }
@@ -1170,8 +1169,8 @@ function _chat_headers(
 ) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let user_headers: map<string, string> = params.headers {
-        for (let name in user_headers.keys()) {
-            let _ = headers.set(name.to_lower_case(), user_headers.get(name) ?? "");
+        for (let (let name, let entry_value) in user_headers.entries()) {
+            let _ = headers.set(name.to_lower_case(), entry_value);
         }
     }
     if (!preview) {
@@ -1801,13 +1800,11 @@ class ChatStreamDecoder {
                             // Reasoning and tool-input fragments are content
                             // with no TextDelta of their own.
                             let other_content = (choice.delta?.reasoning_content ?? "") != "";
-                            let position = 0;
-                            for (let call in deltas) {
+                            for (let (let position, let call) in deltas.enumerate()) {
                                 if ((call.fn?.arguments ?? "") != "") {
                                     other_content = true;
                                 }
                                 self._absorb_call(call, position);
-                                position += 1;
                             }
                             if (other_content) {
                                 out.push(ai.stream.ContentSeen {});
