@@ -22,7 +22,7 @@ pub(crate) enum DashboardCommands {
     Create(UploadArgs),
     #[command(
         about = "Publish a new dashboard version",
-        after_long_help = "Examples:\n  Publish version 2:\n    baml cloud dashboard update dashboard.html --project acme/app --key overview --name Overview --expected-version 1"
+        after_long_help = "Examples:\n  Publish version 2:\n    baml cloud dashboard update page.html --key home --name Home --expected-version 1"
     )]
     Update(UpdateArgs),
     #[command(
