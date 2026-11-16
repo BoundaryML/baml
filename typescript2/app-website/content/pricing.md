@@ -37,7 +37,7 @@ Boundary Cloud is in early access.
 
 Free on both plans: unlimited spans, profiles, dashboards, alerts, members, projects and environments, and unlimited queries (SQL or `baml query`), up to 90 seconds each.
 
-Every Boundary Cloud plan comes with a 60-day money-back guarantee. [Get early access](https://calendly.com/boundary-founders/boundary-unified-stack-set-up).
+Every Boundary Cloud plan comes with a 60-day money-back guarantee. [Get early access](https://boundaryml.com/eap).
 
 ### How ingestion is billed
 

@@ -1454,7 +1454,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
                 return Ok(Conv::Bad(format!("cannot convert {text:?} to float")));
             }
             match text.parse::<f64>() {
-                Ok(f) if f.is_finite() => Conv::Ok(Value::object(vm.alloc_float(f))),
+                Ok(f) if f.is_finite() => Conv::Ok(vm.float_value(f)),
                 _ => Conv::Bad(format!("cannot convert {text:?} to float")),
             }
         }
@@ -1965,6 +1965,7 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
         ValueKind::Null => null_value.to_string(),
         ValueKind::Bool(b) => if b { "true" } else { "false" }.to_string(),
         ValueKind::Int(i) => i.to_string(),
+        ValueKind::Float(f) => float_cell_text(f)?,
         ValueKind::OmittedArg => {
             return Err(CellTextErr::Unsupported("omitted argument".to_string()));
         }
@@ -2088,10 +2089,8 @@ fn md_escape(text: &str) -> String {
 
 fn md_value_text(vm: &mut BexVm, v: Value, json_fallback: bool) -> String {
     // Prompt text is not meant to round-trip: non-finite floats render as-is.
-    if let ValueKind::Object(ptr) = v.kind() {
-        if let Object::Float(f) = vm.get_object(ptr) {
-            return format_float_md(*f);
-        }
+    if let Some(f) = v.as_float() {
+        return format_float_md(f);
     }
     match value_cell_text(vm, v, "") {
         Ok(t) => t,

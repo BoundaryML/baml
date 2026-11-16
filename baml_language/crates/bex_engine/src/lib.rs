@@ -1918,10 +1918,11 @@ impl BexEngine {
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
-        // Box every reachable `ConstValue::Float` into a compile-time
-        // `Object::Float` (floats can no longer live inline in `Value`).
-        // `bytecode.globals` are rewritten further down, during the
-        // `ConstValue` → `Value` conversion, using the returned index map.
+        // Box every reachable `ConstValue::Float` that has no inline `Value`
+        // encoding (NaN, ±inf, extreme magnitudes) into a compile-time
+        // `Object::Float`. `bytecode.globals` are rewritten further down,
+        // during the `ConstValue` → `Value` conversion, using the returned
+        // index map.
         let float_indices = bex_vm_types::types::box_compile_time_floats(
             &mut compile_time_objects,
             &bytecode.globals,
@@ -2043,13 +2044,14 @@ impl BexEngine {
             pending_globals[slot] = true;
         }
 
-        // Float globals were redirected to compile-time Object::Float entries
-        // by the boxing pre-pass above.
+        // Float globals with no inline encoding were redirected to
+        // compile-time Object::Float entries by the boxing pre-pass above; the
+        // rest resolve inline in `to_value`.
         let globals_vec: Vec<Value> = bytecode
             .globals
             .into_iter()
             .map(|cv| match cv {
-                bex_vm_types::ConstValue::Float(f) => {
+                bex_vm_types::ConstValue::Float(f) if float_indices.contains_key(&f.to_bits()) => {
                     let idx = float_indices[&f.to_bits()];
                     Value::object(heap.compile_time_ptr(idx))
                 }
@@ -3792,7 +3794,12 @@ impl BexEngine {
         vm.set_root_context(self.launch_context.clone());
         let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
-        inactive.acquire().await
+        let mut permit = inactive.acquire().await;
+        // A callback a sys-op runs for its caller, such as a server's request
+        // handler, is a spawned future: its body runs from here. Unmarked, it
+        // would record its start at its completion, as if cancelled unstarted.
+        permit.vm.mark_telemetry_running();
+        permit
     }
 
     /// A VM over this engine's heap and program for task `thread_id`, running
@@ -5311,6 +5318,7 @@ impl BexEngine {
             ValueKind::Null => "null".to_string(),
             ValueKind::Bool(value) => value.to_string(),
             ValueKind::Int(value) => value.to_string(),
+            ValueKind::Float(value) => value.to_string(),
             ValueKind::OmittedArg => "<omitted argument>".to_string(),
             ValueKind::Object(ptr) => match unsafe { ptr.get() } {
                 Object::String(value) => value.to_string(),
@@ -6183,7 +6191,7 @@ impl BexEngine {
                         // cancellation it received): per BEP-034 it runs to
                         // completion and its value stands, for a root call as
                         // for a spawned child.
-                        // A heap-boxed float is no handle: a function declared
+                        // A float (inline, or boxed) is no handle: a function declared
                         // `-> float` (or `-> float | ...`, `-> float?`) hands the
                         // host an inline `BexExternalValue::Float`, through the
                         // typed converter so the declared type's shape (a union

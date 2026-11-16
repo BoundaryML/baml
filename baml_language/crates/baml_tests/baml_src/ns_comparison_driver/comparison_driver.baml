@@ -467,3 +467,107 @@ function cd_eq_reordered_union() -> bool { baml.ops.equals_equals(cd_mk_ubox_a()
 test "driver_union_type_args_order_insensitive" {
     assert.is_true(cd_eq_reordered_union())
 }
+
+// ─── The `==` operator's in-place answers ────────────────────────────────────
+// `x == null` and `x != null` compile to a null test of `x`, and every other
+// `==` the driver serves to `CallEquals`, which answers the common pairs
+// without calling the driver: identical values, primitives, strings, floats,
+// operands of different kinds, and variants of an enum with no custom
+// `Equals`. Each answer must be the driver's.
+
+class CdLink {
+    next: CdLink?
+}
+
+function cd_link_is_null(link: CdLink?) -> bool { link == null }
+function cd_null_is_link(link: CdLink?) -> bool { null == link }
+function cd_link_not_null(link: CdLink?) -> bool { link != null }
+function cd_unknown_is_null(value: unknown) -> bool { value == null }
+function cd_unknown_not_null(value: unknown) -> bool { value != null }
+function cd_int_or_null_is_null(value: int?) -> bool { value == null }
+
+// The tested side is evaluated exactly once.
+function cd_counted(counter: int[], link: CdLink?) -> CdLink? {
+    counter.push(1);
+    link
+}
+function cd_null_test_evaluates_once() -> bool {
+    let counter: int[] = [];
+    let is_null = cd_counted(counter, null) == null;
+    is_null && counter.length() == 1
+}
+
+test "operator_null_test" {
+    assert.is_true(cd_link_is_null(null))
+    assert.is_true(!cd_link_is_null(CdLink { next: null }))
+    assert.is_true(cd_null_is_link(null))
+    assert.is_true(!cd_null_is_link(CdLink { next: null }))
+    assert.is_true(!cd_link_not_null(null))
+    assert.is_true(cd_link_not_null(CdLink { next: null }))
+    assert.is_true(cd_unknown_is_null(null))
+    assert.is_true(!cd_unknown_is_null(0))
+    assert.is_true(!cd_unknown_is_null(false))
+    assert.is_true(!cd_unknown_is_null(""))
+    assert.is_true(!cd_unknown_is_null([]))
+    assert.is_true(!cd_unknown_not_null(null))
+    assert.is_true(cd_unknown_not_null(0))
+    assert.is_true(cd_int_or_null_is_null(null))
+    assert.is_true(!cd_int_or_null_is_null(0))
+    assert.is_true(cd_null_test_evaluates_once())
+}
+
+enum CdState {
+    Todo
+    Doing
+    Done
+}
+
+enum CdPhase {
+    Todo
+    Doing
+}
+
+function cd_state_eq(a: CdState, b: CdState) -> bool { a == b }
+function cd_state_ne(a: CdState, b: CdState) -> bool { a != b }
+function cd_any_eq(a: unknown, b: unknown) -> bool { a == b }
+function cd_decoded_state(text: string) -> CdState { baml.json.decode<CdState>(text) }
+function cd_joined(a: string, b: string) -> string { a + b }
+
+test "operator_enum_equality" {
+    assert.is_true(cd_state_eq(CdState.Todo, CdState.Todo))
+    assert.is_true(!cd_state_eq(CdState.Todo, CdState.Done))
+    assert.is_true(cd_state_ne(CdState.Todo, CdState.Doing))
+    assert.is_true(!cd_state_ne(CdState.Done, CdState.Done))
+    // A decoded variant is its own object; it equals the constant by variant.
+    assert.is_true(cd_state_eq(cd_decoded_state("\"Done\""), CdState.Done))
+    assert.is_true(!cd_state_eq(cd_decoded_state("\"Doing\""), CdState.Done))
+    // The same variant index in another enum is a different value.
+    assert.is_true(!cd_any_eq(CdState.Todo, CdPhase.Todo))
+    assert.is_true(!cd_any_eq(CdState.Todo, null))
+}
+
+// The operator reaches a custom enum `eq` too: `CdTotalEq.eq` is total-true.
+function cd_total_eq(a: CdTotalEq, b: CdTotalEq) -> bool { a == b }
+function cd_total_ne(a: CdTotalEq, b: CdTotalEq) -> bool { a != b }
+
+test "operator_dispatches_custom_enum_equals" {
+    assert.is_true(cd_total_eq(CdTotalEq.A, CdTotalEq.B))
+    assert.is_true(!cd_total_ne(CdTotalEq.A, CdTotalEq.C))
+}
+
+test "operator_in_place_primitive_pairs" {
+    assert.is_true(cd_any_eq(cd_joined("a", "b"), "ab"))
+    assert.is_true(!cd_any_eq(cd_joined("a", "b"), "ac"))
+    assert.is_true(cd_any_eq(float.nan(), float.nan()))
+    assert.is_true(cd_any_eq(-0.0, 0.0))
+    assert.is_true(!cd_any_eq(1.5, 2.5))
+    assert.is_true(cd_any_eq(7, 7))
+    assert.is_true(!cd_any_eq(7, 8))
+    assert.is_true(!cd_any_eq(1, 1.0))
+    assert.is_true(!cd_any_eq(1, "1"))
+    assert.is_true(!cd_any_eq(true, 1))
+    assert.is_true(cd_any_eq(null, null))
+    // Pairs the driver still walks: structural classes and arrays.
+    assert.is_true(cd_any_eq(cd_mk_point(1, 2), cd_mk_point(1, 2)))
+    assert.is_true(!cd_any_eq([1, 2], [1, 3]))
+}

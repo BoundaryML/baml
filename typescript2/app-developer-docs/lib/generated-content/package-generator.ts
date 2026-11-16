@@ -416,10 +416,13 @@ export async function generatePackagePublicationInput(
   bamlBinary: string,
   packageName: string,
 ): Promise<PackagePublicationInput> {
+  // BEP-086 replaced `describe <package> --export` with the global
+  // `--output-format json`; the exported document is unchanged.
   const invocation = await invokeBaml(bamlBinary, [
     'describe',
     packageName,
-    '--export',
+    '--output-format',
+    'json',
   ]);
   const rawPayload = packageDescribeExportSchema.parse(
     JSON.parse(invocation.stdout),
