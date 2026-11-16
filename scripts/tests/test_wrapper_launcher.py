@@ -223,6 +223,19 @@ class WrapperLauncherTests(unittest.TestCase):
             self.assertEqual(child.returncode, 0)
         self.assertEqual(self.invoke(["signal"]).returncode, -signal.SIGTERM)
 
+    @unittest.skipIf(os.name == "nt", "POSIX native signal defaults")
+    def test_posix_does_not_leak_python_sigpipe_ignore_into_native_host(self):
+        self.build()
+        self.binary.unlink()
+        self.binary.symlink_to(shutil.which("sh"))
+        result = subprocess.run(
+            [sys.executable, self.launcher, "-c", "kill -PIPE $$; exit 99"],
+            env=self.environment,
+            capture_output=True,
+            timeout=20,
+        )
+        self.assertEqual(result.returncode, -signal.SIGPIPE)
+
     def test_launch_errors_are_nonzero_and_do_not_echo_environment_or_arguments(self):
         self.build()
         self.binary.unlink()

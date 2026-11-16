@@ -36,6 +36,13 @@ def main():
             # Preserve the entire Windows DWORD status, including NT exceptions.
             ctypes.windll.kernel32.ExitProcess(ctypes.c_uint32(status))
         else:
+            import signal
+
+            # Python ignores these at startup; restore native command defaults
+            # just as subprocess.Popen(restore_signals=True) does on POSIX.
+            for name in ("SIGPIPE", "SIGXFZ", "SIGXFSZ"):
+                if hasattr(signal, name):
+                    signal.signal(getattr(signal, name), signal.SIG_DFL)
             # Preserve PID, stdio, cwd, exit status and normal POSIX signals.
             os.execve(binary, command, environment)
     except OSError as error:
