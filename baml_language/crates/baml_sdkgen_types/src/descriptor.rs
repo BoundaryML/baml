@@ -384,6 +384,7 @@ mod tests {
             type_name("Box"),
             Symbol::Class(Class {
                 crossing: crate::ClassCrossing::Fields,
+                json_omit_nulls: false,
                 name: type_name("Box"),
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
@@ -391,6 +392,9 @@ mod tests {
                     name: BaseName::new("item"),
                     docstring: None,
                     ty: Ty::TypeVar(ParamTy::new(0, BaseName::new("T"))),
+                    json_rename: None,
+                    json_flatten: false,
+                    json_fallback: false,
                 }],
                 static_methods: vec![function("empty", &[], vec![])],
                 instance_methods: vec![function(
@@ -423,6 +427,7 @@ mod tests {
                         name: BaseName::new(v),
                         docstring: None,
                         value: (*v).to_string(),
+                        json_rename: None,
                     })
                     .collect(),
                 origin: origin(),

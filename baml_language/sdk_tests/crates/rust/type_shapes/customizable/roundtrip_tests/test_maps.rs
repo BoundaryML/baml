@@ -2,8 +2,8 @@
 
 use baml_bridge::Map;
 use baml_sdk::maps::{
-    Resume, Sentiment, round_trip_list_valued_map, round_trip_resume, round_trip_sentiment,
-    round_trip_simple_map,
+    Resume, Sentiment, round_trip_list_valued_map_sync, round_trip_resume_sync,
+    round_trip_sentiment_sync, round_trip_simple_map_sync,
 };
 
 // NOTE: enum-keyed maps don't round-trip yet. The inbound wire encoding
@@ -19,19 +19,19 @@ use baml_sdk::maps::{
 #[test]
 fn test_maps_round_trip_simple_map() {
     let m = Map::from([("a".to_string(), 1), ("b".to_string(), 2)]);
-    assert_eq!(round_trip_simple_map(m.clone()).unwrap(), m);
+    assert_eq!(round_trip_simple_map_sync(m.clone()).unwrap(), m);
 }
 
 #[test]
 fn test_maps_round_trip_list_valued_map() {
     let m = Map::from([("k".to_string(), vec![1, 2])]);
-    assert_eq!(round_trip_list_valued_map(m.clone()).unwrap(), m);
+    assert_eq!(round_trip_list_valued_map_sync(m.clone()).unwrap(), m);
 }
 
 #[test]
 fn test_maps_round_trip_sentiment() {
     assert_eq!(
-        round_trip_sentiment(Sentiment::Positive).unwrap(),
+        round_trip_sentiment_sync(Sentiment::Positive).unwrap(),
         Sentiment::Positive
     );
 }
@@ -41,5 +41,5 @@ fn test_maps_round_trip_resume() {
     let r = Resume {
         name: "n".to_string(),
     };
-    assert_eq!(round_trip_resume(r.clone()).unwrap(), r);
+    assert_eq!(round_trip_resume_sync(r.clone()).unwrap(), r);
 }

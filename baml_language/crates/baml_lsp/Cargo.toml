@@ -19,7 +19,7 @@ lsp-types = { workspace = true }
 percent-encoding = { workspace = true }
 salsa = { workspace = true }
 serde = { workspace = true, features = [ "derive" ] }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 text-size = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

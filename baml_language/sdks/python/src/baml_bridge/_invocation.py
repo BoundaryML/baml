@@ -123,7 +123,7 @@ def _dynamic_args(target, arguments, types, options):
     )
 
 
-def invoke(target, arguments, *, _types=None, _baml=None):
+def invoke_sync(target, arguments, *, _types=None, _baml=None):
     from . import get_runtime
     from .proto import decode_call_result
 
@@ -141,7 +141,7 @@ def invoke(target, arguments, *, _types=None, _baml=None):
     )
 
 
-async def invoke_async(target, arguments, *, _types=None, _baml=None):
+async def invoke(target, arguments, *, _types=None, _baml=None):
     import asyncio
     from . import _decode_call_result_async, get_runtime
     from .baml_py import cancel_function_call

@@ -22,9 +22,10 @@ class Dog {
 
 function classify(n: int) -> string {
     match (n) {
-        //# leading header before the first arm
+        // A `//#` header is a statement: between arms it is an error, so
+        // these are ordinary comments.
         0 => "zero",
-        //# header between arms
+        // between arms
         1 | 2 | 3 => "small",
         _ => "big",
     }

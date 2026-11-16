@@ -153,15 +153,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "approx"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "ar_archive_writer"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -354,27 +345,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml"
-version = "0.2.5"
-dependencies = [
- "anyhow",
- "baml_env",
- "baml_release",
- "clap",
- "console",
- "dunce",
- "reqwest",
- "semver",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "toml 0.8.23",
- "toml_edit 0.22.27",
- "uuid",
-]
-
-[[package]]
 name = "baml_artifact"
 version = "0.0.0-beta"
 dependencies = [
@@ -400,12 +370,13 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.23.0"
+version = "0.25.2"
 dependencies = [
  "hex",
  "indexmap",
  "libc",
  "libloading 0.8.9",
+ "log",
  "num-bigint",
  "prost",
  "serde_json",
@@ -433,9 +404,7 @@ dependencies = [
  "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
+ "baml_parser",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -456,13 +425,13 @@ dependencies = [
  "baml_ide",
  "baml_linker_types",
  "baml_lsp_server",
+ "baml_parser",
  "baml_query_btel",
  "baml_release",
  "baml_sdkgen_types",
  "baml_tests",
  "baml_type",
  "baml_version",
- "base64",
  "bcs_api",
  "bex_cache",
  "bex_engine",
@@ -485,7 +454,6 @@ dependencies = [
  "libc",
  "libsui",
  "mimalloc",
- "mime_guess",
  "num-bigint",
  "prost",
  "pulldown-cmark",
@@ -521,14 +489,13 @@ version = "0.1.0"
 dependencies = [
  "baml_base",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
+ "baml_parser",
+ "baml_syntax",
  "baml_type",
  "borsh",
+ "divan",
  "la-arena",
  "num-bigint",
- "rowan 0.16.1",
  "smol_str",
  "text-size",
 ]
@@ -563,7 +530,7 @@ dependencies = [
  "baml_base",
  "baml_compiler2_ast",
  "baml_compiler_diagnostics",
- "baml_compiler_parser",
+ "baml_parser",
  "baml_type",
  "indexmap",
  "la-arena",
@@ -605,9 +572,9 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
- "baml_compiler_parser",
- "baml_compiler_syntax",
  "baml_db",
+ "baml_parser",
+ "baml_syntax",
  "num-bigint",
  "text-size",
 ]
@@ -660,42 +627,12 @@ name = "baml_compiler_diagnostics"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_compiler_lexer",
+ "baml_parser",
+ "baml_syntax",
  "borsh",
  "miette",
  "owo-colors",
  "text-size",
-]
-
-[[package]]
-name = "baml_compiler_lexer"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "logos 0.15.1",
- "salsa",
- "text-size",
-]
-
-[[package]]
-name = "baml_compiler_parser"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_syntax",
- "rowan 0.16.1",
- "salsa",
- "text-size",
-]
-
-[[package]]
-name = "baml_compiler_syntax"
-version = "0.0.0-beta"
-dependencies = [
- "baml_base",
- "rowan 0.16.1",
 ]
 
 [[package]]
@@ -712,11 +649,9 @@ dependencies = [
  "baml_compiler2_mir",
  "baml_compiler2_rust",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
  "baml_linker",
  "baml_linker_types",
+ "baml_parser",
  "baml_project_root",
  "baml_type",
  "bex_vm_types",
@@ -767,10 +702,14 @@ name = "baml_fmt"
 version = "0.0.0-beta"
 dependencies = [
  "baml_db",
+ "baml_parser",
+ "baml_syntax",
+ "insta",
  "ouroboros",
- "rowan 0.16.1",
  "salsa",
+ "text-size",
  "thiserror 2.0.18",
+ "walkdir",
 ]
 
 [[package]]
@@ -794,16 +733,14 @@ dependencies = [
  "baml_compiler2_metrics",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
  "baml_db",
+ "baml_parser",
  "baml_sdkgen_types",
+ "baml_syntax",
  "baml_type",
  "bitflags 2.11.1",
  "insta",
  "la-arena",
- "rowan 0.16.1",
  "salsa",
  "serde",
  "serde_json",
@@ -925,6 +862,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_parser"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_env",
+ "baml_syntax",
+ "bitflags 2.11.1",
+ "insta",
+ "salsa",
+ "text-size",
+ "walkdir",
+]
+
+[[package]]
 name = "baml_path"
 version = "0.0.0-beta"
 dependencies = [
@@ -1004,6 +955,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_syntax"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_syntax_macros",
+ "logos 0.15.1",
+ "text-size",
+ "walkdir",
+]
+
+[[package]]
+name = "baml_syntax_macros"
+version = "0.0.0-beta"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "baml_test_support"
 version = "0.0.0-beta"
 dependencies = [
@@ -1019,6 +989,7 @@ dependencies = [
  "baml_artifact",
  "baml_base",
  "baml_builtins2",
+ "baml_builtins2_codegen",
  "baml_cli",
  "baml_compiler2_ast",
  "baml_compiler2_emit",
@@ -1027,10 +998,13 @@ dependencies = [
  "baml_compiler2_mir",
  "baml_compiler_diagnostics",
  "baml_db",
+ "baml_env",
  "baml_exec",
  "baml_fmt",
  "baml_linker",
  "baml_linker_types",
+ "baml_parser",
+ "baml_syntax",
  "baml_test_support",
  "baml_type",
  "bex_engine",
@@ -1043,9 +1017,9 @@ dependencies = [
  "borsh",
  "btel_clock",
  "btel_recorder",
- "codspeed-divan-compat",
  "darwin-kperf",
  "darwin-kperf-events",
+ "divan",
  "indexmap",
  "insta",
  "libc",
@@ -1219,6 +1193,7 @@ dependencies = [
  "indexmap",
  "libc",
  "num-bigint",
+ "os_info",
  "prost",
  "rustc-hash 2.1.2",
  "serde_json",
@@ -1299,12 +1274,11 @@ dependencies = [
  "baml_compiler2_hir_ty",
  "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
  "baml_db",
  "baml_fmt",
+ "baml_parser",
  "baml_path",
+ "baml_syntax",
  "baml_type",
  "baml_version",
  "bex_cache",
@@ -1321,7 +1295,6 @@ dependencies = [
  "paste",
  "percent-encoding",
  "regex",
- "rowan 0.16.1",
  "serde",
  "serde_json",
  "sha2",
@@ -1370,7 +1343,7 @@ name = "bex_str"
 version = "0.1.0"
 dependencies = [
  "bytecount",
- "codspeed-divan-compat",
+ "divan",
  "indexmap",
  "xxhash-rust",
 ]
@@ -1403,6 +1376,7 @@ dependencies = [
  "chacha20poly1305",
  "console",
  "corosensei",
+ "forked_google_cloud_auth",
  "getrandom 0.2.17",
  "indexmap",
  "itoa",
@@ -1444,8 +1418,10 @@ dependencies = [
  "hex",
  "indexmap",
  "num-bigint",
+ "rustc-hash 2.1.2",
  "serde_json",
  "sha2",
+ "smallvec",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -1494,6 +1470,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
 dependencies = [
  "hybrid-array",
+]
+
+[[package]]
+name = "block2"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdeb9d870516001442e364c5220d3574d2da8dc765554b4a617230d33fa58ef5"
+dependencies = [
+ "objc2",
 ]
 
 [[package]]
@@ -1546,7 +1531,7 @@ dependencies = [
  "btel_types",
  "cbindgen",
  "cc",
- "codspeed-divan-compat",
+ "divan",
  "futures",
  "indexmap",
  "libc",
@@ -1623,6 +1608,7 @@ dependencies = [
  "bridge_encode",
  "btel_snapshot",
  "btel_types",
+ "futures",
  "indexmap",
  "log",
  "num-bigint",
@@ -2182,80 +2168,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
 
 [[package]]
-name = "codspeed"
-version = "4.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57af92d1db7f6871b7e82c79cd87f2501db66f36b0eab924be6ea83dd6b2f3f3"
-dependencies = [
- "anyhow",
- "cc",
- "colored",
- "getrandom 0.2.17",
- "glob",
- "libc",
- "nix",
- "serde",
- "serde_json",
- "statrs",
-]
-
-[[package]]
-name = "codspeed-divan-compat"
-version = "4.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4ea79fd0b1f2128cfac6308369013dba92df47baf4a4f66b57d8158224a361d"
-dependencies = [
- "clap",
- "codspeed",
- "codspeed-divan-compat-macros",
- "codspeed-divan-compat-walltime",
- "regex",
-]
-
-[[package]]
-name = "codspeed-divan-compat-macros"
-version = "4.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f70e4ddd6beedefeb48f59d5f85fc21365a66e7976408c3d39f6cbbc4f03e08c"
-dependencies = [
- "divan-macros",
- "itertools 0.14.0",
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "codspeed-divan-compat-walltime"
-version = "4.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490c04f6076be6eacfafb496b8b237f3efbbed93838f2689115cc6f35fcf81c9"
-dependencies = [
- "cfg-if",
- "clap",
- "codspeed",
- "condtype",
- "divan-macros",
- "libc",
- "regex-lite",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
-
-[[package]]
-name = "colored"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
-dependencies = [
- "lazy_static",
- "windows-sys 0.59.0",
-]
 
 [[package]]
 name = "combine"
@@ -2642,10 +2558,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "divan-macros"
-version = "0.1.17"
+name = "divan"
+version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8dc51d98e636f5e3b0759a39257458b22619cac7e96d932da6eeb052891bb67c"
+checksum = "a405457ec78b8fe08b0e32b4a3570ab5dff6dd16eb9e76a5ee0a9d9cbd898933"
+dependencies = [
+ "cfg-if",
+ "clap",
+ "condtype",
+ "divan-macros",
+ "libc",
+ "regex-lite",
+]
+
+[[package]]
+name = "divan-macros"
+version = "0.1.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9556bc800956545d6420a640173e5ba7dfa82f38d3ea5a167eb555bc69ac3323"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2857,7 +2787,6 @@ dependencies = [
  "base64",
  "percent-encoding",
  "rsa",
- "serde",
  "serde_json",
  "sha2",
  "tokio",
@@ -3068,12 +2997,6 @@ name = "gimli"
 version = "0.32.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
-
-[[package]]
-name = "glob"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "globset"
@@ -4468,6 +4391,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-cloud-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73ad74d880bb43877038da939b7427bba67e9dd42004a18b809ba7d87cee241c"
+dependencies = [
+ "bitflags 2.11.1",
+ "objc2",
+ "objc2-foundation",
+]
+
+[[package]]
+name = "objc2-core-data"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b402a653efbb5e82ce4df10683b6b28027616a2715e90009947d50b8dd298fa"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
+]
+
+[[package]]
 name = "objc2-core-foundation"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4476,6 +4420,51 @@ dependencies = [
  "bitflags 2.11.1",
  "dispatch2",
  "objc2",
+]
+
+[[package]]
+name = "objc2-core-graphics"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807"
+dependencies = [
+ "bitflags 2.11.1",
+ "dispatch2",
+ "objc2",
+ "objc2-core-foundation",
+ "objc2-io-surface",
+]
+
+[[package]]
+name = "objc2-core-image"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5d563b38d2b97209f8e861173de434bd0214cf020e3423a52624cd1d989f006"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
+]
+
+[[package]]
+name = "objc2-core-location"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca347214e24bc973fc025fd0d36ebb179ff30536ed1f80252706db19ee452009"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
+]
+
+[[package]]
+name = "objc2-core-text"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cde0dfb48d25d2b4862161a4d5fcc0e3c24367869ad306b0c9ec0073bfed92d"
+dependencies = [
+ "bitflags 2.11.1",
+ "objc2",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
 ]
 
 [[package]]
@@ -4491,8 +4480,64 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272"
 dependencies = [
  "bitflags 2.11.1",
+ "block2",
+ "libc",
  "objc2",
  "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-io-surface"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d"
+dependencies = [
+ "bitflags 2.11.1",
+ "objc2",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-quartz-core"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96c1358452b371bf9f104e21ec536d37a650eb10f7ee379fff67d2e08d537f1f"
+dependencies = [
+ "bitflags 2.11.1",
+ "objc2",
+ "objc2-core-foundation",
+ "objc2-foundation",
+]
+
+[[package]]
+name = "objc2-ui-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d87d638e33c06f577498cbcc50491496a3ed4246998a7fbba7ccb98b1e7eab22"
+dependencies = [
+ "bitflags 2.11.1",
+ "block2",
+ "objc2",
+ "objc2-cloud-kit",
+ "objc2-core-data",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-core-image",
+ "objc2-core-location",
+ "objc2-core-text",
+ "objc2-foundation",
+ "objc2-quartz-core",
+ "objc2-user-notifications",
+]
+
+[[package]]
+name = "objc2-user-notifications"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9df9128cbbfef73cda168416ccf7f837b62737d748333bfe9ab71c245d76613e"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
 ]
 
 [[package]]
@@ -4591,6 +4636,21 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
+name = "os_info"
+version = "3.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cf20a545b305cf1da722b236b5155c9bb35f1d5ceb28c048bd96ca842f41b5b"
+dependencies = [
+ "android_system_properties",
+ "log",
+ "nix",
+ "objc2",
+ "objc2-foundation",
+ "objc2-ui-kit",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "ouroboros"
@@ -5546,18 +5606,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rowan"
-version = "0.16.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "417a3a9f582e349834051b8a10c8d71ca88da4211e4093528e36b9845f6b5f21"
-dependencies = [
- "countme",
- "hashbrown 0.14.5",
- "rustc-hash 1.1.0",
- "text-size",
-]
-
-[[package]]
 name = "rsa"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6396,16 +6444,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
-name = "statrs"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a3fe7c28c6512e766b0874335db33c94ad7b8f9054228ae1c2abd47ce7d335e"
-dependencies = [
- "approx",
- "num-traits",
-]
-
-[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6538,6 +6576,7 @@ dependencies = [
  "bex_heap",
  "bex_resource_types",
  "bridge_ctypes",
+ "btel_settings",
  "bytes",
  "flate2",
  "fs2",
@@ -6651,7 +6690,7 @@ dependencies = [
  "itertools 0.10.5",
  "logos 0.12.1",
  "once_cell",
- "rowan 0.15.18",
+ "rowan",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

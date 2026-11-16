@@ -86,7 +86,7 @@ fn detected_agent_cannot_run_without_skill() {
     let output = run_as_detected_agent(&["init"], project.path());
     let stderr = stderr_of(&output);
 
-    assert_eq!(output.status.code(), Some(4), "{stderr}");
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains(SKILL_MISSING_ERROR), "{stderr}");
     assert!(!project.path().join("baml.toml").exists());
 }
@@ -99,7 +99,7 @@ fn require_rejects_outdated_skill() {
         .unwrap();
     let stderr = stderr_of(&output);
 
-    assert_eq!(output.status.code(), Some(4), "{stderr}");
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains(SKILL_OUTDATED_ERROR), "{stderr}");
     assert!(stderr.contains("skill version unknown"), "{stderr}");
     assert!(!project.path().join("baml.toml").exists());
@@ -130,7 +130,7 @@ fn selected_project_uses_its_skill() {
         &[
             "fmt",
             "--dry-run",
-            "--project",
+            "--project-dir",
             project.path().to_str().unwrap(),
         ],
         cwd.path(),
@@ -152,12 +152,12 @@ fn selected_project_does_not_use_cwd_skill() {
     .unwrap();
 
     let output = run_as_detected_agent(
-        &["check", "--project", project.path().to_str().unwrap()],
+        &["check", "--project-dir", project.path().to_str().unwrap()],
         cwd.path(),
     );
     let stderr = stderr_of(&output);
 
-    assert_eq!(output.status.code(), Some(4), "{stderr}");
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains(SKILL_MISSING_ERROR), "{stderr}");
 }
 

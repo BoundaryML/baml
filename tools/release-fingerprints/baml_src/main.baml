@@ -7,7 +7,7 @@
 // the release workflow runs this over every uploaded build artifact before any
 // publisher:
 //
-//   baml-cli run --from tools/release-fingerprints check -- \
+//   baml-cli run --project-dir tools/release-fingerprints check -- \
 //     --artifacts <one subdirectory per artifact> --commit <release commit>
 //
 // Every artifact must belong to exactly one family below. A new artifact fails
@@ -86,7 +86,7 @@ function families() -> Family[] {
             expectation: Fingerprinted { unpack: [], binaries: ["**/bridge_web_core_bg.wasm"] },
         },
         Family {
-            name: "baml-wrapper-candidates",
+            name: "wrapper-baml",
             expectation: Fingerprinted {
                 unpack: ["**/*.tar.gz", "**/*.zip"],
                 binaries: ["**/bin/{baml,baml.exe}"],
@@ -97,8 +97,8 @@ function families() -> Family[] {
             expectation: Unfingerprinted { why: "shared wrapper scenario reports" },
         },
         Family {
-            name: "wrapper-",
-            expectation: Unfingerprinted { why: "the toolchain selector does not link baml_artifact" },
+            name: "rust-wrapper-",
+            expectation: Unfingerprinted { why: "the Rust reference does not link baml_artifact" },
         },
         Family {
             name: "baml-playground-dist",
@@ -235,7 +235,7 @@ function artifact_problems(dir: string, expectation: Fingerprinted, commit: stri
 
 /// Checks every artifact in `artifacts` (one subdirectory each, as
 /// `actions/download-artifact` lays them out) against `commit`, and exits
-/// non-zero on any problem.
+/// non-zero on any problem. Every fingerprinted family must be present.
 function check(artifacts: string, commit: string) -> null {
     if (!is_commit_id(commit)) {
         baml.io.eprintln(`--commit must be a full lowercase Git commit id, got "${commit}"`);
@@ -323,8 +323,8 @@ test "every artifact name belongs to exactly one family" {
         "swift-xcframework",
         "swift-sdk-mirror",
         "web-sdk-dist",
-        "wrapper-x86_64-unknown-linux-musl",
-        "baml-wrapper-candidates",
+        "rust-wrapper-x86_64-unknown-linux-musl",
+        "wrapper-baml",
         "baml-wrapper-tests-x86_64-unknown-linux-gnu",
         "baml-playground-dist",
         "baml-vscode-vsix",
@@ -346,4 +346,24 @@ test "every artifact name belongs to exactly one family" {
             .length(),
         0,
     );
+}
+
+test "published wrappers require fingerprints and Rust references stay separate" {
+    for (let family in families()) {
+        if (family.contains("wrapper-baml")) {
+            match (family.expectation) {
+                Fingerprinted => {},
+                Unfingerprinted => assert.is_true(false),
+            }
+        }
+        if (family.contains("rust-wrapper-x86_64-unknown-linux-gnu")) {
+            assert.is_true(!family.contains("wrapper-baml"));
+            match (family.expectation) {
+                Unfingerprinted => {},
+                Fingerprinted => assert.is_true(false),
+            }
+        }
+        assert.is_true(!family.contains("baml-wrapper-candidates"));
+        assert.is_true(!family.contains("wrapper-x86_64-unknown-linux-gnu"));
+    }
 }

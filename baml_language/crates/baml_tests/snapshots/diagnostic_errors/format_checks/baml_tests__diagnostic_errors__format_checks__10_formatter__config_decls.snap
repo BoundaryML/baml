@@ -6,353 +6,439 @@ source: crates/baml_tests/src/generated_tests.rs
 
 // ===== Basic client declaration =====
 client<llm> BasicClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-    },
+    provider openai,
+    options {
+        model "gpt-4",
+    }
 }
 
 // ===== Client with many options =====
 client<llm> FullClient {
-    provider: openai,
-    retry_policy: MyRetryPolicy,
-    options: {
-        model: "gpt-4",
-        max_tokens: 100,
-        temperature: 0.7,
-        top_p: 0.9,
-    },
+    provider openai
+    retry_policy MyRetryPolicy
+    options {
+        model: "gpt-4"
+        max_tokens 100
+        temperature 0.7,
+        top_p 0.9
+    }
 }
 
 // ===== Client with string provider =====
 client<llm> StringProviderClient {
-    provider: "openai-generic",
-    options: {
-        base_url: "https://openrouter.ai/api/v1",
-        model: "mistralai/mistral-small-3.1-24b-instruct",
-    },
+    provider "openai-generic"
+    options {
+        base_url "https://openrouter.ai/api/v1"
+        model "mistralai/mistral-small-3.1-24b-instruct"
+    }
 }
 
 // ===== Client with nested config =====
 client<llm> NestedConfigClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-        headers: {
-            "X-API-Key": "my-key",
-            "Authorization": "Bearer token",
-        },
-    },
+    provider openai
+    options {
+        model "gpt-4"
+        headers {
+            "X-API-Key" "my-key"
+            "Authorization" "Bearer token"
+        }
+    }
 }
 
 // ===== Client with array in config =====
 client<llm> ArrayConfigClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-        stop_sequences: ["END", "STOP", "DONE"],
-    },
+    provider openai
+    options {
+        model "gpt-4",
+        stop_sequences: ["END", "STOP", "DONE"]
+    }
 }
 
 // ===== Client with long option values pushing past line limit =====
 client<llm> LongOptionClient {
-    provider: openai,
-    options: {
-        model: "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit",
-        base_url: "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions",
-    },
+    provider openai
+    options {
+        model "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+        base_url "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
+    }
 }
 
 // ===== Client with boolean and number values =====
 client<llm> TypedValuesClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-        temperature: 0.5,
-        max_tokens: 2048,
-        stream: true,
-    },
+    provider openai
+    options {
+        model "gpt-4"
+        temperature: 0.5
+        max_tokens 2048
+        stream true
+    }
 }
 
 // ===== Client with env access in config =====
 client<llm> EnvClient {
-    provider: openai,
-    options: {
-        api_key: env.OPENAI_API_KEY,
-        model: "gpt-4",
-    },
+    provider: openai
+    options {
+        api_key env.OPENAI_API_KEY
+        model "gpt-4"
+    }
 }
 
 // ===== Client with array of objects in config =====
 client<llm> ArrayOfObjectsClient {
-    provider: openai,
+    provider openai
     options: {
-        model: "gpt-4",
-        tools: [
+        model "gpt-4",
+        tools [
             {
-                server_label: "web_search",
-                server_url: "https://example.com",
-                type: "mcp",
-            },
+                server_label "web_search"
+                server_url "https://example.com"
+                type "mcp"
+            }
             {
-                server_label: "calculator",
-                server_url: "https://calc.example.com",
-            },
-        ],
-    },
+                server_label "calculator"
+                server_url "https://calc.example.com"
+            }
+        ]
+    }
 }
 
 // ===== Client with raw string in config =====
 client<llm> RawStringConfigClient {
-    provider: openai,
+    provider openai,
     options: {
-        model: "gpt-4",
-        system_prompt: "You are a helpful assistant.\nAlways be concise.",
+        model: "gpt-4"
+        system_prompt "You are a helpful assistant.\nAlways be concise."
     },
 }
 
 // ===== Client with mixed value types =====
 client<llm> MixedValuesClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-        max_tokens: 100,
-        temperature: 0.7,
-        stream: true,
-        stop: ["END"],
-        inline_string: "inline quoted",
-        "string key": "value with spaces",
-    },
+    provider openai
+    options {
+        model "gpt-4"
+        max_tokens 100
+        temperature 0.7
+        stream true
+        stop ["END"]
+        inline_string "inline quoted"
+        "string key" "value with spaces"
+    }
 }
 
 // ===== Trivia on client declaration (line comments) =====
 // 1 client keyword leading
-client<llm> TriviaClient { // 12 open brace trailing
+client // 2 client keyword trailing
+// 3 type angle leading
+< // 4 open angle trailing
+// 5 type leading
+llm // 6 type trailing
+// 7 close angle leading
+> // 8 close angle trailing
+// 9 name leading
+TriviaClient // 10 name trailing
+// 11 open brace leading
+{ // 12 open brace trailing
     // 13 provider key leading
-    provider: openai, // 16 provider value trailing
+    provider: // 14 provider key trailing
+    // 15 provider value leading
+    openai // 16 provider value trailing
     // 17 options key leading
-    options: { // 20 options open brace trailing
+    options // 18 options key trailing
+    // 19 options brace leading
+    { // 20 options open brace trailing
         // 21 first option leading
-        model: "gpt-4", // 24 model value trailing
-        // 25 options close brace leading
-    }, // 26 options close brace trailing
-    // 27 close brace leading
+        model // 22 model key trailing
+        // 23 model value leading
+        "gpt-4" // 24 model value trailing
+    // 25 options close brace leading
+    } // 26 options close brace trailing
+// 27 close brace leading
 } // 28 close brace trailing
 
 ///////////////////
 
 // ===== Trivia on client declaration (block comments) =====
 /* 1 client keyword leading */
-client<llm> TriviaClientBlock { /* 12 open brace trailing */
+client /* 2 client keyword trailing */
+/* 3 type angle leading */
+< /* 4 open angle trailing */
+/* 5 type leading */
+llm /* 6 type trailing */
+/* 7 close angle leading */
+> /* 8 close angle trailing */
+/* 9 name leading */
+TriviaClientBlock /* 10 name trailing */
+/* 11 open brace leading */
+{ /* 12 open brace trailing */
     /* 13 provider key leading */
-    provider: /* 15 provider value leading */openai, /* 16 provider value trailing */
+    provider /* 14 provider key trailing */
+    /* 15 provider value leading */
+    openai /* 16 provider value trailing */
     /* 17 options key leading */
-    options: /* 18 options key trailing *//* 19 options brace leading */{ /* 20 options open brace trailing */
+    options: /* 18 options key trailing */
+    /* 19 options brace leading */
+    { /* 20 options open brace trailing */
         /* 21 first option leading */
-        model: /* 23 model value leading */"gpt-4", /* 24 model value trailing */
-        /* 25 options close brace leading */
-    }, /* 26 options close brace trailing */
-    /* 27 close brace leading */
+        model /* 22 model key trailing */
+        /* 23 model value leading */
+        "gpt-4" /* 24 model value trailing */
+    /* 25 options close brace leading */
+    } /* 26 options close brace trailing */
+/* 27 close brace leading */
 } /* 28 close brace trailing */
 
 ///////////////////
 
 // ===== Client with very long name exceeding limit =====
 client<llm> ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-    },
+    provider openai
+    options {
+        model "gpt-4"
+    }
 }
 
 // ===== Client with deeply nested config (3 levels) =====
 client<llm> DeeplyNestedClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-        headers: {
-            "X-API-Key": "my-key",
-            "Authorization": "Bearer token",
-            custom_config: {
-                retry_on_failure: true,
-                timeout_ms: 30000,
-                metadata: {
-                    team: "platform",
-                    environment: "production",
-                },
-            },
-        },
-    },
+    provider openai
+    options {
+        model "gpt-4"
+        headers {
+            "X-API-Key" "my-key"
+            "Authorization" "Bearer token"
+            custom_config {
+                retry_on_failure true
+                timeout_ms 30000
+                metadata {
+                    team "platform"
+                    environment "production"
+                }
+            }
+        }
+    }
 }
 
 // ===== Client with very long nested values exceeding limit =====
 client<llm> LongNestedValuesClient {
-    provider: openai,
-    options: {
-        model: "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily",
-        base_url: "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming",
-        headers: {
-            "Authorization": "Bearer some-extremely-long-api-token-value-that-is-used-for-authentication-and-exceeds-the-line-limit-easily-and-comfortably",
-            "X-Custom-Header": "another-very-long-header-value-that-also-pushes-past-one-hundred-columns-for-testing-purposes",
-        },
-    },
+    provider openai
+    options {
+        model "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
+        base_url "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
+        headers {
+            "Authorization" "Bearer some-extremely-long-api-token-value-that-is-used-for-authentication-and-exceeds-the-line-limit-easily-and-comfortably"
+            "X-Custom-Header" "another-very-long-header-value-that-also-pushes-past-one-hundred-columns-for-testing-purposes"
+        }
+    }
 }
 
 // ===== Client with many options pushing config length =====
 client<llm> ManyOptionsClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-        max_tokens: 4096,
-        temperature: 0.7,
-        top_p: 0.95,
-        frequency_penalty: 0.5,
-        presence_penalty: 0.3,
-        stream: true,
-        stop_sequences: ["END", "STOP", "DONE", "COMPLETE", "FINISHED"],
-        api_key: env.OPENAI_API_KEY,
-        base_url: "https://api.openai.com/v1",
-    },
+    provider openai
+    options {
+        model "gpt-4"
+        max_tokens 4096
+        temperature 0.7
+        top_p 0.95
+        frequency_penalty 0.5
+        presence_penalty 0.3
+        stream true
+        stop_sequences ["END", "STOP", "DONE", "COMPLETE", "FINISHED"]
+        api_key env.OPENAI_API_KEY
+        base_url "https://api.openai.com/v1"
+    }
 }
 
 // ===== Client with long array values exceeding limit =====
 client<llm> LongArrayClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-        stop_sequences: [
-            "STOP_GENERATION_NOW",
-            "END_OF_RESPONSE_MARKER",
-            "COMPLETION_FINISHED_SIGNAL",
-            "TERMINATE_OUTPUT_HERE",
-            "FINAL_ANSWER_DELIMITER",
-        ],
-    },
+    provider openai
+    options {
+        model "gpt-4"
+        stop_sequences ["STOP_GENERATION_NOW", "END_OF_RESPONSE_MARKER", "COMPLETION_FINISHED_SIGNAL", "TERMINATE_OUTPUT_HERE", "FINAL_ANSWER_DELIMITER"]
+    }
 }
 
 // ===== Client with array of objects with long values =====
 client<llm> LongArrayOfObjectsClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-        tools: [
+    provider openai
+    options {
+        model "gpt-4"
+        tools [
             {
-                server_label: "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation",
-                server_url: "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2",
-                type: "mcp",
-                description: "A very long description of the tool server that explains what it does and how it should be used by the model",
-            },
+                server_label "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation"
+                server_url "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2"
+                type "mcp"
+                description "A very long description of the tool server that explains what it does and how it should be used by the model"
+            }
             {
-                server_label: "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects",
-                server_url: "https://another-long-domain.internal.staging.example.com/tools/v1",
-            },
-        ],
-    },
+                server_label "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects"
+                server_url "https://another-long-domain.internal.staging.example.com/tools/v1"
+            }
+        ]
+    }
 }
 
 // ===== Trivia on deeply nested config (line comments) =====
 // 1 client leading
-client<llm> TriviaDeeplyNestedClient { // 9 open brace trailing
+client // 2 client trailing
+< // 3 angle trailing
+llm // 4 type trailing
+> // 5 close angle trailing
+// 6 name leading
+TriviaDeeplyNestedClient // 7 name trailing
+// 8 open brace leading
+{ // 9 open brace trailing
     // 10 provider leading
-    provider: openai, // 13 value trailing
+    provider // 11 provider trailing
+    // 12 value leading
+    openai // 13 value trailing
     // 14 options leading
-    options: { // 17 options brace trailing
+    options // 15 options trailing
+    // 16 options brace leading
+    { // 17 options brace trailing
         // 18 model leading
-        model: "gpt-4", // 21 model value trailing
+        model // 19 model trailing
+        // 20 model value leading
+        "gpt-4" // 21 model value trailing
         // 22 headers leading
-        headers: { // 25 headers brace trailing
+        headers // 23 headers trailing
+        // 24 headers brace leading
+        { // 25 headers brace trailing
             // 26 first header leading
-            "X-API-Key": "my-key", // 29 first value trailing
+            "X-API-Key" // 27 first header trailing
+            // 28 first value leading
+            "my-key" // 29 first value trailing
             // 30 second header leading
-            "Authorization": "Bearer token", // 33 second value trailing
-            // 34 headers close leading
-        }, // 35 headers close trailing
-        // 36 options close leading
-    }, // 37 options close trailing
-    // 38 close brace leading
+            "Authorization" // 31 second header trailing
+            // 32 second value leading
+            "Bearer token" // 33 second value trailing
+        // 34 headers close leading
+        } // 35 headers close trailing
+    // 36 options close leading
+    } // 37 options close trailing
+// 38 close brace leading
 } // 39 close brace trailing
 
 ///////////////////
 
 // ===== Trivia on deeply nested config (block comments) =====
 /* 1 client leading */
-client<llm> TriviaDeeplyNestedClientBlock { /* 9 open brace trailing */
+client /* 2 client trailing */
+< /* 3 angle trailing */
+llm /* 4 type trailing */
+> /* 5 close angle trailing */
+/* 6 name leading */
+TriviaDeeplyNestedClientBlock /* 7 name trailing */
+/* 8 open brace leading */
+{ /* 9 open brace trailing */
     /* 10 provider leading */
-    provider: /* 12 value leading */openai, /* 13 value trailing */
+    provider /* 11 provider trailing */
+    /* 12 value leading */
+    openai /* 13 value trailing */
     /* 14 options leading */
-    options: /* 16 options brace leading */{ /* 17 options brace trailing */
+    options /* 15 options trailing */
+    /* 16 options brace leading */
+    { /* 17 options brace trailing */
         /* 18 model leading */
-        model: /* 20 model value leading */"gpt-4", /* 21 model value trailing */
+        model /* 19 model trailing */
+        /* 20 model value leading */
+        "gpt-4" /* 21 model value trailing */
         /* 22 headers leading */
-        headers: /* 24 headers brace leading */{ /* 25 headers brace trailing */
+        headers /* 23 headers trailing */
+        /* 24 headers brace leading */
+        { /* 25 headers brace trailing */
             /* 26 first header leading */
-            "X-API-Key": /* 28 first value leading */"my-key", /* 29 first value trailing */
+            "X-API-Key" /* 27 first header trailing */
+            /* 28 first value leading */
+            "my-key" /* 29 first value trailing */
             /* 30 second header leading */
-            "Authorization": /* 32 second value leading */"Bearer token", /* 33 second value trailing */
-            /* 34 headers close leading */
-        }, /* 35 headers close trailing */
-        /* 36 options close leading */
-    }/* 37 options close trailing *//* 38 comma leading */, /* 39 comma trailing */
-    /* 40 close brace leading */
+            "Authorization" /* 31 second header trailing */
+            /* 32 second value leading */
+            "Bearer token" /* 33 second value trailing */
+        /* 34 headers close leading */
+        } /* 35 headers close trailing */
+    /* 36 options close leading */
+    } /* 37 options close trailing */
+    /* 38 comma leading */
+    , /* 39 comma trailing */
+/* 40 close brace leading */
 } /* 41 close brace trailing */
 
 ///////////////////
 
 // ===== Trivia on config item with long value (line comments) =====
 client<llm> TriviaLongValueClient {
-    provider: openai,
-    options: {
+    provider openai
+    options {
         // 1 key leading
-        model: "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", // 4 value trailing
+        model // 2 key trailing
+        // 3 value leading
+        "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" // 4 value trailing
         // 5 next key leading
-        base_url: "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", // 8 next value trailing
-    },
+        base_url // 6 next key trailing
+        // 7 next value leading
+        "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" // 8 next value trailing
+    }
 }
 
 // ===== Trivia on config item with long value (block comments) =====
 client<llm> TriviaLongValueClientBlock {
-    provider: openai,
-    options: {
+    provider openai
+    options {
         /* 1 key leading */
-        model: /* 3 value leading */"some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", /* 4 value trailing */
+        model /* 2 key trailing */
+        /* 3 value leading */
+        "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" /* 4 value trailing */
         /* 5 next key leading */
-        base_url: /* 7 next value leading */"https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", /* 8 next value trailing */
-    },
+        base_url /* 6 next key trailing */
+        /* 7 next value leading */
+        "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" /* 8 next value trailing */
+    }
 }
 
 // ===== Retry policy =====
 retry_policy BasicRetry {
-    max_retries: 3,
+    max_retries 3
 }
 
 // ===== Retry policy with many settings =====
 retry_policy FullRetry {
-    max_retries: 5,
-    backoff_multiplier: 2.0,
-    initial_delay_ms: 1000,
+    max_retries 5
+    backoff_multiplier 2.0
+    initial_delay_ms 1000
 }
 
 // ===== Retry policy with long name exceeding limit =====
 retry_policy ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols {
-    max_retries: 10,
-    backoff_multiplier: 3.0,
-    initial_delay_ms: 5000,
+    max_retries 10
+    backoff_multiplier 3.0
+    initial_delay_ms 5000
 }
 
 // ===== Trivia on retry policy (line comments) =====
 // 1 keyword leading
-retry_policy TriviaRetry { // 6 open brace trailing
+retry_policy // 2 keyword trailing
+// 3 name leading
+TriviaRetry // 4 name trailing
+// 5 open brace leading
+{ // 6 open brace trailing
     // 7 first item leading
-    max_retries: 3, // 10 value trailing
-    // 11 close brace leading
+    max_retries // 8 key trailing
+    // 9 value leading
+    3 // 10 value trailing
+// 11 close brace leading
 } // 12 close brace trailing
 
 // ===== Trivia on retry policy (block comments) =====
 /* 1 keyword leading */
-retry_policy TriviaRetryBlock { /* 6 open brace trailing */
+retry_policy /* 2 keyword trailing */
+/* 3 name leading */
+TriviaRetryBlock /* 4 name trailing */
+/* 5 open brace leading */
+{ /* 6 open brace trailing */
     /* 7 first item leading */
-    max_retries: /* 9 value leading */3, /* 10 value trailing */
-    /* 11 close brace leading */
+    max_retries /* 8 key trailing */
+    /* 9 value leading */
+    3 /* 10 value trailing */
+/* 11 close brace leading */
 } /* 12 close brace trailing */
 
 // ===== Test declaration =====
@@ -383,41 +469,39 @@ test "TriviaTestBlock" { /* 6 open brace trailing */
 
 // ===== Short names =====
 client<llm> C {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-    },
+    provider openai
+    options {
+        model "gpt-4"
+    }
 }
 
 retry_policy R {
-    max_retries: 1,
+    max_retries 1
 }
 
 // ===== Extraneous whitespace =====
-client<llm> ExtraWhitespaceClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-    },
+client<llm>    ExtraWhitespaceClient    {
+    provider    openai
+    options    {
+        model    "gpt-4"
+    }
 }
 
-retry_policy ExtraWhitespaceRetry {
-    max_retries: 3,
+retry_policy    ExtraWhitespaceRetry    {
+    max_retries    3
 }
 
 // ===== Config with commas between items =====
 client<llm> CommaClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-        max_tokens: 100,
-    },
+    provider openai,
+    options {
+        model "gpt-4",
+        max_tokens 100,
+    }
 }
 
 // ===== Config with items on same line =====
 client<llm> SameLineClient {
-    provider: openai,
-    options: {
-        model: "gpt-4",
-    },
+    provider openai
+    options { model "gpt-4" }
 }

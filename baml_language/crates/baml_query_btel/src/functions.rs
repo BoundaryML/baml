@@ -523,6 +523,7 @@ impl Composer {
             },
             DecodedValue::Null
             | DecodedValue::OmittedArg
+            | DecodedValue::Redacted(_)
             | DecodedValue::Bool(_)
             | DecodedValue::Int(_)
             | DecodedValue::Float(_)

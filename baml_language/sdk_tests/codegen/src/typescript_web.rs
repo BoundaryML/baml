@@ -119,14 +119,14 @@ fn codegen_fixture(fixtures_root: &Path, fixture: &str, crate_dir: &Path, custom
     overlay.file(
         "worker.js",
         if fixture == "function_calls" {
-            r#"import { worker_runtime_smoke, worker_startup_span_identity } from "./workers/baml_sdk/index.js";
+            r#"import { worker_runtime_smoke_sync, worker_startup_span_identity_sync } from "./workers/baml_sdk/index.js";
 
 export default {
   fetch(request) {
     if (new URL(request.url).pathname === "/reserved-span") {
-      return new Response(String(worker_startup_span_identity()));
+      return new Response(String(worker_startup_span_identity_sync()));
     }
-    return new Response(worker_runtime_smoke());
+    return new Response(worker_runtime_smoke_sync());
   },
 };
 "#

@@ -12,7 +12,7 @@ import BamlBridge
 final class TestGenerics: XCTestCase {
     func test_generics_round_trip_wrapper_int() throws {
         let w = Baml.generics.Wrapper<Int>(value: 5)
-        XCTAssertEqual(try Baml.generics.round_trip_wrapper_int(w: w), w)
+        XCTAssertEqual(try Baml.generics.round_trip_wrapper_int_sync(w: w), w)
     }
 
     func test_generics_round_trip_generic_linked_list_int() throws {
@@ -20,17 +20,17 @@ final class TestGenerics: XCTestCase {
             value: 1,
             next: Baml.generics.GenericLinkedList<Int>(value: 2, next: nil)
         )
-        XCTAssertEqual(try Baml.generics.round_trip_generic_linked_list_int(l: ll), ll)
+        XCTAssertEqual(try Baml.generics.round_trip_generic_linked_list_int_sync(l: ll), ll)
     }
 
     func test_generics_round_trip_generic_binary_tree_int() throws {
         let t = Baml.generics.GenericBinaryTree<Int>(value: 1, left: nil, right: nil)
-        XCTAssertEqual(try Baml.generics.round_trip_generic_binary_tree_int(t: t), t)
+        XCTAssertEqual(try Baml.generics.round_trip_generic_binary_tree_int_sync(t: t), t)
     }
 
     func test_generics_round_trip_box_int() throws {
         let b = Baml.generics.Box<Int>(value: 3, wrapped: Baml.generics.Wrapper<Int>(value: 4))
-        XCTAssertEqual(try Baml.generics.round_trip_box_int(b: b), b)
+        XCTAssertEqual(try Baml.generics.round_trip_box_int_sync(b: b), b)
     }
 
     func test_generics_round_trip_nested_generics() throws {
@@ -41,7 +41,7 @@ final class TestGenerics: XCTestCase {
                 value: Baml.generics.GenericLinkedList<Int>(value: 9, next: nil)
             )
         )
-        XCTAssertEqual(try Baml.generics.round_trip_nested_generics(n: n), n)
+        XCTAssertEqual(try Baml.generics.round_trip_nested_generics_sync(n: n), n)
     }
 
     func test_generics_round_trip_differing_instantiation() throws {
@@ -51,6 +51,6 @@ final class TestGenerics: XCTestCase {
                 next: nil
             )
         )
-        XCTAssertEqual(try Baml.generics.round_trip_differing_instantiation(d: d), d)
+        XCTAssertEqual(try Baml.generics.round_trip_differing_instantiation_sync(d: d), d)
     }
 }

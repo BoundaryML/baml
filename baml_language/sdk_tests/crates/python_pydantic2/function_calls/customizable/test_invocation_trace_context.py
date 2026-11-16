@@ -18,35 +18,35 @@ from baml_sdk.baml.spawn import CancelToken
 async def test_callback_captures_internal_baml_context():
     def callback(value):
         assert trace.current_cancel_token() is not None
-        current = trace.current_context()
+        current = trace.current_context_sync()
         assert current.distinct_id == "internal-id"
         assert current.metadata == {"phase": "internal", "keep": 7}
         return value
 
-    assert await context_baml.internal_context_async(
+    assert await context_baml.internal_context(
         callback,
         7,
-        _baml={"trace": trace.hidden().context(
+        _baml={"trace": trace.hidden_sync().context_sync(
             distinct_id="root-id",
             metadata={"phase": "root", "keep": 7, "remove": 9},
         )},
     ) == 7
     assert trace.current_cancel_token() is None
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
 
 
 async def test_current_context_returns_detached_snapshot():
     def callback(value):
-        observed = trace.current_context()
+        observed = trace.current_context_sync()
         observed.metadata["request"] = 99
         observed.distinct_id = "changed"
-        assert trace.current_context().metadata == {"request": 7}
-        assert trace.current_context().distinct_id == "original"
+        assert trace.current_context_sync().metadata == {"request": 7}
+        assert trace.current_context_sync().distinct_id == "original"
         return value
 
-    assert await baml.call_int_callback_async(
+    assert await baml.call_int_callback(
         callback, 1,
-        _baml={"trace": trace.context(distinct_id="original", metadata={"request": 7})},
+        _baml={"trace": trace.context_sync(distinct_id="original", metadata={"request": 7})},
     ) == 1
 
 
@@ -56,16 +56,16 @@ async def test_concurrent_invocations_isolate_context():
 
     async def request(index):
         async def callback(value):
-            assert trace.current_context().metadata == {"request": index}
+            assert trace.current_context_sync().metadata == {"request": index}
             ready[index].set()
             await release.wait()
-            assert trace.current_context().metadata == {"request": index}
-            nested = await context_baml.current_context_async()
+            assert trace.current_context_sync().metadata == {"request": index}
+            nested = await context_baml.current_context()
             assert nested.metadata == {"request": index}
             return value
 
-        return await baml.call_int_callback_async(
-            callback, index, _baml={"trace": trace.hidden().context(metadata={"request": index})}
+        return await baml.call_int_callback(
+            callback, index, _baml={"trace": trace.hidden_sync().context_sync(metadata={"request": index})}
         )
 
     pending = [asyncio.create_task(request(index)) for index in range(2)]
@@ -75,7 +75,7 @@ async def test_concurrent_invocations_isolate_context():
         release.set()
     assert await asyncio.gather(*pending) == [0, 1]
     assert trace.current_cancel_token() is None
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
 
 
 async def test_retained_context_survives_parent_completion():
@@ -85,46 +85,46 @@ async def test_retained_context_survives_parent_completion():
         captured.append(contextvars.copy_context())
         return value
 
-    assert await baml.call_int_callback_async(
-        callback, 1, _baml={"trace": trace.hidden().context(metadata={"request": 7})}
+    assert await baml.call_int_callback(
+        callback, 1, _baml={"trace": trace.hidden_sync().context_sync(metadata={"request": 7})}
     ) == 1
     assert trace.current_cancel_token() is None
-    assert captured[0].run(trace.current_context).metadata == {"request": 7}
+    assert captured[0].run(trace.current_context_sync).metadata == {"request": 7}
 
     def child_callback(value):
-        assert trace.current_context().metadata == {"request": 7}
+        assert trace.current_context_sync().metadata == {"request": 7}
         return value
 
     # Constructing a coroutine does not execute it in a copied Python context.
     # Task creation is the native carrier handoff; the parent has already exited.
-    child = captured[0].run(asyncio.create_task, baml.call_int_callback_async(child_callback, 7))
+    child = captured[0].run(asyncio.create_task, baml.call_int_callback(child_callback, 7))
     assert await child == 7
     assert trace.current_cancel_token() is None
-    assert trace.current_context().metadata == {}
+    assert trace.current_context_sync().metadata == {}
 
 
 async def test_reservation_does_not_inherit():
-    reserved = trace.span().context(metadata={"request": 7}).reserve()
+    reserved = trace.span_sync().context_sync(metadata={"request": 7}).reserve_sync()
 
     async def callback(value):
-        nested = await context_baml.current_context_async()
+        nested = await context_baml.current_context()
         assert nested.metadata == {"request": 7}
         return value
 
-    assert await baml.call_int_callback_async(callback, 1, _baml={"trace": reserved}) == 1
+    assert await baml.call_int_callback(callback, 1, _baml={"trace": reserved}) == 1
     # The root consumed the reservation. Descendants succeeded without reusing it.
     with pytest.raises(TypeError, match="invalid trace reservation: AlreadyAttached"):
-        await context_baml.current_context_async(_baml={"trace": reserved})
+        await context_baml.current_context(_baml={"trace": reserved})
 
 
 async def test_hidden_mode_does_not_inherit():
-    assert await context_baml.child_span_under_hidden_parent_async(
-        _baml={"trace": trace.hidden()}
+    assert await context_baml.child_span_under_hidden_parent(
+        _baml={"trace": trace.hidden_sync()}
     )
 
 
 async def test_cancelled_waiter_preserves_callback_context():
-    source = CancelToken.new()
+    source = CancelToken.new_sync()
     started = asyncio.Event()
     cleanup_started = asyncio.Event()
     release = asyncio.Event()
@@ -138,10 +138,10 @@ async def test_cancelled_waiter_preserves_callback_context():
         finally:
             cleanup_started.set()
             try:
-                assert trace.current_context().metadata == {"request": 7}
-                assert trace.current_cancel_token().is_cancelled()
+                assert trace.current_context_sync().metadata == {"request": 7}
+                assert trace.current_cancel_token().is_cancelled_sync()
                 await release.wait()
-                assert trace.current_context().metadata == {"request": 7}
+                assert trace.current_context_sync().metadata == {"request": 7}
             except Exception as error:
                 # The waiter is already cancelled, so it cannot report a
                 # callback assertion failure during physical cleanup.
@@ -151,19 +151,19 @@ async def test_cancelled_waiter_preserves_callback_context():
                 exited.set()
         return value
 
-    pending = asyncio.create_task(baml.call_int_callback_async(
+    pending = asyncio.create_task(baml.call_int_callback(
         callback, 1,
-        _baml={"cancel": source, "trace": trace.hidden().context(metadata={"request": 7})},
+        _baml={"cancel": source, "trace": trace.hidden_sync().context_sync(metadata={"request": 7})},
     ))
     try:
         await asyncio.wait_for(started.wait(), 5)
-        source.cancel()
+        source.cancel_sync()
         with pytest.raises(asyncio.CancelledError):
             await pending
         await asyncio.wait_for(cleanup_started.wait(), 5)
         assert not exited.is_set()
         assert trace.current_cancel_token() is None
-        assert trace.current_context().metadata == {}
+        assert trace.current_context_sync().metadata == {}
     finally:
         release.set()
     await asyncio.wait_for(exited.wait(), 5)

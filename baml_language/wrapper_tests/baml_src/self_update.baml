@@ -9,11 +9,14 @@ testset "wrapper self update" {
             defer { fixture.close(); }
             fixture.manage(
                 candidate,
-                ["self-update"],
+                ["self", "update"],
                 success = false,
                 diagnostic = "package manager",
             );
-            root.harness.require(fixture.requests().length() == 0, "disabled self-update downloaded");
+            root.harness.require(
+                fixture.requests().length() == 0,
+                "disabled self-update downloaded",
+            );
         }
     }
 
@@ -24,7 +27,10 @@ testset "wrapper self update" {
             let config_before = fixture.read(USER_CONFIG_FILE);
             let project_before = fixture.read(PROJECT_MANIFEST_FILE);
 
-            root.harness.require(candidate.command.length() == 1, "self-update requires a copied executable candidate");
+            root.harness.require(
+                candidate.command.length() == 1,
+                "self-update requires a copied executable candidate",
+            );
             fixture.copy(candidate.command[0], `wrapper${fixture.suffix}`);
             let copy = root.harness.Candidate {
                 label: candidate.label,
@@ -33,7 +39,16 @@ testset "wrapper self update" {
             };
             fixture.wrapper_archive(mode = "valid");
             let state = fixture.read(CHANNEL_STATE_FILE);
-            fixture.manage(copy, ["self-update"], success = true);
+            let updated = fixture.manage(
+                copy,
+                ["self", "update", "--output-format", "json"],
+                success = true,
+            );
+            root.harness.require(updated.stdout.to_string() == "", "update report reached stdout");
+            root.harness.require(
+                updated.stderr.to_string().includes("updated BAML wrapper"),
+                "update report was not written to stderr",
+            );
             fixture.behavior(REPLACEMENT_WRAPPER_IDENTITY, "replacement\n");
             let attempts = 0;
             while (attempts < 100) {
@@ -64,7 +79,10 @@ testset "wrapper self update" {
             let config_before = fixture.read(USER_CONFIG_FILE);
             let project_before = fixture.read(PROJECT_MANIFEST_FILE);
 
-            root.harness.require(candidate.command.length() == 1, "self-update requires a copied executable candidate");
+            root.harness.require(
+                candidate.command.length() == 1,
+                "self-update requires a copied executable candidate",
+            );
             fixture.copy(candidate.command[0], `wrapper${fixture.suffix}`);
             let copy = root.harness.Candidate {
                 label: candidate.label,
@@ -74,7 +92,7 @@ testset "wrapper self update" {
             fixture.wrapper_archive(mode = "valid");
             fixture.write("server/wrapper.json.status", "500");
             let state = fixture.read(CHANNEL_STATE_FILE);
-            fixture.manage(copy, ["self-update"], success = false);
+            fixture.manage(copy, ["self", "update"], success = false);
             fixture.check(copy, BASE_VERSION);
             root.harness.require(
                 fixture.read(CHANNEL_STATE_FILE) == state
@@ -90,7 +108,10 @@ testset "wrapper self update" {
             let config_before = fixture.read(USER_CONFIG_FILE);
             let project_before = fixture.read(PROJECT_MANIFEST_FILE);
 
-            root.harness.require(candidate.command.length() == 1, "self-update requires a copied executable candidate");
+            root.harness.require(
+                candidate.command.length() == 1,
+                "self-update requires a copied executable candidate",
+            );
             fixture.copy(candidate.command[0], `wrapper${fixture.suffix}`);
             let copy = root.harness.Candidate {
                 label: candidate.label,
@@ -99,7 +120,7 @@ testset "wrapper self update" {
             };
             fixture.wrapper_archive(mode = "checksum");
             let state = fixture.read(CHANNEL_STATE_FILE);
-            let result = fixture.manage(copy, ["self-update"], success = false);
+            let result = fixture.manage(copy, ["self", "update"], success = false);
             root.harness.require(
                 fixture.requests().includes(
                     if (fixture.windows) {
@@ -138,7 +159,7 @@ testset "wrapper self update" {
                     self_update: true,
                 };
                 fixture.wrapper_archive(mode = "not-executable");
-                fixture.manage(copy, ["self-update"]);
+                fixture.manage(copy, ["self", "update"]);
                 fixture.behavior(REPLACEMENT_WRAPPER_IDENTITY, "replacement\n");
                 let output = fixture.run(copy, ["check"]);
                 root.harness.require(
@@ -173,7 +194,7 @@ testset "wrapper self update" {
                 fixture.chmod(".", "555");
                 defer { fixture.chmod(".", "755"); }
                 let state = fixture.read(CHANNEL_STATE_FILE);
-                fixture.manage(copy, ["self-update"], success = false);
+                fixture.manage(copy, ["self", "update"], success = false);
                 root.harness.require(
                     fixture.requests().includes("/wrapper.tar.gz"),
                     "staging failure happened before archive download",
@@ -190,14 +211,34 @@ testset "wrapper self update" {
         }
     }
 
-    if (candidate.supports([root.harness.Capability.Windows, root.harness.Capability.SelfUpdate])) {
-        test "windows self update replaces wrapper copy" {
+    if (
+        candidate.supports(
+            [
+                root.harness.Capability.Windows,
+                root.harness.Capability.SelfUpdate,
+                root.harness.Capability.Posthog,
+            ],
+        )
+    ) {
+        test "windows self update replaces wrapper copy while telemetry drains" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
+            fixture.env["DO_NOT_TRACK"] = "0";
+            fixture.env["BAML_WRAPPER_TELEMETRY_HOST"] = fixture.env["BAML_MANIFEST_BASE_URL"];
+            fixture.env["CI"] = "true";
+            fixture.seed_telemetry();
+            // Keep delivery active beyond the updater's five-second deadline.
+            for (let batch in [1, 2, 3, 4, 5, 6]) {
+                fixture.seed_queue(`sealed_before_update_${batch}.jsonl`);
+            }
+            fixture.write("telemetry.delay", "1");
             let config_before = fixture.read(USER_CONFIG_FILE);
             let project_before = fixture.read(PROJECT_MANIFEST_FILE);
 
-            root.harness.require(candidate.command.length() == 1, "self-update requires a copied executable candidate");
+            root.harness.require(
+                candidate.command.length() == 1,
+                "self-update requires a copied executable candidate",
+            );
             fixture.copy(candidate.command[0], `wrapper${fixture.suffix}`);
             let copy = root.harness.Candidate {
                 label: candidate.label,
@@ -206,7 +247,7 @@ testset "wrapper self update" {
             };
             fixture.wrapper_archive(mode = "valid");
             let state = fixture.read(CHANNEL_STATE_FILE);
-            fixture.manage(copy, ["self-update"], success = true);
+            fixture.manage(copy, ["self", "update"], success = true);
             fixture.behavior(REPLACEMENT_WRAPPER_IDENTITY, "replacement\n");
             let attempts = 0;
             while (attempts < 100) {
@@ -221,8 +262,9 @@ testset "wrapper self update" {
                 fixture.calls().some((call) -> bool {
                     call.identity == REPLACEMENT_WRAPPER_IDENTITY
                 }),
-                "replacement wrapper did not take effect",
+                "replacement wrapper did not take effect during telemetry delivery",
             );
+            fixture.await_telemetry(6);
             root.harness.require(
                 fixture.read(CHANNEL_STATE_FILE) == state
                     && fixture.read(USER_CONFIG_FILE) == config_before

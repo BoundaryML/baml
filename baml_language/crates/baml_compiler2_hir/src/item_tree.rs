@@ -49,18 +49,12 @@ pub struct ItemTree {
     pub type_aliases: FxHashMap<LocalItemId<TypeAliasMarker>, TypeAlias>,
     pub lets: FxHashMap<LocalItemId<LetMarker>, Let>,
 
-    /// Unified store for every `implements` block (both in-body and
-    /// out-of-body), keyed by a stable `ImplMarker` id. Downstream queries
-    /// (`impl_data`) read this map; `class_to_impls` / `free_impls` index it.
+    /// Every `implements` block, keyed by a stable `ImplMarker` id.
+    /// Downstream queries (`impl_data`) read this map; `impl_order` orders it.
     pub impls: FxHashMap<LocalItemId<ImplMarker>, ImplBlock>,
-    /// Index from a class to the impls whose subject is that class
-    /// (`ImplSubject::InClass`), in source order. Lets "impls for class C" be
-    /// answered without a scan; parallel to `Class::implements`.
-    pub class_to_impls: FxHashMap<LocalItemId<ClassMarker>, Vec<LocalItemId<ImplMarker>>>,
-    /// Out-of-body (`ImplSubject::Free`) impl ids in source order. Gives consumers a
-    /// deterministic iteration order over free impls (the unified `impls` map is unordered) —
-    /// e.g. resolving the enclosing out-of-body impl of a method.
-    pub free_impls: Vec<LocalItemId<ImplMarker>>,
+    /// The impl ids in source order: coherence needs a deterministic order to
+    /// pick a winner among overlapping impls, and the map has none.
+    pub impl_order: Vec<LocalItemId<ImplMarker>>,
 
     /// BEP-044: for a class method declared inside an `implements I {}`
     /// block, record the unresolved interface target path. Empty for

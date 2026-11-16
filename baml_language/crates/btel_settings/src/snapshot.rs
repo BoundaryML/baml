@@ -87,6 +87,9 @@ pub const CARRIED_GROUPS: usize = 4096;
 /// reads under either codec, but a blob of either readable version written
 /// before that and naming a `void` type no longer decodes.
 pub const BLOB_MAGIC: [u8; 8] = *b"BTELCAS\0";
-pub const BLOB_VERSION: u32 = 5;
+pub const BLOB_VERSION: u32 = 6;
 /// Supported read formats, newest first, for decoding and on-disk lookup.
-pub const READABLE_BLOB_VERSIONS: &[u32] = &[BLOB_VERSION, 4, 3];
+///
+/// A format is read before any runtime writes it: every reader of a
+/// runtime's blobs must read its format first. Format 6 adds redacted values.
+pub const READABLE_BLOB_VERSIONS: &[u32] = &[BLOB_VERSION, 5, 4, 3];

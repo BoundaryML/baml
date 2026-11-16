@@ -1,4 +1,7 @@
+import { z } from 'zod';
+
 import {
+  type BamlBinaryIdentity,
   invokeBaml,
   readBamlBinaryIdentity,
 } from '@/lib/generated-content/baml-binary';
@@ -101,9 +104,12 @@ function parseDefaultValue(description: string): string | null {
   return /\[default: ([^\]]+)\]/.exec(description)?.[1] ?? null;
 }
 
-function parseUsage(lines: string[]): string {
+function parseUsage(lines: string[], fallbackUsage?: string): string {
   const usageIndex = lines.findIndex((line) => line.startsWith('Usage:'));
   if (usageIndex === -1) {
+    if (fallbackUsage) {
+      return fallbackUsage;
+    }
     throw new Error('Emitted CLI help does not contain a Usage section.');
   }
   const inline = lines[usageIndex].slice('Usage:'.length).trim();
@@ -125,8 +131,13 @@ function parseUsage(lines: string[]): string {
 
 function parseDescription(lines: string[]): string | null {
   const usageIndex = lines.findIndex((line) => line.startsWith('Usage:'));
+  // Without a Usage line the description runs up to the first section.
+  const end =
+    usageIndex === -1
+      ? lines.findIndex((line) => /^[A-Za-z][A-Za-z ]+:\s*$/.test(line))
+      : usageIndex;
   const description = lines
-    .slice(0, usageIndex)
+    .slice(0, end === -1 ? lines.length : end)
     .map((line) => line.trim())
     .filter(Boolean)
     .join(' ');
@@ -169,7 +180,12 @@ function parseFlags(rows: HelpRow[]): CliCommandNodeInput['flags'] {
   });
 }
 
-function parseHelp(text: string): ParsedHelp {
+/**
+ * Parses clap-style help. `fallbackUsage` is for wrapper-owned commands:
+ * the wrapper prints `baml toolchain help` and its self-update help without
+ * a Usage line.
+ */
+export function parseHelp(text: string, fallbackUsage?: string): ParsedHelp {
   const lines = text.replaceAll('\r\n', '\n').split('\n');
   return {
     arguments: parseArguments(
@@ -180,8 +196,64 @@ function parseHelp(text: string): ParsedHelp {
     flags: parseFlags(
       parseHelpRows(findSection(lines, ['Options:', 'Global options:'])),
     ),
-    usage: parseUsage(lines),
+    usage: parseUsage(lines, fallbackUsage),
   };
+}
+
+const toolchainStatusSchema = z.object({
+  installed: z.literal(true),
+  schema_version: z.literal(1),
+  toolchain_path: z.string().min(1),
+  version: z.string().nullable(),
+});
+
+function wrapperAnswersRootHelp(wrapperVersion: string): boolean {
+  const [major, minor] = wrapperVersion.split('.').map(Number);
+  if (!Number.isInteger(major) || !Number.isInteger(minor)) {
+    throw new Error(`Unrecognized baml wrapper version ${wrapperVersion}.`);
+  }
+  return major > 0 || minor >= 3;
+}
+
+/**
+ * The binary that prints the toolchain's own CLI help. Wrapper 0.2 forwarded
+ * `baml help` to the selected baml-cli. Wrapper 0.3 answers root help itself
+ * with a summary, so read the CLI tree from the toolchain binary it resolves.
+ */
+export async function resolveCliHelpBinary(
+  bamlBinary: string,
+  identity: BamlBinaryIdentity,
+): Promise<string> {
+  if (!wrapperAnswersRootHelp(identity.wrapperVersion)) {
+    return bamlBinary;
+  }
+  // Wrapper 0.3 spells the flag `--json`; later wrappers take the CLI's
+  // `--output-format json`.
+  const status = await invokeBaml(bamlBinary, [
+    'toolchain',
+    'status',
+    '--output-format',
+    'json',
+  ]).catch(() => invokeBaml(bamlBinary, ['toolchain', 'status', '--json']));
+  const resolved = toolchainStatusSchema.parse(JSON.parse(status.stdout));
+  if (
+    resolved.version !== null &&
+    resolved.version !== identity.productVersion
+  ) {
+    throw new Error(
+      `The wrapper resolved toolchain ${resolved.version}, but reported ${identity.productVersion}.`,
+    );
+  }
+  const versionOutput = await invokeBaml(resolved.toolchain_path, [
+    '--version',
+  ]);
+  const cliVersion = /^baml-cli (\S+)$/m.exec(versionOutput.stdout)?.[1];
+  if (cliVersion !== identity.productVersion) {
+    throw new Error(
+      `${resolved.toolchain_path} reports ${cliVersion ?? 'no version'}, expected ${identity.productVersion}.`,
+    );
+  }
+  return resolved.toolchain_path;
 }
 
 function commandNameFromSpecification(specification: string): string {
@@ -214,21 +286,27 @@ export async function generateCliPublicationInput(
   bamlBinary: string,
 ): Promise<CliPublicationInput> {
   const identity = await readBamlBinaryIdentity(bamlBinary);
+  const cliBinary = await resolveCliHelpBinary(bamlBinary, identity);
   const rawHelp: CliArtifactPayload['raw_help'] = [];
   const visited = new Set<string>();
 
+  // CLI commands come from the toolchain binary. `toolchain` and
+  // the self-updater belong to the wrapper; `fallbackUsage` covers wrapper help
+  // that has no Usage line.
   const capture = async (
+    binary: string,
     commandPath: string[],
     invocation: string[],
     recurse: boolean,
+    fallbackUsage?: string,
   ): Promise<CliCommandNodeInput> => {
     const pathKey = commandPath.join('\0');
     if (visited.has(pathKey)) {
       throw new Error(`CLI command traversal cycle: ${commandPath.join(' ')}.`);
     }
     visited.add(pathKey);
-    const result = await invokeBaml(bamlBinary, invocation);
-    const parsed = parseHelp(result.stdout);
+    const result = await invokeBaml(binary, invocation);
+    const parsed = parseHelp(result.stdout, fallbackUsage);
     rawHelp.push({
       command_path: commandPath,
       invocation,
@@ -246,7 +324,12 @@ export async function generateCliPublicationInput(
             .map((row) => {
               const childName = commandNameFromSpecification(row.specification);
               const childPath = [...commandPath, childName];
-              return capture(childPath, ['help', ...childPath], true);
+              return capture(
+                cliBinary,
+                childPath,
+                ['help', ...childPath],
+                true,
+              );
             }),
         )
       : parsed.commandRows.map((row) => leafFromHelpRow(commandPath, row));
@@ -261,13 +344,69 @@ export async function generateCliPublicationInput(
     });
   };
 
-  const root = await capture([], ['help'], true);
-  const toolchain = await capture(['toolchain'], ['toolchain', 'help'], false);
-  const selfUpdate = await capture(
-    ['self-update'],
-    ['self-update', '--help'],
+  const root = await capture(cliBinary, [], ['help'], true);
+  if (root.subcommands.length === 0) {
+    throw new Error('The CLI root help did not list any commands.');
+  }
+  const toolchain = await capture(
+    bamlBinary,
+    ['toolchain'],
+    ['toolchain', 'help'],
     false,
+    'baml toolchain <command>',
   );
+  // Wrapper 0.3 spells the updater `baml self-update`; later wrappers spell
+  // it `baml self update`. Only the wrapper knows which it is.
+  const spacedSelfUpdate = await invokeBaml(bamlBinary, [
+    'self',
+    'update',
+    '--help',
+  ]).then(
+    () => true,
+    () => false,
+  );
+  // Those later wrappers list their toolchain commands by name only; the
+  // arguments and flags are in each command's own help. Wrapper 0.3 has no
+  // such help, and its rows carry the arguments.
+  if (spacedSelfUpdate) {
+    toolchain.subcommands = await Promise.all(
+      toolchain.subcommands.map((leaf) =>
+        leaf.name === 'help'
+          ? leaf
+          : capture(
+              bamlBinary,
+              leaf.command_path,
+              [...leaf.command_path, '--help'],
+              false,
+            ),
+      ),
+    );
+  }
+  const selfUpdate = spacedSelfUpdate
+    ? cliCommandNodeSchema.parse({
+        arguments: [],
+        command_path: ['self'],
+        description: 'Manage the wrapper executable',
+        flags: [],
+        name: 'self',
+        subcommands: [
+          await capture(
+            bamlBinary,
+            ['self', 'update'],
+            ['self', 'update', '--help'],
+            false,
+            'baml self update',
+          ),
+        ],
+        usage: 'baml self <command>',
+      })
+    : await capture(
+        bamlBinary,
+        ['self-update'],
+        ['self-update', '--help'],
+        false,
+        'baml self-update',
+      );
   root.subcommands.push(toolchain, selfUpdate);
   root.subcommands.sort((left, right) => left.name.localeCompare(right.name));
 

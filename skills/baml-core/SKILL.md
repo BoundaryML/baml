@@ -23,13 +23,15 @@ brew install baml                # CLI binary: `baml`
 baml init                        # new project (baml.toml + baml_src/)
 baml help <command>              # CLI options and examples
 baml describe baml.json          # reference for any module/type/method/signature/keyword
-baml describe Array --budget 120 #   (Array, String, Map, assert, match, patterns, spawn, python, ...)
-                                 #   ends with "N more lines"? re-run with `--budget <N>`
+baml describe Array --limit 120  #   (Array, String, Map, assert, match, patterns, spawn, python, ...)
+                                 #   ends with "N more lines"? re-run with `--limit <N>`
 baml check                       # compile-check the project
 baml run -e 'expr'               # eval an expression; fast feedback + syntax check
 baml test --list && baml test    # run every test/testset block
 baml fmt baml_src/main.baml      # canonicalize the project's formatting
 baml codequality --functions     # complexity per function, worst first
+baml <command> --output-format json  # one JSON document on stdout, status on stderr
+                                 #   (`baml run` also passes the program's own output through)
 ```
 
 `baml describe <name>` prints the **full source body** of stdlib functions. It's the fastest way to verify behavior, and the only path for embedded builtins like `assert` (no on-disk file). Pure functions need no test/client; check them with `baml run -e 'add(2, 3)'`. For anything not shown here (signatures, niche stdlib, advanced features), run `baml describe <name>`; never guess the stdlib.
@@ -83,7 +85,7 @@ The rest of the language:
 
 ## Concurrency and resources
 
-- **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }`. Each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.spawn.Limit.new(n)` caps concurrency (excess spawns queue), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. Use it to parallelize LLM and HTTP calls. `baml describe spawn` / `baml describe baml.future`.
+- **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }`. Each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.sync.Semaphore.new(n)` caps concurrency (excess spawns queue; a running task takes a slot with `sem.with(fn)`), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. Use it to parallelize LLM and HTTP calls. Tasks run in parallel even between awaits, so guard an object's own state with `baml.sync.atomic(self, () -> { ... })`, or several objects at once with `baml.sync.atomic([a, b], ...)` (re-entrant; only other `atomic` blocks on the same key are excluded, code outside them is not protected). `baml describe spawn` / `baml describe baml.sync` / `baml describe baml.future`.
 - **Resource safety.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / fall-through), like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it.
 
 ## LLM functions
@@ -116,17 +118,17 @@ To add cross-cutting behavior (metering, caching, replay, budgets), write a clas
 
 ### Debugging a recorded call
 
-Runs record their calls, and AI functions record their inputs, output, error and type arguments by default. `baml query` answers SQL over them (`baml query --schema` lists the tables). To turn a failing call into a test:
+Runs record their calls, and AI functions record their inputs, output, error and type arguments by default. `baml local recordings query` answers SQL over them (`baml local recordings schema` lists the tables). To turn a failing call into a test:
 
 ```bash
 # 1. Find the call.
-baml query "SELECT span_id, input_args, error_value FROM spans
+baml local recordings query "SELECT span_id, input_args, error_value FROM spans
   WHERE span_name = 'user.Extract' AND error_value IS NOT NULL ORDER BY start_time DESC LIMIT 1"
 # 2. Its types as BAML code, classes and enums built at run time included.
 #    baml_code also takes an instance or enum value: input_args['row'].
-baml query "SELECT baml_code(type_args['T']) FROM spans WHERE span_id = '<span_id>'"
+baml local recordings query "SELECT baml_code(type_args['T']) FROM spans WHERE span_id = '<span_id>'"
 # 3. The model's raw HTTP response, from the request under the call.
-baml query "SELECT network_event_values FROM spans
+baml local recordings query "SELECT network_event_values FROM spans
   WHERE span_type = 'network_span' AND parent_span_id = '<span_id>' ORDER BY start_time"
 ```
 
@@ -157,20 +159,20 @@ test "Extract parses the recorded reply" {
 
 ### Alerts on recorded calls
 
-When the user wants to be told about something in their recorded calls ("tell #ai-pipeline when FindFacts starts failing"), set up a Boundary alert with `baml alerts`. An alert is SQL that runs on a schedule in a Boundary environment and posts to Slack or a webhook when it returns rows. It uses the `baml auth login` session, not an API key, and takes `--project org_handle/project_name --environment <env>` like `baml query`.
+When the user wants to be told about something in their recorded calls ("tell #ai-pipeline when FindFacts starts failing"), set up a Boundary alert with `baml cloud alerts`. An alert is SQL that runs on a schedule in a Boundary environment and posts to Slack or a webhook when something is wrong. It uses the `baml cloud auth login` session, not an API key, and takes `baml cloud`'s `--project org_handle/project_name --env <env>`, like `baml cloud recordings query`.
 
 1. Write SQL with its own time window that matches the schedule: checked every 15 minutes, look at the last 15 minutes. Either it returns rows only when something is wrong (the default condition), or it returns a number to compare with a threshold, given as `--when "errors > 5"` (a column of the first row) or `--when "> 0.2"` (its first column).
-2. Run it with `baml query --project ... --environment ...` and check it returns what you expect now.
-3. `baml alerts destinations` lists where it can post. Destinations are added in Studio.
+2. Run it with `baml cloud recordings query "..." --project ... --env ...` and check it returns what you expect now.
+3. `baml cloud alerts destinations` lists where it can post. Destinations are added in Studio.
 4. Show the user the SQL, the schedule and the destination, and wait for a yes: the alert posts to their team's channel.
 5. Create it, then report its ID and next run.
 
 ```bash
-baml alerts create --project acme/ai-pipeline --environment production \
+baml cloud alerts create --project acme/ai-pipeline --env production \
   --name "FindFacts failing" --every 15m --to "#ai-pipeline" --sql-file findfacts.sql
 ```
 
-By default it posts when it starts firing and when it resolves. `--after 3` fires only after 3 bad checks in a row, `--remind 1h` repeats while it stays firing, and `--notify every-check` posts on every bad check instead. `--at 09:00 --time-zone Europe/Madrid --days weekdays` runs it at a time instead of `--every`, and `--run-now` also runs it once right away. `baml alerts list`, `show`, `update`, `runs`, `mute <alert> 24h`, `unmute` and `delete` manage alerts; add `--json` to read the output.
+By default it posts when it starts firing and when it resolves. `--after 3` fires only after 3 bad checks in a row, `--remind 1h` repeats while it stays firing, and `--notify every-check` posts on every bad check instead. `--at 09:00 --time-zone Europe/Madrid --days weekdays` runs it at a time instead of `--every`, and `--run-now` also runs it once right away. `baml cloud alerts list`, `show`, `update`, `runs`, `mute <alert> 24h`, `unmute` and `delete` manage alerts; add `--json` to read the output.
 
 ## Tests
 
@@ -549,10 +551,10 @@ function fetch_all(urls: string[]) -> string[] {
     await baml.future.all(urls.map((u) -> { spawn { baml.http.fetch(u).text() } }))
 }
 
-// Each value after `with` is a `baml.spawn.Modifier`: a Limit caps concurrency (excess
+// Each value after `with` is a `baml.spawn.Modifier`: a Semaphore caps concurrency (excess
 // spawns queue), a CancelToken cancels cooperatively, a Root detaches from the spawner.
 function rate_limited() -> int {
-    let g = baml.spawn.Limit.new(2);
+    let g = baml.sync.Semaphore.new(2);
     let a = spawn with g { 1 };
     let b = spawn with g { 2 };
     (await a) + (await b)

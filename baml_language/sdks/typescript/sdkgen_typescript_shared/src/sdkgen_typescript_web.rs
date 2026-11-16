@@ -81,6 +81,7 @@ mod tests {
                         source_file_path: "builtins.baml".to_string(),
                         span_start: 0,
                     },
+                    json_omit_nulls: false,
                 }),
             );
         }

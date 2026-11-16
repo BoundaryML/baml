@@ -1911,6 +1911,15 @@ fn verify_mir(
 
     // 10. Every read is definitely assigned; every captured access has its cell.
     verify_definite_assignment(db, body, arity, name);
+
+    // 11. The CFG is reducible: every loop is entered only at its header.
+    //     Lowering only builds such loops; this checks the passes kept it so.
+    if let Err(blocks) = crate::reducible::check(body) {
+        panic!(
+            "irreducible control flow in MIR function {name}: a cycle with more than one entry \
+             among {blocks:?}",
+        );
+    }
 }
 
 /// Every read of a local is dominated by a write to it, and every read, write,

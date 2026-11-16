@@ -1,6 +1,6 @@
-//! Callable emission — free functions and class methods: one sync + one
-//! `_async` binding per BAML callable, both thin wrappers over
-//! `baml_bridge::runtime`.
+//! Callable emission — free functions and class methods: one async binding
+//! (the plain name) and one blocking `_sync` binding per BAML callable, both
+//! thin wrappers over `baml_bridge::runtime`.
 
 use baml_sdkgen_types::{Function, Name};
 use proc_macro2::TokenStream;

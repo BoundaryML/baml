@@ -163,6 +163,30 @@ class Fixture {
         baml.fs.read(`${self.root}/${path}`)
     }
 
+    /// Every path under `path` with file sizes and modification times, to detect any write.
+    function tree(self, path: string) -> string[] {
+        let entries: string[] = [];
+        let directories = [path];
+        let index = 0;
+        while (index < directories.length()) {
+            let directory = directories[index];
+            index += 1;
+            for (let entry in baml.fs.read_dir(`${self.root}/${directory}`)) {
+                let child = `${directory}/${entry.name}`;
+                if (entry.is_dir) {
+                    directories.push(child);
+                    entries.push(`${child}/`);
+                } else {
+                    let file = `${self.root}/${child}`;
+                    entries.push(
+                        `${child} ${baml.fs.size(file)} ${baml.fs.metadata(file).modified_ms ?? 0}`,
+                    );
+                }
+            }
+        }
+        entries.sort()
+    }
+
     function os(self, args: string[]) -> null {
         let result = helper([args[0], self.root].concat(args.slice(1, args.length())));
         require(result.ok(), result.stderr.to_string());
@@ -350,8 +374,10 @@ class Fixture {
     }
 
     function captures(self) -> root.PosthogCapture[] {
-        self.read("telemetry.jsonl")
-            .split("\n")
+        let lines = self.read("telemetry.jsonl").split("\n");
+        // The fixture appends while telemetry polling reads. A record is only
+        // complete once its terminating newline is visible.
+        lines.slice(0, lines.length() - 1)
             .filter((line) -> bool {
                 line.trim() != ""
             })
@@ -515,9 +541,19 @@ class ResolutionResult {
     }
 }
 
+class InventoryResult {
+    schema_version: int,
+    default_selector: string,
+    active_selector: string,
+    source: string,
+    channels: map<string, string>,
+    installed: string[],
+}
+
 // Fixture corruption modes are wire values accepted by fixture.py.
 type FixtureReleaseMode = "valid"
     | "missing-cli"
+    | "non-executable-cli"
     | "layout"
     | "traversal"
     | "link"

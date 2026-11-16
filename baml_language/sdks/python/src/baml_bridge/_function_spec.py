@@ -25,58 +25,58 @@ class BamlFunctionSpec(Generic[TOut]):
     def _to_pyhandle(self) -> BamlPyHandle:
         return self._handle
 
-    def name(self, *, _baml: Any = None) -> str:
+    def name_sync(self, *, _baml: Any = None) -> str:
         return self._call_sync("ai.FunctionSpec.name", _baml=_baml)
 
-    async def name_async(self, *, _baml: Any = None) -> str:
+    async def name(self, *, _baml: Any = None) -> str:
         return await self._call_async("ai.FunctionSpec.name", _baml=_baml)
 
-    def arguments(self, *, _baml: Any = None) -> dict[str, Any]:
+    def arguments_sync(self, *, _baml: Any = None) -> dict[str, Any]:
         return self._call_sync("ai.FunctionSpec.arguments", _baml=_baml)
 
-    async def arguments_async(self, *, _baml: Any = None) -> dict[str, Any]:
+    async def arguments(self, *, _baml: Any = None) -> dict[str, Any]:
         return await self._call_async("ai.FunctionSpec.arguments", _baml=_baml)
 
-    def output_type(self, *, _baml: Any = None) -> Any:
+    def output_type_sync(self, *, _baml: Any = None) -> Any:
         return self._call_sync("ai.FunctionSpec.output_type", _baml=_baml)
 
-    async def output_type_async(self, *, _baml: Any = None) -> Any:
+    async def output_type(self, *, _baml: Any = None) -> Any:
         return await self._call_async("ai.FunctionSpec.output_type", _baml=_baml)
 
-    def prompt(self, *, _baml: Any = None) -> Any:
+    def prompt_sync(self, *, _baml: Any = None) -> Any:
         return self._call_sync("ai.FunctionSpec.prompt", _baml=_baml)
 
-    async def prompt_async(self, *, _baml: Any = None) -> Any:
+    async def prompt(self, *, _baml: Any = None) -> Any:
         return await self._call_async("ai.FunctionSpec.prompt", _baml=_baml)
 
-    def tools(self, *, _baml: Any = None) -> Any:
+    def tools_sync(self, *, _baml: Any = None) -> Any:
         return self._call_sync("ai.FunctionSpec.tools", _baml=_baml)
 
-    async def tools_async(self, *, _baml: Any = None) -> Any:
+    async def tools(self, *, _baml: Any = None) -> Any:
         return await self._call_async("ai.FunctionSpec.tools", _baml=_baml)
 
-    def requested_model(self, *, _baml: Any = None) -> str:
+    def requested_model_sync(self, *, _baml: Any = None) -> str:
         return self._call_sync("ai.FunctionSpec.requested_model", _baml=_baml)
 
-    async def requested_model_async(self, *, _baml: Any = None) -> str:
+    async def requested_model(self, *, _baml: Any = None) -> str:
         return await self._call_async("ai.FunctionSpec.requested_model", _baml=_baml)
 
-    def build_request(self, *, _baml: Any = None, **kwargs: Any) -> Any:
+    def build_request_sync(self, *, _baml: Any = None, **kwargs: Any) -> Any:
         return self._call_sync("ai.FunctionSpec.build_request", kwargs, _baml=_baml)
 
-    async def build_request_async(self, *, _baml: Any = None, **kwargs: Any) -> Any:
+    async def build_request(self, *, _baml: Any = None, **kwargs: Any) -> Any:
         return await self._call_async("ai.FunctionSpec.build_request", kwargs, _baml=_baml)
 
-    def parse(self, json: str, *, _baml: Any = None) -> TOut:
+    def parse_sync(self, json: str, *, _baml: Any = None) -> TOut:
         return self._call_sync("ai.FunctionSpec.parse", {"json": json}, _baml=_baml)
 
-    async def parse_async(self, json: str, *, _baml: Any = None) -> TOut:
+    async def parse(self, json: str, *, _baml: Any = None) -> TOut:
         return await self._call_async("ai.FunctionSpec.parse", {"json": json}, _baml=_baml)
 
-    def call(self, *, _baml: Any = None, **kwargs: Any) -> TOut:
+    def call_sync(self, *, _baml: Any = None, **kwargs: Any) -> TOut:
         return self._call_sync("ai.FunctionSpec.call", kwargs, _baml=_baml)
 
-    async def call_async(self, *, _baml: Any = None, **kwargs: Any) -> TOut:
+    async def call(self, *, _baml: Any = None, **kwargs: Any) -> TOut:
         return await self._call_async("ai.FunctionSpec.call", kwargs, _baml=_baml)
 
     def _call_sync(self, fqn: str, kwargs: dict[str, Any] | None = None, *, _baml: Any = None) -> Any:

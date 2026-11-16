@@ -12,8 +12,8 @@
 // public, and that literal-union-typed params (`open`'s mode, `seek_from`'s
 // whence) surface as plain `String`.
 use baml_bridge::OptionalArg::Unset;
-use baml_sdk::baml::fs::{File, open as baml_open};
-use baml_sdk::baml::http::fetch;
+use baml_sdk::baml::fs::{File, open_sync as baml_open};
+use baml_sdk::baml::http::fetch_sync;
 use baml_sdk::baml::media::Image;
 
 // 1x1 transparent PNG.
@@ -67,10 +67,13 @@ fn http_server() -> String {
 #[test]
 fn test_handles_http_get_response_fields_and_methods() {
     let http_server = http_server();
-    let resp = fetch(http_server, Unset).unwrap();
+    let resp = fetch_sync(http_server, Unset).unwrap();
     assert_eq!(resp.status_code, 200);
-    assert!(resp.ok().unwrap());
-    assert_eq!(resp.text().unwrap(), str::from_utf8(HTTP_BODY).unwrap());
+    assert!(resp.ok_sync().unwrap());
+    assert_eq!(
+        resp.text_sync().unwrap(),
+        str::from_utf8(HTTP_BODY).unwrap()
+    );
 }
 
 // --- baml.fs.File: cursor state preserved across calls --------------------
@@ -95,7 +98,7 @@ fn test_handles_open_file_returns_file_handle() {
     // the annotated binding pins the static type instead.
     let f: File = baml_open(temp_file.to_str().unwrap().to_string(), "r".to_string()).unwrap();
     // `close()` returns null — the successful unwrap is python's `is None`.
-    f.close().unwrap();
+    f.close_sync().unwrap();
 }
 
 #[test]
@@ -104,15 +107,15 @@ fn test_handles_file_cursor_state_persists_across_calls() {
     let f = baml_open(temp_file.to_str().unwrap().to_string(), "r".to_string()).unwrap();
 
     // Relative seeks verify that separate calls share one engine-side handle.
-    assert_eq!(f.seek_from("current".to_string(), 3).unwrap(), 3);
-    assert_eq!(f.seek_from("current".to_string(), 3).unwrap(), 6);
+    assert_eq!(f.seek_from_sync("current".to_string(), 3).unwrap(), 3);
+    assert_eq!(f.seek_from_sync("current".to_string(), 3).unwrap(), 6);
 
     // Seek back to the start and confirm the cursor actually moved.
-    assert_eq!(f.seek_from("start".to_string(), 0).unwrap(), 0);
-    assert_eq!(f.seek_from("current".to_string(), 2).unwrap(), 2);
+    assert_eq!(f.seek_from_sync("start".to_string(), 0).unwrap(), 0);
+    assert_eq!(f.seek_from_sync("current".to_string(), 2).unwrap(), 2);
 
     // text() reads from the current cursor (now at 2) to EOF.
-    assert_eq!(f.text().unwrap(), "23456789");
+    assert_eq!(f.text_sync().unwrap(), "23456789");
 
-    f.close().unwrap();
+    f.close_sync().unwrap();
 }

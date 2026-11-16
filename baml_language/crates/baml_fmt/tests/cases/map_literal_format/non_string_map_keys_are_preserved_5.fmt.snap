@@ -1,0 +1,7 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    { 1.5: 1 };
+    0
+}

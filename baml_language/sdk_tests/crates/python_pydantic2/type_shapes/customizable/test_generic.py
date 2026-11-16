@@ -41,10 +41,10 @@ def test_generic_generic():
     [Void { ... }, Class(... WrapperMarker ...)]" — the same shape as
     the streaming smoke's error.
     """
-    from baml_sdk.generics import make_wrapper_methods
+    from baml_sdk.generics import make_wrapper_methods_sync
 
-    w = make_wrapper_methods("hello")
-    assert w.get_value_or_marker() == "hello"
+    w = make_wrapper_methods_sync("hello")
+    assert w.get_value_or_marker_sync() == "hello"
 
 
 def test_generic_generic_wrapper_get_value():
@@ -67,7 +67,7 @@ def test_generic_generic_wrapper_get_value():
     returned `WrapperMethods<string>`, the re-encoded receiver has empty
     class args and the call is rejected at the inbound boundary.
     """
-    from baml_sdk.generics import make_wrapper_methods
+    from baml_sdk.generics import make_wrapper_methods_sync
 
-    w = make_wrapper_methods("hello")
-    assert w.get_value() == "hello"
+    w = make_wrapper_methods_sync("hello")
+    assert w.get_value_sync() == "hello"

@@ -188,6 +188,15 @@ pub fn assert_outputs(probe: &str, outputs: &[Option<Output>]) {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         match probe {
+            "EscapeOrderedReturn" | "EscapeSessionHandoff" | "EscapeOrderedSpawn" => {
+                assert!(output.status.success(), "{probe}: {stderr}");
+                let expected = match probe {
+                    "EscapeOrderedReturn" => "returned:2",
+                    "EscapeSessionHandoff" => "session:2",
+                    _ => "spawned:1",
+                };
+                assert!(stdout.contains(expected), "{probe}: {stdout}");
+            }
             "GlobalCalls" => {
                 assert!(output.status.success(), "{stderr}");
                 for expected in ["6:9", "8:10:15", "global-call:9"] {

@@ -107,6 +107,8 @@ enum Value<'a> {
     Scalar(Leaf<'a>),
     Unsigned(u64),
     Omitted,
+    /// A value the producer withheld: never knowably equal to anything.
+    Redacted,
     Uint8Array(&'a [u8]),
     Enum(&'a DecodedName, &'a str),
     List(Vec<Self>),
@@ -126,56 +128,37 @@ enum Source<'a> {
 }
 
 impl Value<'_> {
-    fn equal(&self, other: &Self, remaining: &mut usize) -> Result<bool, Error> {
+    /// Equality in three values, as SQL compares: `None` when the answer
+    /// depends on a redacted value, which equals nothing knowably, not even
+    /// another redaction. A difference elsewhere still decides it.
+    fn equal(&self, other: &Self, remaining: &mut usize) -> Result<Option<bool>, Error> {
         *remaining = remaining.checked_sub(1).ok_or(Error::Limit)?;
         Ok(match (self, other) {
-            (Self::Unsigned(a), Self::Unsigned(b)) => a == b,
+            (Self::Redacted, _) | (_, Self::Redacted) => None,
+            (Self::Unsigned(a), Self::Unsigned(b)) => Some(a == b),
             (Self::Unsigned(n), Self::Scalar(b)) | (Self::Scalar(b), Self::Unsigned(n)) => {
-                compare(Leaf::Bigint(&(*n).into()), CmpOp::Eq, *b) == Some(true)
+                Some(compare(Leaf::Bigint(&(*n).into()), CmpOp::Eq, *b) == Some(true))
             }
-            (Self::Scalar(a), Self::Scalar(b)) => compare(*a, CmpOp::Eq, *b) == Some(true),
-            (Self::Omitted, Self::Omitted) => true,
-            (Self::Uint8Array(a), Self::Uint8Array(b)) => a == b,
-            (Self::Enum(a, x), Self::Enum(b, y)) => a == b && x == y,
+            (Self::Scalar(a), Self::Scalar(b)) => Some(compare(*a, CmpOp::Eq, *b) == Some(true)),
+            (Self::Omitted, Self::Omitted) => Some(true),
+            (Self::Uint8Array(a), Self::Uint8Array(b)) => Some(a == b),
+            (Self::Enum(a, x), Self::Enum(b, y)) => Some(a == b && x == y),
             (Self::List(a), Self::List(b)) => {
                 if a.len() != b.len() {
-                    return Ok(false);
+                    return Ok(Some(false));
                 }
-                for (x, y) in a.iter().zip(b) {
-                    if !x.equal(y, remaining)? {
-                        return Ok(false);
-                    }
-                }
-                true
+                all_equal(a.iter().zip(b), remaining)?
             }
             (Self::Map(a), Self::Map(b)) => fields_equal(a, b, remaining)?,
-            (Self::GeneralMap(a), Self::GeneralMap(b)) => {
-                if a.len() != b.len() {
-                    return Ok(false);
+            (Self::GeneralMap(a), Self::GeneralMap(b)) => general_maps_equal(a, b, remaining)?,
+            (Self::Class(a, x), Self::Class(b, y)) => {
+                if a != b {
+                    return Ok(Some(false));
                 }
-                let mut used = vec![false; b.len()];
-                for (key, value) in a {
-                    let mut found = false;
-                    for (index, (other_key, other_value)) in b.iter().enumerate() {
-                        *remaining = remaining.checked_sub(1).ok_or(Error::Limit)?;
-                        if !used[index]
-                            && key.equal(other_key, remaining)?
-                            && value.equal(other_value, remaining)?
-                        {
-                            used[index] = true;
-                            found = true;
-                            break;
-                        }
-                    }
-                    if !found {
-                        return Ok(false);
-                    }
-                }
-                true
+                fields_equal(x, y, remaining)?
             }
-            (Self::Class(a, x), Self::Class(b, y)) => a == b && fields_equal(x, y, remaining)?,
             (Self::Media(kind, mime_type, source), Self::Media(other_kind, other_mime, other)) => {
-                kind == other_kind && mime_type == other_mime && source == other
+                Some(kind == other_kind && mime_type == other_mime && source == other)
             }
             (
                 Self::Unsigned(_)
@@ -189,21 +172,87 @@ impl Value<'_> {
                 | Self::Class(..)
                 | Self::Media(..),
                 _,
-            ) => false,
+            ) => Some(false),
         })
     }
 }
 
-fn fields_equal(a: &Fields<'_>, b: &Fields<'_>, remaining: &mut usize) -> Result<bool, Error> {
-    if a.len() != b.len() {
-        return Ok(false);
-    }
-    for ((k, x), (l, y)) in a.iter().zip(b) {
-        if k != l || !x.equal(y, remaining)? {
-            return Ok(false);
+/// Pairs all equal: `false` when one is unequal, else unknown when one is
+/// unknown, else `true`.
+fn all_equal<'v, 'a: 'v>(
+    pairs: impl Iterator<Item = (&'v Value<'a>, &'v Value<'a>)>,
+    remaining: &mut usize,
+) -> Result<Option<bool>, Error> {
+    let mut known = true;
+    for (x, y) in pairs {
+        match x.equal(y, remaining)? {
+            Some(false) => return Ok(Some(false)),
+            Some(true) => {}
+            None => known = false,
         }
     }
-    Ok(true)
+    Ok(known.then_some(true))
+}
+
+fn fields_equal(
+    a: &Fields<'_>,
+    b: &Fields<'_>,
+    remaining: &mut usize,
+) -> Result<Option<bool>, Error> {
+    if a.len() != b.len() || a.keys().ne(b.keys()) {
+        return Ok(Some(false));
+    }
+    all_equal(a.values().zip(b.values()), remaining)
+}
+
+/// Maps with keys of any kind, matched in any order. Only a known match pairs
+/// two entries; equality is an equivalence, so pairing greedily never
+/// misses one. An entry with no known match is unequal only when nothing
+/// left could match it; otherwise the answer is unknown.
+fn general_maps_equal(
+    a: &[(Value<'_>, Value<'_>)],
+    b: &[(Value<'_>, Value<'_>)],
+    remaining: &mut usize,
+) -> Result<Option<bool>, Error> {
+    if a.len() != b.len() {
+        return Ok(Some(false));
+    }
+    let mut used = vec![false; b.len()];
+    let mut known = true;
+    for (key, value) in a {
+        let mut matched = false;
+        let mut possible = false;
+        for (index, (other_key, other_value)) in b.iter().enumerate() {
+            *remaining = remaining.checked_sub(1).ok_or(Error::Limit)?;
+            if used[index] {
+                continue;
+            }
+            let pair = match key.equal(other_key, remaining)? {
+                Some(false) => Some(false),
+                keys => match (keys, value.equal(other_value, remaining)?) {
+                    (_, Some(false)) => Some(false),
+                    (Some(true), Some(true)) => Some(true),
+                    _ => None,
+                },
+            };
+            match pair {
+                Some(true) => {
+                    used[index] = true;
+                    matched = true;
+                    break;
+                }
+                Some(false) => {}
+                None => possible = true,
+            }
+        }
+        if !matched {
+            if !possible {
+                return Ok(Some(false));
+            }
+            known = false;
+        }
+    }
+    Ok(known.then_some(true))
 }
 
 struct Builder<'a> {
@@ -327,7 +376,8 @@ impl<'a> Builder<'a> {
             | DecodedValue::Object(_)
             | DecodedValue::Type(_)
             | DecodedValue::Enum { .. }
-            | DecodedValue::Truncated(_) => self.stored(s, v, depth),
+            | DecodedValue::Truncated(_)
+            | DecodedValue::Redacted(_) => self.stored(s, v, depth),
         }
     }
 
@@ -362,6 +412,7 @@ impl<'a> Builder<'a> {
                 Ok(Value::Enum(self.declaration(s, *declaration, true)?, name))
             }
             DecodedValue::OmittedArg => Ok(Value::Omitted),
+            DecodedValue::Redacted(_) => Ok(Value::Redacted),
             DecodedValue::Truncated(reason) => {
                 Err(Error::Evidence(Unavailable::Truncated(*reason)))
             }
@@ -606,12 +657,11 @@ pub fn captured(
     let a = builder.captured(&from_left, left.names)?;
     let b = builder.captured(&from_right, right.names)?;
     let mut remaining = limits.max_nodes;
-    a.zip(b)
-        .map(|(a, b)| {
-            a.equal(&b, &mut remaining)
-                .map(|equal| equal == (op == CmpOp::Eq))
-        })
-        .transpose()
+    let (Some(a), Some(b)) = (a, b) else {
+        return Ok(None);
+    };
+    Ok(a.equal(&b, &mut remaining)?
+        .map(|equal| equal == (op == CmpOp::Eq)))
 }
 
 pub fn json(
@@ -636,11 +686,11 @@ pub fn json(
     let a = builder.captured(&from_left, left.names)?;
     let b = builder.json(right, 0)?;
     let mut remaining = limits.max_nodes;
-    a.map(|a| {
-        a.equal(&b, &mut remaining)
-            .map(|equal| equal == (op == CmpOp::Eq))
-    })
-    .transpose()
+    let Some(a) = a else {
+        return Ok(None);
+    };
+    Ok(a.equal(&b, &mut remaining)?
+        .map(|equal| equal == (op == CmpOp::Eq)))
 }
 
 #[cfg(test)]

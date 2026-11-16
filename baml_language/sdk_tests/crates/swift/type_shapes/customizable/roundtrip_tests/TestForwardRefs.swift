@@ -12,22 +12,22 @@ final class TestForwardRefs: XCTestCase {
     func test_forward_refs_round_trip_rec_list() throws {
         // Python value [1, [2, 3]].
         let r: Baml.forward_refs.RecList = .t1([.t0(1), .t1([.t0(2), .t0(3)])])
-        XCTAssertEqual(try Baml.forward_refs.round_trip_rec_list(r: r), r)
+        XCTAssertEqual(try Baml.forward_refs.round_trip_rec_list_sync(r: r), r)
     }
 
     func test_forward_refs_round_trip_rec_list_with_other() throws {
         // RecListWithOther = int | Other | RecListWithOther[].
         XCTAssertEqual(
-            try Baml.forward_refs.round_trip_rec_list_with_other(r: .t0(1)),
+            try Baml.forward_refs.round_trip_rec_list_with_other_sync(r: .t0(1)),
             .t0(1)
         )
         let listy: Baml.forward_refs.RecListWithOther = .t2([.t0(1), .t0(2)])
-        XCTAssertEqual(try Baml.forward_refs.round_trip_rec_list_with_other(r: listy), listy)
+        XCTAssertEqual(try Baml.forward_refs.round_trip_rec_list_with_other_sync(r: listy), listy)
     }
 
     func test_forward_refs_round_trip_other() throws {
         let o = Baml.forward_refs.Other(v: 7)
-        XCTAssertEqual(try Baml.forward_refs.round_trip_other(o: o), o)
+        XCTAssertEqual(try Baml.forward_refs.round_trip_other_sync(o: o), o)
     }
 
     func test_forward_refs_round_trip_node_symbol_exists() {

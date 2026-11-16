@@ -10,7 +10,9 @@
 //! case asserts on the generated source text (the test cwd is the
 //! generated crate root).
 
-use baml_sdk::raises_test::{DocLoader, InferredThrow, LoadDoc, PureLen, Reparse};
+use baml_sdk::raises_test::{
+    DocLoader, InferredThrow_sync, LoadDoc_sync, PureLen_sync, Reparse_sync,
+};
 
 /// The generated `raises_test` module source. PROVISIONAL: the module's
 /// on-disk layout is not pinned (the generator may emit
@@ -59,13 +61,13 @@ fn test_raises_imports() {
     // resolving at compile time is the assertion. Touch each symbol so the
     // imports are exercised.
     let _: Option<DocLoader> = None;
-    let _ = (InferredThrow, LoadDoc, PureLen, Reparse);
+    let _ = (InferredThrow_sync, LoadDoc_sync, PureLen_sync, Reparse_sync);
 }
 
 #[test]
 fn test_raises_union_throws_lists_all_names() {
     let src = _raises_test_source();
-    let doc = _getdoc(&src, "fn LoadDoc(").expect("no doc comment on LoadDoc");
+    let doc = _getdoc(&src, "fn LoadDoc_sync(").expect("no doc comment on LoadDoc_sync");
     assert!(
         doc.trim_end()
             .ends_with("# Errors\n\nThrows `ParseError`, `TimeoutError`."),
@@ -76,7 +78,7 @@ fn test_raises_union_throws_lists_all_names() {
 #[test]
 fn test_raises_async_sibling_also_has_raises() {
     let src = _raises_test_source();
-    let doc = _getdoc(&src, "fn LoadDoc_async(").expect("no doc comment on LoadDoc_async");
+    let doc = _getdoc(&src, "fn LoadDoc(").expect("no doc comment on LoadDoc");
     assert!(
         doc.trim_end()
             .ends_with("# Errors\n\nThrows `ParseError`, `TimeoutError`."),
@@ -87,7 +89,7 @@ fn test_raises_async_sibling_also_has_raises() {
 #[test]
 fn test_raises_single_throws() {
     let src = _raises_test_source();
-    let doc = _getdoc(&src, "fn Reparse(").expect("no doc comment on Reparse");
+    let doc = _getdoc(&src, "fn Reparse_sync(").expect("no doc comment on Reparse_sync");
     assert!(
         doc.trim_end().ends_with("# Errors\n\nThrows `ParseError`."),
         "{doc:?}"
@@ -97,7 +99,7 @@ fn test_raises_single_throws() {
 #[test]
 fn test_raises_summary_precedes_raises_block() {
     let src = _raises_test_source();
-    let doc = _getdoc(&src, "fn LoadDoc(").expect("no doc comment on LoadDoc");
+    let doc = _getdoc(&src, "fn LoadDoc_sync(").expect("no doc comment on LoadDoc_sync");
     assert!(doc.starts_with("Load a document from a path."), "{doc:?}");
     assert!(doc.contains("\n\n# Errors\n"), "{doc:?}");
 }
@@ -107,7 +109,8 @@ fn test_raises_inferred_contract_without_clause_still_raises() {
     // No written `throws` clause, but the body throws ParseError — the
     // inferred contract (callable_throws) still surfaces an Errors section.
     let src = _raises_test_source();
-    let doc = _getdoc(&src, "fn InferredThrow(").expect("no doc comment on InferredThrow");
+    let doc =
+        _getdoc(&src, "fn InferredThrow_sync(").expect("no doc comment on InferredThrow_sync");
     assert!(
         doc.trim_end().ends_with("# Errors\n\nThrows `ParseError`."),
         "{doc:?}"
@@ -117,7 +120,7 @@ fn test_raises_inferred_contract_without_clause_still_raises() {
 #[test]
 fn test_raises_non_throwing_function_has_no_raises_block() {
     let src = _raises_test_source();
-    let doc = _getdoc(&src, "fn PureLen(").unwrap_or_default();
+    let doc = _getdoc(&src, "fn PureLen_sync(").unwrap_or_default();
     assert!(!doc.contains("# Errors"), "{doc:?}");
 }
 

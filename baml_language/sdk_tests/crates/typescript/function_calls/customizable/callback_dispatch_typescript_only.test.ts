@@ -40,7 +40,7 @@ describe.runIf(isTestRuntime("node"))(
         calls.push(value);
         return value + 1;
       };
-      expect(() => baml.call_int_callback(callback, 6)).toThrow(
+      expect(() => baml.call_int_callback_sync(callback, 6)).toThrow(
         /host callable.*async/i,
       );
       expect(calls).toEqual([]);
@@ -55,7 +55,7 @@ describe.runIf(isTestRuntime("node"))(
         return value + 1;
       };
       expect(() =>
-        baml.call_int_callback(
+        baml.call_int_callback_sync(
           callback as unknown as (value: number) => number,
           6,
         ),
@@ -68,7 +68,7 @@ describe.runIf(isTestRuntime("node"))(
       const caller = threadId;
       let ran = false;
       expect(() =>
-        baml.call_int_callback((value) => {
+        baml.call_int_callback_sync((value) => {
           ran = true;
           expect(threadId).toBe(caller);
           return value;
@@ -81,7 +81,7 @@ describe.runIf(isTestRuntime("node"))(
     it("sync_callback_of_async_entry_runs_on_originating_loop_thread_typescript_only", async () => {
       const caller = threadId;
       expect(
-        await baml.call_int_callback_async((value) => {
+        await baml.call_int_callback((value) => {
           expect(threadId).toBe(caller);
           return value;
         }, 7),
@@ -101,8 +101,8 @@ describe.runIf(isTestRuntime("node"))(
         return await response;
       };
       expect(
-        await baml.call_int_callback_async(
-          callback as unknown as (value: number) => number,
+        await baml.call_int_callback(
+          callback,
           7,
         ),
       ).toBe(7);
@@ -114,7 +114,7 @@ describe.runIf(isTestRuntime("node"))(
       await nextTurn();
       let ran = false;
       expect(() =>
-        baml.call_int_callback((value) => {
+        baml.call_int_callback_sync((value) => {
           ran = true;
           return value;
         }, 7),
@@ -133,7 +133,7 @@ describe.runIf(isTestRuntime("node"))(
         return value;
       };
       expect(() =>
-        baml.call_int_callback(
+        baml.call_int_callback_sync(
           callback as unknown as (value: number) => number,
           7,
         ),
@@ -152,7 +152,7 @@ describe.runIf(isTestRuntime("node"))(
         return value;
       });
       request.run("at call", () => {
-        expect(() => baml.call_int_callback(callback, 7)).toThrow(
+        expect(() => baml.call_int_callback_sync(callback, 7)).toThrow(
           /host callable.*async/i,
         );
         expect(request.getStore()).toBe("at call");
@@ -168,7 +168,7 @@ describe.runIf(isTestRuntime("node"))(
         return value;
       });
       await request.run("A", async () => {
-        expect(await baml.call_int_callback_async(callback, 7)).toBe(7);
+        expect(await baml.call_int_callback(callback, 7)).toBe(7);
         expect(request.getStore()).toBe("A");
       });
       expect(request.getStore()).toBeUndefined();
@@ -185,8 +185,8 @@ describe.runIf(isTestRuntime("node"))(
       };
       await request.run("A", async () => {
         expect(
-          await baml.call_int_callback_async(
-            callback as unknown as (value: number) => number,
+          await baml.call_int_callback(
+            callback,
             7,
           ),
         ).toBe(7);
@@ -212,8 +212,8 @@ describe.runIf(isTestRuntime("node"))(
       try {
         const calls = [0, 1, 2, 3].map((value) =>
           request.run(value, () =>
-            baml.call_int_callback_async(
-              callback as unknown as (value: number) => number,
+            baml.call_int_callback(
+              callback,
               value,
             ),
           ),
@@ -235,16 +235,16 @@ describe.runIf(isTestRuntime("node"))(
       };
       expect(
         await request.run("A", () =>
-          baml.call_with_callback_async(
-            callback as unknown as (value: number) => string,
+          baml.call_with_callback(
+            callback,
             1,
           ),
         ),
       ).toBe("A:1");
       expect(
         await request.run("B", () =>
-          baml.call_with_callback_async(
-            callback as unknown as (value: number) => string,
+          baml.call_with_callback(
+            callback,
             2,
           ),
         ),
@@ -261,15 +261,15 @@ describe.runIf(isTestRuntime("node"))(
         return value;
       };
       expect(
-        await baml.call_int_callback_async(
-          callback as unknown as (value: number) => number,
+        await baml.call_int_callback(
+          callback,
           1,
         ),
       ).toBe(1);
       await nextTurn();
       expect(
-        await baml.call_int_callback_async(
-          callback as unknown as (value: number) => number,
+        await baml.call_int_callback(
+          callback,
           2,
         ),
       ).toBe(2);
@@ -286,7 +286,7 @@ describe.runIf(isTestRuntime("node"))(
       };
       request.run("caller", () => {
         expect(() =>
-          baml.call_int_callback(
+          baml.call_int_callback_sync(
             callback as unknown as (value: number) => number,
             7,
           ),
@@ -308,8 +308,8 @@ describe.runIf(isTestRuntime("node"))(
       };
       await request.run("caller", async () => {
         expect(
-          await baml.call_repeatedly_async(
-            callback as unknown as (value: number) => string,
+          await baml.call_repeatedly(
+            callback,
             3,
           ),
         ).toEqual(["0", "1", "2"]);
@@ -319,7 +319,7 @@ describe.runIf(isTestRuntime("node"))(
     // SDK_PARITY_LINT(skip): Node AsyncResource destruction and AsyncLocalStorage
     it("cancelled_waiter_keeps_host_resource_until_promise_exit_typescript_only", async () => {
       const request = new AsyncLocalStorage<string>();
-      const ctx = CancelToken.new();
+      const ctx = CancelToken.new_sync();
       const resources = new Set<number>();
       const destroyed = new Set<number>();
       const hook = createHook({
@@ -344,13 +344,13 @@ describe.runIf(isTestRuntime("node"))(
           cleanedUp = true;
         }
       };
-      const pending = request.run("original", () => baml.call_int_callback_async(
-        callback as unknown as (value: number) => number, 6, { $baml: { cancel: ctx } },
+      const pending = request.run("original", () => baml.call_int_callback(
+        callback, 6, { $baml: { cancel: ctx } },
       ));
       try {
         await entered;
         expect(resources.has(resourceId)).toBe(true);
-        ctx.cancel();
+        ctx.cancel_sync();
         await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
         await nextTurn();
         expect(cleanedUp).toBe(false);

@@ -19,6 +19,26 @@ This package is generally consumed indirectly via the code generated
 by `baml-cli generate --target python` — direct use is reserved for
 runtime authors and bridge tests.
 
+## Package name and location
+
+The generated SDK never names its own package, so it imports under whatever
+name and location it is installed at. `package_name` in the generator section
+picks both: by default the SDK is `baml_sdk` in `output_dir`. A library that
+ships a generated SDK can nest it inside its own package, so it does not
+install a top-level `baml_sdk` that another library's SDK would overwrite:
+
+```toml
+[generator.python]
+output_type = "python/pydantic"
+naming_convention = "language"
+output_dir = "src"                     # the import root
+package_name = "my_app._generated"     # written to src/my_app/_generated
+```
+
+BAML creates missing parent directories but never writes or edits `my_app/__init__.py`. One process still holds one
+BAML program: two generated SDKs imported into the same process replace each
+other's program.
+
 ## Python callback execution
 
 Passing a Python callable to BAML uses the environment of the call that
@@ -38,9 +58,11 @@ so a type checker takes a plain function and an `async def` for it.
 A class has one type for a field, whoever built the instance. A call of a
 function-typed field therefore has the type `R | Coroutine[Any, Any, R]` also
 on an instance that BAML returned, where the callable is a BAML closure and
-the call returns `R`. A function that BAML returns directly, and a callable
-that BAML passes to a callback, is typed as the BAML closure it is: a call
-returns `R`, optional parameters are keyword-only, and `call_async` awaits it.
+the call returns a coroutine of `R`. A function that BAML returns directly,
+and a callable that BAML passes to a callback, is typed as the BAML closure it
+is: like a generated function, `await closure(...)` gives `R`, optional
+parameters are keyword-only, and the blocking `closure.call_sync(...)` returns
+`R` directly.
 
 Each dispatch of an async entry receives a separate copy of its application
 `ContextVars`. Callback writes do not change the awaiting task's context or
@@ -51,8 +73,8 @@ A synchronous entry blocks its calling thread, including any application loop
 running there. Coroutine callbacks of that entry must use resources of their
 executing worker loop. Awaiting resources owned by the blocked loop is unsupported.
 
-Returned BAML closures support `closure(...)` and
-`await closure.call_async(...)`. Passing a closure back into BAML preserves
+Returned BAML closures support `await closure(...)` and the blocking
+`closure.call_sync(...)`. Passing a closure back into BAML preserves
 its native function handle. Each new invocation selects its own environment.
 
 Cancelling a BAML call cancels executing coroutine callbacks on their owning

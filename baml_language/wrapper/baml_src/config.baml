@@ -102,13 +102,19 @@ function read_text(path: string) -> string {
 }
 
 function document(path: string) -> baml.toml.Table {
-    baml.toml.Table.parse(read_text(path)) catch (error) {
-        baml.toml.ParseError | baml.errors.Io => {
-            let message = match (error) {
-                baml.toml.ParseError { message } | baml.errors.Io { message } => message,
-            };
-            throw baml.errors.InvalidArgument { message: `${path}: ${message}` };
-        },
+    let text = read_text(path) catch (error) {
+        baml.errors.Io => fail(`${path}: ${error.message}`),
+    };
+    parse_document(path, text)
+}
+
+// Parses the TOML text of the file at `path`. A syntax error names the file.
+function parse_document(
+    path: string,
+    text: string,
+) -> baml.toml.Table throws baml.errors.InvalidArgument {
+    baml.toml.Table.parse(text) catch (error) {
+        baml.toml.ParseError => fail(`${path}: ${error.message}`),
     }
 }
 
@@ -323,6 +329,7 @@ class GeneratorShape {
     naming_convention: string?,
     output_dir: string?,
     sdk_import_path: string?,
+    package_name: string?,
     max_typed_union_arity: int?,
 }
 
@@ -336,7 +343,12 @@ class TestProfileShape {
 }
 
 class PackShape {
-    telemetry_environment: string?,
+    build: ArtifactBuildShape?,
+}
+
+class ArtifactBuildShape {
+    embed_telemetry_api_key_from_env_var: string?,
+    embed_telemetry_env: string?,
 }
 
 class BoundaryShape {

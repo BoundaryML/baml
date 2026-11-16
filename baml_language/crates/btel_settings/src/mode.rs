@@ -12,7 +12,9 @@ pub enum AutoTelemetryLevel {
     /// Timing for ordinary functions; spans and default captures for LLM functions.
     #[default]
     Medium,
-    /// Spans for supported functions, without enabling additional value capture.
+    /// Spans for supported functions, without enabling additional input or
+    /// output capture. A span records the error it ends with at every level
+    /// (`policy::SPAN_CAPTURE_ERROR`).
     High,
 }
 

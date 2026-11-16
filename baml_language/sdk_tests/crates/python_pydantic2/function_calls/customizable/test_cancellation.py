@@ -40,22 +40,22 @@ async def _wait_for_marker(path: Path) -> None:
 
 
 def test_cancellation_sync_call_returns_none():
-    assert throws_test.SleepMs(1) is None
+    assert throws_test.SleepMs_sync(1) is None
 
 
 async def test_cancellation_async_call_returns_none():
-    assert await throws_test.SleepMs_async(1) is None
+    assert await throws_test.SleepMs(1) is None
 
 
 def test_cancellation_sync_cancel_via_call_context():
     start = time.monotonic()
-    ctx = CancelToken.new()
-    timer = threading.Timer(0.05, ctx.cancel)
+    ctx = CancelToken.new_sync()
+    timer = threading.Timer(0.05, ctx.cancel_sync)
 
     timer.start()
     try:
         with pytest.raises(BamlCancelledError) as exc_info:
-            throws_test.SleepMs(2000, _baml={"cancel": ctx})
+            throws_test.SleepMs_sync(2000, _baml={"cancel": ctx})
     finally:
         timer.cancel()
 
@@ -65,16 +65,16 @@ def test_cancellation_sync_cancel_via_call_context():
 
 async def test_cancellation_async_cancel_via_call_context():
     start = time.monotonic()
-    ctx = CancelToken.new()
+    ctx = CancelToken.new_sync()
 
     async def _abort_soon() -> None:
         await asyncio.sleep(0.05)
-        ctx.cancel()
+        ctx.cancel_sync()
 
     abort_task = asyncio.create_task(_abort_soon())
 
     with pytest.raises(asyncio.CancelledError) as exc_info:
-        await throws_test.SleepMs_async(2000, _baml={"cancel": ctx})
+        await throws_test.SleepMs(2000, _baml={"cancel": ctx})
 
     await abort_task
 
@@ -84,7 +84,7 @@ async def test_cancellation_async_cancel_via_call_context():
 
 async def test_cancellation_async_cancel_via_task_cancel():
     start = time.monotonic()
-    task = asyncio.create_task(throws_test.SleepMs_async(2000))
+    task = asyncio.create_task(throws_test.SleepMs(2000))
 
     await asyncio.sleep(0.05)
     task.cancel()
@@ -107,7 +107,7 @@ async def test_cancellation_async_cancel_via_task_group_sibling():
 
     with pytest.raises(ExceptionGroup) as exc_info:
         async with asyncio.TaskGroup() as group:
-            task = group.create_task(throws_test.SleepMs_async(2000))
+            task = group.create_task(throws_test.SleepMs(2000))
             group.create_task(_fail_soon())
 
     assert any(isinstance(exc, RuntimeError) for exc in exc_info.value.exceptions)
@@ -118,7 +118,7 @@ async def test_cancellation_async_cancel_via_task_group_sibling():
 async def test_cancellation_async_cancel_via_asyncio_timeout():
     start = time.monotonic()
     with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(throws_test.SleepMs_async(2000), timeout=0.05)
+        await asyncio.wait_for(throws_test.SleepMs(2000), timeout=0.05)
 
     _assert_fast_cancellation(start)
 
@@ -138,7 +138,7 @@ async def test_cancellation_async_cancel_skips_later_step(tmp_path: Path, mode: 
     sleep_ms = 2000
 
     task = asyncio.create_task(
-        throws_test.SleepThenMarkMs_async(sleep_ms, str(entry), str(later))
+        throws_test.SleepThenMarkMs(sleep_ms, str(entry), str(later))
     )
     await _wait_for_marker(entry)
     # measured from the cancellation point: task startup and marker polling are

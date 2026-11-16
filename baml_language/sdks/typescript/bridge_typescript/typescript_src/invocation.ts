@@ -14,11 +14,11 @@ export interface InvokeOptions {
     $baml?: InvocationOptions | null;
     $types?: Record<string, BamlType | BamlTypeToken> | null;
 }
-export function invoke(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options?: InvokeOptions): unknown {
-    return invokeTarget(target, args, options, false);
-}
-export async function invokeAsync(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options?: InvokeOptions): Promise<unknown> {
+export async function invoke(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options?: InvokeOptions): Promise<unknown> {
     return await invokeTarget(target, args, options, true);
+}
+export function invokeSync(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options?: InvokeOptions): unknown {
+    return invokeTarget(target, args, options, false);
 }
 
 /** Link a native source to one call; retiring the waiter removes the listener. */

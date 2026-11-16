@@ -4,7 +4,7 @@ expression: outcome.dump
 ---
 429..430 'f': throws never
 440..529 '{\n   ...tal\n}': int
-446..455 'let total': int
+450..455 'total': int
 458..467 '[1, 2, 3]': int[]
 458..474 '[1, 2,...reduce': (self: int[], reducer: (int, int) -> int throws never, initial: int) -> int throws never
 458..498 '[1, 2,... }, 0)': int

@@ -12,14 +12,15 @@
 // `std::boxed::Box`, so the recursion boxes below are spelled in full.
 use baml_sdk::generics::{
     Box, DifferingInstantiation, GenericBinaryTree, GenericLinkedList, NestedGenerics, Wrapper,
-    round_trip_box_int, round_trip_differing_instantiation, round_trip_generic_binary_tree_int,
-    round_trip_generic_linked_list_int, round_trip_nested_generics, round_trip_wrapper_int,
+    round_trip_box_int_sync, round_trip_differing_instantiation_sync,
+    round_trip_generic_binary_tree_int_sync, round_trip_generic_linked_list_int_sync,
+    round_trip_nested_generics_sync, round_trip_wrapper_int_sync,
 };
 
 #[test]
 fn test_generics_round_trip_wrapper_int() {
     let w = Wrapper::<i64> { value: 5 };
-    assert_eq!(round_trip_wrapper_int(w.clone()).unwrap(), w);
+    assert_eq!(round_trip_wrapper_int_sync(w.clone()).unwrap(), w);
 }
 
 #[test]
@@ -31,7 +32,10 @@ fn test_generics_round_trip_generic_linked_list_int() {
             next: None,
         })),
     };
-    assert_eq!(round_trip_generic_linked_list_int(ll.clone()).unwrap(), ll);
+    assert_eq!(
+        round_trip_generic_linked_list_int_sync(ll.clone()).unwrap(),
+        ll
+    );
 }
 
 #[test]
@@ -41,7 +45,10 @@ fn test_generics_round_trip_generic_binary_tree_int() {
         left: None,
         right: None,
     };
-    assert_eq!(round_trip_generic_binary_tree_int(t.clone()).unwrap(), t);
+    assert_eq!(
+        round_trip_generic_binary_tree_int_sync(t.clone()).unwrap(),
+        t
+    );
 }
 
 #[test]
@@ -50,7 +57,7 @@ fn test_generics_round_trip_box_int() {
         value: 3,
         wrapped: Wrapper::<i64> { value: 4 },
     };
-    assert_eq!(round_trip_box_int(b.clone()).unwrap(), b);
+    assert_eq!(round_trip_box_int_sync(b.clone()).unwrap(), b);
 }
 
 #[test]
@@ -69,7 +76,7 @@ fn test_generics_round_trip_nested_generics() {
             },
         },
     };
-    assert_eq!(round_trip_nested_generics(n.clone()).unwrap(), n);
+    assert_eq!(round_trip_nested_generics_sync(n.clone()).unwrap(), n);
 }
 
 #[test]
@@ -80,5 +87,8 @@ fn test_generics_round_trip_differing_instantiation() {
             next: None,
         },
     };
-    assert_eq!(round_trip_differing_instantiation(d.clone()).unwrap(), d);
+    assert_eq!(
+        round_trip_differing_instantiation_sync(d.clone()).unwrap(),
+        d
+    );
 }

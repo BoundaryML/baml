@@ -12,7 +12,7 @@ from baml_sdk.complex_models import (
     PostalAddress,
     ProfileOwner,
     WirePayment,
-    round_trip_complex_profile,
+    round_trip_complex_profile_sync,
 )
 
 
@@ -96,4 +96,4 @@ def test_complex_models_round_trip_complex_profile_preserves_deeply_nested_mixed
         flags=[7, "manual-review", True],
     )
 
-    assert round_trip_complex_profile(profile) == profile
+    assert round_trip_complex_profile_sync(profile) == profile

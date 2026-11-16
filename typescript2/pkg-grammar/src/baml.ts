@@ -12,7 +12,7 @@ type IncludeRule = tm.IncludeRule<BamlScope>;
 // replaces the reference with `{ include: "#<key>" }`.
 
 // An identifier as the BAML lexer defines its `Word` token
-// (baml_compiler_lexer/src/tokens.rs):
+// (baml_syntax/src/token.rs):
 //
 //   $-prefixed: \$[a-zA-Z_][a-zA-Z0-9_]*
 //   normal:     [a-zA-Z_][a-zA-Z0-9_-]*(\$[a-zA-Z_][a-zA-Z0-9_-]*)*
@@ -189,7 +189,7 @@ const ITEM_END_TAIL = String.raw`\s*\}|\s+${IDENT}\b|\r?\n\s*(?:${IDENT}\b|@@|\}
 
 // --- Literals --------------------------------------------------------------
 //
-// Derived from the BAML lexer (baml_compiler_lexer/src/tokens.rs). Every literal
+// Derived from the BAML lexer (baml_syntax/src/token.rs). Every literal
 // is also a valid type expression in BAML (literal types: `1 | 2`, `"a" | "b"`,
 // `true`), so the `literal` group below is wired into `typeExpression` as well.
 
@@ -862,7 +862,7 @@ const upcastExpression: Rule = {
   begin: String.raw`(\.)\s*(as)\b(?=\s*<)`,
   beginCaptures: {
     '1': { scope: 'punctuation.accessor.baml' },
-    '2': { scope: 'keyword.operator.as.baml' },
+    '2': { scope: 'keyword.operator.expression.as.baml' },
   },
   end: String.raw`(?<=>)`,
   patterns: [comments, typeArgumentsRule('upcast-type-arguments', '')],
@@ -873,7 +873,7 @@ const spawnExpression: Rule = {
   scope: 'meta.expression.spawn.baml',
   begin: String.raw`\b(spawn)\b`,
   beginCaptures: {
-    '1': { scope: 'keyword.operator.spawn.baml' },
+    '1': { scope: 'keyword.operator.expression.spawn.baml' },
   },
   end: EXPRESSION_BODY_END,
   patterns: [
@@ -897,7 +897,7 @@ const spawnExpression: Rule = {
           scope: 'meta.spawn.modifiers.baml',
           begin: String.raw`\b(with)\b`,
           beginCaptures: {
-            '1': { scope: 'keyword.operator.with.baml' },
+            '1': { scope: 'keyword.operator.expression.with.baml' },
           },
           end: String.raw`(?=\{)`,
           patterns: [comments, conditionExpression, comma],
@@ -910,7 +910,7 @@ const spawnExpression: Rule = {
 
 const awaitExpression: Rule = {
   key: 'await-expression',
-  scope: 'keyword.operator.await.baml',
+  scope: 'keyword.operator.expression.await.baml',
   match: String.raw`\bawait\b`,
 };
 
@@ -1049,13 +1049,13 @@ const typeArrowOperator: Rule = {
 
 const typeThrowsOperator: Rule = {
   key: 'type-throws-operator',
-  scope: 'keyword.operator.throws.baml',
+  scope: 'keyword.operator.expression.throws.baml',
   match: String.raw`\bthrows\b`,
 };
 
 const typeAsOperator: Rule = {
   key: 'type-as-operator',
-  scope: 'keyword.operator.as.baml',
+  scope: 'keyword.operator.expression.as.baml',
   match: String.raw`\bas\b`,
 };
 
@@ -1309,7 +1309,7 @@ function isPatternRule(key: string, inner: Rule, extra = ''): Rule {
     key,
     scope: 'meta.expression.is.baml',
     begin: String.raw`\b(is)\b`,
-    beginCaptures: { '1': { scope: 'keyword.operator.is.baml' } },
+    beginCaptures: { '1': { scope: 'keyword.operator.expression.is.baml' } },
     end: String.raw`(?=\s*(?:&&|\|\||=>|[,);\]}${extra}]|$))`,
     patterns: [comments, inner],
   };
@@ -1566,7 +1566,7 @@ const forInPattern: Rule = {
 
 const forInKeyword: Rule = {
   key: 'for-in-keyword',
-  scope: 'keyword.operator.in.baml',
+  scope: 'keyword.operator.expression.in.baml',
   match: String.raw`\bin\b`,
 };
 
@@ -1862,7 +1862,7 @@ const lambdaExpression: Rule = {
       scope: 'meta.throws.lambda.baml',
       begin: String.raw`\b(throws)\b`,
       beginCaptures: {
-        '1': { scope: 'keyword.operator.throws.baml' },
+        '1': { scope: 'keyword.operator.expression.throws.baml' },
       },
       end: String.raw`(?=\{)`,
       patterns: [comments, typeExpression],
@@ -1942,7 +1942,7 @@ const declarationTypeParameters: Rule = {
         comments,
         {
           key: 'declaration-type-parameter-extends',
-          scope: 'keyword.operator.extends.baml',
+          scope: 'keyword.operator.expression.extends.baml',
           match: String.raw`\bextends\b`,
         },
         {
@@ -2046,7 +2046,7 @@ const letTypeStatement: Rule = {
       scope: 'meta.type-parameter.bounds.baml',
       begin: String.raw`\b(extends)\b`,
       beginCaptures: {
-        '1': { scope: 'keyword.operator.extends.baml' },
+        '1': { scope: 'keyword.operator.expression.extends.baml' },
       },
       end: String.raw`(?=\s*=)`,
       patterns: [
@@ -2136,6 +2136,24 @@ const clientItem: Rule = {
   },
   end: String.raw`(?<=\})`,
   patterns: [comments, configBlock],
+};
+
+// `client Name = <expr>;` binds a client value (anything implementing
+// `ai.Client`). The legacy `client<llm> Name { ... }` block above still
+// parses, so the compiler can point at the migration. The initializer may
+// start on the next line and the `;` is optional, so the rule stays open
+// until the `;` or the next top-level item.
+const clientValueItem: Rule = {
+  key: 'client-value',
+  scope: 'meta.client.baml',
+  begin: String.raw`^\s*(client)\s+(${IDENT})\s*(=)(?!=)`,
+  beginCaptures: {
+    '1': { scope: 'keyword.declaration.client.baml' },
+    '2': { scope: 'entity.name.client.baml' },
+    '3': { scope: 'keyword.operator.assignment.baml' },
+  },
+  end: String.raw`(?=;|${TOP_LEVEL_ITEM_START}|^\s*${BINDING_INTRO}\b)`,
+  patterns: [comments, expression],
 };
 
 const retryPolicyItem: Rule = {
@@ -2248,7 +2266,7 @@ const testHeader: Rule = {
     comments,
     {
       key: 'test-with-keyword',
-      scope: 'keyword.operator.with.baml',
+      scope: 'keyword.operator.expression.with.baml',
       match: String.raw`\bwith\b`,
     },
     conditionExpression,
@@ -2368,7 +2386,7 @@ const associatedTypeItem: Rule = {
     comments,
     {
       key: 'associated-type-extends',
-      scope: 'keyword.operator.extends.baml',
+      scope: 'keyword.operator.expression.extends.baml',
       match: String.raw`\bextends\b`,
     },
     assignmentOperator,
@@ -2412,7 +2430,7 @@ const interfaceFieldLink: Rule = {
   begin: String.raw`(?:^\s*|(?<=\{)\s*)(${IDENT})\s+(as)\s+(${IDENT})\b`,
   beginCaptures: {
     '1': { scope: 'variable.other.property.interface.baml' },
-    '2': { scope: 'keyword.operator.as.baml' },
+    '2': { scope: 'keyword.operator.expression.as.baml' },
     '3': { scope: 'variable.other.property.baml' },
   },
   end: MEMBER_SIGNATURE_END,
@@ -2601,6 +2619,7 @@ export const baml: Grammar = {
   patterns: [
     comments,
     clientItem,
+    clientValueItem,
     retryPolicyItem,
     generatorItem,
     templateStringItem,

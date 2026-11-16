@@ -298,9 +298,21 @@ mod stackful {
             if stack_address() >= self.compiled.fiber_floor {
                 return Ok(());
             }
-            Err(Box::new(VmError::thrown_fresh(
+            Err(self.stack_overflow())
+        }
+
+        /// The `StackOverflow` throw, out of line: every compiled call checks
+        /// `stack_room` and inlines its fast path.
+        #[allow(
+            clippy::unnecessary_box_returns,
+            reason = "boxing out of line keeps the allocation off the inlined fast path"
+        )]
+        #[cold]
+        #[inline(never)]
+        fn stack_overflow(&mut self) -> Box<VmError> {
+            Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
-            )))
+            ))
         }
     }
 }

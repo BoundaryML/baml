@@ -1,0 +1,306 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== main.baml ===
+SourceFile@262..1105
+  items: FunctionDef@262..305
+    kw: Function "function" @262..270
+    name: Name@271..272
+      token: Word "f" @271..272
+    generics: GenericParamList@272..278
+      l: Less "<" @272..273
+      params: GenericParam@273..274
+        name: Name@273..274
+          token: Word "K" @273..274
+      params: Comma "," @274..275
+      params: GenericParam@276..277
+        name: Name@276..277
+          token: Word "V" @276..277
+      r: Greater ">" @277..278
+    params: ParamList@278..290
+      l: LParen "(" @278..279
+      params: Param@279..283
+        name: Name@279..280
+          token: Word "k" @279..280
+        ascription: TypeAscription@280..283
+          colon: Colon ":" @280..281
+          ty: PathType@282..283
+            head: Name@282..283
+              token: Word "K" @282..283
+      params: Comma "," @283..284
+      params: Param@285..289
+        name: Name@285..286
+          token: Word "v" @285..286
+        ascription: TypeAscription@286..289
+          colon: Colon ":" @286..287
+          ty: PathType@288..289
+            head: Name@288..289
+              token: Word "V" @288..289
+      r: RParen ")" @289..290
+    ret: ReturnType@291..295
+      arrow: Arrow "->" @291..293
+      ty: PathType@294..295
+        head: Name@294..295
+          token: Word "V" @294..295
+    body: Block@296..305
+      l: LBrace "{" @296..297
+      tail: PathExpr@302..303
+        head: Name@302..303
+          token: Word "v" @302..303
+      r: RBrace "}" @304..305
+  items: FunctionDef@365..417
+    kw: Function "function" @365..373
+    name: Name@374..386
+      token: Word "UnclosedCall" @374..386
+    params: ParamList@386..388
+      l: LParen "(" @386..387
+      r: RParen ")" @387..388
+    ret: ReturnType@389..398
+      arrow: Arrow "->" @389..391
+      ty: PathType@392..398
+        head: Name@392..398
+          token: Word "string" @392..398
+    body: Block@399..417
+      l: LBrace "{" @399..400
+      tail: CallExpr@405..415
+        callee: PathExpr@405..406
+          head: Name@405..406
+            token: Word "f" @405..406
+        args: ArgList@406..415
+          l: LParen "(" @406..407
+          args: Arg@407..408
+            value: LiteralExpr@407..408
+              token: Integer "1" @407..408
+          args: Comma "," @408..409
+          args: Arg@410..415
+            value: StringLit@410..415
+              token: String "\"two\"" @410..415
+          r: <missing @416>
+      r: RBrace "}" @416..417
+  items: FunctionDef@480..537
+    kw: Function "function" @480..488
+    name: Name@489..504
+      token: Word "ExtraCloseParen" @489..504
+    params: ParamList@504..506
+      l: LParen "(" @504..505
+      r: RParen ")" @505..506
+    ret: ReturnType@507..516
+      arrow: Arrow "->" @507..509
+      ty: PathType@510..516
+        head: Name@510..516
+          token: Word "string" @510..516
+    body: Block@517..537
+      l: LBrace "{" @517..518
+      stmts: ExprStmt@523..534
+        expr: CallExpr@523..534
+          callee: PathExpr@523..524
+            head: Name@523..524
+              token: Word "f" @523..524
+          args: ArgList@524..534
+            l: LParen "(" @524..525
+            args: Arg@525..526
+              value: LiteralExpr@525..526
+                token: Integer "1" @525..526
+            args: Comma "," @526..527
+            args: Arg@528..533
+              value: StringLit@528..533
+                token: String "\"two\"" @528..533
+            r: RParen ")" @533..534
+      stmts: Bogus@534..535
+        tokens: RParen ")" @534..535
+      r: RBrace "}" @536..537
+  items: FunctionDef@626..694
+    kw: Function "function" @626..634
+    name: Name@635..650
+      token: Word "UnclosedGeneric" @635..650
+    params: ParamList@650..652
+      l: LParen "(" @650..651
+      r: RParen ")" @651..652
+    ret: ReturnType@653..662
+      arrow: Arrow "->" @653..655
+      ty: PathType@656..662
+        head: Name@656..662
+          token: Word "string" @656..662
+    body: Block@663..694
+      l: LBrace "{" @663..664
+      stmts: ExprStmt@669..674
+        expr: BinaryExpr@669..674
+          lhs: PathExpr@669..670
+            head: Name@669..670
+              token: Word "f" @669..670
+          op: Less "<" @670..671
+          rhs: PathExpr@671..674
+            head: Name@671..674
+              token: Word "int" @671..674
+      stmts: Bogus@674..675
+        tokens: Comma "," @674..675
+      tail: CallExpr@676..692
+        callee: PathExpr@676..682
+          head: Name@676..682
+            token: Word "string" @676..682
+        args: ArgList@682..692
+          l: LParen "(" @682..683
+          args: Arg@683..684
+            value: LiteralExpr@683..684
+              token: Integer "1" @683..684
+          args: Comma "," @684..685
+          args: Arg@686..691
+            value: StringLit@686..691
+              token: String "\"two\"" @686..691
+          r: RParen ")" @691..692
+      r: RBrace "}" @693..694
+  items: FunctionDef@731..801
+    kw: Function "function" @731..739
+    name: Name@740..755
+      token: Word "ExtraCloseAngle" @740..755
+    params: ParamList@755..757
+      l: LParen "(" @755..756
+      r: RParen ")" @756..757
+    ret: ReturnType@758..767
+      arrow: Arrow "->" @758..760
+      ty: PathType@761..767
+        head: Name@761..767
+          token: Word "string" @761..767
+    body: Block@768..801
+      l: LBrace "{" @768..769
+      stmts: ExprStmt@774..779
+        expr: BinaryExpr@774..779
+          lhs: PathExpr@774..775
+            head: Name@774..775
+              token: Word "f" @774..775
+          op: Less "<" @775..776
+          rhs: PathExpr@776..779
+            head: Name@776..779
+              token: Word "int" @776..779
+      stmts: Bogus@779..780
+        tokens: Comma "," @779..780
+      stmts: ExprStmt@781..791
+        expr: BinaryExpr@781..791
+          lhs: PathExpr@781..787
+            head: Name@781..787
+              token: Word "string" @781..787
+          op: Greater ">" @787..788
+          op: Greater ">" @788..789
+          rhs: ParenExpr@789..791
+            l: LParen "(" @789..790
+            inner: LiteralExpr@790..791
+              token: Integer "1" @790..791
+            r: <missing @791>
+      stmts: Bogus@791..792
+        tokens: Comma "," @791..792
+      stmts: ExprStmt@793..798
+        expr: StringLit@793..798
+          token: String "\"two\"" @793..798
+      stmts: Bogus@798..799
+        tokens: RParen ")" @798..799
+      r: RBrace "}" @800..801
+  items: FunctionDef@841..897
+    kw: Function "function" @841..849
+    name: Name@850..872
+      token: Word "MismatchedParenBracket" @850..872
+    params: ParamList@872..874
+      l: LParen "(" @872..873
+      r: RParen ")" @873..874
+    ret: ReturnType@875..881
+      arrow: Arrow "->" @875..877
+      ty: PathType@878..881
+        head: Name@878..881
+          token: Word "int" @878..881
+    body: Block@882..897
+      l: LBrace "{" @882..883
+      stmts: ExprStmt@888..894
+        expr: ParenExpr@888..894
+          l: LParen "(" @888..889
+          inner: BinaryExpr@889..894
+            lhs: LiteralExpr@889..890
+              token: Integer "1" @889..890
+            op: Plus "+" @891..892
+            rhs: LiteralExpr@893..894
+              token: Integer "2" @893..894
+          r: <missing @894>
+      stmts: Bogus@894..895
+        tokens: RBracket "]" @894..895
+      r: RBrace "}" @896..897
+  items: FunctionDef@937..1105
+    kw: Function "function" @937..945
+    name: Name@946..959
+      token: Word "UnclosedArray" @946..959
+    params: ParamList@959..961
+      l: LParen "(" @959..960
+      r: RParen ")" @960..961
+    ret: ReturnType@962..970
+      arrow: Arrow "->" @962..964
+      ty: ArrayType@965..970
+        inner: PathType@965..968
+          head: Name@965..968
+            token: Word "int" @965..968
+        l: LBracket "[" @968..969
+        r: RBracket "]" @969..970
+    body: Block@971..1105
+      l: LBrace "{" @971..972
+      tail: ArrayLiteral@977..1105
+        l: LBracket "[" @977..978
+        value: LiteralExpr@978..979
+          token: Integer "1" @978..979
+        comma: Comma "," @979..980
+        value: LiteralExpr@981..982
+          token: Integer "2" @981..982
+        comma: Comma "," @982..983
+        value: LiteralExpr@984..985
+          token: Integer "3" @984..985
+        value: CallExpr@1048..1064
+          callee: PathExpr@1048..1062
+            head: Name@1048..1062
+              token: Word "NestedUnclosed" @1048..1062
+          args: ArgList@1062..1064
+            l: LParen "(" @1062..1063
+            r: RParen ")" @1063..1064
+        value: PathExpr@1068..1074
+          head: Name@1068..1074
+            token: Word "string" @1068..1074
+        value: Block@1075..1105
+          l: LBrace "{" @1075..1076
+          stmts: ExprStmt@1081..1086
+            expr: BinaryExpr@1081..1086
+              lhs: PathExpr@1081..1082
+                head: Name@1081..1082
+                  token: Word "f" @1081..1082
+              op: Less "<" @1082..1083
+              rhs: PathExpr@1083..1086
+                head: Name@1083..1086
+                  token: Word "int" @1083..1086
+          stmts: Bogus@1086..1087
+            tokens: Comma "," @1086..1087
+          tail: CallExpr@1088..1103
+            callee: PathExpr@1088..1094
+              head: Name@1088..1094
+                token: Word "string" @1088..1094
+            args: ArgList@1094..1103
+              l: LParen "(" @1094..1095
+              args: Arg@1095..1096
+                value: LiteralExpr@1095..1096
+                  token: Integer "1" @1095..1096
+              args: Comma "," @1096..1097
+              args: Arg@1098..1103
+                value: StringLit@1098..1103
+                  token: String "\"two\"" @1098..1103
+              r: <missing @1104>
+          r: RBrace "}" @1104..1105
+        r: <missing @1105>
+      r: <missing @1105>
+error @416..417: expected ')', found '}'
+error @534..535: expected expression, found ')'
+error @674..675: expected expression, found ','
+error @779..780: expected expression, found ','
+error @791..792: expected ')', found ','
+error @791..792: expected expression, found ','
+error @798..799: expected expression, found ')'
+error @894..895: expected ')', found ']'
+error @894..895: expected expression, found ']'
+error @986..987: expected expression, found '}'
+error @1039..1047: expected expression, found function
+error @1065..1067: expected expression, found '->'
+error @1086..1087: expected expression, found ','
+error @1104..1105: expected ')', found '}'
+error @1105..1105: expected ']', found EOF
+error @1105..1105: expected '}', found EOF

@@ -26,29 +26,29 @@ from baml_sdk.generic_tests import (
     ContainerShapes,
     NamedStatic,
     SomeEnum,
-    identity,
-    second_of,
-    tag_or_value,
-    list_head,
-    choose,
-    read_items,
-    make_triple,
-    extract,
-    wrap,
-    parse_as,
-    one_type_arg,
-    optional_only,
-    maybe_id,
-    first_or,
-    values_of,
-    elem_type,
-    apply,
-    pair,
-    merge,
-    combine,
-    glue,
-    triple_choose,
-    two_in_union,
+    identity_sync,
+    second_of_sync,
+    tag_or_value_sync,
+    list_head_sync,
+    choose_sync,
+    read_items_sync,
+    make_triple_sync,
+    extract_sync,
+    wrap_sync,
+    parse_as_sync,
+    one_type_arg_sync,
+    optional_only_sync,
+    maybe_id_sync,
+    first_or_sync,
+    values_of_sync,
+    elem_type_sync,
+    apply_sync,
+    pair_sync,
+    merge_sync,
+    combine_sync,
+    glue_sync,
+    triple_choose_sync,
+    two_in_union_sync,
 )
 
 
@@ -72,48 +72,48 @@ def _assert_type_error(call, *needles):
 
 def test_generic_inference_identity_infers_primitives():
     # T1/T2: T bound from the value; identity returns it unchanged.
-    assert identity(5) == 5
-    assert identity("hi") == "hi"
-    assert identity(True) is True
+    assert identity_sync(5) == 5
+    assert identity_sync("hi") == "hi"
+    assert identity_sync(True) is True
 
 
 def test_generic_inference_identity_infers_user_class():
     # T3: T = StringIntPair, recovered from the instance value.
     pair = StringIntPair(my_string="a", my_int=1)
-    assert identity(pair) == pair
+    assert identity_sync(pair) == pair
 
 
 def test_generic_inference_identity_infers_generic_instance():
     # T4: a fully-bound GenericBox[int] carries its [int] on the wire, so T is
     # recovered as GenericBox<int> with no caller binding.
     box = GenericBox[int](value=5)
-    assert identity(box) == box
+    assert identity_sync(box) == box
 
     nested = GenericBox[GenericBox[str]](value=GenericBox[str](value="hello"))
-    assert identity(nested) == nested
+    assert identity_sync(nested) == nested
 
 
 async def test_generic_inference_identity_async_infers():
     # T5: the async path infers identically.
-    from baml_sdk.generic_tests import identity_async
+    from baml_sdk.generic_tests import identity
 
-    assert await identity_async(7) == 7
+    assert await identity(7) == 7
 
 
 def test_generic_inference_identity_null_binds_null():
     # §I I4: `None` is a value of exactly one BAML type, `null`, and the engine
     # infers from the concrete types of the values that arrived ⇒ T = null, as
     # the compile-time unifier does; the value round-trips.
-    assert identity(None) is None
+    assert identity_sync(None) is None
 
 
 # SDK_PARITY_LINT(skip): validates Python default-argument stubs and runtime TypeVar inference
 def test_generic_inference_default_only_value_position():
     # With the only argument left to its default, no value arrives to bind `T`,
     # and BAML never guesses a type argument ⇒ must-specify; a value binds it.
-    _assert_type_error(lambda: optional_only(), "could not infer a type", "optional_only")
-    assert optional_only(x=7) == 7
-    assert optional_only(_types={"T": int}) is None
+    _assert_type_error(lambda: optional_only_sync(), "could not infer a type", "optional_only")
+    assert optional_only_sync(x=7) == 7
+    assert optional_only_sync(_types={"T": int}) is None
 
 
 def test_generic_inference_identity_unbound_generic_instance_round_trips():
@@ -122,7 +122,7 @@ def test_generic_inference_identity_unbound_generic_instance_round_trips():
     # from its fields (`GenericBox<int>` here) and states them on the wire;
     # the engine binds `T` from the stated type and the value round-trips.
     unbound = GenericBox(value=5)
-    assert identity(unbound) == unbound
+    assert identity_sync(unbound) == unbound
 
 
 # ===========================================================================
@@ -133,7 +133,7 @@ def test_generic_inference_identity_unbound_generic_instance_round_trips():
 def test_generic_inference_make_triple_infers_multiple_typevars():
     # T6: A=int (scalar), B=string (list element), C=bool (map value) — all three
     # inferred from differently-shaped arguments at once.
-    t = make_triple(1, ["a", "b"], {"k": True})
+    t = make_triple_sync(1, ["a", "b"], {"k": True})
     assert isinstance(t, GenericTriple)
     assert t.first == 1
     assert t.second == ["a", "b"]
@@ -143,10 +143,10 @@ def test_generic_inference_make_triple_infers_multiple_typevars():
 def test_generic_inference_second_of_infers_from_nested_generic():
     # T9: second_of<T>(p: GenericPair<int, T>) — T binds from the instance's 2nd
     # wire arg only (`first` is pinned to int in the signature).
-    assert second_of(GenericPair[int, str](first=1, second="hi")) == "hi"
+    assert second_of_sync(GenericPair[int, str](first=1, second="hi")) == "hi"
     pair = StringIntPair(my_string="z", my_int=9)
     p = GenericPair[int, StringIntPair](first=0, second=pair)
-    assert second_of(p) == pair
+    assert second_of_sync(p) == pair
 
 
 def test_generic_inference_read_items_infers_from_instance_wire_args():
@@ -155,12 +155,12 @@ def test_generic_inference_read_items_infers_from_instance_wire_args():
     container = ContainerShapes[int](
         item=1, items=[1, 2, 3], by_key={"k": 4}, maybe=None, mixed=None
     )
-    assert read_items(container) == [1, 2, 3]
+    assert read_items_sync(container) == [1, 2, 3]
 
     empty_fields = ContainerShapes[int](
         item=1, items=[], by_key={}, maybe=None, mixed=None
     )
-    assert read_items(empty_fields) == []
+    assert read_items_sync(empty_fields) == []
 
 
 def test_generic_inference_list_head_infers_from_recursive_generic():
@@ -168,7 +168,7 @@ def test_generic_inference_list_head_infers_from_recursive_generic():
     linked = GenericRecursive[int](
         value=7, next=GenericRecursive[int](value=8, next=None)
     )
-    assert list_head(linked) == 7
+    assert list_head_sync(linked) == 7
 
 
 def test_generic_inference_extract_infers_four_typevars_from_nesting():
@@ -177,7 +177,7 @@ def test_generic_inference_extract_infers_four_typevars_from_nesting():
         first=GenericPair[int, str](first=1, second="a"),
         second=GenericPair[bool, float](first=True, second=1.5),
     )
-    assert extract(pair) == "int | string | bool | float"
+    assert extract_sync(pair) == "int | string | bool | float"
 
 
 # ===========================================================================
@@ -188,14 +188,14 @@ def test_generic_inference_extract_infers_four_typevars_from_nesting():
 def test_generic_inference_choose_infers_unified_typevar():
     # T14: choose(5, 6) ⇒ T = int (the two bindings merge to one). Body returns
     # `left`, so the call returns 5.
-    assert choose(5, 6) == 5
-    assert choose("a", "b") == "a"
+    assert choose_sync(5, 6) == 5
+    assert choose_sync("a", "b") == "a"
 
 
 def test_generic_inference_choose_infers_divergent_union():
     # T15: choose(5, "asdf") ⇒ T = int | string (a capability inference unlocks
     # over the explicit form, which forces a single T). Returns `left` = 5.
-    assert choose(5, "asdf") == 5
+    assert choose_sync(5, "asdf") == 5
 
 
 # ===========================================================================
@@ -214,7 +214,7 @@ def test_generic_inference_make_triple_partial_explicit_then_infer():
     # the supported surface for the rare case where a binding must be forced.
     # `_types=` is an internal wiring detail kept mainly for this partial-bind
     # escape hatch; prefer plain inference.
-    t = make_triple(1, ["x", "y"], {"k": True}, _types={"A": int})
+    t = make_triple_sync(1, ["x", "y"], {"k": True}, _types={"A": int})
     assert isinstance(t, GenericTriple)
     assert t.first == 1
     assert t.second == ["x", "y"]
@@ -228,7 +228,7 @@ def test_generic_inference_make_triple_partial_explicit_then_infer():
 
 def test_generic_inference_wrap_infers_and_returns_generic():
     # T29: wrap(5) infers T=int and returns a GenericBox<int>.
-    w = wrap(5)
+    w = wrap_sync(5)
     assert isinstance(w, GenericBox)
     assert w.value == 5
 
@@ -242,19 +242,19 @@ def test_generic_inference_genericbox_pair_with_infers_method_typevar():
     # T37: class T=int from the GenericBox[int] receiver; method U=string inferred
     # from the bare `other` arg (no [str] subscript).
     b = GenericBox[int](value=5)
-    assert b.pair_with("hello world") == "int | string"
+    assert b.pair_with_sync("hello world") == "int | string"
 
 
 def test_generic_inference_generic_static_infers_own_typevar():
     # T38: GenericBox.new<V>(value: V) — V inferred from the value, no subscript.
-    box = GenericBox.new(value=5)
+    box = GenericBox.new_sync(value=5)
     assert isinstance(box, GenericBox)
     assert box.value == 5
 
 
 def test_generic_inference_named_static_infers_distinct_typevars():
     # T39: NamedStatic.make<D,E>(d, e) — D=int, E=string inferred from the args.
-    assert NamedStatic.make(1, "x") == "int | string"
+    assert NamedStatic.make_sync(1, "x") == "int | string"
 
 
 # ===========================================================================
@@ -267,22 +267,22 @@ def test_generic_inference_union_with_concrete_sibling_infers_typevar():
     # members (`x: T | string | null`) is NOW solved by inference. The `int`
     # actual is not absorbed by the `string`/`null` siblings, so it routes to
     # `T` ⇒ T=int, matching the explicit form `tag_or_value[int](5) == "int"`.
-    assert tag_or_value(5) == "int"
+    assert tag_or_value_sync(5) == "int"
 
 
 def test_generic_inference_union_concrete_sibling_absorbs_value_binds_never():
     # §H H3: a `string` actual IS absorbed by the concrete `string` sibling, so
     # nothing pins `T`: the value could be a `T` or not, and the tie breaks to
     # `T = never`. Naming `T` still wins.
-    assert tag_or_value("hi") == "never"
-    assert tag_or_value("hi", _types={"T": int}) == "int"
+    assert tag_or_value_sync("hi") == "never"
+    assert tag_or_value_sync("hi", _types={"T": int}) == "int"
 
 
 def test_generic_inference_union_null_actual_binds_never():
     # `None` is a `null`, and the `null` sibling of `T | string | null` takes
     # it exactly as the `string` sibling takes "hi": nothing pins `T`, and the
     # tie breaks to `T = never`, the type no value has.
-    assert tag_or_value(None) == "never"
+    assert tag_or_value_sync(None) == "never"
 
 
 def test_generic_inference_return_only_var_still_requires_binding():
@@ -291,7 +291,7 @@ def test_generic_inference_return_only_var_still_requires_binding():
     # the call as a TYPE error (Python `TypeError`), and the message complains
     # that the type parameter couldn't be inferred and names the function.
     _assert_type_error(
-        lambda: parse_as("42"),
+        lambda: parse_as_sync("42"),
         "could not infer a type",
         "parse_as",
     )
@@ -302,7 +302,7 @@ def test_generic_inference_body_only_var_still_requires_binding():
     # Python `TypeError` whose message complains about the un-inferrable type
     # parameter and names the function.
     _assert_type_error(
-        lambda: one_type_arg(),
+        lambda: one_type_arg_sync(),
         "could not infer a type",
         "one_type_arg",
     )
@@ -321,7 +321,7 @@ def test_generic_inference_pair_invariant_list_conflict_rejects():
     # `(int|string)[]`). Surfaces as a Python `TypeError` whose message names the
     # function, the clashing concrete types, and that they can't be reconciled.
     _assert_type_error(
-        lambda: pair([1, 2], ["a", "b"]),
+        lambda: pair_sync([1, 2], ["a", "b"]),
         "can't be reconciled",
         "pair",
         "int",
@@ -332,7 +332,7 @@ def test_generic_inference_pair_invariant_list_conflict_rejects():
 def test_generic_inference_pair_invariant_list_agree_binds():
     # J9/G1: pair(int[], int[]) ⇒ two invariant occurrences that AGREE ⇒ T = int.
     # The fix narrows behavior, so this must still succeed.
-    assert pair([1, 2], [3, 4]) == "int"
+    assert pair_sync([1, 2], [3, 4]) == "int"
 
 
 def test_generic_inference_choose_union_outside_container_is_sound():
@@ -340,14 +340,14 @@ def test_generic_inference_choose_union_outside_container_is_sound():
     # so the union forms OUTSIDE the container (T = int[] | string[]) and the call
     # SUCCEEDS, returning `left`. Proves the fix keys on position variance, not
     # "arrays are involved." (Contrast pair, where T is under the container.)
-    assert choose([1, 2], ["a"]) == [1, 2]
+    assert choose_sync([1, 2], ["a"]) == [1, 2]
 
 
 def test_generic_inference_merge_invariant_map_value_conflict_rejects():
     # J5/E2: merge(map<string,int>, map<string,string>) ⇒ conflicting invariant
     # map-value type ⇒ reject as a Python `TypeError`.
     _assert_type_error(
-        lambda: merge({"k": 1}, {"k": "a"}),
+        lambda: merge_sync({"k": 1}, {"k": "a"}),
         "can't be reconciled",
         "merge",
     )
@@ -357,7 +357,7 @@ def test_generic_inference_combine_invariant_class_arg_conflict_rejects():
     # J6/E3: combine(GenericBox[int], GenericBox[string]) ⇒ Box<T> invariant,
     # int ≠ string ⇒ reject as a Python `TypeError`.
     _assert_type_error(
-        lambda: combine(GenericBox[int](value=1), GenericBox[str](value="x")),
+        lambda: combine_sync(GenericBox[int](value=1), GenericBox[str](value="x")),
         "can't be reconciled",
         "combine",
     )
@@ -367,7 +367,7 @@ def test_generic_inference_glue_invariant_vs_covariant_conflict_rejects():
     # J7/E4: glue(int, string[]) ⇒ arr⇒T==string (invariant) but bare⇒int <: T
     # (covariant); int <: string is false ⇒ reject as a Python `TypeError`.
     _assert_type_error(
-        lambda: glue(1, ["a"]),
+        lambda: glue_sync(1, ["a"]),
         "can't be reconciled",
         "glue",
     )
@@ -376,7 +376,7 @@ def test_generic_inference_glue_invariant_vs_covariant_conflict_rejects():
 def test_generic_inference_glue_invariant_and_covariant_agree_binds():
     # J11/G4: glue(int, int[]) ⇒ invariant (T==int) + covariant (int <: int)
     # AGREE ⇒ T = int; must still succeed.
-    assert glue(1, [2, 3]) == "int"
+    assert glue_sync(1, [2, 3]) == "int"
 
 
 def test_generic_inference_two_typevar_union_is_uninferrable_rejects():
@@ -384,7 +384,7 @@ def test_generic_inference_two_typevar_union_is_uninferrable_rejects():
     # principled split without an explicit hint ⇒ reject as a Python `TypeError`
     # (distinct from §H, which is ONE var beside concrete members).
     _assert_type_error(
-        lambda: two_in_union("hello"),
+        lambda: two_in_union_sync("hello"),
         "two_in_union",
     )
 
@@ -397,7 +397,7 @@ def test_generic_inference_two_typevar_union_is_uninferrable_rejects():
 def test_generic_inference_triple_choose_three_covariant_join():
     # D3: triple_choose(5, "asdf", True) ⇒ T = int | string | bool — three
     # covariant bare-arg occurrences union-merge (n-ary, not pairwise).
-    assert triple_choose(5, "asdf", True) == "int | string | bool"
+    assert triple_choose_sync(5, "asdf", True) == "int | string | bool"
 
 
 def test_generic_inference_make_triple_heterogeneous_list_element_unions():
@@ -405,7 +405,7 @@ def test_generic_inference_make_triple_heterogeneous_list_element_unions():
     # mixed elements union-merge while synthesizing ONE container's element type
     # (the §D join applied INSIDE a container; distinct from §J's invariant
     # conflict between two separate args). The heterogeneous list round-trips.
-    t = make_triple(1, [1, "x"], {"k": True})
+    t = make_triple_sync(1, [1, "x"], {"k": True})
     assert isinstance(t, GenericTriple)
     assert t.second == [1, "x"]
 
@@ -416,13 +416,13 @@ def test_generic_inference_choose_divergent_generic_instances_union():
     # Body returns `left`, so the int box comes back. Contrast `combine`, where T
     # is INSIDE the box and the same actuals conflict (§J).
     left = GenericBox[int](value=1)
-    assert choose(left, GenericBox[str](value="x")) == left
+    assert choose_sync(left, GenericBox[str](value="x")) == left
 
 
 def test_generic_inference_tag_or_value_binds_generic_instance():
     # H2: tag_or_value(GenericBox[str]) ⇒ the instance is not absorbed by the
     # `string`/`null` siblings, so it routes to T ⇒ T = GenericBox<string>.
-    rendered = tag_or_value(GenericBox[str](value="asdf"))
+    rendered = tag_or_value_sync(GenericBox[str](value="asdf"))
     assert "GenericBox" in rendered and "string" in rendered
 
 
@@ -438,14 +438,14 @@ def test_generic_inference_first_or_empty_list_requires_binding():
     # with no annotation; naming `T` makes `[]` an `int[]`. (Contrast read_items
     # over a *bound* instance with empty fields, B6, where T is still recovered
     # from the wire type-arg.)
-    _assert_type_error(lambda: first_or([]), "could not infer a type", "first_or")
-    assert first_or([], _types={"T": int}) is None
+    _assert_type_error(lambda: first_or_sync([]), "could not infer a type", "first_or")
+    assert first_or_sync([], _types={"T": int}) is None
 
 
 def test_generic_inference_first_or_nonempty_infers_element():
     # B7 twin: a non-empty list DOES carry element evidence, so the same function
     # binds T from the element and returns the head.
-    assert first_or([7, 8, 9]) == 7
+    assert first_or_sync([7, 8, 9]) == 7
 
 
 # SDK_PARITY_LINT(skip): a dynamic host has no static value type for an empty map; the typed SDKs state theirs and round-trip
@@ -453,13 +453,13 @@ def test_generic_inference_values_of_empty_map_requires_binding():
     # B9: the map-value position is the only evidence channel and the empty map
     # yields no value ⇒ `T` stays unbound and the bridge refuses the call. Pins
     # that the empty-collection rule applies to `map<_, T>`, not just `T[]`.
-    _assert_type_error(lambda: values_of({}), "could not infer a type", "values_of")
-    assert values_of({}, _types={"T": int}) == []
+    _assert_type_error(lambda: values_of_sync({}), "could not infer a type", "values_of")
+    assert values_of_sync({}, _types={"T": int}) == []
 
 
 def test_generic_inference_values_of_nonempty_returns_values():
     # B9 twin: a non-empty map carries value evidence and returns its values.
-    assert values_of({"a": 1, "b": 2}) == [1, 2]
+    assert values_of_sync({"a": 1, "b": 2}) == [1, 2]
 
 
 # ===========================================================================
@@ -475,7 +475,7 @@ def test_generic_inference_make_triple_partial_subscript_requires_full_arity():
     # test_make_triple_partial_explicit_then_infer), not subscript; the full
     # subscript is C3 (test_make_triple_subscript_fully_bound).
     with pytest.raises(TypeError):
-        make_triple[int](5, ["hello", "world"], {"asdf": 5})
+        make_triple_sync[int](5, ["hello", "world"], {"asdf": 5})
 
 
 def test_generic_inference_make_triple_subscript_fully_bound():
@@ -483,7 +483,7 @@ def test_generic_inference_make_triple_subscript_fully_bound():
     # arg is validated against its now-concrete formal. A cross-check that the
     # fully-bound path agrees with the partial/inferred cases (the explicit suite
     # in test_generic_calls.py exercises this path broadly).
-    t = make_triple[int, str, bool](5, ["x"], {"k": True})
+    t = make_triple_sync[int, str, bool](5, ["x"], {"k": True})
     assert isinstance(t, GenericTriple)
     assert t.first == 5
     assert t.second == ["x"]
@@ -498,13 +498,13 @@ def test_generic_inference_make_triple_subscript_fully_bound():
 def test_generic_inference_one_type_arg_explicit_types_succeeds():
     # E2: the body-only var is uninferable (E1), but supplying it via `_types=`
     # succeeds and reflects the bound type.
-    assert one_type_arg(_types={"T": int}) == "int"
+    assert one_type_arg_sync(_types={"T": int}) == "int"
 
 
 def test_generic_inference_parse_as_explicit_types_succeeds():
     # E4: the return-only var is uninferable (E3); `_types=` binds it and the
     # value parses to the bound type.
-    assert parse_as("42", _types={"T": int}) == 42
+    assert parse_as_sync("42", _types={"T": int}) == 42
 
 
 # ===========================================================================
@@ -518,7 +518,7 @@ def test_generic_inference_second_of_unbound_instance_recovers_field_type():
     # no wire type-args, but the formal `GenericPair<int, T>` forces inference into
     # the second slot ⇒ T=string recovered from the field VALUE; returns "hi".
     # (Contrast B2/test_second_of_infers_from_nested_generic, a *bound* instance.)
-    assert second_of(GenericPair(first=1, second="hi")) == "hi"
+    assert second_of_sync(GenericPair(first=1, second="hi")) == "hi"
 
 
 def test_generic_inference_identity_nested_unbound_round_trips():
@@ -526,7 +526,7 @@ def test_generic_inference_identity_nested_unbound_round_trips():
     # the inner instance from its field and the outer from the inner, stating
     # `GenericBox<GenericBox<string>>`; the value round-trips.
     nested = GenericBox(value=GenericBox(value="hello"))
-    assert identity(nested) == nested
+    assert identity_sync(nested) == nested
 
 
 def test_generic_inference_wrap_infers_and_returns_bound_generic():
@@ -536,7 +536,7 @@ def test_generic_inference_wrap_infers_and_returns_bound_generic():
     # asserted at the bex layer — Pydantic `==` ignores the generic
     # parameterization, so `GenericBox[int](value=5) == GenericBox(value=5)` here
     # and the distinction isn't observable through Python equality.
-    assert wrap(5) == GenericBox[int](value=5)
+    assert wrap_sync(5) == GenericBox[int](value=5)
 
 
 # ===========================================================================
@@ -547,15 +547,15 @@ def test_generic_inference_wrap_infers_and_returns_bound_generic():
 def test_generic_inference_maybe_id_present_value_infers():
     # I1: the non-null arm of `T?` binds against the int actual ⇒ T=int; the value
     # round-trips.
-    assert maybe_id(5) == 5
+    assert maybe_id_sync(5) == 5
 
 
 def test_generic_inference_maybe_id_null_round_trips():
     # I4: a `null` actual is a value of type `null`; under `T?` the engine
     # binds what the union leaves to `T` and the value round-trips. Naming `T`
     # explicitly is accepted too.
-    assert maybe_id(None) is None
-    assert maybe_id(None, _types={"T": int}) is None
+    assert maybe_id_sync(None) is None
+    assert maybe_id_sync(None, _types={"T": int}) is None
 
 
 def test_generic_inference_identity_enum_round_trips():
@@ -568,7 +568,7 @@ def test_generic_inference_identity_enum_round_trips():
     # load-bearing: a bare `string` round-trip (the old behavior) would still pass
     # `== SomeEnum.VARIANT` via str-enum equality, so only the type assertion
     # proves the value came back as a real enum member rather than its string value.
-    result = identity(SomeEnum.VARIANT)
+    result = identity_sync(SomeEnum.VARIANT)
     assert result == SomeEnum.VARIANT
     assert isinstance(result, SomeEnum)
 
@@ -590,7 +590,7 @@ def test_generic_inference_host_only_object_not_encodable_from_python():
             self.n = n
 
     with pytest.raises(TypeError) as excinfo:
-        identity(HostThing(3))
+        identity_sync(HostThing(3))
     assert "cannot encode" in str(excinfo.value)
     assert "no BAML type" in str(excinfo.value)
 
@@ -608,7 +608,7 @@ def test_generic_inference_apply_closure_poisons_typevars_must_specify():
     # in the closure's return, so both must be specified; bare ⇒ rejected as a
     # Python `TypeError` complaining that a type parameter couldn't be inferred.
     _assert_type_error(
-        lambda: apply(lambda v: v + 1, 5),
+        lambda: apply_sync(lambda v: v + 1, 5),
         "could not infer a type",
         "apply",
     )
@@ -617,7 +617,7 @@ def test_generic_inference_apply_closure_poisons_typevars_must_specify():
 def test_generic_inference_apply_closure_typevars_specified_succeeds():
     # J13 (positive): once `T` and `R` are specified, the call goes through and the
     # callable is invoked ⇒ apply(lambda v: v + 1, 5) == 6.
-    assert apply(lambda v: v + 1, 5, _types={"T": int, "R": int}) == 6
+    assert apply_sync(lambda v: v + 1, 5, _types={"T": int, "R": int}) == 6
 
 
 # ===========================================================================
@@ -628,7 +628,7 @@ def test_generic_inference_apply_closure_typevars_specified_succeeds():
 def test_generic_inference_genericbox_get_infers_class_var_from_receiver():
     # L1: GenericBox[int](value=5).get() == "int" — class T recovered from the
     # receiver's wire type-args (no method var to infer).
-    assert GenericBox[int](value=5).get() == "int"
+    assert GenericBox[int](value=5).get_sync() == "int"
 
 
 def test_generic_inference_genericbox_pair_with_unbound_receiver_recovers_class_var():
@@ -639,7 +639,7 @@ def test_generic_inference_genericbox_pair_with_unbound_receiver_recovers_class_
     # (The bare path is supported precisely because no method param is explicitly
     # bound; the `_types=`/subscript form on an unparameterized receiver raises —
     # see test_generic_calls.test_instance_method_unparameterized_receiver_raises.)
-    assert GenericBox(value=5).pair_with("x") == "int | string"
+    assert GenericBox(value=5).pair_with_sync("x") == "int | string"
 
 
 # ===========================================================================
@@ -662,7 +662,7 @@ def test_generic_inference_make_triple_types_kwarg_contradicted_by_actual_reject
     # value.) Only `_types=` can bind a *partial* set of vars — the subscript
     # requires full arity (C1).
     _assert_type_error(
-        lambda: make_triple("nope", ["x"], {"k": True}, _types={"A": int}),
+        lambda: make_triple_sync("nope", ["x"], {"k": True}, _types={"A": int}),
         "make_triple",
     )
 
@@ -677,7 +677,7 @@ def test_generic_inference_make_triple_full_subscript_contradicted_by_actual_rej
     # surfacing as a `TypeError` naming the function. Pins that the subscript path
     # delegates rather than re-validating, and that both surfaces reject identically.
     _assert_type_error(
-        lambda: make_triple[int, str, bool]("nope", ["x"], {"k": True}),
+        lambda: make_triple_sync[int, str, bool]("nope", ["x"], {"k": True}),
         "make_triple",
     )
 
@@ -692,17 +692,17 @@ def test_generic_inference_elem_type_heterogeneous_array_unifies():
     # The mixed elements of a single `T[]` union-merge while synthesizing the
     # container's element type ⇒ elem_type([1, "x"]) binds T = int | string.
     # Directly asserts the unified element type (B8 only reads back the values).
-    assert elem_type([1, "x"]) == "int | string"
+    assert elem_type_sync([1, "x"]) == "int | string"
 
 
 def test_generic_inference_elem_type_homogeneous_array_is_single_type():
     # The degenerate case: a homogeneous array dedups to a single type.
-    assert elem_type([1, 2, 3]) == "int"
+    assert elem_type_sync([1, 2, 3]) == "int"
 
 
 def test_generic_inference_elem_type_three_way_heterogeneous_array_unifies():
     # n-ary element union: three distinct element types all merge.
-    rendered = elem_type([1, "x", True])
+    rendered = elem_type_sync([1, "x", True])
     assert "int" in rendered and "string" in rendered and "bool" in rendered
 
 
@@ -725,7 +725,7 @@ def test_generic_inference_read_items_unbound_container_recovers_t_from_fields()
     unbound = ContainerShapes(
         item=1, items=[1, 2, 3], by_key={"k": 4}, maybe=None, mixed=None
     )
-    assert read_items(unbound) == [1, 2, 3]
+    assert read_items_sync(unbound) == [1, 2, 3]
 
 
 def test_generic_inference_list_head_unbound_recursive_recovers_t_from_fields():
@@ -733,7 +733,7 @@ def test_generic_inference_list_head_unbound_recursive_recovers_t_from_fields():
     # GenericRecursive<T>)` formal forces recursion into `value`/`next` ⇒ T=int
     # recovered from the field values even though the wire carries no type-args.
     unbound = GenericRecursive(value=7, next=GenericRecursive(value=8, next=None))
-    assert list_head(unbound) == 7
+    assert list_head_sync(unbound) == 7
 
 
 def test_generic_inference_extract_fully_unbound_nested_pair_recovers_all_vars():
@@ -747,7 +747,7 @@ def test_generic_inference_extract_fully_unbound_nested_pair_recovers_all_vars()
         first=GenericPair(first=1, second="a"),
         second=GenericPair(first=True, second=1.5),
     )
-    assert extract(fully_unbound) == "int | string | bool | float"
+    assert extract_sync(fully_unbound) == "int | string | bool | float"
 
 
 # ===========================================================================
@@ -759,7 +759,7 @@ def test_generic_inference_extract_fully_unbound_nested_pair_recovers_all_vars()
 def test_generic_inference_triple_choose_join_includes_concrete_class():
     # triple_choose(int, StringIntPair, string) — the covariant join merges a
     # primitive, a concrete BAML class, and a primitive ⇒ T includes StringIntPair.
-    rendered = triple_choose(5, StringIntPair(my_string="a", my_int=1), "x")
+    rendered = triple_choose_sync(5, StringIntPair(my_string="a", my_int=1), "x")
     assert "int" in rendered and "StringIntPair" in rendered and "string" in rendered
 
 
@@ -769,7 +769,7 @@ def test_generic_inference_triple_choose_join_includes_enum_variant():
     # an `EnumVariant` (see test_identity_enum_round_trips), so the enum actual
     # rides as the enum type `SomeEnum` and the join is the full
     # `T = int | SomeEnum | StringIntPair`.
-    rendered = triple_choose(
+    rendered = triple_choose_sync(
         5, SomeEnum.VARIANT, StringIntPair(my_string="a", my_int=1)
     )
     assert (

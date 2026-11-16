@@ -12,6 +12,8 @@ pub struct EnumVariant {
     pub docstring: Option<String>,
     pub other: IndexMap<String, String>,
     pub skip: bool,
+    /// `@json.rename`: the variant's JSON string, under every naming.
+    pub json_rename: Option<String>,
 }
 
 /// Runtime enum representation.
@@ -55,6 +57,19 @@ pub struct Enum {
     /// `Class::telemetry_definition`.
     #[borsh(skip)]
     pub telemetry_definition: btel_types::DefinitionCell,
+
+    /// One permanent `Object::Variant` per variant, by index, which every
+    /// evaluation of a variant constant (`Status.Todo`) returns instead of
+    /// allocating. The heap creates them for each compile-time enum when it
+    /// is built; an enum created at runtime has none and allocates. A
+    /// variant has no state beyond its enum and index and is never mutated,
+    /// so sharing one changes no answer: equality compares enum and index,
+    /// and its one identity test, `==` taking a value as equal to itself,
+    /// is what the `Equals` contract (reflexivity) promises anyway. Every
+    /// pointer here is into the compile-time space, so a collection never
+    /// visits them.
+    #[borsh(skip)]
+    pub shared_variants: Box<[HeapPtr]>,
 }
 
 impl Enum {

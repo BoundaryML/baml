@@ -23,7 +23,7 @@ class BamlRuntimeValue:
     def _to_pyhandle(self) -> BamlPyHandle:
         return self._handle
 
-    def to_data(self, *, _baml: Any = None) -> Any:
+    def to_data_sync(self, *, _baml: Any = None) -> Any:
         from . import get_runtime
         from .baml_py import new_function_call
         from .proto import decode_call_result, encode_call_args
@@ -36,7 +36,7 @@ class BamlRuntimeValue:
         )
         return decode_call_result(get_runtime().call_function_sync(encoded, encoded.kwargs, encoded.cancel))
 
-    async def to_data_async(self, *, _baml: Any = None) -> Any:
+    async def to_data(self, *, _baml: Any = None) -> Any:
         from . import _decode_call_result_async, cancel_function_call, get_runtime
         from .baml_py import new_function_call
         from .proto import encode_call_args

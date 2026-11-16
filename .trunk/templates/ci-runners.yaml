@@ -1,0 +1,28 @@
+version: 1
+name: CI runners
+
+# The template env reaches the build steps AND every CI job (through $GITHUB_ENV).
+# Put a value here only when the jobs need it too.
+env:
+  # jdx/mise-action finds the baked mise binary and tools here.
+  MISE_DATA_DIR: /cache/mise
+  # No job checks out LFS objects, so the bake does not download them.
+  GIT_LFS_SKIP_SMUDGE: "1"
+
+build:
+  size: xlarge
+  disk_gib: 400
+  timeout_minutes: 120
+  rebuild_nightly: true
+
+# Each script is a sibling file. Each one stands alone: it sets its own shell options,
+# paths and env, so shellcheck can check it alone.
+steps:
+  # Clones the synced commit with full history to /opt/actions-runner/_work/baml/baml, the
+  # path the job uses, and binds it at /workspace/baml. The bind stays in /etc/fstab.
+  - checkout: { on: build, repo: . }
+  - script: { name: Toolchains, on: build, run: ./ci-runners-toolchains.sh }
+  - script: { name: Rust builds, on: build, run: ./ci-runners-rust.sh }
+  - script: { name: SDK test legs, on: build, run: ./ci-runners-sdk.sh }
+  # Last, so it also sees a tool that a later step changed.
+  - script: { name: Check mise tools, on: build, run: ./ci-runners-check-tools.sh }

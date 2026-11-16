@@ -98,7 +98,7 @@ pub(crate) fn shutdown_at_exit() {
     #[expect(unsafe_code)]
     let status = unsafe { libc::atexit(shutdown_on_exit) };
     if status != 0 {
-        crate::loader::log::warn(
+        log::warn!(
             "could not register the BAML runtime shutdown for process exit; \
              call baml_bridge::runtime::shutdown() before exiting",
         );
@@ -112,9 +112,7 @@ extern "C" fn shutdown_on_exit() {
         return;
     }
     if let Err(error) = shutdown() {
-        crate::loader::log::warn(&format!(
-            "BAML runtime shutdown at process exit failed: {error}"
-        ));
+        log::warn!("BAML runtime shutdown at process exit failed: {error}");
     }
 }
 
@@ -148,9 +146,9 @@ pub fn initialize_from_files(
 /// Execute a BAML function call, blocking until it completes.
 ///
 /// Refuses to run inside an async runtime (parking an executor thread on
-/// the completion would stall it): generated sync functions return
-/// [`Error::CalledSyncFromAsync`] and callers switch to the `_async`
-/// sibling.
+/// the completion would stall it): generated `_sync` functions return
+/// [`Error::CalledSyncFromAsync`] and callers switch to the async binding
+/// (the plain name).
 pub fn invoke_sync<R: BamlValue, E: BamlValue>(
     fqn: &str,
     encode: impl FnOnce(&mut Arguments) -> Result<Vec<wire::BamlTyArg>, ArgumentError>,

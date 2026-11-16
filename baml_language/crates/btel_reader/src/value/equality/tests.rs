@@ -399,3 +399,97 @@ fn whole_arguments_require_complete_names_and_preserve_omitted_slots() {
         Err(Error::Evidence(Unavailable::ArgumentNamesUnknown))
     );
 }
+
+#[test]
+fn redacted_values_compare_as_unknown_unless_a_difference_decides() {
+    use DecodedValue as V;
+    let redacted = || V::Redacted(btel_snapshot::Redaction::Declared);
+    let root = |value| snapshot(value, vec![]);
+    let in_list = |items| snapshot(V::Object(NodeId(0)), vec![list(items)]);
+    let in_map = |entries| snapshot(V::Object(NodeId(0)), vec![map(entries)]);
+    let general = |entries: Vec<(DecodedValue, DecodedValue)>| {
+        snapshot(
+            V::Object(NodeId(0)),
+            vec![DecodedObject::Map {
+                key_type: ty(),
+                value_type: ty(),
+                original_len: entries.len() as u64,
+                entries,
+            }],
+        )
+    };
+
+    // Equal to nothing knowably, not even another redaction.
+    assert_eq!(eq(&root(redacted()), &root(redacted())), Ok(None));
+    assert_eq!(eq(&root(redacted()), &root(V::Int(1))), Ok(None));
+    assert_eq!(
+        compared(
+            &root(redacted()),
+            CmpOp::NotEq,
+            &root(V::Int(1)),
+            &Limits::default()
+        ),
+        Ok(None)
+    );
+
+    // A known difference elsewhere still decides.
+    assert_eq!(
+        eq(
+            &in_list(vec![V::Int(1), redacted()]),
+            &in_list(vec![V::Int(2), redacted()])
+        ),
+        Ok(Some(false))
+    );
+    assert_eq!(
+        eq(
+            &in_list(vec![V::Int(1), redacted()]),
+            &in_list(vec![V::Int(1), redacted(), V::Int(3)])
+        ),
+        Ok(Some(false))
+    );
+    assert_eq!(
+        eq(
+            &in_list(vec![V::Int(1), redacted()]),
+            &in_list(vec![V::Int(1), redacted()])
+        ),
+        Ok(None)
+    );
+    assert_eq!(
+        eq(
+            &in_map(vec![("a", V::Int(1)), ("key", redacted())]),
+            &in_map(vec![("a", V::Int(2)), ("key", redacted())])
+        ),
+        Ok(Some(false))
+    );
+    assert_eq!(
+        eq(
+            &in_map(vec![("a", V::Int(1)), ("key", redacted())]),
+            &in_map(vec![("a", V::Int(1)), ("other", redacted())])
+        ),
+        Ok(Some(false))
+    );
+    assert_eq!(
+        eq(
+            &in_map(vec![("a", V::Int(1)), ("key", redacted())]),
+            &in_map(vec![("a", V::Int(1)), ("key", redacted())])
+        ),
+        Ok(None)
+    );
+
+    // Keys of any kind, in any order: an entry nothing left could match
+    // decides; one only a redaction could match leaves it unknown.
+    assert_eq!(
+        eq(
+            &general(vec![(V::Int(1), redacted()), (V::Int(2), V::Int(5))]),
+            &general(vec![(V::Int(2), V::Int(5)), (V::Int(1), redacted())])
+        ),
+        Ok(None)
+    );
+    assert_eq!(
+        eq(
+            &general(vec![(V::Int(1), redacted()), (V::Int(2), V::Int(5))]),
+            &general(vec![(V::Int(2), V::Int(6)), (V::Int(1), redacted())])
+        ),
+        Ok(Some(false))
+    );
+}

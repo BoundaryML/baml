@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
+import errno
 import hashlib
 import http.server
 import io
@@ -18,6 +19,8 @@ import tempfile
 import time
 from urllib.parse import unquote, urlsplit
 import zipfile
+
+from environment import test_environment
 
 TARGETS = [
     "aarch64-apple-darwin",
@@ -111,19 +114,19 @@ def init():
         root / "baml/state.toml",
         '[channels.canary]\nactive_version = "0.11.0"\nresolved_at = "fixture"\nmanifest_path = "fixture"\n[channels.nightly]\nactive_version = "0.12.0"\nresolved_at = "fixture"\nmanifest_path = "fixture"\n',
     )
-    environment = {
-        key: value
-        for (key, value) in os.environ.items()
-        if not key.startswith(("BAML_", "WRAPPER_"))
-    }
+    environment = test_environment(
+        {
+            key: value
+            for (key, value) in os.environ.items()
+            if not key.startswith(("BAML_", "WRAPPER_"))
+        }
+    )
     environment.update(
         HOME=str(root / "home"),
         USERPROFILE=str(root / "home"),
         BAML_HOME=str(root / "baml"),
         WRAPPER_FIXTURE_ROOT=str(root),
         BAML_TELEMETRY_ENABLED="false",
-        BAML_WRAPPER_BCS_TELEMETRY="off",
-        DO_NOT_TRACK="1",
     )
     return {
         "root": str(root),
@@ -142,6 +145,7 @@ def init():
 class ReleaseMode(str, Enum):
     VALID = "valid"
     MISSING_CLI = "missing-cli"
+    NON_EXECUTABLE_CLI = "non-executable-cli"
     INVALID_LAYOUT = "layout"
     TRAVERSAL = "traversal"
     LINK = "link"
@@ -213,15 +217,24 @@ class FixtureFiles:
                     for name, data in files.items():
                         entry = zipfile.ZipInfo(name)
                         entry.create_system = 3
+                        permissions = (
+                            0o100644
+                            if mode == "non-executable-cli" and name == "bin/baml-cli" + SUFFIX
+                            else 0o100755
+                        )
                         entry.external_attr = (
-                            0o120777 if name == "bin/link" else 0o100755
+                            0o120777 if name == "bin/link" else permissions
                         ) << 16
                         archive.writestr(entry, data)
             else:
                 with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
                     for name, data in files.items():
                         entry = tarfile.TarInfo(name)
-                        entry.mode = 0o755
+                        entry.mode = (
+                            0o644
+                            if mode == "non-executable-cli" and name == "bin/baml-cli" + SUFFIX
+                            else 0o755
+                        )
                         entry.size = len(data)
                         if name == "bin/link":
                             entry.type = tarfile.SYMTYPE
@@ -360,8 +373,17 @@ class FixtureFiles:
                 try:
                     shutil.rmtree(path, onerror=writable)
                     break
-                except PermissionError:
-                    if attempt == 39:
+                except OSError as error:
+                    # Detached telemetry helpers can finish creating lock files
+                    # during final teardown. Retry only these directory races
+                    # for whole-fixture cleanup, preserving other I/O failures.
+                    teardown_race = args == ["."] and error.errno in (
+                        errno.ENOTEMPTY,
+                        errno.ENOENT,
+                    )
+                    if teardown_race and not path.exists():
+                        return
+                    if (not isinstance(error, PermissionError) and not teardown_race) or attempt == 39:
                         raise
                     time.sleep(0.05)
         else:

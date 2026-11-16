@@ -89,9 +89,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0111
 
   × refutable pattern in for-let binding; refutable patterns belong in `match`
-    ╭─[patterns_new.baml:89:10]
+    ╭─[patterns_new.baml:89:14]
  89 │     for (let Team { scores: [let first, ..] } in teams) {
-    ·          ────────────────────────────────────
+    ·              ────────────────────────────────
     ╰────
 
   [type] E0063

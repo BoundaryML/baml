@@ -1,5 +1,5 @@
-use baml_sdk::baml::fs::exists;
-use baml_sdk::baml::sys::argv;
+use baml_sdk::baml::fs::exists_sync;
+use baml_sdk::baml::sys::argv_sync;
 
 /// Intrinsic-only modules are not emitted at all, so a missing file is fine;
 /// callers only need to confirm the symbol is absent when the file exists.
@@ -21,7 +21,7 @@ fn _generated_sdk_file(rel_path: &str) -> Option<String> {
 // this asserts.
 #[test]
 fn test_stdlib_entrypoints_native_argv_callable_as_entry_point() {
-    assert!(argv().is_ok());
+    assert!(argv_sync().is_ok());
 }
 
 // `baml.fs.exists(path: string) -> bool` is a `$rust_io_function` →
@@ -30,7 +30,7 @@ fn test_stdlib_entrypoints_native_argv_callable_as_entry_point() {
 // directory on the test host.
 #[test]
 fn test_stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point() {
-    assert!(exists(".".to_string()).unwrap());
+    assert!(exists_sync(".".to_string()).unwrap());
 }
 
 #[test]

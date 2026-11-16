@@ -76,8 +76,9 @@ pub(crate) fn prepare(request: &Request) -> PrepareUploadsRequest {
     if let Some(target) = body.as_object_mut().unwrap().remove("target") {
         let _: bcs_api::credentials::Target = serde_json::from_value(target).unwrap();
     }
-    if let Some(build) = body.as_object_mut().unwrap().remove("buildId") {
-        assert!(build.as_str().is_some_and(|id| !id.is_empty()));
-    }
+    assert!(
+        body.get("buildId").is_none(),
+        "runtime bodies cannot contain buildId"
+    );
     serde_json::from_value(body).unwrap()
 }

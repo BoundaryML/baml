@@ -87,19 +87,22 @@ test "with_timeout of a function value: catch sees the error of the value" {
     assert.equal(with_timeout_of_function_value(with_timeout_body_fails), "body error 7")
 }
 
-function with_timeout_catch_all_of_function_value(body: () -> string throws unknown) -> string {
-    baml.future.with_timeout(baml.time.Duration.from_milliseconds(25), body) catch_all (e) {
+function with_timeout_catch_all_of_function_value(
+    body: () -> string throws unknown,
+    timeout: baml.time.Duration,
+) -> string {
+    baml.future.with_timeout(timeout, body) catch_all (e) {
         _ => e.to_string(),
     }
 }
 
 test "with_timeout of a function value: a catch_all binding is the thrown value" {
     assert.equal(
-        with_timeout_catch_all_of_function_value(with_timeout_body_fails),
+        with_timeout_catch_all_of_function_value(with_timeout_body_fails, baml.time.Duration.from_seconds(30)),
         "WithTimeoutBodyError { code: 7 }",
     );
     assert.equal(
-        with_timeout_catch_all_of_function_value(with_timeout_body_sleeps),
+        with_timeout_catch_all_of_function_value(with_timeout_body_sleeps, baml.time.Duration.from_milliseconds(25)),
         "Timeout { message: \"operation timed out after 25ms\", duration: Duration { _nanoseconds: 25000000 }, timeout_type: \"limit\" }",
     )
 }

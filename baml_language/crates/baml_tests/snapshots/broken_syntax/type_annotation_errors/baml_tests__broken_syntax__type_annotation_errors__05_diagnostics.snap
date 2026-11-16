@@ -19,20 +19,11 @@ source: crates/baml_tests/src/generated_tests.rs
    ·      ───
    ╰────
 
-  [hir] E0108
+  [parse] E0009
 
-  × could not parse type expression for type alias `Bar`
+  × unexpected end of file
     ╭─[type_malformed.baml:10:11]
  10 │ type Bar =
     ·           ▲
-    ·           ╰── unparseable type
-    ╰────
-
-  [parse] E0010
-
-  × unexpected token
-    ╭─[type_malformed.baml:10:11]
- 10 │ type Bar =
-    ·           ▲
-    ·           ╰── expected `type`, found `EOF`
+    ·           ╰── expected `type`, found end of file
     ╰────

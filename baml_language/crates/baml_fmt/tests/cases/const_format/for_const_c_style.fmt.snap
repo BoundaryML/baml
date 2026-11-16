@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    const sum = 0;
+    for (const i = 0; i < 3; i += 1) {
+        sum += i;
+    }
+    sum
+}

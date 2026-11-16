@@ -5,9 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0007
 
   × class `Person` has no field `missing`
-    ╭─[patterns_class_destructure.baml:31:5]
+    ╭─[patterns_class_destructure.baml:31:9]
  31 │     let Person { missing } = Person {
-    ·     ──────────────────────
+    ·         ──────────────────
     ╰────
 
   [hir] E0012
@@ -85,9 +85,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: MissingClass
-     ╭─[patterns_class_destructure.baml:109:5]
+     ╭─[patterns_class_destructure.baml:109:9]
  109 │     let MissingClass { age } = Person {
-     ·     ────────────────────────
+     ·         ────────────────────
      ╰────
 
   [type] E0001
@@ -118,47 +118,47 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × generic class destructure `Box { ... }` must specify type arguments
-     ╭─[patterns_class_destructure.baml:146:5]
+     ╭─[patterns_class_destructure.baml:146:9]
  146 │     let Box { value } = boxed;
-     ·     ─────────────────
+     ·         ─────────────
      ╰────
 
   [type] E0111
 
   × refutable pattern in let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:164:5]
+     ╭─[patterns_class_destructure.baml:164:9]
  164 │     let Person { age } = v;
-     ·     ──────────────────
+     ·         ──────────────
      ╰────
 
   [type] E0111
 
   × refutable pattern in for-let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:169:10]
+     ╭─[patterns_class_destructure.baml:169:14]
  169 │     for (let Person { age } in [
-     ·          ──────────────────
+     ·              ──────────────
      ╰────
 
   [type] E0111
 
   × refutable pattern in let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:179:5]
+     ╭─[patterns_class_destructure.baml:179:9]
  179 │     let Person { flexible_age: int } = Person {
-     ·     ────────────────────────────────
+     ·         ────────────────────────────
      ╰────
 
   [type] E0111
 
   × refutable pattern in let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:188:5]
+     ╭─[patterns_class_destructure.baml:188:9]
  188 │     let Person { age: 1 } = Person {
-     ·     ─────────────────────
+     ·         ─────────────────
      ╰────
 
   [type] E0111
 
   × refutable pattern in let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:197:5]
+     ╭─[patterns_class_destructure.baml:197:9]
  197 │ ╭─▶     let Person {
  198 │ │           address: Address { zip: 1 }
  199 │ ╰─▶     } = Person {
@@ -167,25 +167,25 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0111
 
   × refutable pattern in for-let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:208:10]
+     ╭─[patterns_class_destructure.baml:208:14]
  208 │     for (let Person { flexible_age: int } in [
-     ·          ────────────────────────────────
+     ·              ────────────────────────────
      ╰────
 
   [type] E0111
 
   × refutable pattern in let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:217:5]
+     ╭─[patterns_class_destructure.baml:217:9]
  217 │     let OptionalPerson { age: int } = OptionalPerson { age: 1 };
-     ·     ───────────────────────────────
+     ·         ───────────────────────────
      ╰────
 
   [type] E0111
 
   × refutable pattern in let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:223:5]
+     ╭─[patterns_class_destructure.baml:223:9]
  223 │     let Box<string> { value: int } = boxed;
-     ·     ──────────────────────────────
+     ·         ──────────────────────────
      ╰────
 
   [type] E0001
@@ -269,7 +269,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0007
 
   × class `Person` has no field `missing`
-     ╭─[patterns_class_destructure.baml:277:5]
+     ╭─[patterns_class_destructure.baml:277:9]
  277 │ ╭─▶     let Person {
  278 │ │           missing: let renamed
  279 │ ╰─▶     } = Person {
@@ -278,9 +278,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0111
 
   × refutable pattern in let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:289:9]
+     ╭─[patterns_class_destructure.baml:289:13]
  289 │         let Person { age: string } = p;
-     ·         ──────────────────────────
+     ·             ──────────────────────
      ╰────
 
   [type] E0001

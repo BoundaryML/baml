@@ -4,8 +4,9 @@ use std::borrow::Cow;
 
 use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind};
 use btel_snapshot::{
-    Builder, Carried, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType, Reserved,
-    Shaper, Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue, TypeIdentity,
+    Builder, Carried, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType,
+    RedactionReason, Reserved, Shaper, Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue,
+    TypeIdentity,
 };
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
@@ -65,6 +66,7 @@ impl Scratch {
             ValueKind::OmittedArg => return SnapshotValue::OmittedArg,
             ValueKind::Int(v) => return SnapshotValue::Int(v),
             ValueKind::Bool(v) => return SnapshotValue::Bool(v),
+            ValueKind::Float(v) => return SnapshotValue::Float(v),
             ValueKind::Object(ptr) => ptr,
         };
         // SAFETY: capture holds the heap permit and never allocates in the VM heap.
@@ -114,6 +116,12 @@ impl Scratch {
                     id
                 };
                 SnapshotValue::Object(id)
+            }
+            // A class declared redacted is withheld whole: nothing of the
+            // instance enters the capture, which records only that it was.
+            // SAFETY: the class lives under the same heap permit.
+            Object::Instance(instance) if matches!(unsafe { instance.class.get() }, Object::Class(class) if class.redact) => {
+                SnapshotValue::Redacted(RedactionReason::Declared)
             }
             _ => {
                 let Some(slot) = leaves.reserve() else {
@@ -193,8 +201,13 @@ impl Scratch {
                                 type_arguments,
                                 (0..instance.field_len()).zip(&class.fields),
                                 |leaves, (at, field)| {
-                                    let value =
-                                        self.add(leaves, instance.load_field(at), depth + 1);
+                                    // A field declared redacted is withheld,
+                                    // its value never visited.
+                                    let value = if field.redact {
+                                        SnapshotValue::Redacted(RedactionReason::Declared)
+                                    } else {
+                                        self.add(leaves, instance.load_field(at), depth + 1)
+                                    };
                                     (field.name.as_str().into(), value)
                                 },
                             )
@@ -569,7 +582,8 @@ mod tests {
             "b".repeat(1024).into(),
         ));
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
-        let float = vm.tlab.alloc_float(2.5);
+        let float = vm.tlab.float_value(2.5);
+        let boxed_float = vm.tlab.float_value(f64::INFINITY);
         let opaque: Arc<dyn bex_vm_types::BexRustData> = Arc::new(bex_vm_types::TestRustData(7));
         let weak = Arc::downgrade(&opaque);
         let first = vm.tlab.alloc_rust_data(opaque.clone());
@@ -582,9 +596,10 @@ mod tests {
             Value::int(-3),
             Value::object(string),
             Value::object(big),
-            Value::object(float),
+            float,
             Value::object(first),
             Value::object(second),
+            boxed_float,
         ]);
         unsafe { vm.heap.collect_garbage(&[]) };
         drop(vm);
@@ -611,6 +626,8 @@ mod tests {
             captured_object(&snapshot, roots[8]),
             Obj::NonSnapshotableValue {}
         ));
+        // Inline and boxed floats capture alike.
+        assert!(matches!(roots[9], Val::Float(f) if f == f64::INFINITY));
     }
     #[test]
     fn media_is_captured_by_content_without_retaining_sources() {
@@ -841,6 +858,11 @@ mod tests {
                     other: indexmap::IndexMap::default(),
                     skip: false,
                     runtime_type: None,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
+                    json_omit_null: false,
+                    redact: false,
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
@@ -854,6 +876,11 @@ mod tests {
                     other: indexmap::IndexMap::default(),
                     skip: false,
                     runtime_type: None,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
+                    json_omit_null: false,
+                    redact: false,
                 },
             ],
             description: None,
@@ -867,6 +894,7 @@ mod tests {
             generic_param_count: 1,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
@@ -879,6 +907,7 @@ mod tests {
                     docstring: None,
                     other: indexmap::IndexMap::default(),
                     skip: false,
+                    json_rename: None,
                 },
                 bex_vm_types::EnumVariant {
                     name: "Green".to_string(),
@@ -887,6 +916,7 @@ mod tests {
                     docstring: None,
                     other: indexmap::IndexMap::default(),
                     skip: false,
+                    json_rename: None,
                 },
                 bex_vm_types::EnumVariant {
                     name: "Blue".to_string(),
@@ -895,6 +925,7 @@ mod tests {
                     docstring: None,
                     other: indexmap::IndexMap::default(),
                     skip: false,
+                    json_rename: None,
                 },
             ],
             description: None,
@@ -903,6 +934,7 @@ mod tests {
             other: indexmap::IndexMap::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let instance = vm.tlab.alloc_instance_with_type_args(
             class_ptr,
@@ -990,6 +1022,148 @@ mod tests {
             snapshot.object(declaration),
             Obj::Declaration { is_enum: true, .. }
         ));
+    }
+    /// A class whose fields are each a string, redacted as `fields` says,
+    /// and the class as `redact` says.
+    fn class(vm: &mut crate::BexVm, name: &str, fields: &[(&str, bool)], redact: bool) -> HeapPtr {
+        let fields = fields
+            .iter()
+            .map(|&(name, redact)| bex_vm_types::ClassField {
+                name: name.to_string(),
+                field_type: baml_type::RuntimeTy::String,
+                field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::String),
+                must_exist: false,
+                stream_done: false,
+                description: None,
+                alias: None,
+                docstring: None,
+                other: indexmap::IndexMap::default(),
+                skip: false,
+                json_rename: None,
+                json_flatten: false,
+                json_fallback: false,
+                json_omit_null: false,
+                runtime_type: None,
+                redact,
+            })
+            .collect();
+        vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+            declared_crossing: baml_type::ClassCrossing::Fields,
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
+            fields,
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            type_tag: baml_type::typetag::TypeTag::from_i64(300),
+            stream_done: false,
+            cleanup: None,
+            methods: indexmap::IndexMap::new(),
+            generic_param_count: 0,
+            owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact,
+        })))
+    }
+    #[test]
+    fn declared_redactions_withhold_the_value_and_everything_it_holds() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let text = |vm: &mut crate::BexVm, text: &str| {
+            Value::object(vm.tlab.alloc_string(text.to_string()))
+        };
+        // `@@trace.redact class Credentials { key }`, and
+        // `class Client { name, token @trace.redact, credentials, again }`
+        // whose `credentials` and `again` hold one `Credentials`.
+        let credentials_class = class(&mut vm, "Credentials", &[("key", false)], true);
+        let client_class = class(
+            &mut vm,
+            "Client",
+            &[
+                ("name", false),
+                ("token", true),
+                ("credentials", false),
+                ("again", false),
+            ],
+            false,
+        );
+        let key = text(&mut vm, "secret-in-a-redacted-class");
+        let credentials =
+            vm.tlab
+                .alloc_instance_with_type_args(credentials_class, Box::new([]), vec![key]);
+        let name = text(&mut vm, "visible-name");
+        let token = text(&mut vm, "secret-in-a-redacted-field");
+        let client = vm.tlab.alloc_instance_with_type_args(
+            client_class,
+            Box::new([]),
+            vec![
+                name,
+                token,
+                Value::object(credentials),
+                Value::object(credentials),
+            ],
+        );
+        let snapshot = capture(&[Value::object(client), Value::object(credentials)]);
+        let declared = Val::Redacted(btel_snapshot::RedactionReason::Declared);
+
+        // The redacted class's instance is the marker wherever it is held,
+        // as an argument or a field, shared or not.
+        assert_eq!(snapshot.roots()[1], declared);
+        let Obj::Instance { fields, .. } = captured_object(&snapshot, snapshot.roots()[0]) else {
+            panic!("the client is an instance")
+        };
+        let fields = snapshot.fields(*fields);
+        let field = |name: &str| {
+            fields
+                .iter()
+                .find(|field| field.key.as_str() == name)
+                .unwrap_or_else(|| panic!("no field {name}"))
+                .value
+        };
+        assert!(
+            matches!(field("name"), Val::String(id) if snapshot.string(id).as_str() == "visible-name")
+        );
+        assert_eq!(field("token"), declared);
+        assert_eq!(field("credentials"), declared);
+        assert_eq!(field("again"), declared);
+
+        // A capture's identity is of what it kept: another secret, of
+        // another length, captures to the same blobs under the same IDs.
+        let other_token = text(&mut vm, &"other-secret".repeat(64));
+        let other_key = text(&mut vm, "a different key");
+        let other_credentials =
+            vm.tlab
+                .alloc_instance_with_type_args(credentials_class, Box::new([]), vec![other_key]);
+        let other_client = vm.tlab.alloc_instance_with_type_args(
+            client_class,
+            Box::new([]),
+            vec![
+                name,
+                other_token,
+                Value::object(other_credentials),
+                Value::object(other_credentials),
+            ],
+        );
+        let other = capture(&[
+            Value::object(other_client),
+            Value::object(other_credentials),
+        ]);
+        let ids = |snapshot: &Snapshot| snapshot.blobs().map(|blob| blob.id()).collect::<Vec<_>>();
+        assert_eq!(ids(&snapshot), ids(&other));
+
+        // Nothing a redaction withholds reaches any blob of the capture.
+        for blob in snapshot.blobs() {
+            let mut bytes = Vec::new();
+            blob.write(&mut btel_snapshot::BlobScratch::default(), &mut bytes)
+                .unwrap();
+            for secret in ["secret-in-a-redacted-class", "secret-in-a-redacted-field"] {
+                assert!(
+                    !bytes
+                        .windows(secret.len())
+                        .any(|window| window == secret.as_bytes()),
+                    "{secret} reached a blob"
+                );
+            }
+        }
     }
     #[test]
     fn function_args_preserve_omission_null_and_aliases_separately_from_value_roots() {
@@ -1108,7 +1282,7 @@ mod tests {
             .tlab
             .alloc_array(RealizedTy::int(), (0..10_000).map(Value::int).collect());
         let float_values = (0..10_000)
-            .map(|i| Value::object(vm.tlab.alloc_float(f64::from(i))))
+            .map(|i| vm.tlab.float_value(f64::from(i)))
             .collect();
         let floats = vm.tlab.alloc_array(ty(), float_values);
         let map = vm.tlab.alloc_map(

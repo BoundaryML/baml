@@ -5,57 +5,57 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: Missing
-    ╭─[main.baml:11:5]
+    ╭─[main.baml:11:9]
  11 │     let Missing { age } = person;
-    ·     ───────────────────
+    ·         ───────────────
     ╰────
 
   [type] E0002
 
   × unresolved type: Missing
-    ╭─[main.baml:16:5]
+    ╭─[main.baml:16:9]
  16 │     let Missing { age: let years } = person;
-    ·     ──────────────────────────────
+    ·         ──────────────────────────
     ╰────
 
   [type] E0002
 
   × unresolved type: Missing
-    ╭─[main.baml:21:5]
+    ╭─[main.baml:21:9]
  21 │     let Missing { address: Address { zip } } = person;
-    ·     ────────────────────────────────────────
+    ·         ────────────────────────────────────
     ╰────
 
   [type] E0002
 
   × unresolved type: Missing
-    ╭─[main.baml:27:5]
+    ╭─[main.baml:27:9]
  27 │     let Missing { age } = person else {
-    ·     ───────────────────
+    ·         ───────────────
     ╰────
 
   [type] E0002
 
   × unresolved type: Missing
-    ╭─[main.baml:34:8]
+    ╭─[main.baml:34:12]
  34 │     if let Missing { age } = person {
-    ·        ───────────────────
+    ·            ───────────────
     ╰────
 
   [type] E0002
 
   × unresolved type: Missing
-    ╭─[main.baml:42:11]
+    ╭─[main.baml:42:15]
  42 │     while let Missing { age } = person {
-    ·           ───────────────────
+    ·               ───────────────
     ╰────
 
   [type] E0002
 
   × unresolved type: Missing
-    ╭─[main.baml:49:10]
+    ╭─[main.baml:49:14]
  49 │     for (let Missing { age } in [person]) {
-    ·          ───────────────────
+    ·              ───────────────
     ╰────
 
   [type] E0002

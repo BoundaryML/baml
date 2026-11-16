@@ -373,7 +373,7 @@ Design proposal: [BEP-030](https://beps.boundaryml.com/beps/30).
 
 ### Recursive self-improvement
 
-Boundary runs thousands of simulated agents against BAML to find places where the language, errors, CLI, and skill are difficult to use. [Agent Tries BAML](https://boundaryml.com/atb) measures these attempts, and the [arena](https://boundaryml.com/atb/arena) compares which version of the BAML skill helps agents succeed faster.
+Boundary runs thousands of simulated agents against BAML to find places where the language, errors, CLI, and skill are difficult to use. Agent Tries BAML measures these attempts, and its arena compares which version of the BAML skill helps agents succeed faster.
 
 ### Supply-chain tradeoff
 

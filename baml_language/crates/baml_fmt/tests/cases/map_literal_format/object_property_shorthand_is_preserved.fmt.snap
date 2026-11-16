@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+class Config {
+    options: string,
+}
+
+function f(options: string) -> Config {
+    Config { options }
+}

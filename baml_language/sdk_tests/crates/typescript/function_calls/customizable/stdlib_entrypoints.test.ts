@@ -1,10 +1,10 @@
 // TypeScript correspondent to test_stdlib_entrypoints.py: stdlib functions of
 // different `FunctionKind`s are callable as entry points (directly from the
-// host), not only from inside BAML. Each gets its sync + `_async` binding.
+// host), not only from inside BAML. Each gets its async binding plus a `_sync` twin.
 import "./baml_sdk/index.js";
 import { describe, it, expect } from "vitest";
-import { argv, argv_async } from "./baml_sdk/baml/sys/index.js";
-import { exists, exists_async } from "./baml_sdk/baml/fs/index.js";
+import { argv_sync, argv } from "./baml_sdk/baml/sys/index.js";
+import { exists_sync, exists } from "./baml_sdk/baml/fs/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
 let existsSync: typeof import("node:fs").existsSync;
@@ -30,8 +30,8 @@ describe("function_calls — portable stdlib entry points", () => {
   // fixture host passes no program arguments, so the array is legitimately
   // empty — the shape is what this asserts.
   it("stdlib_entrypoints_native_baml_sys_argv_is_callable_as_an_entry_point", async () => {
-    expect(Array.isArray(argv())).toBe(true);
-    expect(Array.isArray(await argv_async())).toBe(true);
+    expect(Array.isArray(argv_sync())).toBe(true);
+    expect(Array.isArray(await argv())).toBe(true);
   });
 });
 
@@ -44,8 +44,8 @@ describe.runIf(isTestRuntime("node"))(
     // filesystem sysop and return a bool. `.` is the generated fixture
     // directory on the test host.
     it("stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point", async () => {
-      expect(exists(".")).toBe(true);
-      expect(await exists_async(".")).toBe(true);
+      expect(exists_sync(".")).toBe(true);
+      expect(await exists(".")).toBe(true);
     });
   },
 );

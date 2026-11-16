@@ -167,12 +167,12 @@ async def test_function_spec_uses_canonical_method_fqns_and_wire_argument_names(
     monkeypatch.setattr(BamlFunctionSpec, "_call_sync", capture_sync)
     monkeypatch.setattr(BamlFunctionSpec, "_call_async", capture_async)
 
-    assert spec.output_type() == "ai.FunctionSpec.output_type"
-    assert spec.requested_model() == "ai.FunctionSpec.requested_model"
-    assert spec.parse("{}") == "ai.FunctionSpec.parse"
-    assert await spec.output_type_async() == "ai.FunctionSpec.output_type"
-    assert await spec.requested_model_async() == "ai.FunctionSpec.requested_model"
-    assert await spec.parse_async("[]") == "ai.FunctionSpec.parse"
+    assert spec.output_type_sync() == "ai.FunctionSpec.output_type"
+    assert spec.requested_model_sync() == "ai.FunctionSpec.requested_model"
+    assert spec.parse_sync("{}") == "ai.FunctionSpec.parse"
+    assert await spec.output_type() == "ai.FunctionSpec.output_type"
+    assert await spec.requested_model() == "ai.FunctionSpec.requested_model"
+    assert await spec.parse("[]") == "ai.FunctionSpec.parse"
 
     assert sync_calls == [
         ("ai.FunctionSpec.output_type", None),
@@ -196,10 +196,10 @@ async def test_stream_uses_canonical_method_fqns(monkeypatch):
 
     monkeypatch.setattr(BamlStream, "_call_async", capture_async)
 
-    assert stream.next() == "ai.stream.Stream.next"
-    assert stream.final() == "ai.stream.Stream.final"
-    assert await stream.next_async() == "ai.stream.Stream.next"
-    assert await stream.final_async() == "ai.stream.Stream.final"
+    assert stream.next_sync() == "ai.stream.Stream.next"
+    assert stream.final_sync() == "ai.stream.Stream.final"
+    assert await stream.next() == "ai.stream.Stream.next"
+    assert await stream.final() == "ai.stream.Stream.final"
 
 
 @pytest.mark.asyncio
@@ -228,7 +228,7 @@ async def test_stream_async_forwards_python_task_cancellation(monkeypatch):
     monkeypatch.setattr(baml_bridge.proto, "encode_call_args", encode_call_args)
     stream = BamlStream._from_pyhandle(typing.cast(BamlPyHandle, object()))
 
-    task = asyncio.create_task(stream.next_async())
+    task = asyncio.create_task(stream.next())
     await asyncio.wait_for(entered.wait(), timeout=1.0)
     assert task.cancel()
 
@@ -264,7 +264,7 @@ async def test_stream_async_preserves_cancellation_when_native_cancel_fails(
     )
     stream = BamlStream._from_pyhandle(typing.cast(BamlPyHandle, object()))
 
-    task = asyncio.create_task(stream.next_async())
+    task = asyncio.create_task(stream.next())
     await asyncio.wait_for(entered.wait(), timeout=1.0)
     assert task.cancel()
 
@@ -298,9 +298,9 @@ async def test_live_capability_methods_use_async_cancellation_decoder(monkeypatc
 
     handle = typing.cast(BamlPyHandle, object())
     calls = [
-        BamlFunctionSpec._from_pyhandle(handle).name_async,
-        BamlStream._from_pyhandle(handle).next_async,
-        BamlRuntimeValue._from_pyhandle(handle).to_data_async,
+        BamlFunctionSpec._from_pyhandle(handle).name,
+        BamlStream._from_pyhandle(handle).next,
+        BamlRuntimeValue._from_pyhandle(handle).to_data,
     ]
     for call in calls:
         with pytest.raises(asyncio.CancelledError, match="engine cancellation"):

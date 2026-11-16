@@ -1,0 +1,7 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function F(xs: string[]) -> string {
+    `${for (let x in xs)}- ${x}
+${endfor}`
+}

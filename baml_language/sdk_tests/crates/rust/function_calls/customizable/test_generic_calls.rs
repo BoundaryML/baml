@@ -22,9 +22,10 @@ use baml_bridge::Map;
 // (`TOrString`), not its declaring field (python's `ContainerShapesMixed`).
 use baml_sdk::generic_tests::{
     ContainerShapes, GenericBox, GenericPair, GenericRecursive, GenericTriple, NamedStatic,
-    StringIntPair, TOrString, choose, consume_int_wrapper, extract, identity, list_head,
-    make_int_box, make_int_container, make_int_str_bool_triple, make_nested_box, make_triple,
-    one_type_arg, parse_as, read_items, second_of, tag_or_value, two_type_args, wrap,
+    StringIntPair, TOrString, choose_sync, consume_int_wrapper_sync, extract_sync, identity_sync,
+    list_head_sync, make_int_box_sync, make_int_container_sync, make_int_str_bool_triple_sync,
+    make_nested_box_sync, make_triple_sync, one_type_arg_sync, parse_as_sync, read_items_sync,
+    second_of_sync, tag_or_value_sync, two_type_args_sync, wrap_sync,
 };
 
 // ===========================================================================
@@ -35,14 +36,14 @@ use baml_sdk::generic_tests::{
 
 #[test]
 fn test_generic_calls_identity_explicit() {
-    assert_eq!(identity::<i64>(5).unwrap(), 5);
-    assert_eq!(identity::<String>("hi".to_string()).unwrap(), "hi");
+    assert_eq!(identity_sync::<i64>(5).unwrap(), 5);
+    assert_eq!(identity_sync::<String>("hi".to_string()).unwrap(), "hi");
 
     let pair = StringIntPair {
         my_string: "a".to_string(),
         my_int: 1,
     };
-    assert_eq!(identity::<StringIntPair>(pair.clone()).unwrap(), pair);
+    assert_eq!(identity_sync::<StringIntPair>(pair.clone()).unwrap(), pair);
 
     let boxed = GenericBox::<GenericBox<String>> {
         value: GenericBox::<String> {
@@ -50,7 +51,7 @@ fn test_generic_calls_identity_explicit() {
         },
     };
     assert_eq!(
-        identity::<GenericBox<GenericBox<String>>>(boxed.clone()).unwrap(),
+        identity_sync::<GenericBox<GenericBox<String>>>(boxed.clone()).unwrap(),
         boxed
     );
 
@@ -62,16 +63,16 @@ fn test_generic_calls_identity_explicit() {
         third: Map::from([("lorem".to_string(), true), ("ipsum".to_string(), false)]),
     };
     assert_eq!(
-        identity::<GenericTriple<GenericBox<String>, f64, bool>>(triple.clone()).unwrap(),
+        identity_sync::<GenericTriple<GenericBox<String>, f64, bool>>(triple.clone()).unwrap(),
         triple
     );
 }
 
 #[tokio::test]
 async fn test_generic_calls_identity_async_explicit() {
-    use baml_sdk::generic_tests::identity_async;
+    use baml_sdk::generic_tests::identity;
 
-    assert_eq!(identity_async::<i64>(7).await.unwrap(), 7);
+    assert_eq!(identity::<i64>(7).await.unwrap(), 7);
 }
 
 // --- tag_or_value<T>(x: T | string | null) -> string : TypeVar in a union ---
@@ -86,9 +87,9 @@ fn test_generic_calls_tag_or_value_explicit() {
     // so union values are constructed by naming the variant. The union is
     // untagged on the wire, so with `T = String` the `T` and `String`
     // variants encode identically.
-    assert_eq!(tag_or_value::<i64>(TOrString::T(5)).unwrap(), "int");
+    assert_eq!(tag_or_value_sync::<i64>(TOrString::T(5)).unwrap(), "int");
     assert_eq!(
-        tag_or_value::<String>(TOrString::T("plain".to_string())).unwrap(),
+        tag_or_value_sync::<String>(TOrString::T("plain".to_string())).unwrap(),
         "string"
     );
     let pair = StringIntPair {
@@ -96,7 +97,7 @@ fn test_generic_calls_tag_or_value_explicit() {
         my_int: 2,
     };
     assert!(
-        tag_or_value::<StringIntPair>(TOrString::T(pair))
+        tag_or_value_sync::<StringIntPair>(TOrString::T(pair))
             .unwrap()
             .contains("StringIntPair")
     );
@@ -107,7 +108,7 @@ fn test_generic_calls_tag_or_value_explicit() {
 #[test]
 fn test_generic_calls_make_triple_explicit() {
     // A=int, B=str, C=bool, bound positionally by the subscript.
-    let t = make_triple::<i64, String, bool>(
+    let t = make_triple_sync::<i64, String, bool>(
         1,
         vec!["a".to_string(), "b".to_string()],
         Map::from([("k".to_string(), true)]),
@@ -126,16 +127,16 @@ fn test_generic_calls_make_triple_explicit() {
 
 #[test]
 fn test_generic_calls_one_type_arg_explicit() {
-    assert_eq!(one_type_arg::<i64>().unwrap(), "int");
-    assert_eq!(one_type_arg::<String>().unwrap(), "string");
+    assert_eq!(one_type_arg_sync::<i64>().unwrap(), "int");
+    assert_eq!(one_type_arg_sync::<String>().unwrap(), "string");
     // Nested generic binding must encode fully (base class + concrete arg).
-    let nested = one_type_arg::<GenericBox<i64>>().unwrap();
+    let nested = one_type_arg_sync::<GenericBox<i64>>().unwrap();
     assert!(nested.contains("GenericBox") && nested.contains("int"));
 }
 
 #[test]
 fn test_generic_calls_two_type_args_explicit() {
-    assert_eq!(two_type_args::<i64, String>().unwrap(), "int | string");
+    assert_eq!(two_type_args_sync::<i64, String>().unwrap(), "int | string");
 }
 
 #[test]
@@ -172,7 +173,7 @@ fn test_generic_calls_consume_int_wrapper_baseline() {
     // breaks, the generic *class* boundary regressed independent of TypeVar
     // binding.
     assert_eq!(
-        consume_int_wrapper(GenericBox::<i64> { value: 9 }).unwrap(),
+        consume_int_wrapper_sync(GenericBox::<i64> { value: 9 }).unwrap(),
         9
     );
 }
@@ -186,7 +187,7 @@ fn test_generic_calls_genericbox_get_explicit() {
     // `GenericBox[int](...)` carries the type arg; the host recovers it from
     // the receiver and seeds it as the method frame's class-level `T`.
     let b = GenericBox::<i64> { value: 5 };
-    assert_eq!(b.get().unwrap(), "int");
+    assert_eq!(b.get_sync().unwrap(), "int");
 }
 
 // --- GenericBox<T>.pair_with<U>(self, other: U) -> string : class T + method U
@@ -196,7 +197,8 @@ fn test_generic_calls_genericbox_pair_with_explicit() {
     // `T` from the `GenericBox[int]` receiver, `U` from the method subscript.
     let b = GenericBox::<i64> { value: 5 };
     assert_eq!(
-        b.pair_with::<String>("hello world".to_string()).unwrap(),
+        b.pair_with_sync::<String>("hello world".to_string())
+            .unwrap(),
         "int | string"
     );
 }
@@ -211,7 +213,7 @@ fn test_generic_calls_genericbox_new_static_explicit() {
     // inferred here from the argument. The class turbofish names the impl —
     // BAML follows Rust in that the class params belong on the struct — but
     // a static consumes no class params and none ride the wire.
-    let boxed = GenericBox::<i64>::new(5).unwrap();
+    let boxed = GenericBox::<i64>::new_sync(5).unwrap();
     // DIVERGENCE(rust): python's `isinstance(box, GenericBox)` is guaranteed
     // by the static return type.
     assert_eq!(boxed.value, 5);
@@ -224,7 +226,7 @@ fn test_generic_calls_generic_static_infers_binding() {
     // ADAPTATION(rust): the impl's class param must still be named to reach
     // the associated function (arbitrary here — the static consumes no class
     // params and sends none on the wire).
-    let boxed = GenericBox::<()>::new(5).unwrap();
+    let boxed = GenericBox::<()>::new_sync(5).unwrap();
     assert_eq!(boxed.value, 5);
 }
 
@@ -242,7 +244,7 @@ fn test_generic_calls_named_static_distinct_typevar_names() {
     // `[D, E]`, which is exactly the "no phantom class params" contract this
     // test pins.
     assert_eq!(
-        NamedStatic::<(), (), ()>::make::<i64, String>(1, "x".to_string()).unwrap(),
+        NamedStatic::<(), (), ()>::make_sync::<i64, String>(1, "x".to_string()).unwrap(),
         "int | string"
     );
 }
@@ -276,7 +278,7 @@ fn test_generic_calls_extract_explicit() {
         },
     };
     assert_eq!(
-        extract::<i64, String, bool, f64>(pair).unwrap(),
+        extract_sync::<i64, String, bool, f64>(pair).unwrap(),
         "int | string | bool | float"
     );
 }
@@ -290,7 +292,8 @@ fn test_generic_calls_extract_explicit() {
 #[test]
 fn test_generic_calls_parse_as_explicit() {
     // `T` bound by the host via the subscript (Python surface for `$types`).
-    let pair = parse_as::<StringIntPair>(r#"{"my_string": "x", "my_int": 3}"#.to_string()).unwrap();
+    let pair =
+        parse_as_sync::<StringIntPair>(r#"{"my_string": "x", "my_int": 3}"#.to_string()).unwrap();
     assert_eq!(
         pair,
         StringIntPair {
@@ -298,7 +301,7 @@ fn test_generic_calls_parse_as_explicit() {
             my_int: 3,
         }
     );
-    assert_eq!(parse_as::<i64>("42".to_string()).unwrap(), 42);
+    assert_eq!(parse_as_sync::<i64>("42".to_string()).unwrap(), 42);
 }
 
 // ===========================================================================
@@ -310,7 +313,7 @@ fn test_generic_calls_parse_as_explicit() {
 #[test]
 fn test_generic_calls_second_of_explicit() {
     assert_eq!(
-        second_of::<String>(GenericPair::<i64, String> {
+        second_of_sync::<String>(GenericPair::<i64, String> {
             first: 1,
             second: "hi".to_string(),
         })
@@ -325,7 +328,7 @@ fn test_generic_calls_second_of_explicit() {
         first: 0,
         second: pair.clone(),
     };
-    assert_eq!(second_of::<StringIntPair>(p).unwrap(), pair);
+    assert_eq!(second_of_sync::<StringIntPair>(p).unwrap(), pair);
 }
 
 // --- list_head<T>(list: GenericRecursive<T>) -> T : recursive generic arg ----
@@ -342,16 +345,16 @@ fn test_generic_calls_list_head_explicit() {
             next: None,
         })),
     };
-    assert_eq!(list_head::<i64>(linked_list).unwrap(), 7);
+    assert_eq!(list_head_sync::<i64>(linked_list).unwrap(), 7);
 }
 
 // --- choose<T>(left: T, right: T) -> T : unification across two args ---------
 
 #[test]
 fn test_generic_calls_choose_explicit() {
-    assert_eq!(choose::<i64>(1, 2).unwrap(), 1);
+    assert_eq!(choose_sync::<i64>(1, 2).unwrap(), 1);
     assert_eq!(
-        choose::<String>("a".to_string(), "b".to_string()).unwrap(),
+        choose_sync::<String>("a".to_string(), "b".to_string()).unwrap(),
         "a"
     );
 }
@@ -370,7 +373,7 @@ fn test_generic_calls_read_items_explicit() {
         // `None`.
         mixed: None,
     };
-    assert_eq!(read_items::<i64>(container).unwrap(), vec![1, 2, 3]);
+    assert_eq!(read_items_sync::<i64>(container).unwrap(), vec![1, 2, 3]);
 }
 
 // ===========================================================================
@@ -381,7 +384,7 @@ fn test_generic_calls_read_items_explicit() {
 
 #[test]
 fn test_generic_calls_wrap_explicit() {
-    let w = wrap::<i64>(5).unwrap();
+    let w = wrap_sync::<i64>(5).unwrap();
     // DIVERGENCE(rust): python's `isinstance(w, GenericBox)` is guaranteed by
     // the static return type.
     assert_eq!(w.value, 5);
@@ -413,7 +416,7 @@ fn _type_args<T>(_obj: &T) -> &'static str {
 
 #[test]
 fn test_generic_calls_make_int_box_reified() {
-    let boxed = make_int_box().unwrap();
+    let boxed = make_int_box_sync().unwrap();
     let name = _type_args(&boxed);
     assert!(name.contains("GenericBox") && name.contains("i64"));
     assert_eq!(boxed.value, 7);
@@ -425,7 +428,7 @@ fn test_generic_calls_make_int_box_reified() {
 
 #[test]
 fn test_generic_calls_make_int_container_reified() {
-    let c = make_int_container().unwrap();
+    let c = make_int_container_sync().unwrap();
     let name = _type_args(&c);
     assert!(name.contains("ContainerShapes") && name.contains("i64"));
     assert_eq!(c.item, 1);
@@ -445,7 +448,7 @@ fn test_generic_calls_make_int_container_reified() {
 
 #[test]
 fn test_generic_calls_make_nested_box_reified() {
-    let outer = make_nested_box().unwrap();
+    let outer = make_nested_box_sync().unwrap();
     // The outer box's single type arg is itself the parametrized `GenericBox[int]`.
     let outer_name = _type_args(&outer);
     assert!(outer_name.contains("GenericBox") && outer_name.contains("i64"));
@@ -460,7 +463,7 @@ fn test_generic_calls_make_nested_box_reified() {
 
 #[test]
 fn test_generic_calls_make_int_str_bool_triple_reified() {
-    let t = make_int_str_bool_triple().unwrap();
+    let t = make_int_str_bool_triple_sync().unwrap();
     let name = _type_args(&t);
     assert!(
         name.contains("GenericTriple")

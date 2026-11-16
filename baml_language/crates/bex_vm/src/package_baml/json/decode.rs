@@ -11,7 +11,9 @@
 //! children by the same rule. The one place shape decides is a union: its
 //! member is the best structural match ([`super::union`]), because a provided
 //! `from_json` that throws unwinds the whole walk and cannot be tried and
-//! fallen through; the chosen member then decodes by the rule above.
+//! fallen through; the chosen member then decodes by the rule above. A union
+//! with a `@json.fallback` member chooses by tag instead
+//! ([`super::union::tagged_member`]).
 //!
 //! The walk suspends only to call a provided `from_json`. It keeps the
 //! containers it is inside on a stack of its own ([`Decoder`]), so its depth is
@@ -40,7 +42,7 @@ use sys_types::JsonNaming;
 
 use super::{
     CYCLIC_JSON, MediaFields, OpenSet, STRING_MAP_REQUIRED,
-    plan::{ClassPlan, Plans},
+    plan::{ClassPlan, Impossible, Plans},
     raise_decode,
     union::{self, Kind},
 };
@@ -238,7 +240,16 @@ impl Container {
     }
 }
 
-/// What one decode call has looked up, kept for the rest of the call.
+/// What decode calls have looked up about types, under one naming: kept on
+/// the VM between calls ([`DecodeCache`]), so a type is worked out once
+/// rather than once per call.
+///
+/// Every answer depends on the declarations, which do not change once
+/// published, and on the impl rules the resolver sees from the calling
+/// code's package, which do. So the lookups remember the dispatch generation
+/// and the package they were filled under, and a call under any other
+/// starts empty. A collection may move or free what the answers point at,
+/// so the VM drops its lookups at every one.
 pub(super) struct Lookups {
     pub(super) plans: Plans,
     /// The `from_json` a `baml.FromJson` rule provides for a type, if any.
@@ -246,7 +257,41 @@ pub(super) struct Lookups {
     /// Whether decoding a type can reach a provided `from_json`. Holds only
     /// final answers: see [`Lookups::reaches_override`].
     reaches: FxHashMap<RealizedTy, bool>,
+    /// The engine's dispatch generation the answers were worked out under.
+    generation: u64,
+    /// The runtime package of the calling code (null for static code): the
+    /// world the resolver roots a static declaration's rule lookup in.
+    lexical: HeapPtr,
 }
+
+/// The decode lookups a VM keeps between calls, one per naming. A running
+/// decode holds its lookups and hands them back when it finishes or calls a
+/// provided `from_json`, so a decode inside that `from_json` shares them.
+#[derive(Default)]
+pub struct DecodeCache {
+    declared: Option<Box<Lookups>>,
+    aliased: Option<Box<Lookups>>,
+}
+
+impl DecodeCache {
+    fn slot(&mut self, naming: JsonNaming) -> &mut Option<Box<Lookups>> {
+        match naming {
+            JsonNaming::Declared => &mut self.declared,
+            JsonNaming::Aliased => &mut self.aliased,
+        }
+    }
+
+    /// Forget every answer: after a collection its pointers may be stale.
+    pub(crate) fn clear(&mut self) {
+        self.declared = None;
+        self.aliased = None;
+    }
+}
+
+/// Answers kept past this many are dropped before the next call, bounding a
+/// VM that meets an unbounded stream of types (generic instantiations, or
+/// classes minted in a loop).
+const MAX_CACHED_ANSWERS: usize = 4096;
 
 /// One [`Lookups::reaches_override`] walk: Tarjan's strongly connected
 /// components over the types the walk is still working out.
@@ -261,17 +306,49 @@ struct ReachWalk {
     direct: FxHashMap<RealizedTy, bool>,
 }
 
-/// Distinct types [`Lookups::reaches_override`] follows before it assumes an
-/// override can be reached (a generic class can nest without end).
+/// Distinct types one [`Lookups::reaches_override`] walk follows before it
+/// assumes an override can be reached (a generic class can nest without end).
 const MAX_REACH_TYPES: usize = 256;
 
 impl Lookups {
-    pub(super) fn new(naming: JsonNaming) -> Self {
-        Self {
-            plans: Plans::new(naming),
-            provided: FxHashMap::default(),
-            reaches: FxHashMap::default(),
+    /// The VM's lookups for `naming`, when they were filled under the world
+    /// this call runs in; otherwise empty ones for it. Lookups handed back
+    /// after the rules changed under them carry the generation they started
+    /// at, so this is the one place a stale answer is refused.
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "the box is the VM's own slot, moved out and back without reallocating"
+    )]
+    pub(super) fn take(vm: &mut BexVm, naming: JsonNaming) -> Box<Self> {
+        let generation = vm.dynamic_dispatch.generation();
+        let lexical = vm.current_runtime_package();
+        match vm.json_decode_cache.slot(naming).take() {
+            Some(lookups)
+                if lookups.generation == generation
+                    && lookups.lexical == lexical
+                    && lookups.answers() <= MAX_CACHED_ANSWERS =>
+            {
+                lookups
+            }
+            _ => Box::new(Self {
+                plans: Plans::new(naming),
+                provided: FxHashMap::default(),
+                reaches: FxHashMap::default(),
+                generation,
+                lexical,
+            }),
         }
+    }
+
+    /// Hand the lookups back to the VM for the next call.
+    pub(super) fn store(self: Box<Self>, vm: &mut BexVm) {
+        let naming = self.plans.naming;
+        *vm.json_decode_cache.slot(naming) = Some(self);
+    }
+
+    /// How many answers the lookups hold.
+    fn answers(&self) -> usize {
+        self.plans.len() + self.provided.len() + self.reaches.len()
     }
 
     /// The `from_json` a `baml.FromJson` rule provides for `ty`, the class,
@@ -417,7 +494,7 @@ impl Lookups {
                 // Visited on this walk: still open (same component) unless its
                 // component already closed, which would have answered it.
                 low = low.min(order);
-            } else if self.reaches.len() + walk.open.len() >= MAX_REACH_TYPES {
+            } else if walk.order.len() >= MAX_REACH_TYPES {
                 // Too many distinct types (a generic class can nest without
                 // end): assume an override can be reached.
                 direct = true;
@@ -450,62 +527,106 @@ impl Lookups {
         }
         low
     }
-
-    /// Forget everything: after a collection the pointers may be stale.
-    fn clear(&mut self) {
-        self.plans.clear();
-        self.provided.clear();
-        self.reaches.clear();
-    }
 }
 
-/// The walk's state: the containers it is inside, outermost first, and what
-/// it has looked up. It is its own continuation — what a provided `from_json`
-/// returns is the next child of the innermost container, or the whole result
-/// when there is none.
+/// The walk's state: the containers it is inside, outermost first. It is its
+/// own continuation — what a provided `from_json` returns is the next child
+/// of the innermost container, or the whole result when there is none.
+///
+/// The walk borrows the VM's [`Lookups`] for its naming while it runs and
+/// hands them back whenever it stops, finished or calling a `from_json`.
 pub(super) struct Decoder {
     open: Vec<Container>,
     /// The sources of `open`, to find a value that contains itself.
     inside: OpenSet,
-    pub(super) lookups: Lookups,
+    /// The naming the walk decodes under: which lookups it borrows.
+    naming: JsonNaming,
+}
+
+/// Where one stretch of the walk stopped.
+enum Stopped {
+    /// The whole result.
+    Done(Value),
+    Error(VmRustFnError),
+    /// A provided `from_json` builds the next child; the walk resumes with
+    /// what it returns.
+    Call {
+        from_json: HeapPtr,
+        frame: Vec<RealizedTy>,
+        json: Value,
+    },
 }
 
 impl Decoder {
-    /// A walk that has opened nothing yet.
+    /// A walk under `naming` that has opened nothing yet.
     pub(super) fn new(naming: JsonNaming) -> Self {
         Self {
             open: Vec::new(),
             inside: OpenSet::default(),
-            lookups: Lookups::new(naming),
+            naming,
         }
     }
 
-    /// Decode `json` as `ty` (the root, per `root`) inside the open
-    /// containers, then keep walking.
-    pub(super) fn decode(
+    /// Decode `json` as `ty` (the root, per `root`) with `lookups`, the
+    /// VM's for this walk's naming, then hand them back.
+    pub(super) fn run(
         mut self,
         vm: &mut BexVm,
         json: Value,
         ty: &RealizedTy,
         root: Root,
+        mut lookups: Box<Lookups>,
     ) -> NativeCallResult {
-        match decode_one(vm, json, ty, root, &mut self.lookups, &|| String::new()) {
-            Ok(Decoded::Value(value)) => self.resume(vm, value),
+        let stopped = self.decode(vm, json, ty, root, &mut lookups);
+        lookups.store(vm);
+        Self::settle(stopped, || Box::new(self))
+    }
+
+    /// What the native call returns where the walk stopped: `walk` is the
+    /// continuation, boxed only when a `from_json` is to be called.
+    fn settle(stopped: Stopped, walk: impl FnOnce() -> Box<Self>) -> NativeCallResult {
+        match stopped {
+            Stopped::Done(value) => NativeCallResult::Done(value),
+            Stopped::Error(error) => NativeCallResult::Error(error),
+            Stopped::Call {
+                from_json,
+                frame,
+                json,
+            } => NativeCallResult::YieldToCall {
+                callee: from_json,
+                args: vec![json],
+                type_args: frame,
+                continuation: walk(),
+            },
+        }
+    }
+
+    /// Decode `json` as `ty` (the root, per `root`) inside the open
+    /// containers, then keep walking.
+    fn decode(
+        &mut self,
+        vm: &mut BexVm,
+        json: Value,
+        ty: &RealizedTy,
+        root: Root,
+        lookups: &mut Lookups,
+    ) -> Stopped {
+        match decode_one(vm, json, ty, root, lookups, &|| String::new()) {
+            Ok(Decoded::Value(value)) => self.resume(vm, value, lookups),
             Ok(Decoded::Open(container)) => match self.open(vm, container, &|| String::new()) {
-                Ok(()) => self.walk(vm),
-                Err(error) => NativeCallResult::Error(error),
+                Ok(()) => self.walk(vm, lookups),
+                Err(error) => Stopped::Error(error),
             },
             Ok(Decoded::Provided {
                 from_json,
                 frame,
                 json,
-            }) => NativeCallResult::YieldToCall {
-                callee: from_json,
-                args: vec![json],
-                type_args: frame,
-                continuation: Box::new(self),
+            }) => Stopped::Call {
+                from_json,
+                frame,
+                json,
             },
-            Err(error) => NativeCallResult::Error(error),
+            Err(error) => Stopped::Error(error),
         }
     }
 
@@ -529,21 +650,21 @@ impl Decoder {
 
     /// `value` is the next child of the innermost container; with none open
     /// it is the result.
-    fn resume(mut self, vm: &mut BexVm, value: Value) -> NativeCallResult {
+    fn resume(&mut self, vm: &mut BexVm, value: Value, lookups: &mut Lookups) -> Stopped {
         match self.open.last_mut() {
             Some(container) => {
                 container.push(value);
-                self.walk(vm)
+                self.walk(vm, lookups)
             }
-            None => NativeCallResult::Done(value),
+            None => Stopped::Done(value),
         }
     }
 
     /// Decode children until one yields or the outermost container is done.
-    fn walk(mut self, vm: &mut BexVm) -> NativeCallResult {
+    fn walk(&mut self, vm: &mut BexVm, lookups: &mut Lookups) -> Stopped {
         loop {
-            let Self { open, lookups, .. } = &mut self;
-            let container = open
+            let container = self
+                .open
                 .last()
                 .unwrap_or_else(|| unreachable!("the walk runs inside an open container"));
             let decoded = match container.next() {
@@ -552,7 +673,7 @@ impl Decoder {
                     // The path of the next child of the innermost container,
                     // from the root: each open container's segment for the
                     // child it is on. Only an error needs it.
-                    let open = &*open;
+                    let open = &self.open;
                     let path = || {
                         let mut path = String::new();
                         for container in open {
@@ -574,7 +695,7 @@ impl Decoder {
                             parent.push(finished);
                             continue;
                         }
-                        None => return NativeCallResult::Done(finished),
+                        None => return Stopped::Done(finished),
                     }
                 }
             };
@@ -605,7 +726,7 @@ impl Decoder {
                             self.inside.insert(child.source());
                             self.open.push(child);
                         }
-                        Err(error) => return NativeCallResult::Error(error),
+                        Err(error) => return Stopped::Error(error),
                     }
                 }
                 Ok(Decoded::Provided {
@@ -613,14 +734,13 @@ impl Decoder {
                     frame,
                     json,
                 }) => {
-                    return NativeCallResult::YieldToCall {
-                        callee: from_json,
-                        args: vec![json],
-                        type_args: frame,
-                        continuation: Box::new(self),
+                    return Stopped::Call {
+                        from_json,
+                        frame,
+                        json,
                     };
                 }
-                Err(error) => return NativeCallResult::Error(error),
+                Err(error) => return Stopped::Error(error),
             }
         }
     }
@@ -631,13 +751,12 @@ impl RootHaver for Decoder {
         let Self {
             open,
             inside,
-            lookups,
+            naming: _,
         } = self;
-        // The lookups are a cache of what the call has resolved: forgotten at
-        // every collection rather than walked, and filled again as the walk
-        // goes on. Dropped first, so the plans the open containers share with
-        // it are theirs alone when they are repointed.
-        lookups.clear();
+        // The walk holds no lookups across a yield: they are back on the VM,
+        // which drops them at every collection, so the plans the open
+        // containers share with them are theirs alone when they are
+        // repointed.
         open.visit_roots(visitor);
         // Keyed by the sources, so rebuilt from them.
         *inside = OpenSet::default();
@@ -699,8 +818,11 @@ impl RootHaver for Container {
 }
 
 impl Continuation for Decoder {
-    fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        self.resume(vm, value)
+    fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
+        let mut lookups = Lookups::take(vm, self.naming);
+        let stopped = self.resume(vm, value, &mut lookups);
+        lookups.store(vm);
+        Self::settle(stopped, || self)
     }
 }
 
@@ -740,6 +862,19 @@ fn decode_one(
             // the whole walk, so a member cannot be tried through its rule
             // and fallen through to the next.
             validate(vm, json, path)?;
+            if let Some(ptr) = json.as_object_ptr()
+                && let Some(tagged) = union::tagged_member(vm, members, ptr, &mut lookups.plans)
+            {
+                return match tagged {
+                    Ok(member) => decode_one(vm, json, &member, Root::Dispatch, lookups, path),
+                    Err(refused) => {
+                        let at = refused
+                            .key
+                            .map_or_else(path, |key| format!("{}.{key}", path()));
+                        Err(raise_decode(vm, refused.message, &at))
+                    }
+                };
+            }
             let keys = json.as_object_ptr().map(union::Keys::Map);
             let order = union::Candidates::of(vm, members, kind_of(vm, json)).order(
                 vm,
@@ -820,7 +955,7 @@ fn decode_leaf(
 
 /// The JSON kind of `json`, as a union sorts its members by: what
 /// [`node_of`] reads it as.
-fn kind_of(vm: &BexVm, json: Value) -> Kind {
+pub(super) fn kind_of(vm: &BexVm, json: Value) -> Kind {
     match node_of(vm, json) {
         Node::Null => Kind::Null,
         Node::Bool(_) => Kind::Bool,
@@ -886,8 +1021,23 @@ fn open_class(
             ));
         }
     };
+    if plan.is_fallback()
+        && let Some((message, key)) = super::fallback_tag_error(vm, source, &plan)
+    {
+        let at = key.map_or_else(path, |key| format!("{}.{key}", path()));
+        return Err(raise_decode(vm, message, &at));
+    }
     let mut fields: Vec<Field> = Vec::with_capacity(plan.fields.len());
     for (index, field) in plan.fields.iter().enumerate() {
+        if let Some(rest) = field.rest {
+            match super::rest_value(vm, source, &plan, rest) {
+                Ok(held) => fields.push(Field::Held(held)),
+                Err((message, inner)) => {
+                    return Err(raise_decode(vm, message, &format!("{}{inner}", path())));
+                }
+            }
+            continue;
+        }
         if !field.shown {
             let Some(empty) = super::super::sap::empty_value(vm, &field.ty, &mut Vec::new())?
             else {
@@ -1183,6 +1333,7 @@ fn node_of(vm: &BexVm, json: Value) -> Node {
         ValueKind::Null | ValueKind::OmittedArg => Node::Null,
         ValueKind::Bool(b) => Node::Bool(b),
         ValueKind::Int(i) => Node::Int(i),
+        ValueKind::Float(f) => Node::Float(f),
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Float(f) => Node::Float(*f),
             Object::String(_) => Node::String(json),
@@ -1385,7 +1536,7 @@ impl<'p> Structural<'p> {
             RealizedTy::Float => match (&node, node.as_f64()) {
                 // A float is itself: NaN and the infinities too.
                 (Node::Float(_), _) => Ok(json),
-                (_, Some(float)) => Ok(Value::object(vm.alloc_float(float))),
+                (_, Some(float)) => Ok(vm.float_value(float)),
                 _ => Err(self.fail(vm, || "expected number".into())),
             },
             RealizedTy::String => match node {
@@ -1547,6 +1698,22 @@ impl<'p> Structural<'p> {
                 self.decode(vm, json, other)
             };
         }
+        if let Some(ptr) = json.as_object_ptr()
+            && let Some(tagged) = union::tagged_member(vm, members, ptr, self.plans)
+        {
+            return match tagged {
+                Ok(member) => self.decode(vm, json, &member),
+                Err(refused) => self.within(
+                    |path| {
+                        if let Some(key) = &refused.key {
+                            path.push('.');
+                            path.push_str(key);
+                        }
+                    },
+                    |this| Err(this.fail(vm, || refused.message.clone())),
+                ),
+            };
+        }
         let keys = json.as_object_ptr().map(union::Keys::Map);
         let order = union::Candidates::of(vm, members, kind_of(vm, json)).order(
             vm,
@@ -1577,7 +1744,7 @@ impl<'p> Structural<'p> {
         let Some(base) = self.path.clone() else {
             return Failed::Quiet;
         };
-        let impossible = impossible_members(vm, members, self.naming());
+        let impossible = impossible_members(vm, members, self.plans);
         let is_null = kind_of(vm, json) == Kind::Null;
         let mut misfits = Vec::new();
         for (member, ty) in members.iter().enumerate() {
@@ -1662,7 +1829,7 @@ impl<'p> Structural<'p> {
             baml_type::Literal::Float(expected) if node.is_number() => {
                 match (expected.parse::<f64>(), node.as_f64()) {
                     (Ok(expected), Some(actual)) if (expected - actual).abs() < f64::EPSILON => {
-                        Ok(Value::object(vm.alloc_float(actual)))
+                        Ok(vm.float_value(actual))
                     }
                     _ => Err(self.fail(vm, || "literal float mismatch".into())),
                 }
@@ -1729,7 +1896,9 @@ impl<'p> Structural<'p> {
                 .map(|v| {
                     (
                         self.naming().shows(v.skip),
-                        self.naming().key(&v.name, v.alias.as_deref()).to_owned(),
+                        self.naming()
+                            .key(&v.name, v.alias.as_deref(), v.json_rename.as_deref())
+                            .to_owned(),
                     )
                 }),
             _ => return Err(self.fail(vm, || format!("`{}` is not an enum", named()))),
@@ -1783,8 +1952,33 @@ impl<'p> Structural<'p> {
         // holds its type's empty value, as it does when SAP reads a model's
         // answer. A field that can be `null` may be absent and decodes to
         // `null`; every other field must be present.
+        if plan.is_fallback()
+            && let Some((message, key)) = super::fallback_tag_error(vm, ptr, &plan)
+        {
+            return self.within(
+                |path| {
+                    if let Some(key) = &key {
+                        path.push('.');
+                        path.push_str(key);
+                    }
+                },
+                |this| Err(this.fail(vm, || message)),
+            );
+        }
         let mut values = Vec::with_capacity(plan.fields.len());
         for (index, field) in plan.fields.iter().enumerate() {
+            if let Some(rest) = field.rest {
+                match super::rest_value(vm, ptr, &plan, rest) {
+                    Ok(held) => values.push(held),
+                    Err((message, inner)) => {
+                        return self.within(
+                            |path| path.push_str(&inner),
+                            |this| Err(this.fail(vm, || message.to_owned())),
+                        );
+                    }
+                }
+                continue;
+            }
             if !field.shown {
                 let empty = match super::super::sap::empty_value(vm, &field.ty, &mut Vec::new()) {
                     Ok(Some(empty)) => empty,
@@ -1876,8 +2070,20 @@ fn object_string_keyed(vm: &BexVm, ptr: HeapPtr) -> bool {
 }
 
 /// The members of a union no JSON value can be, each with why: a member with
-/// no JSON form, such as `uint8array`, or with no values at all.
-fn impossible_members(
+/// no JSON form, such as `uint8array`, or with no values at all. Worked out
+/// once per union, under the naming of `plans`.
+fn impossible_members(vm: &BexVm, members: &[RealizedTy], plans: &mut Plans) -> Impossible {
+    if let Some(impossible) = plans.impossible.get(members) {
+        return Arc::clone(impossible);
+    }
+    let impossible: Impossible = work_out_impossible(vm, members, plans.naming).into();
+    plans
+        .impossible
+        .insert(members.into(), Arc::clone(&impossible));
+    impossible
+}
+
+fn work_out_impossible(
     vm: &BexVm,
     members: &[RealizedTy],
     naming: JsonNaming,

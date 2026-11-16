@@ -220,8 +220,9 @@ class ModelCall {
     // The tokens the call reported; null when the provider reported none.
     usage: Usage?,
     timing: Timing,
-    // Reused as-is; only when capture_wire. Rendered requests carry no
-    // credential headers (auth is applied at send); the URL is redacted.
+    // The request as sent; only when capture_wire. It carried credentials, so
+    // credential headers and URL secrets are redacted (see
+    // `ai.wire.redact_request_headers` and `ai.wire.redact_url_secrets`).
     // Null for a call that is not an HTTP request.
     http_request: baml.http.Request?,
     // Null on transport failure and for a call that is not an HTTP request.

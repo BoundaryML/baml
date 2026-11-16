@@ -1,0 +1,8 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(
+    o: string?,
+) -> int? {
+    o?.length
+}

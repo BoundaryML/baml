@@ -18,7 +18,7 @@ pub(crate) enum SyncAsync {
 /// `param_names`.
 pub(crate) struct PyFunction {
     /// Collision-allocated Python identifier for a direct, spec, or stream
-    /// role. The async role conventionally ends in `_async`.
+    /// role. The sync role conventionally ends in `_sync`.
     pub(crate) py_name: String,
     /// Authored FQN passed to `__define_function` for every role.
     pub(crate) baml_fqn: String,

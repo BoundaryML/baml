@@ -13,7 +13,7 @@ private let childExitDeadline: TimeInterval = 30
 final class TestUnhandledSpawnErrors: XCTestCase {
     func test_unhandled_spawn_error_uses_host_default() throws {
         if ProcessInfo.processInfo.environment["BAML_SWIFT_UNHANDLED_SPAWN_CHILD"] != nil {
-            XCTAssertEqual(try Baml.spawn_unhandled_error(), 1)
+            XCTAssertEqual(try Baml.spawn_unhandled_error_sync(), 1)
             BamlRuntime.shared.shutdown()
             XCTFail("unhandled spawn error did not terminate the process")
             return

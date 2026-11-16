@@ -21,83 +21,83 @@ source: crates/baml_tests/src/generated_tests.rs
     · ╰──── expected `int`, but this block ends without a value
     ╰────
 
-  [hir] E0010
+  [parse] E0010
 
-  × assignment is not allowed in expression position; assignment is a statement
+  × invalid syntax
     ╭─[banned_expressions.baml:22:4]
  22 │   (x = 5)
     ·    ──┬──
-    ·      ╰── assignment not allowed here
+    ·      ╰── assignment is not allowed in expression position; assignment is a statement
     ╰────
 
-  [hir] E0010
+  [parse] E0010
 
-  × assignment is not allowed in expression position; assignment is a statement
+  × invalid syntax
     ╭─[banned_expressions.baml:28:4]
  28 │   (x += 5)
     ·    ───┬──
-    ·       ╰── assignment not allowed here
+    ·       ╰── assignment is not allowed in expression position; assignment is a statement
     ╰────
 
-  [hir] E0010
+  [parse] E0010
 
-  × assignment is not allowed in expression position; assignment is a statement
+  × invalid syntax
     ╭─[banned_expressions.baml:34:12]
  34 │   let y = (x = 5);
     ·            ──┬──
-    ·              ╰── assignment not allowed here
+    ·              ╰── assignment is not allowed in expression position; assignment is a statement
     ╰────
 
-  [hir] E0010
+  [parse] E0010
 
-  × assignment is not allowed in expression position; assignment is a statement
+  × invalid syntax
     ╭─[banned_expressions.baml:64:17]
  64 │   let result = (user?.profile?.name = "new_name");
     ·                 ────────────────┬───────────────
-    ·                                 ╰── assignment not allowed here
+    ·                                 ╰── assignment is not allowed in expression position; assignment is a statement
     ╰────
 
-  [hir] E0010
+  [parse] E0010
 
-  × assignment is not allowed in expression position; assignment is a statement
+  × invalid syntax
     ╭─[banned_expressions.baml:70:17]
  70 │   let result = (items?.[0] = 42);
     ·                 ───────┬───────
-    ·                        ╰── assignment not allowed here
+    ·                        ╰── assignment is not allowed in expression position; assignment is a statement
     ╰────
 
-  [hir] E0010
+  [parse] E0010
 
-  × assignment is not allowed in expression position; assignment is a statement
+  × invalid syntax
     ╭─[banned_expressions.baml:76:17]
  76 │   let result = (user?.id += 1);
     ·                 ──────┬──────
-    ·                       ╰── assignment not allowed here
+    ·                       ╰── assignment is not allowed in expression position; assignment is a statement
     ╰────
 
-  [hir] E0010
+  [parse] E0010
 
-  × assignment is not allowed in expression position; assignment is a statement
+  × invalid syntax
     ╭─[banned_expressions.baml:82:4]
  82 │   (user?.profile?.name = "updated")
     ·    ───────────────┬───────────────
-    ·                   ╰── assignment not allowed here
+    ·                   ╰── assignment is not allowed in expression position; assignment is a statement
     ╰────
 
-  [hir] E0010
+  [parse] E0010
 
-  × assignment is not allowed in expression position; assignment is a statement
+  × invalid syntax
     ╭─[banned_expressions.baml:87:17]
  87 │   let result = (node?.children?.[0].value = 99);
     ·                 ───────────────┬──────────────
-    ·                                ╰── assignment not allowed here
+    ·                                ╰── assignment is not allowed in expression position; assignment is a statement
     ╰────
 
-  [hir] E0010
+  [parse] E0010
 
-  × assignment is not allowed in expression position; assignment is a statement
+  × invalid syntax
     ╭─[banned_expressions.baml:93:17]
  93 │   let result = (node?.labels?.["main"].value = 50);
     ·                 ────────────────┬────────────────
-    ·                                 ╰── assignment not allowed here
+    ·                                 ╰── assignment is not allowed in expression position; assignment is a statement
     ╰────

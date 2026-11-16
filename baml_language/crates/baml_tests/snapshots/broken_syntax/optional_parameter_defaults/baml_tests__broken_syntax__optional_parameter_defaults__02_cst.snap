@@ -1,0 +1,103 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== callback_param_defaults.baml ===
+SourceFile@469..587
+  items: FunctionDef@469..587
+    kw: Function "function" @469..477
+    name: Name@478..506
+      token: Word "call_with_defaulted_callback" @478..506
+    params: ParamList@506..557
+      l: LParen "(" @506..507
+      params: Param@507..548
+        name: Name@507..515
+          token: Word "callback" @507..515
+        ascription: TypeAscription@515..548
+          colon: Colon ":" @515..516
+          ty: FunctionType@517..548
+            l: LParen "(" @517..518
+            params: FunctionTypeParam@518..524
+              name: Name@518..519
+                token: Word "x" @518..519
+              colon: Colon ":" @519..520
+              ty: PathType@521..524
+                head: Name@521..524
+                  token: Word "int" @521..524
+            params: Comma "," @524..525
+            params: FunctionTypeParam@526..537
+              name: Name@526..527
+                token: Word "y" @526..527
+              colon: Colon ":" @527..528
+              ty: PathType@529..532
+                head: Name@529..532
+                  token: Word "int" @529..532
+            r: RParen ")" @537..538
+            arrow: Arrow "->" @539..541
+            ret: PathType@542..548
+              head: Name@542..548
+                token: Word "string" @542..548
+      params: Comma "," @548..549
+      params: Param@550..556
+        name: Name@550..551
+          token: Word "x" @550..551
+        ascription: TypeAscription@551..556
+          colon: Colon ":" @551..552
+          ty: PathType@553..556
+            head: Name@553..556
+              token: Word "int" @553..556
+      r: RParen ")" @556..557
+    ret: ReturnType@558..567
+      arrow: Arrow "->" @558..560
+      ty: PathType@561..567
+        head: Name@561..567
+          token: Word "string" @561..567
+    body: Block@568..587
+      l: LBrace "{" @568..569
+      tail: CallExpr@574..585
+        callee: PathExpr@574..582
+          head: Name@574..582
+            token: Word "callback" @574..582
+        args: ArgList@582..585
+          l: LParen "(" @582..583
+          args: Arg@583..584
+            value: PathExpr@583..584
+              head: Name@583..584
+                token: Word "x" @583..584
+          r: RParen ")" @584..585
+      r: RBrace "}" @586..587
+error @535..537: default expressions are not allowed in function types
+=== function_type_defaults.baml ===
+SourceFile@0..90
+  items: TypeAliasDef@0..90
+    kw: Type "type" @0..4
+    name: Name@5..29
+      token: Word "BadDefaultInFunctionType" @5..29
+    eq: Equals "=" @30..31
+    ty: FunctionType@32..90
+      l: LParen "(" @32..33
+      params: FunctionTypeParam@33..46
+        name: Name@33..38
+          token: Word "query" @33..38
+        colon: Colon ":" @38..39
+        ty: PathType@40..46
+          head: Name@40..46
+            token: Word "string" @40..46
+      params: Comma "," @46..47
+      params: FunctionTypeParam@48..69
+        name: Name@48..59
+          token: Word "max_results" @48..59
+        colon: Colon ":" @59..60
+        ty: PathType@61..64
+          head: Name@61..64
+            token: Word "int" @61..64
+      r: RParen ")" @69..70
+      arrow: Arrow "->" @71..73
+      ret: PathType@74..77
+        head: Name@74..77
+          token: Word "int" @74..77
+      throws: ThrowsClause@78..90
+        kw: Throws "throws" @78..84
+        ty: PathType@85..90
+          head: Name@85..90
+            token: Word "never" @85..90
+error @67..69: default expressions are not allowed in function types

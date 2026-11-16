@@ -19,6 +19,11 @@ impl<'db> Generator<'_, 'db> {
         let code = match rvalue {
             Rvalue::Use(operand) => return self.operand(block, operand),
             Rvalue::BinaryOp { op, left, right } => {
+                if let Some((tested, negate)) = rvalue.null_test() {
+                    let value = self.value_operand(block, tested)?;
+                    let not = if negate { "!" } else { "" };
+                    return Ok(Expr::new(format!("({not}({value}).is_null())"), Repr::Bool));
+                }
                 let left = self.operand(block, left)?;
                 let right = self.operand(block, right)?;
                 return self.binary(block, *op, &left, &right);
@@ -28,9 +33,15 @@ impl<'db> Generator<'_, 'db> {
                 return self.unary(block, *op, &operand);
             }
             Rvalue::Len(place) => {
+                let needs = self.analysis.escape.object_needs(place);
                 let container = self.load(block, place)?;
                 let container = self.value_arg(&container);
-                self.fallible(block, &format!("vm.container_len({container})"))?
+                let len = self.by_locality(
+                    needs,
+                    &format!("vm.container_len_local({container})"),
+                    &format!("vm.container_len({container})"),
+                );
+                self.fallible(block, &len)?
             }
             Rvalue::Discriminant(place) => {
                 let value = self.load(block, place)?;

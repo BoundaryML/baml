@@ -24,6 +24,7 @@
 ///
 /// Returns `None` only when `len` does not fit in `i64`, which never happens for
 /// a real slice (its length cannot exceed `isize::MAX`).
+#[inline]
 fn count_from_end(index: i64, len: usize) -> Option<i64> {
     let len_i64 = i64::try_from(len).ok()?;
     // `index < 0` ⟹ `index + len_i64` moves toward zero, so it cannot overflow.
@@ -37,6 +38,14 @@ fn count_from_end(index: i64, len: usize) -> Option<i64> {
 /// `None` when it falls outside the sequence even after counting from the end
 /// (e.g. `-len - 1`, or any index `>= len`).
 pub(crate) fn resolve_index(index: i64, len: usize) -> Option<usize> {
+    resolve_index_inline(index, len)
+}
+
+/// [`resolve_index`] for compiled code's array accessors, which inline into
+/// the generated crate and must take this with them. The interpreter keeps
+/// calling the out-of-line [`resolve_index`], so its code does not change.
+#[inline]
+pub(crate) fn resolve_index_inline(index: i64, len: usize) -> Option<usize> {
     // `try_from` rejects the below-start case (`< 0`); the filter rejects the
     // past-end case (`>= len`).
     usize::try_from(count_from_end(index, len)?)

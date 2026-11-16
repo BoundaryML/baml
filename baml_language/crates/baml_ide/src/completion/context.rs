@@ -20,11 +20,22 @@
 //! readings itself would be re-deriving the position it was handed.
 
 use baml_base::{AttributePosition, SourceFile};
-use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxToken};
 use baml_compiler2_hir::{
     body::BodyOwnerId,
     contributions::Definition,
     resolve::{NamespaceMember, namespace_members_at},
+};
+use baml_syntax::{
+    index::TreeIndex,
+    nodes::{
+        Arg, ArgList, ArrayType, Attribute, BacktickString, Block, BlockAttr, ClassDef, EnumDef,
+        EnumVariant, Field, FileTree, FunctionType, ImplementsBlock, ImplementsFor, InterfaceDef,
+        LiteralType, Name, ObjectLiteral, OptionalType, ParenType, PathType, QualifiedPath,
+        SourceFile as SourceFileNode, TemplateElif, TemplateForOpen, TemplateIfOpen,
+        TemplateInterp, UnionType,
+    },
+    token::{TokenAtOffset, TokenIdx, TokenKind, TokenSet as _, sets::StringToken},
+    tree::{AnyNodeId, Bogus},
 };
 use text_size::{TextRange, TextSize};
 
@@ -136,22 +147,25 @@ impl<'db> CompletionContext<'db> {
         if usize::from(offset) > text.len() {
             return None;
         }
-        let (tree, marker) = speculative_parse(db, file, text, offset)?;
-        let token = tree
-            .token_at_offset(marker.start() + TextSize::from(1))
-            .right_biased()?;
+        let spec = speculative_parse(text, offset)?;
+        let tokens = spec.tree.tokens();
+        let token = match tokens.token_at_offset(spec.marker.start() + TextSize::from(1)) {
+            TokenAtOffset::Single(token) => token,
+            TokenAtOffset::Between { right, .. } => right,
+            TokenAtOffset::None => return None,
+        };
 
         // The fragment already typed is the marker token minus the marker
         // itself — real coordinates, because it ends at the cursor.
-        let source_range = if token.kind() == SyntaxKind::WORD {
-            TextRange::new(token.text_range().start().min(offset), offset)
+        let source_range = if tokens.kind(token) == TokenKind::Word {
+            TextRange::new(tokens.range(token).start().min(offset), offset)
         } else {
             TextRange::empty(offset)
         };
 
         // Classify on the speculative tree, then resolve what the
         // classification located against the real file's recorded facts.
-        let position = classify(&token);
+        let position = classify(&spec, token);
         // An accepted attribute replaces the WHOLE name: `@stream.⎸` is one
         // dotted attribute name, and the fragment-only range would splice
         // `stream.stream.done`.
@@ -204,14 +218,30 @@ impl<'db> CompletionContext<'db> {
     }
 }
 
-/// The file's text with [`MARKER`] spliced in at `offset`, parsed. Returns the
-/// tree and the marker's range within it.
-fn speculative_parse(
-    db: &dyn baml_compiler2_hir::Db,
-    file: SourceFile,
-    text: &str,
-    offset: TextSize,
-) -> Option<(SyntaxNode, TextRange)> {
+/// The speculative parse: the file's text with [`MARKER`] spliced in at the
+/// cursor, its tree, the index over it, and the marker's range within it.
+struct Speculative {
+    tree: FileTree,
+    index: TreeIndex,
+    marker: TextRange,
+}
+
+impl Speculative {
+    fn node_range(&self, id: AnyNodeId) -> TextRange {
+        self.tree.tokens().text_range(self.tree.arenas().span(id))
+    }
+
+    /// The nodes from the token's owner up to the root; none for trivia.
+    fn ancestors_of(&self, token: TokenIdx) -> impl Iterator<Item = AnyNodeId> + '_ {
+        self.index
+            .token_owner(token)
+            .into_iter()
+            .flat_map(|owner| self.index.ancestors(owner))
+    }
+}
+
+/// Parse the file's text with [`MARKER`] spliced in at `offset`.
+fn speculative_parse(text: &str, offset: TextSize) -> Option<Speculative> {
     let at = usize::from(offset);
     if !text.is_char_boundary(at) {
         return None;
@@ -220,14 +250,13 @@ fn speculative_parse(
     faked.push_str(&text[..at]);
     faked.push_str(MARKER);
     faked.push_str(&text[at..]);
-
-    let tokens = baml_compiler_lexer::lex_lossless(&faked, file.file_id(db));
-    let (green, _errors) = baml_compiler_parser::parse_file(&tokens);
-    let marker_len = TextSize::of(MARKER);
-    Some((
-        SyntaxNode::new_root(green),
-        TextRange::at(offset, marker_len),
-    ))
+    let tree = baml_parser::parse(&faked).tree;
+    let index = TreeIndex::build(&tree);
+    Some(Speculative {
+        tree,
+        index,
+        marker: TextRange::at(offset, TextSize::of(MARKER)),
+    })
 }
 
 /// The purely syntactic classification, before any resolution. Every offset
@@ -266,87 +295,112 @@ enum Position {
     Unsupported,
 }
 
-/// The declaration an attribute node annotates, or `None` where the grammar
-/// accepts an attribute the schema table has no position for (a config item).
-fn attribute_position(attribute: &SyntaxNode) -> Option<AttributePosition> {
-    let block = attribute.kind() == SyntaxKind::BLOCK_ATTRIBUTE;
-    for owner in attribute.ancestors().skip(1) {
-        match owner.kind() {
+/// The declaration an attribute annotates, or `None` where the grammar
+/// accepts an attribute the schema table has no position for.
+fn attribute_position(
+    spec: &Speculative,
+    attribute: AnyNodeId,
+    block: bool,
+) -> Option<AttributePosition> {
+    let mut owners = spec.index.ancestors(attribute).skip(1);
+    if block {
+        // A `@@` is a member of the declaration it describes.
+        return owners.find_map(|owner| {
+            if owner.cast::<ClassDef>().is_some() {
+                Some(AttributePosition::Class)
+            } else if owner.cast::<EnumDef>().is_some() {
+                Some(AttributePosition::Enum)
+            } else if owner.cast::<InterfaceDef>().is_some() {
+                Some(AttributePosition::Interface)
+            } else {
+                None
+            }
+        });
+    }
+    owners.find_map(|owner| {
+        if owner.cast::<Field>().is_some() {
             // A field is a class's or an interface's; the enclosing
             // declaration says which.
-            SyntaxKind::FIELD if !block => {
-                return owner.ancestors().skip(1).find_map(|declaration| {
-                    match declaration.kind() {
-                        SyntaxKind::CLASS_DEF => Some(AttributePosition::ClassField),
-                        SyntaxKind::INTERFACE_DEF => Some(AttributePosition::InterfaceField),
-                        _ => None,
-                    }
-                });
-            }
-            SyntaxKind::ENUM_VARIANT if !block => return Some(AttributePosition::EnumVariant),
-            // A method's `@@` is the method's, so the function kinds come
-            // before the class/interface that contains them in the walk.
-            SyntaxKind::FUNCTION_DEF | SyntaxKind::METHOD_SIG if block => {
-                return Some(AttributePosition::Function);
-            }
-            SyntaxKind::CLASS_DEF if block => return Some(AttributePosition::Class),
-            SyntaxKind::ENUM_DEF if block => return Some(AttributePosition::Enum),
-            SyntaxKind::INTERFACE_DEF if block => return Some(AttributePosition::Interface),
-            _ => {}
+            spec.index.ancestors(owner).skip(1).find_map(|declaration| {
+                if declaration.cast::<ClassDef>().is_some() {
+                    Some(AttributePosition::ClassField)
+                } else if declaration.cast::<InterfaceDef>().is_some() {
+                    Some(AttributePosition::InterfaceField)
+                } else {
+                    None
+                }
+            })
+        } else if owner.cast::<EnumVariant>().is_some() {
+            Some(AttributePosition::EnumVariant)
+        } else {
+            None
         }
-    }
-    None
+    })
+}
+
+/// Whether `id` is a type expression node.
+fn is_type_node(id: AnyNodeId) -> bool {
+    id.cast::<PathType>().is_some()
+        || id.cast::<LiteralType>().is_some()
+        || id.cast::<ParenType>().is_some()
+        || id.cast::<FunctionType>().is_some()
+        || id.cast::<OptionalType>().is_some()
+        || id.cast::<ArrayType>().is_some()
+        || id.cast::<UnionType>().is_some()
+        || id.cast::<QualifiedPath>().is_some()
 }
 
 /// What the marker token's surroundings say the position is.
 ///
 /// Innermost-first: an object literal inside an argument list is a field
 /// slot, not an argument slot, because that is the node the cursor is in.
-fn classify(token: &SyntaxToken) -> Position {
-    if in_prose(token) {
+fn classify(spec: &Speculative, token: TokenIdx) -> Position {
+    let tokens = spec.tree.tokens();
+    if in_prose(spec, token) {
         return Position::Unsupported;
     }
-    // A marker inside a TYPE_EXPR is a type being written, wherever the
+    // A marker inside a type node is a type being written, wherever the
     // expression sits — annotation, signature, bound, `throws`, or a
-    // match/catch arm (patterns parse as TYPE_PATTERN around a TYPE_EXPR).
-    // The kind rides along on the dotted form: `baml.⎸` in a type slot
-    // resolves through the same DotTarget and filters to types.
-    // BEFORE the type check: an `@name` nests INSIDE the annotated
-    // `TYPE_EXPR`, and before the dot check: `@stream.⎸` is one attribute
-    // name, not a qualified path. An attribute at a position the schema
-    // table does not know offers nothing.
-    if let Some(attribute) = token.parent_ancestors().find(|node| {
-        matches!(
-            node.kind(),
-            SyntaxKind::ATTRIBUTE | SyntaxKind::BLOCK_ATTRIBUTE
-        )
-    }) {
-        let Some(position) = attribute_position(&attribute) else {
+    // match/catch arm (a type pattern holds a type). The kind rides along
+    // on the dotted form: `baml.⎸` in a type slot resolves through the same
+    // DotTarget and filters to types. BEFORE the type check: an `@name`
+    // sits on the annotated member, and before the dot check: `@stream.⎸`
+    // is one attribute name, not a qualified path. An attribute at a
+    // position the schema table does not know offers nothing.
+    let attribute = spec.ancestors_of(token).find_map(|id| {
+        if id.cast::<Attribute>().is_some() {
+            Some((id, false))
+        } else if id.cast::<BlockAttr>().is_some() {
+            Some((id, true))
+        } else {
+            None
+        }
+    });
+    if let Some((attribute, block)) = attribute {
+        let Some(position) = attribute_position(spec, attribute, block) else {
             return Position::Unsupported;
         };
-        let ats = attribute
-            .text()
-            .to_string()
+        let range = spec.node_range(attribute);
+        let ats = spec.tree.text()[range]
             .bytes()
             .take_while(|b| *b == b'@')
             .count();
         // At most two `@`s can lead an attribute; the cast cannot truncate.
         return Position::Attribute {
-            name_start: attribute.text_range().start()
-                + TextSize::from(u32::try_from(ats).unwrap_or(u32::MAX)),
+            name_start: range.start() + TextSize::from(u32::try_from(ats).unwrap_or(u32::MAX)),
             position,
         };
     }
-    if token
-        .parent_ancestors()
-        .any(|node| node.kind() == SyntaxKind::BLOCK_ATTRIBUTE)
+    // An `@`/`@@` the grammar gave no attribute node — a `@@` before a
+    // declaration, which takes none — names nothing to offer.
+    if tokens
+        .prev_significant(token)
+        .is_some_and(|previous| matches!(tokens.kind(previous), TokenKind::At | TokenKind::AtAt))
     {
         return Position::Unsupported;
     }
-    let in_type = token
-        .parent_ancestors()
-        .any(|node| node.kind() == SyntaxKind::TYPE_EXPR);
-    if let Some(dot) = preceding_dot(token) {
+    let in_type = spec.ancestors_of(token).any(is_type_node);
+    if let Some(dot) = preceding_dot(spec, token) {
         return Position::Dotted {
             dot,
             kind: if in_type {
@@ -359,44 +413,67 @@ fn classify(token: &SyntaxToken) -> Position {
     if in_type {
         return Position::Type;
     }
-    for node in token.parent_ancestors() {
-        match node.kind() {
-            SyntaxKind::OBJECT_LITERAL => {
-                return Position::FieldSlot {
-                    literal: node.text_range().start(),
-                };
-            }
-            // The VALUE of an already-labelled argument (`tag = <here>`) is
-            // an expression; the label is spoken for.
-            SyntaxKind::CALL_ARG if labelled_before(&node, token) => {
-                return Position::Expression;
-            }
-            SyntaxKind::CALL_ARGS => {
-                return Position::ArgumentSlot {
-                    open_paren: node.text_range().start(),
-                };
-            }
-            SyntaxKind::BLOCK_EXPR | SyntaxKind::EXPR_FUNCTION_BODY => {
-                return Position::Expression;
-            }
-            _ => {}
+    for node in spec.ancestors_of(token) {
+        if node.cast::<ObjectLiteral>().is_some() {
+            return Position::FieldSlot {
+                literal: spec.node_range(node).start(),
+            };
+        }
+        // The VALUE of an already-labelled argument (`tag = <here>`) is an
+        // expression; the label is spoken for.
+        if let Some(arg) = node.cast::<Arg>()
+            && labelled_before(spec, arg, token)
+        {
+            return Position::Expression;
+        }
+        if node.cast::<ArgList>().is_some() {
+            return Position::ArgumentSlot {
+                open_paren: spec.node_range(node).start(),
+            };
+        }
+        // A block, or a template's `${…}` hole and block headers: code.
+        if node.cast::<Block>().is_some()
+            || node.cast::<TemplateInterp>().is_some()
+            || node.cast::<TemplateForOpen>().is_some()
+            || node.cast::<TemplateIfOpen>().is_some()
+            || node.cast::<TemplateElif>().is_some()
+        {
+            return Position::Expression;
         }
     }
-    // Item slots: a bare WORD the parser could only read as the start of a
-    // declaration (top level) or as a field name (class-like bodies — where
-    // a declaration keyword is equally writable).
-    if token.kind() == SyntaxKind::WORD {
-        let container = match token.parent().map(|parent| parent.kind()) {
-            Some(SyntaxKind::SOURCE_FILE) => Some(ItemContainer::TopLevel),
-            Some(SyntaxKind::FIELD) => {
-                token.parent_ancestors().find_map(|node| match node.kind() {
-                    SyntaxKind::CLASS_DEF => Some(ItemContainer::Class),
-                    SyntaxKind::INTERFACE_DEF => Some(ItemContainer::Interface),
-                    SyntaxKind::IMPLEMENTS_FOR => Some(ItemContainer::Impl),
-                    _ => None,
-                })
-            }
-            _ => None,
+    // Item slots: a bare word the parser could only read as the start of a
+    // declaration (top level: a `Bogus` item) or as a field name (class-like
+    // bodies — where a declaration keyword is equally writable).
+    if tokens.kind(token) == TokenKind::Word
+        && let Some(owner) = spec.index.token_owner(token)
+    {
+        let parent = spec.index.parent(owner);
+        let container = if owner.cast::<Bogus>().is_some() {
+            parent.and_then(|parent| {
+                if parent.cast::<SourceFileNode>().is_some() {
+                    Some(ItemContainer::TopLevel)
+                } else if parent.cast::<ImplementsFor>().is_some()
+                    || parent.cast::<ImplementsBlock>().is_some()
+                {
+                    Some(ItemContainer::Impl)
+                } else {
+                    None
+                }
+            })
+        } else if owner.cast::<Name>().is_some()
+            && parent.is_some_and(|parent| parent.cast::<Field>().is_some())
+        {
+            spec.index.ancestors(owner).find_map(|node| {
+                if node.cast::<ClassDef>().is_some() {
+                    Some(ItemContainer::Class)
+                } else if node.cast::<InterfaceDef>().is_some() {
+                    Some(ItemContainer::Interface)
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
         };
         if let Some(container) = container {
             return Position::Item { container };
@@ -430,21 +507,18 @@ fn qualifier_chain(
     dot: TextSize,
 ) -> Option<Vec<baml_base::Name>> {
     let token = syntax::find_token_at_offset(db, file, dot)?;
-    let last = token
-        .prev_token()
-        .filter(|prev| prev.kind() == SyntaxKind::WORD)?;
+    let last = token.prev().filter(syntax::TokenRef::is_ident)?;
     Some(syntax::dotted_chain_to(&last))
 }
 
 /// Whether this argument already carries its label, i.e. there is an `=`
 /// between the argument's start and the cursor.
-fn labelled_before(arg: &SyntaxNode, token: &SyntaxToken) -> bool {
-    arg.children_with_tokens()
-        .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
-        .any(|child| {
-            child.kind() == SyntaxKind::EQUALS
-                && child.text_range().end() <= token.text_range().start()
-        })
+fn labelled_before(spec: &Speculative, arg: baml_syntax::tree::Id<Arg>, token: TokenIdx) -> bool {
+    let tokens = spec.tree.tokens();
+    spec.tree
+        .get(arg)
+        .label
+        .is_some_and(|label| tokens.range(label.eq.idx).end() <= tokens.range(token).start())
 }
 
 /// Whether the cursor sits in text that is not code: a comment, or the
@@ -453,23 +527,31 @@ fn labelled_before(arg: &SyntaxNode, token: &SyntaxToken) -> bool {
 /// A backtick string is both — its `${…}` interpolations ARE code — so the
 /// walk stops at whichever comes first: an interpolation (code, keep going)
 /// or the string itself (prose, stop).
-fn in_prose(token: &SyntaxToken) -> bool {
-    if token.kind().is_comment() {
+fn in_prose(spec: &Speculative, token: TokenIdx) -> bool {
+    let kind = spec.tree.tokens().kind(token);
+    if matches!(
+        kind,
+        TokenKind::LineComment
+            | TokenKind::BlockComment
+            | TokenKind::UnclosedBlockComment
+            | TokenKind::DocComment
+            | TokenKind::DirectiveComment
+            | TokenKind::HeaderComment
+            | TokenKind::TemplateChunk
+    ) || StringToken::KINDS.contains(kind)
+    {
         return true;
     }
-    for node in token.parent_ancestors() {
-        match node.kind() {
-            SyntaxKind::BACKTICK_INTERPOLATION
-            | SyntaxKind::BACKTICK_FOR_OPEN
-            | SyntaxKind::BACKTICK_IF_OPEN
-            | SyntaxKind::BACKTICK_ELSE_IF => return false,
-            SyntaxKind::STRING_LITERAL
-            | SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
-            | SyntaxKind::RAW_STRING_LITERAL
-            | SyntaxKind::BYTE_STRING_LITERAL
-            | SyntaxKind::BACKTICK_STRING_LITERAL
-            | SyntaxKind::BACKTICK_TEXT => return true,
-            _ => {}
+    for node in spec.ancestors_of(token) {
+        if node.cast::<TemplateInterp>().is_some()
+            || node.cast::<TemplateForOpen>().is_some()
+            || node.cast::<TemplateIfOpen>().is_some()
+            || node.cast::<TemplateElif>().is_some()
+        {
+            return false;
+        }
+        if node.cast::<BacktickString>().is_some() {
+            return true;
         }
     }
     false
@@ -479,18 +561,12 @@ fn in_prose(token: &SyntaxToken) -> bool {
 /// `a?.b` reads a member of `a` exactly as `a.b` does. Trivia between the
 /// two is skipped: a dot on its own line is a member access being written
 /// across lines, and the receiver is still the value before it.
-fn preceding_dot(token: &SyntaxToken) -> Option<TextSize> {
-    let mut previous = token.prev_token()?;
-    while matches!(
-        previous.kind(),
-        SyntaxKind::WHITESPACE
-            | SyntaxKind::NEWLINE
-            | SyntaxKind::LINE_COMMENT
-            | SyntaxKind::BLOCK_COMMENT
-            | SyntaxKind::HEADER_COMMENT
-    ) {
-        previous = previous.prev_token()?;
-    }
-    matches!(previous.kind(), SyntaxKind::DOT | SyntaxKind::QUESTION_DOT)
-        .then(|| previous.text_range().start())
+fn preceding_dot(spec: &Speculative, token: TokenIdx) -> Option<TextSize> {
+    let tokens = spec.tree.tokens();
+    let previous = tokens.prev_significant(token)?;
+    matches!(
+        tokens.kind(previous),
+        TokenKind::Dot | TokenKind::QuestionDot
+    )
+    .then(|| tokens.range(previous).start())
 }

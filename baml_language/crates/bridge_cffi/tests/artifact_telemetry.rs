@@ -148,15 +148,14 @@ async fn run_generated_main(recording_level_envvar: Option<String>) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn bridge_embedded_ingestion_respects_binding_and_build_boundaries() {
+async fn bridge_embedded_ingestion_respects_bindings() {
     use btel_settings::artifact::{
-        ArtifactTelemetry, DestinationOverrides, EmbeddedIngestion, IngestionDestination,
-        PublicCredential, build_digest,
+        ArtifactTelemetry, DestinationOverrides, EmbeddedCredential, EmbeddedIngestion,
     };
     const SCENARIO: &str = "BAML_TEST_BRIDGE_EMBEDDED";
     let Some(scenario) = baml_env::raw_var(SCENARIO) else {
         use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
-        for scenario in ["fixed", "custom", "off", "mismatch"] {
+        for scenario in ["fixed", "custom", "off"] {
             let server = MockServer::start().await;
             Mock::given(method("POST"))
                 .respond_with(ResponseTemplate::new(401))
@@ -165,7 +164,7 @@ async fn bridge_embedded_ingestion_respects_binding_and_build_boundaries() {
             let output = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
                     "--exact",
-                    "bridge_embedded_ingestion_respects_binding_and_build_boundaries",
+                    "bridge_embedded_ingestion_respects_bindings",
                     "--nocapture",
                 ])
                 .env(SCENARIO, scenario)
@@ -187,7 +186,7 @@ async fn bridge_embedded_ingestion_respects_binding_and_build_boundaries() {
                 String::from_utf8_lossy(&output.stderr)
             );
             let requests = server.received_requests().await.unwrap();
-            if matches!(scenario, "off" | "mismatch") {
+            if scenario == "off" {
                 assert_eq!(requests.len(), 0);
                 continue;
             }
@@ -197,13 +196,10 @@ async fn bridge_embedded_ingestion_respects_binding_and_build_boundaries() {
                 if scenario == "fixed" {
                     assert_eq!(
                         request.headers["authorization"],
-                        format!("Bearer bdry_public_{}", "a".repeat(64))
+                        "Bearer bdry_secret_embedded"
                     );
-                    assert_eq!(body["buildId"], "build-bridge");
-                    assert_eq!(
-                        body["target"],
-                        serde_json::json!({"orgId":"o","projectId":"p","environmentId":"e"})
-                    );
+                    assert_eq!(body.get("buildId"), None);
+                    assert_eq!(body["target"], serde_json::json!({}));
                 } else {
                     assert_eq!(
                         request.headers["authorization"],
@@ -240,22 +236,9 @@ async fn bridge_embedded_ingestion_respects_binding_and_build_boundaries() {
         },
         ..Default::default()
     };
-    let digest = build_digest(&bytecode, &policy).unwrap();
     policy.embedded = Some(Box::new(EmbeddedIngestion {
-        token: PublicCredential::new(format!("bdry_public_{}", "a".repeat(64))),
-        token_id: "token-bridge".into(),
-        build_id: "build-bridge".into(),
-        product_id: "product-bridge".into(),
-        destination: IngestionDestination {
-            org_id: "o".into(),
-            project_id: "p".into(),
-            environment_id: "e".into(),
-        },
-        bytecode_digest: digest,
+        api_key: EmbeddedCredential::new("bdry_secret_embedded".into()),
     }));
-    if scenario == "mismatch" {
-        policy.embedded.as_mut().unwrap().bytecode_digest.value = "f".repeat(64);
-    }
     let metadata = toml::Table::from_iter([
         ("metadata_version".into(), 1.into()),
         (
@@ -274,22 +257,6 @@ async fn bridge_embedded_ingestion_respects_binding_and_build_boundaries() {
     .unwrap();
     let blob = baml_artifact::encode_embedded(&bytecode);
     let runtime = bridge_cffi::initialize_runtime_from_blob(blob.as_bytes(), Some(&manifest));
-    if scenario == "mismatch" {
-        let Err(error) = runtime else {
-            panic!("mismatched build must fail before auth")
-        };
-        assert_eq!(
-            error.to_string(),
-            format!(
-                r#"BAML startup failed: generated SDK bytecode could not be loaded.
-
-`baml_sdk` generated using BAML toolchain {}, could not be loaded by baml-bridge-test {}: Embedded telemetry does not match this artifact. Rebuild with `baml pack --embed-telemetry` or `baml generate --embed-telemetry`."#,
-                baml_version::CANONICAL_VERSION,
-                baml_version::CANONICAL_VERSION
-            )
-        );
-        return;
-    }
     let runtime = runtime.unwrap();
     let args = CallFunctionArgs {
         call_id: bridge_cffi::new_function_call_id(),

@@ -15,7 +15,7 @@
 9:28-29      ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 9:30-32      "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 9:33-39      "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
-9:40-46      "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+9:40-46      "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 9:47-53      "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 9:54-55      "|"                source.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 9:56-62      "Errors"           source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml

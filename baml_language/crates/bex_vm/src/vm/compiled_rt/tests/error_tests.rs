@@ -378,7 +378,10 @@ fn compiled_raise_kinds_follow_source_opcodes_instead_of_error_values() {
                     matches!(instruction, Instruction::Throw)
                 } else {
                     // Earlier calls construct the map; the last one indexes it.
-                    matches!(instruction, Instruction::Call { .. })
+                    matches!(
+                        instruction,
+                        Instruction::Call { .. } | Instruction::CallLocal { .. }
+                    )
                 }
             })
             .unwrap();

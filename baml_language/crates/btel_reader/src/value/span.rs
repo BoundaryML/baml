@@ -10,7 +10,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use btel_snapshot::{
     CasId, ChildIndex, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, MediaPayload,
-    NodeId, TypeDescription, TypeIdentity,
+    NodeId, Redaction, TypeDescription, TypeIdentity,
 };
 use num_bigint::BigInt;
 
@@ -51,6 +51,8 @@ pub enum Found {
     },
     /// An object with content: never a cell or a truncation marker.
     Object(NodeId),
+    /// A value the producer withheld, and why.
+    Redacted(Redaction),
 }
 
 impl From<&Found> for DecodedValue {
@@ -73,6 +75,7 @@ impl From<&Found> for DecodedValue {
                 name: name.clone(),
             },
             Found::Object(id) => Self::Object(*id),
+            Found::Redacted(reason) => Self::Redacted(reason.clone()),
         }
     }
 }
@@ -121,7 +124,8 @@ fn child_content(child: &DecodedSnapshot, text_len: u64) -> Result<&Arc<str>, Un
         | DecodedValue::Enum { .. }
         | DecodedValue::Truncated(_)
         | DecodedValue::External(_)
-        | DecodedValue::ExternalNode { .. } => Err(BROKEN_REFERENCE),
+        | DecodedValue::ExternalNode { .. }
+        | DecodedValue::Redacted(_) => Err(BROKEN_REFERENCE),
     }
 }
 
@@ -236,6 +240,7 @@ pub(super) fn reach(
             DecodedValue::String(text) => return found(blob, Found::String(text)),
             DecodedValue::Bigint(n) => return found(blob, Found::Bigint(n)),
             DecodedValue::Type(ty) => return found(blob, Found::Type(ty)),
+            DecodedValue::Redacted(reason) => return found(blob, Found::Redacted(reason)),
             DecodedValue::Enum {
                 declaration,
                 variant,
@@ -402,7 +407,8 @@ impl Span {
             | DecodedValue::Float(_)
             | DecodedValue::String(_)
             | DecodedValue::Bigint(_)
-            | DecodedValue::Truncated(_) => return,
+            | DecodedValue::Truncated(_)
+            | DecodedValue::Redacted(_) => return,
         };
         let count = self.references.entry((blob.id, id)).or_insert(0);
         *count += 1;

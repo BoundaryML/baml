@@ -19,41 +19,41 @@ from baml_sdk.methods_on_classes import Greeter
 
 def test_methods_on_classes_method_bindings_exist():
     # Static bindings hang off the class; instance bindings carry `self`.
+    assert callable(Greeter.create_sync)
     assert callable(Greeter.create)
-    assert callable(Greeter.create_async)
+    assert callable(Greeter.who_sync)
     assert callable(Greeter.who)
-    assert callable(Greeter.who_async)
+    assert callable(Greeter.greet_sync)
     assert callable(Greeter.greet)
-    assert callable(Greeter.greet_async)
 
 
 def test_methods_on_classes_static_create_round_trips():
-    g = Greeter.create("ada")
+    g = Greeter.create_sync("ada")
     assert isinstance(g, Greeter)
     assert g.name == "ada"
 
 
 async def test_methods_on_classes_static_create_async_round_trips():
-    g = await Greeter.create_async("grace")
+    g = await Greeter.create("grace")
     assert isinstance(g, Greeter)
     assert g.name == "grace"
 
 
 def test_methods_on_classes_instance_who_round_trips():
-    g = Greeter.create("hopper")
-    assert g.who() == "hopper"
+    g = Greeter.create_sync("hopper")
+    assert g.who_sync() == "hopper"
 
 
 async def test_methods_on_classes_instance_who_async_round_trips():
-    g = await Greeter.create_async("hopper")
-    assert await g.who_async() == "hopper"
+    g = await Greeter.create("hopper")
+    assert await g.who() == "hopper"
 
 
 def test_methods_on_classes_instance_greet_with_arg_round_trips():
-    g = Greeter.create("lovelace")
-    assert g.greet("hi") == "hi"
+    g = Greeter.create_sync("lovelace")
+    assert g.greet_sync("hi") == "hi"
 
 
 async def test_methods_on_classes_instance_greet_async_with_arg_round_trips():
-    g = await Greeter.create_async("lovelace")
-    assert await g.greet_async("hi") == "hi"
+    g = await Greeter.create("lovelace")
+    assert await g.greet("hi") == "hi"

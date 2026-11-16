@@ -2987,11 +2987,15 @@ mod opaque_class_tests {
                 name: BaseName::new("_inner"),
                 docstring: Some("The runtime's own state.".to_string()),
                 ty: Ty::Unknown,
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
             }],
             crossing,
             static_methods: vec![],
             instance_methods: vec![function("name", vec![], Ty::String)],
             origin: origin(),
+            json_omit_nulls: false,
         };
         let echo = Name::new(BaseName::new("user"), vec![], BaseName::new("echo"));
         let echo_fn = function(

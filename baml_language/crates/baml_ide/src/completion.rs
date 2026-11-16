@@ -1299,6 +1299,10 @@ function f() -> int throws <[CURSOR]
             "skip",
             "stream.done",
             "stream.must_exist",
+            "json.rename",
+            "json.flatten",
+            "json.fallback",
+            "trace.redact",
         ] {
             assert!(labels.contains(&name), "missing `{name}`: {labels:?}");
         }
@@ -1317,11 +1321,17 @@ function f() -> int throws <[CURSOR]
         let cases: [(&str, &[&str]); 6] = [
             (
                 "enum E {\n    A @<[CURSOR]\n}\n",
-                &["alias", "description", "skip"],
+                &["alias", "description", "json.rename", "skip"],
             ),
             (
                 "class C {\n    x: int\n    @@<[CURSOR]\n}\n",
-                &["alias", "description", "stream.done"],
+                &[
+                    "alias",
+                    "description",
+                    "json.omit_nulls",
+                    "stream.done",
+                    "trace.redact",
+                ],
             ),
             (
                 "enum E {\n    A\n    @@<[CURSOR]\n}\n",

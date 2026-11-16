@@ -139,6 +139,48 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         repeatable: false,
         positions: &[AttributePosition::ClassField],
     },
+    // The JSON key of a field or variant, in `baml.json` and generated SDK
+    // serialization. `@alias` stays the name a model is shown.
+    SchemaAttributeSpec {
+        name: "json.rename",
+        arguments: SchemaAttributeArguments::String { placeholder: "key" },
+        repeatable: false,
+        positions: DATA_MEMBERS,
+    },
+    // A `map<string, json>` field that holds every key no other field took,
+    // and writes them next to the other fields.
+    SchemaAttributeSpec {
+        name: "json.flatten",
+        arguments: SchemaAttributeArguments::None,
+        repeatable: false,
+        positions: &[AttributePosition::ClassField],
+    },
+    // A `map<string, json>` field that makes its class the member of a union
+    // that takes any object no other member's literals match. It holds the
+    // whole object, and is all the class writes.
+    SchemaAttributeSpec {
+        name: "json.fallback",
+        arguments: SchemaAttributeArguments::None,
+        repeatable: false,
+        positions: &[AttributePosition::ClassField],
+    },
+    // The class's optional fields holding `null` are left out when it is
+    // written. A `json` field keeps its `null`, which is a value there.
+    SchemaAttributeSpec {
+        name: "json.omit_nulls",
+        arguments: SchemaAttributeArguments::None,
+        repeatable: false,
+        positions: &[AttributePosition::Class],
+    },
+    // Telemetry records a redaction marker in place of the value: a field's
+    // `@trace.redact` withholds that field, a class's `@@trace.redact` every
+    // instance of the class whole.
+    SchemaAttributeSpec {
+        name: "trace.redact",
+        arguments: SchemaAttributeArguments::None,
+        repeatable: false,
+        positions: &[AttributePosition::ClassField, AttributePosition::Class],
+    },
 ];
 
 pub fn schema_attribute_spec(name: &str) -> Option<&'static SchemaAttributeSpec> {
@@ -231,16 +273,26 @@ mod tests {
                 "alias",
                 "skip",
                 "stream.done",
-                "stream.must_exist"
+                "stream.must_exist",
+                "json.rename",
+                "json.flatten",
+                "json.fallback",
+                "trace.redact"
             ]
         );
         assert_eq!(
             names_at(AttributePosition::EnumVariant),
-            ["description", "alias", "skip"]
+            ["description", "alias", "skip", "json.rename"]
         );
         assert_eq!(
             names_at(AttributePosition::Class),
-            ["description", "alias", "stream.done"]
+            [
+                "description",
+                "alias",
+                "stream.done",
+                "json.omit_nulls",
+                "trace.redact"
+            ]
         );
         assert_eq!(names_at(AttributePosition::Enum), ["description", "alias"]);
         assert!(names_at(AttributePosition::Interface).is_empty());

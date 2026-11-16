@@ -1,0 +1,8 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    // set up cleanup
+    defer { cleanup() }
+    42
+}

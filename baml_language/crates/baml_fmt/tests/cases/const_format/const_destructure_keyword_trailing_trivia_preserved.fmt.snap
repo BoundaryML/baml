@@ -1,0 +1,11 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+class Foo {
+    a: int,
+}
+
+function f(foo: Foo) -> int {
+    const /*keep*/ Foo { a } = foo;
+    a
+}

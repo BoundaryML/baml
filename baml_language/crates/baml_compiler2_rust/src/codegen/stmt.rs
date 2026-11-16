@@ -364,6 +364,7 @@ impl<'db> Generator<'_, 'db> {
         destination: &Place,
     ) -> Gen<()> {
         if let Some((iter, array)) = array_iter_walk(
+            self.db,
             self.body,
             self.analysis.arity,
             terminator,
@@ -371,7 +372,8 @@ impl<'db> Generator<'_, 'db> {
         ) {
             let array = coerce(&format!("l{array}"), self.repr(Local(array)), Repr::Value);
             self.emit_statement(&format!("l{iter} = {array}; i{iter} = 0;"));
-        } else if let Some(iter) = array_next_call(terminator, &self.analysis.array_iters) {
+        } else if let Some(iter) = array_next_call(self.db, terminator, &self.analysis.array_iters)
+        {
             // Re-read the length each step because the array can change during iteration.
             let done = baml_compiler2_hir_ty::layout::lang_class(
                 self.db,
@@ -383,10 +385,18 @@ impl<'db> Generator<'_, 'db> {
             let Some((done, _)) = done else {
                 return unsupported("`baml.iter.Done` not found in the program");
             };
-            let step = format!(
-                "if i{iter} < bex_vm::compiled_rt::expect_int(vm.container_len(l{iter})?)? {{ \
-                 let v = vm.load_array_element(l{iter}, Value::int(i{iter}))?; i{iter} += 1; v }} \
-                 else {{ vm.new_instance(vm.record_object(fr, ObjectIndex::from_raw({done})), Vec::new()) }}"
+            // The walk reads the iterator's array, its contents.
+            let walk = |local: &str| {
+                format!(
+                    "if i{iter} < bex_vm::compiled_rt::expect_int(vm.container_len{local}(l{iter})?)? {{ \
+                     let v = vm.load_array_element{local}(l{iter}, Value::int(i{iter}))?; i{iter} += 1; v }} \
+                     else {{ vm.new_instance(vm.record_object(fr, ObjectIndex::from_raw({done})), Vec::new()) }}"
+                )
+            };
+            let step = self.by_locality(
+                self.analysis.escape.contents_needs(Local(iter)),
+                &walk("_local"),
+                &walk(""),
             );
             let code = self.store(id, destination, &Expr::new(step, Repr::Value))?;
             self.emit_statement(&code);

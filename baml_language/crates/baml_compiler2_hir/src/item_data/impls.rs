@@ -5,35 +5,21 @@ use crate::{
         AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, GenericParamData,
         InterfaceFieldLinkData, InterfaceFieldLinkSourceMap, lower_generic_params,
     },
-    loc::{ClassLoc, FunctionLoc, ImplLoc},
+    loc::{FunctionLoc, ImplLoc},
     type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
 };
 
-/// What an `implements` block applies to.
-///
-/// Unifying the owner with the for-target makes "in-body with an explicit
-/// for-target" and "out-of-body without one" both unrepresentable.
-#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
-pub enum ImplSubjectData<'db> {
-    /// `implements I { … }` in a class body. The for-type is the class itself.
-    /// `out_of_body` records the syntactic origin for diagnostics only — it must
-    /// NOT influence resolution, dispatch, or coherence.
-    InClass {
-        class: ClassLoc<'db>,
-        out_of_body: bool,
-    },
-    /// `implement<…> I for <for_target> { … }` — an explicit for-type plus the
-    /// block's own generic parameters.
-    Free {
-        for_target: TypeRefId,
-        generics: Vec<GenericParamData>,
-    },
-}
-
-/// Span-free semantic data for one `implements` block (either kind).
+/// Span-free semantic data for one `implements` block, in either spelling:
+/// an in-body block arrives with the class's generics and the class as its
+/// for-target, so there is one shape. `origin` records how it was written,
+/// for the rules that read provenance — an interface with fields is
+/// implemented in-body — and must NOT influence resolution, dispatch, or
+/// coherence.
 #[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct ImplBlockData<'db> {
-    pub subject: ImplSubjectData<'db>,
+    pub for_target: TypeRefId,
+    pub generics: Vec<GenericParamData>,
+    pub origin: baml_compiler2_ast::ImplOrigin,
     /// Every type reference in this block's header — the for-target, its generic
     /// bounds, the interface target, and any associated-type bindings.
     pub type_refs: TypeRefStore,
@@ -65,39 +51,25 @@ pub fn impl_block_data<'db>(db: &'db dyn crate::Db, block: ImplLoc<'db>) -> Impl
     lower(db, block).0
 }
 
-/// The enclosing class of an in-body `implements` block — the class whose
-/// declared fields satisfy the interface's field obligations (E0126 keeps
-/// out-of-body impls field-less) and whose generics form the block's frame.
-/// `None` for out-of-body blocks. Downstream consumers ask this SEMANTIC
-/// question instead of matching the subject: the in-body-vs-free split is
-/// HIR's business.
+/// The class an `implements` block is written for, when it is for a class of
+/// its own file: the class whose declared fields satisfy the interface's
+/// field obligations (E0126 keeps out-of-body impls field-less) and whose
+/// generics form the block's frame. `None` for a free block.
 pub fn impl_enclosing_class<'db>(
     db: &'db dyn crate::Db,
     block: ImplLoc<'db>,
 ) -> Option<crate::loc::ClassLoc<'db>> {
-    match impl_block_data(db, block).subject {
-        ImplSubjectData::InClass { class, .. } => Some(class),
-        ImplSubjectData::Free { .. } => None,
-    }
+    super::enumeration::impl_class(db, block)
 }
 
 /// The declared generic parameters scoping an impl block's methods, with the
-/// `TypeRefStore` their bound refs live in: the block's own generics for an
-/// out-of-body impl, the enclosing class's for an in-body one. The
-/// signature-metadata counterpart of `impl_enclosing_class` — downstream
-/// consumers stay subject-blind.
+/// `TypeRefStore` their bound refs live in.
 pub fn impl_declared_generics<'db>(
     db: &'db dyn crate::Db,
     block: ImplLoc<'db>,
 ) -> (&'db [GenericParamData], &'db crate::type_ref::TypeRefStore) {
     let data = impl_block_data(db, block);
-    match &data.subject {
-        ImplSubjectData::InClass { class, .. } => {
-            let class = super::class_data(db, *class);
-            (&class.generic_params, &class.type_refs)
-        }
-        ImplSubjectData::Free { generics, .. } => (generics, &data.type_refs),
-    }
+    (&data.generics, &data.type_refs)
 }
 
 /// Spans for one `implements` block. Kept separate from [`impl_block_data`] so
@@ -117,28 +89,12 @@ fn lower<'db>(
     db: &'db dyn crate::Db,
     block: ImplLoc<'db>,
 ) -> (ImplBlockData<'db>, ImplBlockSourceMap) {
-    use crate::item_tree::ImplSubject;
-
     let file = block.file(db);
     let item_tree = crate::file_item_tree(db, file);
     let data = &item_tree.impls[&block.id(db)];
-
     let mut type_refs = TypeRefBuilder::new();
-
-    let subject = match &data.subject {
-        ImplSubject::InClass { class, out_of_body } => ImplSubjectData::InClass {
-            class: ClassLoc::new(db, file, *class),
-            out_of_body: *out_of_body,
-        },
-        ImplSubject::Free {
-            for_target,
-            generics,
-        } => ImplSubjectData::Free {
-            for_target: type_refs.lower(for_target),
-            generics: lower_generic_params(generics, &mut type_refs),
-        },
-    };
-
+    let for_target = type_refs.lower(&data.for_target);
+    let generics = lower_generic_params(&data.generics, &mut type_refs);
     let interface_target = type_refs.lower(&data.interface_target);
 
     let associated_type_bindings = data
@@ -154,7 +110,9 @@ fn lower<'db>(
 
     (
         ImplBlockData {
-            subject,
+            for_target,
+            generics,
+            origin: data.origin,
             type_refs: store,
             interface_target,
             field_links: data

@@ -41,18 +41,18 @@ fn _assert_fast_cancellation(start: Instant) {
 #[test]
 fn test_cancellation_sync_call_returns_none() {
     // `SleepMs` returns `null`: the `Result<(), _>` unwrap is the `is None`.
-    throws_test::SleepMs(1).unwrap();
+    throws_test::SleepMs_sync(1).unwrap();
 }
 
 #[tokio::test]
 async fn test_cancellation_async_call_returns_none() {
-    throws_test::SleepMs_async(1).await.unwrap();
+    throws_test::SleepMs(1).await.unwrap();
 }
 
 #[test]
 fn test_cancellation_sync_cancel_via_call_context() {
     let start = Instant::now();
-    let ctx = CancelToken::new().unwrap();
+    let ctx = CancelToken::new_sync().unwrap();
 
     // python arms a `threading.Timer` and cancels it in `finally`; a scoped
     // thread is joined instead (aborting a context whose call has already
@@ -60,10 +60,10 @@ fn test_cancellation_sync_cancel_via_call_context() {
     std::thread::scope(|scope| {
         let timer = scope.spawn(|| {
             std::thread::sleep(Duration::from_millis(50));
-            ctx.cancel().unwrap();
+            ctx.cancel_sync().unwrap();
         });
 
-        let result = throws_test::SleepMs_with_options(60000, &ctx);
+        let result = throws_test::SleepMs_sync_with_options(60000, &ctx);
         _assert_cancelled_panic(result.unwrap_err());
         timer.join().unwrap();
     });
@@ -74,18 +74,15 @@ fn test_cancellation_sync_cancel_via_call_context() {
 #[tokio::test]
 async fn test_cancellation_async_cancel_via_call_context() {
     let start = Instant::now();
-    let ctx = CancelToken::new_async().await.unwrap();
+    let ctx = CancelToken::new().await.unwrap();
 
     // python cancels a spawned task and catches `asyncio.CancelledError`;
     // here the call and the aborter run under `join!` and the aborted call
     // itself resolves to the cancellation error.
-    let (result, ()) = tokio::join!(
-        throws_test::SleepMs_async_with_options(60000, &ctx),
-        async {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            ctx.cancel_async().await.unwrap();
-        }
-    );
+    let (result, ()) = tokio::join!(throws_test::SleepMs_with_options(60000, &ctx), async {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        ctx.cancel().await.unwrap();
+    });
 
     _assert_cancelled_reason(result.unwrap_err());
     _assert_fast_cancellation(start);
@@ -94,7 +91,7 @@ async fn test_cancellation_async_cancel_via_call_context() {
 #[tokio::test]
 async fn test_cancellation_async_cancel_via_task_cancel() {
     let start = Instant::now();
-    let task = tokio::spawn(throws_test::SleepMs_async(60000));
+    let task = tokio::spawn(throws_test::SleepMs(60000));
 
     tokio::time::sleep(Duration::from_millis(50)).await;
     task.abort();
@@ -123,7 +120,7 @@ async fn test_cancellation_async_cancel_via_task_group_sibling() {
     // `task.cancelled()`.
     let result = tokio::try_join!(
         async {
-            throws_test::SleepMs_async(60000)
+            throws_test::SleepMs(60000)
                 .await
                 .map_err(|_| "sleep failed")
         },
@@ -140,8 +137,7 @@ async fn test_cancellation_async_cancel_via_asyncio_timeout() {
     // `asyncio.wait_for(..., timeout=0.05)` → `tokio::time::timeout`; the
     // elapsed error is the `TimeoutError`, and the timed-out call future is
     // dropped (cancelled).
-    let result =
-        tokio::time::timeout(Duration::from_millis(50), throws_test::SleepMs_async(60000)).await;
+    let result = tokio::time::timeout(Duration::from_millis(50), throws_test::SleepMs(60000)).await;
     assert!(result.is_err());
 
     _assert_fast_cancellation(start);

@@ -86,11 +86,4 @@ def candidates_from_archives(artifacts, destination, platform, version):
     variants = [
         WrapperVariant(value) for value in platform["artifacts"]["wrapper"]["variants"]
     ]
-    return [
-        stager.stage(implementation, product, variant)
-        for implementation, product in [
-            ("rust", "baml-wrapper"),
-            ("baml", "baml-wrapper-baml"),
-        ]
-        for variant in variants
-    ]
+    return [stager.stage("baml", "baml-wrapper", variant) for variant in variants]

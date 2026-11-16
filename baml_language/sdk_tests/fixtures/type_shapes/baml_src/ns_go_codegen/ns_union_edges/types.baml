@@ -105,3 +105,48 @@ class DynamicUnionContainer {
 function round_trip_dynamic_union_container(value: DynamicUnionContainer) -> DynamicUnionContainer {
   value
 }
+
+// A union of four classes exceeds the typed-union arity, so the field projects
+// to `any` in Go. A value the SDK decodes from such a field (directly or
+// through a generic `T`) must encode back under the same declared type.
+class ClassArmAws {
+  role_arn string
+  platform "aws"
+}
+
+class ClassArmGcp {
+  project string
+  platform "gcp"
+}
+
+class ClassArmAzure {
+  tenant string
+  platform "azure"
+}
+
+class ClassArmOther {
+  note string
+  platform "other"
+}
+
+type ClassArms = ClassArmAws | ClassArmGcp | ClassArmAzure | ClassArmOther
+
+class ClassUnionHolder {
+  config ClassArms?
+}
+
+function make_class_union_holder() -> ClassUnionHolder {
+  ClassUnionHolder { config: ClassArmAws { role_arn: "arn", platform: "aws" } }
+}
+
+function round_trip_class_union_holder(value: ClassUnionHolder) -> ClassUnionHolder {
+  value
+}
+
+function class_union_holder_to_json<T>(value: T) -> string throws baml.json.SerializationError {
+  baml.json.stringify(value)
+}
+
+function class_union_holder_from_json<T>(source: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
+  baml.json.decode<T>(source)
+}

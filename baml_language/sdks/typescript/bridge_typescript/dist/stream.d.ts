@@ -21,16 +21,18 @@ export declare class BamlStream<T> {
     _toHandle(): BamlHandle;
     next(options?: {
         $baml?: InvocationOptions | null;
-    }): T;
-    nextAsync(options?: {
-        $baml?: InvocationOptions | null;
     }): Promise<T>;
+    /** Blocking twin of `next()`. Throws in Web runtimes (browser, workerd), which cannot block on a stream pull. */
+    nextSync(options?: {
+        $baml?: InvocationOptions | null;
+    }): T;
     final(options?: {
         $baml?: InvocationOptions | null;
-    }): T;
-    finalAsync(options?: {
-        $baml?: InvocationOptions | null;
     }): Promise<T>;
+    /** Blocking twin of `final()`. Throws in Web runtimes (browser, workerd), which cannot block on a stream pull. */
+    finalSync(options?: {
+        $baml?: InvocationOptions | null;
+    }): T;
     private _callSync;
     private _callAsync;
 }

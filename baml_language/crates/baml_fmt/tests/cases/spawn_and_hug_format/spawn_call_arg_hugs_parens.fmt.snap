@@ -1,0 +1,12 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(calls: int[]) -> int[] {
+    let futures: baml.future.Future<int, null>[] = [];
+    for (let c in calls) {
+        futures.push(spawn {
+            compute_something_with(c, "a long string to push this past the line width limit!")
+        });
+    }
+    await baml.future.all(futures)
+}

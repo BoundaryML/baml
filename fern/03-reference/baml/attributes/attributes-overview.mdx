@@ -11,6 +11,7 @@ Field-level attributes are applied directly to individual fields within a class 
 - **`@skip`**: Excludes a field from prompts or parsing.
 - **`@assert`**: Applies strict validation to a field.
 - **`@check`**: Adds non-exception-raising validation to a field.
+- **`@json.rename`, `@json.flatten`, `@json.fallback`**: Shape a field's JSON. See [JSON attributes](/ref/attributes/json).
 
 ```baml BAML
 class MyClass {
@@ -26,6 +27,7 @@ Block-level attributes are applied to an entire class or enum, affecting all fie
 ### Examples of Block-Level Attributes
 
 - **`@@dynamic`**: Allows dynamic modification of fields or values at runtime.
+- **`@@json.omit_nulls`**: Leaves a class's `null` fields out of its JSON. See [JSON attributes](/ref/attributes/json).
 
 ```baml BAML
 class MyClass {

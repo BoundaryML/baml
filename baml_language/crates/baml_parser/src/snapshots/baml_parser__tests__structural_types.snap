@@ -1,0 +1,95 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"type T = (a: int, b?: string) -> map<string, int[]?> | \\\"lit\\\" | -1 | (Base as Iface).Item;\\nclass C {\\n  f: (A | B)[]\\n}\")"
+---
+SourceFile@0..116
+  items: TypeAliasDef@0..89
+    kw: Type "type" @0..4
+    name: Name@5..6
+      token: Word "T" @5..6
+    eq: Equals "=" @7..8
+    ty: FunctionType@9..88
+      l: LParen "(" @9..10
+      params: FunctionTypeParam@10..16
+        name: Name@10..11
+          token: Word "a" @10..11
+        colon: Colon ":" @11..12
+        ty: PathType@13..16
+          head: Name@13..16
+            token: Word "int" @13..16
+      params: Comma "," @16..17
+      params: FunctionTypeParam@18..28
+        name: Name@18..19
+          token: Word "b" @18..19
+        question: Question "?" @19..20
+        colon: Colon ":" @20..21
+        ty: PathType@22..28
+          head: Name@22..28
+            token: Word "string" @22..28
+      r: RParen ")" @28..29
+      arrow: Arrow "->" @30..32
+      ret: UnionType@33..88
+        first: PathType@33..52
+          head: Name@33..36
+            token: Map "map" @33..36
+          args: TypeArgs@36..52
+            l: Less "<" @36..37
+            args: PathType@37..43
+              head: Name@37..43
+                token: Word "string" @37..43
+            args: Comma "," @43..44
+            args: OptionalType@45..51
+              inner: ArrayType@45..50
+                inner: PathType@45..48
+                  head: Name@45..48
+                    token: Word "int" @45..48
+                l: LBracket "[" @48..49
+                r: RBracket "]" @49..50
+              q: Question "?" @50..51
+            r: Greater ">" @51..52
+        pipe: Pipe "|" @53..54
+        ty: LiteralType@55..60
+          value: String "\"lit\"" @55..60
+        pipe: Pipe "|" @61..62
+        ty: LiteralType@63..65
+          minus: Minus "-" @63..64
+          value: Integer "1" @64..65
+        pipe: Pipe "|" @66..67
+        ty: QualifiedPath@68..88
+          l: LParen "(" @68..69
+          base: PathType@69..73
+            head: Name@69..73
+              token: Word "Base" @69..73
+          as_kw: As "as" @74..76
+          iface: PathType@77..82
+            head: Name@77..82
+              token: Word "Iface" @77..82
+          r: RParen ")" @82..83
+          dot: Dot "." @83..84
+          member: Name@84..88
+            token: Word "Item" @84..88
+    semi: Semicolon ";" @88..89
+  items: ClassDef@90..116
+    kw: Class "class" @90..95
+    name: Name@96..97
+      token: Word "C" @96..97
+    l: LBrace "{" @98..99
+    members: Field@102..114
+      name: Name@102..103
+        token: Word "f" @102..103
+      colon: Colon ":" @103..104
+      ty: ArrayType@105..114
+        inner: ParenType@105..112
+          l: LParen "(" @105..106
+          inner: UnionType@106..111
+            first: PathType@106..107
+              head: Name@106..107
+                token: Word "A" @106..107
+            pipe: Pipe "|" @108..109
+            ty: PathType@110..111
+              head: Name@110..111
+                token: Word "B" @110..111
+          r: RParen ")" @111..112
+        l: LBracket "[" @112..113
+        r: RBracket "]" @113..114
+    r: RBrace "}" @115..116

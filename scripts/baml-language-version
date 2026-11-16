@@ -46,7 +46,7 @@ RUBY_BRIDGE_VERSION = (
     / "bridge"
     / "version.rb"
 )
-WRAPPER_CARGO_TOML = ROOT / "baml_language" / "crates" / "baml" / "Cargo.toml"
+WRAPPER_RELEASE_TOML = ROOT / "baml_language" / "wrapper" / "release.toml"
 CSHARP_PROJECT = (
     ROOT
     / "baml_language"
@@ -1060,7 +1060,7 @@ def check_release() -> None:
     if forbidden:
         allowed = []
         for line in forbidden.splitlines():
-            if "tools_stow" in line or "crates/baml/src" in line:
+            if "tools_stow" in line:
                 continue
             if "scripts/baml-language-version:" in line:
                 continue
@@ -1068,11 +1068,9 @@ def check_release() -> None:
         if allowed:
             mismatches.append("deprecated version plumbing:\n" + "\n".join(allowed))
 
-    wrapper_toml = WRAPPER_CARGO_TOML.read_text(encoding="utf-8")
-    if "version.workspace" in wrapper_toml:
-        mismatches.append("wrapper crate must use a literal [package].version")
+    wrapper_toml = WRAPPER_RELEASE_TOML.read_text(encoding="utf-8")
     if not re.search(r'^version = "(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"$', wrapper_toml, flags=re.MULTILINE):
-        mismatches.append("wrapper crate version must be literal MAJOR.MINOR.PATCH SemVer")
+        mismatches.append("wrapper version must be literal MAJOR.MINOR.PATCH SemVer")
 
     if mismatches:
         fail("version check failed:\n" + "\n".join(f"- {item}" for item in mismatches))

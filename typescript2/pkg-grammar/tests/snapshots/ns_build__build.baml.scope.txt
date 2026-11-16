@@ -31,7 +31,7 @@
 22:14-15     ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 22:16-18     "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 22:19-25     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
-22:26-32     "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+22:26-32     "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 22:33-39     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 22:40-41     "|"                source.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 22:42-46     "baml"             source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml support.other.namespace.baml

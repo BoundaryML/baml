@@ -755,7 +755,7 @@
 158:14-15    "n"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
 158:15-16    ":"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml punctuation.separator.colon.baml
 158:17-20    "int"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml support.type.primitive.baml
-158:21-23    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+158:21-23    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 158:24-29    "items"            source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
 158:29-30    ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.end.baml
 158:31-32    "{"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml punctuation.definition.block.begin.baml
@@ -790,7 +790,7 @@
 166:17-20    "int"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml support.type.primitive.baml
 166:21-22    "|"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml keyword.operator.type.baml
 166:23-29    "string"           source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml support.type.primitive.baml
-166:30-32    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+166:30-32    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 166:33-38    "items"            source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
 166:38-39    ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.end.baml
 166:40-41    "{"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml punctuation.definition.block.begin.baml
@@ -832,7 +832,7 @@
 175:21-22    ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml punctuation.definition.type.baml
 175:23-25    "->"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml keyword.operator.arrow.baml
 175:26-29    "int"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml support.type.primitive.baml
-175:30-32    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+175:30-32    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 175:33-38    "items"            source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
 175:38-39    ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.end.baml
 175:40-41    "{"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml punctuation.definition.block.begin.baml
@@ -863,7 +863,7 @@
 187:31-32    ")"                source.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 187:33-35    "->"               source.baml meta.function.baml meta.return-type.baml keyword.operator.arrow.baml
 187:36-39    "int"              source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
-187:40-46    "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.throws.baml
+187:40-46    "throws"           source.baml meta.function.baml meta.return-type.baml keyword.operator.expression.throws.baml
 187:47-55    "AppError"         source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 187:56-57    "|"                source.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
 187:58-64    "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml

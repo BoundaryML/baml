@@ -319,7 +319,7 @@ function _oai_images_fetch_inline(location: string, fallback_mime: string) -> im
         _ => {
             throw ai.errors.NetworkFailure { status_code: null,
                 provider: "openai-images",
-                detail: `fetching the generated image at ${location} failed: ${e.to_string()}`,
+                detail: ai.wire.redact_url_secrets(`fetching the generated image at ${location} failed: ${e.to_string()}`),
                 raw_body: null,
             }
         },
@@ -327,7 +327,7 @@ function _oai_images_fetch_inline(location: string, fallback_mime: string) -> im
     if (!response.ok()) {
         throw ai.errors.NetworkFailure { status_code: null,
             provider: "openai-images",
-            detail: `fetching the generated image at ${location} returned HTTP ${response.status_code}`,
+            detail: ai.wire.redact_url_secrets(`fetching the generated image at ${location} returned HTTP ${response.status_code}`),
             raw_body: null,
         }
     }

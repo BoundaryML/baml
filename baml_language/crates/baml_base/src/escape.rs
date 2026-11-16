@@ -85,7 +85,7 @@ pub fn byte_string_literal_escape_issues(input: &str) -> Vec<EscapeIssue> {
 
 /// A sequence in a literal body that does not decode. The decoded value keeps
 /// it verbatim.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EscapeIssue {
     /// Byte offset of the start of the sequence (normally the backslash).
     pub start: usize,
@@ -104,7 +104,7 @@ pub struct EscapeIssue {
 }
 
 /// The kind of literal an [`EscapeIssue`] comes from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LiteralKind {
     /// `"..."`
     Quoted,
@@ -114,7 +114,7 @@ pub enum LiteralKind {
     Bytes,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EscapeIssueKind {
     /// `\` followed by a character that is not an escape (e.g. `\d`, `\v`).
     Unknown(char),
@@ -140,7 +140,7 @@ pub enum EscapeIssueKind {
 }
 
 /// Why a `\u` escape is malformed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnicodeEscapeError {
     /// `\u` followed by neither four hex digits nor `{`.
     Malformed,

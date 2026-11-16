@@ -1,794 +1,321 @@
-//! Reference: [`baml_db::baml_compiler_syntax::ast::Expr`] and [`baml_db::baml_compiler_hir::body`]
-
-use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
-use rowan::TextRange;
-
-use crate::{
-    ast::{
-        BinaryOp, FromCST, KnownKind, MatchPattern, Statement, StrongAstError, SyntaxNodeIter,
-        Token, Type, UnaryOp, tokens as t,
+use baml_syntax::{
+    nodes::{
+        AnyElse, AnyExpr, AnyMatchScrutinee, AnyObjectCtor, AnyObjectKey, AnyObjectMember, AnyStmt,
+        Arg, ArgList, ArrayElement, ArrayLiteral, BinaryExpr, Block, CallExpr, CatchArm,
+        CatchClause, CatchExpr, ElseBranch, EnvAccessExpr, FieldAccessExpr, FileTree,
+        GenericApplyExpr, GenericArgs, GenericParamBounds, GenericParamList, IfExpr, IfLetExpr,
+        IndexExpr, IsExpr, LambdaExpr, MapEntry, MapLiteral, MatchArm, MatchExpr, MatchGuard, Name,
+        ObjectField, ObjectLiteral, OptionalCallExpr, OptionalFieldAccessExpr, OptionalIndexExpr,
+        ParenExpr, PathExpr, SpawnExpr, SpreadElement, TypeAscription, UnaryExpr,
     },
-    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
-    trivia_classifier::{EmittableTrivia, TriviaInfo, TriviaSliceExt},
+    ops::{BinaryOp, BinaryOpTok},
+    token::{Token, punct, sets::MemberDot},
+    tree::{Id, SepItem, TokenRange},
+};
+use text_size::TextRange;
+
+use super::{
+    pattern::print_binding_keyword_with_trailing_trivia, present, statements::ClosingAssign,
+    tokens::BinaryOpExt as _, union_printable,
+};
+use crate::{
+    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape, Spanned},
+    trivia_classifier::{EmittableTrivia, TriviaSliceExt as _},
 };
 
-#[derive(Debug)]
-pub enum Expression {
-    Literal(Literal),
-    /// Includes things like `null`, `true`, `false`, `baml.fs`, etc.
-    Path(PathExpr),
-    /// A generic instantiation whose base is NOT a plain path — e.g.
-    /// `(<T>(x: T) -> T { x })<int>` or `(foo)<int>`. The path-based form
-    /// (`foo<int>`, `a.b.foo<int>`) is carried by [`PathExpr::generic_args`];
-    /// the parser wraps both in a `PATH_EXPR` node, so this is selected when
-    /// that node's first child is not a word/path.
-    GenericApply(GenericApplyExpr),
-    Paren(ParenExpr),
-    Binary(BinaryExpr),
-    Is(IsExpr),
-    Unary(UnaryExpr),
-    If(IfExpr),
-    IfLet(IfLetExpr),
-    Match(MatchExpr),
-    Catch(CatchExpr),
-    Call(CallExpr),
-    Index(IndexExpr),
-    FieldAccess(FieldAccessExpr),
-    OptionalFieldAccess(OptionalFieldAccessExpr),
-    OptionalIndex(OptionalIndexExpr),
-    OptionalCall(OptionalCallExpr),
-    EnvAccess(EnvAccessExpr),
-    Block(BlockExpr),
-    ArrayInitializer(ArrayInitializer),
-    MapInitializer(MapLiteral),
-    ObjectInitializer(ObjectInitializer),
-    HashString(t::HashString),
-    BacktickString(t::BacktickString),
-    ByteString(t::ByteString),
-    RawString(t::RawString),
-    Lambda(Box<LambdaExpr>),
-    /// A `spawn name? (with opts)? { … }` task-spawn expression (BEP-034).
-    Spawn(Box<SpawnExpr>),
-    /// A braceless `return …` in expression position (a `RETURN_EXPR`, e.g. a
-    /// `catch`/`match` arm value like `_ => return 0`). Printed verbatim, like
-    /// [`Expression::Unknown`] and backed by the same [`VerbatimSpan`], but kept
-    /// as a distinct variant so the arm printers can recognize it: when they wrap
-    /// a braceless arm body into a block they append the `;` that a block-position
-    /// `return` requires, so the output round-trips through `RETURN_STMT` (i.e. is
-    /// idempotent).
-    Return(VerbatimSpan),
-    /// A braceless `break` in expression position (a `BREAK_EXPR`, e.g. a
-    /// `catch`/`match` arm value like `0 => break`). Handled exactly like
-    /// [`Expression::Return`] and backed by the same [`VerbatimSpan`]: when an arm
-    /// printer wraps it into a block it appends the `;` that a block-position
-    /// `break` requires, so the output round-trips through `BREAK_STMT`.
-    Break(VerbatimSpan),
-    /// A braceless `continue` in expression position (a `CONTINUE_EXPR`). The
-    /// `continue` counterpart of [`Expression::Break`].
-    Continue(VerbatimSpan),
-    Unknown(VerbatimSpan),
-}
+/// A run of tokens inside a node: the part of a member before its comma.
+/// Trivia attaches to its first and last tokens like a node's.
+#[derive(Clone, Copy)]
+pub(crate) struct TokenSpan(TokenRange);
 
-/// A node the strong AST does not model and prints verbatim: an unmodeled
-/// expression (e.g. `defer { … }`, `throw e`, `await f`,
-/// `x.as<T>`) held as [`Expression::Unknown`], or a braceless jump held as
-/// [`Expression::Return`], [`Expression::Break`], or [`Expression::Continue`].
-///
-/// Rather than a single whole-node span, this carries the node's true first and
-/// last *token* ranges. The trivia classifier keys leading/trailing comments to
-/// individual token ranges, so [`Printable::leftmost_token`] /
-/// [`Printable::rightmost_token`] must return those exact token ranges for a
-/// comment to attach and emit. A whole-node span never matches a token key, so
-/// a trailing comment on the node was silently dropped — the `defer` statement
-/// comment-loss bug (B-629), and the same class of bug for a braceless `return`
-/// arm. A whole-node span can also begin inside leading trivia (the parser
-/// attaches a preceding comment to the node), which would re-print that comment
-/// verbatim at the wrong indent; the `content_range` used for printing excludes
-/// it.
-#[derive(Debug)]
-pub struct VerbatimSpan {
-    /// Range of the first non-trivia token — the leading-trivia anchor.
-    first_token: TextRange,
-    /// Range of the last non-trivia token — the trailing-trivia anchor.
-    last_token: TextRange,
-}
-
-impl VerbatimSpan {
-    /// Build from the verbatim-printed syntax element, capturing its first and
-    /// last non-trivia token ranges. Any leading/trailing trivia that the CST
-    /// attaches inside the node is skipped so the anchors line up with the
-    /// classifier's per-token comment keys.
-    fn from_element(elem: &SyntaxElement) -> Self {
-        if let Some(node) = elem.as_node() {
-            let mut tokens = node
-                .descendants_with_tokens()
-                .filter_map(rowan::NodeOrToken::into_token)
-                .filter(|t| !t.kind().is_trivia());
-            if let Some(first) = tokens.next() {
-                let first_token = first.text_range();
-                let last_token = tokens.last().map_or(first_token, |t| t.text_range());
-                return VerbatimSpan {
-                    first_token,
-                    last_token,
-                };
-            }
-        }
-        // A bare token, or a node with only trivia: the whole span is the token.
-        let whole = elem.text_range();
-        VerbatimSpan {
-            first_token: whole,
-            last_token: whole,
-        }
-    }
-
-    /// The verbatim source span to print: from the first token to the last,
-    /// excluding any leading/trailing trivia the CST folded into the node.
-    fn content_range(&self) -> TextRange {
-        TextRange::new(self.first_token.start(), self.last_token.end())
+impl Spanned for TokenSpan {
+    fn tokens(self, _tree: &FileTree) -> TokenRange {
+        self.0
     }
 }
 
-impl Expression {
-    #[must_use]
-    pub const fn statement_needs_semicolon(&self) -> bool {
+/// The tokens from `first`'s start to `last`'s end.
+fn span_between(first: impl Spanned, last: impl Spanned, tree: &FileTree) -> TokenSpan {
+    TokenSpan(TokenRange::new(
+        first.tokens(tree).start(),
+        last.tokens(tree).end(),
+    ))
+}
+
+// ── Expression helpers ───────────────────────────────────────────────────────
+
+pub(crate) trait ExprExt: Copy {
+    /// Whether the expression, as a statement with no `;` written, is given one.
+    fn statement_needs_semicolon(self, tree: &FileTree) -> bool;
+    /// The width of the expression printed on one line with its comments,
+    /// or `None` when it cannot be.
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+    fn peel_transparent_parens(self, printer: &Printer<'_>) -> AnyExpr;
+    fn binds_as_postfix_operand(self, tree: &FileTree) -> bool;
+    fn has_optional_chain_link(self, tree: &FileTree) -> bool;
+    fn effective_postfix_operand(self, printer: &Printer<'_>) -> AnyExpr;
+    fn effective_unary_operand(self, printer: &Printer<'_>) -> AnyExpr;
+    fn peel_to_needed_paren(self, printer: &Printer<'_>, unary: bool) -> AnyExpr;
+}
+
+/// A node not modelled by the printer: the width of its text on one line.
+fn verbatim_width(printer: &Printer<'_>, element: impl Spanned) -> Option<usize> {
+    let text = printer.text_of(element);
+    if text.contains('\n') {
+        None
+    } else {
+        Some(text.len())
+    }
+}
+
+impl ExprExt for AnyExpr {
+    fn statement_needs_semicolon(self, _tree: &FileTree) -> bool {
         !matches!(
             self,
-            Expression::If(_)
-                | Expression::IfLet(_)
-                | Expression::Match(_)
-                | Expression::Lambda(_)
-                | Expression::Spawn(_)
-                | Expression::Unknown(_)
+            AnyExpr::If(_)
+                | AnyExpr::IfLet(_)
+                | AnyExpr::Match(_)
+                | AnyExpr::Lambda(_)
+                | AnyExpr::Spawn(_)
+                // Printed as written; the formatter adds nothing to them.
+                | AnyExpr::Upcast(_)
+                | AnyExpr::Spec(_)
+                | AnyExpr::TaggedTemplate(_)
+                | AnyExpr::Await(_)
+                | AnyExpr::Throw(_)
+                | AnyExpr::QualifiedPath(_)
         )
     }
-}
 
-impl FromCST for Expression {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let expr = match elem.kind() {
-            SyntaxKind::STRING_LITERAL => t::QuotedString::from_cst(elem)
-                .map(Literal::String)
-                .map(Expression::Literal)?,
-            SyntaxKind::INTEGER_LITERAL => Expression::Literal(Literal::Integer(
-                t::IntegerLiteral::new_from_span(elem.text_range()),
-            )),
-            SyntaxKind::BIGINT_LITERAL => Expression::Literal(Literal::Bigint(
-                t::BigintLiteral::new_from_span(elem.text_range()),
-            )),
-            SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(
-                t::FloatLiteral::new_from_span(elem.text_range()),
-            )),
-            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
-                Literal::from_cst(elem).map(Expression::Literal)?
-            }
-            SyntaxKind::WORD | SyntaxKind::KW_CLIENT => {
-                PathExpr::from_cst(elem).map(Expression::Path)?
-            }
-            SyntaxKind::PATH_EXPR => {
-                // The parser wraps any postfix `<...>` in a PATH_EXPR. When the
-                // base is a plain path (word / nested PATH_EXPR) it is a
-                // `PathExpr`; otherwise (a parenthesized expr, lambda, etc.) it
-                // is a generic instantiation on a non-path base.
-                let node = StrongAstError::assert_is_node(elem.clone())?;
-                let base_is_path = SyntaxNodeIter::new(&node).next().is_some_and(|c| {
-                    is_path_segment_kind(c.kind()) || c.kind() == SyntaxKind::PATH_EXPR
-                });
-                if base_is_path {
-                    PathExpr::from_cst(elem).map(Expression::Path)?
-                } else {
-                    GenericApplyExpr::from_cst(elem).map(Expression::GenericApply)?
-                }
-            }
-            SyntaxKind::PAREN_EXPR => ParenExpr::from_cst(elem).map(Expression::Paren)?,
-            SyntaxKind::BINARY_EXPR => BinaryExpr::from_cst(elem).map(Expression::Binary)?,
-            SyntaxKind::IS_EXPR => IsExpr::from_cst(elem).map(Expression::Is)?,
-            SyntaxKind::UNARY_EXPR => UnaryExpr::from_cst(elem).map(Expression::Unary)?,
-            SyntaxKind::IF_EXPR => IfExpr::from_cst(elem).map(Expression::If)?,
-            SyntaxKind::IF_LET_EXPR => IfLetExpr::from_cst(elem).map(Expression::IfLet)?,
-            SyntaxKind::MATCH_EXPR => MatchExpr::from_cst(elem).map(Expression::Match)?,
-            SyntaxKind::CATCH_EXPR => CatchExpr::from_cst(elem).map(Expression::Catch)?,
-            SyntaxKind::CALL_EXPR => CallExpr::from_cst(elem).map(Expression::Call)?,
-            SyntaxKind::INDEX_EXPR => IndexExpr::from_cst(elem).map(Expression::Index)?,
-            SyntaxKind::FIELD_ACCESS_EXPR => {
-                FieldAccessExpr::from_cst(elem).map(Expression::FieldAccess)?
-            }
-            SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => {
-                OptionalFieldAccessExpr::from_cst(elem).map(Expression::OptionalFieldAccess)?
-            }
-            SyntaxKind::OPTIONAL_INDEX_EXPR => {
-                OptionalIndexExpr::from_cst(elem).map(Expression::OptionalIndex)?
-            }
-            SyntaxKind::OPTIONAL_CALL_EXPR => {
-                OptionalCallExpr::from_cst(elem).map(Expression::OptionalCall)?
-            }
-            SyntaxKind::ENV_ACCESS_EXPR => {
-                EnvAccessExpr::from_cst(elem).map(Expression::EnvAccess)?
-            }
-            SyntaxKind::BLOCK_EXPR => BlockExpr::from_cst(elem).map(Expression::Block)?,
-            SyntaxKind::ARRAY_LITERAL => {
-                ArrayInitializer::from_cst(elem).map(Expression::ArrayInitializer)?
-            }
-            SyntaxKind::MAP_LITERAL => {
-                MapLiteral::from_cst(elem).map(Expression::MapInitializer)?
-            }
-            SyntaxKind::OBJECT_LITERAL => {
-                ObjectInitializer::from_cst(elem).map(Expression::ObjectInitializer)?
-            }
-            SyntaxKind::DEPRECATED_HASH_STRING_LITERAL => {
-                t::HashString::from_cst(elem).map(Expression::HashString)?
-            }
-            SyntaxKind::BACKTICK_STRING_LITERAL => {
-                t::BacktickString::from_cst(elem).map(Expression::BacktickString)?
-            }
-            SyntaxKind::BYTE_STRING_LITERAL => {
-                t::ByteString::from_cst(elem).map(Expression::ByteString)?
-            }
-            SyntaxKind::RAW_STRING_LITERAL => {
-                t::RawString::from_cst(elem).map(Expression::RawString)?
-            }
-            SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
-            SyntaxKind::SPAWN_EXPR => Expression::Spawn(Box::new(SpawnExpr::from_cst(elem)?)),
-            SyntaxKind::RETURN_EXPR => Expression::Return(VerbatimSpan::from_element(&elem)),
-            SyntaxKind::BREAK_EXPR => Expression::Break(VerbatimSpan::from_element(&elem)),
-            SyntaxKind::CONTINUE_EXPR => Expression::Continue(VerbatimSpan::from_element(&elem)),
-            _ => Expression::Unknown(VerbatimSpan::from_element(&elem)),
-        };
-        Ok(expr)
-    }
-}
-
-impl Expression {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
         match self {
-            Expression::Literal(lit) => lit.single_line_width(input),
-            Expression::Path(path) => path.single_line_width(input),
-            Expression::GenericApply(ga) => ga.single_line_width(input),
-            Expression::Paren(paren) => paren.single_line_width(input),
-            Expression::Binary(binary) => binary.single_line_width(input),
-            Expression::Is(is) => is.single_line_width(input),
-            Expression::Unary(unary) => unary.single_line_width(input),
-            Expression::If(_) => None,
-            Expression::IfLet(_) => None,
-            Expression::Match(_) => None,
-            Expression::Catch(_) => None,
-            Expression::Call(call) => call.single_line_width(input),
-            Expression::Index(index) => index.single_line_width(input),
-            Expression::FieldAccess(fa) => fa.single_line_width(input),
-            Expression::OptionalFieldAccess(fa) => fa.single_line_width(input),
-            Expression::OptionalIndex(index) => index.single_line_width(input),
-            Expression::OptionalCall(call) => call.single_line_width(input),
-            Expression::EnvAccess(env) => env.single_line_width(input),
-            Expression::Block(_) => None,
-            Expression::ArrayInitializer(array) => array.single_line_width(input),
-            Expression::MapInitializer(map) => map.single_line_width(input),
-            Expression::ObjectInitializer(obj) => obj.single_line_width(input),
-            Expression::HashString(raw) => {
-                if input.input[raw.span()].contains('\n') {
-                    None
-                } else {
-                    Some(usize::from(raw.span().len()))
-                }
-            }
-            Expression::BacktickString(bt) => {
-                if input.input[bt.span()].contains('\n') {
-                    None
-                } else {
-                    Some(usize::from(bt.span().len()))
-                }
-            }
-            Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
-            Expression::RawString(raw) => {
-                if input.input[raw.span()].contains('\n') {
-                    None
-                } else {
-                    Some(usize::from(raw.span().len()))
-                }
-            }
-            Expression::Lambda(_) => None,
-            Expression::Spawn(spawn) => spawn.single_line_width(input),
-            Expression::Return(_) | Expression::Break(_) | Expression::Continue(_) => None,
-            Expression::Unknown(unknown) => {
-                // Unmodeled nodes (e.g. `await f`, `x.as<T>`,
-                // `throw e`) print their source verbatim (see `print`). When that
-                // text is a single line it occupies a known width and can sit
-                // inline like any other fitting expression. Reporting `None` here
-                // used to force every *enclosing* expression to wrap even when the
-                // whole thing fit the width budget (B-231).
-                let text = &input.input[unknown.content_range()];
-                if text.contains('\n') {
-                    None
-                } else {
-                    Some(text.trim_start().len())
-                }
-            }
+            AnyExpr::Literal(lit) => Some(usize::from(lit.rightmost_token(tree).len())),
+            AnyExpr::String(s) => verbatim_width(input, s),
+            AnyExpr::Backtick(s) => verbatim_width(input, s),
+            AnyExpr::Path(path) => path.single_line_width(input),
+            AnyExpr::GenericApply(ga) => ga.single_line_width(input),
+            AnyExpr::Paren(paren) => paren.single_line_width(input),
+            AnyExpr::Binary(binary) => binary.single_line_width(input),
+            AnyExpr::Is(is) => is.single_line_width(input),
+            AnyExpr::Unary(unary) => unary.single_line_width(input),
+            AnyExpr::If(_) | AnyExpr::IfLet(_) | AnyExpr::Match(_) | AnyExpr::Catch(_) => None,
+            AnyExpr::Call(call) => call.single_line_width(input),
+            AnyExpr::Index(index) => index.single_line_width(input),
+            AnyExpr::FieldAccess(fa) => fa.single_line_width(input),
+            AnyExpr::OptionalFieldAccess(fa) => fa.single_line_width(input),
+            AnyExpr::OptionalIndex(index) => index.single_line_width(input),
+            AnyExpr::OptionalCall(call) => call.single_line_width(input),
+            AnyExpr::EnvAccess(env) => env.single_line_width(input),
+            AnyExpr::Block(_) => None,
+            AnyExpr::Array(array) => array.single_line_width(input),
+            AnyExpr::Map(map) => map.single_line_width(input),
+            AnyExpr::Object(obj) => obj.single_line_width(input),
+            AnyExpr::Lambda(_) => None,
+            AnyExpr::Spawn(spawn) => spawn.single_line_width(input),
+            AnyExpr::Return(_) | AnyExpr::Break(_) | AnyExpr::Continue(_) => None,
+            AnyExpr::Upcast(id) => verbatim_width(input, id),
+            AnyExpr::Spec(id) => verbatim_width(input, id),
+            AnyExpr::TaggedTemplate(id) => verbatim_width(input, id),
+            AnyExpr::Await(id) => verbatim_width(input, id),
+            AnyExpr::Throw(id) => verbatim_width(input, id),
+            AnyExpr::QualifiedPath(id) => verbatim_width(input, id),
+            AnyExpr::Bogus(_) => unreachable!("the formatter prints only error-free trees"),
         }
     }
+
+    fn peel_transparent_parens(self, printer: &Printer<'_>) -> AnyExpr {
+        let mut expr = self;
+        while let AnyExpr::Paren(paren) = expr {
+            if !paren_is_transparent(paren, printer) {
+                break;
+            }
+            expr = present(printer.tree.get(paren).inner);
+        }
+        expr
+    }
+
+    fn binds_as_postfix_operand(self, tree: &FileTree) -> bool {
+        match self {
+            AnyExpr::Call(_) | AnyExpr::Index(_) | AnyExpr::FieldAccess(_) => {
+                !self.has_optional_chain_link(tree)
+            }
+            AnyExpr::Path(_)
+            | AnyExpr::EnvAccess(_)
+            | AnyExpr::Array(_)
+            | AnyExpr::String(_)
+            | AnyExpr::Backtick(_) => true,
+            _ => false,
+        }
+    }
+
+    fn has_optional_chain_link(self, tree: &FileTree) -> bool {
+        match self {
+            AnyExpr::OptionalFieldAccess(_)
+            | AnyExpr::OptionalIndex(_)
+            | AnyExpr::OptionalCall(_) => true,
+            AnyExpr::Call(call) => tree.get(call).callee.has_optional_chain_link(tree),
+            AnyExpr::Index(index) => tree.get(index).base.has_optional_chain_link(tree),
+            AnyExpr::FieldAccess(fa) => tree.get(fa).base.has_optional_chain_link(tree),
+            AnyExpr::Paren(paren) => present(tree.get(paren).inner).has_optional_chain_link(tree),
+            _ => false,
+        }
+    }
+
+    fn effective_postfix_operand(self, printer: &Printer<'_>) -> AnyExpr {
+        self.peel_to_needed_paren(printer, false)
+    }
+
+    fn effective_unary_operand(self, printer: &Printer<'_>) -> AnyExpr {
+        self.peel_to_needed_paren(printer, true)
+    }
+
+    fn peel_to_needed_paren(self, printer: &Printer<'_>, unary: bool) -> AnyExpr {
+        let tree = printer.tree;
+        let mut expr = self;
+        while let AnyExpr::Paren(paren) = expr {
+            if !paren_is_transparent(paren, printer) {
+                break;
+            }
+            let inner = present(tree.get(paren).inner);
+            let stands_alone = inner.binds_as_postfix_operand(tree)
+                || matches!(inner, AnyExpr::Paren(_))
+                || (unary && matches!(inner, AnyExpr::Literal(_)));
+            if !stands_alone {
+                break;
+            }
+            expr = inner;
+        }
+        expr
+    }
 }
 
-impl Printable for Expression {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for AnyExpr {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            Expression::Literal(lit) => lit.print(shape, printer),
-            chain @ (Expression::Path(_)
-            | Expression::Call(_)
-            | Expression::Index(_)
-            | Expression::FieldAccess(_)
-            | Expression::OptionalFieldAccess(_)
-            | Expression::OptionalIndex(_)
-            | Expression::OptionalCall(_)) => {
+            AnyExpr::Literal(lit) => printer.print(lit, shape),
+            AnyExpr::String(s) => printer.print(s, shape),
+            AnyExpr::Backtick(bt) => printer.print(bt, shape),
+            chain @ (AnyExpr::Path(_)
+            | AnyExpr::Call(_)
+            | AnyExpr::Index(_)
+            | AnyExpr::FieldAccess(_)
+            | AnyExpr::OptionalFieldAccess(_)
+            | AnyExpr::OptionalIndex(_)
+            | AnyExpr::OptionalCall(_)) => {
                 // These are all chains of postfix expressions
-                let chain = PrintChain::new(chain, printer.trivia);
+                let chain = PrintChain::new(chain, printer);
                 chain.print(shape, printer)
             }
-            Expression::GenericApply(ga) => ga.print(shape, printer),
-            Expression::Paren(paren) => paren.print(shape, printer),
-            Expression::Binary(binary) => binary.print(shape, printer),
-            Expression::Is(is) => is.print(shape, printer),
-            Expression::Unary(unary) => unary.print(shape, printer),
-            Expression::If(if_expr) => if_expr.print(shape, printer),
-            Expression::IfLet(if_let_expr) => if_let_expr.print(shape, printer),
-            Expression::Match(match_expr) => match_expr.print(shape, printer),
-            Expression::Catch(catch_expr) => catch_expr.print(shape, printer),
-            Expression::EnvAccess(env) => env.print(shape, printer),
-            Expression::Block(block) => block.print(shape, printer),
-            Expression::ArrayInitializer(array) => array.print(shape, printer),
-            Expression::MapInitializer(map) => map.print(shape, printer),
-            Expression::ObjectInitializer(obj) => obj.print(shape, printer),
-            Expression::HashString(raw) => raw.print(shape, printer),
-            Expression::BacktickString(bt) => bt.print(shape, printer),
-            Expression::ByteString(bs) => bs.print(shape, printer),
-            Expression::RawString(raw) => raw.print(shape, printer),
-            Expression::Lambda(lambda) => lambda.print(shape, printer),
-            Expression::Spawn(spawn) => spawn.print(shape, printer),
-            // Print the raw `return …` / `break` / `continue` text. The arm
-            // printers add the `;` when they wrap this into a block (see
-            // `CatchArm`/`MatchArm`). A braceless jump only appears as a whole
-            // arm value, never nested inside another expression, so it always
-            // reports multi-lined.
-            Expression::Return(jump) | Expression::Break(jump) | Expression::Continue(jump) => {
-                printer.print_input_range_trimmed_start(jump.content_range());
-                PrintInfo::default_multi_lined()
-            }
-            // Unmodeled nodes print their source verbatim. Report `multi_lined`
-            // honestly from whether that text spans multiple lines: a single-line
-            // unknown node (`await f`, `x.as<T>`, …) must not claim to be
-            // multi-line, or it force-wraps its parents even when everything fits
-            // on one line (B-231).
-            Expression::Unknown(unknown) => {
-                let range = unknown.content_range();
-                printer.print_input_range_trimmed_start(range);
-                PrintInfo {
-                    multi_lined: printer.input[range].contains('\n'),
-                }
-            }
-        }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        match self {
-            Expression::Literal(lit) => lit.leftmost_token(),
-            Expression::Path(path) => path.leftmost_token(),
-            Expression::GenericApply(ga) => ga.leftmost_token(),
-            Expression::Paren(paren) => paren.leftmost_token(),
-            Expression::Binary(binary) => binary.leftmost_token(),
-            Expression::Is(is) => is.leftmost_token(),
-            Expression::Unary(unary) => unary.leftmost_token(),
-            Expression::If(if_expr) => if_expr.leftmost_token(),
-            Expression::IfLet(if_let_expr) => if_let_expr.leftmost_token(),
-            Expression::Match(match_expr) => match_expr.leftmost_token(),
-            Expression::Catch(catch_expr) => catch_expr.leftmost_token(),
-            Expression::Call(call) => call.leftmost_token(),
-            Expression::Index(index) => index.leftmost_token(),
-            Expression::FieldAccess(fa) => fa.base.leftmost_token(),
-            Expression::OptionalFieldAccess(fa) => fa.base.leftmost_token(),
-            Expression::OptionalIndex(index) => index.base.leftmost_token(),
-            Expression::OptionalCall(call) => call.callee.leftmost_token(),
-            Expression::EnvAccess(env) => env.leftmost_token(),
-            Expression::Block(block) => block.leftmost_token(),
-            Expression::ArrayInitializer(array) => array.leftmost_token(),
-            Expression::MapInitializer(map) => map.leftmost_token(),
-            Expression::ObjectInitializer(obj) => obj.leftmost_token(),
-            Expression::HashString(raw) => raw.leftmost_token(),
-            Expression::BacktickString(bt) => bt.leftmost_token(),
-            Expression::ByteString(bs) => bs.leftmost_token(),
-            Expression::RawString(raw) => raw.leftmost_token(),
-            Expression::Lambda(lambda) => lambda.leftmost_token(),
-            Expression::Spawn(spawn) => spawn.leftmost_token(),
-            Expression::Return(span)
-            | Expression::Break(span)
-            | Expression::Continue(span)
-            | Expression::Unknown(span) => span.first_token,
-        }
-    }
-    fn rightmost_token(&self) -> TextRange {
-        match self {
-            Expression::Literal(lit) => lit.rightmost_token(),
-            Expression::Path(path) => path.rightmost_token(),
-            Expression::GenericApply(ga) => ga.rightmost_token(),
-            Expression::Paren(paren) => paren.rightmost_token(),
-            Expression::Binary(binary) => binary.rightmost_token(),
-            Expression::Is(is) => is.rightmost_token(),
-            Expression::Unary(unary) => unary.rightmost_token(),
-            Expression::If(if_expr) => if_expr.rightmost_token(),
-            Expression::IfLet(if_let_expr) => if_let_expr.rightmost_token(),
-            Expression::Match(match_expr) => match_expr.rightmost_token(),
-            Expression::Catch(catch_expr) => catch_expr.rightmost_token(),
-            Expression::Call(call) => call.rightmost_token(),
-            Expression::Index(index) => index.rightmost_token(),
-            Expression::FieldAccess(fa) => fa.field.span(),
-            Expression::OptionalFieldAccess(fa) => fa.field.span(),
-            Expression::OptionalIndex(index) => index.close_bracket.span(),
-            Expression::OptionalCall(call) => call.args.rightmost_token(),
-            Expression::EnvAccess(env) => env.rightmost_token(),
-            Expression::Block(block) => block.rightmost_token(),
-            Expression::ArrayInitializer(array) => array.rightmost_token(),
-            Expression::MapInitializer(map) => map.rightmost_token(),
-            Expression::ObjectInitializer(obj) => obj.rightmost_token(),
-            Expression::HashString(raw) => raw.rightmost_token(),
-            Expression::BacktickString(bt) => bt.rightmost_token(),
-            Expression::ByteString(bs) => bs.rightmost_token(),
-            Expression::RawString(raw) => raw.rightmost_token(),
-            Expression::Lambda(lambda) => lambda.rightmost_token(),
-            Expression::Spawn(spawn) => spawn.rightmost_token(),
-            Expression::Return(span)
-            | Expression::Break(span)
-            | Expression::Continue(span)
-            | Expression::Unknown(span) => span.last_token,
+            AnyExpr::GenericApply(ga) => printer.print(ga, shape),
+            AnyExpr::Paren(paren) => printer.print(paren, shape),
+            AnyExpr::Binary(binary) => printer.print(binary, shape),
+            AnyExpr::Is(is) => printer.print(is, shape),
+            AnyExpr::Unary(unary) => printer.print(unary, shape),
+            AnyExpr::If(if_expr) => printer.print(if_expr, shape),
+            AnyExpr::IfLet(if_let_expr) => printer.print(if_let_expr, shape),
+            AnyExpr::Match(match_expr) => printer.print(match_expr, shape),
+            AnyExpr::Catch(catch_expr) => printer.print(catch_expr, shape),
+            AnyExpr::EnvAccess(env) => printer.print(env, shape),
+            AnyExpr::Block(block) => printer.print(block, shape),
+            AnyExpr::Array(array) => printer.print(array, shape),
+            AnyExpr::Map(map) => printer.print(map, shape),
+            AnyExpr::Object(obj) => printer.print(obj, shape),
+            AnyExpr::Lambda(lambda) => printer.print(lambda, shape),
+            AnyExpr::Spawn(spawn) => printer.print(spawn, shape),
+            AnyExpr::Return(jump) => printer.print(jump, shape),
+            AnyExpr::Break(jump) => printer.print(jump, shape),
+            AnyExpr::Continue(jump) => printer.print(jump, shape),
+            // Not modelled by the printer yet: printed as written. The
+            // `multi_lined` verdict is honest about whether that text spans
+            // lines, so a single-line `await f` does not force-wrap its
+            // parents (B-231).
+            AnyExpr::Upcast(id) => printer.print_verbatim(id),
+            AnyExpr::Spec(id) => printer.print_verbatim(id),
+            AnyExpr::TaggedTemplate(id) => printer.print_verbatim(id),
+            AnyExpr::Await(id) => printer.print_verbatim(id),
+            AnyExpr::Throw(id) => printer.print_verbatim(id),
+            AnyExpr::QualifiedPath(id) => printer.print_verbatim(id),
+            AnyExpr::Bogus(_) => unreachable!("the formatter prints only error-free trees"),
         }
     }
 }
 
-#[derive(Debug)]
-pub enum Literal {
-    String(t::QuotedString),
-    Integer(t::IntegerLiteral),
-    Bigint(t::BigintLiteral),
-    Float(t::FloatLiteral),
-    /// `true` / `false` / `null`.
-    Keyword(t::KeywordLiteral),
+// ── Paths and generic application ────────────────────────────────────────────
+
+pub(crate) trait PathExprExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for Literal {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        match elem.kind() {
-            SyntaxKind::STRING_LITERAL => Ok(Literal::String(t::QuotedString::from_cst(elem)?)),
-            SyntaxKind::INTEGER_LITERAL => Ok(Literal::Integer(t::IntegerLiteral::from_cst(elem)?)),
-            SyntaxKind::BIGINT_LITERAL => Ok(Literal::Bigint(t::BigintLiteral::from_cst(elem)?)),
-            SyntaxKind::FLOAT_LITERAL => Ok(Literal::Float(t::FloatLiteral::from_cst(elem)?)),
-            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
-                Ok(Literal::Keyword(t::KeywordLiteral::from_cst(elem)?))
-            }
-            _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "a literal".into(),
-                found: elem.kind(),
-                at: elem.text_range(),
-            }),
-        }
-    }
-}
-
-impl Literal {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        match self {
-            Literal::String(s) => {
-                if input.input[s.span()].contains('\n') {
-                    None
-                } else {
-                    Some(usize::from(s.span().len()))
-                }
-            }
-            Literal::Integer(i) => Some(usize::from(i.span().len())),
-            Literal::Bigint(i) => Some(usize::from(i.span().len())),
-            Literal::Float(f) => Some(usize::from(f.span().len())),
-            Literal::Keyword(k) => Some(usize::from(k.span().len())),
-        }
-    }
-}
-
-impl Printable for Literal {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            Literal::String(s) => printer.print_raw_token(s),
-            Literal::Integer(i) => printer.print_raw_token(i),
-            Literal::Bigint(i) => printer.print_raw_token(i),
-            Literal::Float(f) => printer.print_raw_token(f),
-            Literal::Keyword(k) => printer.print_raw_token(k),
-        }
-        PrintInfo::default_single_line()
-    }
-    fn leftmost_token(&self) -> TextRange {
-        match self {
-            Literal::String(s) => s.leftmost_token(),
-            Literal::Integer(i) => i.span(),
-            Literal::Bigint(i) => i.span(),
-            Literal::Float(f) => f.span(),
-            Literal::Keyword(k) => k.span(),
-        }
-    }
-    fn rightmost_token(&self) -> TextRange {
-        match self {
-            Literal::String(s) => s.rightmost_token(),
-            Literal::Integer(i) => i.span(),
-            Literal::Bigint(i) => i.span(),
-            Literal::Float(f) => f.span(),
-            Literal::Keyword(k) => k.span(),
-        }
-    }
-}
-
-/// Corresponds to either a [`SyntaxKind::PATH_EXPR`] node or single [`SyntaxKind::WORD`] token.
-#[derive(Debug)]
-pub struct PathExpr {
-    pub first: t::Word,
-    pub rest: Vec<(t::Dot, t::Word)>,
-    /// Trailing generic arguments, e.g. the `<int, string>` in `f<int, string>`
-    /// or `baml.fetch_as<Todo>`. Only present at the tail of the path.
-    pub generic_args: Option<GenericArgs>,
-}
-
-/// Mirrors the segment set of `parse_path_or_ident` in `baml_compiler_parser`:
-/// every word-like keyword, so a member such as `reflect.Class.extends` keeps
-/// its path shape.
-fn is_path_segment_kind(kind: SyntaxKind) -> bool {
-    t::is_word_like(kind)
-}
-
-fn path_segment_from_cst(elem: SyntaxElement) -> Result<t::Word, StrongAstError> {
-    let token = StrongAstError::assert_is_token(elem)?;
-    if is_path_segment_kind(token.kind()) {
-        Ok(t::Word::new_from_span(token.text_range()))
-    } else {
-        Err(StrongAstError::UnexpectedKindDesc {
-            expected_desc: "path segment".into(),
-            found: token.kind(),
-            at: token.text_range(),
-        })
-    }
-}
-
-impl FromCST for PathExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        if is_path_segment_kind(elem.kind()) {
-            let first = path_segment_from_cst(elem)?;
-            return Ok(PathExpr {
-                first,
-                rest: Vec::new(),
-                generic_args: None,
-            });
-        }
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::PATH_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // First child: either a WORD, or a nested PATH_EXPR (the parser wraps
-        // an existing path expr when it adds GENERIC_ARGS as a postfix).
-        let next = it
-            .next()
-            .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, it.parent))?;
-
-        let (first, mut rest) = match next.kind() {
-            kind if is_path_segment_kind(kind) => (path_segment_from_cst(next)?, Vec::new()),
-            SyntaxKind::PATH_EXPR => {
-                let nested = PathExpr::from_cst(next)?;
-                if nested.generic_args.is_some() {
-                    return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: it.parent,
-                        at: nested
-                            .generic_args
-                            .as_ref()
-                            .map_or_else(rowan::TextRange::default, |g| g.open_angle.span()),
-                    });
-                }
-                (nested.first, nested.rest)
-            }
-            _ => {
-                return Err(StrongAstError::UnexpectedAdditionalElement {
-                    parent: it.parent,
-                    at: next.text_range(),
-                });
-            }
-        };
-
-        let mut generic_args: Option<GenericArgs> = None;
-
-        // Then: DOT WORD pairs, optionally followed by a single GENERIC_ARGS.
-        while let Some(elem) = it.next() {
-            match elem.kind() {
-                SyntaxKind::DOT => {
-                    let dot = t::Dot::from_cst(elem)?;
-                    let word = path_segment_from_cst(it.expect_next("path segment after `.`")?)?;
-                    rest.push((dot, word));
-                }
-                SyntaxKind::GENERIC_ARGS => {
-                    generic_args = Some(GenericArgs::from_cst(elem)?);
-                    if let Some(extra) = it.next() {
-                        return Err(StrongAstError::UnexpectedAdditionalElement {
-                            parent: it.parent,
-                            at: extra.text_range(),
-                        });
-                    }
-                    break;
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: it.parent,
-                        at: elem.text_range(),
-                    });
-                }
-            }
-        }
-
-        Ok(PathExpr {
-            first,
-            rest,
-            generic_args,
-        })
-    }
-}
-
-impl PathExpr {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    #[allow(clippy::unnecessary_wraps)]
-    pub(crate) fn single_line_width(&self, _input: &Printer<'_>) -> Option<usize> {
-        let mut len = usize::from(self.first.span().len());
-        for (dot, word) in &self.rest {
-            len += usize::from(dot.span().len()) + usize::from(word.span().len());
-        }
-        if let Some(ref ga) = self.generic_args {
-            len += ga.formatted_single_line_width();
+impl PathExprExt for Id<PathExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let mut len = usize::from(node.head.rightmost_token(tree).len());
+        for segment in tree.list(node.segments) {
+            len += usize::from(input.range(segment.dot).len())
+                + usize::from(present(segment.name).rightmost_token(tree).len());
         }
         Some(len)
     }
 }
 
-impl Printable for PathExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        if self.rest.is_empty() {
-            printer.print_raw_token(&self.first);
-            if let Some(ref ga) = self.generic_args {
-                printer.print(ga, shape);
-            }
+impl Printable for Id<PathExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let segments = tree.list(node.segments);
+        if segments.is_empty() {
+            printer.print(node.head, shape);
             return PrintInfo::default_single_line();
         }
-        let first = Expression::Path(PathExpr {
-            first: self.first.clone(),
-            rest: Vec::new(),
-            generic_args: None,
-        });
-        let chain_members = self
-            .rest
-            .iter()
-            .map(|(dot, word)| PrintChainItem::FieldAccess(dot, word))
-            .collect();
         let chain = PrintChain {
-            first: &first,
-            chain_members,
+            first: ChainFirst::Name(node.head),
+            chain_members: segments
+                .iter()
+                .map(|segment| {
+                    PrintChainItem::FieldAccess(segment.dot.widen(), present(segment.name))
+                })
+                .collect(),
         };
-        let info = chain.print(shape.clone(), printer);
-        if let Some(ref ga) = self.generic_args {
-            printer.print(ga, shape);
-        }
+        chain.print(shape, printer)
+    }
+}
+
+pub(crate) trait GenericApplyExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+}
+impl GenericApplyExt for Id<GenericApplyExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let node = input.tree.get(self);
+        Some(node.base.single_line_width(input)? + node.args.formatted_single_line_width(input))
+    }
+}
+
+impl Printable for Id<GenericApplyExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let node = printer.tree.get(self);
+        let info = printer.print(node.base, shape);
+        printer.print(node.args, shape);
         info
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.first.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        if let Some(ref ga) = self.generic_args {
-            return ga.close_angle.span();
-        }
-        self.rest
-            .last()
-            .map_or(&self.first, |(_, word)| word)
-            .span()
-    }
 }
 
-/// A generic instantiation whose base is not a plain path, e.g.
-/// `(<T>(x: T) -> T { x })<int>` or `(foo)<int>`. Corresponds to a
-/// [`SyntaxKind::PATH_EXPR`] node whose first child is an arbitrary expression
-/// followed by `GENERIC_ARGS`.
-#[derive(Debug)]
-pub struct GenericApplyExpr {
-    pub base: Box<Expression>,
-    pub generic_args: GenericArgs,
+// ── Parentheses ──────────────────────────────────────────────────────────────
+
+pub(crate) trait ParenExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for GenericApplyExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::PATH_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-        let base_elem = it
-            .next()
-            .ok_or_else(|| StrongAstError::missing(SyntaxKind::PAREN_EXPR, it.parent))?;
-        let base = Box::new(Expression::from_cst(base_elem)?);
-        let ga_elem = it
-            .next()
-            .ok_or_else(|| StrongAstError::missing(SyntaxKind::GENERIC_ARGS, it.parent))?;
-        let generic_args = GenericArgs::from_cst(ga_elem)?;
-        if let Some(extra) = it.next() {
-            return Err(StrongAstError::UnexpectedAdditionalElement {
-                parent: it.parent,
-                at: extra.text_range(),
-            });
-        }
-        Ok(GenericApplyExpr { base, generic_args })
-    }
-}
-
-impl GenericApplyExpr {
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        Some(self.base.single_line_width(input)? + self.generic_args.formatted_single_line_width())
-    }
-}
-
-impl Printable for GenericApplyExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let info = self.base.print(shape.clone(), printer);
-        printer.print(&self.generic_args, shape);
-        info
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.base.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.generic_args.close_angle.span()
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::PAREN_EXPR`] node.
-#[derive(Debug)]
-pub struct ParenExpr {
-    pub open_paren: t::LParen,
-    pub expr: Box<Expression>,
-    pub close_paren: t::RParen,
-}
-
-impl FromCST for ParenExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::PAREN_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let open_paren = it.expect_parse()?;
-
-        let expr = it.expect_next("an expression")?;
-        let expr = Expression::from_cst(expr)?;
-
-        let close_paren = it.expect_parse()?;
-
-        it.expect_end()?;
-
-        Ok(ParenExpr {
-            open_paren,
-            expr: Box::new(expr),
-            close_paren,
-        })
-    }
-}
-
-impl KnownKind for ParenExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::PAREN_EXPR
-    }
-}
-
-impl ParenExpr {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let inner = self.expr.single_line_width(input)?;
-        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_paren.span());
-        let (expr_leading, expr_trailing) = input.trivia.get_for_element(&*self.expr);
-        let (close_leading, _) = input.trivia.get_for_range_split(self.close_paren.span());
+impl ParenExt for Id<ParenExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let expr = present(node.inner);
+        let inner = expr.single_line_width(input)?;
+        let (_, open_trailing) = input.trivia.get_for_range_split(input.range(node.l));
+        let (expr_leading, expr_trailing) = input.trivia.get_for_element(tree, expr);
+        let (close_leading, _) = input
+            .trivia
+            .get_for_range_split(input.range(present(node.r)));
         let trivia_len = open_trailing
             .iter()
             .chain(expr_leading)
@@ -798,109 +325,93 @@ impl ParenExpr {
             .sum::<Option<usize>>()?;
         Some(const { "()".len() } + inner + trivia_len)
     }
-
-    /// Whether no comments are attached to either paren token or to the inner
-    /// expression's boundary. Peeling a transparent paren cannot lose trivia:
-    /// every span a parent context queries around it is empty.
-    fn is_transparent(&self, trivia: &TriviaInfo) -> bool {
-        let (open_leading, open_trailing) = trivia.get_for_range_split(self.open_paren.span());
-        let (close_leading, close_trailing) = trivia.get_for_range_split(self.close_paren.span());
-        let (expr_leading, expr_trailing) = trivia.get_for_element(&*self.expr);
-        open_leading.is_empty()
-            && open_trailing.is_empty()
-            && close_leading.is_empty()
-            && close_trailing.is_empty()
-            && expr_leading.is_empty()
-            && expr_trailing.is_empty()
-    }
 }
 
-impl PrintMultiLine for ParenExpr {
-    /// Multi-line layout: inner expression wraps to an indented new line,
-    /// closing paren aligns with the opening context.
-    ///
-    /// ```baml
-    /// (
-    ///     some_long_expression
-    /// )
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+/// Whether no comment or blank line touches the parentheses or their
+/// content, so dropping them changes nothing a parent context queries.
+fn paren_is_transparent(id: Id<ParenExpr>, printer: &Printer<'_>) -> bool {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    let trivia = printer.trivia;
+    let (open_leading, open_trailing) = trivia.get_for_range_split(printer.range(node.l));
+    let (close_leading, close_trailing) =
+        trivia.get_for_range_split(printer.range(present(node.r)));
+    let (expr_leading, expr_trailing) = trivia.get_for_element(tree, present(node.inner));
+    open_leading.is_empty()
+        && open_trailing.is_empty()
+        && close_leading.is_empty()
+        && close_trailing.is_empty()
+        && expr_leading.is_empty()
+        && expr_trailing.is_empty()
+}
+
+impl PrintMultiLine for Id<ParenExpr> {
+    fn print_multi_line(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let expr = present(node.inner);
+        let close = present(node.r);
         let inner_shape = Shape {
             width: shape.width.saturating_sub(printer.config.indent_width),
             indent: shape.indent + printer.config.indent_width,
             first_line_offset: 0,
         };
-        printer.print_raw_token(&self.open_paren);
-        printer.print_trivia_all_trailing_for(self.open_paren.token_span);
+        printer.print_token(node.l);
+        printer.print_trivia_all_trailing_for(printer.range(node.l));
         printer.print_newline();
-
-        let (expr_leading, expr_trailing) = printer.trivia.get_for_element(&*self.expr);
+        let (expr_leading, expr_trailing) = printer.trivia.get_for_element(tree, expr);
         printer.print_trivia_with_newline(expr_leading.trim_blanks(), inner_shape.indent);
         printer.print_spaces(inner_shape.indent);
-        printer.print(&*self.expr, inner_shape.clone());
+        printer.print(expr, inner_shape);
         printer.print_trivia_trailing(expr_trailing);
         printer.print_newline();
-
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        let (close_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
         printer.print_trivia_with_newline(close_leading.trim_blanks(), inner_shape.indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_paren);
+        printer.print_token(close);
         PrintInfo::default_multi_lined()
     }
 }
 
-impl ParenExpr {
-    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
-    /// in the event that the printer is unable to fit the parenthesized expression on a single line.
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_paren);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        printer.try_print_trivia_single_line_squished(open_trailing)?;
-
-        let (expr_leading, expr_trailing) = printer.trivia.get_for_element(&*self.expr);
-        printer.try_print_trivia_single_line_squished(expr_leading)?;
-        if printer
-            .print(&*self.expr, Shape::unlimited_single_line())
-            .multi_lined
-        {
-            return None;
-        }
-        printer.try_print_trivia_single_line_squished(expr_trailing)?;
-
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_paren);
-
-        if printer.output.len() > shape.width {
-            None
-        } else {
-            Some(PrintInfo::default_single_line())
-        }
+fn paren_single_line(id: Id<ParenExpr>, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    let expr = present(node.inner);
+    let close = present(node.r);
+    printer.print_token(node.l);
+    let (_, open_trailing) = printer.trivia.get_for_range_split(printer.range(node.l));
+    printer.try_print_trivia_single_line_squished(open_trailing)?;
+    let (expr_leading, expr_trailing) = printer.trivia.get_for_element(tree, expr);
+    printer.try_print_trivia_single_line_squished(expr_leading)?;
+    if printer
+        .print(expr, Shape::unlimited_single_line())
+        .multi_lined
+    {
+        return None;
+    }
+    printer.try_print_trivia_single_line_squished(expr_trailing)?;
+    let (close_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
+    printer.try_print_trivia_single_line_squished(close_leading)?;
+    printer.print_token(close);
+    if printer.output.len() > shape.width {
+        None
+    } else {
+        Some(PrintInfo::default_single_line())
     }
 }
 
-impl Printable for ParenExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<ParenExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.with_line_separated(false, |printer| {
             printer
-                .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+                .try_sub_printer(|p| paren_single_line(self, &shape, p))
                 .unwrap_or_else(|| self.print_multi_line(shape, printer))
         })
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.open_paren.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_paren.span()
-    }
 }
 
-/// Prints `inner` inside parentheses the formatter adds itself, in
-/// [`ParenExpr`]'s multi-line layout, so reformatting the output (which then
-/// holds a real `PAREN_EXPR`) is idempotent. Inside the parentheses line
-/// breaks are whitespace.
 fn print_in_added_parens_multi_line(
-    inner: &impl Printable,
+    inner: impl Printable,
     shape: &Shape,
     printer: &mut Printer,
 ) -> PrintInfo {
@@ -919,457 +430,29 @@ fn print_in_added_parens_multi_line(
     PrintInfo::default_multi_lined()
 }
 
-impl Expression {
-    /// Strips nested [`ParenExpr`] wrappers that are transparent (no comments
-    /// attached to the parens or the inner expression's boundary), returning
-    /// the innermost expression. Callers decide per context whether printing
-    /// the peeled expression instead of `self` is safe.
-    fn peel_transparent_parens(&self, trivia: &TriviaInfo) -> &Expression {
-        let mut expr = self;
-        while let Expression::Paren(paren) = expr {
-            if !paren.is_transparent(trivia) {
-                break;
-            }
-            expr = &paren.expr;
-        }
-        expr
-    }
+// ── Binary expressions ───────────────────────────────────────────────────────
 
-    /// Whether this expression binds at least as tightly as a postfix
-    /// operator, i.e. it can sit directly in a receiver position (`X.f`,
-    /// `X(..)`, `X[i]`) or as a unary operand with no parens around it.
-    ///
-    /// Numeric and keyword literals are excluded: the `.` in `(1).to_string()`
-    /// re-lexes as part of a float once the parens come off. Object and map
-    /// literals are excluded because a bare leading `{` is ambiguous with a
-    /// block, and [`Expression::GenericApply`] because its `<` is ambiguous
-    /// with a comparison.
-    ///
-    /// An optional-chain link anywhere on the spine also disqualifies it —
-    /// see [`Self::has_optional_chain_link`].
-    fn binds_as_postfix_operand(&self) -> bool {
-        match self {
-            Expression::Call(_) | Expression::Index(_) | Expression::FieldAccess(_) => {
-                !self.has_optional_chain_link()
-            }
-            Expression::Path(_)
-            | Expression::EnvAccess(_)
-            | Expression::ArrayInitializer(_)
-            | Expression::HashString(_)
-            | Expression::BacktickString(_)
-            | Expression::ByteString(_)
-            | Expression::RawString(_) => true,
-            Expression::Literal(lit) => matches!(lit, Literal::String(_)),
-            _ => false,
-        }
-    }
-
-    /// Whether this expression's postfix spine contains a `?.` link.
-    ///
-    /// Parens around such a receiver are load-bearing, not decoration: they
-    /// **end the short-circuit region**. `(a?.b).c` evaluates `(null).c` when
-    /// `a` is null — a `TypeError` — where `a?.b.c` short-circuits to null. So
-    /// peeling them would silently change runtime behavior and these parens
-    /// always stay.
-    ///
-    /// Only the spine counts. A `?.` inside a call argument or index operand
-    /// (`f(a?.b).c`) belongs to a separate chain and is unaffected.
-    fn has_optional_chain_link(&self) -> bool {
-        match self {
-            Expression::OptionalFieldAccess(_)
-            | Expression::OptionalIndex(_)
-            | Expression::OptionalCall(_) => true,
-            Expression::Call(call) => call.callee.has_optional_chain_link(),
-            Expression::Index(index) => index.base.has_optional_chain_link(),
-            Expression::FieldAccess(fa) => fa.base.has_optional_chain_link(),
-            Expression::Paren(paren) => paren.expr.has_optional_chain_link(),
-            _ => false,
-        }
-    }
-
-    /// The expression a postfix-receiver or unary-operand position actually
-    /// prints: transparent parens peel while what they wrap still stands on
-    /// its own here, so the parens delimit nothing.
-    /// `((xs).join(` `)).includes(x)` prints as `xs.join(` `).includes(x)`.
-    ///
-    /// A receiver that binds looser than postfix keeps *one* paren — removing
-    /// it would re-parse against a different base (`(a ?? b).length()`) — but
-    /// the redundant layers around it still peel, so `((a + b)).f()` prints as
-    /// `(a + b).f()` rather than keeping the whole stack.
-    pub(crate) fn effective_postfix_operand(&self, trivia: &TriviaInfo) -> &Expression {
-        self.peel_to_needed_paren(trivia, false)
-    }
-
-    /// [`Self::effective_postfix_operand`] for a unary operand.
-    ///
-    /// Identical except that literals peel here. The literal restriction exists
-    /// only to keep `(1).to_string()` from re-lexing its `.` into a float, and
-    /// no `.` follows a unary operand — so `-((1))` prints as `-1` and
-    /// `!((true))` as `!true`. A literal that *is* a postfix receiver
-    /// (`-(1).to_string()`) sits in the receiver position, not this one, and
-    /// still keeps its parens.
-    pub(crate) fn effective_unary_operand(&self, trivia: &TriviaInfo) -> &Expression {
-        self.peel_to_needed_paren(trivia, true)
-    }
-
-    fn peel_to_needed_paren(&self, trivia: &TriviaInfo, unary: bool) -> &Expression {
-        let mut expr = self;
-        while let Expression::Paren(paren) = expr {
-            if !paren.is_transparent(trivia) {
-                break;
-            }
-            // Peel only down to the last paren this position still needs: an
-            // inner paren is reconsidered on the next turn, so a stack around
-            // a looser-binding receiver collapses to exactly one.
-            let stands_alone = paren.expr.binds_as_postfix_operand()
-                || matches!(&*paren.expr, Expression::Paren(_))
-                || (unary && matches!(&*paren.expr, Expression::Literal(_)));
-            if !stands_alone {
-                break;
-            }
-            expr = &paren.expr;
-        }
-        expr
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::BINARY_EXPR`] node.
-#[derive(Debug)]
-pub struct BinaryExpr {
-    pub op: BinaryOp,
-    pub sides: Box<(Expression, Expression)>,
-}
-
-impl FromCST for BinaryExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::BINARY_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // Get left expression
-        let left = it.expect_next("left expression")?;
-        let left_expr = Expression::from_cst(left)?;
-
-        // Get operator — handle `??` which appears as two consecutive QUESTION tokens
-        let op_elem = it.expect_next("binary operator")?;
-        let op = if op_elem.kind() == SyntaxKind::QUESTION {
-            // Check for second QUESTION to form `??`
-            let first_range = op_elem.text_range();
-            if let Some(second) = it.next_if_kind(SyntaxKind::QUESTION) {
-                let combined_range = TextRange::new(first_range.start(), second.text_range().end());
-                BinaryOp::QuestionQuestion(t::QuestionQuestion::new_from_span(combined_range))
-            } else {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "binary operator".into(),
-                    found: SyntaxKind::QUESTION,
-                    at: first_range,
-                });
-            }
-        } else {
-            BinaryOp::from_cst(op_elem)?
-        };
-
-        // Get right expression
-        let right = it.expect_next("right expression")?;
-        let right_expr = Expression::from_cst(right)?;
-
-        it.expect_end()?;
-
-        Ok(BinaryExpr {
-            op,
-            sides: Box::new((left_expr, right_expr)),
-        })
-    }
-}
-
-impl KnownKind for BinaryExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::BINARY_EXPR
-    }
-}
-
-impl BinaryExpr {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let left = self.effective_left(input.trivia);
-        let right = &self.sides.1;
-        let left_width = left.single_line_width(input)?;
-        let right_width = right.single_line_width(input)?;
-        // Must match trivia handled by try_print_single_line
-        let mut trivia_len = 0usize;
-        let left_trailing = input.trivia.get_trailing_for_element(left);
-
-        let (op_leading, op_trailing) = input.trivia.get_for_range_split(self.op.span());
-        trivia_len += (op_leading.try_squished_len(input.input)?
-            + left_trailing.try_squished_len(input.input)?)
-        .max(const { " ".len() }); // basically, if not comments then we have the space
-
-        let right_leading = input.trivia.get_leading_for_element(right);
-        trivia_len += (right_leading.try_squished_len(input.input)?
-            + op_trailing.try_squished_len(input.input)?)
-        .max(const { " ".len() }); // basically, if not comments then we have the space
-
-        let len = left_width + usize::from(self.op.span().len()) + right_width + trivia_len;
-        Some(len)
-    }
-
-    /// The left operand with redundant parens peeled.
-    ///
-    /// `(a && b) && c` and `a && b && c` parse to different trees but mean
-    /// the same thing and print identically, so a transparent paren around
-    /// the left operand is dropped when the inner operator sits in the same
-    /// precedence row as this one (reparsing the output yields the printed
-    /// tree, keeping the formatter idempotent). Right operands are never
-    /// peeled: removing those parens would re-associate, as in `a - (b - c)`.
-    /// Mixed-precedence parens like `(a * b) + c` are kept: they are
-    /// redundant to the parser but carry clarity for the reader.
-    fn effective_left(&self, trivia: &TriviaInfo) -> &Expression {
-        let Some(row) = BinaryOpPrecedenceRow::row_for_op(&self.op) else {
-            return &self.sides.0;
-        };
-        let peeled = self.sides.0.peel_transparent_parens(trivia);
-        match peeled {
-            Expression::Binary(inner)
-                if BinaryOpPrecedenceRow::row_for_op(&inner.op) == Some(row) =>
-            {
-                peeled
-            }
-            _ => &self.sides.0,
-        }
-    }
-
-    /// Recursively lifts binary expressions in the same chaining group to the top level.
-    /// For ops that are not in any chaining groups, return will be the same as the original.
-    /// Redundant parens around left operands are peeled (see [`Self::effective_left`])
-    /// so a fully parenthesized chain flattens like an unparenthesized one.
-    ///
-    /// The vec will never be empty.
-    fn get_chaining_members(
-        &self,
-        trivia: &TriviaInfo,
-    ) -> (&Expression, Vec<(&BinaryOp, &Expression)>) {
-        let mut members = Vec::new();
-        let Some(chaining_group) = BinaryOpChainingGroup::group_for_op(&self.op) else {
-            members.push((&self.op, &self.sides.1));
-            return (&self.sides.0, members);
-        };
-
-        match (self.effective_left(trivia), &self.sides.1) {
-            (Expression::Binary(left), Expression::Binary(right))
-                if BinaryOpChainingGroup::group_for_op(&left.op) == Some(chaining_group)
-                    && BinaryOpChainingGroup::group_for_op(&right.op) == Some(chaining_group) =>
-            {
-                let (left_first, left_rest) = left.get_chaining_members(trivia);
-                let (right_first, right_rest) = right.get_chaining_members(trivia);
-
-                members.extend(left_rest);
-                members.push((&self.op, right_first));
-                members.extend(right_rest);
-
-                (left_first, members)
-            }
-            (Expression::Binary(left), right)
-                if BinaryOpChainingGroup::group_for_op(&left.op) == Some(chaining_group) =>
-            {
-                let (first, left_rest) = left.get_chaining_members(trivia);
-
-                members.extend(left_rest);
-                members.push((&self.op, right));
-                (first, members)
-            }
-            (left, Expression::Binary(right))
-                if BinaryOpChainingGroup::group_for_op(&right.op) == Some(chaining_group) =>
-            {
-                let (right_first, right_rest) = right.get_chaining_members(trivia);
-
-                members.push((&self.op, right_first));
-                members.extend(right_rest);
-                (left, members)
-            }
-            (left, right) => {
-                members.push((&self.op, right));
-                (left, members)
-            }
-        }
-    }
-}
-
-impl PrintMultiLine for BinaryExpr {
-    /// Multi-line layout: splits at the operator. The operator and right-hand
-    /// side wrap to an indented new line. Trailing comments on sub-expressions
-    /// are preserved.
-    ///
-    /// ```baml
-    /// left_expression // trailing comment
-    ///     + right_expression
-    /// ```
-    ///
-    /// For chainable operators, contained binary ops (of the same group) should be printed at the same indentation.
-    /// Groups:
-    ///     - Add/Subtract
-    ///     - Multiply/Divide/Modulo
-    ///     - Bitwise And/Or/Xor
-    ///     - Logical And/Or
-    ///
-    /// ```baml
-    /// a
-    ///     + b
-    ///     + c
-    ///     - d * e
-    /// ```
-    ///
-    /// ```baml
-    /// // precedence matters:
-    /// aaaaaaaaa
-    ///     + bbbbbbbbb
-    ///         * cccccccc
-    ///         / dddddddd
-    ///     - eeeeeee
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_indent = shape.indent + printer.config.indent_width;
-        let (first, chain_members) = self.get_chaining_members(printer.trivia);
-        printer.print(first, shape);
-        printer.print_trivia_all_trailing_for(first.rightmost_token());
-        let num_chain_members = chain_members.len();
-        for (i, (op, right)) in chain_members.into_iter().enumerate() {
-            printer.print_newline();
-            printer.print_spaces(inner_indent);
-            printer.print(op, Shape::unlimited_single_line());
-            printer.print_str(" ");
-            let inner_shape = Shape {
-                width: printer
-                    .config
-                    .line_width
-                    .saturating_sub(inner_indent + usize::from(op.span().len()) + 1),
-                indent: inner_indent,
-                first_line_offset: usize::from(op.span().len()) + 1,
-            };
-            printer.print(right, inner_shape.clone());
-            if i + 1 < num_chain_members {
-                printer.print_trivia_all_trailing_for(right.rightmost_token());
-            }
-        }
-        PrintInfo::default_multi_lined()
-    }
-}
-
-impl BinaryExpr {
-    /// Whether this chain has a `-` operator, which the multi-line layout
-    /// would put at the start of a line.
-    fn has_minus_in_chain(&self, trivia: &TriviaInfo) -> bool {
-        let (_, chain_members) = self.get_chaining_members(trivia);
-        chain_members
-            .iter()
-            .any(|(op, _)| op.begins_statement_at_line_start())
-    }
-
-    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
-    /// in the event that the printer is unable to fit the binary expression on a single line.
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let left = self.effective_left(printer.trivia);
-        let right = &self.sides.1;
-
-        if printer
-            .print(left, Shape::unlimited_single_line())
-            .multi_lined
-        {
-            return None;
-        }
-        let left_trailing = printer.trivia.get_trailing_for_element(left);
-        let (op_leading, op_trailing) = printer.trivia.get_for_range_split(self.op.span());
-        let right_leading = printer.trivia.get_leading_for_element(right);
-
-        let mut left_trivia_len = printer.try_print_trivia_single_line_squished(left_trailing)?;
-        left_trivia_len += printer.print_trivia_squished(op_leading);
-        if left_trivia_len == 0 {
-            printer.print_spaces(1); // only add space if there are no block comments between
-        }
-
-        printer.print(&self.op, Shape::unlimited_single_line());
-
-        let mut right_trivia_len = printer.print_trivia_squished(op_trailing);
-        right_trivia_len += printer.print_trivia_squished(right_leading);
-        if right_trivia_len == 0 {
-            printer.print_spaces(1); // only add space if there are no block comments between
-        }
-        if printer
-            .print(right, Shape::unlimited_single_line())
-            .multi_lined
-        {
-            return None;
-        }
-        // right trailing is the outermost trailing — not printed here
-
-        if printer.output.len() > shape.width {
-            None
-        } else {
-            Some(PrintInfo::default_single_line())
-        }
-    }
-}
-
-impl Printable for BinaryExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        if let Some(info) = printer.try_sub_printer(|p| self.try_print_single_line(&shape, p)) {
-            return info;
-        }
-        if printer.line_separated && self.has_minus_in_chain(printer.trivia) {
-            // Keep the conservative grouping of wrapped subtraction chains.
-            // A spaced line-leading `- b` also continues without parentheses.
-            //
-            // ```baml
-            // let t = (
-            //     aaaaaaaaa
-            //         - bbbbbbbbb
-            // );
-            // ```
-            return print_in_added_parens_multi_line(self, &shape, printer);
-        }
-        self.print_multi_line(shape, printer)
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.sides.0.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.sides.1.rightmost_token()
-    }
-}
-
-/// Categories for grouping binary operators for nested chaining
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum BinaryOpChainingGroup {
     AddSubtract,
     MultiplyDivide,
     Bitwise,
     Logical,
 }
+
 impl BinaryOpChainingGroup {
-    fn group_for_op(op: &BinaryOp) -> Option<Self> {
+    fn group_for_op(op: BinaryOp) -> Option<Self> {
         match op {
-            BinaryOp::Plus(_) | BinaryOp::Minus(_) => Some(Self::AddSubtract),
-            BinaryOp::Star(_) | BinaryOp::Slash(_) | BinaryOp::Percent(_) => {
-                Some(Self::MultiplyDivide)
-            }
-            BinaryOp::And(_) | BinaryOp::Pipe(_) | BinaryOp::Caret(_) => Some(Self::Bitwise),
-            BinaryOp::AndAnd(_) | BinaryOp::OrOr(_) => Some(Self::Logical),
+            BinaryOp::Add | BinaryOp::Sub => Some(Self::AddSubtract),
+            BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => Some(Self::MultiplyDivide),
+            BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor => Some(Self::Bitwise),
+            BinaryOp::And | BinaryOp::Or => Some(Self::Logical),
             _ => None,
         }
     }
 }
 
-/// Precedence rows whose redundant left-operand parens the formatter strips
-/// (see [`BinaryExpr::effective_left`]). Ops within a row share one binding
-/// power in the parser (`infix_binding_power`), so `(a OP b) OP c` reparses
-/// identically without the parens. Comparisons, equality, shifts, `??`, and
-/// assignments are deliberately absent: chains of those are unusual enough
-/// that explicit parens read as intent.
-///
-/// Finer-grained than [`BinaryOpChainingGroup`], which mixes precedence
-/// levels (`&&` with `||`, `&` with `|`) because it only groups layout.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum BinaryOpPrecedenceRow {
     AddSubtract,
     MultiplyDivideModulo,
@@ -1379,276 +462,365 @@ enum BinaryOpPrecedenceRow {
     LogicalAnd,
     LogicalOr,
 }
+
 impl BinaryOpPrecedenceRow {
-    fn row_for_op(op: &BinaryOp) -> Option<Self> {
+    fn row_for_op(op: BinaryOp) -> Option<Self> {
         match op {
-            BinaryOp::Plus(_) | BinaryOp::Minus(_) => Some(Self::AddSubtract),
-            BinaryOp::Star(_) | BinaryOp::Slash(_) | BinaryOp::Percent(_) => {
-                Some(Self::MultiplyDivideModulo)
-            }
-            BinaryOp::And(_) => Some(Self::BitwiseAnd),
-            BinaryOp::Pipe(_) => Some(Self::BitwiseOr),
-            BinaryOp::Caret(_) => Some(Self::BitwiseXor),
-            BinaryOp::AndAnd(_) => Some(Self::LogicalAnd),
-            BinaryOp::OrOr(_) => Some(Self::LogicalOr),
+            BinaryOp::Add | BinaryOp::Sub => Some(Self::AddSubtract),
+            BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => Some(Self::MultiplyDivideModulo),
+            BinaryOp::BitAnd => Some(Self::BitwiseAnd),
+            BinaryOp::BitOr => Some(Self::BitwiseOr),
+            BinaryOp::BitXor => Some(Self::BitwiseXor),
+            BinaryOp::And => Some(Self::LogicalAnd),
+            BinaryOp::Or => Some(Self::LogicalOr),
             _ => None,
         }
     }
 }
 
-/// Corresponds to a [`SyntaxKind::IS_EXPR`] node.
-///
-/// `<expr> is <pattern>` — Rust `matches!`-style pattern test. Structure is
-/// rigid (an expression LHS, a single keyword, a pattern RHS), so the
-/// formatter prints it on a single line whenever it fits and otherwise
-/// keeps the keyword glued to the pattern on the next line.
-#[derive(Debug)]
-pub struct IsExpr {
-    pub lhs: Box<Expression>,
-    pub keyword: t::Is,
-    pub pattern: MatchPattern,
+/// The text range of a multi-token operator.
+fn op_range(op: impl Spanned, tree: &FileTree) -> TextRange {
+    TextRange::new(
+        op.leftmost_token(tree).start(),
+        op.rightmost_token(tree).end(),
+    )
 }
 
-impl FromCST for IsExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::IS_EXPR)?;
+/// The width of `left op right` on one line, comments included.
+fn binary_like_single_line_width(
+    left: AnyExpr,
+    op: impl Spanned,
+    right: AnyExpr,
+    input: &Printer<'_>,
+) -> Option<usize> {
+    let tree = input.tree;
+    let left_width = left.single_line_width(input)?;
+    let right_width = right.single_line_width(input)?;
+    let mut trivia_len = 0usize;
+    let left_trailing = input.trivia.get_trailing_for_element(tree, left);
+    let (op_leading, _) = input.trivia.get_for_range_split(op.leftmost_token(tree));
+    let (_, op_trailing) = input.trivia.get_for_range_split(op.rightmost_token(tree));
+    trivia_len += (op_leading.try_squished_len(input.input)?
+        + left_trailing.try_squished_len(input.input)?)
+    .max(const { " ".len() }); // basically, if not comments then we have the space
+    let right_leading = input.trivia.get_leading_for_element(tree, right);
+    // A comment after the operator is spaced from it (`a / /* c */b`), so the
+    // operator never reads as the start of a comment.
+    let op_trailing_len = op_trailing.try_squished_len(input.input)?;
+    trivia_len += (right_leading.try_squished_len(input.input)?
+        + op_trailing_len
+        + usize::from(op_trailing_len > 0))
+    .max(const { " ".len() }); // basically, if not comments then we have the space
+    Some(left_width + usize::from(op_range(op, tree).len()) + right_width + trivia_len)
+}
 
-        let mut it = SyntaxNodeIter::new(&node);
-        let lhs_elem = it.expect_next("`is` left expression")?;
-        let lhs = Expression::from_cst(lhs_elem)?;
-        let kw_elem = it.expect_next("`is` keyword")?;
-        let keyword = t::Is::from_cst(kw_elem)?;
-        let pat_elem = it.expect_next("`is` pattern")?;
-        let pattern = MatchPattern::from_cst(pat_elem)?;
-        it.expect_end()?;
-
-        Ok(IsExpr {
-            lhs: Box::new(lhs),
-            keyword,
-            pattern,
-        })
+/// `left op right` on one line, or `None` when a part cannot be.
+fn binary_like_try_single_line(
+    left: AnyExpr,
+    op: impl Printable,
+    right: AnyExpr,
+    shape: &Shape,
+    printer: &mut Printer,
+) -> Option<PrintInfo> {
+    let tree = printer.tree;
+    if printer
+        .print(left, Shape::unlimited_single_line())
+        .multi_lined
+    {
+        return None;
+    }
+    let left_trailing = printer.trivia.get_trailing_for_element(tree, left);
+    let (op_leading, _) = printer.trivia.get_for_range_split(op.leftmost_token(tree));
+    let (_, op_trailing) = printer.trivia.get_for_range_split(op.rightmost_token(tree));
+    let right_leading = printer.trivia.get_leading_for_element(tree, right);
+    let mut left_trivia_len = printer.try_print_trivia_single_line_squished(left_trailing)?;
+    left_trivia_len += printer.print_trivia_squished(op_leading);
+    if left_trivia_len == 0 {
+        printer.print_spaces(1); // only add space if there are no block comments between
+    }
+    printer.print(op, Shape::unlimited_single_line());
+    let mut right_trivia_len = 0;
+    if op_trailing.iter().any(EmittableTrivia::is_comment) {
+        // Spaced from the operator, as the width above counted it.
+        printer.print_spaces(1);
+        right_trivia_len += 1;
+    }
+    right_trivia_len += printer.print_trivia_squished(op_trailing);
+    right_trivia_len += printer.print_trivia_squished(right_leading);
+    if right_trivia_len == 0 {
+        printer.print_spaces(1); // only add space if there are no block comments between
+    }
+    if printer
+        .print(right, Shape::unlimited_single_line())
+        .multi_lined
+    {
+        return None;
+    }
+    if printer.output.len() > shape.width {
+        None
+    } else {
+        Some(PrintInfo::default_single_line())
     }
 }
 
-impl KnownKind for IsExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::IS_EXPR
+/// The members of a chain `first op right op right …`, each operator with
+/// the operand it precedes, one per line.
+fn print_chain_members_multi_line<O: Printable>(
+    first: AnyExpr,
+    members: &[(O, AnyExpr)],
+    shape: Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    let tree = printer.tree;
+    let inner_indent = shape.indent + printer.config.indent_width;
+    printer.print(first, shape);
+    printer.print_trivia_all_trailing_for(first.rightmost_token(tree));
+    let num_chain_members = members.len();
+    for (i, (op, right)) in members.iter().enumerate() {
+        let op_len = usize::from(op_range(*op, tree).len());
+        printer.print_newline();
+        printer.print_spaces(inner_indent);
+        printer.print(*op, Shape::unlimited_single_line());
+        printer.print_str(" ");
+        let inner_shape = Shape {
+            width: printer
+                .config
+                .line_width
+                .saturating_sub(inner_indent + op_len + 1),
+            indent: inner_indent,
+            first_line_offset: op_len + 1,
+        };
+        printer.print(*right, inner_shape);
+        if i + 1 < num_chain_members {
+            printer.print_trivia_all_trailing_for(right.rightmost_token(tree));
+        }
+    }
+    PrintInfo::default_multi_lined()
+}
+
+/// An assignment or other `left op right` that never chains.
+pub(crate) fn print_binary_like(
+    left: AnyExpr,
+    op: impl Printable,
+    right: AnyExpr,
+    shape: Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    if let Some(info) =
+        printer.try_sub_printer(|p| binary_like_try_single_line(left, op, right, &shape, p))
+    {
+        return info;
+    }
+    print_chain_members_multi_line(left, &[(op, right)], shape, printer)
+}
+
+pub(crate) trait BinaryExprExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+    fn effective_left(self, printer: &Printer<'_>) -> AnyExpr;
+    fn get_chaining_members(self, printer: &Printer<'_>) -> (AnyExpr, Vec<(BinaryOpTok, AnyExpr)>);
+    fn has_minus_in_chain(self, printer: &Printer<'_>) -> bool;
+}
+
+impl BinaryExprExt for Id<BinaryExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let node = input.tree.get(self);
+        let left = self.effective_left(input);
+        binary_like_single_line_width(left, node.op, present(node.rhs), input)
+    }
+
+    fn effective_left(self, printer: &Printer<'_>) -> AnyExpr {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let Some(row) = BinaryOpPrecedenceRow::row_for_op(node.op.op()) else {
+            return node.lhs;
+        };
+        let peeled = node.lhs.peel_transparent_parens(printer);
+        match peeled {
+            AnyExpr::Binary(inner)
+                if BinaryOpPrecedenceRow::row_for_op(tree.get(inner).op.op()) == Some(row) =>
+            {
+                peeled
+            }
+            _ => node.lhs,
+        }
+    }
+
+    /// Recursively lifts binary expressions in the same chaining group to the top level.
+    /// For ops that are not in any chaining groups, return will be the same as the original.
+    /// Redundant parens around left operands are peeled (see [`Self::effective_left`])
+    /// so a fully parenthesized chain flattens like an unparenthesized one.
+    ///
+    /// The vec will never be empty.
+    fn get_chaining_members(self, printer: &Printer<'_>) -> (AnyExpr, Vec<(BinaryOpTok, AnyExpr)>) {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let rhs = present(node.rhs);
+        let mut members = Vec::new();
+        let Some(chaining_group) = BinaryOpChainingGroup::group_for_op(node.op.op()) else {
+            members.push((node.op, rhs));
+            return (node.lhs, members);
+        };
+        let in_group = |inner: Id<BinaryExpr>| {
+            BinaryOpChainingGroup::group_for_op(tree.get(inner).op.op()) == Some(chaining_group)
+        };
+        match (self.effective_left(printer), rhs) {
+            (AnyExpr::Binary(left), AnyExpr::Binary(right))
+                if in_group(left) && in_group(right) =>
+            {
+                let (left_first, left_rest) = left.get_chaining_members(printer);
+                let (right_first, right_rest) = right.get_chaining_members(printer);
+                members.extend(left_rest);
+                members.push((node.op, right_first));
+                members.extend(right_rest);
+                (left_first, members)
+            }
+            (AnyExpr::Binary(left), right) if in_group(left) => {
+                let (first, left_rest) = left.get_chaining_members(printer);
+                members.extend(left_rest);
+                members.push((node.op, right));
+                (first, members)
+            }
+            (left, AnyExpr::Binary(right)) if in_group(right) => {
+                let (right_first, right_rest) = right.get_chaining_members(printer);
+                members.push((node.op, right_first));
+                members.extend(right_rest);
+                (left, members)
+            }
+            (left, right) => {
+                members.push((node.op, right));
+                (left, members)
+            }
+        }
+    }
+
+    fn has_minus_in_chain(self, printer: &Printer<'_>) -> bool {
+        let (_, chain_members) = self.get_chaining_members(printer);
+        chain_members
+            .iter()
+            .any(|(op, _)| op.begins_statement_at_line_start())
     }
 }
 
-impl IsExpr {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if the LHS can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let lhs = self.lhs.single_line_width(input)?;
-        // The pattern's width is hard to query precisely without
-        // reimplementing MatchPattern's own width logic, so use the source
-        // span between leftmost and rightmost tokens as an upper bound —
-        // overestimates by leading/trailing trivia, which is fine for the
-        // line-fit check.
-        let pat_left = self.pattern.leftmost_token().start();
-        let pat_right = self.pattern.rightmost_token().end();
+impl PrintMultiLine for Id<BinaryExpr> {
+    fn print_multi_line(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let (first, chain_members) = self.get_chaining_members(printer);
+        print_chain_members_multi_line(first, &chain_members, shape, printer)
+    }
+}
+
+impl Printable for Id<BinaryExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let node = printer.tree.get(self);
+        let left = self.effective_left(printer);
+        let right = present(node.rhs);
+        if let Some(info) = printer
+            .try_sub_printer(|p| binary_like_try_single_line(left, node.op, right, &shape, p))
+        {
+            return info;
+        }
+        if printer.line_separated && self.has_minus_in_chain(printer) {
+            return print_in_added_parens_multi_line(self, &shape, printer);
+        }
+        self.print_multi_line(shape, printer)
+    }
+}
+
+// ── `is`, unary ──────────────────────────────────────────────────────────────
+
+pub(crate) trait IsExprExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+}
+impl IsExprExt for Id<IsExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let pattern = present(node.pattern);
+        let lhs = node.expr.single_line_width(input)?;
+        let pat_left = pattern.leftmost_token(tree).start();
+        let pat_right = pattern.rightmost_token(tree).end();
         let pattern_width = usize::from(pat_right - pat_left);
-        // `<lhs> is <pattern>` — lhs + " " + "is" + " " + pattern.
-        Some(lhs + 1 + usize::from(self.keyword.span().len()) + 1 + pattern_width)
+        Some(lhs + 1 + usize::from(input.range(node.is_kw).len()) + 1 + pattern_width)
     }
 }
 
-impl Printable for IsExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        // Mirrors `BinaryExpr::try_print_single_line`'s trivia handling so
-        // comments around the `is` keyword (e.g. `v /*hint*/ is int`) round-
-        // trip instead of being silently dropped.
+impl Printable for Id<IsExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let pattern = present(node.pattern);
         let mut multi_lined = false;
-
-        multi_lined |= printer.print(&*self.lhs, shape.clone()).multi_lined;
-
-        let lhs_trailing = printer.trivia.get_trailing_for_element(&*self.lhs);
-        let (kw_leading, kw_trailing) = printer.trivia.get_for_range_split(self.keyword.span());
-
+        multi_lined |= printer.print(node.expr, shape).multi_lined;
+        let lhs_trailing = printer.trivia.get_trailing_for_element(tree, node.expr);
+        let (kw_leading, kw_trailing) = printer
+            .trivia
+            .get_for_range_split(printer.range(node.is_kw));
         let mut left_trivia_len = printer.print_trivia_squished(lhs_trailing);
         left_trivia_len += printer.print_trivia_squished(kw_leading);
         if left_trivia_len == 0 {
             printer.print_spaces(1);
         }
-
-        printer.print_raw_token(&self.keyword);
-
-        let pat_leading = printer.trivia.get_leading_for_element(&self.pattern);
+        printer.print_token(node.is_kw);
+        let pat_leading = printer.trivia.get_leading_for_element(tree, pattern);
         let mut right_trivia_len = printer.print_trivia_squished(kw_trailing);
         right_trivia_len += printer.print_trivia_squished(pat_leading);
         if right_trivia_len == 0 {
             printer.print_spaces(1);
         }
-
-        multi_lined |= printer.print(&self.pattern, shape).multi_lined;
+        multi_lined |= printer.print(pattern, shape).multi_lined;
         PrintInfo { multi_lined }
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.lhs.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.pattern.rightmost_token()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::UNARY_EXPR`] node.
-#[derive(Debug)]
-pub struct UnaryExpr {
-    pub op: UnaryOp,
-    pub expr: Box<Expression>,
+pub(crate) trait UnaryExprExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for UnaryExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::UNARY_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // Get operator
-        let op = it.expect_next("unary operator")?;
-        let op = UnaryOp::from_cst(op)?;
-
-        // Get expression
-        let expr_node = it.expect_next("expression")?;
-        let expr = Expression::from_cst(expr_node)?;
-
-        it.expect_end()?;
-
-        Ok(UnaryExpr {
-            op,
-            expr: Box::new(expr),
-        })
-    }
-}
-
-impl KnownKind for UnaryExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::UNARY_EXPR
-    }
-}
-
-impl UnaryExpr {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let expr = self
-            .expr
-            .effective_unary_operand(input.trivia)
+impl UnaryExprExt for Id<UnaryExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let node = input.tree.get(self);
+        let expr = present(node.operand)
+            .effective_unary_operand(input)
             .single_line_width(input)?;
-        Some(usize::from(self.op.span().len()) + expr)
+        Some(usize::from(input.range(node.op).len()) + expr)
     }
 }
 
-impl Printable for UnaryExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<UnaryExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let node = printer.tree.get(self);
         let mut multi_lined = false;
-        multi_lined |= printer.print(&self.op, shape.clone()).multi_lined;
-        let expr = self.expr.effective_unary_operand(printer.trivia);
+        multi_lined |= printer.print(node.op, shape).multi_lined;
+        let expr = present(node.operand).effective_unary_operand(printer);
         multi_lined |= printer.print(expr, shape).multi_lined;
-
         PrintInfo { multi_lined }
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.op.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.expr.rightmost_token()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::IF_EXPR`] node.
-#[derive(Debug)]
-pub struct IfExpr {
-    pub keyword: t::If,
-    /// The condition expression. Parens are optional in Baml, so this can be
-    /// any expression — `if (a == b)` and `if a == b` are both valid.
-    pub condition: Box<Expression>,
-    pub block: BlockExpr,
-    pub else_branch: Option<(t::Else, ElseExpr)>,
+// ── if / if let ──────────────────────────────────────────────────────────────
+
+union_printable!(AnyElse { Block, If, IfLet });
+
+/// ` else …` after a branch.
+fn print_else_branch(else_branch: ElseBranch, shape: Shape, printer: &mut Printer) {
+    printer.print_str(" ");
+    printer.print_token(else_branch.kw);
+    printer.print_str(" ");
+    printer.print(present(else_branch.body), shape);
 }
 
-impl FromCST for IfExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::IF_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // KW_IF
-        let keyword = it.expect_parse()?;
-
-        // Condition: any expression (parens are optional in Baml).
-        let condition_elem = it.expect_next("an if condition expression")?;
-        let condition = Box::new(Expression::from_cst(condition_elem)?);
-
-        // BLOCK_EXPR
-        let block: BlockExpr = it.expect_parse()?;
-
-        // Optional else branch
-        let else_branch = if let Some(elem) = it.next() {
-            let else_token = t::Else::from_cst(elem)?;
-
-            let else_body_node = it.expect_node("else body (if, if-let, or block)")?;
-            let else_body = match else_body_node.kind() {
-                SyntaxKind::IF_EXPR => ElseExpr::If(Box::new(IfExpr::from_cst(
-                    SyntaxElement::Node(else_body_node),
-                )?)),
-                SyntaxKind::IF_LET_EXPR => ElseExpr::IfLet(Box::new(IfLetExpr::from_cst(
-                    SyntaxElement::Node(else_body_node),
-                )?)),
-                SyntaxKind::BLOCK_EXPR => ElseExpr::Block(Box::new(BlockExpr::from_cst(
-                    SyntaxElement::Node(else_body_node),
-                )?)),
-                _ => {
-                    return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "IF_EXPR, IF_LET_EXPR, or BLOCK_EXPR".into(),
-                        found: else_body_node.kind(),
-                        at: else_body_node.text_range(),
-                    });
-                }
-            };
-
-            Some((else_token, else_body))
-        } else {
-            None
-        };
-
-        it.expect_end()?;
-
-        Ok(IfExpr {
-            keyword,
-            condition,
-            block,
-            else_branch,
-        })
-    }
-}
-
-impl KnownKind for IfExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::IF_EXPR
-    }
-}
-
-impl Printable for IfExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
+impl Printable for Id<IfExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let node = printer.tree.get(self);
+        let condition = present(node.cond);
+        let block = present(node.then_branch);
+        printer.print_token(node.kw);
         printer.print_str(" ");
-        // Always print parens around the condition. Source may omit them
-        // (Baml allows `if cond { ... }`), but emitting them keeps formatter
-        // output consistent with the canonical form.
-        // Added parens print exactly like a real `PAREN_EXPR` so the output
-        // reformats to itself.
-        if matches!(*self.condition, Expression::Paren(_)) {
-            printer.print(&*self.condition, shape.clone());
+        if matches!(condition, AnyExpr::Paren(_)) {
+            printer.print(condition, shape);
         } else if printer
             .try_sub_printer(|p| {
                 p.print_str("(");
                 if p.with_line_separated(false, |p| {
-                    p.print(&*self.condition, Shape::unlimited_single_line())
+                    p.print(condition, Shape::unlimited_single_line())
                 })
                 .multi_lined
                 {
@@ -1659,542 +831,254 @@ impl Printable for IfExpr {
             })
             .is_none()
         {
-            print_in_added_parens_multi_line(&*self.condition, &shape, printer);
+            print_in_added_parens_multi_line(condition, &shape, printer);
         }
         printer.print_str(" ");
-        printer.print(&self.block, shape.clone());
-
-        if let Some((else_kw, else_expr)) = &self.else_branch {
-            printer.print_str(" ");
-            printer.print_raw_token(else_kw);
-            printer.print_str(" ");
-            printer.print(else_expr, shape);
+        printer.print(block, shape);
+        if let Some(else_branch) = node.else_branch {
+            print_else_branch(else_branch, shape, printer);
         }
-
         PrintInfo::default_multi_lined()
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        if let Some((_, else_expr)) = &self.else_branch {
-            else_expr.rightmost_token()
-        } else {
-            self.block.rightmost_token()
-        }
-    }
 }
 
-/// Used in [`IfExpr`] / [`IfLetExpr`] to represent the else/else-if branch.
-#[derive(Debug)]
-pub enum ElseExpr {
-    /// else if
-    If(Box<IfExpr>),
-    /// else if let
-    IfLet(Box<IfLetExpr>),
-    /// final else block
-    Block(Box<BlockExpr>),
-}
-
-impl Printable for ElseExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            ElseExpr::If(if_expr) => if_expr.print(shape, printer),
-            ElseExpr::IfLet(if_let_expr) => if_let_expr.print(shape, printer),
-            ElseExpr::Block(block) => block.print(shape, printer),
-        }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        match self {
-            ElseExpr::If(if_expr) => if_expr.leftmost_token(),
-            ElseExpr::IfLet(if_let_expr) => if_let_expr.leftmost_token(),
-            ElseExpr::Block(block) => block.leftmost_token(),
-        }
-    }
-    fn rightmost_token(&self) -> TextRange {
-        match self {
-            ElseExpr::If(if_expr) => if_expr.rightmost_token(),
-            ElseExpr::IfLet(if_let_expr) => if_let_expr.rightmost_token(),
-            ElseExpr::Block(block) => block.rightmost_token(),
-        }
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::IF_LET_EXPR`] node.
-///
-/// `if let PATTERN = SCRUTINEE BLOCK (else (BLOCK | IF_EXPR | IF_LET_EXPR))?`
-#[derive(Debug)]
-pub struct IfLetExpr {
-    pub keyword: t::If,
-    /// `let PATTERN` — the leading `let` is part of the pattern grammar
-    /// (`parse_let_pattern`), so it's stored inside `pattern` rather than
-    /// as a separate token.
-    pub pattern: MatchPattern,
-    pub equals: t::Equals,
-    pub scrutinee: Box<Expression>,
-    pub block: BlockExpr,
-    pub else_branch: Option<(t::Else, ElseExpr)>,
-}
-
-impl FromCST for IfLetExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::IF_LET_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // KW_IF
-        let keyword = it.expect_parse()?;
-
-        // PATTERN (consumes its own leading `let` token)
-        let pattern = it.expect_parse()?;
-
-        // `=` separator between pattern and scrutinee
-        let equals = it.expect_parse()?;
-
-        // Scrutinee: any expression
-        let scrutinee_elem = it.expect_next("if-let scrutinee expression")?;
-        let scrutinee = Box::new(Expression::from_cst(scrutinee_elem)?);
-
-        // Then block
-        let block: BlockExpr = it.expect_parse()?;
-
-        // Optional else / else-if / else-if-let
-        let else_branch = if let Some(elem) = it.next() {
-            let else_token = t::Else::from_cst(elem)?;
-            let else_body_node = it.expect_node("else body (if, if-let, or block)")?;
-            let else_body = match else_body_node.kind() {
-                SyntaxKind::IF_EXPR => ElseExpr::If(Box::new(IfExpr::from_cst(
-                    SyntaxElement::Node(else_body_node),
-                )?)),
-                SyntaxKind::IF_LET_EXPR => ElseExpr::IfLet(Box::new(IfLetExpr::from_cst(
-                    SyntaxElement::Node(else_body_node),
-                )?)),
-                SyntaxKind::BLOCK_EXPR => ElseExpr::Block(Box::new(BlockExpr::from_cst(
-                    SyntaxElement::Node(else_body_node),
-                )?)),
-                _ => {
-                    return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "IF_EXPR, IF_LET_EXPR, or BLOCK_EXPR".into(),
-                        found: else_body_node.kind(),
-                        at: else_body_node.text_range(),
-                    });
-                }
-            };
-            Some((else_token, else_body))
-        } else {
-            None
-        };
-
-        it.expect_end()?;
-
-        Ok(IfLetExpr {
-            keyword,
-            pattern,
-            equals,
-            scrutinee,
-            block,
-            else_branch,
-        })
-    }
-}
-
-impl KnownKind for IfLetExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::IF_LET_EXPR
-    }
-}
-
-impl Printable for IfLetExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
+impl Printable for Id<IfLetExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let node = printer.tree.get(self);
+        let pattern = present(node.pattern);
+        let eq = present(node.eq);
+        let scrutinee = present(node.scrutinee);
+        let block = present(node.then_branch);
+        printer.print_token(node.kw);
         printer.print_str(" ");
-        // `if let PATTERN = SCRUTINEE { ... }` — pattern carries its own
-        // leading `let`. No surrounding parens around the pattern or
-        // scrutinee (unlike plain `if`, where parens are canonicalised
-        // around the condition).
-        printer.print(&self.pattern, shape.clone());
+        print_binding_keyword_with_trailing_trivia(printer, node.introducer);
+        printer.print(pattern, shape);
         printer.print_str(" ");
-        printer.print_raw_token(&self.equals);
+        printer.print_token(eq);
         printer.print_str(" ");
-        printer.print(&*self.scrutinee, shape.clone());
+        printer.print(scrutinee, shape);
         printer.print_str(" ");
-        printer.print(&self.block, shape.clone());
-
-        if let Some((else_kw, else_expr)) = &self.else_branch {
-            printer.print_str(" ");
-            printer.print_raw_token(else_kw);
-            printer.print_str(" ");
-            printer.print(else_expr, shape);
+        printer.print(block, shape);
+        if let Some(else_branch) = node.else_branch {
+            print_else_branch(else_branch, shape, printer);
         }
-
         PrintInfo::default_multi_lined()
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
+}
+
+// ── match ────────────────────────────────────────────────────────────────────
+
+type ScrutineeParens = Option<(Token<punct::LParen>, Token<punct::RParen>)>;
+
+/// The scrutinee's expression and, when written, its parentheses and type.
+fn scrutinee_parts(
+    scrutinee: AnyMatchScrutinee,
+    tree: &FileTree,
+) -> (AnyExpr, ScrutineeParens, Option<Id<TypeAscription>>) {
+    match scrutinee {
+        AnyMatchScrutinee::Paren(paren) => {
+            let node = tree.get(paren);
+            (
+                present(node.expr),
+                Some((node.l, present(node.r))),
+                node.ascription,
+            )
+        }
+        AnyMatchScrutinee::Bare(expr) => (expr, None, None),
+        AnyMatchScrutinee::Bogus(_) => unreachable!("the formatter prints only error-free trees"),
     }
-    fn rightmost_token(&self) -> TextRange {
-        if let Some((_, else_expr)) = &self.else_branch {
-            else_expr.rightmost_token()
-        } else {
-            self.block.rightmost_token()
+}
+
+fn print_scrutinee_ascription(ascription: Id<TypeAscription>, printer: &mut Printer) {
+    let node = printer.tree.get(ascription);
+    if let Some(colon) = node.colon {
+        printer.print_token(colon);
+    } else {
+        printer.print_str(":");
+    }
+    printer.print_str(" ");
+    printer.print(present(node.ty), Shape::unlimited_single_line());
+}
+
+fn match_scrutinee_single_line(
+    id: Id<MatchExpr>,
+    shape: &Shape,
+    printer: &mut Printer,
+) -> Option<PrintInfo> {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    let (scrutinee, parens, ascription) = scrutinee_parts(present(node.scrutinee), tree);
+    match parens {
+        Some((open, _)) => {
+            printer.print_token(open);
+            let (_, open_trailing) = printer.trivia.get_for_range_split(printer.range(open));
+            printer.try_print_trivia_single_line_squished(open_trailing)?;
+        }
+        None => printer.print_str("("),
+    }
+    let (scrutinee_leading, scrutinee_trailing) = printer.trivia.get_for_element(tree, scrutinee);
+    printer.try_print_trivia_single_line_squished(scrutinee_leading)?;
+    if printer
+        .print(scrutinee, Shape::unlimited_single_line())
+        .multi_lined
+    {
+        return None;
+    }
+    if let Some(ascription) = ascription {
+        print_scrutinee_ascription(ascription, printer);
+    }
+    printer.try_print_trivia_single_line_squished(scrutinee_trailing)?;
+    match parens {
+        Some((_, close)) => {
+            let (close_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
+            printer.try_print_trivia_single_line_squished(close_leading)?;
+            printer.print_token(close);
+        }
+        None => printer.print_str(")"),
+    }
+    if printer.output.len() > shape.width {
+        None
+    } else {
+        Some(PrintInfo::default_single_line())
+    }
+}
+
+fn match_scrutinee_multi_line(id: Id<MatchExpr>, shape: &Shape, printer: &mut Printer) {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    let (scrutinee, parens, ascription) = scrutinee_parts(present(node.scrutinee), tree);
+    let paren_inner_indent = shape.indent + printer.config.indent_width;
+    match parens {
+        Some((open, _)) => {
+            printer.print_token(open);
+            printer.print_trivia_all_trailing_for(printer.range(open));
+        }
+        None => printer.print_str("("),
+    }
+    printer.print_newline();
+    printer.print_standalone_with_trivia(scrutinee, paren_inner_indent);
+    if let Some(ascription) = ascription {
+        print_scrutinee_ascription(ascription, printer);
+    }
+    printer.print_newline();
+    match parens {
+        Some((_, close)) => {
+            printer.print_trivia_all_leading_with_newline_for(
+                printer.range(close),
+                paren_inner_indent,
+            );
+            printer.print_spaces(shape.indent);
+            printer.print_token(close);
+        }
+        None => {
+            printer.print_spaces(shape.indent);
+            printer.print_str(")");
         }
     }
 }
 
-/// An element of a match/catch arm list: an arm, or a `//#` header comment
-/// appearing between arms. Headers are legal arm-list elements (the parser
-/// consumes them there, mirroring statement blocks), so the strong AST must
-/// carry them through formatting.
-#[derive(Debug)]
-pub enum ArmListItem<A> {
-    Arm(A),
-    Header(t::HeaderComment),
-}
-
-impl<A: Printable> Printable for ArmListItem<A> {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            Self::Arm(arm) => arm.print(shape, printer),
-            Self::Header(header) => {
-                printer.print_raw_token(header);
-                PrintInfo::default_single_line()
-            }
-        }
-    }
-
-    fn leftmost_token(&self) -> TextRange {
-        match self {
-            Self::Arm(arm) => arm.leftmost_token(),
-            Self::Header(header) => header.span(),
-        }
-    }
-
-    fn rightmost_token(&self) -> TextRange {
-        match self {
-            Self::Arm(arm) => arm.rightmost_token(),
-            Self::Header(header) => header.span(),
-        }
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::MATCH_EXPR`] node.
-#[derive(Debug)]
-pub struct MatchExpr {
-    pub keyword: t::Match,
-    pub open_paren: t::LParen,
-    pub scrutinee: Box<Expression>,
-    pub close_paren: t::RParen,
-    pub open_brace: t::LBrace,
-    pub arms: Vec<ArmListItem<MatchArm>>,
-    pub close_brace: t::RBrace,
-}
-
-impl FromCST for MatchExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::MATCH_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // KW_MATCH
-        let keyword = it.expect_parse()?;
-
-        // L_PAREN
-        let open_paren = it.expect_parse()?;
-
-        // Scrutinee expression (can be any node that represents an expression)
-        let scrutinee_node = it.expect_next("scrutinee expression")?;
-        let scrutinee = Box::new(Expression::from_cst(scrutinee_node)?);
-
-        // R_PAREN
-        let close_paren = it.expect_parse()?;
-
-        // L_BRACE
-        let open_brace = it.expect_parse()?;
-
-        // Collect match arms
-        let mut arms = Vec::new();
-        let close_brace = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
-            };
-            match elem.kind() {
-                SyntaxKind::R_BRACE => {
-                    break t::RBrace::from_cst(elem)?;
-                }
-                SyntaxKind::MATCH_ARM => {
-                    let arm = MatchArm::from_cst(elem)?;
-                    arms.push(ArmListItem::Arm(arm));
-                }
-                SyntaxKind::HEADER_COMMENT => {
-                    arms.push(ArmListItem::Header(t::HeaderComment::from_cst(elem)?));
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "MATCH_ARM, HEADER_COMMENT, or R_BRACE".into(),
-                        found: elem.kind(),
-                        at: elem.text_range(),
-                    });
-                }
-            }
-        };
-
-        it.expect_end()?;
-
-        Ok(MatchExpr {
-            keyword,
-            open_paren,
-            scrutinee,
-            close_paren,
-            open_brace,
-            arms,
-            close_brace,
-        })
-    }
-}
-
-impl KnownKind for MatchExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::MATCH_EXPR
-    }
-}
-
-impl MatchExpr {
-    fn try_print_scrutinee_single_line(
-        &self,
-        shape: &Shape,
-        printer: &mut Printer,
-    ) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_paren);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        printer.try_print_trivia_single_line_squished(open_trailing)?;
-
-        let (scrutinee_leading, scrutinee_trailing) =
-            printer.trivia.get_for_element(&*self.scrutinee);
-        printer.try_print_trivia_single_line_squished(scrutinee_leading)?;
-        if printer
-            .print(&*self.scrutinee, Shape::unlimited_single_line())
-            .multi_lined
-        {
-            return None;
-        }
-        printer.try_print_trivia_single_line_squished(scrutinee_trailing)?;
-
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_paren);
-
-        if printer.output.len() > shape.width {
-            None
-        } else {
-            Some(PrintInfo::default_single_line())
-        }
-    }
-
-    fn print_scrutinee_multi_line(&self, shape: &Shape, printer: &mut Printer) {
-        let paren_inner_indent = shape.indent + printer.config.indent_width;
-        printer.print_raw_token(&self.open_paren);
-        printer.print_trivia_all_trailing_for(self.open_paren.span());
-        printer.print_newline();
-
-        printer.print_standalone_with_trivia(&*self.scrutinee, paren_inner_indent);
-        printer.print_newline();
-        printer
-            .print_trivia_all_leading_with_newline_for(self.close_paren.span(), paren_inner_indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_paren);
-    }
-}
-
-impl Printable for MatchExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<MatchExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let open = present(node.l);
+        let close = present(node.r);
         let inner_indent = shape.indent + printer.config.indent_width;
-
-        // Print "match" keyword
-        printer.print_raw_token(&self.keyword);
+        printer.print_token(node.kw);
         printer.print_str(" ");
-
-        // Print scrutinee: try single-line, fall back to multi-line. It sits in
-        // the match's own parentheses.
         printer.with_line_separated(false, |printer| {
             if printer
-                .try_sub_printer(|p| self.try_print_scrutinee_single_line(&shape, p))
+                .try_sub_printer(|p| match_scrutinee_single_line(self, &shape, p))
                 .is_none()
             {
-                self.print_scrutinee_multi_line(&shape, printer);
+                match_scrutinee_multi_line(self, &shape, printer);
             }
         });
-
-        // Print body with block container pattern
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        printer.print_token(open);
+        printer.print_trivia_all_trailing_for(printer.range(open));
         printer.print_newline();
-
-        for arm in &self.arms {
-            printer.print_standalone_with_trivia(arm, inner_indent);
+        for arm in tree.list(node.arms) {
+            printer.print_standalone_with_trivia(*arm, inner_indent);
             printer.print_newline();
         }
-
-        printer.print_trivia_all_leading_with_newline_for(self.close_brace.span(), inner_indent);
+        printer.print_trivia_all_leading_with_newline_for(printer.range(close), inner_indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
-
+        printer.print_token(close);
         PrintInfo::default_multi_lined()
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::MATCH_ARM`] node.
-#[derive(Debug)]
-pub struct MatchArm {
-    pub pattern: MatchPattern,
-    pub guard: Option<MatchGuard>,
-    pub fat_arrow: t::FatArrow,
-    pub body: Expression,
-    pub comma: Option<t::Comma>,
-}
-
-impl FromCST for MatchArm {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::MATCH_ARM)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // MATCH_PATTERN
-        let pattern: MatchPattern = it.expect_parse()?;
-
-        // Check for optional guard (if condition)
-        let guard = it
-            .next_if_kind(SyntaxKind::MATCH_GUARD)
-            .map(MatchGuard::from_cst)
-            .transpose()?;
-
-        // FAT_ARROW
-        let fat_arrow = it.expect_parse()?;
-
-        // Body expression
-        let body_node = it.expect_next("match arm body")?;
-        let body = Expression::from_cst(body_node)?;
-
-        let comma = it.next().map(t::Comma::from_cst).transpose()?;
-
-        it.expect_end()?;
-
-        Ok(MatchArm {
-            pattern,
-            guard,
-            fat_arrow,
-            body,
-            comma,
-        })
-    }
-}
-
-impl KnownKind for MatchArm {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::MATCH_ARM
-    }
-}
-
-impl MatchArm {
-    /// Prints all of the arm except the body/expression (prints up to and including the `=>`)
-    fn print_condition(&self, shape: &Shape, printer: &mut Printer) -> PrintInfo {
-        let mut multi_lined = false;
-
-        let mut pattern_printer = printer.sub_printer();
-        let pattern_info = pattern_printer.print(&self.pattern, shape.clone());
-        multi_lined |= pattern_info.multi_lined;
-        let pattern_len = pattern_printer.len();
-        printer.append_from_printer(pattern_printer);
-
-        if let Some(guard) = &self.guard {
-            if pattern_info.multi_lined {
-                // Guard goes on new line
+/// `pattern [if guard] =>`.
+fn match_arm_print_condition(id: Id<MatchArm>, shape: &Shape, printer: &mut Printer) -> PrintInfo {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    let pattern = present(node.pattern);
+    let mut multi_lined = false;
+    let mut pattern_printer = printer.sub_printer();
+    let pattern_info = pattern_printer.print(pattern, *shape);
+    multi_lined |= pattern_info.multi_lined;
+    let pattern_len = pattern_printer.len();
+    printer.append_from_printer(pattern_printer);
+    if let Some(guard) = node.guard {
+        let condition = present(guard.cond);
+        if pattern_info.multi_lined {
+            printer.print_newline();
+            printer.print_spaces(shape.indent + printer.config.indent_width);
+            let offset = usize::from(printer.range(guard.kw).len()) + const { " ".len() };
+            let guard_shape = Shape {
+                width: printer.config.line_width.saturating_sub(
+                    shape.indent + printer.config.indent_width + offset + const { " =>".len() },
+                ),
+                indent: shape.indent + printer.config.indent_width,
+                first_line_offset: offset,
+            };
+            printer.print(guard, guard_shape);
+        } else if matches!(condition, AnyExpr::Paren(_) | AnyExpr::Block(_)) {
+            printer.print_spaces(1);
+            let offset = shape.first_line_offset + pattern_len + 1;
+            let guard_shape = Shape {
+                width: printer
+                    .config
+                    .line_width
+                    .saturating_sub(shape.indent + offset + const { " => ".len() }),
+                indent: shape.indent,
+                first_line_offset: offset,
+            };
+            let guard_info = printer.print(guard, guard_shape);
+            multi_lined |= guard_info.multi_lined;
+        } else {
+            let mut guard_single_line = printer.sub_printer();
+            let guard_info = guard_single_line.print(guard, Shape::unlimited_single_line());
+            let single_line_len =
+                pattern_len + const { " ".len() } + guard_single_line.len() + const { " =>".len() };
+            if guard_info.multi_lined || single_line_len > shape.width {
                 printer.print_newline();
                 printer.print_spaces(shape.indent + printer.config.indent_width);
-                let offset = usize::from(guard.keyword.token_span.len()) + const { " ".len() };
-                let guard_shape = Shape {
-                    width: printer.config.line_width.saturating_sub(
-                        shape.indent + printer.config.indent_width + offset + const { " =>".len() },
-                    ),
-                    indent: shape.indent + printer.config.indent_width,
-                    first_line_offset: offset,
-                };
-                guard.print(guard_shape, printer);
-            } else if matches!(guard.condition, Expression::Paren(_) | Expression::Block(_)) {
-                // we can delegate determining whether or not to multi-line to the guard expression
-                // since it will do so nicely
-                printer.print_spaces(1);
-                let offset = shape.first_line_offset + pattern_len + 1;
                 let guard_shape = Shape {
                     width: printer
                         .config
                         .line_width
-                        .saturating_sub(shape.indent + offset + const { " => ".len() }),
+                        .saturating_sub(shape.indent + const { " => {".len() }),
                     indent: shape.indent,
-                    first_line_offset: offset,
+                    first_line_offset: 0,
                 };
-                let guard_info = guard.print(guard_shape, printer);
-                multi_lined |= guard_info.multi_lined;
+                printer.print(guard, guard_shape);
             } else {
-                // try printing guard single-line
-                let mut guard_single_line = printer.sub_printer();
-                let guard_info =
-                    guard.print(Shape::unlimited_single_line(), &mut guard_single_line);
-
-                let single_line_len = pattern_len
-                    + const { " ".len() }
-                    + guard_single_line.len()
-                    + const { " =>".len() };
-                if guard_info.multi_lined || single_line_len > shape.width {
-                    // Guard is too long to fit on a single line, so print it on the next line
-                    printer.print_newline();
-                    printer.print_spaces(shape.indent + printer.config.indent_width);
-                    let guard_shape = Shape {
-                        width: printer
-                            .config
-                            .line_width
-                            .saturating_sub(shape.indent + const { " => {".len() }),
-                        indent: shape.indent,
-                        first_line_offset: 0,
-                    };
-                    guard.print(guard_shape, printer);
-                } else {
-                    // guard goes on the same line after the pattern
-                    printer.print_spaces(1);
-                    printer.append_from_printer(guard_single_line);
-                }
+                printer.print_spaces(1);
+                printer.append_from_printer(guard_single_line);
             }
         }
-
-        printer.print_str(" =>");
-
-        PrintInfo { multi_lined }
     }
+    printer.print_str(" =>");
+    PrintInfo { multi_lined }
 }
 
-/// Print an arm body that is being wrapped into a `{ … }` block (the `{` and
-/// newline are already emitted; the caller emits the closing `}`).
-///
-/// `arm_indent` is the arm's own indent; the body is printed one level deeper.
-/// A braceless jump body (`return`/`break`/`continue`) additionally gets its
-/// statement `;` — and its trailing trivia is deliberately left for the arm
-/// level so a same-line comment stays attached to the arm (emitted after the
-/// wrapped `},`) instead of being split from the `;` or dropped/duplicated when
-/// the arm has no comma (B-629).
-fn print_wrapped_arm_body(printer: &mut Printer, body: &Expression, arm_indent: usize) {
+fn print_wrapped_arm_body(printer: &mut Printer, body: AnyExpr, arm_indent: usize) {
     let inner_indent = arm_indent + printer.config.indent_width;
     if matches!(
         body,
-        Expression::Return(_) | Expression::Break(_) | Expression::Continue(_)
+        AnyExpr::Return(_) | AnyExpr::Break(_) | AnyExpr::Continue(_)
     ) {
         printer.print_standalone_leading_and_body(body, inner_indent);
         printer.print_str(";");
@@ -2203,19 +1087,18 @@ fn print_wrapped_arm_body(printer: &mut Printer, body: &Expression, arm_indent: 
     }
 }
 
-impl Printable for MatchArm {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<MatchArm> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let body = present(node.body);
         printer.with_line_separated(true, |printer| {
-            let condition_info = self.print_condition(&shape, printer);
+            let condition_info = match_arm_print_condition(self, &shape, printer);
             let condition_multi_lined = condition_info.multi_lined;
-
             if condition_multi_lined {
-                // the body goes in a block expression on a new line
                 printer.print_newline();
-
                 printer.print_spaces(shape.indent);
-                if let Expression::Block(block) = &self.body {
-                    // body is already a block expression
+                if let AnyExpr::Block(block) = body {
                     let body_shape = Shape {
                         width: printer.config.line_width.saturating_sub(shape.indent),
                         indent: shape.indent,
@@ -2224,26 +1107,18 @@ impl Printable for MatchArm {
                     printer.print(block, body_shape);
                     printer.print_str(",");
                 } else {
-                    // put the body in a block expression
                     printer.print_str("{");
                     printer.print_newline();
-                    print_wrapped_arm_body(printer, &self.body, shape.indent);
+                    print_wrapped_arm_body(printer, body, shape.indent);
                     printer.print_newline();
                     printer.print_spaces(shape.indent);
                     printer.print_str("},");
                 }
                 return PrintInfo::default_multi_lined();
             }
-
-            // condition is single line, see if we can fit the body with it
-            // TODO: if the body is a block with only a tail expression, we might be able to un-nest it
-
             printer.print_spaces(1);
             let line_len_remaining = printer.current_line_remaining_width();
-            if let Expression::Block(block) = &self.body {
-                // If it is a block expression, we print it directly in front of the ` => `.
-                // Since the condition was single-line, the preceding line had no extra indent
-                // so we don't need to put the `{` on a new line.
+            if let AnyExpr::Block(block) = body {
                 let body_shape = Shape {
                     width: line_len_remaining,
                     indent: shape.indent,
@@ -2255,12 +1130,12 @@ impl Printable for MatchArm {
                 let info = printer.print(block, body_shape);
                 printer.print_str(",");
                 return info;
-            } else if let Expression::Match(match_expr) = &self.body
-                && let Some(match_scrutinee_len) = match_expr.scrutinee.single_line_width(printer)
+            } else if let AnyExpr::Match(match_expr) = body
+                && let (scrutinee, _, _) =
+                    scrutinee_parts(present(tree.get(match_expr).scrutinee), tree)
+                && let Some(match_scrutinee_len) = scrutinee.single_line_width(printer)
                 && const { "match () {".len() } + match_scrutinee_len <= line_len_remaining
             {
-                // Match expressions also may go directly on the same line if
-                // `match (...) {` fits. The arms can be multi-line.
                 let match_shape = Shape {
                     width: line_len_remaining,
                     indent: shape.indent,
@@ -2269,22 +1144,16 @@ impl Printable for MatchArm {
                         .line_width
                         .saturating_sub(shape.indent + line_len_remaining),
                 };
-                let info = match_expr.print(match_shape, printer);
+                let info = printer.print(match_expr, match_shape);
                 printer.print_str(",");
                 return info;
             }
-
-            // try and print the body single-line
             let mut try_body = printer.sub_printer();
-            let try_body_info = self
-                .body
-                .print(Shape::unlimited_single_line(), &mut try_body);
-
+            let try_body_info = try_body.print(body, Shape::unlimited_single_line());
             if try_body_info.multi_lined || try_body.len() > line_len_remaining {
-                // create a block expression around it
                 printer.print_str("{");
                 printer.print_newline();
-                print_wrapped_arm_body(printer, &self.body, shape.indent);
+                print_wrapped_arm_body(printer, body, shape.indent);
                 printer.print_newline();
                 printer.print_spaces(shape.indent);
                 printer.print_str("},");
@@ -2296,367 +1165,90 @@ impl Printable for MatchArm {
             }
         })
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.pattern.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        if let Some(comma) = &self.comma {
-            comma.span()
-        } else {
-            self.body.rightmost_token()
-        }
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::MATCH_GUARD`] node.
-#[derive(Debug)]
-pub struct MatchGuard {
-    pub keyword: t::If,
-    pub condition: Expression,
-}
-
-impl FromCST for MatchGuard {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::MATCH_GUARD)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let if_token = it.expect_parse()?;
-
-        let condition = it.expect_next("a condition")?;
-        let condition = Expression::from_cst(condition)?;
-
-        it.expect_end()?;
-
-        Ok(MatchGuard {
-            keyword: if_token,
-            condition,
-        })
-    }
-}
-
-impl KnownKind for MatchGuard {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::MATCH_GUARD
+impl Spanned for MatchGuard {
+    fn tokens(self, tree: &FileTree) -> TokenRange {
+        span_between(self.kw, present(self.cond), tree).0
     }
 }
 
 impl Printable for MatchGuard {
-    fn print(&self, mut shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
+    fn print(self, mut shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let condition = present(self.cond);
+        printer.print_token(self.kw);
         printer.print_str(" ");
-        shape.width = shape
-            .width
-            .saturating_sub(usize::from(self.keyword.token_span.len()) + 1);
-        shape.first_line_offset += usize::from(self.keyword.token_span.len()) + 1;
-        printer.print(&self.condition, shape)
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.condition.rightmost_token()
+        let kw_len = usize::from(printer.range(self.kw).len());
+        shape.width = shape.width.saturating_sub(kw_len + 1);
+        shape.first_line_offset += kw_len + 1;
+        printer.print(condition, shape)
     }
 }
 
-/// Corresponds to a [`SyntaxKind::CATCH_EXPR`] node.
-#[derive(Debug)]
-pub struct CatchExpr {
-    pub base: Box<Expression>,
-    pub clauses: Vec<CatchClause>,
-}
+// ── catch ────────────────────────────────────────────────────────────────────
 
-impl FromCST for CatchExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CATCH_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-        let base = Box::new(Expression::from_cst(
-            it.expect_next("catch base expression")?,
-        )?);
-
-        let mut clauses = Vec::new();
-        for elem in it {
-            if elem.kind() != SyntaxKind::CATCH_CLAUSE {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "CATCH_CLAUSE".into(),
-                    found: elem.kind(),
-                    at: elem.text_range(),
-                });
-            }
-            clauses.push(CatchClause::from_cst(elem)?);
-        }
-
-        Ok(Self { base, clauses })
-    }
-}
-
-impl KnownKind for CatchExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CATCH_EXPR
-    }
-}
-
-impl Printable for CatchExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let base_info = printer.print(&*self.base, shape.clone());
-        for clause in &self.clauses {
+impl Printable for Id<CatchExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let clauses = tree.list(node.clauses.as_list());
+        let base_info = printer.print(node.body, shape);
+        for clause in clauses {
             printer.print_str(" ");
-            printer.print(clause, shape.clone());
+            printer.print(*clause, shape);
         }
         PrintInfo {
-            multi_lined: base_info.multi_lined || !self.clauses.is_empty(),
-        }
-    }
-
-    fn leftmost_token(&self) -> TextRange {
-        self.base.leftmost_token()
-    }
-
-    fn rightmost_token(&self) -> TextRange {
-        self.clauses
-            .last()
-            .map_or_else(|| self.base.rightmost_token(), CatchClause::rightmost_token)
-    }
-}
-
-/// The `catch`, `catch_all`, or `catch_all_panics` keyword that starts a catch clause.
-#[derive(Debug)]
-pub enum CatchKeyword {
-    Catch(t::Catch),
-    CatchAll(t::CatchAll),
-    CatchAllPanics(t::CatchAllPanics),
-}
-
-impl FromCST for CatchKeyword {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        match elem.kind() {
-            SyntaxKind::KW_CATCH => t::Catch::from_cst(elem).map(Self::Catch),
-            SyntaxKind::KW_CATCH_ALL => t::CatchAll::from_cst(elem).map(Self::CatchAll),
-            SyntaxKind::KW_CATCH_ALL_PANICS => {
-                t::CatchAllPanics::from_cst(elem).map(Self::CatchAllPanics)
-            }
-            found => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "KW_CATCH, KW_CATCH_ALL, or KW_CATCH_ALL_PANICS".into(),
-                found,
-                at: elem.text_range(),
-            }),
+            multi_lined: base_info.multi_lined || !clauses.is_empty(),
         }
     }
 }
 
-impl Token for CatchKeyword {
-    fn span(&self) -> TextRange {
-        match self {
-            CatchKeyword::Catch(keyword) => keyword.span(),
-            CatchKeyword::CatchAll(keyword) => keyword.span(),
-            CatchKeyword::CatchAllPanics(keyword) => keyword.span(),
-        }
-    }
-}
-
-/// `catch (binding)` and optional stack-trace bindings use small wrapper nodes.
-#[derive(Debug)]
-pub struct CatchBinding {
-    pub name: t::Word,
-}
-
-impl CatchBinding {
-    fn from_cst_kind(elem: SyntaxElement, kind: SyntaxKind) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, kind)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-        let name = it.expect_parse()?;
-        it.expect_end()?;
-        Ok(Self { name })
-    }
-}
-
-impl Printable for CatchBinding {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.name);
-        PrintInfo::default_single_line()
-    }
-
-    fn leftmost_token(&self) -> TextRange {
-        self.name.span()
-    }
-
-    fn rightmost_token(&self) -> TextRange {
-        self.name.span()
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::CATCH_CLAUSE`] node.
-#[derive(Debug)]
-pub struct CatchClause {
-    pub keyword: CatchKeyword,
-    pub open_paren: t::LParen,
-    pub binding: CatchBinding,
-    pub stack_trace_binding: Option<(t::Comma, CatchBinding)>,
-    pub close_paren: t::RParen,
-    pub open_brace: t::LBrace,
-    pub arms: Vec<ArmListItem<CatchArm>>,
-    pub close_brace: t::RBrace,
-}
-
-impl FromCST for CatchClause {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CATCH_CLAUSE)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword = CatchKeyword::from_cst(it.expect_next("catch keyword")?)?;
-        let open_paren = it.expect_parse()?;
-        let binding = CatchBinding::from_cst_kind(
-            it.expect_next("catch binding")?,
-            SyntaxKind::CATCH_BINDING,
-        )?;
-        let stack_trace_binding = it
-            .next_if_kind(SyntaxKind::COMMA)
-            .map(|comma| {
-                Ok::<_, StrongAstError>((
-                    t::Comma::from_cst(comma)?,
-                    CatchBinding::from_cst_kind(
-                        it.expect_next("catch stack trace binding")?,
-                        SyntaxKind::CATCH_STACK_TRACE_BINDING,
-                    )?,
-                ))
-            })
-            .transpose()?;
-        let close_paren = it.expect_parse()?;
-        let open_brace = it.expect_parse()?;
-
-        let mut arms = Vec::new();
-        let close_brace = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
-            };
-            match elem.kind() {
-                SyntaxKind::R_BRACE => break t::RBrace::from_cst(elem)?,
-                SyntaxKind::CATCH_ARM => arms.push(ArmListItem::Arm(CatchArm::from_cst(elem)?)),
-                SyntaxKind::HEADER_COMMENT => {
-                    arms.push(ArmListItem::Header(t::HeaderComment::from_cst(elem)?));
-                }
-                found => {
-                    return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "CATCH_ARM, HEADER_COMMENT, or R_BRACE".into(),
-                        found,
-                        at: elem.text_range(),
-                    });
-                }
-            }
-        };
-        it.expect_end()?;
-
-        Ok(Self {
-            keyword,
-            open_paren,
-            binding,
-            stack_trace_binding,
-            close_paren,
-            open_brace,
-            arms,
-            close_brace,
-        })
-    }
-}
-
-impl KnownKind for CatchClause {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CATCH_CLAUSE
-    }
-}
-
-impl Printable for CatchClause {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<CatchClause> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let open_brace = present(node.lbrace);
+        let close_brace = present(node.rbrace);
         let inner_indent = shape.indent + printer.config.indent_width;
-
-        printer.print_raw_token(&self.keyword);
+        printer.print_token(node.kw);
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_paren);
-        printer.print(&self.binding, Shape::unlimited_single_line());
-        if let Some((comma, stack_trace_binding)) = &self.stack_trace_binding {
-            printer.print_raw_token(comma);
+        printer.print_token(present(node.l));
+        printer.print(present(node.binding), Shape::unlimited_single_line());
+        if let Some(trace) = node.trace {
+            printer.print_token(trace.comma);
             printer.print_str(" ");
-            printer.print(stack_trace_binding, Shape::unlimited_single_line());
+            printer.print(present(trace.name), Shape::unlimited_single_line());
         }
-        printer.print_raw_token(&self.close_paren);
+        printer.print_token(present(node.r));
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        printer.print_token(open_brace);
+        printer.print_trivia_all_trailing_for(printer.range(open_brace));
         printer.print_newline();
-
-        for arm in &self.arms {
-            printer.print_standalone_with_trivia(arm, inner_indent);
+        for arm in tree.list(node.arms) {
+            printer.print_standalone_with_trivia(*arm, inner_indent);
             printer.print_newline();
         }
-
-        printer.print_trivia_all_leading_with_newline_for(self.close_brace.span(), inner_indent);
+        printer.print_trivia_all_leading_with_newline_for(printer.range(close_brace), inner_indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
-
+        printer.print_token(close_brace);
         PrintInfo::default_multi_lined()
     }
-
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-
-    fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::CATCH_ARM`] node.
-#[derive(Debug)]
-pub struct CatchArm {
-    pub pattern: MatchPattern,
-    pub fat_arrow: t::FatArrow,
-    pub body: Expression,
-    pub comma: Option<t::Comma>,
-}
-
-impl FromCST for CatchArm {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CATCH_ARM)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-        let pattern = it.expect_parse()?;
-        let fat_arrow = it.expect_parse()?;
-        let body = Expression::from_cst(it.expect_next("catch arm body")?)?;
-        let comma = it.next().map(t::Comma::from_cst).transpose()?;
-        it.expect_end()?;
-
-        Ok(Self {
-            pattern,
-            fat_arrow,
-            body,
-            comma,
-        })
-    }
-}
-
-impl KnownKind for CatchArm {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CATCH_ARM
-    }
-}
-
-impl Printable for CatchArm {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<CatchArm> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let pattern = present(node.pattern);
+        let arrow = present(node.arrow);
+        let body = present(node.body);
         printer.with_line_separated(true, |printer| {
-            printer.print(&self.pattern, shape.clone());
+            printer.print(pattern, shape);
             printer.print_str(" ");
-            printer.print_raw_token(&self.fat_arrow);
+            printer.print_token(arrow);
             printer.print_str(" ");
-
             let line_len_remaining = printer.current_line_remaining_width();
-            if let Expression::Block(block) = &self.body {
+            if let AnyExpr::Block(block) = body {
                 let body_shape = Shape {
                     width: line_len_remaining,
                     indent: shape.indent,
@@ -2666,242 +1258,102 @@ impl Printable for CatchArm {
                         .saturating_sub(shape.indent + line_len_remaining),
                 };
                 let info = printer.print(block, body_shape);
-                if self.comma.is_some() {
+                if node.comma.is_some() {
                     printer.print_str(",");
                 }
                 return info;
             }
-
             let mut try_body = printer.sub_printer();
-            let try_body_info = self
-                .body
-                .print(Shape::unlimited_single_line(), &mut try_body);
-
+            let try_body_info = try_body.print(body, Shape::unlimited_single_line());
             if try_body_info.multi_lined || try_body.len() > line_len_remaining {
                 printer.print_str("{");
                 printer.print_newline();
-                print_wrapped_arm_body(printer, &self.body, shape.indent);
+                print_wrapped_arm_body(printer, body, shape.indent);
                 printer.print_newline();
                 printer.print_spaces(shape.indent);
                 printer.print_str("}");
-                if self.comma.is_some() {
+                if node.comma.is_some() {
                     printer.print_str(",");
                 }
                 PrintInfo::default_multi_lined()
             } else {
                 printer.append_from_printer(try_body);
-                if self.comma.is_some() {
+                if node.comma.is_some() {
                     printer.print_str(",");
                 }
                 PrintInfo::default_single_line()
             }
         })
     }
-
-    fn leftmost_token(&self) -> TextRange {
-        self.pattern.leftmost_token()
-    }
-
-    fn rightmost_token(&self) -> TextRange {
-        if let Some(comma) = &self.comma {
-            comma.span()
-        } else {
-            self.body.rightmost_token()
-        }
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::CALL_EXPR`] node.
-#[derive(Debug)]
-pub struct CallExpr {
-    pub callee: Box<Expression>,
-    pub args: CallArgs,
+// ── calls ────────────────────────────────────────────────────────────────────
+
+pub(crate) trait CallExprExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for CallExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CALL_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // Callee expression
-        let callee_node = it.expect_next("callee expression")?;
-        let callee = Box::new(Expression::from_cst(callee_node)?);
-
-        // CALL_ARGS
-        let args: CallArgs = it.expect_parse()?;
-
-        Ok(CallExpr { callee, args })
-    }
-}
-
-impl KnownKind for CallExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CALL_EXPR
-    }
-}
-
-impl CallExpr {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let callee = self
+impl CallExprExt for Id<CallExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let node = input.tree.get(self);
+        let callee = node
             .callee
-            .effective_postfix_operand(input.trivia)
+            .effective_postfix_operand(input)
             .single_line_width(input)?;
-        let args = self.args.single_line_width(input)?;
+        let args = node.args.single_line_width(input)?;
         Some(callee + args)
     }
 }
 
-impl Printable for CallExpr {
-    /// The main way to call this should be through [`PrintChain`]
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<CallExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let node = printer.tree.get(self);
         let mut multi_lined = false;
         let line_len_before = printer.current_line_len();
-        let callee = self.callee.effective_postfix_operand(printer.trivia);
-        multi_lined |= printer.print(callee, shape.clone()).multi_lined;
-        // Account for the callee on the call line so the args' hug layout
-        // (see `CallArgs::try_print_hug`) budgets its first line correctly.
+        let callee = node.callee.effective_postfix_operand(printer);
+        multi_lined |= printer.print(callee, shape).multi_lined;
         let args_shape = Shape {
             first_line_offset: shape.first_line_offset
                 + printer.current_line_len().saturating_sub(line_len_before),
             ..shape
         };
-        multi_lined |= printer.print(&self.args, args_shape).multi_lined;
+        multi_lined |= printer.print(node.args, args_shape).multi_lined;
         PrintInfo { multi_lined }
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.callee.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.args.rightmost_token()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::CALL_ARGS`] node.
-#[derive(Debug)]
-pub struct CallArgs {
-    pub open_paren: t::LParen,
-    pub args: Vec<(CallArg, Option<t::Comma>)>,
-    pub close_paren: t::RParen,
+pub(crate) trait ArgExt: Copy {
+    fn is_huggable(self, tree: &FileTree) -> bool;
+    fn effective_expr(self, printer: &Printer<'_>) -> AnyExpr;
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-impl FromCST for CallArgs {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CALL_ARGS)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let open_paren = it.expect_parse()?;
-
-        let mut args = Vec::new();
-        let close_paren = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
-            };
-
-            if elem.kind() == SyntaxKind::R_PAREN {
-                break t::RParen::from_cst(elem)?;
-            }
-
-            let arg = if elem.kind() == SyntaxKind::CALL_ARG {
-                CallArg::from_cst(elem)?
-            } else {
-                CallArg {
-                    label: None,
-                    expr: Expression::from_cst(elem)?,
-                }
-            };
-            let comma = it
-                .next_if_kind(SyntaxKind::COMMA)
-                .map(t::Comma::from_cst)
-                .transpose()?;
-            args.push((arg, comma));
-        };
-
-        it.expect_end()?;
-
-        Ok(CallArgs {
-            open_paren,
-            args,
-            close_paren,
-        })
+impl ArgExt for Id<Arg> {
+    fn is_huggable(self, tree: &FileTree) -> bool {
+        matches!(
+            present(tree.get(self).value),
+            AnyExpr::Lambda(_) | AnyExpr::Spawn(_)
+        )
     }
-}
-
-/// Corresponds to a [`SyntaxKind::CALL_ARG`] node.
-#[derive(Debug)]
-pub struct CallArg {
-    pub label: Option<(t::Word, t::Equals)>,
-    pub expr: Expression,
-}
-
-impl FromCST for CallArg {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::CALL_ARG)?;
-
-        let children: Vec<_> = node
-            .children_with_tokens()
-            .filter(|elem| !elem.kind().is_trivia())
-            .collect();
-
-        let (label, expr_elem) = if children.len() >= 3
-            && matches!(children[0].kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT)
-            && children[1].kind() == SyntaxKind::EQUALS
-        {
-            let name = t::Word::new_from_span(children[0].text_range());
-            let equals = t::Equals::from_cst(children[1].clone())?;
-            (Some((name, equals)), children[2].clone())
-        } else {
-            let Some(expr_elem) = children.first().cloned() else {
-                return Err(StrongAstError::missing_desc(
-                    "call argument",
-                    node.text_range(),
-                ));
-            };
-            (None, expr_elem)
-        };
-
-        let expr = Expression::from_cst(expr_elem)?;
-
-        Ok(CallArg { label, expr })
-    }
-}
-
-impl CallArg {
-    /// A block-terminal argument (a lambda or a `spawn { … }`) that may hug
-    /// the call parens instead of forcing the whole call to break: the
-    /// argument's block opens on the call line and its `}` is immediately
-    /// followed by `)`.
-    const fn is_huggable(&self) -> bool {
-        matches!(self.expr, Expression::Lambda(_) | Expression::Spawn(_))
-    }
-
-    /// The argument expression with redundant parens peeled: the call's own
-    /// parens already delimit the argument, so a transparent paren wrapping
-    /// the whole expression carries nothing. Lambdas and `spawn` keep their
-    /// parens: peeling one would flip [`Self::is_huggable`] between passes
-    /// and break idempotency.
-    fn effective_expr(&self, trivia: &TriviaInfo) -> &Expression {
-        let peeled = self.expr.peel_transparent_parens(trivia);
-        if matches!(peeled, Expression::Lambda(_) | Expression::Spawn(_)) {
-            &self.expr
+    fn effective_expr(self, printer: &Printer<'_>) -> AnyExpr {
+        let value = present(printer.tree.get(self).value);
+        let peeled = value.peel_transparent_parens(printer);
+        if matches!(peeled, AnyExpr::Lambda(_) | AnyExpr::Spawn(_)) {
+            value
         } else {
             peeled
         }
     }
-
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let expr = self.effective_expr(input.trivia);
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let expr = self.effective_expr(input);
         let mut len = 0;
-        if let Some((name, equals)) = &self.label {
-            let (_, name_trailing) = input.trivia.get_for_range_split(name.span());
-            let (equals_leading, equals_trailing) = input.trivia.get_for_range_split(equals.span());
-            let expr_leading = input.trivia.get_leading_for_element(expr);
-            len += usize::from(name.span().len())
+        if let Some(label) = node.label {
+            let name_range = label.name.rightmost_token(tree);
+            let (_, name_trailing) = input.trivia.get_for_range_split(name_range);
+            let (equals_leading, equals_trailing) =
+                input.trivia.get_for_range_split(input.range(label.eq));
+            let expr_leading = input.trivia.get_leading_for_element(tree, expr);
+            len += usize::from(name_range.len())
                 + name_trailing.try_squished_len(input.input)?
                 + equals_leading.try_squished_len(input.input)?
                 + " = ".len()
@@ -2913,15 +1365,19 @@ impl CallArg {
     }
 }
 
-impl Printable for CallArg {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let expr = self.effective_expr(printer.trivia);
-        if let Some((name, equals)) = &self.label {
-            printer.print_raw_token(name);
-            let (_, name_trailing) = printer.trivia.get_for_range_split(name.span());
+impl Printable for Id<Arg> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let expr = self.effective_expr(printer);
+        if let Some(label) = node.label {
+            printer.print(label.name, shape);
+            let (_, name_trailing) = printer
+                .trivia
+                .get_for_range_split(label.name.rightmost_token(tree));
             let (equals_leading, equals_trailing) =
-                printer.trivia.get_for_range_split(equals.span());
-            let expr_leading = printer.trivia.get_leading_for_element(expr);
+                printer.trivia.get_for_range_split(printer.range(label.eq));
+            let expr_leading = printer.trivia.get_leading_for_element(tree, expr);
             printer.print_trivia_squished(name_trailing);
             printer.print_trivia_squished(equals_leading);
             printer.print_str(" = ");
@@ -2930,75 +1386,64 @@ impl Printable for CallArg {
         }
         printer.print(expr, shape)
     }
-
-    fn leftmost_token(&self) -> TextRange {
-        self.label
-            .as_ref()
-            .map_or_else(|| self.expr.leftmost_token(), |(name, _)| name.span())
-    }
-
-    fn rightmost_token(&self) -> TextRange {
-        self.expr.rightmost_token()
-    }
 }
 
-impl KnownKind for CallArgs {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::CALL_ARGS
-    }
-}
-
-impl PrintMultiLine for CallArgs {
-    /// Always multi-lined, even if there are no arguments it would still be `(\n<indent>)`
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl PrintMultiLine for Id<ArgList> {
+    fn print_multi_line(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let close = present(node.r);
         let inner_indent = shape.indent + printer.config.indent_width;
         let inner_shape = Shape {
             width: printer.config.line_width.saturating_sub(inner_indent),
             indent: inner_indent,
             first_line_offset: 0,
         };
-
-        printer.print_raw_token(&self.open_paren);
-        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        printer.print_token(node.l);
+        printer.print_trivia_all_trailing_for(printer.range(node.l));
         printer.print_newline();
-
-        for (arg, comma) in &self.args {
+        for SepItem { item: arg, sep } in tree.list(node.args) {
             printer.print_trivia_all_leading_with_newline_for(
-                arg.leftmost_token(),
+                arg.leftmost_token(tree),
                 inner_shape.indent,
             );
             printer.print_spaces(inner_shape.indent);
-            printer.print(arg, inner_shape.clone());
-            if let Some(comma) = comma {
-                printer.print_raw_token(comma);
-                printer.print_trivia_all_trailing_for(comma.span());
+            printer.print(*arg, inner_shape);
+            if let Some(comma) = *sep {
+                printer.print_token(comma);
+                printer.print_trivia_all_trailing_for(printer.range(comma));
             } else {
                 printer.print_str(",");
-                printer.print_trivia_all_trailing_for(arg.rightmost_token());
+                printer.print_trivia_all_trailing_for(arg.rightmost_token(tree));
             }
             printer.print_newline();
         }
-
-        printer
-            .print_trivia_all_leading_with_newline_for(self.close_paren.span(), inner_shape.indent);
+        printer.print_trivia_all_leading_with_newline_for(printer.range(close), inner_shape.indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_paren);
-
+        printer.print_token(close);
         PrintInfo::default_multi_lined()
     }
 }
 
-impl CallArgs {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+pub(crate) trait ArgListExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+    fn try_print_single_line(self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo>;
+    fn can_hug(self, tree: &FileTree) -> bool;
+    fn try_print_hug(self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo>;
+}
+
+impl ArgListExt for Id<ArgList> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let args = tree.list(node.args);
         let mut len = const { "()".len() };
-        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_paren.span());
+        let (_, open_trailing) = input.trivia.get_for_range_split(input.range(node.l));
         for t in open_trailing {
             len += t.single_line_len(input.input)?;
         }
-        for (i, (arg, comma)) in self.args.iter().enumerate() {
-            let (arg_leading, arg_trailing) = input.trivia.get_for_element(arg);
+        for (i, SepItem { item: arg, sep }) in args.iter().enumerate() {
+            let (arg_leading, arg_trailing) = input.trivia.get_for_element(tree, *arg);
             for t in arg_leading {
                 len += t.single_line_len(input.input)?;
             }
@@ -3006,10 +1451,10 @@ impl CallArgs {
             for t in arg_trailing {
                 len += t.single_line_len(input.input)?;
             }
-            if i + 1 < self.args.len() {
-                if let Some(comma) = comma {
+            if i + 1 < args.len() {
+                if let Some(comma) = *sep {
                     let (comma_leading, comma_trailing) =
-                        input.trivia.get_for_range_split(comma.span());
+                        input.trivia.get_for_range_split(input.range(comma));
                     for t in comma_leading {
                         len += t.single_line_len(input.input)?;
                     }
@@ -3021,10 +1466,9 @@ impl CallArgs {
                     len += 1; // ","
                 }
                 len += 1; // " "
-            } else if let Some(comma) = comma {
-                // Trailing comma is removed in single-line mode, but check trivia
+            } else if let Some(comma) = *sep {
                 let (comma_leading, comma_trailing) =
-                    input.trivia.get_for_range_split(comma.span());
+                    input.trivia.get_for_range_split(input.range(comma));
                 for t in comma_leading {
                     len += t.single_line_len(input.input)?;
                 }
@@ -3033,57 +1477,57 @@ impl CallArgs {
                 }
             }
         }
-        let (close_leading, _) = input.trivia.get_for_range_split(self.close_paren.span());
+        let (close_leading, _) = input
+            .trivia
+            .get_for_range_split(input.range(present(node.r)));
         for t in close_leading {
             len += t.single_line_len(input.input)?;
         }
         Some(len)
     }
 
-    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
-    /// in the event that the printer is unable to fit the call args on a single line.
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_paren);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+    fn try_print_single_line(self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let close = present(node.r);
+        let args = tree.list(node.args);
+        printer.print_token(node.l);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(printer.range(node.l));
         printer.try_print_trivia_single_line_squished(open_trailing)?;
-
-        for (i, (arg, comma)) in self.args.iter().enumerate() {
+        for (i, SepItem { item: arg, sep }) in args.iter().enumerate() {
             if printer.output.len() > shape.width {
                 return None;
             }
-            let (arg_leading, arg_trailing) = printer.trivia.get_for_element(arg);
+            let (arg_leading, arg_trailing) = printer.trivia.get_for_element(tree, *arg);
             printer.try_print_trivia_single_line_squished(arg_leading)?;
             if printer
-                .print(arg, Shape::unlimited_single_line())
+                .print(*arg, Shape::unlimited_single_line())
                 .multi_lined
             {
                 return None;
             }
             printer.try_print_trivia_single_line_squished(arg_trailing)?;
-            if i + 1 < self.args.len() {
-                if let Some(comma) = comma {
+            if i + 1 < args.len() {
+                if let Some(comma) = *sep {
                     let (comma_leading, comma_trailing) =
-                        printer.trivia.get_for_range_split(comma.span());
+                        printer.trivia.get_for_range_split(printer.range(comma));
                     printer.try_print_trivia_single_line_squished(comma_leading)?;
-                    printer.print_raw_token(comma);
+                    printer.print_token(comma);
                     printer.try_print_trivia_single_line_squished(comma_trailing)?;
                 } else {
                     printer.print_str(",");
                 }
                 printer.print_str(" ");
-            } else if let Some(comma) = comma {
-                // Trailing comma is removed in single-line mode, but we still try the comments.
+            } else if let Some(comma) = *sep {
                 let (comma_leading, comma_trailing) =
-                    printer.trivia.get_for_range_split(comma.span());
+                    printer.trivia.get_for_range_split(printer.range(comma));
                 printer.try_print_trivia_single_line_squished(comma_leading)?;
                 printer.try_print_trivia_single_line_squished(comma_trailing)?;
             }
         }
-
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        let (close_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
         printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_paren);
-
+        printer.print_token(close);
         if printer.output.len() > shape.width {
             None
         } else {
@@ -3091,64 +1535,52 @@ impl CallArgs {
         }
     }
 
-    /// Whether the hug layout (see [`Self::try_print_hug`]) applies: the last
-    /// argument is block-terminal (a lambda or `spawn { … }`).
-    fn can_hug(&self) -> bool {
-        self.args
+    fn can_hug(self, tree: &FileTree) -> bool {
+        tree.list(tree.get(self).args)
             .split_last()
-            .is_some_and(|((arg, _), _)| arg.is_huggable())
+            .is_some_and(|(SepItem { item: arg, .. }, _)| arg.is_huggable(tree))
     }
 
-    /// Hug layout for a trailing block-terminal argument: everything up to
-    /// the last argument prints on one line, the last argument's block opens
-    /// on that same line and closes at the outer indent, immediately followed
-    /// by the closing paren (no trailing comma).
-    ///
-    /// ```baml
-    /// futures.push(spawn {
-    ///     work(c)
-    /// })
-    /// ```
-    ///
-    /// Should be passed a sub-printer to avoid printing trivia in the outer
-    /// printer in the event that the hug layout does not apply.
-    fn try_print_hug(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let ((last_arg, last_comma), init) = self.args.split_last()?;
-        if !last_arg.is_huggable() {
+    fn try_print_hug(self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let close = present(node.r);
+        let (
+            SepItem {
+                item: last_arg,
+                sep: last_comma,
+            },
+            init,
+        ) = tree.list(node.args).split_last()?;
+        if !last_arg.is_huggable(tree) {
             return None;
         }
-
-        printer.print_raw_token(&self.open_paren);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.print_token(node.l);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(printer.range(node.l));
         printer.try_print_trivia_single_line_squished(open_trailing)?;
-
-        for (arg, comma) in init {
-            let (arg_leading, arg_trailing) = printer.trivia.get_for_element(arg);
+        for SepItem { item: arg, sep } in init {
+            let (arg_leading, arg_trailing) = printer.trivia.get_for_element(tree, *arg);
             printer.try_print_trivia_single_line_squished(arg_leading)?;
             if printer
-                .print(arg, Shape::unlimited_single_line())
+                .print(*arg, Shape::unlimited_single_line())
                 .multi_lined
             {
                 return None;
             }
             printer.try_print_trivia_single_line_squished(arg_trailing)?;
-            if let Some(comma) = comma {
+            if let Some(comma) = *sep {
                 let (comma_leading, comma_trailing) =
-                    printer.trivia.get_for_range_split(comma.span());
+                    printer.trivia.get_for_range_split(printer.range(comma));
                 printer.try_print_trivia_single_line_squished(comma_leading)?;
-                printer.print_raw_token(comma);
+                printer.print_token(comma);
                 printer.try_print_trivia_single_line_squished(comma_trailing)?;
             } else {
                 printer.print_str(",");
             }
             printer.print_str(" ");
         }
-
-        let (last_leading, last_trailing) = printer.trivia.get_for_element(last_arg);
+        let (last_leading, last_trailing) = printer.trivia.get_for_element(tree, *last_arg);
         printer.try_print_trivia_single_line_squished(last_leading)?;
-        // The hugged argument's first line continues the call line, so its
-        // single-line budget is what remains after the indent, the call's own
-        // offset, and everything printed since the open paren.
         let first_line_offset = shape.first_line_offset + printer.current_line_len();
         let arg_shape = Shape {
             width: printer
@@ -3158,25 +1590,23 @@ impl CallArgs {
             indent: shape.indent,
             first_line_offset,
         };
-        printer.print(last_arg, arg_shape);
-        // The trailing comma is dropped in the hug layout, but keep any
-        // comments attached around it.
+        printer.print(*last_arg, arg_shape);
         printer.try_print_trivia_single_line_squished(last_trailing)?;
-        if let Some(comma) = last_comma {
-            let (comma_leading, comma_trailing) = printer.trivia.get_for_range_split(comma.span());
+        if let Some(comma) = *last_comma {
+            let (comma_leading, comma_trailing) =
+                printer.trivia.get_for_range_split(printer.range(comma));
             printer.try_print_trivia_single_line_squished(comma_leading)?;
             printer.try_print_trivia_single_line_squished(comma_trailing)?;
         }
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        let (close_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
         printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_paren);
-
+        printer.print_token(close);
         Some(PrintInfo::default_multi_lined())
     }
 }
 
-impl Printable for CallArgs {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<ArgList> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.with_line_separated(false, |printer| {
             printer
                 .try_sub_printer(|p| self.try_print_single_line(&shape, p))
@@ -3184,44 +1614,69 @@ impl Printable for CallArgs {
                 .unwrap_or_else(|| self.print_multi_line(shape, printer))
         })
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.open_paren.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_paren.span()
+}
+
+// ── indexing ─────────────────────────────────────────────────────────────────
+
+/// `[index]` of an index expression, optional or not.
+#[derive(Clone, Copy)]
+pub(crate) struct IndexArgs {
+    open_bracket: Token<punct::LBracket>,
+    index: AnyExpr,
+    close_bracket: Token<punct::RBracket>,
+}
+
+impl Spanned for IndexArgs {
+    fn tokens(self, tree: &FileTree) -> TokenRange {
+        span_between(self.open_bracket, self.close_bracket, tree).0
     }
 }
 
-/// Represents the bracket-enclosed portion of an index expression: `[expr]`.
-/// Analogous to [`CallArgs`] for call expressions.
-/// Used by both [`IndexExpr`] and [`PrintChain`].
-#[derive(Debug)]
-pub struct IndexArgs<'a> {
-    pub open_bracket: &'a t::LBracket,
-    pub index: &'a Expression,
-    pub close_bracket: &'a t::RBracket,
-}
+impl IndexArgs {
+    fn of_index(id: Id<IndexExpr>, tree: &FileTree) -> Self {
+        let node = tree.get(id);
+        Self {
+            open_bracket: node.l,
+            index: present(node.index),
+            close_bracket: present(node.r),
+        }
+    }
 
-impl IndexArgs<'_> {
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+    fn of_optional_index(id: Id<OptionalIndexExpr>, tree: &FileTree) -> Self {
+        let node = tree.get(id);
+        Self {
+            open_bracket: node.l,
+            index: present(node.index),
+            close_bracket: present(node.r),
+        }
+    }
+
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
         let mut len = const { "[]".len() };
         len += self.index.single_line_width(input)?;
-        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_bracket.span());
+        let (_, open_trailing) = input
+            .trivia
+            .get_for_range_split(input.range(self.open_bracket));
         len += open_trailing.try_squished_len(input.input)?;
-        let (index_leading, index_trailing) = input.trivia.get_for_element(self.index);
+        let (index_leading, index_trailing) = input.trivia.get_for_element(tree, self.index);
         len += index_leading.try_squished_len(input.input)?;
         len += index_trailing.try_squished_len(input.input)?;
-        let (close_leading, _) = input.trivia.get_for_range_split(self.close_bracket.span());
+        let (close_leading, _) = input
+            .trivia
+            .get_for_range_split(input.range(self.close_bracket));
         len += close_leading.try_squished_len(input.input)?;
         Some(len)
     }
 
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(self.open_bracket);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_bracket.span());
+    fn try_print_single_line(self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        let tree = printer.tree;
+        printer.print_token(self.open_bracket);
+        let (_, open_trailing) = printer
+            .trivia
+            .get_for_range_split(printer.range(self.open_bracket));
         printer.try_print_trivia_single_line_squished(open_trailing)?;
-
-        let (index_leading, index_trailing) = printer.trivia.get_for_element(self.index);
+        let (index_leading, index_trailing) = printer.trivia.get_for_element(tree, self.index);
         printer.try_print_trivia_single_line_squished(index_leading)?;
         if printer
             .print(self.index, Shape::unlimited_single_line())
@@ -3230,13 +1685,11 @@ impl IndexArgs<'_> {
             return None;
         }
         printer.try_print_trivia_single_line_squished(index_trailing)?;
-
         let (close_leading, _) = printer
             .trivia
-            .get_for_range_split(self.close_bracket.span());
+            .get_for_range_split(printer.range(self.close_bracket));
         printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(self.close_bracket);
-
+        printer.print_token(self.close_bracket);
         if printer.output.len() > shape.width {
             None
         } else {
@@ -3245,583 +1698,260 @@ impl IndexArgs<'_> {
     }
 }
 
-impl PrintMultiLine for IndexArgs<'_> {
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl PrintMultiLine for IndexArgs {
+    fn print_multi_line(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
         let inner_indent = shape.indent + printer.config.indent_width;
-        printer.print_raw_token(self.open_bracket);
-        printer.print_trivia_all_trailing_for(self.open_bracket.span());
+        printer.print_token(self.open_bracket);
+        printer.print_trivia_all_trailing_for(printer.range(self.open_bracket));
         printer.print_newline();
-
-        let (index_leading, index_trailing) = printer.trivia.get_for_element(self.index);
+        let (index_leading, index_trailing) = printer.trivia.get_for_element(tree, self.index);
         printer.print_trivia_with_newline(index_leading.trim_blanks(), inner_indent);
         printer.print_spaces(inner_indent);
         let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
         printer.print(self.index, inner_shape);
         printer.print_trivia_trailing(index_trailing);
         printer.print_newline();
-
         let (close_leading, _) = printer
             .trivia
-            .get_for_range_split(self.close_bracket.span());
+            .get_for_range_split(printer.range(self.close_bracket));
         printer.print_trivia_with_newline(close_leading.trim_blanks(), inner_indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(self.close_bracket);
+        printer.print_token(self.close_bracket);
         PrintInfo::default_multi_lined()
     }
 }
 
-impl Printable for IndexArgs<'_> {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for IndexArgs {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.with_line_separated(false, |printer| {
             printer
                 .try_sub_printer(|p| self.try_print_single_line(&shape, p))
                 .unwrap_or_else(|| self.print_multi_line(shape, printer))
         })
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.open_bracket.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_bracket.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::INDEX_EXPR`] node.
-#[derive(Debug)]
-pub struct IndexExpr {
-    pub base: Box<Expression>,
-    pub open_bracket: t::LBracket,
-    pub index: Box<Expression>,
-    pub close_bracket: t::RBracket,
+pub(crate) trait IndexExprExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for IndexExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::INDEX_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // Base expression
-        let base_node = it.expect_next("base expression")?;
-        let base = Box::new(Expression::from_cst(base_node)?);
-
-        // L_BRACKET
-        let open_bracket = it.expect_parse()?;
-
-        // Index expression
-        let index_node = it.expect_next("index expression")?;
-        let index = Box::new(Expression::from_cst(index_node)?);
-
-        // R_BRACKET
-        let close_bracket = it.expect_parse()?;
-
-        it.expect_end()?;
-
-        Ok(IndexExpr {
-            base,
-            open_bracket,
-            index,
-            close_bracket,
-        })
-    }
-}
-
-impl KnownKind for IndexExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::INDEX_EXPR
-    }
-}
-
-impl IndexExpr {
-    fn args(&self) -> IndexArgs<'_> {
-        IndexArgs {
-            open_bracket: &self.open_bracket,
-            index: &self.index,
-            close_bracket: &self.close_bracket,
-        }
-    }
-
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self
+impl IndexExprExt for Id<IndexExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let node = input.tree.get(self);
+        let base = node
             .base
-            .effective_postfix_operand(input.trivia)
+            .effective_postfix_operand(input)
             .single_line_width(input)?;
-        Some(base + self.args().single_line_width(input)?)
+        Some(base + IndexArgs::of_index(self, input.tree).single_line_width(input)?)
     }
 }
 
-impl PrintMultiLine for IndexExpr {
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let base = self.base.effective_postfix_operand(printer.trivia);
-        printer.print(base, shape.clone());
-        self.args().print_multi_line(shape, printer)
+impl PrintMultiLine for Id<IndexExpr> {
+    fn print_multi_line(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let node = printer.tree.get(self);
+        let base = node.base.effective_postfix_operand(printer);
+        printer.print(base, shape);
+        IndexArgs::of_index(self, printer.tree).print_multi_line(shape, printer)
     }
 }
 
-impl IndexExpr {
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let base = self.base.effective_postfix_operand(printer.trivia);
-        let base_len = base.single_line_width(printer)?;
-        let args_len = self.args().single_line_width(printer)?;
-        if base_len + args_len > shape.width {
-            return None;
-        }
-        if base
-            .print(Shape::unlimited_single_line(), printer)
-            .multi_lined
-        {
-            return None;
-        }
-        if self
-            .args()
-            .print(Shape::unlimited_single_line(), printer)
-            .multi_lined
-        {
-            return None;
-        }
-        Some(PrintInfo::default_single_line())
+fn index_single_line(id: Id<IndexExpr>, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    let node = printer.tree.get(id);
+    let base = node.base.effective_postfix_operand(printer);
+    let args = IndexArgs::of_index(id, printer.tree);
+    let base_len = base.single_line_width(printer)?;
+    let args_len = args.single_line_width(printer)?;
+    if base_len + args_len > shape.width {
+        return None;
     }
+    if printer
+        .print(base, Shape::unlimited_single_line())
+        .multi_lined
+    {
+        return None;
+    }
+    if printer
+        .print(args, Shape::unlimited_single_line())
+        .multi_lined
+    {
+        return None;
+    }
+    Some(PrintInfo::default_single_line())
 }
 
-impl Printable for IndexExpr {
-    /// The main way to call this should be through [`PrintChain`]
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<IndexExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| index_single_line(self, &shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.base.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_bracket.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::FIELD_ACCESS_EXPR`] node.
-#[derive(Debug)]
-pub struct FieldAccessExpr {
-    pub base: Box<Expression>,
-    pub dot: t::Dot,
-    pub field: t::Word,
+pub(crate) trait FieldAccessExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for FieldAccessExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::FIELD_ACCESS_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // Base expression
-        let base_node = it.expect_next("base expression")?;
-        let base = Box::new(Expression::from_cst(base_node)?);
-
-        // DOT
-        let dot = it.expect_parse()?;
-
-        // WORD (field name)
-        let field = it.expect_parse()?;
-
-        it.expect_end()?;
-
-        Ok(FieldAccessExpr { base, dot, field })
-    }
-}
-
-impl KnownKind for FieldAccessExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::FIELD_ACCESS_EXPR
-    }
-}
-
-impl FieldAccessExpr {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self
+impl FieldAccessExt for Id<FieldAccessExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let base = node
             .base
-            .effective_postfix_operand(input.trivia)
-            .single_line_width(input)?;
-        Some(base + usize::from(self.dot.span().len()) + usize::from(self.field.span().len()))
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR`] node: `base?.field`.
-#[derive(Debug)]
-pub struct OptionalFieldAccessExpr {
-    pub base: Box<Expression>,
-    pub question_dot: t::QuestionDot,
-    pub field: t::Word,
-}
-
-impl FromCST for OptionalFieldAccessExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let base_node = it.expect_next("base expression")?;
-        let base = Box::new(Expression::from_cst(base_node)?);
-
-        let question_dot = it.expect_parse()?;
-
-        let field = it.expect_parse()?;
-
-        it.expect_end()?;
-
-        Ok(OptionalFieldAccessExpr {
-            base,
-            question_dot,
-            field,
-        })
-    }
-}
-
-impl KnownKind for OptionalFieldAccessExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
-    }
-}
-
-impl OptionalFieldAccessExpr {
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self
-            .base
-            .effective_postfix_operand(input.trivia)
+            .effective_postfix_operand(input)
             .single_line_width(input)?;
         Some(
-            base + usize::from(self.question_dot.span().len())
-                + usize::from(self.field.span().len()),
+            base + usize::from(input.range(node.dot).len())
+                + usize::from(present(node.name).rightmost_token(tree).len()),
+        )
+    }
+}
+impl FieldAccessExt for Id<OptionalFieldAccessExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let base = node
+            .base
+            .effective_postfix_operand(input)
+            .single_line_width(input)?;
+        Some(
+            base + usize::from(input.range(node.qdot).len())
+                + usize::from(present(node.name).rightmost_token(tree).len()),
         )
     }
 }
 
-/// Corresponds to a [`SyntaxKind::OPTIONAL_INDEX_EXPR`] node: `base?.[index]`.
-#[derive(Debug)]
-pub struct OptionalIndexExpr {
-    pub base: Box<Expression>,
-    pub question_dot: t::QuestionDot,
-    pub open_bracket: t::LBracket,
-    pub index: Box<Expression>,
-    pub close_bracket: t::RBracket,
+pub(crate) trait OptionalIndexExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for OptionalIndexExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::OPTIONAL_INDEX_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let base_node = it.expect_next("base expression")?;
-        let base = Box::new(Expression::from_cst(base_node)?);
-
-        let question_dot = it.expect_parse()?;
-
-        let open_bracket = it.expect_parse()?;
-
-        let index_node = it.expect_next("index expression")?;
-        let index = Box::new(Expression::from_cst(index_node)?);
-
-        let close_bracket = it.expect_parse()?;
-
-        it.expect_end()?;
-
-        Ok(OptionalIndexExpr {
-            base,
-            question_dot,
-            open_bracket,
-            index,
-            close_bracket,
-        })
-    }
-}
-
-impl KnownKind for OptionalIndexExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::OPTIONAL_INDEX_EXPR
-    }
-}
-
-impl OptionalIndexExpr {
-    fn args(&self) -> IndexArgs<'_> {
-        IndexArgs {
-            open_bracket: &self.open_bracket,
-            index: &self.index,
-            close_bracket: &self.close_bracket,
-        }
-    }
-
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let base = self
+impl OptionalIndexExt for Id<OptionalIndexExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let node = input.tree.get(self);
+        let base = node
             .base
-            .effective_postfix_operand(input.trivia)
+            .effective_postfix_operand(input)
             .single_line_width(input)?;
         Some(
-            base + usize::from(self.question_dot.span().len())
-                + self.args().single_line_width(input)?,
+            base + usize::from(input.range(node.qdot).len())
+                + IndexArgs::of_optional_index(self, input.tree).single_line_width(input)?,
         )
     }
 }
 
-impl Printable for OptionalIndexExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<OptionalIndexExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let node = printer.tree.get(self);
         let mut multi_lined = false;
-        let base = self.base.effective_postfix_operand(printer.trivia);
-        multi_lined |= printer.print(base, shape.clone()).multi_lined;
-        printer.print_raw_token(&self.question_dot);
-        multi_lined |= printer.print(&self.args(), shape).multi_lined;
+        let base = node.base.effective_postfix_operand(printer);
+        multi_lined |= printer.print(base, shape).multi_lined;
+        printer.print_token(node.qdot);
+        multi_lined |= printer
+            .print(IndexArgs::of_optional_index(self, printer.tree), shape)
+            .multi_lined;
         PrintInfo { multi_lined }
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.base.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_bracket.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::OPTIONAL_CALL_EXPR`] node: `callee?.(args)`.
-#[derive(Debug)]
-pub struct OptionalCallExpr {
-    pub callee: Box<Expression>,
-    pub question_dot: t::QuestionDot,
-    pub args: CallArgs,
+pub(crate) trait OptionalCallExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for OptionalCallExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::OPTIONAL_CALL_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let callee_node = it.expect_next("callee expression")?;
-        let callee = Box::new(Expression::from_cst(callee_node)?);
-
-        let question_dot = it.expect_parse()?;
-
-        let args: CallArgs = it.expect_parse()?;
-
-        it.expect_end()?;
-
-        Ok(OptionalCallExpr {
-            callee,
-            question_dot,
-            args,
-        })
-    }
-}
-
-impl KnownKind for OptionalCallExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::OPTIONAL_CALL_EXPR
-    }
-}
-
-impl OptionalCallExpr {
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let callee = self
+impl OptionalCallExt for Id<OptionalCallExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let node = input.tree.get(self);
+        let callee = node
             .callee
-            .effective_postfix_operand(input.trivia)
+            .effective_postfix_operand(input)
             .single_line_width(input)?;
-        let args = self.args.single_line_width(input)?;
-        Some(callee + usize::from(self.question_dot.span().len()) + args)
+        let args = node.args.single_line_width(input)?;
+        Some(callee + usize::from(input.range(node.qdot).len()) + args)
     }
 }
 
-impl Printable for OptionalCallExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<OptionalCallExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let node = printer.tree.get(self);
         let mut multi_lined = false;
-        let callee = self.callee.effective_postfix_operand(printer.trivia);
-        multi_lined |= printer.print(callee, shape.clone()).multi_lined;
-        printer.print_raw_token(&self.question_dot);
-        multi_lined |= printer.print(&self.args, shape).multi_lined;
+        let callee = node.callee.effective_postfix_operand(printer);
+        multi_lined |= printer.print(callee, shape).multi_lined;
+        printer.print_token(node.qdot);
+        multi_lined |= printer.print(node.args, shape).multi_lined;
         PrintInfo { multi_lined }
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.callee.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.args.rightmost_token()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::ENV_ACCESS_EXPR`] node.
-#[derive(Debug)]
-pub struct EnvAccessExpr {
-    pub keyword: t::Word,
-    pub dot: t::Dot,
-    pub field: t::Word,
+pub(crate) trait EnvAccessExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for EnvAccessExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::ENV_ACCESS_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let keyword = it.expect_parse()?;
-
-        let dot = it.expect_parse()?;
-
-        let field = it.expect_parse()?;
-
-        it.expect_end()?;
-
-        Ok(EnvAccessExpr {
-            keyword,
-            dot,
-            field,
-        })
-    }
-}
-
-impl KnownKind for EnvAccessExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::ENV_ACCESS_EXPR
-    }
-}
-
-impl EnvAccessExpr {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    #[allow(clippy::unnecessary_wraps)]
-    pub(crate) fn single_line_width(&self, _input: &Printer<'_>) -> Option<usize> {
+impl EnvAccessExt for Id<EnvAccessExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
         Some(
-            usize::from(self.keyword.span().len())
-                + usize::from(self.dot.span().len())
-                + usize::from(self.field.span().len()),
+            usize::from(input.range(node.env).len())
+                + usize::from(input.range(node.dot).len())
+                + usize::from(present(node.name).rightmost_token(tree).len()),
         )
     }
 }
 
-impl Printable for EnvAccessExpr {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.keyword);
-        printer.print_raw_token(&self.dot);
-        printer.print_raw_token(&self.field);
+impl Printable for Id<EnvAccessExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let node = printer.tree.get(self);
+        printer.print_token(node.env);
+        printer.print_token(node.dot);
+        printer.print(present(node.name), shape);
         PrintInfo::default_single_line()
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.field.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::BLOCK_EXPR`] node.
-#[derive(Debug)]
-pub struct BlockExpr {
-    pub open_brace: t::LBrace,
-    pub stmts: Vec<Statement>,
-    /// Possible tail expression.
-    /// If not in a block that can have a tail expression, this should be treated as a normal [`Statement::Expr`].
-    pub expr: Option<Box<Expression>>,
-    pub close_brace: t::RBrace,
-}
+// ── blocks ───────────────────────────────────────────────────────────────────
 
-impl FromCST for BlockExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::BLOCK_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let open_brace = it.expect_parse()?;
-
-        // Collect all statements and optional final expression
-        let mut stmts = Vec::new();
-        let close_brace = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
-            };
-            if elem.kind() == SyntaxKind::R_BRACE {
-                break t::RBrace::from_cst(elem)?;
-            }
-
-            let stmt = Statement::from_cst(elem)?;
-            if let Some(Statement::Expr(expr)) = stmts.last_mut()
-                && expr.semicolon.is_none()
-                && let Statement::EmptySemicolon(semi) = stmt
-            {
-                // Attach semicolon to preceding expression since expressions don't immediately parse semicolons
-                expr.semicolon = Some(semi);
-                continue;
-            }
-            stmts.push(stmt);
-        };
-
-        // If final statement is a expression without semicolon, extract it as a tail expression
-        let expr = match stmts.pop() {
-            Some(Statement::Expr(expr)) if expr.semicolon.is_none() => Some(expr.expr),
-            Some(stmt) => {
-                stmts.push(stmt);
-                None
-            }
-            None => None,
-        };
-
-        it.expect_end()?;
-
-        Ok(BlockExpr {
-            open_brace,
-            stmts,
-            expr: expr.map(Box::new),
-            close_brace,
-        })
-    }
-}
-
-impl KnownKind for BlockExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::BLOCK_EXPR
-    }
-}
-
-impl Printable for BlockExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<Block> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let close = present(node.r);
+        let stmts = tree.list(node.stmts);
         printer.with_line_separated(true, |printer| {
-            if self.stmts.is_empty()
-                && self.expr.is_none()
-                && printer.try_print_empty_braces(&self.open_brace, &self.close_brace)
+            if stmts.is_empty()
+                && node.tail.is_none()
+                && printer.try_print_empty_braces(node.l, close)
             {
                 return PrintInfo::default_single_line();
             }
-
-            printer.print_raw_token(&self.open_brace);
-            printer.print_trivia_all_trailing_for(self.open_brace.span());
+            printer.print_token(node.l);
+            printer.print_trivia_all_trailing_for(printer.range(node.l));
             printer.print_newline();
-
-            // body statements
             let inner_indent = shape.indent + printer.config.indent_width;
-            if let Some((first, rest)) = self.stmts.split_first() {
-                let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
+            if let Some((first, rest)) = stmts.split_first() {
+                let closing = |index: usize| index + 1 == stmts.len() && node.tail.is_none();
+                let (first_leading, first_trailing) = printer.trivia.get_for_element(tree, *first);
                 printer
                     .print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
                 printer.print_spaces(inner_indent);
                 let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-                printer.print(first, inner_shape);
+                match *first {
+                    AnyStmt::Assign(assign) if closing(0) => {
+                        printer.print(ClosingAssign(assign), inner_shape);
+                    }
+                    _ => {
+                        printer.print(*first, inner_shape);
+                    }
+                }
                 printer.print_trivia_trailing(first_trailing);
                 printer.print_newline();
-
-                for stmt in rest {
-                    printer.print_standalone_with_trivia(stmt, inner_indent);
+                for (index, stmt) in rest.iter().enumerate() {
+                    match *stmt {
+                        AnyStmt::Assign(assign) if closing(index + 1) => {
+                            printer
+                                .print_standalone_with_trivia(ClosingAssign(assign), inner_indent);
+                        }
+                        _ => printer.print_standalone_with_trivia(*stmt, inner_indent),
+                    }
                     printer.print_newline();
                 }
             }
-
-            // tail expression
-            if let Some(expr) = self.expr.as_deref() {
-                let (expr_leading, expr_trailing) = printer.trivia.get_for_element(expr);
-                let expr_leading = if self.stmts.is_empty() {
+            if let Some(expr) = node.tail {
+                let (expr_leading, expr_trailing) = printer.trivia.get_for_element(tree, expr);
+                let expr_leading = if stmts.is_empty() {
                     expr_leading.trim_leading_blanks()
                 } else {
                     expr_leading
@@ -3830,149 +1960,83 @@ impl Printable for BlockExpr {
                 printer.print_spaces(inner_indent);
                 let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
                 printer.print(expr, inner_shape);
+                // A jump ends the block like a statement, `;` included.
+                if matches!(
+                    expr,
+                    AnyExpr::Return(_) | AnyExpr::Break(_) | AnyExpr::Continue(_)
+                ) {
+                    printer.print_str(";");
+                }
                 printer.print_trivia_trailing(expr_trailing);
                 printer.print_newline();
             }
-
-            let (close_brace_leading, _) =
-                printer.trivia.get_for_range_split(self.close_brace.span());
+            let (close_brace_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
             printer.print_trivia_with_newline(
                 close_brace_leading.trim_trailing_blanks(),
                 inner_indent,
             );
             printer.print_spaces(shape.indent);
-            printer.print_raw_token(&self.close_brace);
-
+            printer.print_token(close);
             PrintInfo { multi_lined: true }
         })
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.open_brace.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::ARRAY_LITERAL`] node.
-#[derive(Debug)]
-pub struct ArrayInitializer {
-    pub open_bracket: t::LBracket,
-    /// Commas are optional for all elements.
-    /// For example, `[1 2 3]` is equivalent to `[1, 2, 3]` in BAML.
-    ///
-    /// While this is valid, excluding commas is *strongly* discouraged as it is a crime against software and also more error-prone:
-    /// if `[1, -2, 3]` is written as `[1 -2 3]`, it will be parsed as `[1-2, 3]` instead (the `-` will be treated as a binary operator instead of a unary operator).
-    pub elements: Vec<(Expression, Option<t::Comma>)>,
-    pub close_bracket: t::RBracket,
-}
+// ── array literals ───────────────────────────────────────────────────────────
 
-impl FromCST for ArrayInitializer {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::ARRAY_LITERAL)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let open_bracket = it.expect_parse()?;
-
-        let mut elements: Vec<(Expression, Option<t::Comma>)> = Vec::new();
-
-        let close_bracket = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_BRACKET, it.parent));
-            };
-
-            if elem.kind() == SyntaxKind::R_BRACKET {
-                break t::RBracket::from_cst(elem)?;
-            }
-
-            let expr = Expression::from_cst(elem)?;
-            let comma = it
-                .next_if_kind(SyntaxKind::COMMA)
-                .map(t::Comma::from_cst)
-                .transpose()?;
-
-            elements.push((expr, comma));
-        };
-
-        Ok(ArrayInitializer {
-            open_bracket,
-            elements,
-            close_bracket,
-        })
-    }
-}
-
-impl KnownKind for ArrayInitializer {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::ARRAY_LITERAL
-    }
-}
-
-impl PrintMultiLine for ArrayInitializer {
-    /// Multi-line layout: each element on its own indented line with trailing comma.
-    /// Closing bracket on its own line.
-    ///
-    /// ```baml
-    /// [
-    ///     element1,
-    ///     element2,
-    ///     element3,
-    /// ]
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.open_bracket);
-        printer.print_trivia_all_trailing_for(self.open_bracket.span());
+impl PrintMultiLine for Id<ArrayLiteral> {
+    fn print_multi_line(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let close = present(node.r);
+        printer.print_token(node.l);
+        printer.print_trivia_all_trailing_for(printer.range(node.l));
         printer.print_newline();
-
         let inner_indent = shape.indent + printer.config.indent_width;
-        for (elem, comma) in &self.elements {
-            let (elem_leading, elem_trailing) = printer.trivia.get_for_element(elem);
+        for ArrayElement { value: elem, comma } in tree.list(node.elements) {
+            let (elem_leading, elem_trailing) = printer.trivia.get_for_element(tree, *elem);
             printer.print_trivia_with_newline(elem_leading.trim_blanks(), inner_indent);
             printer.print_spaces(inner_indent);
             let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-            printer.print(elem, inner_shape);
-            if let Some(comma) = comma {
+            printer.print(*elem, inner_shape);
+            if let Some(comma) = *comma {
                 printer.print_trivia_squished(elem_trailing);
-                printer.print_raw_token(comma);
-                printer.print_trivia_all_trailing_for(comma.span());
+                printer.print_token(comma);
+                printer.print_trivia_all_trailing_for(printer.range(comma));
             } else {
                 printer.print_str(",");
                 printer.print_trivia_trailing(elem_trailing);
             }
             printer.print_newline();
         }
-
-        let (close_bracket_leading, _) = printer
-            .trivia
-            .get_for_range_split(self.close_bracket.span());
+        let (close_bracket_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
         printer
             .print_trivia_with_newline(close_bracket_leading.trim_trailing_blanks(), inner_indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_bracket);
+        printer.print_token(close);
         PrintInfo::default_multi_lined()
     }
 }
 
-impl ArrayInitializer {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+pub(crate) trait ArrayLiteralExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+}
+impl ArrayLiteralExt for Id<ArrayLiteral> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let elements = tree.list(node.elements);
         let mut len = const { "[".len() };
-        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_bracket.span());
+        let (_, open_trailing) = input.trivia.get_for_range_split(input.range(node.l));
         len += open_trailing.try_squished_len(input.input)?;
-
-        for (i, (elem, comma)) in self.elements.iter().enumerate() {
-            let (el_leading, el_trailing) = input.trivia.get_for_element(elem);
-
+        for (i, ArrayElement { value: elem, comma }) in elements.iter().enumerate() {
+            let (el_leading, el_trailing) = input.trivia.get_for_element(tree, *elem);
             len += el_leading.try_squished_len(input.input)?;
             len += elem.single_line_width(input)?;
-
-            let is_last = i + 1 >= self.elements.len();
-            if let Some(comma) = comma {
+            let is_last = i + 1 >= elements.len();
+            if let Some(comma) = *comma {
                 let (comma_leading, comma_trailing) =
-                    input.trivia.get_for_range_split(comma.span());
+                    input.trivia.get_for_range_split(input.range(comma));
                 len += el_trailing.squished_len(input.input); // always squished before the comma
                 len += comma_leading.squished_len(input.input); // always squished before the comma
                 if !is_last {
@@ -3986,224 +2050,314 @@ impl ArrayInitializer {
                 }
             }
         }
-
-        let (close_leading, _) = input.trivia.get_for_range_split(self.close_bracket.span());
+        let (close_leading, _) = input
+            .trivia
+            .get_for_range_split(input.range(present(node.r)));
         len += close_leading.try_squished_len(input.input)?;
         len += const { "]".len() };
         Some(len)
     }
+}
 
-    /// Tries to print the array initializer as a single line.
-    ///
-    /// If successful, returns the info.
-    ///
-    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
-    /// in the event that the printer is unable to fit the array initializer on a single line.
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.open_bracket);
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_bracket.span());
-        printer.try_print_trivia_single_line_squished(open_trailing)?;
-
-        for (i, (elem, comma)) in self.elements.iter().enumerate() {
-            if printer.output.len() > shape.width {
-                return None;
-            }
-
-            let (el_leading, el_trailing) = printer.trivia.get_for_element(elem);
-            printer.try_print_trivia_single_line_squished(el_leading)?;
-            if printer
-                .print(elem, Shape::unlimited_single_line())
-                .multi_lined
-            {
-                return None;
-            }
-
-            let is_last = i + 1 >= self.elements.len();
-            if let Some(comma) = comma {
-                let (comma_leading, comma_trailing) =
-                    printer.trivia.get_for_range_split(comma.span());
-                printer.print_trivia_squished(el_trailing); // always squished before the comma
-                printer.print_trivia_squished(comma_leading); // always squished before the comma
-                if !is_last {
-                    printer.print_str(", ");
-                }
-                printer.try_print_trivia_single_line_squished(comma_trailing)?;
-            } else {
-                printer.try_print_trivia_single_line_squished(el_trailing)?; // if multilined would go after the added comma and thus would not be squished
-                if !is_last {
-                    printer.print_str(", ");
-                }
-            }
-        }
-
-        let (close_leading, _) = printer
-            .trivia
-            .get_for_range_split(self.close_bracket.span());
-        printer.try_print_trivia_single_line_squished(close_leading)?;
-        printer.print_raw_token(&self.close_bracket);
-
+fn array_single_line(
+    id: Id<ArrayLiteral>,
+    shape: &Shape,
+    printer: &mut Printer,
+) -> Option<PrintInfo> {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    let close = present(node.r);
+    let elements = tree.list(node.elements);
+    printer.print_token(node.l);
+    let (_, open_trailing) = printer.trivia.get_for_range_split(printer.range(node.l));
+    printer.try_print_trivia_single_line_squished(open_trailing)?;
+    for (i, ArrayElement { value: elem, comma }) in elements.iter().enumerate() {
         if printer.output.len() > shape.width {
-            None
-        } else {
-            Some(PrintInfo::default_single_line())
+            return None;
         }
+        let (el_leading, el_trailing) = printer.trivia.get_for_element(tree, *elem);
+        printer.try_print_trivia_single_line_squished(el_leading)?;
+        if printer
+            .print(*elem, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        let is_last = i + 1 >= elements.len();
+        if let Some(comma) = *comma {
+            let (comma_leading, comma_trailing) =
+                printer.trivia.get_for_range_split(printer.range(comma));
+            printer.print_trivia_squished(el_trailing); // always squished before the comma
+            printer.print_trivia_squished(comma_leading); // always squished before the comma
+            if !is_last {
+                printer.print_str(", ");
+            }
+            printer.try_print_trivia_single_line_squished(comma_trailing)?;
+        } else {
+            printer.try_print_trivia_single_line_squished(el_trailing)?; // if multilined would go after the added comma and thus would not be squished
+            if !is_last {
+                printer.print_str(", ");
+            }
+        }
+    }
+    let (close_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
+    printer.try_print_trivia_single_line_squished(close_leading)?;
+    printer.print_token(close);
+    if printer.output.len() > shape.width {
+        None
+    } else {
+        Some(PrintInfo::default_single_line())
     }
 }
 
-impl Printable for ArrayInitializer {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<ArrayLiteral> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.with_line_separated(false, |printer| {
             printer
-                .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+                .try_sub_printer(|p| array_single_line(self, &shape, p))
                 .unwrap_or_else(|| self.print_multi_line(shape, printer))
         })
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.open_bracket.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_bracket.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::OBJECT_LITERAL`] node.
-#[derive(Debug)]
-pub struct ObjectInitializer {
-    pub name: PathExpr,
-    pub open_brace: t::LBrace,
-    /// Fields and `...spread` members, in source order. Order is significant:
-    /// later members win at runtime, so it must be preserved verbatim.
-    pub fields: Vec<(ObjectMember, Option<t::Comma>)>,
-    pub close_brace: t::RBrace,
+// ── object literals ──────────────────────────────────────────────────────────
+
+union_printable!(AnyObjectCtor { Path, Generic });
+union_printable!(AnyObjectMember { Field, Spread });
+union_printable!(AnyObjectKey {
+    Name,
+    String,
+    Backtick
+});
+
+pub(crate) trait ObjectMemberExt: Copy {
+    /// The member without its comma: what trivia attaches around.
+    fn core(self, tree: &FileTree) -> TokenSpan;
+    fn comma(self, tree: &FileTree) -> Option<Token<punct::Comma>>;
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
 
-impl FromCST for ObjectInitializer {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::OBJECT_LITERAL)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // WORD (object type name)
-        let name = it.expect_next("a WORD or PATH_EXPR")?;
-        let name = PathExpr::from_cst(name)?;
-
-        let open_brace = it.expect_parse()?;
-
-        let mut fields = Vec::new();
-        let close_brace = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
-            };
-            match elem.kind() {
-                SyntaxKind::R_BRACE => {
-                    break t::RBrace::from_cst(elem)?;
-                }
-                SyntaxKind::OBJECT_FIELD | SyntaxKind::SPREAD_ELEMENT => {
-                    let field = ObjectMember::from_cst(elem)?;
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    fields.push((field, comma));
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "OBJECT_FIELD, SPREAD_ELEMENT, or R_BRACE".into(),
-                        found: elem.kind(),
-                        at: elem.text_range(),
-                    });
-                }
+impl ObjectMemberExt for AnyObjectMember {
+    fn core(self, tree: &FileTree) -> TokenSpan {
+        match self {
+            AnyObjectMember::Field(field) => {
+                let node = tree.get(field);
+                let last: TokenRange = match node.value {
+                    Some(value) => present(value.value).tokens(tree),
+                    None => node.key.tokens(tree),
+                };
+                TokenSpan(TokenRange::new(node.key.tokens(tree).start(), last.end()))
             }
+            AnyObjectMember::Spread(spread) => {
+                let node = tree.get(spread);
+                span_between(node.dots, present(node.value), tree)
+            }
+            AnyObjectMember::Bogus(_) => unreachable!("the formatter prints only error-free trees"),
+        }
+    }
+    fn comma(self, tree: &FileTree) -> Option<Token<punct::Comma>> {
+        match self {
+            AnyObjectMember::Field(field) => tree.get(field).comma,
+            AnyObjectMember::Spread(spread) => tree.get(spread).comma,
+            AnyObjectMember::Bogus(_) => unreachable!("the formatter prints only error-free trees"),
+        }
+    }
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        match self {
+            AnyObjectMember::Field(field) => field.single_line_width(input),
+            AnyObjectMember::Spread(spread) => spread.single_line_width(input),
+            AnyObjectMember::Bogus(_) => unreachable!("the formatter prints only error-free trees"),
+        }
+    }
+}
+
+pub(crate) trait ObjectFieldExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+}
+impl ObjectFieldExt for Id<ObjectField> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let name = node.key.single_line_width(input)?;
+        let Some(field_value) = node.value else {
+            return Some(name);
         };
-
-        it.expect_end()?;
-
-        Ok(ObjectInitializer {
-            name,
-            open_brace,
-            fields,
-            close_brace,
-        })
+        let value = present(field_value.value);
+        let value_width = value.single_line_width(input)?;
+        let mut trivia_len = 0usize;
+        let (_, colon_trailing) = input
+            .trivia
+            .get_for_range_split(input.range(field_value.colon));
+        for t in colon_trailing {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_leading = input.trivia.get_leading_for_element(tree, value);
+        for t in value_leading {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        Some(name + const { ": ".len() } + value_width + trivia_len)
     }
 }
 
-impl KnownKind for ObjectInitializer {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::OBJECT_LITERAL
+/// An object field prints without its comma; the literal prints that.
+impl Printable for Id<ObjectField> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let mut multi_lined = false;
+        multi_lined |= printer.print(node.key, shape).multi_lined;
+        let Some(field_value) = node.value else {
+            return PrintInfo { multi_lined };
+        };
+        let value = present(field_value.value);
+        printer.print_token(field_value.colon);
+        let (_, colon_trailing) = printer
+            .trivia
+            .get_for_range_split(printer.range(field_value.colon));
+        printer.print_str(" ");
+        printer.print_trivia_squished(colon_trailing);
+        let value_leading = printer.trivia.get_leading_for_element(tree, value);
+        printer.print_trivia_squished(value_leading);
+        multi_lined |= printer.print(value, shape).multi_lined;
+        PrintInfo { multi_lined }
     }
 }
 
-impl PrintMultiLine for ObjectInitializer {
-    /// Multi-line layout: each field on its own indented line with trailing comma.
-    /// Closing brace on its own line.
-    ///
-    ///
-    /// ```baml
-    /// Name {
-    ///     field1: value1,
-    ///     field2: value2,
-    /// }
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+pub(crate) trait ObjectKeyExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+}
+impl ObjectKeyExt for AnyObjectKey {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        match self {
+            AnyObjectKey::Name(name) => Some(input.text_of(name).len()),
+            AnyObjectKey::String(s) => verbatim_width(input, s),
+            AnyObjectKey::Backtick(s) => verbatim_width(input, s),
+            AnyObjectKey::Bogus(_) => unreachable!("the formatter prints only error-free trees"),
+        }
+    }
+}
+
+pub(crate) trait SpreadExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+}
+impl SpreadExt for Id<SpreadElement> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let value = present(node.value);
+        let mut trivia_len = 0usize;
+        let (_, dots_trailing) = input.trivia.get_for_range_split(input.range(node.dots));
+        for t in dots_trailing {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_leading = input.trivia.get_leading_for_element(tree, value);
+        for t in value_leading {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_width = value.single_line_width(input)?;
+        Some(const { "...".len() } + value_width + trivia_len)
+    }
+}
+
+impl Printable for Id<SpreadElement> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let value = present(node.value);
+        printer.print_token(node.dots);
+        let (_, dots_trailing) = printer.trivia.get_for_range_split(printer.range(node.dots));
+        printer.print_trivia_squished(dots_trailing);
+        let value_leading = printer.trivia.get_leading_for_element(tree, value);
+        printer.print_trivia_squished(value_leading);
+        printer.print(value, shape)
+    }
+}
+
+/// Whether the braces hold members or comments.
+fn braces_have_content(
+    open: Token<punct::LBrace>,
+    close: Token<punct::RBrace>,
+    members: usize,
+    input: &Printer<'_>,
+) -> bool {
+    let (_, open_trailing) = input.trivia.get_for_range_split(input.range(open));
+    let (close_leading, _) = input.trivia.get_for_range_split(input.range(close));
+    members > 0
+        || open_trailing.iter().any(EmittableTrivia::is_comment)
+        || close_leading.iter().any(EmittableTrivia::is_comment)
+}
+
+impl PrintMultiLine for Id<ObjectLiteral> {
+    fn print_multi_line(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let close = present(node.r);
         let inner_shape = Shape {
             width: shape.width.saturating_sub(printer.config.indent_width),
             indent: shape.indent + printer.config.indent_width,
             first_line_offset: 0,
         };
-
-        printer.print(&self.name, Shape::unlimited_single_line());
+        printer.print(node.ctor, Shape::unlimited_single_line());
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        printer.print_token(node.l);
+        printer.print_trivia_all_trailing_for(printer.range(node.l));
         printer.print_newline();
-
-        for (field, comma) in &self.fields {
+        for member in tree.list(node.members) {
+            let core = member.core(tree);
             printer.print_trivia_all_leading_with_newline_for(
-                field.leftmost_token(),
+                core.leftmost_token(tree),
                 inner_shape.indent,
             );
             printer.print_spaces(inner_shape.indent);
-            printer.print(field, inner_shape.clone());
-            if let Some(comma) = comma {
-                printer.print_raw_token(comma);
-                printer.print_trivia_all_trailing_for(comma.span());
+            printer.print(*member, inner_shape);
+            if let Some(comma) = member.comma(tree) {
+                printer.print_token(comma);
+                printer.print_trivia_all_trailing_for(printer.range(comma));
             } else {
                 printer.print_str(",");
-                printer.print_trivia_all_trailing_for(field.rightmost_token());
+                printer.print_trivia_all_trailing_for(core.rightmost_token(tree));
             }
             printer.print_newline();
         }
-
         printer.print_spaces(shape.indent);
-        printer.print_trivia_all_leading_with_newline_for(self.close_brace.span(), shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        printer.print_trivia_all_leading_with_newline_for(printer.range(close), shape.indent);
+        printer.print_token(close);
         PrintInfo::default_multi_lined()
     }
 }
 
-impl ObjectInitializer {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        // Name { field1: v1, field2: v2 }
-        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_brace.span());
-        let mut len = self.name.single_line_width(input)?
-            + if self.has_content(input) {
+pub(crate) trait ObjectLiteralExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+}
+impl ObjectLiteralExt for Id<ObjectLiteral> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let close = present(node.r);
+        let members = tree.list(node.members);
+        let (_, open_trailing) = input.trivia.get_for_range_split(input.range(node.l));
+        let ctor_width = match node.ctor {
+            AnyObjectCtor::Path(path) => path.single_line_width(input)?,
+            AnyObjectCtor::Generic(ga) => ga.single_line_width(input)?,
+            AnyObjectCtor::Bogus(_) => unreachable!("the formatter prints only error-free trees"),
+        };
+        let mut len = ctor_width
+            + if braces_have_content(node.l, close, members.len(), input) {
                 const { " {  }".len() }
             } else {
                 const { " {}".len() }
             };
         len += open_trailing.try_squished_len(input.input)?;
-        for (i, (field, comma)) in self.fields.iter().enumerate() {
-            let (fld_leading, fld_trailing) = input.trivia.get_for_element(field);
+        for (i, member) in members.iter().enumerate() {
+            let core = member.core(tree);
+            let (fld_leading, fld_trailing) = input.trivia.get_for_element(tree, core);
             len += fld_leading.try_squished_len(input.input)?;
-            len += field.single_line_width(input)?;
+            len += member.single_line_width(input)?;
             len += fld_trailing.try_squished_len(input.input)?;
-            if i + 1 < self.fields.len() {
-                if let Some(comma) = comma {
+            if i + 1 < members.len() {
+                if let Some(comma) = member.comma(tree) {
                     let (comma_leading, comma_trailing) =
-                        input.trivia.get_for_range_split(comma.span());
+                        input.trivia.get_for_range_split(input.range(comma));
                     len += comma_leading.try_squished_len(input.input)?;
                     len += 1; // ","
                     len += comma_trailing.try_squished_len(input.input)?;
@@ -4211,199 +2365,158 @@ impl ObjectInitializer {
                     len += 1; // ","
                 }
                 len += 1; // " "
-            } else if let Some(comma) = comma {
-                // Trailing comma is removed in single-line mode, but check trivia
+            } else if let Some(comma) = member.comma(tree) {
                 let (comma_leading, comma_trailing) =
-                    input.trivia.get_for_range_split(comma.span());
+                    input.trivia.get_for_range_split(input.range(comma));
                 len += comma_leading.try_squished_len(input.input)?;
                 len += comma_trailing.try_squished_len(input.input)?;
             }
         }
-        let (close_leading, _) = input.trivia.get_for_range_split(self.close_brace.span());
+        let (close_leading, _) = input.trivia.get_for_range_split(input.range(close));
         len += close_leading.try_squished_len(input.input)?;
         Some(len)
     }
+}
 
-    /// Tries to print the object initializer as a single line.
-    ///
-    /// If successful, returns the info.
-    ///
-    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
-    /// in the event that the printer is unable to fit the object initializer on a single line.
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        // An empty literal renders as `Name {}`: the padding spaces surround
-        // members or an interior comment, and there is neither.
-        let has_content = self.has_content(printer);
-        printer.print(&self.name, Shape::unlimited_single_line());
+fn object_single_line(
+    id: Id<ObjectLiteral>,
+    shape: &Shape,
+    printer: &mut Printer,
+) -> Option<PrintInfo> {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    let close = present(node.r);
+    let members = tree.list(node.members);
+    let has_content = braces_have_content(node.l, close, members.len(), printer);
+    printer.print(node.ctor, Shape::unlimited_single_line());
+    printer.print_str(" ");
+    printer.print_token(node.l);
+    if has_content {
         printer.print_str(" ");
-        printer.print_raw_token(&self.open_brace);
-        if has_content {
-            printer.print_str(" ");
-        }
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
-        printer.try_print_trivia_single_line_squished(open_trailing)?;
-
-        for (i, (field, comma)) in self.fields.iter().enumerate() {
-            if printer.output.len() > shape.width {
-                return None;
-            }
-            let (fld_leading, fld_trailing) = printer.trivia.get_for_element(field);
-            printer.try_print_trivia_single_line_squished(fld_leading)?;
-            if printer
-                .print(field, Shape::unlimited_single_line())
-                .multi_lined
-            {
-                return None;
-            }
-            printer.try_print_trivia_single_line_squished(fld_trailing)?;
-            if i + 1 < self.fields.len() {
-                if let Some(comma) = comma {
-                    let (comma_leading, comma_trailing) =
-                        printer.trivia.get_for_range_split(comma.span());
-                    printer.try_print_trivia_single_line_squished(comma_leading)?;
-                    printer.print_raw_token(comma);
-                    printer.try_print_trivia_single_line_squished(comma_trailing)?;
-                } else {
-                    printer.print_str(",");
-                }
-                printer.print_str(" ");
-            } else if let Some(comma) = comma {
-                // Trailing comma is removed in single-line mode, but we still try the comments.
-                let (comma_leading, comma_trailing) =
-                    printer.trivia.get_for_range_split(comma.span());
-                printer.try_print_trivia_single_line_squished(comma_leading)?;
-                printer.try_print_trivia_single_line_squished(comma_trailing)?;
-            }
-        }
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        printer.try_print_trivia_single_line_squished(close_leading)?;
-        if has_content {
-            printer.print_str(" ");
-        }
-        printer.print_raw_token(&self.close_brace);
-
+    }
+    let (_, open_trailing) = printer.trivia.get_for_range_split(printer.range(node.l));
+    printer.try_print_trivia_single_line_squished(open_trailing)?;
+    for (i, member) in members.iter().enumerate() {
         if printer.output.len() > shape.width {
-            None
-        } else {
-            Some(PrintInfo::default_single_line())
+            return None;
+        }
+        let core = member.core(tree);
+        let (fld_leading, fld_trailing) = printer.trivia.get_for_element(tree, core);
+        printer.try_print_trivia_single_line_squished(fld_leading)?;
+        if printer
+            .print(*member, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        printer.try_print_trivia_single_line_squished(fld_trailing)?;
+        if i + 1 < members.len() {
+            if let Some(comma) = member.comma(tree) {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(printer.range(comma));
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.print_token(comma);
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            } else {
+                printer.print_str(",");
+            }
+            printer.print_str(" ");
+        } else if let Some(comma) = member.comma(tree) {
+            let (comma_leading, comma_trailing) =
+                printer.trivia.get_for_range_split(printer.range(comma));
+            printer.try_print_trivia_single_line_squished(comma_leading)?;
+            printer.try_print_trivia_single_line_squished(comma_trailing)?;
         }
     }
-
-    /// Whether anything sits between the braces on a single line: a member,
-    /// or an interior comment (the only trivia that prints there). An empty
-    /// literal takes no interior padding, as an empty map does.
-    fn has_content(&self, input: &Printer<'_>) -> bool {
-        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_brace.span());
-        let (close_leading, _) = input.trivia.get_for_range_split(self.close_brace.span());
-        !self.fields.is_empty()
-            || open_trailing.iter().any(EmittableTrivia::is_comment)
-            || close_leading.iter().any(EmittableTrivia::is_comment)
+    let (close_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
+    printer.try_print_trivia_single_line_squished(close_leading)?;
+    if has_content {
+        printer.print_str(" ");
+    }
+    printer.print_token(close);
+    if printer.output.len() > shape.width {
+        None
+    } else {
+        Some(PrintInfo::default_single_line())
     }
 }
 
-impl Printable for ObjectInitializer {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<ObjectLiteral> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.with_line_separated(false, |printer| {
             printer
-                .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+                .try_sub_printer(|p| object_single_line(self, &shape, p))
                 .unwrap_or_else(|| self.print_multi_line(shape, printer))
         })
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.name.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::MAP_LITERAL`] node.
-#[derive(Debug)]
-pub struct MapLiteral {
-    pub prefix: Option<t::Word>,
-    pub open_brace: t::LBrace,
-    pub fields: Vec<(ObjectField, Option<t::Comma>)>,
-    pub close_brace: t::RBrace,
+// ── map literals ─────────────────────────────────────────────────────────────
+
+pub(crate) trait MapEntryExt: Copy {
+    /// The entry without its comma: what trivia attaches around.
+    fn core(self, tree: &FileTree) -> TokenSpan;
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for MapLiteral {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::MAP_LITERAL)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let prefix = it
-            .next_if_kind(SyntaxKind::WORD)
-            .map(t::Word::from_cst)
-            .transpose()?;
-        let open_brace = it.expect_parse()?;
-
-        let mut fields = Vec::new();
-        let close_brace = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
-            };
-            match elem.kind() {
-                SyntaxKind::R_BRACE => {
-                    break t::RBrace::from_cst(elem)?;
-                }
-                SyntaxKind::OBJECT_FIELD => {
-                    let field = ObjectField::from_cst(elem)?;
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    fields.push((field, comma));
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "OBJECT_FIELD or R_BRACE".into(),
-                        found: elem.kind(),
-                        at: elem.text_range(),
-                    });
-                }
-            }
-        };
-
-        it.expect_end()?;
-
-        Ok(MapLiteral {
-            prefix,
-            open_brace,
-            fields,
-            close_brace,
-        })
+impl MapEntryExt for Id<MapEntry> {
+    fn core(self, tree: &FileTree) -> TokenSpan {
+        let node = tree.get(self);
+        span_between(node.key, present(node.value), tree)
+    }
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let value = present(node.value);
+        let colon = present(node.colon);
+        let name = node.key.single_line_width(input)?;
+        let value_width = value.single_line_width(input)?;
+        let mut trivia_len = 0usize;
+        let (_, colon_trailing) = input.trivia.get_for_range_split(input.range(colon));
+        for t in colon_trailing {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_leading = input.trivia.get_leading_for_element(tree, value);
+        for t in value_leading {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        Some(name + const { ": ".len() } + value_width + trivia_len)
     }
 }
 
-impl KnownKind for MapLiteral {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::MAP_LITERAL
+/// A map entry prints without its comma; the literal prints that.
+impl Printable for Id<MapEntry> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let value = present(node.value);
+        let colon = present(node.colon);
+        let mut multi_lined = false;
+        multi_lined |= printer.print(node.key, shape).multi_lined;
+        printer.print_token(colon);
+        let (_, colon_trailing) = printer.trivia.get_for_range_split(printer.range(colon));
+        printer.print_str(" ");
+        printer.print_trivia_squished(colon_trailing);
+        let value_leading = printer.trivia.get_leading_for_element(tree, value);
+        printer.print_trivia_squished(value_leading);
+        multi_lined |= printer.print(value, shape).multi_lined;
+        PrintInfo { multi_lined }
     }
 }
 
-impl PrintMultiLine for MapLiteral {
-    /// Multi-line layout: each entry on its own indented line with trailing comma.
-    /// Closing brace on its own line.
-    ///
-    /// ```baml
-    /// {
-    ///     key1: value1,
-    ///     key2: value2,
-    /// }
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl PrintMultiLine for Id<MapLiteral> {
+    fn print_multi_line(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let close = present(node.r);
         let inner_shape = Shape {
             width: shape.width.saturating_sub(printer.config.indent_width),
             indent: shape.indent + printer.config.indent_width,
             first_line_offset: 0,
         };
-
-        if let Some(prefix) = &self.prefix {
-            printer.print_raw_token(prefix);
-            let (_, line_comment) = printer.print_trivia_all_trailing_for(prefix.span());
-            let (leading, _) = printer.trivia.get_for_range_split(self.open_brace.span());
+        if let Some(prefix) = node.map_kw {
+            printer.print_token(prefix);
+            let (_, line_comment) = printer.print_trivia_all_trailing_for(printer.range(prefix));
+            let (leading, _) = printer.trivia.get_for_range_split(printer.range(node.l));
             if line_comment || !leading.is_empty() {
                 printer.print_newline();
                 printer.print_trivia_with_newline(leading, shape.indent);
@@ -4412,55 +2525,54 @@ impl PrintMultiLine for MapLiteral {
                 printer.print_str(" ");
             }
         }
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
+        printer.print_token(node.l);
+        printer.print_trivia_all_trailing_for(printer.range(node.l));
         printer.print_newline();
-
-        for (field, comma) in &self.fields {
+        for entry in tree.list(node.entries) {
+            let core = entry.core(tree);
             printer.print_trivia_all_leading_with_newline_for(
-                field.leftmost_token(),
+                core.leftmost_token(tree),
                 inner_shape.indent,
             );
             printer.print_spaces(inner_shape.indent);
-            printer.print(field, inner_shape.clone());
-            if let Some(comma) = comma {
-                printer.print_raw_token(comma);
-                printer.print_trivia_all_trailing_for(comma.span());
+            printer.print(*entry, inner_shape);
+            if let Some(comma) = tree.get(*entry).comma {
+                printer.print_token(comma);
+                printer.print_trivia_all_trailing_for(printer.range(comma));
             } else {
                 printer.print_str(",");
-                printer.print_trivia_all_trailing_for(field.rightmost_token());
+                printer.print_trivia_all_trailing_for(core.rightmost_token(tree));
             }
             printer.print_newline();
         }
-
-        printer
-            .print_trivia_all_leading_with_newline_for(self.close_brace.span(), inner_shape.indent);
+        printer.print_trivia_all_leading_with_newline_for(printer.range(close), inner_shape.indent);
         printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
+        printer.print_token(close);
         PrintInfo::default_multi_lined()
     }
 }
 
-impl MapLiteral {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_brace.span());
-        let (close_leading, _) = input.trivia.get_for_range_split(self.close_brace.span());
-        // A populated map carries two interior padding spaces (`{ k1: v1 }`);
-        // an empty map is just `{}`. Keep this in sync with `try_print_single_line`.
-        let has_content = !self.fields.is_empty()
-            || open_trailing.iter().any(EmittableTrivia::is_comment)
-            || close_leading.iter().any(EmittableTrivia::is_comment);
+pub(crate) trait MapLiteralExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
+}
+impl MapLiteralExt for Id<MapLiteral> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let close = present(node.r);
+        let entries = tree.list(node.entries);
+        let (_, open_trailing) = input.trivia.get_for_range_split(input.range(node.l));
+        let (close_leading, _) = input.trivia.get_for_range_split(input.range(close));
+        let has_content = braces_have_content(node.l, close, entries.len(), input);
         let mut len = if has_content {
             const { "{  }".len() }
         } else {
             const { "{}".len() }
         };
-        if let Some(prefix) = &self.prefix {
+        if let Some(prefix) = node.map_kw {
             len += const { "map ".len() };
-            let (_, trailing) = input.trivia.get_for_range_split(prefix.span());
-            let (leading, _) = input.trivia.get_for_range_split(self.open_brace.span());
+            let (_, trailing) = input.trivia.get_for_range_split(input.range(prefix));
+            let (leading, _) = input.trivia.get_for_range_split(input.range(node.l));
             len += trailing.try_squished_len(input.input)?;
             len += leading.try_squished_len(input.input)?;
             if trailing
@@ -4474,19 +2586,21 @@ impl MapLiteral {
         for t in open_trailing {
             len += t.single_line_len(input.input)?;
         }
-        for (i, (field, comma)) in self.fields.iter().enumerate() {
-            let (fld_leading, fld_trailing) = input.trivia.get_for_element(field);
+        for (i, entry) in entries.iter().enumerate() {
+            let core = entry.core(tree);
+            let comma = tree.get(*entry).comma;
+            let (fld_leading, fld_trailing) = input.trivia.get_for_element(tree, core);
             for t in fld_leading {
                 len += t.single_line_len(input.input)?;
             }
-            len += field.single_line_width(input)?;
+            len += entry.single_line_width(input)?;
             for t in fld_trailing {
                 len += t.single_line_len(input.input)?;
             }
-            if i + 1 < self.fields.len() {
+            if i + 1 < entries.len() {
                 if let Some(comma) = comma {
                     let (comma_leading, comma_trailing) =
-                        input.trivia.get_for_range_split(comma.span());
+                        input.trivia.get_for_range_split(input.range(comma));
                     for t in comma_leading {
                         len += t.single_line_len(input.input)?;
                     }
@@ -4499,9 +2613,8 @@ impl MapLiteral {
                 }
                 len += 1; // " "
             } else if let Some(comma) = comma {
-                // Trailing comma is removed in single-line mode, but check trivia
                 let (comma_leading, comma_trailing) =
-                    input.trivia.get_for_range_split(comma.span());
+                    input.trivia.get_for_range_split(input.range(comma));
                 for t in comma_leading {
                     len += t.single_line_len(input.input)?;
                 }
@@ -4515,645 +2628,146 @@ impl MapLiteral {
         }
         Some(len)
     }
+}
 
-    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
-    /// in the event that the printer is unable to fit the map literal on a single line.
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        // An empty map renders as `{}` with no interior padding. The padding
-        // spaces are only added when there is something to surround: fields or
-        // an interior comment (the only trivia that prints on a single line).
-        let has_content = !self.fields.is_empty()
-            || open_trailing.iter().any(EmittableTrivia::is_comment)
-            || close_leading.iter().any(EmittableTrivia::is_comment);
-
-        if let Some(prefix) = &self.prefix {
-            printer.print_raw_token(prefix);
-            let (_, trailing) = printer.trivia.get_for_range_split(prefix.span());
-            let (leading, _) = printer.trivia.get_for_range_split(self.open_brace.span());
-            printer.print_str(" ");
-            printer.try_print_trivia_single_line_squished(trailing)?;
-            printer.try_print_trivia_single_line_squished(leading)?;
-            if trailing
-                .iter()
-                .chain(leading)
-                .any(EmittableTrivia::is_comment)
-            {
-                printer.print_str(" ");
-            }
-        }
-        printer.print_raw_token(&self.open_brace);
-        if has_content {
+fn map_single_line(id: Id<MapLiteral>, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    let close = present(node.r);
+    let entries = tree.list(node.entries);
+    let (_, open_trailing) = printer.trivia.get_for_range_split(printer.range(node.l));
+    let (close_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
+    let has_content = braces_have_content(node.l, close, entries.len(), printer);
+    if let Some(prefix) = node.map_kw {
+        printer.print_token(prefix);
+        let (_, trailing) = printer.trivia.get_for_range_split(printer.range(prefix));
+        let (leading, _) = printer.trivia.get_for_range_split(printer.range(node.l));
+        printer.print_str(" ");
+        printer.try_print_trivia_single_line_squished(trailing)?;
+        printer.try_print_trivia_single_line_squished(leading)?;
+        if trailing
+            .iter()
+            .chain(leading)
+            .any(EmittableTrivia::is_comment)
+        {
             printer.print_str(" ");
         }
-        printer.try_print_trivia_single_line_squished(open_trailing)?;
-
-        for (i, (field, comma)) in self.fields.iter().enumerate() {
-            if printer.output.len() > shape.width {
-                return None;
-            }
-            let (fld_leading, fld_trailing) = printer.trivia.get_for_element(field);
-            printer.try_print_trivia_single_line_squished(fld_leading)?;
-            if printer
-                .print(field, Shape::unlimited_single_line())
-                .multi_lined
-            {
-                return None;
-            }
-            printer.try_print_trivia_single_line_squished(fld_trailing)?;
-            if i + 1 < self.fields.len() {
-                if let Some(comma) = comma {
-                    let (comma_leading, comma_trailing) =
-                        printer.trivia.get_for_range_split(comma.span());
-                    printer.try_print_trivia_single_line_squished(comma_leading)?;
-                    printer.print_raw_token(comma);
-                    printer.try_print_trivia_single_line_squished(comma_trailing)?;
-                } else {
-                    printer.print_str(",");
-                }
-                printer.print_str(" ");
-            } else if let Some(comma) = comma {
-                // Trailing comma is removed in single-line mode, but we still try the comments.
-                let (comma_leading, comma_trailing) =
-                    printer.trivia.get_for_range_split(comma.span());
-                printer.try_print_trivia_single_line_squished(comma_leading)?;
-                printer.try_print_trivia_single_line_squished(comma_trailing)?;
-            }
-        }
-        printer.try_print_trivia_single_line_squished(close_leading)?;
-        if has_content {
-            printer.print_str(" ");
-        }
-        printer.print_raw_token(&self.close_brace);
-
+    }
+    printer.print_token(node.l);
+    if has_content {
+        printer.print_str(" ");
+    }
+    printer.try_print_trivia_single_line_squished(open_trailing)?;
+    for (i, entry) in entries.iter().enumerate() {
         if printer.output.len() > shape.width {
-            None
-        } else {
-            Some(PrintInfo::default_single_line())
+            return None;
         }
+        let core = entry.core(tree);
+        let comma = tree.get(*entry).comma;
+        let (fld_leading, fld_trailing) = printer.trivia.get_for_element(tree, core);
+        printer.try_print_trivia_single_line_squished(fld_leading)?;
+        if printer
+            .print(*entry, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        printer.try_print_trivia_single_line_squished(fld_trailing)?;
+        if i + 1 < entries.len() {
+            if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(printer.range(comma));
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.print_token(comma);
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            } else {
+                printer.print_str(",");
+            }
+            printer.print_str(" ");
+        } else if let Some(comma) = comma {
+            let (comma_leading, comma_trailing) =
+                printer.trivia.get_for_range_split(printer.range(comma));
+            printer.try_print_trivia_single_line_squished(comma_leading)?;
+            printer.try_print_trivia_single_line_squished(comma_trailing)?;
+        }
+    }
+    printer.try_print_trivia_single_line_squished(close_leading)?;
+    if has_content {
+        printer.print_str(" ");
+    }
+    printer.print_token(close);
+    if printer.output.len() > shape.width {
+        None
+    } else {
+        Some(PrintInfo::default_single_line())
     }
 }
 
-impl Printable for MapLiteral {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<MapLiteral> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.with_line_separated(false, |printer| {
             printer
-                .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+                .try_sub_printer(|p| map_single_line(self, &shape, p))
                 .unwrap_or_else(|| self.print_multi_line(shape, printer))
         })
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.prefix
-            .as_ref()
-            .map_or(self.open_brace.span(), t::Word::span)
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_brace.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::OBJECT_FIELD`] node.
-#[derive(Debug)]
-pub struct ObjectField {
-    pub name: ObjectFieldKey,
-    /// Absent for class property shorthand (`Request { options }`).
-    pub colon: Option<t::Colon>,
-    pub value: Option<Expression>,
-}
+// ── generics ─────────────────────────────────────────────────────────────────
 
-impl FromCST for ObjectField {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::OBJECT_FIELD)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let name = it.expect_next("field name or map key expression")?;
-        let name = if node
-            .parent()
-            .is_some_and(|parent| parent.kind() == SyntaxKind::MAP_LITERAL)
-        {
-            ObjectFieldKey::Expression(Box::new(Expression::from_cst(name)?))
-        } else {
-            ObjectFieldKey::from_cst(name)?
-        };
-
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
-
-        let value = if colon.is_some() {
-            let value = it.expect_next("value")?;
-            Some(Expression::from_cst(value)?)
-        } else {
-            None
-        };
-
-        it.expect_end()?;
-
-        Ok(ObjectField { name, colon, value })
-    }
-}
-
-impl KnownKind for ObjectField {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::OBJECT_FIELD
-    }
-}
-
-impl ObjectField {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        let name = self.name.single_line_width(input)?;
-        let (Some(colon), Some(value)) = (&self.colon, &self.value) else {
-            return Some(name);
-        };
-        let value_width = value.single_line_width(input)?;
-        // Must match trivia handled by print: colon_trailing + value_leading
-        let mut trivia_len = 0usize;
-        let (_, colon_trailing) = input.trivia.get_for_range_split(colon.span());
-        for t in colon_trailing {
-            trivia_len += t.single_line_len(input.input)?;
-        }
-        let value_leading = input.trivia.get_leading_for_element(value);
-        for t in value_leading {
-            trivia_len += t.single_line_len(input.input)?;
-        }
-        Some(name + const { ": ".len() } + value_width + trivia_len)
-    }
-}
-
-impl Printable for ObjectField {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut multi_lined = false;
-        multi_lined |= printer.print(&self.name, shape.clone()).multi_lined;
-        let (Some(colon), Some(value)) = (&self.colon, &self.value) else {
-            return PrintInfo { multi_lined };
-        };
-        printer.print_raw_token(colon);
-        let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-        printer.print_str(" ");
-        printer.print_trivia_squished(colon_trailing);
-        let value_leading = printer.trivia.get_leading_for_element(value);
-        printer.print_trivia_squished(value_leading);
-        multi_lined |= printer.print(value, shape).multi_lined;
-        PrintInfo { multi_lined }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.name.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.value
-            .as_ref()
-            .map(Printable::rightmost_token)
-            .unwrap_or_else(|| self.name.rightmost_token())
-    }
-}
-
-/// A member of an [`ObjectInitializer`]: either a `name: value` field or a
-/// `...expr` spread element.
-///
-/// Only [`SyntaxKind::OBJECT_LITERAL`] admits spreads; map literals and array
-/// literals keep using [`ObjectField`] directly.
-#[derive(Debug)]
-pub enum ObjectMember {
-    Field(ObjectField),
-    Spread(SpreadElement),
-}
-
-impl FromCST for ObjectMember {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        match elem.kind() {
-            SyntaxKind::OBJECT_FIELD => Ok(ObjectMember::Field(ObjectField::from_cst(elem)?)),
-            SyntaxKind::SPREAD_ELEMENT => Ok(ObjectMember::Spread(SpreadElement::from_cst(elem)?)),
-            _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "OBJECT_FIELD or SPREAD_ELEMENT".into(),
-                found: elem.kind(),
-                at: elem.text_range(),
-            }),
-        }
-    }
-}
-
-impl ObjectMember {
-    /// Returns the width of the member if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        match self {
-            ObjectMember::Field(field) => field.single_line_width(input),
-            ObjectMember::Spread(spread) => spread.single_line_width(input),
-        }
-    }
-}
-
-impl Printable for ObjectMember {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            ObjectMember::Field(field) => field.print(shape, printer),
-            ObjectMember::Spread(spread) => spread.print(shape, printer),
-        }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        match self {
-            ObjectMember::Field(field) => field.leftmost_token(),
-            ObjectMember::Spread(spread) => spread.leftmost_token(),
-        }
-    }
-    fn rightmost_token(&self) -> TextRange {
-        match self {
-            ObjectMember::Field(field) => field.rightmost_token(),
-            ObjectMember::Spread(spread) => spread.rightmost_token(),
-        }
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::SPREAD_ELEMENT`] node.
-///
-/// Struct-update spread inside an object literal: `Type { ...base, field: v }`.
-#[derive(Debug)]
-pub struct SpreadElement {
-    pub dot_dot_dot: t::DotDotDot,
-    pub value: Expression,
-}
-
-impl FromCST for SpreadElement {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::SPREAD_ELEMENT)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let dot_dot_dot = it.expect_parse()?;
-        let value = it.expect_next("spread value")?;
-        let value = Expression::from_cst(value)?;
-
-        it.expect_end()?;
-
-        Ok(SpreadElement { dot_dot_dot, value })
-    }
-}
-
-impl KnownKind for SpreadElement {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::SPREAD_ELEMENT
-    }
-}
-
-impl SpreadElement {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        // Must match the trivia handled by `print`: dots_trailing + value_leading.
-        let mut trivia_len = 0usize;
-        let (_, dots_trailing) = input.trivia.get_for_range_split(self.dot_dot_dot.span());
-        for t in dots_trailing {
-            trivia_len += t.single_line_len(input.input)?;
-        }
-        let value_leading = input.trivia.get_leading_for_element(&self.value);
-        for t in value_leading {
-            trivia_len += t.single_line_len(input.input)?;
-        }
-        let value_width = self.value.single_line_width(input)?;
-        Some(const { "...".len() } + value_width + trivia_len)
-    }
-}
-
-impl Printable for SpreadElement {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        // No space after `...` — it binds tightly to its operand.
-        printer.print_raw_token(&self.dot_dot_dot);
-        let (_, dots_trailing) = printer.trivia.get_for_range_split(self.dot_dot_dot.span());
-        printer.print_trivia_squished(dots_trailing);
-        let value_leading = printer.trivia.get_leading_for_element(&self.value);
-        printer.print_trivia_squished(value_leading);
-        printer.print(&self.value, shape)
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.dot_dot_dot.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.value.rightmost_token()
-    }
-}
-
-/// Represents the a valid key for an [`ObjectField`].
-#[derive(Debug)]
-pub enum ObjectFieldKey {
-    Word(t::Word),
-    String(t::QuotedString),
-    Expression(Box<Expression>),
-}
-
-impl FromCST for ObjectFieldKey {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        match elem.kind() {
-            SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => Ok(
-                ObjectFieldKey::Expression(Box::new(Expression::from_cst(elem)?)),
-            ),
-            // `client` (KW_CLIENT) is a keyword but a valid field name, e.g.
-            // `Agent { client: ... }` — mirror `parse_object_field`.
-            kind if t::is_word_like(kind) => Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?)),
-            SyntaxKind::STRING_LITERAL => {
-                Ok(ObjectFieldKey::String(t::QuotedString::from_cst(elem)?))
-            }
-            _ => Ok(ObjectFieldKey::Expression(Box::new(Expression::from_cst(
-                elem,
-            )?))),
-        }
-    }
-}
-
-impl ObjectFieldKey {
-    /// Returns the width of the expression if it fits on a single line.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        match self {
-            ObjectFieldKey::Word(word) => Some(usize::from(word.span().len())),
-            ObjectFieldKey::Expression(expr) => expr.single_line_width(input),
-            ObjectFieldKey::String(s) => {
-                if input.input[s.span()].contains('\n') {
-                    None
-                } else {
-                    Some(usize::from(s.span().len()))
-                }
-            }
-        }
-    }
-}
-
-impl Printable for ObjectFieldKey {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            ObjectFieldKey::Word(word) => {
-                printer.print_raw_token(word);
-                PrintInfo::default_single_line()
-            }
-            ObjectFieldKey::String(string) => printer.print(string, shape),
-            ObjectFieldKey::Expression(expr) => printer.print(expr.as_ref(), shape),
-        }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        match self {
-            ObjectFieldKey::Word(word) => word.span(),
-            ObjectFieldKey::String(string) => string.leftmost_token(),
-            ObjectFieldKey::Expression(expr) => expr.leftmost_token(),
-        }
-    }
-    fn rightmost_token(&self) -> TextRange {
-        match self {
-            ObjectFieldKey::Word(word) => word.span(),
-            ObjectFieldKey::String(string) => string.rightmost_token(),
-            ObjectFieldKey::Expression(expr) => expr.rightmost_token(),
-        }
-    }
-}
-
-// ─── Lambda Expression ────────────────────────────────────────────────────────
-
-/// Corresponds to a [`SyntaxKind::GENERIC_PARAM_LIST`] node.
-///
-/// Contains `<T, U>` generic parameter declarations for a lambda expression.
-/// Printed as `<T>` or `<K, V>` etc.
-#[derive(Debug)]
-pub struct GenericParamList {
-    pub open_angle: t::Less,
-    /// Comma-separated type parameter declarations.
-    pub params: Vec<GenericParam>,
-    pub close_angle: t::Greater,
-}
-
-#[derive(Debug)]
-pub struct GenericParam {
-    pub name: t::Word,
-    pub bounds: Option<GenericParamBounds>,
-    pub comma: Option<t::Comma>,
-}
-
-#[derive(Debug)]
-pub struct GenericParamBounds {
-    pub extends: t::Extends,
-    pub bounds: Vec<(Type, Option<t::And>)>,
-}
-
-impl FromCST for GenericParamList {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::GENERIC_PARAM_LIST)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let open_angle: t::Less = it.expect_parse()?;
-
-        let mut params = Vec::new();
-        let close_angle = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
-            };
-            match elem.kind() {
-                SyntaxKind::GREATER => {
-                    break t::Greater::from_cst(elem)?;
-                }
-                SyntaxKind::GENERIC_PARAM => {
-                    let param_node = StrongAstError::assert_is_node(elem)?;
-                    let mut param_it = SyntaxNodeIter::new(&param_node);
-                    let name: t::Word = param_it.expect_parse()?;
-                    let bounds = if param_it.peek().map(SyntaxElement::kind)
-                        == Some(SyntaxKind::GENERIC_PARAM_BOUNDS)
-                    {
-                        let elem = param_it.next().expect("peeked");
-                        Some(GenericParamBounds::from_cst(elem)?)
-                    } else {
-                        None
-                    };
-                    param_it.expect_end()?;
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    params.push(GenericParam {
-                        name,
-                        bounds,
-                        comma,
-                    });
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: it.parent,
-                        at: elem.text_range(),
-                    });
-                }
-            }
-        };
-
-        it.expect_end()?;
-
-        Ok(GenericParamList {
-            open_angle,
-            params,
-            close_angle,
-        })
-    }
-}
-
-impl FromCST for GenericParamBounds {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::GENERIC_PARAM_BOUNDS)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-        let extends: t::Extends = it.expect_parse()?;
-        let mut bounds = Vec::new();
-        while it.peek().is_some() {
-            let ty: Type = it.expect_parse()?;
-            let and = it
-                .next_if_kind(SyntaxKind::AND)
-                .map(t::And::from_cst)
-                .transpose()?;
-            bounds.push((ty, and));
-        }
-        it.expect_end()?;
-
-        Ok(GenericParamBounds { extends, bounds })
-    }
-}
-
-impl KnownKind for GenericParamList {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::GENERIC_PARAM_LIST
-    }
-}
-
-impl Printable for GenericParamList {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.open_angle);
-        for (i, param) in self.params.iter().enumerate() {
-            printer.print_raw_token(&param.name);
-            if let Some(bounds) = &param.bounds {
+impl Printable for Id<GenericParamList> {
+    fn print(self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let params = tree.list(node.params);
+        printer.print_token(node.l);
+        for (i, SepItem { item: param, .. }) in params.iter().enumerate() {
+            let param = tree.get(*param);
+            printer.print(param.name, Shape::unlimited_single_line());
+            if let Some(bounds) = param.bounds {
                 printer.print_str(" ");
                 printer.print(bounds, Shape::unlimited_single_line());
             }
-            if i + 1 < self.params.len() {
+            if i + 1 < params.len() {
                 printer.print_str(", ");
             }
         }
-        printer.print_raw_token(&self.close_angle);
+        printer.print_token(present(node.r));
         PrintInfo::default_single_line()
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.open_angle.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_angle.span()
     }
 }
 
-impl Printable for GenericParamBounds {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.extends);
-        for (idx, (bound, _and)) in self.bounds.iter().enumerate() {
-            if idx == 0 {
-                printer.print_str(" ");
-            } else {
-                printer.print_str(" & ");
-            }
-            printer.print(bound, Shape::unlimited_single_line());
+impl Printable for Id<GenericParamBounds> {
+    fn print(self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        printer.print_token(node.kw);
+        printer.print_str(" ");
+        printer.print(present(node.first), Shape::unlimited_single_line());
+        for arm in tree.list(node.rest) {
+            printer.print_str(" & ");
+            printer.print(present(arm.ty), Shape::unlimited_single_line());
         }
         PrintInfo::default_single_line()
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.extends.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.bounds
-            .last()
-            .map(|(bound, _)| bound.rightmost_token())
-            .unwrap_or_else(|| self.extends.span())
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::GENERIC_ARGS`] node.
-///
-/// Contains `<Type1, Type2, ...>` generic arguments at a call site
-/// or generic-typed path (e.g. `f<int, string>(...)`, `Box<int> { ... }`).
-#[derive(Debug)]
-pub struct GenericArgs {
-    pub open_angle: t::Less,
-    /// Comma-separated static or contextual runtime type arguments.
-    pub args: Vec<(GenericArg, Option<t::Comma>)>,
-    pub close_angle: t::Greater,
+pub(crate) trait GenericArgsExt: Copy {
+    /// The width of the arguments as printed: `<a, b>`, which tracks what
+    /// the printer emits rather than the source spacing.
+    fn formatted_single_line_width(self, printer: &Printer<'_>) -> usize;
 }
-
-#[derive(Debug)]
-pub enum GenericArg {
-    Type(crate::ast::Type),
-}
-
-impl FromCST for GenericArgs {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::GENERIC_ARGS)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        let open_angle: t::Less = it.expect_parse()?;
-
-        let mut args = Vec::new();
-        let close_angle = loop {
-            let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
-            };
-            match elem.kind() {
-                SyntaxKind::GREATER => {
-                    break t::Greater::from_cst(elem)?;
-                }
-                SyntaxKind::TYPE_EXPR => {
-                    let arg = GenericArg::Type(crate::ast::Type::from_cst(elem)?);
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    args.push((arg, comma));
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: it.parent,
-                        at: elem.text_range(),
-                    });
-                }
-            }
-        };
-
-        it.expect_end()?;
-
-        Ok(GenericArgs {
-            open_angle,
-            args,
-            close_angle,
-        })
-    }
-}
-
-impl GenericArgs {
-    /// Width that the formatter would emit on a single line, ignoring any
-    /// internal trivia in the source. Used by single-line-width estimators
-    /// upstream to decide whether a host expression fits on one line.
-    ///
-    /// Format is `<T1, T2, T3>`: 2 chars for `<>`, plus each type argument's
-    /// source-text width, plus `, ` (2 chars) between arguments. Source
-    /// types may contain whitespace, but for typical cases this is a tight
-    /// upper bound and tracks what the printer actually emits.
-    pub(crate) fn formatted_single_line_width(&self) -> usize {
+impl GenericArgsExt for Id<GenericArgs> {
+    fn formatted_single_line_width(self, printer: &Printer<'_>) -> usize {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let args = tree.list(node.args);
         let mut len: usize = 2; // `<` and `>`
-        for (i, (arg, _)) in self.args.iter().enumerate() {
-            let (left, right) = match arg {
-                GenericArg::Type(ty) => (ty.leftmost_token(), ty.rightmost_token()),
-            };
-            let arg_span = right.end() - left.start();
-            len += usize::from(arg_span);
-            if i + 1 < self.args.len() {
+        for (i, SepItem { item: ty, .. }) in args.iter().enumerate() {
+            let left = ty.leftmost_token(tree);
+            let right = ty.rightmost_token(tree);
+            len += usize::from(right.end() - left.start());
+            if i + 1 < args.len() {
                 len += 2; // `, `
             }
         }
@@ -5161,423 +2775,131 @@ impl GenericArgs {
     }
 }
 
-impl KnownKind for GenericArgs {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::GENERIC_ARGS
-    }
-}
-
-impl Printable for GenericArgs {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.open_angle);
-        for (i, (arg, _comma)) in self.args.iter().enumerate() {
-            match arg {
-                GenericArg::Type(ty) => printer.print(ty, shape.clone()),
-            };
-            if i + 1 < self.args.len() {
+impl Printable for Id<GenericArgs> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let args = tree.list(node.args);
+        printer.print_token(node.l);
+        for (i, SepItem { item: ty, .. }) in args.iter().enumerate() {
+            printer.print(*ty, shape);
+            if i + 1 < args.len() {
                 printer.print_str(", ");
             }
         }
-        printer.print_raw_token(&self.close_angle);
+        printer.print_token(present(node.r));
         PrintInfo::default_single_line()
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.open_angle.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.close_angle.span()
-    }
 }
 
-/// Corresponds to a [`SyntaxKind::THROWS_CLAUSE`] node.
-///
-/// Contains `throws <type>`.
-#[derive(Debug)]
-pub struct ThrowsClause {
-    pub keyword: t::Throws,
-    pub ty: crate::ast::Type,
-}
+// ── lambdas and spawns ───────────────────────────────────────────────────────
 
-impl FromCST for ThrowsClause {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::THROWS_CLAUSE)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword: t::Throws = it.expect_parse()?;
-        let ty: crate::ast::Type = it.expect_parse()?;
-        it.expect_end()?;
-
-        Ok(ThrowsClause { keyword, ty })
-    }
-}
-
-impl KnownKind for ThrowsClause {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::THROWS_CLAUSE
-    }
-}
-
-impl Printable for ThrowsClause {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut multi_lined = false;
-        printer.print_raw_token(&self.keyword);
-        printer.print_separator(
-            self.keyword.span(),
-            Some(self.ty.leftmost_token()),
-            shape.indent + printer.config.indent_width,
-            " ",
-        );
-        multi_lined |= printer.print(&self.ty, shape).multi_lined;
-        PrintInfo { multi_lined }
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.ty.rightmost_token()
-    }
-}
-
-/// Arrow token in a function signature. Accepts either `->` (canonical) or
-/// `=>` (accepted permissively for ergonomic parity with JS/TS arrow functions);
-/// the formatter always emits `->`. Shared by declarations and lambdas so the
-/// compiler's permissive syntax and formatter repair stay in lockstep.
-#[derive(Debug)]
-pub enum FunctionArrow {
-    Arrow(t::Arrow),
-    FatArrow(t::FatArrow),
-}
-
-impl FunctionArrow {
-    #[must_use]
-    pub fn span(&self) -> TextRange {
-        match self {
-            FunctionArrow::Arrow(t) => t.span(),
-            FunctionArrow::FatArrow(t) => t.span(),
-        }
-    }
-
-    /// Returns true if the source used `=>` instead of the canonical `->`.
-    #[must_use]
-    pub fn is_fat_arrow(&self) -> bool {
-        matches!(self, FunctionArrow::FatArrow(_))
-    }
-
-    /// Print trivia between the source arrow and the next canonical element.
-    /// The arrow spelling may be synthesized, but its source span still owns
-    /// comments that must survive normalization.
-    pub(crate) fn print_separator_before(
-        &self,
-        next_leftmost: Option<TextRange>,
-        continuation_indent: usize,
-        printer: &mut Printer,
-    ) {
-        printer.print_separator(self.span(), next_leftmost, continuation_indent, " ");
-    }
-}
-
-impl FromCST for FunctionArrow {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let token = StrongAstError::assert_is_token(elem)?;
-        match token.kind() {
-            SyntaxKind::ARROW => Ok(FunctionArrow::Arrow(t::Arrow::new_from_span(
-                token.text_range(),
-            ))),
-            SyntaxKind::FAT_ARROW => Ok(FunctionArrow::FatArrow(t::FatArrow::new_from_span(
-                token.text_range(),
-            ))),
-            _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "ARROW or FAT_ARROW".into(),
-                found: token.kind(),
-                at: token.text_range(),
-            }),
-        }
-    }
-}
-
-impl KnownKind for FunctionArrow {
-    fn kind() -> SyntaxKind {
-        // Primary/canonical kind; `from_cst` also accepts FAT_ARROW.
-        SyntaxKind::ARROW
-    }
-}
-
-/// Corresponds to a [`SyntaxKind::LAMBDA_EXPR`] node.
-///
-/// Syntax: `[<T, U>] (params) (-> | =>) [RetType] [throws E] { body }`
-#[derive(Debug)]
-pub struct LambdaExpr {
-    pub generic_params: Option<GenericParamList>,
-    pub param_list: super::FunctionParamList,
-    pub arrow: FunctionArrow,
-    pub return_type: Option<crate::ast::Type>,
-    pub throws: Option<ThrowsClause>,
-    pub block: BlockExpr,
-}
-
-#[allow(clippy::redundant_closure_for_method_calls)]
-impl FromCST for LambdaExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::LAMBDA_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-
-        // Optional generic params: <T, U>
-        let generic_params = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::GENERIC_PARAM_LIST)
-        {
-            let elem = it.next().expect("peeked");
-            Some(GenericParamList::from_cst(elem)?)
-        } else {
-            None
-        };
-
-        // Parameter list: (x: int, y: string) or ()
-        let param_list: super::FunctionParamList = it.expect_parse()?;
-
-        // Arrow: `->` or `=>` (formatter normalizes to `->`)
-        let arrow: FunctionArrow = it.expect_parse()?;
-
-        // Optional return annotation before THROWS_CLAUSE or BLOCK_EXPR
-        let return_type =
-            if it.peek().map(|e| e.kind()) == Some(SyntaxKind::FUNCTION_TYPE_RETURN_TYPE) {
-                let elem = it.next().expect("peeked");
-                Some(super::FunctionTypeReturnType::from_cst(elem)?.ty)
-            } else {
-                None
-            };
-
-        // Optional throws clause
-        let throws = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::THROWS_CLAUSE) {
-            let elem = it.next().expect("peeked");
-            Some(ThrowsClause::from_cst(elem)?)
-        } else {
-            None
-        };
-
-        // Block body
-        let block: BlockExpr = it.expect_parse()?;
-
-        it.expect_end()?;
-
-        Ok(LambdaExpr {
-            generic_params,
-            param_list,
-            arrow,
-            return_type,
-            throws,
-            block,
-        })
-    }
-}
-
-impl KnownKind for LambdaExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::LAMBDA_EXPR
-    }
-}
-
-impl Printable for LambdaExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        // Optional generic params: <T>
-        if let Some(ref gp) = self.generic_params {
-            printer.print(gp, shape.clone());
-        }
-
-        // Parameter list
-        printer.print(&self.param_list, shape.clone());
-
-        // Space + arrow (always normalize to canonical `->`)
+impl Printable for Id<LambdaExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let tree = printer.tree;
+        let node = tree.get(self);
+        let arrow = present(node.arrow);
+        let block = present(node.body);
+        let continuation = shape.indent + printer.config.indent_width;
+        printer.print(node.params, shape);
+        // `=>` is accepted in place of `->` and printed as the latter.
         printer.print_str(" ->");
-
-        // Optional return type
-        if let Some(ref ret) = self.return_type {
-            self.arrow.print_separator_before(
-                Some(ret.leftmost_token()),
-                shape.indent + printer.config.indent_width,
-                printer,
+        if let Some(ret) = node.ret {
+            printer.print_separator(
+                printer.range(arrow),
+                Some(ret.leftmost_token(tree)),
+                continuation,
+                " ",
             );
-            printer.print(ret, shape.clone());
-            if let Some(ref throws) = self.throws {
+            printer.print(ret, shape);
+            if let Some(throws) = node.throws {
                 printer.print_str(" ");
-                printer.print(throws, shape.clone());
+                printer.print(throws, shape);
             }
             printer.print_str(" ");
-        } else if let Some(ref throws) = self.throws {
-            self.arrow.print_separator_before(
-                Some(throws.leftmost_token()),
-                shape.indent + printer.config.indent_width,
-                printer,
+        } else if let Some(throws) = node.throws {
+            printer.print_separator(
+                printer.range(arrow),
+                Some(throws.leftmost_token(tree)),
+                continuation,
+                " ",
             );
-            printer.print(throws, shape.clone());
+            printer.print(throws, shape);
             printer.print_str(" ");
         } else {
-            self.arrow.print_separator_before(
-                Some(self.block.leftmost_token()),
-                shape.indent + printer.config.indent_width,
-                printer,
+            printer.print_separator(
+                printer.range(arrow),
+                Some(block.leftmost_token(tree)),
+                continuation,
+                " ",
             );
         }
-
-        printer.print(&self.block, shape);
-
+        printer.print(block, shape);
         PrintInfo::default_multi_lined()
     }
-    fn leftmost_token(&self) -> TextRange {
-        if let Some(ref gp) = self.generic_params {
-            gp.leftmost_token()
-        } else {
-            self.param_list.leftmost_token()
+}
+
+/// `spawn [name] [with a, b]`: the part before the block.
+fn spawn_header_range(id: Id<SpawnExpr>, printer: &Printer<'_>) -> TextRange {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    TextRange::new(
+        printer.range(node.kw).start(),
+        printer.range(tree.get(present(node.body)).l).start(),
+    )
+}
+
+fn spawn_header_requires_verbatim(id: Id<SpawnExpr>, input: &Printer<'_>) -> bool {
+    let range = spawn_header_range(id, input);
+    input.trivia.all_trivia().iter().any(|trivia| {
+        let attached_at = trivia.attached_to().start();
+        trivia.is_comment() && attached_at >= range.start() && attached_at <= range.end()
+    })
+}
+
+fn spawn_header_single_line_width(id: Id<SpawnExpr>, input: &Printer<'_>) -> Option<usize> {
+    let tree = input.tree;
+    let node = tree.get(id);
+    if spawn_header_requires_verbatim(id, input) {
+        return None;
+    }
+    let mut len = usize::from(input.range(node.kw).len());
+    if let Some(name) = node.name {
+        len += const { " ".len() } + name.single_line_width(input)?;
+    }
+    if let Some(with) = node.with {
+        let with = tree.get(with);
+        len += const { " ".len() } + usize::from(input.range(with.kw).len());
+        for (i, SepItem { item: expr, .. }) in tree.list(with.items).iter().enumerate() {
+            len += if i == 0 {
+                const { " ".len() }
+            } else {
+                const { ", ".len() }
+            };
+            len += expr.single_line_width(input)?;
         }
     }
-    fn rightmost_token(&self) -> TextRange {
-        self.block.rightmost_token()
-    }
+    Some(len)
 }
 
-/// The `with` options clause of a [`SpawnExpr`]: the keyword and its
-/// comma-separated expressions (each a `baml.spawn.Modifier` value
-/// call).
-pub type SpawnWithClause = (t::With, Vec<(Expression, Option<t::Comma>)>);
-
-/// Corresponds to a [`SyntaxKind::SPAWN_EXPR`] node.
-///
-/// `spawn name_expr? (with expr (, expr)*)? { body }` (BEP-034). The name
-/// expression and the `with` options clause are both optional; the body is
-/// always a brace-delimited block.
-#[derive(Debug)]
-pub struct SpawnExpr {
-    pub keyword: t::Spawn,
-    /// Optional task-name expression between `spawn` and `with`/the body.
-    pub name: Option<Expression>,
-    pub with_clause: Option<SpawnWithClause>,
-    pub block: BlockExpr,
+pub(crate) trait SpawnExt: Copy {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize>;
 }
-
-impl FromCST for SpawnExpr {
-    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::SPAWN_EXPR)?;
-
-        let mut it = SyntaxNodeIter::new(&node);
-        let keyword: t::Spawn = it.expect_parse()?;
-
-        let mut name = None;
-        let mut with_clause = None;
-        let block = loop {
-            let elem = it.expect_next("spawn body block")?;
-            match elem.kind() {
-                SyntaxKind::BLOCK_EXPR => break BlockExpr::from_cst(elem)?,
-                SyntaxKind::KW_WITH => {
-                    let with_kw = t::With::from_cst(elem)?;
-                    let mut options = Vec::new();
-                    while let Some(next) = it.peek() {
-                        if next.kind() == SyntaxKind::BLOCK_EXPR {
-                            break;
-                        }
-                        let expr = Expression::from_cst(it.next().expect("peeked"))?;
-                        let comma = it
-                            .next_if_kind(SyntaxKind::COMMA)
-                            .map(t::Comma::from_cst)
-                            .transpose()?;
-                        options.push((expr, comma));
-                    }
-                    with_clause = Some((with_kw, options));
-                }
-                _ if name.is_none() && with_clause.is_none() => {
-                    name = Some(Expression::from_cst(elem)?);
-                }
-                _ => {
-                    return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: it.parent,
-                        at: elem.text_range(),
-                    });
-                }
-            }
-        };
-        it.expect_end()?;
-
-        Ok(SpawnExpr {
-            keyword,
-            name,
-            with_clause,
-            block,
-        })
-    }
-}
-
-impl KnownKind for SpawnExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::SPAWN_EXPR
-    }
-}
-
-impl SpawnExpr {
-    /// Source range for the spawn header, excluding the body block's opening
-    /// brace. Keeping a commented header verbatim avoids dropping trivia that
-    /// sits between the keyword, optional name, `with` options, and commas.
-    fn header_range(&self) -> TextRange {
-        TextRange::new(
-            self.keyword.span().start(),
-            self.block.open_brace.span().start(),
-        )
-    }
-
-    /// Header comments are deliberately kept verbatim. The structured header
-    /// layout canonicalizes whitespace and commas, but does not otherwise have
-    /// enough information to place a line comment without changing its line.
-    /// The trivia classifier catches both line and block comments here.
-    fn header_requires_verbatim(&self, input: &Printer<'_>) -> bool {
-        let header_start = self.keyword.span().start();
-        let block_start = self.block.open_brace.span().start();
-        input.trivia.all_trivia().iter().any(|trivia| {
-            let attached_at = trivia.attached_to().start();
-            trivia.is_comment() && attached_at >= header_start && attached_at <= block_start
-        })
-    }
-
-    /// Width of the header (`spawn`, optional name, optional `with` clause)
-    /// without the body block. `None` if any part can never be single-lined.
-    fn header_single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        if self.header_requires_verbatim(input) {
+impl SpawnExt for Id<SpawnExpr> {
+    fn single_line_width(self, input: &Printer<'_>) -> Option<usize> {
+        let tree = input.tree;
+        let node = tree.get(self);
+        let block = tree.get(present(node.body));
+        if !tree.list(block.stmts).is_empty() {
             return None;
         }
-        let mut len = usize::from(self.keyword.span().len());
-        if let Some(name) = &self.name {
-            len += const { " ".len() } + name.single_line_width(input)?;
-        }
-        if let Some((with_kw, options)) = &self.with_clause {
-            len += const { " ".len() } + usize::from(with_kw.span().len());
-            for (i, (expr, _)) in options.iter().enumerate() {
-                len += if i == 0 {
-                    const { " ".len() }
-                } else {
-                    const { ", ".len() }
-                };
-                len += expr.single_line_width(input)?;
-            }
-        }
-        Some(len)
-    }
-
-    /// Returns the width of the expression if it fits on a single line —
-    /// a simple body (`{}` or `{ tail }`) and a single-lineable header.
-    /// Returns `None` if it can never be single-lined.
-    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
-        if !self.block.stmts.is_empty() {
-            return None;
-        }
-        let header = self.header_single_line_width(input)?;
-        let (_, open_trailing) = input
-            .trivia
-            .get_for_range_split(self.block.open_brace.span());
-        let (close_leading, _) = input
-            .trivia
-            .get_for_range_split(self.block.close_brace.span());
-        let body = match self.block.expr.as_deref() {
+        let header = spawn_header_single_line_width(self, input)?;
+        let close = present(block.r);
+        let (_, open_trailing) = input.trivia.get_for_range_split(input.range(block.l));
+        let (close_leading, _) = input.trivia.get_for_range_split(input.range(close));
+        let body = match block.tail {
             Some(tail) => {
-                let (tail_leading, tail_trailing) = input.trivia.get_for_element(tail);
+                let (tail_leading, tail_trailing) = input.trivia.get_for_element(tree, tail);
                 (const { " {  }".len() })
                     + open_trailing.try_squished_len(input.input)?
                     + tail_leading.try_squished_len(input.input)?
@@ -5596,283 +2918,268 @@ impl SpawnExpr {
         };
         Some(header + body)
     }
+}
 
-    /// Prints the header: `spawn`, then the optional name and `with` clause.
-    /// Returns whether any part spilled onto multiple lines.
-    fn print_header(&self, shape: &Shape, printer: &mut Printer) -> bool {
-        let mut multi_lined = false;
-        printer.print_raw_token(&self.keyword);
-        if let Some(name) = &self.name {
-            printer.print_str(" ");
-            multi_lined |= printer.print(name, shape.clone()).multi_lined;
-        }
-        if let Some((with_kw, options)) = &self.with_clause {
-            printer.print_str(" ");
-            printer.print_raw_token(with_kw);
-            for (i, (expr, _)) in options.iter().enumerate() {
-                printer.print_str(if i == 0 { " " } else { ", " });
-                multi_lined |= printer.print(expr, shape.clone()).multi_lined;
-            }
-        }
-        multi_lined
-    }
-
-    /// Single-line layout: `spawn name? (with opts)? {}` or `… { tail }`.
-    /// Only possible when the body has no statements.
-    ///
-    /// Should be passed a sub-printer to avoid printing trivia in the outer
-    /// printer in the event that the expression cannot fit on a single line.
-    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        if !self.block.stmts.is_empty() || self.header_requires_verbatim(printer) {
-            return None;
-        }
-        if self.print_header(&Shape::unlimited_single_line(), printer) {
-            return None;
-        }
+fn spawn_print_header(id: Id<SpawnExpr>, shape: &Shape, printer: &mut Printer) -> bool {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    let mut multi_lined = false;
+    printer.print_token(node.kw);
+    if let Some(name) = node.name {
         printer.print_str(" ");
-
-        let (_, open_trailing) = printer
-            .trivia
-            .get_for_range_split(self.block.open_brace.span());
-        let (close_leading, _) = printer
-            .trivia
-            .get_for_range_split(self.block.close_brace.span());
-        match self.block.expr.as_deref() {
-            Some(tail) => {
-                printer.print_raw_token(&self.block.open_brace);
-                printer.print_str(" ");
-                printer.try_print_trivia_single_line_squished(open_trailing)?;
-                let (tail_leading, tail_trailing) = printer.trivia.get_for_element(tail);
-                printer.try_print_trivia_single_line_squished(tail_leading)?;
-                if printer
-                    .print(tail, Shape::unlimited_single_line())
-                    .multi_lined
-                {
-                    return None;
-                }
-                printer.try_print_trivia_single_line_squished(tail_trailing)?;
-                printer.try_print_trivia_single_line_squished(close_leading)?;
-                printer.print_str(" ");
-                printer.print_raw_token(&self.block.close_brace);
-            }
-            None => {
-                if open_trailing.iter().any(EmittableTrivia::is_comment)
-                    || close_leading.iter().any(EmittableTrivia::is_comment)
-                {
-                    return None;
-                }
-                printer.print_raw_token(&self.block.open_brace);
-                printer.print_raw_token(&self.block.close_brace);
-            }
+        multi_lined |= printer.print(name, *shape).multi_lined;
+    }
+    if let Some(with) = node.with {
+        let with = tree.get(with);
+        printer.print_str(" ");
+        printer.print_token(with.kw);
+        for (i, SepItem { item: expr, .. }) in tree.list(with.items).iter().enumerate() {
+            printer.print_str(if i == 0 { " " } else { ", " });
+            multi_lined |= printer.print(*expr, *shape).multi_lined;
         }
+    }
+    multi_lined
+}
 
-        if printer.output.len() > shape.width {
-            None
-        } else {
-            Some(PrintInfo::default_single_line())
+fn spawn_single_line(id: Id<SpawnExpr>, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    let tree = printer.tree;
+    let node = tree.get(id);
+    let block = tree.get(present(node.body));
+    let close = present(block.r);
+    if !tree.list(block.stmts).is_empty() || spawn_header_requires_verbatim(id, printer) {
+        return None;
+    }
+    if spawn_print_header(id, &Shape::unlimited_single_line(), printer) {
+        return None;
+    }
+    printer.print_str(" ");
+    let (_, open_trailing) = printer.trivia.get_for_range_split(printer.range(block.l));
+    let (close_leading, _) = printer.trivia.get_for_range_split(printer.range(close));
+    match block.tail {
+        Some(tail) => {
+            printer.print_token(block.l);
+            printer.print_str(" ");
+            printer.try_print_trivia_single_line_squished(open_trailing)?;
+            let (tail_leading, tail_trailing) = printer.trivia.get_for_element(tree, tail);
+            printer.try_print_trivia_single_line_squished(tail_leading)?;
+            if printer
+                .print(tail, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+            printer.try_print_trivia_single_line_squished(tail_trailing)?;
+            printer.try_print_trivia_single_line_squished(close_leading)?;
+            printer.print_str(" ");
+            printer.print_token(close);
         }
+        None => {
+            if open_trailing.iter().any(EmittableTrivia::is_comment)
+                || close_leading.iter().any(EmittableTrivia::is_comment)
+            {
+                return None;
+            }
+            printer.print_token(block.l);
+            printer.print_token(close);
+        }
+    }
+    if printer.output.len() > shape.width {
+        None
+    } else {
+        Some(PrintInfo::default_single_line())
     }
 }
 
-impl PrintMultiLine for SpawnExpr {
-    /// Multi-line layout: the header stays on the current line and the block
-    /// opens right after it, closing at the outer indent.
-    ///
-    /// ```baml
-    /// spawn with limit {
-    ///     compute()
-    /// }
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        if self.header_requires_verbatim(printer) {
-            printer.print_input_range(self.header_range());
+impl PrintMultiLine for Id<SpawnExpr> {
+    fn print_multi_line(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let block = present(printer.tree.get(self).body);
+        if spawn_header_requires_verbatim(self, printer) {
+            let range = spawn_header_range(self, printer);
+            printer.print_input_range(range);
         } else {
-            self.print_header(&shape, printer);
+            spawn_print_header(self, &shape, printer);
             printer.print_str(" ");
         }
-        printer.print(&self.block, shape);
+        printer.print(block, shape);
         PrintInfo::default_multi_lined()
     }
 }
 
-impl Printable for SpawnExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl Printable for Id<SpawnExpr> {
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .try_sub_printer(|p| spawn_single_line(self, &shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
-    }
-    fn leftmost_token(&self) -> TextRange {
-        self.keyword.span()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        self.block.rightmost_token()
     }
 }
 
-// ─── PrintChain ───────────────────────────────────────────────────────────────
+// ── postfix chains ───────────────────────────────────────────────────────────
+
+/// The head of a postfix chain.
+#[derive(Clone, Copy)]
+enum ChainFirst {
+    /// A bare name, from a path.
+    Name(Id<Name>),
+    Expr(AnyExpr),
+}
 
 /// Only used for printing chained expressions.
 ///
 /// Needed to re-organize before printing from a hierarchical structure to a flat-ish one.
-pub struct PrintChain<'a> {
-    /// May be a [`PathExpr`] in which case only the first item is used (the rest are included in [`PrintChain::chain_members`]).
-    first: &'a Expression,
+pub(crate) struct PrintChain {
+    first: ChainFirst,
     /// Will always start with a field access (if not empty), since calls/indexes will be included in `first` if not following a field access.
-    chain_members: Vec<PrintChainItem<'a>>,
+    chain_members: Vec<PrintChainItem>,
 }
-impl<'a> PrintChain<'a> {
+
+/// Only used for printing chained expressions. See [`PrintChain`].
+#[derive(Clone, Copy)]
+enum PrintChainItem {
+    FieldAccess(Token<MemberDot>, Id<Name>),
+    OptionalFieldAccess(Token<punct::QuestionDot>, Id<Name>),
+    Index(IndexArgs),
+    OptionalIndex(Token<punct::QuestionDot>, IndexArgs),
+    Call(Id<ArgList>),
+    OptionalCall(Token<punct::QuestionDot>, Id<ArgList>),
+    GenericArgs(Id<GenericArgs>),
+}
+
+impl PrintChain {
     /// Builds the flat chain for a postfix spine.
     ///
-    /// Every receiver is taken through `Expression::effective_postfix_operand`
-    /// so redundant parens around it peel and the walk continues through them.
+    /// Every receiver is taken through `effective_postfix_operand` so
+    /// redundant parens around it peel and the walk continues through them.
     /// A paren that survives (looser-binding receiver, or one carrying a
     /// comment) still terminates the walk and becomes `first`, which is what
     /// puts it on its own indent level.
-    #[must_use]
-    pub fn new(from: &'a Expression, trivia: &TriviaInfo) -> Self {
-        let from = from.effective_postfix_operand(trivia);
+    pub(crate) fn new(from: AnyExpr, printer: &Printer<'_>) -> Self {
+        let tree = printer.tree;
+        let from = from.effective_postfix_operand(printer);
         match from {
-            Expression::Path(path_expr) => {
-                let mut chain_members: Vec<PrintChainItem<'a>> = path_expr
-                    .rest
+            AnyExpr::Path(path_expr) => {
+                let node = tree.get(path_expr);
+                let chain_members: Vec<PrintChainItem> = tree
+                    .list(node.segments)
                     .iter()
-                    .map(|(dot, word)| PrintChainItem::FieldAccess(dot, word))
+                    .map(|segment| {
+                        PrintChainItem::FieldAccess(segment.dot.widen(), present(segment.name))
+                    })
                     .collect();
-                if let Some(ref ga) = path_expr.generic_args {
-                    chain_members.push(PrintChainItem::GenericArgs(ga));
-                }
                 Self {
-                    first: from,
+                    first: ChainFirst::Name(node.head),
                     chain_members,
                 }
             }
-            Expression::Call(call_expr) => {
-                let mut chain = Self::new(&call_expr.callee, trivia);
-                if chain.chain_members.is_empty() {
-                    // included in `first` if not following a field access
-                    Self {
-                        first: from,
-                        chain_members: Vec::new(),
-                    }
-                } else {
-                    chain
-                        .chain_members
-                        .push(PrintChainItem::Call(&call_expr.args));
-                    chain
-                }
-            }
-            Expression::Index(index_expr) => {
-                let mut chain = Self::new(&index_expr.base, trivia);
-                if chain.chain_members.is_empty() {
-                    // included in `first` if not following a field access
-                    Self {
-                        first: from,
-                        chain_members: Vec::new(),
-                    }
-                } else {
-                    chain
-                        .chain_members
-                        .push(PrintChainItem::Index(index_expr.args()));
-                    chain
-                }
-            }
-            Expression::FieldAccess(field_access_expr) => {
-                let mut chain = Self::new(&field_access_expr.base, trivia);
-                chain.chain_members.push(PrintChainItem::FieldAccess(
-                    &field_access_expr.dot,
-                    &field_access_expr.field,
-                ));
+            AnyExpr::GenericApply(ga) => {
+                let node = tree.get(ga);
+                let mut chain = Self::new(node.base, printer);
+                chain
+                    .chain_members
+                    .push(PrintChainItem::GenericArgs(node.args));
                 chain
             }
-            Expression::OptionalFieldAccess(ofa) => {
-                let mut chain = Self::new(&ofa.base, trivia);
+            AnyExpr::Call(call_expr) => {
+                let node = tree.get(call_expr);
+                let mut chain = Self::new(node.callee, printer);
+                if chain.chain_members.is_empty() {
+                    Self {
+                        first: ChainFirst::Expr(from),
+                        chain_members: Vec::new(),
+                    }
+                } else {
+                    chain.chain_members.push(PrintChainItem::Call(node.args));
+                    chain
+                }
+            }
+            AnyExpr::Index(index_expr) => {
+                let node = tree.get(index_expr);
+                let mut chain = Self::new(node.base, printer);
+                if chain.chain_members.is_empty() {
+                    Self {
+                        first: ChainFirst::Expr(from),
+                        chain_members: Vec::new(),
+                    }
+                } else {
+                    chain
+                        .chain_members
+                        .push(PrintChainItem::Index(IndexArgs::of_index(index_expr, tree)));
+                    chain
+                }
+            }
+            AnyExpr::FieldAccess(field_access_expr) => {
+                let node = tree.get(field_access_expr);
+                let mut chain = Self::new(node.base, printer);
+                chain
+                    .chain_members
+                    .push(PrintChainItem::FieldAccess(node.dot, present(node.name)));
+                chain
+            }
+            AnyExpr::OptionalFieldAccess(ofa) => {
+                let node = tree.get(ofa);
+                let mut chain = Self::new(node.base, printer);
                 chain
                     .chain_members
                     .push(PrintChainItem::OptionalFieldAccess(
-                        &ofa.question_dot,
-                        &ofa.field,
+                        node.qdot,
+                        present(node.name),
                     ));
                 chain
             }
-            Expression::OptionalIndex(oi) => {
-                let mut chain = Self::new(&oi.base, trivia);
-                chain
-                    .chain_members
-                    .push(PrintChainItem::OptionalIndex(&oi.question_dot, oi.args()));
+            AnyExpr::OptionalIndex(oi) => {
+                let node = tree.get(oi);
+                let mut chain = Self::new(node.base, printer);
+                chain.chain_members.push(PrintChainItem::OptionalIndex(
+                    node.qdot,
+                    IndexArgs::of_optional_index(oi, tree),
+                ));
                 chain
             }
-            Expression::OptionalCall(oc) => {
-                let mut chain = Self::new(&oc.callee, trivia);
+            AnyExpr::OptionalCall(oc) => {
+                let node = tree.get(oc);
+                let mut chain = Self::new(node.callee, printer);
                 chain
                     .chain_members
-                    .push(PrintChainItem::OptionalCall(&oc.question_dot, &oc.args));
+                    .push(PrintChainItem::OptionalCall(node.qdot, node.args));
                 chain
             }
             base => Self {
-                first: base,
+                first: ChainFirst::Expr(base),
                 chain_members: Vec::new(),
             },
         }
     }
-}
 
-impl PrintMultiLine for PrintChain<'_> {
-    /// Prints the chained expression broken at method-call boundaries,
-    /// prettier/rustfmt style.
-    ///
-    /// Plain member accesses (namespace segments, field accesses, generic
-    /// type segments) are atomic with their receiver and never split, no
-    /// matter how long the path is. Break points sit before the `.name` of
-    /// each call group; the first call group stays glued to the receiver
-    /// line when it fits:
-    ///
-    /// ```baml
-    /// root.ai.Agent<Itinerary>.new()
-    ///     .with_client(client)
-    ///     .run(spec)
-    /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let first_single_line = match self.first {
-            Expression::Path(path_expr) => {
-                printer.print_raw_token(&path_expr.first);
+            ChainFirst::Name(name) => {
+                printer.print(name, shape);
                 true
             }
-            // Call/Index print directly: routing them through
-            // `Expression::print` would rebuild this same chain and recurse.
-            Expression::Call(call_expr) => {
-                let first_info = printer.print(call_expr, shape.clone());
+            ChainFirst::Expr(AnyExpr::Call(call_expr)) => {
+                let first_info = printer.print(call_expr, shape);
                 !first_info.multi_lined
             }
-            Expression::Index(index_expr) => {
-                let first_info = printer.print(index_expr, shape.clone());
+            ChainFirst::Expr(AnyExpr::Index(index_expr)) => {
+                let first_info = printer.print(index_expr, shape);
                 !first_info.multi_lined
             }
-            _ => {
-                let first_info = printer.print(self.first, shape.clone());
+            ChainFirst::Expr(expr) => {
+                let first_info = printer.print(expr, shape);
                 !first_info.multi_lined
             }
         };
         let mut multi_lined = !first_single_line;
-
         let chain_indent = shape.indent + printer.config.indent_width;
         let mut line_remaining_width = printer.current_line_remaining_width();
-        let mut rest: &[PrintChainItem<'_>] = &self.chain_members;
-
-        // A call/index applied directly to the receiver (`base?.(x).field`)
-        // cannot break away from it: glue it to the receiver's line.
+        let mut rest: &[PrintChainItem] = &self.chain_members;
         while let Some((item, tail)) = rest.split_first() {
             if Self::is_plain_access(item) {
                 break;
             }
             multi_lined |=
-                Self::print_non_field_item(item, chain_indent, &mut line_remaining_width, printer);
+                Self::print_non_field_item(*item, chain_indent, &mut line_remaining_width, printer);
             rest = tail;
         }
-
-        // The leading run of plain accesses is the namespace path; it is
-        // atomic with the receiver and always stays on its line. When a call
-        // follows, the final access of the run is that call's method name and
-        // belongs to the call's group instead (`.new` stays glued to `()`).
         let plain_run_len = rest
             .iter()
             .take_while(|item| Self::is_plain_access(item))
@@ -5891,13 +3198,10 @@ impl PrintMultiLine for PrintChain<'_> {
                 .unwrap_or(plain_run_len)
         };
         for item in &rest[..path_len] {
-            Self::print_plain_item(item, printer);
+            Self::print_plain_item(*item, printer);
         }
         rest = &rest[path_len..];
         line_remaining_width = printer.current_line_remaining_width();
-
-        // Split the remaining items into groups: each group is a run of
-        // plain accesses (the method name) followed by its calls/indexes.
         let mut is_first_group = true;
         while !rest.is_empty() {
             let group_plain = rest
@@ -5910,11 +3214,6 @@ impl PrintMultiLine for PrintChain<'_> {
                 .count();
             let (group, tail) = rest.split_at(group_plain + group_callish);
             rest = tail;
-
-            // A group can only start with a call/index when the path had no
-            // field access to serve as its name; such a group cannot move to
-            // its own line. Otherwise, the first call group stays glued to
-            // the receiver line when it fits; later groups always break.
             let glue = if group_plain == 0 {
                 true
             } else if is_first_group && first_single_line {
@@ -5931,11 +3230,11 @@ impl PrintMultiLine for PrintChain<'_> {
             }
             for item in group {
                 if Self::is_plain_access(item) {
-                    Self::print_plain_item(item, printer);
+                    Self::print_plain_item(*item, printer);
                     line_remaining_width = printer.current_line_remaining_width();
                 } else {
                     multi_lined |= Self::print_non_field_item(
-                        item,
+                        *item,
                         chain_indent,
                         &mut line_remaining_width,
                         printer,
@@ -5944,16 +3243,10 @@ impl PrintMultiLine for PrintChain<'_> {
             }
             is_first_group = false;
         }
-
         PrintInfo { multi_lined }
     }
-}
 
-impl PrintChain<'_> {
-    /// Plain (non-call) chain items: member accesses and generic type
-    /// segments. These are atomic with their receiver and never move to
-    /// their own line.
-    const fn is_plain_access(item: &PrintChainItem<'_>) -> bool {
+    const fn is_plain_access(item: &PrintChainItem) -> bool {
         matches!(
             item,
             PrintChainItem::FieldAccess(..)
@@ -5962,130 +3255,117 @@ impl PrintChain<'_> {
         )
     }
 
-    /// Prints a plain access glued to whatever precedes it on the line.
-    fn print_plain_item(item: &PrintChainItem<'_>, printer: &mut Printer) {
-        match *item {
+    fn print_plain_item(item: PrintChainItem, printer: &mut Printer) {
+        match item {
             PrintChainItem::FieldAccess(dot, word) => {
-                printer.print_raw_token(dot);
-                printer.print_raw_token(word);
+                printer.print_token(dot);
+                printer.print(word, Shape::unlimited_single_line());
             }
             PrintChainItem::OptionalFieldAccess(qd, word) => {
-                printer.print_raw_token(qd);
-                printer.print_raw_token(word);
+                printer.print_token(qd);
+                printer.print(word, Shape::unlimited_single_line());
             }
             PrintChainItem::GenericArgs(generic_args) => {
                 printer.print(generic_args, Shape::unlimited_single_line());
             }
-            _ => unreachable!("print_plain_item called with a call/index item"),
+            PrintChainItem::Index(_)
+            | PrintChainItem::OptionalIndex(..)
+            | PrintChainItem::Call(_)
+            | PrintChainItem::OptionalCall(..) => {
+                unreachable!("print_plain_item called with a call/index item")
+            }
         }
     }
 
-    /// Returns the single-line width of one chain item, or `None` if it can
-    /// never be single-lined.
-    fn item_single_line_width(item: &PrintChainItem<'_>, printer: &Printer<'_>) -> Option<usize> {
+    fn item_single_line_width(item: PrintChainItem, printer: &Printer<'_>) -> Option<usize> {
+        let tree = printer.tree;
         match item {
-            PrintChainItem::FieldAccess(dot, word) => {
-                Some(usize::from(dot.span().len() + word.span().len()))
-            }
-            PrintChainItem::OptionalFieldAccess(qd, word) => {
-                Some(usize::from(qd.span().len() + word.span().len()))
-            }
+            PrintChainItem::FieldAccess(dot, word) => Some(usize::from(
+                printer.range(dot).len() + word.rightmost_token(tree).len(),
+            )),
+            PrintChainItem::OptionalFieldAccess(qd, word) => Some(usize::from(
+                printer.range(qd).len() + word.rightmost_token(tree).len(),
+            )),
             PrintChainItem::Index(index_args) => index_args.single_line_width(printer),
             PrintChainItem::OptionalIndex(qd, index_args) => {
-                Some(usize::from(qd.span().len()) + index_args.single_line_width(printer)?)
+                Some(usize::from(printer.range(qd).len()) + index_args.single_line_width(printer)?)
             }
             PrintChainItem::Call(call_args) => call_args.single_line_width(printer),
             PrintChainItem::OptionalCall(qd, call_args) => {
-                Some(usize::from(qd.span().len()) + call_args.single_line_width(printer)?)
+                Some(usize::from(printer.range(qd).len()) + call_args.single_line_width(printer)?)
             }
             PrintChainItem::GenericArgs(generic_args) => {
-                Some(generic_args.formatted_single_line_width())
+                Some(generic_args.formatted_single_line_width(printer))
             }
         }
     }
 
-    /// Returns the single-line width of a group of chain items, or `None` if
-    /// any of them can never be single-lined.
-    fn group_single_line_width(
-        group: &[PrintChainItem<'_>],
-        printer: &Printer<'_>,
-    ) -> Option<usize> {
+    fn group_single_line_width(group: &[PrintChainItem], printer: &Printer<'_>) -> Option<usize> {
         group
             .iter()
-            .map(|item| Self::item_single_line_width(item, printer))
+            .map(|item| Self::item_single_line_width(*item, printer))
             .sum()
     }
 
-    /// Prints a call/index item on the current line. Its arguments may wrap.
-    ///
-    /// Returns whether the printed item spanned multiple lines.
     fn print_non_field_item(
-        item: &PrintChainItem<'_>,
+        item: PrintChainItem,
         chain_indent: usize,
         line_remaining_width: &mut usize,
         printer: &mut Printer,
     ) -> bool {
+        let shape_now = |printer: &Printer| Shape {
+            width: *line_remaining_width,
+            indent: chain_indent,
+            first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
+        };
         let multi_lined = match item {
             PrintChainItem::Index(index_args) => {
-                let index_shape = Shape {
-                    width: *line_remaining_width,
-                    indent: chain_indent,
-                    first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
-                };
+                let index_shape = shape_now(printer);
                 printer.print(index_args, index_shape).multi_lined
             }
             PrintChainItem::OptionalIndex(qd, index_args) => {
-                printer.print_raw_token(*qd);
-                let index_shape = Shape {
-                    width: *line_remaining_width,
-                    indent: chain_indent,
-                    first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
-                };
+                printer.print_token(qd);
+                let index_shape = shape_now(printer);
                 printer.print(index_args, index_shape).multi_lined
             }
-            &PrintChainItem::Call(call_args) => {
-                let call_shape = Shape {
-                    width: *line_remaining_width,
-                    indent: chain_indent,
-                    first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
-                };
+            PrintChainItem::Call(call_args) => {
+                let call_shape = shape_now(printer);
                 printer.print(call_args, call_shape).multi_lined
             }
-            &PrintChainItem::OptionalCall(qd, call_args) => {
-                printer.print_raw_token(qd);
-                let call_shape = Shape {
-                    width: *line_remaining_width,
-                    indent: chain_indent,
-                    first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
-                };
+            PrintChainItem::OptionalCall(qd, call_args) => {
+                printer.print_token(qd);
+                let call_shape = shape_now(printer);
                 printer.print(call_args, call_shape).multi_lined
             }
-            _ => unreachable!("print_non_field_item called with a plain access item"),
+            PrintChainItem::FieldAccess(..)
+            | PrintChainItem::OptionalFieldAccess(..)
+            | PrintChainItem::GenericArgs(..) => {
+                unreachable!("print_non_field_item called with a plain access item")
+            }
         };
         *line_remaining_width = printer.current_line_remaining_width();
         multi_lined
     }
 
-    /// Prints `first` followed by `members` in single-line form. Returns
-    /// `None` if any element refuses to single-line. The final total-width
-    /// check is left to the caller.
     fn try_print_members_single_line(
         &self,
-        members: &[PrintChainItem<'_>],
+        members: &[PrintChainItem],
         shape: &Shape,
         printer: &mut Printer,
     ) -> Option<()> {
         match self.first {
-            Expression::Path(path_expr) => {
-                printer.print_raw_token(&path_expr.first);
+            ChainFirst::Name(name) => {
+                printer.print(name, Shape::unlimited_single_line());
             }
-            Expression::FieldAccess(..)
-            | Expression::OptionalFieldAccess(..)
-            | Expression::OptionalIndex(..)
-            | Expression::OptionalCall(..) => {
+            ChainFirst::Expr(
+                AnyExpr::FieldAccess(..)
+                | AnyExpr::OptionalFieldAccess(..)
+                | AnyExpr::OptionalIndex(..)
+                | AnyExpr::OptionalCall(..),
+            ) => {
                 unreachable!("Should have been unwrapped when the PrintChain was created")
             }
-            Expression::Call(call_expr) => {
+            ChainFirst::Expr(AnyExpr::Call(call_expr)) => {
                 if printer
                     .print(call_expr, Shape::unlimited_single_line())
                     .multi_lined
@@ -6093,7 +3373,7 @@ impl PrintChain<'_> {
                     return None;
                 }
             }
-            Expression::Index(index_expr) => {
+            ChainFirst::Expr(AnyExpr::Index(index_expr)) => {
                 if printer
                     .print(index_expr, Shape::unlimited_single_line())
                     .multi_lined
@@ -6101,12 +3381,12 @@ impl PrintChain<'_> {
                     return None;
                 }
             }
-            _ => {
-                if self.first.single_line_width(printer)? > shape.width {
+            ChainFirst::Expr(first) => {
+                if first.single_line_width(printer)? > shape.width {
                     return None;
                 }
                 if printer
-                    .print(self.first, Shape::unlimited_single_line())
+                    .print(first, Shape::unlimited_single_line())
                     .multi_lined
                 {
                     return None;
@@ -6117,30 +3397,30 @@ impl PrintChain<'_> {
             if printer.output.len() > shape.width {
                 return None;
             }
-            match item {
-                &PrintChainItem::FieldAccess(dot, word) => {
-                    printer.print_raw_token(dot);
-                    printer.print_raw_token(word);
+            match *item {
+                PrintChainItem::FieldAccess(dot, word) => {
+                    printer.print_token(dot);
+                    printer.print(word, Shape::unlimited_single_line());
                 }
-                &PrintChainItem::OptionalFieldAccess(qd, word) => {
-                    printer.print_raw_token(qd);
-                    printer.print_raw_token(word);
+                PrintChainItem::OptionalFieldAccess(qd, word) => {
+                    printer.print_token(qd);
+                    printer.print(word, Shape::unlimited_single_line());
                 }
                 PrintChainItem::Index(index_args) => {
                     index_args.try_print_single_line(shape, printer)?;
                 }
                 PrintChainItem::OptionalIndex(qd, index_args) => {
-                    printer.print_raw_token(*qd);
+                    printer.print_token(qd);
                     index_args.try_print_single_line(shape, printer)?;
                 }
-                &PrintChainItem::Call(call_args) => {
+                PrintChainItem::Call(call_args) => {
                     call_args.try_print_single_line(shape, printer)?;
                 }
-                &PrintChainItem::OptionalCall(qd, call_args) => {
-                    printer.print_raw_token(qd);
+                PrintChainItem::OptionalCall(qd, call_args) => {
+                    printer.print_token(qd);
                     call_args.try_print_single_line(shape, printer)?;
                 }
-                &PrintChainItem::GenericArgs(generic_args) => {
+                PrintChainItem::GenericArgs(generic_args) => {
                     printer.print(generic_args, Shape::unlimited_single_line());
                 }
             }
@@ -6157,26 +3437,14 @@ impl PrintChain<'_> {
         }
     }
 
-    /// Hug layout: the whole chain prints on one line except the final call,
-    /// whose trailing block-terminal argument hugs the parens (see
-    /// [`CallArgs::try_print_hug`]).
-    ///
-    /// ```baml
-    /// futures.push(spawn {
-    ///     work(c)
-    /// });
-    /// ```
-    ///
-    /// Should be passed a sub-printer to avoid printing partial output in the
-    /// event that the hug layout does not apply.
     fn try_print_hug(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         let (last, prefix) = self.chain_members.split_last()?;
-        let (question_dot, call_args) = match last {
-            PrintChainItem::Call(args) => (None, *args),
-            PrintChainItem::OptionalCall(qd, args) => (Some(*qd), *args),
+        let (question_dot, call_args) = match *last {
+            PrintChainItem::Call(args) => (None, args),
+            PrintChainItem::OptionalCall(qd, args) => (Some(qd), args),
             _ => return None,
         };
-        if !call_args.can_hug() {
+        if !call_args.can_hug(printer.tree) {
             return None;
         }
         self.try_print_members_single_line(prefix, shape, printer)?;
@@ -6184,117 +3452,64 @@ impl PrintChain<'_> {
             return None;
         }
         if let Some(qd) = question_dot {
-            printer.print_raw_token(qd);
+            printer.print_token(qd);
         }
         let hug_shape = Shape {
             width: shape.width,
             indent: shape.indent,
-            // `try_print_hug` runs in this same sub-printer, so its
-            // `current_line_len()` already includes the printed chain prefix.
-            // Keep only the offset that existed before this chain began.
             first_line_offset: shape.first_line_offset,
         };
         call_args.try_print_hug(&hug_shape, printer)
     }
 
-    /// Tail-broken layout: the receiver, the namespace path, and every
-    /// intermediate call stay on one line, and only the final call/index
-    /// wraps its arguments:
-    ///
-    /// ```baml
-    /// root.ai.Agent<Itinerary>.new().run(
-    ///     plan_trip_spec(...),
-    /// );
-    /// ```
-    ///
-    /// Applies when the whole prefix up to the final call fits the line.
-    /// Should be passed a sub-printer to avoid printing partial output in
-    /// the event that the layout does not apply.
     fn try_print_tail_call_broken(
         &self,
         shape: &Shape,
         printer: &mut Printer,
     ) -> Option<PrintInfo> {
         let (last, prefix) = self.chain_members.split_last()?;
-        let question_dot = match last {
+        let question_dot = match *last {
             PrintChainItem::Call(_) | PrintChainItem::Index(_) => None,
-            PrintChainItem::OptionalCall(qd, _) | PrintChainItem::OptionalIndex(qd, _) => Some(*qd),
+            PrintChainItem::OptionalCall(qd, _) | PrintChainItem::OptionalIndex(qd, _) => Some(qd),
             PrintChainItem::FieldAccess(..)
             | PrintChainItem::OptionalFieldAccess(..)
             | PrintChainItem::GenericArgs(..) => return None,
         };
         self.try_print_members_single_line(prefix, shape, printer)?;
         if let Some(qd) = question_dot {
-            printer.print_raw_token(qd);
+            printer.print_token(qd);
         }
         if printer.output.len() > shape.width {
             return None;
         }
-        // `shape.width` is the remaining line budget measured from the
-        // chain's start column (`width + indent + first_line_offset ==
-        // line_width`), and this sub-printer's output also starts at that
-        // column, so the args' budget is what the prefix left over.
         let args_shape = Shape {
             width: shape.width.saturating_sub(printer.output.len()),
             indent: shape.indent,
             first_line_offset: shape.first_line_offset + printer.output.len(),
         };
-        let info = match last {
+        let info = match *last {
             PrintChainItem::Call(call_args) | PrintChainItem::OptionalCall(_, call_args) => {
-                printer.print(*call_args, args_shape)
+                printer.print(call_args, args_shape)
             }
             PrintChainItem::Index(index_args) | PrintChainItem::OptionalIndex(_, index_args) => {
                 printer.print(index_args, args_shape)
             }
-            _ => unreachable!("checked above"),
+            PrintChainItem::FieldAccess(..)
+            | PrintChainItem::OptionalFieldAccess(..)
+            | PrintChainItem::GenericArgs(..) => unreachable!("checked above"),
         };
-        // The final call/index may still overflow the prefix line: its
-        // multi-line layout keeps the opening bracket (plus any squished
-        // trivia) on that line without re-checking the budget. Reject the
-        // layout in that case so the chain breaks at call boundaries instead.
         let first_line_len = printer.output.find('\n').unwrap_or(printer.output.len());
         if first_line_len > shape.width {
             return None;
         }
         Some(info)
     }
-}
 
-impl Printable for PrintChain<'_> {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+    pub(crate) fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
             .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .or_else(|| printer.try_sub_printer(|p| self.try_print_hug(&shape, p)))
             .or_else(|| printer.try_sub_printer(|p| self.try_print_tail_call_broken(&shape, p)))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
-    fn leftmost_token(&self) -> TextRange {
-        self.first.leftmost_token()
-    }
-    fn rightmost_token(&self) -> TextRange {
-        match self.chain_members.last() {
-            Some(
-                PrintChainItem::FieldAccess(_, word) | PrintChainItem::OptionalFieldAccess(_, word),
-            ) => word.span(),
-            Some(
-                PrintChainItem::Index(index_args) | PrintChainItem::OptionalIndex(_, index_args),
-            ) => index_args.close_bracket.span(),
-            Some(PrintChainItem::Call(call_args) | PrintChainItem::OptionalCall(_, call_args)) => {
-                call_args.rightmost_token()
-            }
-            Some(PrintChainItem::GenericArgs(ga)) => ga.close_angle.span(),
-            None => self.first.rightmost_token(),
-        }
-    }
-}
-
-/// Only used for printing chained expressions. See [`PrintChain`].
-enum PrintChainItem<'a> {
-    FieldAccess(&'a t::Dot, &'a t::Word),
-    OptionalFieldAccess(&'a t::QuestionDot, &'a t::Word),
-    Index(IndexArgs<'a>),
-    OptionalIndex(&'a t::QuestionDot, IndexArgs<'a>),
-    Call(&'a CallArgs),
-    OptionalCall(&'a t::QuestionDot, &'a CallArgs),
-    GenericArgs(&'a GenericArgs),
 }

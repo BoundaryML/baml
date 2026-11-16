@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function classify(v: int | string) -> string {
+    if (v is int) {
+        "number"
+    } else {
+        "text"
+    }
+}

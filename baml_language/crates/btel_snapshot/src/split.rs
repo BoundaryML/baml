@@ -138,7 +138,8 @@ fn is_string(entry: &BlobEntry) -> bool {
                 | SnapshotValue::Object(_)
                 | SnapshotValue::Type(_)
                 | SnapshotValue::Enum { .. }
-                | SnapshotValue::Truncated(_),
+                | SnapshotValue::Truncated(_)
+                | SnapshotValue::Redacted(_),
             )
             | SnapshotRoot::FunctionArgs(_),
         ) => false,

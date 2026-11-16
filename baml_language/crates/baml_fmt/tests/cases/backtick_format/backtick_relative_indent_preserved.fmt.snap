@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function D() -> string {
+    let x = `
+        first line
+              second line
+    `;
+    x
+}

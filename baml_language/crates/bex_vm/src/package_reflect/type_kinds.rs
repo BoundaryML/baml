@@ -371,7 +371,12 @@ fn mint_class(
             skip: false,
             stream_done: false,
             must_exist: false,
+            json_rename: None,
+            json_flatten: false,
+            json_fallback: false,
+            json_omit_null: false,
             runtime_type: Some(row.type_value),
+            redact: false,
         });
     }
 
@@ -398,6 +403,7 @@ fn mint_class(
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        redact: false,
     })));
     // The head is built off the declaration that was just allocated, so the
     // type reaches it directly — there is no table to consult and no name
@@ -1026,6 +1032,7 @@ impl BamlClassEnum for PackageReflectImpl {
             type_tag,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let ty = bex_vm_types::RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, type_tag));
         Ok({
@@ -1266,11 +1273,9 @@ impl BamlClassLiteral for PackageReflectImpl {
                 baml_type::Literal::Int(n) => Value::int(n),
                 baml_type::Literal::Bool(b) => Value::bool(b),
                 baml_type::Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n))?,
-                baml_type::Literal::Float(s) => Value::object(
-                    vm.alloc_float(
-                        s.parse()
-                            .expect("a float literal has a valid representation"),
-                    ),
+                baml_type::Literal::Float(s) => vm.float_value(
+                    s.parse()
+                        .expect("a float literal has a valid representation"),
                 ),
             }),
             bex_vm_types::RealizedTy::EnumVariant(head, name) => {
@@ -2003,6 +2008,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
             docstring: None,
             other: IndexMap::new(),
             skip: false,
+            json_rename: None,
         }),
         Object::Instance(instance) => {
             let Object::Class(class) = vm.get_object(instance.class) else {
@@ -2066,6 +2072,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 docstring: optional_string(2)?,
                 other,
                 skip,
+                json_rename: None,
             })
         }
         _ => Err("reflect.Enum.new values must be strings or reflect.enum.Value rows".into()),
@@ -2345,9 +2352,7 @@ class Fresh {}
         );
         let value = <PackageReflectImpl as BamlClassLiteral>::value(&mut vm, &literal)
             .expect("a literal view has a value");
-        let Object::Float(value) = vm.get_object(value.as_object_ptr().unwrap()) else {
-            panic!("expected a float value")
-        };
+        let value = value.as_float().expect("expected a float value");
         assert_eq!(value.to_bits(), (-1.25_f64).to_bits());
     }
 

@@ -3,6 +3,8 @@
 //! This crate provides the same Python API as `language_client_python`
 //! but powered by `bex_engine` (via `bridge_cffi`) instead of `baml-runtime`.
 
+#[cfg(unix)]
+mod async_completion;
 mod callback_dispatch;
 mod encode;
 mod errors;

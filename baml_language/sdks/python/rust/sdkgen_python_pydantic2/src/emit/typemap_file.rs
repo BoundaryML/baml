@@ -1,4 +1,4 @@
-//! Codegen-emitted `baml_sdk/_typemap.py` (25a2 §4.1, 25b2 Phase 2).
+//! Codegen-emitted `_typemap.py` at the SDK root (25a2 §4.1, 25b2 Phase 2).
 //!
 //! Walks the grouped `LeafBody` map and renders three literal dicts of
 //! `FQN → (module_path, attr_name)` lazy entries, the program descriptor,
@@ -13,9 +13,12 @@
 //! lazy entries become the sole source of truth and resolution happens
 //! via `importlib.import_module + getattr` on first lookup.
 //!
-//! `module_path` is the dotted form of the leaf path, prefixed with
-//! `baml_sdk`. Root-leaf symbols live at module path `baml_sdk`; a
-//! symbol routed to `lorem/__init__.py` lives at `baml_sdk.lorem`.
+//! `module_path` is the dotted form of the leaf path, appended to the SDK's
+//! own package name, which the module derives from its own `__name__` at
+//! import time. Root-leaf symbols live at the SDK package itself; a symbol
+//! routed to `lorem/__init__.py` lives at `<sdk>.lorem`. Nothing names the
+//! SDK, so it imports under whatever name and location it is installed at.
+//! Each distinct module path is built once, as a constant the entries share.
 //!
 //! The descriptor is the program's declared surface (every callable's
 //! signature and the declarations those reach), encoded by
@@ -26,35 +29,35 @@ use std::{collections::BTreeMap, fmt::Write as _};
 
 use crate::{emit::EmittedSymbol, leaf::LeafBody, py_string, routing::LeafPath};
 
-/// Render `_typemap.py` for the given grouped bodies. `sdk_root` is the
-/// dotted prefix every emitted module path starts with — today
-/// `"baml_sdk"`. `descriptor` is the embedded (single-line ASCII) program
-/// descriptor. Returns the file body (no banner; the caller prepends the
-/// standard banner uniformly).
+/// Render `_typemap.py` for the given grouped bodies. `descriptor` is the
+/// embedded (single-line ASCII) program descriptor. Returns the file body (no
+/// banner; the caller prepends the standard banner uniformly).
 pub(crate) fn render_typemap_module(
     bodies: &BTreeMap<LeafPath, LeafBody>,
-    sdk_root: &str,
     descriptor: &str,
 ) -> String {
     let mut classes: Vec<(String, String, String)> = Vec::new();
     let mut enums: Vec<(String, String, String)> = Vec::new();
     let mut aliases: Vec<(String, String, String)> = Vec::new();
+    // `(constant, module path expression)`, one per leaf with entries, so
+    // each module path is built once at import time.
+    let mut module_constants: Vec<(String, String)> = Vec::new();
 
     for (leaf, body) in bodies {
-        let module_path = module_path_for_leaf(leaf, sdk_root);
+        let mut module_constant = None;
         for (sym, _) in &body.symbols {
-            match sym {
-                EmittedSymbol::Class(c) => {
-                    classes.push((c.source.to_string(), module_path.clone(), c.py_name.clone()));
-                }
-                EmittedSymbol::Enum(e) => {
-                    enums.push((e.source.to_string(), module_path.clone(), e.py_name.clone()));
-                }
-                EmittedSymbol::TypeAlias(a) => {
-                    aliases.push((a.source.to_string(), module_path.clone(), a.py_name.clone()));
-                }
-                EmittedSymbol::Function(_) => {}
-            }
+            let (entries, source, py_name) = match sym {
+                EmittedSymbol::Class(c) => (&mut classes, &c.source, &c.py_name),
+                EmittedSymbol::Enum(e) => (&mut enums, &e.source, &e.py_name),
+                EmittedSymbol::TypeAlias(a) => (&mut aliases, &a.source, &a.py_name),
+                EmittedSymbol::Function(_) => continue,
+            };
+            let module_constant = module_constant.get_or_insert_with(|| {
+                let constant = format!("_M{}", module_constants.len());
+                module_constants.push((constant.clone(), module_path_expression(leaf)));
+                constant
+            });
+            entries.push((source.to_string(), module_constant.clone(), py_name.clone()));
         }
     }
     classes.sort();
@@ -64,6 +67,15 @@ pub(crate) fn render_typemap_module(
     let mut out = String::new();
     out.push_str("from __future__ import annotations\n\n");
     out.push_str("from baml_bridge import BamlTypeMap\n\n");
+    out.push_str(
+        "# Module paths start at this SDK's own package, so the SDK imports under\n\
+         # any name and location.\n",
+    );
+    writeln!(out, "{SDK_PACKAGE} = __name__.rpartition(\".\")[0]").unwrap();
+    for (constant, module_path) in &module_constants {
+        writeln!(out, "{constant} = {module_path}").unwrap();
+    }
+    out.push('\n');
 
     write_entries(&mut out, "_CLASS_ENTRIES", &classes);
     out.push('\n');
@@ -95,34 +107,34 @@ pub(crate) fn render_typemap_module(
     out
 }
 
-fn module_path_for_leaf(leaf: &LeafPath, sdk_root: &str) -> String {
+/// Python variable an SDK root-level data module (`_typemap.py`,
+/// `_function_registry.py`) binds to its package's own name.
+pub(crate) const SDK_PACKAGE: &str = "_SDK_PACKAGE";
+
+/// Python expression for `leaf`'s module path, relative to [`SDK_PACKAGE`].
+pub(crate) fn module_path_expression(leaf: &LeafPath) -> String {
     if leaf.segments.is_empty() {
-        sdk_root.to_string()
+        SDK_PACKAGE.to_string()
     } else {
-        let mut s = String::with_capacity(
-            sdk_root.len() + 1 + leaf.segments.iter().map(|s| s.len() + 1).sum::<usize>(),
-        );
-        s.push_str(sdk_root);
-        for seg in &leaf.segments {
-            s.push('.');
-            s.push_str(seg);
-        }
-        s
+        format!(
+            "{SDK_PACKAGE} + {}",
+            py_string(&format!(".{}", leaf.segments.join(".")))
+        )
     }
 }
 
+/// `entries` are `(fqn, module path constant, attribute)`.
 fn write_entries(out: &mut String, name: &str, entries: &[(String, String, String)]) {
     if entries.is_empty() {
         writeln!(out, "{name} = {{}}").unwrap();
         return;
     }
     writeln!(out, "{name} = {{").unwrap();
-    for (fqn, module_path, py_name) in entries {
+    for (fqn, module_constant, py_name) in entries {
         writeln!(
             out,
-            "    {}: ({}, {}),",
+            "    {}: ({module_constant}, {}),",
             py_string(fqn),
-            py_string(module_path),
             py_string(py_name),
         )
         .unwrap();

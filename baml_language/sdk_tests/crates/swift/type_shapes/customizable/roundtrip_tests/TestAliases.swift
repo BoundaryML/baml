@@ -10,9 +10,9 @@ import Baml
 final class TestAliases: XCTestCase {
     func test_aliases_round_trip_rec_list() throws {
         // RecList = int | RecList[]; python values 1 and [1, [2, 3]].
-        XCTAssertEqual(try Baml.aliases.round_trip_rec_list(r: .t0(1)), .t0(1))
+        XCTAssertEqual(try Baml.aliases.round_trip_rec_list_sync(r: .t0(1)), .t0(1))
         let nested: Baml.aliases.RecList = .t1([.t0(1), .t1([.t0(2), .t0(3)])])
-        XCTAssertEqual(try Baml.aliases.round_trip_rec_list(r: nested), nested)
+        XCTAssertEqual(try Baml.aliases.round_trip_rec_list_sync(r: nested), nested)
     }
 
     func test_aliases_round_trip_alias_container() throws {
@@ -20,11 +20,11 @@ final class TestAliases: XCTestCase {
             list_field: ["x"],
             rec_field: .t1([.t0(1), .t1([.t0(2)])])
         )
-        XCTAssertEqual(try Baml.aliases.round_trip_alias_container(c: c), c)
+        XCTAssertEqual(try Baml.aliases.round_trip_alias_container_sync(c: c), c)
     }
 
     func test_aliases_round_trip_string_list() throws {
         let s: Baml.aliases.StringList = ["a", "b"]
-        XCTAssertEqual(try Baml.aliases.round_trip_string_list(s: s), ["a", "b"])
+        XCTAssertEqual(try Baml.aliases.round_trip_string_list_sync(s: s), ["a", "b"])
     }
 }

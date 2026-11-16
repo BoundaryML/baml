@@ -193,6 +193,8 @@ pub struct ParseField {
     pub ty: ParseTy,
     /// The name the output format shows, which the parser also reads.
     pub alias: Option<String>,
+    /// `@json.rename`: the field's JSON key, which the parser also reads.
+    pub json_rename: Option<String>,
     /// `@stream.done`: the field holds its default until its value is complete.
     pub stream_done: bool,
     /// `@stream.must_exist`: the field has no default, so its class has no
@@ -579,13 +581,23 @@ impl TypeCtx {
                     name,
                     ty,
                     alias,
+                    json_rename,
                     stream_done,
                     must_exist,
                 } = field;
+                // A field with aliases is not matched by its name, so a key
+                // read beside the name has to bring the name along.
+                let mut aliases: Vec<Cow<'_, str>> = alias.iter().map(Into::into).collect();
+                if let Some(json_rename) = json_rename {
+                    if aliases.is_empty() {
+                        aliases.push(Cow::Borrowed(name));
+                    }
+                    aliases.push(Cow::Borrowed(json_rename));
+                }
                 Ok(AnnotatedField {
                     name: Cow::Borrowed(name),
                     ty: self.convert_ty(ty)?,
-                    aliases: alias.iter().map(Into::into).collect(),
+                    aliases,
                     stream_done: *stream_done,
                     default: must_exist.then_some(DefaultValue::Never),
                 })
@@ -615,10 +627,22 @@ impl TypeCtx {
     ) -> EnumTy<'a, NamedTy> {
         let variants = enum_def
             .variants()
-            .map(|variant| AnnotatedEnumVariant {
-                name: variant.name.as_str().into(),
-                aliases: variant.alias.iter().map(|a| a.as_str().into()).collect(),
-                description: variant.rendered_description().map(Into::into),
+            .map(|variant| {
+                // As for a field: an alias stops the name matching, so a JSON
+                // string read beside the name brings the name along.
+                let mut aliases: Vec<Cow<'_, str>> =
+                    variant.alias.iter().map(|a| a.as_str().into()).collect();
+                if let Some(json_rename) = &variant.json_rename {
+                    if aliases.is_empty() {
+                        aliases.push(variant.name.as_str().into());
+                    }
+                    aliases.push(json_rename.as_str().into());
+                }
+                AnnotatedEnumVariant {
+                    name: variant.name.as_str().into(),
+                    aliases,
+                    description: variant.rendered_description().map(Into::into),
+                }
             })
             .collect();
 

@@ -817,7 +817,7 @@ def _returned_param_aliases(names: List[str]) -> Dict[str, str]:
 
 
 class BamlClosure:
-    """A reusable BAML callable with synchronous and asynchronous entry paths."""
+    """A reusable BAML callable: `await closure(...)` and the blocking `closure.call_sync(...)`."""
 
     __slots__ = ("_handle", "_required_names", "_optional_names", "_aliases")
 
@@ -874,12 +874,7 @@ class BamlClosure:
         )
         return call_id, args_proto
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        _, args_proto = self._encode_args(args, kwargs)
-        result_bytes = _get_runtime().call_function_sync(args_proto, args_proto.kwargs, args_proto.cancel)
-        return decode_call_result(result_bytes)
-
-    async def call_async(self, *args: Any, **kwargs: Any) -> Any:
+    async def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Invoke on the current application loop, with its current context."""
         from . import _decode_call_result_async
 
@@ -890,6 +885,12 @@ class BamlClosure:
             cancel_function_call(call_id)
             raise
         return _decode_call_result_async(result_bytes)
+
+    def call_sync(self, *args: Any, **kwargs: Any) -> Any:
+        """Blocking twin of `await closure(...)`."""
+        _, args_proto = self._encode_args(args, kwargs)
+        result_bytes = _get_runtime().call_function_sync(args_proto, args_proto.kwargs, args_proto.cancel)
+        return decode_call_result(result_bytes)
 
     def __repr__(self) -> str:
         return "<BamlClosure>"

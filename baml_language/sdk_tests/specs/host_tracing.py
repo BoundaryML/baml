@@ -31,7 +31,7 @@ namespace imported below. Its small, deterministic BAML functions are:
       An AI function backed by a deterministic scripted streaming client.
       Its generated stream_text_stream_async entrypoint returns a native BAML
       stream with nonempty string prefixes and final value equal to value.
-      Use its ordinary async iteration and final_async() accessors below.
+      Use its ordinary async iteration and final() accessors below.
 
 Each has its normal generated *_async entrypoint and _baml invocation option (with trace in its trace field).
 Their default mode is Span. No LLM/network work. These are application BAML
@@ -737,7 +737,7 @@ async def scenario_concurrent_baml_streams_and_regular_call():
                 chunks.append(chunk)
                 await asyncio.sleep(0)
             assert chunks
-            assert await stream.final_async() == label
+            assert await stream.final() == label
             assert trace.current_context().metadata == expected
             # Check a BAML sibling after draining: stream-specific context must
             # not leak out of the opening, next, or final accessor calls.
@@ -778,7 +778,7 @@ async def scenario_concurrent_baml_streams_and_regular_call():
     # must remain associated with its own opening invocation/branch; polling must
     # never select another stream's identity or context. The regular echo belongs
     # to regular. Every actual invocation completes exactly once, independently
-    # of chunk count; final_async after exhaustion cannot duplicate completion.
+    # of chunk count; final() after exhaustion cannot duplicate completion.
     # Stream-opening lifetime versus accessor spans follows the native BAML stream
     # contract; do not apply the optional host-generator lifetime rules here.
 

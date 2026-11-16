@@ -18,9 +18,11 @@ USAGE
 bootstrap_toolchain() {
   bootstrap_wrapper="$1"
   bootstrap_selector="$2"
-  bootstrap_help="$("$bootstrap_wrapper" toolchain use --help)" || return $?
   # Published wrappers span three CLI generations. Probe before installing so
-  # an operational failure never causes a retry with a different scope.
+  # an operational failure never causes a retry with a different scope. The
+  # oldest (through 0.2.5) has no `use --help` and treats it as a version to
+  # fetch, so a failed probe means plain `use`.
+  bootstrap_help="$("$bootstrap_wrapper" toolchain use --help 2>/dev/null)" || bootstrap_help=""
   case "$bootstrap_help" in
     *--global*) "$bootstrap_wrapper" toolchain use "$bootstrap_selector" --global ;;
     *--local*) "$bootstrap_wrapper" toolchain use "$bootstrap_selector" --local ;;

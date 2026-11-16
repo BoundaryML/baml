@@ -1,9 +1,16 @@
-use rowan::TextRange;
+use baml_syntax::{
+    nodes::{Arenas, FileTree},
+    token::{Token, TokenIdx, TokenSet},
+    tree::{HasArena, Id, NodeKindOf, TokenRange},
+};
+use text_size::TextRange;
 
 pub use crate::EmittableTrivia;
-use crate::{FormatOptions, TriviaInfo, ast::Token};
+use crate::{FormatOptions, TriviaInfo};
 
 pub struct Printer<'a> {
+    /// The typed tree of the file being printed; `input` is its text.
+    pub tree: &'a FileTree,
     pub input: &'a str,
     pub config: &'a FormatOptions,
     pub output: String,
@@ -20,9 +27,14 @@ pub struct Printer<'a> {
 impl<'a> Printer<'a> {
     #[inline]
     #[must_use]
-    pub fn new_empty(input: &'a str, config: &'a FormatOptions, trivia: &'a TriviaInfo) -> Self {
+    pub fn new_empty(
+        tree: &'a FileTree,
+        config: &'a FormatOptions,
+        trivia: &'a TriviaInfo,
+    ) -> Self {
         Printer {
-            input,
+            tree,
+            input: tree.text(),
             config,
             output: String::new(),
             trivia,
@@ -54,12 +66,32 @@ impl<'a> Printer<'a> {
         self.output.push('\n');
     }
 
-    /// Prints the token byte-for-byte from the input string.
-    ///
-    /// For tokens like [`crate::ast::HashString`] that implement [`Printable`], you generally should [`Self::print`].
-    pub fn print_raw_token(&mut self, token: &impl Token) {
-        let text = &self.input[token.span()];
+    /// The text range of a token.
+    #[must_use]
+    pub fn range<S: TokenSet>(&self, token: Token<S>) -> TextRange {
+        self.tree.tokens().range(token.idx)
+    }
+
+    /// Prints a token byte-for-byte.
+    pub fn print_token<S: TokenSet>(&mut self, token: Token<S>) {
+        let range = self.range(token);
+        self.print_input_range(range);
+    }
+
+    /// The source text of an element, trivia at its edges excluded.
+    #[must_use]
+    pub fn text_of(&self, element: impl Spanned) -> &'a str {
+        let span = element.tokens(self.tree);
+        &self.input[self.tree.tokens().text_range(span)]
+    }
+
+    /// Prints an element's source text as written.
+    pub fn print_verbatim(&mut self, element: impl Spanned) -> PrintInfo {
+        let text = self.text_of(element);
         self.output.push_str(text);
+        PrintInfo {
+            multi_lined: text.contains('\n'),
+        }
     }
 
     /// Prints the text byte-for-byte.
@@ -72,7 +104,7 @@ impl<'a> Printer<'a> {
     ///
     /// Tries to print the element single-line first, then multi-line if it doesn't fit.
     #[allow(unused_must_use)]
-    pub fn print(&mut self, printable: &impl Printable, shape: Shape) -> PrintInfo {
+    pub fn print(&mut self, printable: impl Printable, shape: Shape) -> PrintInfo {
         printable.print(shape, self)
     }
 
@@ -105,6 +137,14 @@ impl<'a> Printer<'a> {
             | EmittableTrivia::LeadingLineComment { comment, .. }
             | EmittableTrivia::TrailingBlockComment { comment, .. }
             | EmittableTrivia::TrailingLineComment { comment, .. } => {
+                // `a / /* c */ b` squished to `a//* c */b` turns the rest of
+                // the line into a line comment: a comment never glues onto an
+                // operator's `/` or `*` (a closing `*/` is not an operator).
+                if (self.output.ends_with('/') && !self.output.ends_with("*/"))
+                    || self.output.ends_with('*')
+                {
+                    self.output.push(' ');
+                }
                 self.print_input_range(*comment);
             }
         }
@@ -218,8 +258,8 @@ impl<'a> Printer<'a> {
     ///         "printable may be multiline, or not"
     ///     }; // trailing trivia, no newline at end -->
     /// ```
-    pub fn print_standalone_with_trivia(&mut self, printable: &impl Printable, indent: usize) {
-        let (leading_trivia, trailing_trivia) = self.trivia.get_for_element(printable);
+    pub fn print_standalone_with_trivia(&mut self, printable: impl Printable, indent: usize) {
+        let (leading_trivia, trailing_trivia) = self.trivia.get_for_element(self.tree, printable);
         self.print_trivia_with_newline(leading_trivia, indent);
         self.print_spaces(indent);
         let shape = Shape {
@@ -240,8 +280,8 @@ impl<'a> Printer<'a> {
     /// `},`). Printing the trailing trivia here would split the comment from its
     /// `;` and — when the arm has no comma, so the arm's rightmost token *is* the
     /// return value — duplicate it.
-    pub fn print_standalone_leading_and_body(&mut self, printable: &impl Printable, indent: usize) {
-        let leading_trivia = self.trivia.get_leading_for_element(printable);
+    pub fn print_standalone_leading_and_body(&mut self, printable: impl Printable, indent: usize) {
+        let leading_trivia = self.trivia.get_leading_for_element(self.tree, printable);
         self.print_trivia_with_newline(leading_trivia, indent);
         self.print_spaces(indent);
         let shape = Shape {
@@ -340,13 +380,13 @@ impl<'a> Printer<'a> {
         }
     }
 
-    pub(crate) fn try_print_empty_braces(
+    pub(crate) fn try_print_empty_braces<L: TokenSet, R: TokenSet>(
         &mut self,
-        open_brace: &impl Token,
-        close_brace: &impl Token,
+        open_brace: Token<L>,
+        close_brace: Token<R>,
     ) -> bool {
-        let (_, open_trailing) = self.trivia.get_for_range_split(open_brace.span());
-        let (close_leading, _) = self.trivia.get_for_range_split(close_brace.span());
+        let (_, open_trailing) = self.trivia.get_for_range_split(self.range(open_brace));
+        let (close_leading, _) = self.trivia.get_for_range_split(self.range(close_brace));
         if open_trailing
             .iter()
             .chain(close_leading)
@@ -354,8 +394,8 @@ impl<'a> Printer<'a> {
         {
             return false;
         }
-        self.print_raw_token(open_brace);
-        self.print_raw_token(close_brace);
+        self.print_token(open_brace);
+        self.print_token(close_brace);
         true
     }
 
@@ -390,7 +430,7 @@ impl<'a> Printer<'a> {
     {
         Printer {
             line_separated: self.line_separated,
-            ..Printer::new_empty(self.input, self.config, self.trivia)
+            ..Printer::new_empty(self.tree, self.config, self.trivia)
         }
     }
 
@@ -479,23 +519,58 @@ impl PrintInfo {
 /// (leading trivia on `Self::leftmost_token` and trailing trivia on `Self::rightmost_token`).
 /// The outer trivia is handled by whichever parent node has it as internal trivia.
 ///
-/// The only exception is [`crate::ast::SourceFile`]: it can print EOF-attached trivia.
-pub trait Printable {
+/// The only exception is `Id<SourceFile>`: it can print EOF-attached trivia.
+/// An element of the tree with a token extent: a node id, a token, a union
+/// alternative or an inline part. Trivia attaches to its first and last
+/// tokens.
+pub trait Spanned: Copy {
+    /// The tokens the element spans, trivia excluded.
+    fn tokens(self, tree: &FileTree) -> TokenRange;
+    /// The span of the leftmost (earliest) non-trivia token in the element.
+    fn leftmost_token(self, tree: &FileTree) -> TextRange {
+        tree.tokens().range(self.tokens(tree).start())
+    }
+    /// The span of the rightmost (latest) non-trivia token in the element.
+    fn rightmost_token(self, tree: &FileTree) -> TextRange {
+        tree.tokens().range(TokenIdx(self.tokens(tree).end().0 - 1))
+    }
+}
+
+impl<T: NodeKindOf> Spanned for Id<T>
+where
+    Arenas: HasArena<T>,
+{
+    fn tokens(self, tree: &FileTree) -> TokenRange {
+        tree.span(self)
+    }
+}
+
+impl<S: TokenSet> Spanned for Token<S> {
+    fn tokens(self, _tree: &FileTree) -> TokenRange {
+        TokenRange::new(self.idx, TokenIdx(self.idx.0 + 1))
+    }
+}
+
+pub trait Printable: Spanned {
     /// Prints to the printer.
     ///
     /// trivia is emitted by the parent of an element, not the element itself.
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo;
-    /// The span of the leftmost (earliest) non-trivia token in the element.
-    fn leftmost_token(&self) -> TextRange;
-    /// The span of the rightmost (latest) non-trivia token in the element.
-    fn rightmost_token(&self) -> TextRange;
+    fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo;
 }
 
-pub trait PrintMultiLine {
+/// A token prints byte-for-byte.
+impl<S: TokenSet> Printable for Token<S> {
+    fn print(self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_token(self);
+        PrintInfo::default_single_line()
+    }
+}
+
+pub trait PrintMultiLine: Printable {
     /// Prints the element, does not try to single-line it.
     ///
     /// However, if it does turn out to be single-lined anyway, should return as such in the info.
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo;
+    fn print_multi_line(self, shape: Shape, printer: &mut Printer) -> PrintInfo;
 }
 
 #[derive(Debug, Clone)]
@@ -526,7 +601,7 @@ pub enum PrinterWarning {}
 /// For the body of the if statement, `indent = 4` and `first_line_offset = 11`.
 /// This is because the baseline indentation at that line is `4` spaces (one indentation level)
 /// and the length of the other characters in the line "`if (a > b) `" is `11`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Shape {
     /// SINGLE-LINE ONLY
     ///

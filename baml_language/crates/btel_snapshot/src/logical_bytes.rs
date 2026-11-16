@@ -174,7 +174,10 @@ impl Blob<'_> {
                 }
             };
             let bytes = match value {
-                SnapshotValue::OmittedArg | SnapshotValue::Truncated(_) => 0,
+                // A withheld value carries none of its content.
+                SnapshotValue::OmittedArg
+                | SnapshotValue::Truncated(_)
+                | SnapshotValue::Redacted(_) => 0,
                 SnapshotValue::Null => 8,
                 SnapshotValue::Bool(_) => 8 + 1,
                 SnapshotValue::Int(_) | SnapshotValue::Float(_) => 8 + 8,

@@ -171,7 +171,9 @@ class TelemetryQueue {
                 .set_headers({ "content-type": "application/json" })
                 .set_body(line)
                 .set_timeout(TELEMETRY_REQUEST_TIMEOUT);
-            if (!baml.http.send(request).ok()) {
+            let response = baml.http.send(request);
+            discard_response_body(response);
+            if (!response.ok()) {
                 return TelemetryDelivery.Rejected;
             }
             // Persist progress before attempting another event in this file.

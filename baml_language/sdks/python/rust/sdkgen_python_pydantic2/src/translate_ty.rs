@@ -78,12 +78,13 @@ pub(crate) enum CallableSide {
     ///
     /// A position that either side fills (a field of a class that the host
     /// builds and that BAML returns) is on this side as well. A callable that
-    /// BAML made is also a value of the host's type: it returns the value,
-    /// and it takes every callback a host callable is given. So the host's
+    /// BAML made is also a value of the host's type: it returns a coroutine
+    /// of the value, and it takes every callback a host callable is given. So the host's
     /// type is the one that every value of the position has.
     Host,
     /// Only BAML makes the callable: a returned function, an argument of a
-    /// host callback. A call returns the value.
+    /// host callback. Calling it is async, as for generated functions: the
+    /// call returns a coroutine of the value (`call_sync` blocks instead).
     Baml,
 }
 
@@ -98,10 +99,10 @@ impl CallableSide {
 
     /// The Python return type of a callable this side makes, for a BAML
     /// return type rendered as `ret`.
-    fn return_ty(self, ret: String) -> String {
+    fn return_ty(self, ret: &str) -> String {
         match self {
-            Self::Host => host_callback_return_ty(&ret),
-            Self::Baml => ret,
+            Self::Host => host_callback_return_ty(ret),
+            Self::Baml => format!("typing.Coroutine[typing.Any, typing.Any, {ret}]"),
         }
     }
 }
@@ -246,7 +247,7 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
                 // express per-param optionality, so widen the arg list.
                 format!(
                     "typing.Callable[..., {}]",
-                    side.return_ty(translate_ty_from(ret, ctx, side))
+                    side.return_ty(&translate_ty_from(ret, ctx, side))
                 )
             } else {
                 format!(
@@ -256,7 +257,7 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
                         .map(|param| translate_ty_from(&param.ty, ctx, side.of_params()))
                         .collect::<Vec<_>>()
                         .join(", "),
-                    side.return_ty(translate_ty_from(ret, ctx, side))
+                    side.return_ty(&translate_ty_from(ret, ctx, side))
                 )
             }
         }
@@ -565,8 +566,8 @@ mod tests {
         }
     }
 
-    /// A function that BAML returns is BAML-made: a call returns the value. The
-    /// callbacks the host passes into it are host-made.
+    /// A function that BAML returns is BAML-made: a call returns a coroutine
+    /// of the value. The callbacks the host passes into it are host-made.
     #[test]
     fn returned_callable_returns_its_value_and_takes_host_callbacks() {
         let returned = callable(
@@ -578,11 +579,11 @@ mod tests {
         );
         assert_eq!(
             translate_return_ty(&returned, &ctx(&["lorem"])),
-            "typing.Callable[[typing.Callable[[int], typing.Union[str, typing.Coroutine[typing.Any, typing.Any, str]]]], bool]",
+            "typing.Callable[[typing.Callable[[int], typing.Union[str, typing.Coroutine[typing.Any, typing.Any, str]]]], typing.Coroutine[typing.Any, typing.Any, bool]]",
         );
         assert_eq!(
             translate_callback_param_ty(&returned, &ctx(&["lorem"])),
-            "typing.Callable[[typing.Callable[[int], typing.Union[str, typing.Coroutine[typing.Any, typing.Any, str]]]], bool]",
+            "typing.Callable[[typing.Callable[[int], typing.Union[str, typing.Coroutine[typing.Any, typing.Any, str]]]], typing.Coroutine[typing.Any, typing.Any, bool]]",
         );
     }
 
@@ -953,7 +954,7 @@ mod tests {
                     Box::new(Ty::Bool),
                 ),
                 ctx: ctx(&["lorem"]),
-                expected: "typing.Callable[[typing.Callable[[int], str]], typing.Union[bool, typing.Coroutine[typing.Any, typing.Any, bool]]]",
+                expected: "typing.Callable[[typing.Callable[[int], typing.Coroutine[typing.Any, typing.Any, str]]], typing.Union[bool, typing.Coroutine[typing.Any, typing.Any, bool]]]",
             },
             // A callable that a host callback returns is host-made too.
             Case {

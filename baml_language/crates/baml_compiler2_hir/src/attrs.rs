@@ -205,6 +205,10 @@ impl AttributeCarrier for ClassFieldAttrs {
             ("skip", AttributeValue::Flag) => self.skip = true,
             ("stream.done", AttributeValue::Flag) => self.stream_done = true,
             ("stream.must_exist", AttributeValue::Flag) => self.must_exist = true,
+            ("json.rename", AttributeValue::Text(key)) => self.json_rename = Some(key),
+            ("json.flatten", AttributeValue::Flag) => self.json_flatten = true,
+            ("json.fallback", AttributeValue::Flag) => self.json_fallback = true,
+            ("trace.redact", AttributeValue::Flag) => self.redact = true,
             _ => drift(spec, Self::POSITION),
         }
     }
@@ -219,6 +223,7 @@ impl AttributeCarrier for EnumVariantAttrs {
         };
         match (spec.name, value) {
             ("skip", AttributeValue::Flag) => self.skip = true,
+            ("json.rename", AttributeValue::Text(key)) => self.json_rename = Some(key),
             _ => drift(spec, Self::POSITION),
         }
     }
@@ -233,6 +238,8 @@ impl AttributeCarrier for ClassAttrs {
         };
         match (spec.name, value) {
             ("stream.done", AttributeValue::Flag) => self.stream_done = true,
+            ("json.omit_nulls", AttributeValue::Flag) => self.json_omit_nulls = true,
+            ("trace.redact", AttributeValue::Flag) => self.redact = true,
             _ => drift(spec, Self::POSITION),
         }
     }
@@ -254,6 +261,16 @@ pub(crate) struct SerializedMember<'a> {
     pub(crate) name_span: TextRange,
     pub(crate) alias: Option<&'a str>,
     pub(crate) skip: bool,
+}
+
+/// A member's JSON key where it isn't its declared name: its `@json.rename`,
+/// else, under aliased names, its `@alias`.
+pub(crate) fn json_key<'a>(
+    rename: Option<&'a str>,
+    alias: Option<&'a str>,
+    aliased: bool,
+) -> Option<&'a str> {
+    rename.or(alias.filter(|_| aliased))
 }
 
 /// Reject a class or enum whose members don't all serialize to distinct

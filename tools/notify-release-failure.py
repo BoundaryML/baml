@@ -179,6 +179,11 @@ def main() -> int:
 
         version = os.environ.get("VERSION") or "unknown version"
         channel = os.environ.get("CHANNEL") or "unknown channel"
+        # Other scheduled checks reuse this notifier with their own subject and
+        # docs; releases leave both unset.
+        subject = os.environ.get("SUBJECT") or f"BAML {channel} release"
+        prompt_subject = os.environ.get("SUBJECT") or "BAML release"
+        docs = os.environ.get("DOCS") or "baml_language/RELEASING.md"
         release_succeeded = os.environ.get("RELEASE_SUCCEEDED") == "true"
         started_at = get_run_started_at(repository, run_id, run_attempt, github_token)
         failures = find_failures(repository, run_id, run_attempt, github_token)
@@ -192,9 +197,9 @@ def main() -> int:
             oncall_text = (
                 f"cc current oncall {' '.join(mentions)} to investigate, "
                 "here's a prompt you can use:\n\n"
-                f"```\nInvestigate the BAML release failure for {version}:\n\n"
+                f"```\nInvestigate the {prompt_subject} failure for {version}:\n\n"
                 f"- Failed workflow run: {run_url}\n"
-                "- Docs: baml_language/RELEASING.md\n```"
+                f"- Docs: {docs}\n```"
                 if mentions
                 else ""
             )
@@ -205,7 +210,7 @@ def main() -> int:
             else:
                 failure_text = "• Required release completion gate did not succeed"
             paragraphs = [
-                f"❌ BAML {channel} release failed: {version}, "
+                f"❌ {subject} failed: {version}, "
                 f"started at {format_pacific_time(started_at)}"
             ]
             if oncall_text:
@@ -213,7 +218,7 @@ def main() -> int:
             paragraphs.append(f"*Failures:*\n{failure_text}")
         else:
             paragraphs = [
-                f"✅ BAML {channel} release succeeded: {version}, "
+                f"✅ {subject} succeeded: {version}, "
                 f"started at {format_pacific_time(started_at)}"
             ]
 

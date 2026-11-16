@@ -49,8 +49,12 @@ use prost::Message;
 static FACTS: RwLock<Option<Arc<Facts>>> = RwLock::new(None);
 
 thread_local! {
-    /// The runtime's adapter object, held on the JavaScript thread.
-    static ADAPTER: RefCell<Option<ObjectRef>> = const { RefCell::new(None) };
+    /// The runtime's adapter object, held on the JavaScript thread. The
+    /// environment cleanup hook below lets it go; `process.exit()` and an
+    /// uncaught exception skip that hook, and the reference is dropped as the
+    /// process ends. napi's leak check would print a warning then, so it is
+    /// off for this reference.
+    static ADAPTER: RefCell<Option<ObjectRef<false>>> = const { RefCell::new(None) };
 }
 
 /// Install the program descriptor a generated SDK embeds in its typemap
@@ -78,13 +82,12 @@ pub fn register_program_descriptor(descriptor: Option<String>) -> napi::Result<(
 /// `describe(value)`. Called once at module load by the TypeScript runtime.
 #[napi(js_name = "registerHostAdapter")]
 pub fn register_host_adapter(env: Env, adapter: Object<'_>) -> napi::Result<()> {
-    let reference = adapter.create_ref()?;
+    let reference = adapter.create_ref::<false>()?;
     let previous = ADAPTER.with(|cell| cell.borrow_mut().replace(reference));
     if let Some(previous) = previous {
         previous.unref(&env)?;
     }
-    // A reference outlives the environment only as a leak napi reports; it
-    // is let go when the environment shuts down.
+    // Let the reference go when the environment shuts down.
     env.add_env_cleanup_hook(env, |env| {
         if let Some(reference) = ADAPTER.with(|cell| cell.borrow_mut().take()) {
             // The environment is going away: nothing to do about a failure.

@@ -89,7 +89,7 @@ final class TestComplexModels: XCTestCase {
             flags: [.t0(7), .t1("manual-review"), .t2(true)]
         )
 
-        let result = try M.round_trip_complex_profile(profile: profile)
+        let result = try M.round_trip_complex_profile_sync(profile: profile)
         XCTAssertEqual(result, profile)
 
         // Class-arm identity survives the round trip: the wire says

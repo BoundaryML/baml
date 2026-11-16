@@ -1,0 +1,86 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== removed_legacy_test.baml ===
+SourceFile@0..206
+  items: FunctionDef@0..61
+    kw: Function "function" @0..8
+    name: Name@9..14
+      token: Word "Greet" @9..14
+    params: ParamList@14..28
+      l: LParen "(" @14..15
+      params: Param@15..27
+        name: Name@15..19
+          token: Word "name" @15..19
+        ascription: TypeAscription@19..27
+          colon: Colon ":" @19..20
+          ty: PathType@21..27
+            head: Name@21..27
+              token: Word "string" @21..27
+      r: RParen ")" @27..28
+    ret: ReturnType@29..38
+      arrow: Arrow "->" @29..31
+      ty: PathType@32..38
+        head: Name@32..38
+          token: Word "string" @32..38
+    body: Block@39..61
+      l: LBrace "{" @39..40
+      tail: StringLit@43..59
+        token: String "\"Hello, {name}!\"" @43..59
+      r: RBrace "}" @60..61
+  items: RemovedItem@63..136
+    kw: Test "test" @63..67
+    name: Name@68..82
+      token: Word "FunctionsFirst" @68..82
+    body: LBrace "{" @83..84
+    body: Newline "\n" @84..85
+    body: Whitespace "  " @85..87
+    body: Word "functions" @87..96
+    body: Whitespace " " @96..97
+    body: LBracket "[" @97..98
+    body: Word "Greet" @98..103
+    body: RBracket "]" @103..104
+    body: Newline "\n" @104..105
+    body: Whitespace "  " @105..107
+    body: Word "args" @107..111
+    body: Whitespace " " @111..112
+    body: LBrace "{" @112..113
+    body: Newline "\n" @113..114
+    body: Whitespace "    " @114..118
+    body: Word "name" @118..122
+    body: Whitespace " " @122..123
+    body: String "\"world\"" @123..130
+    body: Newline "\n" @130..131
+    body: Whitespace "  " @131..133
+    body: RBrace "}" @133..134
+    body: Newline "\n" @134..135
+    body: RBrace "}" @135..136
+  items: RemovedItem@138..206
+    kw: Test "test" @138..142
+    name: Name@143..152
+      token: Word "ArgsFirst" @143..152
+    body: LBrace "{" @153..154
+    body: Newline "\n" @154..155
+    body: Whitespace "  " @155..157
+    body: Word "args" @157..161
+    body: Whitespace " " @161..162
+    body: LBrace "{" @162..163
+    body: Newline "\n" @163..164
+    body: Whitespace "    " @164..168
+    body: Word "name" @168..172
+    body: Whitespace " " @172..173
+    body: String "\"world\"" @173..180
+    body: Newline "\n" @180..181
+    body: Whitespace "  " @181..183
+    body: RBrace "}" @183..184
+    body: Newline "\n" @184..185
+    body: Whitespace "  " @185..187
+    body: Word "functions" @187..196
+    body: Whitespace " " @196..197
+    body: LBracket "[" @197..198
+    body: Word "Greet" @198..203
+    body: RBracket "]" @203..204
+    body: Newline "\n" @204..205
+    body: RBrace "}" @205..206
+error @63..82: Legacy test declarations were removed. Use an expression-body test with a quoted name, for example: `test "Name" { assert.equal(Foo(...), expected) }`.
+error @138..152: Legacy test declarations were removed. Use an expression-body test with a quoted name, for example: `test "Name" { assert.equal(Foo(...), expected) }`.

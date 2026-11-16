@@ -151,14 +151,20 @@ pub struct GeneratorManifest {
     /// e.g. `"preserve-case"`, `"language"`. Required for codegen.
     pub naming_convention: Option<Spanned<String>>,
 
-    /// Output directory, resolved relative to the project. Defaults to
-    /// `".."` when omitted.
+    /// Directory the generated SDK is placed under, resolved relative to the
+    /// project. Defaults to the project root when omitted.
     #[serde(default)]
     pub output_dir: Option<String>,
 
     /// Import path of the generated SDK root. Required only by Go because
     /// generated subpackages must import one another by module path.
     pub sdk_import_path: Option<Spanned<String>>,
+
+    /// Name of the generated SDK in the target language's terms (a dotted
+    /// Python import path, a Go package, a Rust crate, a TypeScript
+    /// directory). Also names the directory under `output_dir`. Defaults to
+    /// `baml_sdk`.
+    pub package_name: Option<Spanned<String>>,
 
     /// Maximum non-null union arity represented as a closed generated Go
     /// union. Larger unions use `any`. Go-only; defaults to 3.
@@ -387,10 +393,16 @@ mod tests {
              output_type = \"python/pydantic\"\n\
              naming_convention = \"preserve-case\"\n\
              output_dir = \"../python\"\n\
-             sdk_import_path = \"example.com/project/baml_sdk\"\n",
+             sdk_import_path = \"example.com/project/baml_sdk\"\n\
+             package_name = \"my_app._generated\"\n",
         )
         .unwrap();
         let g = &m.generator["lang_python"];
+        assert_eq!(
+            g.get_ref().package_name.as_ref().unwrap().get_ref(),
+            "my_app._generated"
+        );
+        assert!(g.get_ref().unknown.is_empty());
         assert_eq!(
             g.get_ref().output_type.as_ref().unwrap().get_ref(),
             "python/pydantic"

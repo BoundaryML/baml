@@ -215,12 +215,7 @@ extern "C" fn trampoline(call_id: u32, content: *const c_char, length: usize) {
     if caught.is_err() {
         // A panic must not cross the C boundary; losing one completion is
         // the least-bad outcome (its receiver reports a missing result).
-        // stderr because this context can neither return an error nor
-        // panic, and a published SDK cannot assume a logger is installed.
-        #[expect(clippy::print_stderr)]
-        {
-            eprintln!("baml_bridge internal error: completion callback panicked");
-        }
+        log::error!("baml_bridge internal error: completion callback panicked");
     }
 }
 

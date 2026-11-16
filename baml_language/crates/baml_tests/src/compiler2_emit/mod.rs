@@ -110,9 +110,11 @@ function main(x: Foo | int) -> int {
             .iter()
             .skip(narrow_bind_idx + 1)
             .any(|instruction| match instruction {
-                Instruction::LoadVar(slot) | Instruction::StoreVarLoadVar(slot) => {
-                    *slot == destination
-                }
+                Instruction::LoadVar(slot)
+                | Instruction::StoreVarLoadVar(slot)
+                | Instruction::LoadVarField(slot, _)
+                | Instruction::LoadVarFieldLocal(slot, _)
+                | Instruction::AddLocalSmall(_, slot, _) => *slot == destination,
                 Instruction::LoadVar2(first, second) => {
                     *first == destination || *second == destination
                 }

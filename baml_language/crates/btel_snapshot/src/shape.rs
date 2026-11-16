@@ -405,7 +405,8 @@ impl Shaper {
                 | SnapshotValue::Bigint(_)
                 | SnapshotValue::Type(_)
                 | SnapshotValue::Enum { .. }
-                | SnapshotValue::Truncated(_),
+                | SnapshotValue::Truncated(_)
+                | SnapshotValue::Redacted(_),
             )
             | SnapshotRoot::FunctionArgs(_) => None,
         };

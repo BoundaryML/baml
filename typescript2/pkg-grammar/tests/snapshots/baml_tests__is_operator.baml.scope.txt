@@ -14,7 +14,7 @@
 5:37-41      "bool"             source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 5:42-43      "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 6:5-6        "v"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
-6:7-9        "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.is.baml
+6:7-9        "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.expression.is.baml
 6:10-13      "int"              source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml support.type.primitive.baml
 7:1-2        "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
 9:1-35       "// Negation by composing with `!`." source.baml comment.line.double-slash.baml
@@ -33,7 +33,7 @@
 11:5-6       "!"                source.baml meta.function.baml meta.block.function.baml keyword.operator.logical.baml
 11:6-7       "("                source.baml meta.function.baml meta.block.function.baml meta.group.expression.baml punctuation.definition.group.begin.baml
 11:7-8       "v"                source.baml meta.function.baml meta.block.function.baml meta.group.expression.baml meta.dotted-expression.baml variable.other.readwrite.baml
-11:9-11      "is"               source.baml meta.function.baml meta.block.function.baml meta.group.expression.baml meta.expression.is.baml keyword.operator.is.baml
+11:9-11      "is"               source.baml meta.function.baml meta.block.function.baml meta.group.expression.baml meta.expression.is.baml keyword.operator.expression.is.baml
 11:12-18     "string"           source.baml meta.function.baml meta.block.function.baml meta.group.expression.baml meta.expression.is.baml support.type.primitive.baml
 11:18-19     ")"                source.baml meta.function.baml meta.block.function.baml meta.group.expression.baml punctuation.definition.group.end.baml
 12:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
@@ -53,7 +53,7 @@
 15:52-56     "bool"             source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 15:57-58     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 16:5-6       "v"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
-16:7-9       "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.is.baml
+16:7-9       "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.expression.is.baml
 16:10-13     "int"              source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml support.type.primitive.baml
 16:14-15     "|"                source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.type.baml
 16:16-20     "bool"             source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml support.type.primitive.baml
@@ -74,7 +74,7 @@
 21:5-7       "if"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml keyword.control.conditional.baml
 21:8-9       "("                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.if.condition.baml meta.group.expression.baml punctuation.definition.group.begin.baml
 21:9-10      "v"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.if.condition.baml meta.group.expression.baml meta.dotted-expression.baml variable.other.readwrite.baml
-21:11-13     "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.if.condition.baml meta.group.expression.baml meta.expression.is.baml keyword.operator.is.baml
+21:11-13     "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.if.condition.baml meta.group.expression.baml meta.expression.is.baml keyword.operator.expression.is.baml
 21:14-17     "int"              source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.if.condition.baml meta.group.expression.baml meta.expression.is.baml support.type.primitive.baml
 21:17-18     ")"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.if.condition.baml meta.group.expression.baml punctuation.definition.group.end.baml
 21:19-20     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.if.baml meta.block.code.baml punctuation.definition.block.begin.baml
@@ -109,11 +109,11 @@
 26:57-61     "bool"             source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 26:62-63     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 27:5-6       "a"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
-27:7-9       "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.is.baml
+27:7-9       "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.expression.is.baml
 27:10-13     "int"              source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml support.type.primitive.baml
 27:14-16     "&&"               source.baml meta.function.baml meta.block.function.baml keyword.operator.logical.baml
 27:17-18     "b"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
-27:19-21     "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.is.baml
+27:19-21     "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.expression.is.baml
 27:22-25     "int"              source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml support.type.primitive.baml
 28:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml
 30:1-20      "// Literal pattern." source.baml comment.line.double-slash.baml
@@ -128,6 +128,6 @@
 31:29-33     "bool"             source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 31:34-35     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
 32:5-6       "n"                source.baml meta.function.baml meta.block.function.baml meta.dotted-expression.baml variable.other.readwrite.baml
-32:7-9       "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.is.baml
+32:7-9       "is"               source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml keyword.operator.expression.is.baml
 32:10-11     "0"                source.baml meta.function.baml meta.block.function.baml meta.expression.is.baml constant.numeric.integer.baml
 33:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

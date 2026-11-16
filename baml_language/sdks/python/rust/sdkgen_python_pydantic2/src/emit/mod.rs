@@ -235,7 +235,7 @@ fn expand_function(
         .collect();
     let func_docstring = f.docstring.clone();
     let raises_names = collect_raises_names(f.throws.as_ref(), names);
-    for role in [BindingRole::DirectSync, BindingRole::DirectAsync] {
+    for role in [BindingRole::Direct, BindingRole::DirectSync] {
         let arguments: Vec<_> = f.arguments.iter().collect();
         let wire_params: Vec<String> = arguments
             .iter()
@@ -346,7 +346,7 @@ fn expand_methods(
             .collect();
         let method_docstring = m.docstring.clone();
         let raises_names = collect_raises_names(m.throws.as_ref(), names);
-        for role in [BindingRole::DirectSync, BindingRole::DirectAsync] {
+        for role in [BindingRole::Direct, BindingRole::DirectSync] {
             let arguments: Vec<_> = m.arguments.iter().collect();
             let (required_args, optional_args) = split_arguments(&arguments, &fqn_root, names);
             let mode = if role.is_async() {

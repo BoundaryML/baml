@@ -18,13 +18,15 @@
 //! the same host.
 
 use baml_sdk::host_callable_tests::{
-    Person, ValidationError, call_callback_with_optional_args_all_set,
-    call_callback_with_optional_args_all_unset, call_callback_with_optional_args_partially_set,
-    call_int_callback, call_repeatedly, call_throwing_void_callback, call_void_callback,
-    call_void_callback_three_args, call_void_callback_two_args, call_with_callback,
-    call_with_class_callback, call_with_throwing, call_with_two_args, call_with_typed_throws,
-    call_with_typed_throws_propagating, hof, make_adder, make_counter, make_pair_builder,
-    make_void_callback, make_void_forwarder, two_cbs,
+    Person, ValidationError, call_callback_with_optional_args_all_set_sync,
+    call_callback_with_optional_args_all_unset_sync,
+    call_callback_with_optional_args_partially_set_sync, call_int_callback_sync,
+    call_repeatedly_sync, call_throwing_void_callback_sync, call_void_callback_sync,
+    call_void_callback_three_args_sync, call_void_callback_two_args_sync, call_with_callback_sync,
+    call_with_class_callback_sync, call_with_throwing_sync, call_with_two_args_sync,
+    call_with_typed_throws_propagating_sync, call_with_typed_throws_sync, hof_sync,
+    make_adder_sync, make_counter_sync, make_pair_builder_sync, make_void_callback_sync,
+    make_void_forwarder_sync, two_cbs_sync,
 };
 
 /// Stand-in for python's builtin `ValueError`: an arbitrary host error value
@@ -57,7 +59,7 @@ impl std::error::Error for KeyError {}
 fn test_host_callables_simple_sync_callable_returns_string() {
     let cb = |x: i64| format!("got {x}");
 
-    let result = call_with_callback(cb, 5).unwrap();
+    let result = call_with_callback_sync(cb, 5).unwrap();
     assert_eq!(result, "got 5");
 }
 
@@ -65,7 +67,7 @@ fn test_host_callables_simple_sync_callable_returns_string() {
 fn test_host_callables_two_arg_callable_unpacks_positional_args() {
     let cb = |x: i64, prefix: String| format!("{prefix}:{x}");
 
-    let result = call_with_two_args(cb, 7, "answer".to_string()).unwrap();
+    let result = call_with_two_args_sync(cb, 7, "answer".to_string()).unwrap();
     assert_eq!(result, "answer:7");
 }
 
@@ -73,29 +75,29 @@ fn test_host_callables_two_arg_callable_unpacks_positional_args() {
 fn test_host_callables_int_return_callable_round_trip() {
     let cb = |x: i64| x * 2;
 
-    let result = call_int_callback(cb, 21).unwrap();
+    let result = call_int_callback_sync(cb, 21).unwrap();
     assert_eq!(result, 42);
 }
 
 #[test]
 fn test_baml_closure_is_a_native_callable_with_host_language_arguments() {
-    let add_ten = make_adder(10).unwrap();
-    assert_eq!(add_ten.call((5,)).unwrap(), 15);
-    assert_eq!(add_ten.call((7,)).unwrap(), 17);
+    let add_ten = make_adder_sync(10).unwrap();
+    assert_eq!(add_ten.call_sync((5,)).unwrap(), 15);
+    assert_eq!(add_ten.call_sync((7,)).unwrap(), 17);
 }
 
 #[test]
 fn test_baml_closure_decodes_multiple_args_and_structured_return_values() {
-    let build = make_pair_builder(30).unwrap();
+    let build = make_pair_builder_sync(30).unwrap();
     assert_eq!(
-        build.call((12, "Ada".to_string())).unwrap(),
+        build.call_sync((12, "Ada".to_string())).unwrap(),
         Person {
             name: "Ada".to_string(),
             age: 42,
         }
     );
     assert_eq!(
-        build.call((5, "Grace".to_string())).unwrap(),
+        build.call_sync((5, "Grace".to_string())).unwrap(),
         Person {
             name: "Grace".to_string(),
             age: 35,
@@ -105,9 +107,9 @@ fn test_baml_closure_decodes_multiple_args_and_structured_return_values() {
 
 #[test]
 fn test_baml_closure_is_reusable_and_retains_mutable_captures() {
-    let next_value = make_counter(40).unwrap();
-    assert_eq!(next_value.call(()).unwrap(), 41);
-    assert_eq!(next_value.call(()).unwrap(), 42);
+    let next_value = make_counter_sync(40).unwrap();
+    assert_eq!(next_value.call_sync(()).unwrap(), 41);
+    assert_eq!(next_value.call_sync(()).unwrap(), 42);
 }
 
 #[test]
@@ -116,18 +118,20 @@ fn test_host_callable_hof_receives_a_baml_closure() {
     // callback's declared parameter type, a `BamlFunction`, and each call
     // runs back into BAML. Calling it twice shows the handle outlives a call.
     let cb = |f: baml_bridge::BamlFunction<(i64,), i64, std::convert::Infallible>| {
-        let first = f.call((41,)).expect("the BAML closure computes `x + 1`");
-        let second = f.call((1,)).expect("the BAML closure is reusable");
+        let first = f
+            .call_sync((41,))
+            .expect("the BAML closure computes `x + 1`");
+        let second = f.call_sync((1,)).expect("the BAML closure is reusable");
         first * 100 + second * 2
     };
-    assert_eq!(hof(cb).unwrap(), 4204);
+    assert_eq!(hof_sync(cb).unwrap(), 4204);
 }
 
 #[test]
 fn test_host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run() {
     // Two callback parameters whose names differ by a `_returns` suffix
     // each keep their own closure: `f(1) + f_returns(2)`.
-    let result = two_cbs(|x: i64| x * 10, |x: i64| x * 100).unwrap();
+    let result = two_cbs_sync(|x: i64| x * 10, |x: i64| x * 100).unwrap();
     assert_eq!(result, 210);
 }
 
@@ -144,14 +148,14 @@ fn test_host_callable_void_signatures() {
         let seen = Arc::clone(&seen);
         move |value: i64| seen.lock().unwrap().push(format!("{value}"))
     };
-    assert_eq!(call_void_callback(one, 1).unwrap(), 1);
+    assert_eq!(call_void_callback_sync(one, 1).unwrap(), 1);
 
     let two = {
         let seen = Arc::clone(&seen);
         move |value: i64, label: String| seen.lock().unwrap().push(format!("{value}:{label}"))
     };
     assert_eq!(
-        call_void_callback_two_args(two, 2, "two".to_string()).unwrap(),
+        call_void_callback_two_args_sync(two, 2, "two".to_string()).unwrap(),
         2
     );
 
@@ -162,23 +166,24 @@ fn test_host_callable_void_signatures() {
         }
     };
     assert_eq!(
-        call_void_callback_three_args(three, 3, "three".to_string(), true).unwrap(),
+        call_void_callback_three_args_sync(three, 3, "three".to_string(), true).unwrap(),
         3
     );
 
-    call_throwing_void_callback(|_value: i64| -> Result<(), ValueError> { Ok(()) }, 4).unwrap();
+    call_throwing_void_callback_sync(|_value: i64| -> Result<(), ValueError> { Ok(()) }, 4)
+        .unwrap();
     let raised = ValueError("void failed".to_string());
     let failing = {
         let raised = raised.clone();
         move |_value: i64| -> Result<(), ValueError> { Err(raised.clone()) }
     };
-    let err = call_throwing_void_callback(failing, 4).unwrap_err();
+    let err = call_throwing_void_callback_sync(failing, 4).unwrap_err();
     let baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the callback's error, got {err}");
     };
     assert_eq!(value.downcast_ref::<ValueError>(), Some(&raised));
 
-    make_void_callback().unwrap().call(()).unwrap();
+    make_void_callback_sync().unwrap().call_sync(()).unwrap();
 
     let forwarded = {
         let seen = Arc::clone(&seen);
@@ -187,9 +192,9 @@ fn test_host_callable_void_signatures() {
             Ok(())
         }
     };
-    let forward = make_void_forwarder(forwarded).unwrap();
-    forward.call((5, "five".to_string())).unwrap();
-    forward.call((6, "six".to_string())).unwrap();
+    let forward = make_void_forwarder_sync(forwarded).unwrap();
+    forward.call_sync((5, "five".to_string())).unwrap();
+    forward.call_sync((6, "six".to_string())).unwrap();
 
     assert_eq!(
         *seen.lock().unwrap(),
@@ -220,7 +225,8 @@ fn test_host_callables_throwing_callable_round_trips_original_python_exception()
     // callback's `Throws` — and thus `call_with_callback`'s `E` — is
     // `HostCallable`: the opaque host error, transported through BAML and
     // rehydrated to the original on the same host.
-    let err = call_with_callback(cb, 1).expect_err("the host throw must surface to the caller");
+    let err =
+        call_with_callback_sync(cb, 1).expect_err("the host throw must surface to the caller");
     let baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the opaque host throw as a HostCallable, got {err}");
     };
@@ -244,7 +250,8 @@ fn test_host_callables_throwing_callable_keyerror_round_trips_with_identity() {
         move |_x: i64| -> Result<String, KeyError> { Err(raised.clone()) }
     };
 
-    let err = call_with_callback(cb, 1).expect_err("the host throw must surface to the caller");
+    let err =
+        call_with_callback_sync(cb, 1).expect_err("the host throw must surface to the caller");
     let baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the opaque host throw, got {err}");
     };
@@ -279,7 +286,8 @@ fn test_host_callables_throwing_callable_custom_python_exception_round_trips_wit
         move |_x: i64| -> Result<String, MyDomainError> { Err(raised.clone()) }
     };
 
-    let err = call_with_callback(cb, 1).expect_err("the host throw must surface to the caller");
+    let err =
+        call_with_callback_sync(cb, 1).expect_err("the host throw must surface to the caller");
     let baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the opaque host throw, got {err}");
     };
@@ -315,7 +323,7 @@ fn test_host_callables_throwing_callable_bamlerror_wrapping_codegenned_class_is_
         })
     };
 
-    let result = call_with_typed_throws(cb, 1).unwrap();
+    let result = call_with_typed_throws_sync(cb, 1).unwrap();
     assert_eq!(result, "caught: bad shape");
 }
 
@@ -337,7 +345,7 @@ fn test_host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fi
         move |_x: i64| -> Result<String, ValidationError> { Err(raised.clone()) }
     };
 
-    let err = call_with_typed_throws_propagating(cb, 1)
+    let err = call_with_typed_throws_propagating_sync(cb, 1)
         .expect_err("the uncaught typed throw must propagate to the caller");
     // The callback's declared throws is a real BAML class, so it propagates as
     // that class: `E = ValidationError`, surfaced in `Error::Thrown`.
@@ -366,7 +374,8 @@ fn test_host_callables_throwing_async_callable_round_trips_original_python_excep
         }
     };
 
-    let err = call_with_callback(cb, 1).expect_err("the host throw must surface to the caller");
+    let err =
+        call_with_callback_sync(cb, 1).expect_err("the host throw must surface to the caller");
     let baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the opaque host throw, got {err}");
     };
@@ -390,10 +399,10 @@ fn test_host_callables_multiple_throws_in_flight_do_not_collide_in_registry() {
         move |_x: i64| -> Result<String, ValueError> { Err(raised.clone()) }
     };
 
-    let err_first =
-        call_with_callback(cb_first, 1).expect_err("the host throw must surface to the caller");
-    let err_second =
-        call_with_callback(cb_second, 2).expect_err("the host throw must surface to the caller");
+    let err_first = call_with_callback_sync(cb_first, 1)
+        .expect_err("the host throw must surface to the caller");
+    let err_second = call_with_callback_sync(cb_second, 2)
+        .expect_err("the host throw must surface to the caller");
     let (
         baml_bridge::Error::Thrown { value: first, .. },
         baml_bridge::Error::Thrown { value: second, .. },
@@ -430,7 +439,7 @@ fn test_host_callables_release_fires_on_drop_of_callable() {
         let _ = &state;
         x.to_string()
     };
-    let result = call_with_callback(cb, 3).unwrap();
+    let result = call_with_callback_sync(cb, 3).unwrap();
     assert_eq!(result, "3");
     assert!(
         wr.upgrade().is_none(),
@@ -442,7 +451,7 @@ fn test_host_callables_release_fires_on_drop_of_callable() {
 fn test_host_callables_lambda_round_trip() {
     // Lambdas are callable and not pydantic models, so they hit the
     // callable-encoding branch in `_set_inbound_value`.
-    let result = call_with_callback(|x: i64| format!("lambda-{x}"), 99).unwrap();
+    let result = call_with_callback_sync(|x: i64| format!("lambda-{x}"), 99).unwrap();
     assert_eq!(result, "lambda-99");
 }
 
@@ -456,7 +465,7 @@ fn test_host_callables_async_callable_runs_to_completion() {
         format!("async-{x}")
     };
 
-    let result = call_with_callback(cb, 4).unwrap();
+    let result = call_with_callback_sync(cb, 4).unwrap();
     assert_eq!(result, "async-4");
 }
 
@@ -485,8 +494,8 @@ fn test_host_callables_multiple_callable_keys_are_distinct() {
         }
     };
 
-    assert_eq!(call_with_callback(cb_a, 1).unwrap(), "a:1");
-    assert_eq!(call_with_callback(cb_b, 2).unwrap(), "b:2");
+    assert_eq!(call_with_callback_sync(cb_a, 1).unwrap(), "a:1");
+    assert_eq!(call_with_callback_sync(cb_b, 2).unwrap(), "b:2");
     assert_eq!(counter_a.load(Ordering::SeqCst), 1);
     assert_eq!(counter_b.load(Ordering::SeqCst), 1);
 }
@@ -503,7 +512,7 @@ fn test_host_callables_class_callback_round_trips_pydantic_model() {
         name: "Ada".to_string(),
         age: 37,
     };
-    let result = call_with_class_callback(cb, person).unwrap();
+    let result = call_with_class_callback_sync(cb, person).unwrap();
     assert_eq!(result, "Ada is 37");
 }
 
@@ -523,7 +532,7 @@ fn test_host_callables_call_repeatedly_invokes_callback_n_times() {
         }
     };
 
-    let results = call_repeatedly(cb, 5).unwrap();
+    let results = call_repeatedly_sync(cb, 5).unwrap();
     assert_eq!(
         results,
         (0..5).map(|i| format!("item-{i}")).collect::<Vec<_>>()
@@ -546,7 +555,7 @@ fn test_host_callables_call_repeatedly_with_zero_n_returns_empty_list() {
         }
     };
 
-    let results = call_repeatedly(cb, 0).unwrap();
+    let results = call_repeatedly_sync(cb, 0).unwrap();
     assert_eq!(results, Vec::<String>::new());
     assert_eq!(*invocations.lock().unwrap(), Vec::<i64>::new());
 }
@@ -587,7 +596,7 @@ fn test_host_callables_call_with_throwing_in_baml_catches_host_callable_error() 
         Err(RuntimeError("boom from host".to_string()))
     };
 
-    let result = call_with_throwing(cb, 1).unwrap();
+    let result = call_with_throwing_sync(cb, 1).unwrap();
     // DIVERGENCE(rust): python's `class_name` is `type(e).__name__` (bare
     // `RuntimeError`); Rust's is the full, compiler-dependent `type_name` (a
     // module path), so the catch returns `"caught:" + <full path>` — assert
@@ -626,7 +635,7 @@ fn test_host_callables_optional_args_all_unset_apply_host_defaults() {
     // dispatch, so the Python callback runs with only `x` and its own
     // defaults fill `y`/`z` (8 and 9), yielding `5*100 + 8*10 + 9 = 589`.
     assert_eq!(
-        call_callback_with_optional_args_all_unset(optional_args_cb, 5).unwrap(),
+        call_callback_with_optional_args_all_unset_sync(optional_args_cb, 5).unwrap(),
         [589]
     );
 }
@@ -640,7 +649,7 @@ fn test_host_callables_optional_args_partially_set_deliver_by_name() {
     // host default (`y`→8, `z`→9) — including the case where the *leading*
     // optional `y` is skipped while `z` is supplied.
     assert_eq!(
-        call_callback_with_optional_args_partially_set(optional_args_cb, 5).unwrap(),
+        call_callback_with_optional_args_partially_set_sync(optional_args_cb, 5).unwrap(),
         [529, 583]
     );
 }
@@ -650,7 +659,7 @@ fn test_host_callables_optional_args_all_set_deliver_both() {
     // `callback(x, y = 2, z = 3)` supplies both optionals; both arrive by
     // name and override the host defaults, yielding `500 + 20 + 3 = 523`.
     assert_eq!(
-        call_callback_with_optional_args_all_set(optional_args_cb, 5).unwrap(),
+        call_callback_with_optional_args_all_set_sync(optional_args_cb, 5).unwrap(),
         [523]
     );
 }

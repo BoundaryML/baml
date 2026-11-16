@@ -15,7 +15,7 @@ public final class BamlFunctionSpec<Final>: @unchecked Sendable {
     }
 
     /// Execute the bound recipe and decode its final output.
-    public func call(
+    public func callSync(
         client: (any BamlTyped)? = nil,
         onEvent: BamlHostCallable? = nil
     ) throws -> Final where Final: BamlDecodable {
@@ -26,7 +26,7 @@ public final class BamlFunctionSpec<Final>: @unchecked Sendable {
     }
 
     /// Execute the bound recipe asynchronously and decode its final output.
-    public func callAsync(
+    public func call(
         client: (any BamlTyped)? = nil,
         onEvent: BamlHostCallable? = nil
     ) async throws -> Final where Final: BamlDecodable {
@@ -37,14 +37,14 @@ public final class BamlFunctionSpec<Final>: @unchecked Sendable {
     }
 
     /// Parse an existing model response with this spec's realized output type.
-    public func parse(json: String) throws -> Final where Final: BamlDecodable {
+    public func parseSync(json: String) throws -> Final where Final: BamlDecodable {
         try BamlRuntime.shared.callSync(
             "ai.FunctionSpec.parse",
             args: [BamlArgument("self", handle: handle), BamlArgument("json", json, as: String._bamlSlot)]
         )
     }
 
-    public func parseAsync(json: String) async throws -> Final where Final: BamlDecodable {
+    public func parse(json: String) async throws -> Final where Final: BamlDecodable {
         try await BamlRuntime.shared.call(
             "ai.FunctionSpec.parse",
             args: [BamlArgument("self", handle: handle), BamlArgument("json", json, as: String._bamlSlot)]
@@ -52,11 +52,11 @@ public final class BamlFunctionSpec<Final>: @unchecked Sendable {
     }
 
     /// Render the portable, provider-neutral prompt for this recipe.
-    public func prompt() throws -> BamlPrompt {
+    public func promptSync() throws -> BamlPrompt {
         try BamlRuntime.shared.callSync("ai.FunctionSpec.prompt", args: [BamlArgument("self", handle: handle)])
     }
 
-    public func promptAsync() async throws -> BamlPrompt {
+    public func prompt() async throws -> BamlPrompt {
         try await BamlRuntime.shared.call("ai.FunctionSpec.prompt", args: [BamlArgument("self", handle: handle)])
     }
 
@@ -64,7 +64,7 @@ public final class BamlFunctionSpec<Final>: @unchecked Sendable {
     ///
     /// `Request` is inferred from the assignment/return context. Generated
     /// SDKs normally use their `baml.http.Request` model here.
-    public func buildRequest<Request: BamlDecodable>(
+    public func buildRequestSync<Request: BamlDecodable>(
         as _: Request.Type = Request.self,
         client: (any BamlTyped)? = nil
     ) throws -> Request {
@@ -74,7 +74,7 @@ public final class BamlFunctionSpec<Final>: @unchecked Sendable {
         )
     }
 
-    public func buildRequestAsync<Request: BamlDecodable>(
+    public func buildRequest<Request: BamlDecodable>(
         as _: Request.Type = Request.self,
         client: (any BamlTyped)? = nil
     ) async throws -> Request {
@@ -84,11 +84,11 @@ public final class BamlFunctionSpec<Final>: @unchecked Sendable {
         )
     }
 
-    public func name() throws -> String {
+    public func nameSync() throws -> String {
         try BamlRuntime.shared.callSync("ai.FunctionSpec.name", args: [BamlArgument("self", handle: handle)])
     }
 
-    public func nameAsync() async throws -> String {
+    public func name() async throws -> String {
         try await BamlRuntime.shared.call("ai.FunctionSpec.name", args: [BamlArgument("self", handle: handle)])
     }
 }

@@ -2,9 +2,9 @@
  * Tree-sitter grammar for BAML (Boundary Markup Language).
  *
  * Source of truth for the language shape:
- *   - baml_language/crates/baml_compiler_lexer/src/tokens.rs   (token forms)
- *   - baml_language/crates/baml_compiler_syntax/src/syntax_kind.rs (node taxonomy)
- *   - baml_language/crates/baml_compiler_parser/src/parser.rs  (precedence table)
+ *   - baml_language/crates/baml_syntax/src/token.rs   (token forms)
+ *   - baml_language/crates/baml_syntax/src/nodes/     (node taxonomy)
+ *   - baml_language/crates/baml_syntax/src/ops.rs     (precedence table)
  *   - typescript2/pkg-grammar/tests/fixtures/*.baml            (the quality bar)
  *
  * Design notes:
@@ -189,6 +189,7 @@ module.exports = grammar({
         $.implements_for_declaration,
         $.function_declaration,
         $.client_declaration,
+        $.client_value_declaration,
         $.generator_declaration,
         $.retry_policy_declaration,
         $.template_string_declaration,
@@ -395,12 +396,12 @@ module.exports = grammar({
         optional(','),
       ),
 
-    // `prompt #"..."#` | `prompt: #"..."#,`
+    // `prompt: \`...\`` | legacy `prompt #"..."#` / `prompt: #"..."#,`
     prompt_field: ($) =>
       seq(
         alias('prompt', $.property_identifier),
         optional(':'),
-        field('value', $.raw_string),
+        field('value', choice($.backtick_string, $.raw_string)),
         optional(','),
       ),
 
@@ -417,6 +418,20 @@ module.exports = grammar({
       ),
 
     client_type: ($) => seq('<', field('kind', $.identifier), '>'),
+
+    // `client Fast = openai.ResponsesClient.new(model = "gpt-6-luna");`
+    // binds a client value. The config-block form above is legacy; the real
+    // parser still accepts it so it can point at the migration.
+    client_value_declaration: ($) =>
+      prec.right(
+        seq(
+          'client',
+          field('name', $.identifier),
+          '=',
+          field('value', $._expression),
+          optional(';'),
+        ),
+      ),
 
     generator_declaration: ($) =>
       seq(
@@ -824,6 +839,7 @@ module.exports = grammar({
         $.call_expression,
         $.optional_call_expression,
         $.specialized_expression,
+        $.companion_expression,
         $.constructor_expression,
         $.parenthesized_expression,
         $.array_expression,
@@ -871,6 +887,31 @@ module.exports = grammar({
           '<',
           field('type', $._type),
           '>',
+        ),
+      ),
+
+    // `Extract@spec(raw)`, `Extract @parse(reply)`: a function's companion.
+    // The real parser accepts exactly these names, with spaces but no newline
+    // before `@`; the immediate token skips no extras, so it can't cross one.
+    companion_expression: ($) =>
+      prec(
+        PREC.MEMBER,
+        seq(
+          field('function', $._expression),
+          token.immediate(/[ \t]*@/),
+          field(
+            'companion',
+            alias(
+              choice(
+                'spec',
+                'stream',
+                'render_prompt',
+                'build_request',
+                'parse',
+              ),
+              $.property_identifier,
+            ),
+          ),
         ),
       ),
 

@@ -1,0 +1,4 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+let A = 1;

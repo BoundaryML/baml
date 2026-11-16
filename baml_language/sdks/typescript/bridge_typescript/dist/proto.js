@@ -58,25 +58,25 @@ export class BamlPrompt {
     toJSON() {
         return BamlValuePromptAst.toObject(BamlValuePromptAst.create(this._wireCopy()), { arrays: true, objects: true });
     }
-    text(options) {
-        return this._callSync('ai.Prompt.text', options);
-    }
-    async textAsync(options) {
+    async text(options) {
         return await this._callAsync('ai.Prompt.text', options);
     }
-    /** Compatibility with the generated SDK's existing async-method spelling. */
-    async text_async(options) {
-        return await this.textAsync(options);
+    textSync(options) {
+        return this._callSync('ai.Prompt.text', options);
     }
-    messages(options) {
-        return this._callSync('ai.Prompt.messages', options);
+    /** Compatibility with the generated SDK's blocking-method spelling. */
+    text_sync(options) {
+        return this.textSync(options);
     }
-    async messagesAsync(options) {
+    async messages(options) {
         return await this._callAsync('ai.Prompt.messages', options);
     }
-    /** Compatibility with the generated SDK's existing async-method spelling. */
-    async messages_async(options) {
-        return await this.messagesAsync(options);
+    messagesSync(options) {
+        return this._callSync('ai.Prompt.messages', options);
+    }
+    /** Compatibility with the generated SDK's blocking-method spelling. */
+    messages_sync(options) {
+        return this.messagesSync(options);
     }
     _callSync(fqn, options) {
         const callId = BigInt(newFunctionCall());
@@ -667,8 +667,10 @@ function decodeBamlClosure(handle, functionTy) {
         }
         return invokeTarget(closure, kwargs, { $baml: baml }, asynchronous);
     };
-    const closure = (...args) => prepare(args, false);
-    Object.defineProperty(closure, 'callAsync', { value: async (...args) => await prepare(args, true) });
+    // Calling a BAML closure is async, like a generated function; the
+    // blocking twin is `callSync`.
+    const closure = async (...args) => await prepare(args, true);
+    Object.defineProperty(closure, 'callSync', { value: (...args) => prepare(args, false) });
     bamlClosureHandles.set(closure, handle);
     return closure;
 }

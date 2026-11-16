@@ -23,25 +23,25 @@ private typealias G = Baml.generic_tests
 
 final class TestGenericInference: XCTestCase {
     func test_generic_inference_identity_infers_primitives() throws {
-        XCTAssertEqual(try G.identity(x: 5), 5)
-        XCTAssertEqual(try G.identity(x: "hi"), "hi")
-        XCTAssertEqual(try G.identity(x: true), true)
+        XCTAssertEqual(try G.identity_sync(x: 5), 5)
+        XCTAssertEqual(try G.identity_sync(x: "hi"), "hi")
+        XCTAssertEqual(try G.identity_sync(x: true), true)
     }
 
     func test_generic_inference_identity_infers_user_class() throws {
         let pair = G.StringIntPair(my_string: "a", my_int: 1)
-        XCTAssertEqual(try G.identity(x: pair), pair)
+        XCTAssertEqual(try G.identity_sync(x: pair), pair)
     }
 
     func test_generic_inference_identity_infers_generic_instance() throws {
         let box = G.GenericBox<Int>(value: 5)
-        XCTAssertEqual(try G.identity(x: box), box)
+        XCTAssertEqual(try G.identity_sync(x: box), box)
         let nested = G.GenericBox(value: G.GenericBox(value: "hello"))
-        XCTAssertEqual(try G.identity(x: nested), nested)
+        XCTAssertEqual(try G.identity_sync(x: nested), nested)
     }
 
     func test_generic_inference_identity_async_infers() async throws {
-        let r = try await G.identity_async(x: 7)
+        let r = try await G.identity(x: 7)
         XCTAssertEqual(r, 7)
     }
 
@@ -51,7 +51,7 @@ final class TestGenericInference: XCTestCase {
         // the compile-time unifier does; the value round-trips. A generated
         // Swift call always names `T`, so the call goes through the runtime
         // with no type argument.
-        _ = try G.identity(x: 0) // loads the program
+        _ = try G.identity_sync(x: 0) // loads the program
         let r: BamlNull = try BamlRuntime.shared.callSync(
             "user.generic_tests.identity",
             args: [.null("x")]
@@ -61,12 +61,12 @@ final class TestGenericInference: XCTestCase {
 
     // SDK_PARITY_LINT(skip): Swift names `T` statically, so a null argument infers nothing here; this pins the explicit binding round trip
     func test_generic_inference_identity_null_with_explicit_optional_type_round_trips() throws {
-        let r: Int? = try G.identity(x: Int?.none)
+        let r: Int? = try G.identity_sync(x: Int?.none)
         XCTAssertNil(r)
     }
 
     func test_generic_inference_make_triple_infers_multiple_typevars() throws {
-        let t = try G.make_triple(a: 1, b: ["a", "b"], c: ["k": true])
+        let t = try G.make_triple_sync(a: 1, b: ["a", "b"], c: ["k": true])
         XCTAssertEqual(t.first, 1)
         XCTAssertEqual(t.second, ["a", "b"])
         XCTAssertEqual(t.third, ["k": true])
@@ -74,12 +74,12 @@ final class TestGenericInference: XCTestCase {
 
     func test_generic_inference_second_of_infers_from_nested_generic() throws {
         XCTAssertEqual(
-            try G.second_of(p: G.GenericPair<Int, String>(first: 1, second: "hi")),
+            try G.second_of_sync(p: G.GenericPair<Int, String>(first: 1, second: "hi")),
             "hi"
         )
         let pair = G.StringIntPair(my_string: "z", my_int: 9)
         XCTAssertEqual(
-            try G.second_of(p: G.GenericPair<Int, G.StringIntPair>(first: 0, second: pair)),
+            try G.second_of_sync(p: G.GenericPair<Int, G.StringIntPair>(first: 0, second: pair)),
             pair
         )
     }
@@ -88,11 +88,11 @@ final class TestGenericInference: XCTestCase {
         let container = G.ContainerShapes<Int>(
             item: 1, items: [1, 2, 3], by_key: ["k": 4], maybe: nil, mixed: nil
         )
-        XCTAssertEqual(try G.read_items(shape: container), [1, 2, 3])
+        XCTAssertEqual(try G.read_items_sync(shape: container), [1, 2, 3])
         let empty = G.ContainerShapes<Int>(
             item: 1, items: [], by_key: [:], maybe: nil, mixed: nil
         )
-        XCTAssertEqual(try G.read_items(shape: empty), [])
+        XCTAssertEqual(try G.read_items_sync(shape: empty), [])
     }
 
     func test_generic_inference_list_head_infers_from_recursive_generic() throws {
@@ -100,7 +100,7 @@ final class TestGenericInference: XCTestCase {
             value: 7,
             next: G.GenericRecursive<Int>(value: 8, next: nil)
         )
-        XCTAssertEqual(try G.list_head(list: list), 7)
+        XCTAssertEqual(try G.list_head_sync(list: list), 7)
     }
 
     func test_generic_inference_extract_infers_four_typevars_from_nesting() throws {
@@ -108,23 +108,23 @@ final class TestGenericInference: XCTestCase {
             first: G.GenericPair<Int, String>(first: 1, second: "a"),
             second: G.GenericPair<Bool, Double>(first: true, second: 1.5)
         )
-        XCTAssertEqual(try G.extract(a: pair), "int | string | bool | float")
+        XCTAssertEqual(try G.extract_sync(a: pair), "int | string | bool | float")
     }
 
     func test_generic_inference_choose_infers_unified_typevar() throws {
-        XCTAssertEqual(try G.choose(left: 5, right: 6), 5)
-        XCTAssertEqual(try G.choose(left: "a", right: "b"), "a")
+        XCTAssertEqual(try G.choose_sync(left: 5, right: 6), 5)
+        XCTAssertEqual(try G.choose_sync(left: "a", right: "b"), "a")
     }
 
     func test_generic_inference_wrap_infers_and_returns_generic() throws {
-        let w = try G.wrap(x: 5)
+        let w = try G.wrap_sync(x: 5)
         XCTAssertEqual(w.value, 5)
         XCTAssertEqual(w, G.GenericBox<Int>(value: 5))
     }
 
     func test_generic_inference_tag_or_value_binds_generic_instance() throws {
         // T inferred (Swift + engine agree): int arm selected.
-        XCTAssertEqual(try G.tag_or_value(x: .t0(5)), "int")
+        XCTAssertEqual(try G.tag_or_value_sync(x: .t0(5)), "int")
     }
 
     func test_generic_inference_union_concrete_sibling_keeps_the_static_type_arg() throws {
@@ -132,7 +132,7 @@ final class TestGenericInference: XCTestCase {
         // so the engine alone would break the tie to `T = never`. Swift's `T`
         // is `Int`, and it rides the wire.
         XCTAssertEqual(
-            try G.tag_or_value(x: BamlUnion2<Int, Swift.String>.t1("hi")),
+            try G.tag_or_value_sync(x: BamlUnion2<Int, Swift.String>.t1("hi")),
             "int"
         )
     }
@@ -140,36 +140,36 @@ final class TestGenericInference: XCTestCase {
     func test_generic_inference_union_null_actual_keeps_the_static_type_arg() throws {
         // A `null` pins nothing either: `T` is still Swift's `Int`.
         XCTAssertEqual(
-            try G.tag_or_value(x: BamlUnion2<Int, Swift.String>?.none),
+            try G.tag_or_value_sync(x: BamlUnion2<Int, Swift.String>?.none),
             "int"
         )
     }
 
     func test_generic_inference_pair_invariant_list_agree_binds() throws {
-        XCTAssertEqual(try G.pair(a: [1, 2], b: [3, 4]), "int")
+        XCTAssertEqual(try G.pair_sync(a: [1, 2], b: [3, 4]), "int")
     }
 
     func test_generic_inference_glue_invariant_and_covariant_agree_binds() throws {
-        XCTAssertEqual(try G.glue(bare: 1, arr: [2, 3]), "int")
+        XCTAssertEqual(try G.glue_sync(bare: 1, arr: [2, 3]), "int")
     }
 
     func test_generic_inference_triple_choose_three_covariant_join() throws {
         // Heterogeneous T needs a union type at the Swift level; the
         // engine joins the VALUE types: int | string | bool.
         typealias U = BamlUnion3<Int, Swift.String, Bool>
-        let rendered = try G.triple_choose(a: U.t0(5), b: U.t1("asdf"), c: U.t2(true))
+        let rendered = try G.triple_choose_sync(a: U.t0(5), b: U.t1("asdf"), c: U.t2(true))
         XCTAssertTrue(rendered.contains("int"), rendered)
         XCTAssertTrue(rendered.contains("string"), rendered)
         XCTAssertTrue(rendered.contains("bool"), rendered)
     }
 
     func test_generic_inference_elem_type_homogeneous_array_is_single_type() throws {
-        XCTAssertEqual(try G.elem_type(xs: [1, 2, 3]), "int")
+        XCTAssertEqual(try G.elem_type_sync(xs: [1, 2, 3]), "int")
     }
 
     func test_generic_inference_elem_type_heterogeneous_array_unifies() throws {
         let xs: [BamlUnion2<Int, Swift.String>] = [.t0(1), .t1("x")]
-        XCTAssertEqual(try G.elem_type(xs: xs), "int | string")
+        XCTAssertEqual(try G.elem_type_sync(xs: xs), "int | string")
     }
 
     // SDK_PARITY_LINT(skip): Swift names `T` statically, so an empty list cannot leave it unbound; this pins the explicit binding round trip
@@ -178,16 +178,16 @@ final class TestGenericInference: XCTestCase {
         // from the caller. In Swift it is static: `G.first_or(xs: [])` with
         // nothing that names `T` does not compile, and the `T` the result's
         // type names rides the wire.
-        let r: G.StringIntPair? = try G.first_or(xs: [])
+        let r: G.StringIntPair? = try G.first_or_sync(xs: [])
         XCTAssertNil(r)
-        XCTAssertEqual(try G.elem_type(xs: [Int]()), "int")
+        XCTAssertEqual(try G.elem_type_sync(xs: [Int]()), "int")
     }
 
     func test_generic_calls_generic_free_fn_requires_binding() throws {
         // `one_type_arg<T>()` takes no argument that could carry `T`. The
         // generated function makes the caller name it; through the runtime
         // directly, a call without the type argument is refused.
-        _ = try G.identity(x: 0) // loads the program
+        _ = try G.identity_sync(x: 0) // loads the program
         XCTAssertThrowsError(
             try BamlRuntime.shared.callSync("user.generic_tests.one_type_arg", args: []) as String
         ) { error in
@@ -205,98 +205,98 @@ final class TestGenericInference: XCTestCase {
     }
 
     func test_generic_calls_one_type_arg_explicit() throws {
-        XCTAssertEqual(try G.one_type_arg(T: Int.self), "int")
-        XCTAssertEqual(try G.one_type_arg(T: Swift.String.self), "string")
+        XCTAssertEqual(try G.one_type_arg_sync(T: Int.self), "int")
+        XCTAssertEqual(try G.one_type_arg_sync(T: Swift.String.self), "string")
         // A nested generic binding states the class with its argument.
-        let nested = try G.one_type_arg(T: G.GenericBox<Int>.self)
+        let nested = try G.one_type_arg_sync(T: G.GenericBox<Int>.self)
         XCTAssertTrue(nested.contains("GenericBox") && nested.contains("int"), nested)
     }
 
     func test_generic_calls_two_type_args_explicit() throws {
-        XCTAssertEqual(try G.two_type_args(A: Int.self, B: Swift.String.self), "int | string")
+        XCTAssertEqual(try G.two_type_args_sync(A: Int.self, B: Swift.String.self), "int | string")
     }
 
     func test_generic_calls_parse_as_explicit() throws {
         XCTAssertEqual(
-            try G.parse_as(source: "{\"my_string\": \"x\", \"my_int\": 3}", T: G.StringIntPair.self),
+            try G.parse_as_sync(source: "{\"my_string\": \"x\", \"my_int\": 3}", T: G.StringIntPair.self),
             G.StringIntPair(my_string: "x", my_int: 3)
         )
-        XCTAssertEqual(try G.parse_as(source: "42", T: Int.self), 42)
+        XCTAssertEqual(try G.parse_as_sync(source: "42", T: Int.self), 42)
     }
 
     func test_generic_calls_optional_only_unset_names_its_type_arg() throws {
         // `optional_only<T>(x: T? = null)`: an omitted argument carries no `T`.
-        let r = try G.optional_only(T: Int.self)
+        let r = try G.optional_only_sync(T: Int.self)
         XCTAssertNil(r)
-        XCTAssertEqual(try G.optional_only(x: .value(5), T: Int.self), 5)
+        XCTAssertEqual(try G.optional_only_sync(x: .value(5), T: Int.self), 5)
     }
 
     func test_generic_inference_first_or_empty_list_round_trips_none() throws {
-        let r: Int? = try G.first_or(xs: [Int]())
+        let r: Int? = try G.first_or_sync(xs: [Int]())
         XCTAssertNil(r)
     }
 
     func test_generic_inference_first_or_nonempty_infers_element() throws {
-        XCTAssertEqual(try G.first_or(xs: [7, 8, 9]), 7)
+        XCTAssertEqual(try G.first_or_sync(xs: [7, 8, 9]), 7)
     }
 
     func test_generic_inference_values_of_empty_map_round_trips_empty_list() throws {
-        XCTAssertEqual(try G.values_of(m: [String: Int]()), [])
+        XCTAssertEqual(try G.values_of_sync(m: [String: Int]()), [])
     }
 
     func test_generic_inference_values_of_nonempty_returns_values() throws {
-        let values = try G.values_of(m: ["a": 1, "b": 2])
+        let values = try G.values_of_sync(m: ["a": 1, "b": 2])
         XCTAssertEqual(values.sorted(), [1, 2])
     }
 
     func test_generic_inference_maybe_id_present_value_infers() throws {
-        XCTAssertEqual(try G.maybe_id(x: 5), 5)
+        XCTAssertEqual(try G.maybe_id_sync(x: 5), 5)
     }
 
     func test_generic_inference_maybe_id_null_round_trips() throws {
-        let r: Int? = try G.maybe_id(x: Int?.none)
+        let r: Int? = try G.maybe_id_sync(x: Int?.none)
         XCTAssertNil(r)
     }
 
     func test_generic_inference_identity_enum_round_trips() throws {
-        XCTAssertEqual(try G.identity(x: G.SomeEnum.VARIANT), .VARIANT)
+        XCTAssertEqual(try G.identity_sync(x: G.SomeEnum.VARIANT), .VARIANT)
     }
 
     // --- methods on generic classes ---
 
     func test_generic_inference_genericbox_get_infers_class_var_from_receiver() throws {
-        XCTAssertEqual(try G.GenericBox<Int>(value: 5).get(), "int")
+        XCTAssertEqual(try G.GenericBox<Int>(value: 5).get_sync(), "int")
     }
 
     func test_generic_inference_genericbox_pair_with_infers_method_typevar() throws {
-        XCTAssertEqual(try G.GenericBox<Int>(value: 5).pair_with(other: "hello world"), "int | string")
+        XCTAssertEqual(try G.GenericBox<Int>(value: 5).pair_with_sync(other: "hello world"), "int | string")
     }
 
     func test_generic_inference_generic_static_infers_own_typevar() throws {
-        let box = try G.GenericBox<Int>.new(value: 5)
+        let box = try G.GenericBox<Int>.new_sync(value: 5)
         XCTAssertEqual(box.value, 5)
     }
 
     func test_generic_inference_named_static_infers_distinct_typevars() throws {
         XCTAssertEqual(
-            try G.NamedStatic<Int, Int, Int>.make(d: 1, e: "x"),
+            try G.NamedStatic<Int, Int, Int>.make_sync(d: 1, e: "x"),
             "int | string"
         )
     }
 
     func test_generic_calls_consume_int_wrapper_baseline() throws {
-        XCTAssertEqual(try G.consume_int_wrapper(x: G.GenericBox<Int>(value: 9)), 9)
+        XCTAssertEqual(try G.consume_int_wrapper_sync(x: G.GenericBox<Int>(value: 9)), 9)
     }
 
     // --- reified returns (Swift static types ARE the reification) ---
 
     func test_generic_calls_make_int_box_reified() throws {
-        let box: G.GenericBox<Int> = try G.make_int_box()
+        let box: G.GenericBox<Int> = try G.make_int_box_sync()
         XCTAssertEqual(box.value, 7)
     }
 
     func test_generic_calls_make_int_container_reified() throws {
-        let c = try G.make_int_container()
+        let c = try G.make_int_container_sync()
         XCTAssertEqual(c.item, 1)
         XCTAssertEqual(c.items, [1, 2, 3])
         XCTAssertEqual(c.by_key, ["k": 4])
@@ -305,12 +305,12 @@ final class TestGenericInference: XCTestCase {
     }
 
     func test_generic_calls_make_nested_box_reified() throws {
-        let outer: G.GenericBox<G.GenericBox<Int>> = try G.make_nested_box()
+        let outer: G.GenericBox<G.GenericBox<Int>> = try G.make_nested_box_sync()
         XCTAssertEqual(outer.value.value, 9)
     }
 
     func test_generic_calls_make_int_str_bool_triple_reified() throws {
-        let t = try G.make_int_str_bool_triple()
+        let t = try G.make_int_str_bool_triple_sync()
         XCTAssertEqual(t.first, 1)
         XCTAssertEqual(t.second, ["a", "b"])
         XCTAssertEqual(t.third, ["k": true])

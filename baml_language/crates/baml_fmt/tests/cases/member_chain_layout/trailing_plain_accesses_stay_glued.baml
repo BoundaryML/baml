@@ -1,0 +1,4 @@
+function f() -> int {
+    let x = builder.configure(a_pretty_long_argument_name, another_pretty_long_argument_name).result.field.value;
+    x
+}

@@ -31,9 +31,9 @@ describe.runIf(isTestRuntime("node"))(
       };
       const callback = (value: number) => {
         calls.push(["outer", value]);
-        return baml.call_int_callback(leaf, value);
+        return baml.call_int_callback_sync(leaf, value);
       };
-      expect(() => baml.call_int_callback(callback, 6)).toThrow(
+      expect(() => baml.call_int_callback_sync(callback, 6)).toThrow(
         /host callable.*async/i,
       );
       expect(calls).toEqual([]);
@@ -44,10 +44,10 @@ describe.runIf(isTestRuntime("node"))(
       let ran = false;
       const callback = (value: number) => {
         ran = true;
-        return baml.call_int_callback_async((item) => item + 1, value);
+        return baml.call_int_callback((item) => item + 1, value);
       };
       expect(() =>
-        baml.call_int_callback(
+        baml.call_int_callback_sync(
           callback as unknown as (value: number) => number,
           6,
         ),
@@ -69,14 +69,14 @@ describe.runIf(isTestRuntime("node"))(
       const callback = async (value: number) => {
         expect(request.getStore()).toBe("A");
         seen.push(["outer", value]);
-        return await baml.call_int_callback_async(
+        return await baml.call_int_callback(
           leaf as unknown as (value: number) => number,
           value,
         );
       };
       await request.run("A", async () => {
         expect(
-          await baml.call_int_callback_async(
+          await baml.call_int_callback(
             callback as unknown as (value: number) => number,
             6,
           ),
@@ -95,16 +95,16 @@ describe.runIf(isTestRuntime("node"))(
       const callback = async (value: number) => {
         seen.push(value);
         await nextTurn();
-        return baml.call_int_callback((item) => item + 1, value);
+        return baml.call_int_callback_sync((item) => item + 1, value);
       };
       await expect(
-        baml.call_int_callback_async(
+        baml.call_int_callback(
           callback as unknown as (value: number) => number,
           6,
         ),
       ).rejects.toThrow(/host callable.*async/i);
       expect(seen).toEqual([6]);
-      expect(await baml.call_int_callback_async((value) => value + 1, 6)).toBe(
+      expect(await baml.call_int_callback((value) => value + 1, 6)).toBe(
         7,
       );
     });
@@ -114,13 +114,13 @@ describe.runIf(isTestRuntime("node"))(
       const seen: number[] = [];
       const callback = (value: number) => {
         seen.push(value);
-        return baml.call_int_callback((item) => item + 1, value);
+        return baml.call_int_callback_sync((item) => item + 1, value);
       };
-      await expect(baml.call_int_callback_async(callback, 6)).rejects.toThrow(
+      await expect(baml.call_int_callback(callback, 6)).rejects.toThrow(
         /host callable.*async/i,
       );
       expect(seen).toEqual([6]);
-      expect(await baml.call_int_callback_async((value) => value + 1, 6)).toBe(
+      expect(await baml.call_int_callback((value) => value + 1, 6)).toBe(
         7,
       );
     });
@@ -130,9 +130,9 @@ describe.runIf(isTestRuntime("node"))(
       const seen: number[] = [];
       const callback = (value: number): number => {
         seen.push(value);
-        return value === 0 ? 7 : baml.call_int_callback(callback, value - 1);
+        return value === 0 ? 7 : baml.call_int_callback_sync(callback, value - 1);
       };
-      expect(() => baml.call_int_callback(callback, 3)).toThrow(
+      expect(() => baml.call_int_callback_sync(callback, 3)).toThrow(
         /host callable.*async/i,
       );
       expect(seen).toEqual([]);

@@ -26,52 +26,52 @@ export declare class BamlFunctionSpec<TOut> {
     static _fromHandle<TOut>(handle: BamlHandle, _classFqn: string): BamlFunctionSpec<TOut>;
     /** Internal: expose the inner handle for inbound encoding. */
     _toHandle(): BamlHandle;
+    nameSync(options?: {
+        $baml?: InvocationOptions | null;
+    }): string;
     name(options?: {
         $baml?: InvocationOptions | null;
-    }): string;
-    nameAsync(options?: {
-        $baml?: InvocationOptions | null;
     }): Promise<string>;
-    arguments(options?: {
+    argumentsSync(options?: {
         $baml?: InvocationOptions | null;
     }): Record<string, unknown>;
-    argumentsAsync(options?: {
+    arguments(options?: {
         $baml?: InvocationOptions | null;
     }): Promise<Record<string, unknown>>;
-    outputType(options?: {
+    outputTypeSync(options?: {
         $baml?: InvocationOptions | null;
     }): BamlType;
-    outputTypeAsync(options?: {
+    outputType(options?: {
         $baml?: InvocationOptions | null;
     }): Promise<BamlType>;
-    prompt(options?: {
+    promptSync(options?: {
         $baml?: InvocationOptions | null;
     }): BamlPrompt;
-    promptAsync(options?: {
+    prompt(options?: {
         $baml?: InvocationOptions | null;
     }): Promise<BamlPrompt>;
-    tools(options?: {
+    toolsSync(options?: {
         $baml?: InvocationOptions | null;
     }): unknown;
-    toolsAsync(options?: {
+    tools(options?: {
         $baml?: InvocationOptions | null;
     }): Promise<unknown>;
-    requestedModel(options?: {
+    requestedModelSync(options?: {
         $baml?: InvocationOptions | null;
     }): string;
-    requestedModelAsync(options?: {
+    requestedModel(options?: {
         $baml?: InvocationOptions | null;
     }): Promise<string>;
-    buildRequest(options?: BamlFunctionSpecBuildRequestOptions): unknown;
-    buildRequestAsync(options?: BamlFunctionSpecBuildRequestOptions): Promise<unknown>;
-    parse(json: string, options?: {
+    buildRequestSync(options?: BamlFunctionSpecBuildRequestOptions): unknown;
+    buildRequest(options?: BamlFunctionSpecBuildRequestOptions): Promise<unknown>;
+    parseSync(json: string, options?: {
         $baml?: InvocationOptions | null;
     }): TOut;
-    parseAsync(json: string, options?: {
+    parse(json: string, options?: {
         $baml?: InvocationOptions | null;
     }): Promise<TOut>;
-    call(options?: BamlFunctionSpecCallOptions): TOut;
-    callAsync(options?: BamlFunctionSpecCallOptions): Promise<TOut>;
+    callSync(options?: BamlFunctionSpecCallOptions): TOut;
+    call(options?: BamlFunctionSpecCallOptions): Promise<TOut>;
     private _callSync;
     private _callAsync;
     toString(): string;

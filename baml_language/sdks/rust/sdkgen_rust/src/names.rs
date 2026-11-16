@@ -28,6 +28,10 @@ pub(crate) enum CallableId {
     },
 }
 
+/// Functions the generated crate root declares itself (the dynamic
+/// `invoke` facade), reserved against root-level BAML functions.
+const ROOT_FUNCTIONS: &[&str] = &["invoke", "invoke_sync"];
+
 /// One of the Rust functions generated for a BAML callable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Binding {
@@ -42,35 +46,37 @@ pub(crate) enum Binding {
 }
 
 impl Binding {
-    /// The bindings of a callable, the direct one first.
+    /// The bindings of a callable, the direct (async) one first.
     fn of(raw: &str) -> &'static [Self] {
         if raw.ends_with("@stream") {
             &[
-                Self::Sync,
                 Self::Async,
-                Self::StreamWith,
+                Self::Sync,
                 Self::StreamWithAsync,
-                Self::SyncWithOptions,
+                Self::StreamWith,
                 Self::AsyncWithOptions,
+                Self::SyncWithOptions,
             ]
         } else {
             &[
-                Self::Sync,
                 Self::Async,
-                Self::SyncWithOptions,
+                Self::Sync,
                 Self::AsyncWithOptions,
+                Self::SyncWithOptions,
             ]
         }
     }
 
+    /// The plain name is the async binding; each blocking twin carries
+    /// `_sync`.
     const fn suffix(self) -> &'static str {
         match self {
-            Self::Sync => "",
-            Self::Async => "_async",
-            Self::StreamWith => "_with",
-            Self::StreamWithAsync => "_with_async",
-            Self::SyncWithOptions => "_with_options",
-            Self::AsyncWithOptions => "_async_with_options",
+            Self::Async => "",
+            Self::Sync => "_sync",
+            Self::StreamWithAsync => "_with",
+            Self::StreamWith => "_with_sync",
+            Self::AsyncWithOptions => "_with_options",
+            Self::SyncWithOptions => "_sync_with_options",
         }
     }
 }
@@ -87,7 +93,12 @@ pub(crate) struct RustNames {
     fields: HashMap<(Name, baml_base::Name), String>,
     variants: HashMap<(Name, baml_base::Name), String>,
     params: HashMap<(CallableId, baml_base::Name), String>,
+    /// Each class's generated field constructor, named after its methods.
+    constructors: HashMap<Name, String>,
 }
+
+/// The spelling a class's generated field constructor asks for.
+const CONSTRUCTOR: &str = "new";
 
 impl RustNames {
     /// Allocate every name in `pool`. `emitted` are the types the SDK
@@ -105,6 +116,7 @@ impl RustNames {
             fields: HashMap::new(),
             variants: HashMap::new(),
             params: HashMap::new(),
+            constructors: HashMap::new(),
         };
         let mut symbols: Vec<(&Name, &Symbol)> = pool.iter().collect();
         symbols.sort_by_key(|(name, _)| *name);
@@ -151,7 +163,10 @@ impl RustNames {
                 )),
                 Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_) => None,
             });
-            names.allocate_callables(functions, convention);
+            // The crate root also declares the `invoke` / `invoke_sync`
+            // facade; no BAML function may take those spellings.
+            let reserved: &[&str] = if path.is_empty() { ROOT_FUNCTIONS } else { &[] };
+            names.allocate_callables(functions, convention, reserved);
         }
         names.allocate_modules(by_path.keys(), &emitted_types, convention);
 
@@ -183,7 +198,8 @@ impl RustNames {
                                 method,
                             )
                         });
-                    names.allocate_callables(methods, convention);
+                    names.allocate_callables(methods, convention, &[]);
+                    names.allocate_constructor(name, class);
                 }
                 Symbol::Enum(enum_) => names.variants.extend(allocate(
                     enum_.variants.iter().map(|variant| {
@@ -241,14 +257,47 @@ impl RustNames {
             .unwrap_or_else(|| unreachable!("every parameter has a name: {callable:?}.{param}"))
     }
 
+    /// The Rust name of the field constructor generated for class `name`.
+    pub(crate) fn constructor(&self, class: &Name) -> &str {
+        self.constructors
+            .get(class)
+            .unwrap_or_else(|| unreachable!("every class has a constructor name: `{class}`"))
+    }
+
+    /// Name the field constructor of `class` after its methods are named.
+    /// It shares the class's `impl` namespace with every method binding,
+    /// and a BAML method keeps the name it projects to: the constructor is
+    /// `new`, or `new_` (and so on) when a binding already spells `new`.
+    fn allocate_constructor(&mut self, name: &Name, class: &baml_sdkgen_types::Class) {
+        let mut used: HashSet<String> = class
+            .static_methods
+            .iter()
+            .chain(&class.instance_methods)
+            .filter(|method| !method.name.as_str().contains('$'))
+            .flat_map(|method| {
+                let id = CallableId::Method {
+                    class: name.clone(),
+                    method: method.name.clone(),
+                };
+                Binding::of(method.name.as_str())
+                    .iter()
+                    .map(move |&binding| (id.clone(), binding))
+            })
+            .map(|key| self.callables[&key].clone())
+            .collect();
+        self.constructors
+            .insert(name.clone(), allocate_one(CONSTRUCTOR, &mut used));
+    }
+
     /// Name the callables of one Rust namespace (a module's free functions,
     /// or a class's `impl` block) and their parameters. Every direct binding
-    /// is placed before any derived one (`_async`, `_with_options`, ...), so
+    /// is placed before any derived one (`_sync`, `_with_options`, ...), so
     /// a BAML function always keeps the name it projects to.
     fn allocate_callables<'a>(
         &mut self,
         callables: impl Iterator<Item = (CallableId, &'a str, &'a Function)>,
         convention: NamingConvention,
+        reserved: &[&str],
     ) {
         // `$` companions are never emitted.
         let callables: Vec<_> = callables.filter(|(_, raw, _)| !raw.contains('$')).collect();
@@ -257,14 +306,18 @@ impl RustNames {
                 .iter()
                 .map(|(id, raw, _)| (id.clone(), *raw, Case::Snake)),
             convention,
-            [],
+            reserved.iter().copied(),
         );
-        let mut used: HashSet<String> = direct.values().cloned().collect();
+        let mut used: HashSet<String> = direct
+            .values()
+            .cloned()
+            .chain(reserved.iter().map(|name| (*name).to_string()))
+            .collect();
         for (id, raw, function) in &callables {
             let base = &direct[id];
             for &binding in Binding::of(raw) {
                 let spelling = match binding {
-                    Binding::Sync => base.clone(),
+                    Binding::Async => base.clone(),
                     _ => allocate_one(&format!("{base}{}", binding.suffix()), &mut used),
                 };
                 self.callables.insert((id.clone(), binding), spelling);
@@ -396,6 +449,9 @@ mod tests {
                     name: baml_base::Name::new(*field),
                     docstring: None,
                     ty: Ty::String,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 })
                 .collect(),
             static_methods: Vec::new(),
@@ -404,6 +460,7 @@ mod tests {
                 source_file_path: "main.baml".to_string(),
                 span_start: 0,
             },
+            json_omit_nulls: false,
         })
     }
 
@@ -413,15 +470,61 @@ mod tests {
             name("user", &["deploymentGroups"], "createToken"),
             Symbol::Function(function("createToken", &["groupId", "group_id"])),
         );
-        let create_token_async = name("user", &["deploymentGroups"], "createTokenAsync");
+        let create_token_sync = name("user", &["deploymentGroups"], "createTokenSync");
         pool.insert(
-            create_token_async,
-            Symbol::Function(function("createTokenAsync", &[])),
+            create_token_sync,
+            Symbol::Function(function("createTokenSync", &[])),
         );
         let page = name("user", &["deploymentGroups"], "page_result");
         pool.insert(page.clone(), class(&page, &["nextCursor", "type", "self"]));
         let emitted = HashSet::from([page]);
         (pool, emitted)
+    }
+
+    #[test]
+    fn sync_twins_never_displace_authored_methods_or_root_facade() {
+        // Methods `bump` and `bump_sync` on one class, and root functions
+        // spelled like the crate's own `invoke` / `invoke_sync` facade.
+        let mut pool = SymbolPool::new();
+        let counter = name("user", &[], "Counter");
+        let Symbol::Class(mut class) = class(&counter, &[]) else {
+            unreachable!("`class` builds a class");
+        };
+        class.instance_methods = vec![function("bump", &[]), function("bump_sync", &[])];
+        pool.insert(counter.clone(), Symbol::Class(class));
+        pool.insert(
+            name("user", &[], "invoke"),
+            Symbol::Function(function("invoke", &[])),
+        );
+        pool.insert(
+            name("user", &[], "invoke_sync"),
+            Symbol::Function(function("invoke_sync", &[])),
+        );
+        let emitted = HashSet::from([counter.clone()]);
+        let names = RustNames::build(&pool, &emitted, NamingConvention::PreserveCase);
+
+        let method = |raw: &str| CallableId::Method {
+            class: counter.clone(),
+            method: baml_base::Name::new(raw),
+        };
+        assert_eq!(names.binding(&method("bump"), Binding::Async), "bump");
+        assert_eq!(names.binding(&method("bump"), Binding::Sync), "bump_sync_");
+        assert_eq!(
+            names.binding(&method("bump_sync"), Binding::Async),
+            "bump_sync"
+        );
+        assert_eq!(
+            names.binding(&method("bump_sync"), Binding::Sync),
+            "bump_sync_sync"
+        );
+
+        let root = |raw: &str| CallableId::Function(name("user", &[], raw));
+        assert_eq!(names.binding(&root("invoke"), Binding::Async), "invoke_");
+        assert_eq!(
+            names.binding(&root("invoke_sync"), Binding::Async),
+            "invoke_sync_"
+        );
+        assert_ne!(names.binding(&root("invoke"), Binding::Sync), "invoke_sync");
     }
 
     #[test]
@@ -432,18 +535,18 @@ mod tests {
         let create_token = name("user", &["deploymentGroups"], "createToken");
         let callable = CallableId::Function(create_token.clone());
         assert_eq!(names.module_path(&create_token), ["deployment_groups"]);
-        assert_eq!(names.binding(&callable, Binding::Sync), "create_token");
-        // `createTokenAsync` is a direct binding, so it keeps the name
-        // `createToken`'s async binding would have derived.
-        let sibling = CallableId::Function(name("user", &["deploymentGroups"], "createTokenAsync"));
-        assert_eq!(names.binding(&sibling, Binding::Sync), "create_token_async");
+        assert_eq!(names.binding(&callable, Binding::Async), "create_token");
+        // `createTokenSync` is a direct binding, so it keeps the name
+        // `createToken`'s blocking binding would have derived.
+        let sibling = CallableId::Function(name("user", &["deploymentGroups"], "createTokenSync"));
+        assert_eq!(names.binding(&sibling, Binding::Async), "create_token_sync");
         assert_eq!(
-            names.binding(&callable, Binding::Async),
-            "create_token_async_"
+            names.binding(&callable, Binding::Sync),
+            "create_token_sync_"
         );
         assert_eq!(
-            names.binding(&callable, Binding::AsyncWithOptions),
-            "create_token_async_with_options"
+            names.binding(&callable, Binding::SyncWithOptions),
+            "create_token_sync_with_options"
         );
         // The authored `group_id` keeps its spelling.
         assert_eq!(
@@ -473,11 +576,8 @@ mod tests {
         let create_token = name("user", &["deploymentGroups"], "createToken");
         let callable = CallableId::Function(create_token.clone());
         assert_eq!(names.module_path(&create_token), ["deploymentGroups"]);
-        assert_eq!(names.binding(&callable, Binding::Sync), "createToken");
-        assert_eq!(
-            names.binding(&callable, Binding::Async),
-            "createToken_async"
-        );
+        assert_eq!(names.binding(&callable, Binding::Async), "createToken");
+        assert_eq!(names.binding(&callable, Binding::Sync), "createToken_sync");
         assert_eq!(
             names.param(&callable, &baml_base::Name::new("groupId")),
             "groupId"
@@ -488,6 +588,34 @@ mod tests {
             names.field(&page, &baml_base::Name::new("nextCursor")),
             "nextCursor"
         );
+    }
+
+    #[test]
+    fn constructor_takes_the_first_spelling_no_method_binding_has() {
+        let mut pool = SymbolPool::new();
+        let plain = name("user", &[], "Plain");
+        // A field named `new` lives in the field namespace: no clash.
+        pool.insert(plain.clone(), class(&plain, &["new"]));
+        let account = name("user", &[], "Account");
+        let Symbol::Class(mut decl) = class(&account, &[]) else {
+            unreachable!("`class` builds a class");
+        };
+        decl.static_methods = vec![function("new", &[])];
+        decl.instance_methods = vec![function("new_", &[])];
+        pool.insert(account.clone(), Symbol::Class(decl));
+        let emitted = HashSet::from([plain.clone(), account.clone()]);
+        let names = RustNames::build(&pool, &emitted, NamingConvention::Language);
+
+        assert_eq!(names.constructor(&plain), "new");
+        let method = |raw: &str| CallableId::Method {
+            class: account.clone(),
+            method: baml_base::Name::new(raw),
+        };
+        // The BAML methods keep their names; the constructor yields.
+        assert_eq!(names.binding(&method("new"), Binding::Async), "new");
+        assert_eq!(names.binding(&method("new"), Binding::Sync), "new_sync");
+        assert_eq!(names.binding(&method("new_"), Binding::Async), "new_");
+        assert_eq!(names.constructor(&account), "new__");
     }
 
     #[test]

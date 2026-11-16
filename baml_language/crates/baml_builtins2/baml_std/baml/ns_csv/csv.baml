@@ -399,7 +399,6 @@ class Reader {
                     },
                 }
             }
-            root.sys.panic("unreachable: Reader.next loop ended")
         }
     }
 
@@ -432,7 +431,6 @@ class Reader {
                 },
             }
         }
-        root.sys.panic("unreachable: Reader.headers loop ended")
     }
 
     /// A typed iterator over the remaining records, decoding each into `T`.
@@ -629,7 +627,6 @@ class Rows<T> {
                     },
                 }
             }
-            root.sys.panic("unreachable: Rows.next loop ended")
         }
     }
 }

@@ -12,7 +12,8 @@ use baml_bridge::{
     serde_json::{self, json},
 };
 use baml_sdk::json_interchange::{
-    FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, JsonFields, Label, Shade, from_json, to_json,
+    FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, JsonFields, Label, Shade, WireAliased, WireCoded,
+    WireConfig, WireDefault, WireOptionalTag, WireSettings, from_json_sync, to_json_sync,
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -58,11 +59,11 @@ fn assert_serialize_agrees<T>(value: &T) -> String
 where
     T: BamlValue + Clone + PartialEq + Debug + Serialize + DeserializeOwned,
 {
-    let baml = to_json(value.clone()).unwrap();
+    let baml = to_json_sync(value.clone()).unwrap();
     let serde = serde_json::to_string(value).unwrap();
     assert_eq!(serde, baml);
     assert_eq!(&serde_json::from_str::<T>(&baml).unwrap(), value);
-    assert_eq!(&from_json::<T>(serde.clone()).unwrap(), value);
+    assert_eq!(&from_json_sync::<T>(serde.clone()).unwrap(), value);
     serde
 }
 
@@ -71,7 +72,7 @@ fn assert_deserialize_agrees<T>(json: &str) -> T
 where
     T: BamlValue + PartialEq + Debug + DeserializeOwned,
 {
-    let baml = from_json::<T>(json.to_string()).unwrap();
+    let baml = from_json_sync::<T>(json.to_string()).unwrap();
     let serde = serde_json::from_str::<T>(json).unwrap();
     assert_eq!(serde, baml);
     serde
@@ -139,10 +140,15 @@ fn test_json_interchange_optional_fields_may_be_absent_or_null() {
 #[test]
 fn test_json_interchange_deserialize_matches_baml() {
     let mut json = sparse_doc_json();
-    json["scores"] = serde_json::json!({"z": 1, "a": 2});
     json["labels"] = serde_json::json!([{"text": "y"}, {"text": "w", "note": "v"}]);
     json["unknown_key"] = "ignored".into();
-    let value = assert_deserialize_agrees::<JsonDoc>(&json.to_string());
+    // Spliced into the text: a `serde_json::Value` object would sort the
+    // keys (no `preserve_order`), and the map must keep the document's order.
+    let json = json
+        .to_string()
+        .replace(r#""scores":{}"#, r#""scores":{"z":1,"a":2}"#);
+    assert!(json.contains(r#""scores":{"z":1,"a":2}"#));
+    let value = assert_deserialize_agrees::<JsonDoc>(&json);
     assert_eq!(value.ratio, 1.0);
     assert_eq!(value.shade, Shade::Light);
     assert_eq!(value.scores.keys().collect::<Vec<_>>(), ["z", "a"]);
@@ -238,7 +244,7 @@ fn test_json_interchange_both_reject_what_baml_rejects() {
     for json in cases {
         let text = json.to_string();
         assert!(
-            from_json::<JsonDoc>(text.clone()).is_err(),
+            from_json_sync::<JsonDoc>(text.clone()).is_err(),
             "BAML read {text}"
         );
         assert!(
@@ -246,4 +252,139 @@ fn test_json_interchange_both_reject_what_baml_rejects() {
             "serde read {text}"
         );
     }
+}
+
+/// serde and BAML read `text` as the same value, and write it the same.
+fn assert_reads_and_writes_agree<T>(text: &str)
+where
+    T: BamlValue + Clone + PartialEq + Debug + Serialize + DeserializeOwned,
+{
+    let from_serde: T = serde_json::from_str(text).unwrap();
+    let from_baml: T = from_json_sync::<T>(text.to_string()).unwrap();
+    assert_eq!(from_serde, from_baml);
+    let written = serde_json::to_string(&from_serde).unwrap();
+    let written_by_baml = to_json_sync(from_baml).unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&written).unwrap(),
+        serde_json::from_str::<serde_json::Value>(&written_by_baml).unwrap(),
+        "{text}"
+    );
+}
+
+type Network = baml_sdk::json_interchange::WireDefaultOrWireVpcOrWireOther;
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_renamed_keys_and_tags_match_baml() {
+    assert_reads_and_writes_agree::<Network>(r#"{"type":"use-default"}"#);
+    assert_reads_and_writes_agree::<Network>(r#"{"type":"byo-vpc","vpc-id":"v"}"#);
+    assert_reads_and_writes_agree::<Network>(
+        r#"{"type":"byo-vpc","vpc-id":"v","subnet_ids":["a"]}"#,
+    );
+    let network: Network = serde_json::from_str(r#"{"type":"byo-vpc","vpc-id":"v"}"#).unwrap();
+    assert!(matches!(network, Network::WireVpc(_)), "{network:?}");
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_an_object_no_member_matches_is_the_fallback_as_sent() {
+    let text = r#"{"foo":1,"type":"future-mode"}"#;
+    assert_reads_and_writes_agree::<Network>(text);
+    let network: Network = serde_json::from_str(text).unwrap();
+    assert!(matches!(network, Network::WireOther(_)), "{network:?}");
+    assert_eq!(serde_json::to_string(&network).unwrap(), text);
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_a_member_whose_tag_matches_but_fields_do_not_is_an_error() {
+    let text = r#"{"type":"byo-vpc"}"#;
+    assert!(serde_json::from_str::<Network>(text).is_err());
+    assert!(from_json_sync::<Network>(text.to_string()).is_err());
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_unset_fields_are_left_out_and_nested_unions_keep_their_member() {
+    let text = r#"{"network":{"type":"byo-vpc","vpc-id":"v"},"mode":"fast-mode"}"#;
+    assert_reads_and_writes_agree::<WireSettings>(text);
+    let settings: WireSettings = serde_json::from_str(text).unwrap();
+    assert_eq!(
+        serde_json::to_value(&settings).unwrap(),
+        json!({"network": {"type": "byo-vpc", "vpc-id": "v"}, "mode": "fast-mode"})
+    );
+    assert_reads_and_writes_agree::<WireSettings>(
+        r#"{"network":{"type":"future","x":1},"mode":"Slow"}"#,
+    );
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_flattened_keys_are_kept_and_a_declared_field_wins() {
+    let text = r#"{"id":"i","a":{"k":1},"b":null}"#;
+    assert_reads_and_writes_agree::<WireConfig>(text);
+    let config: WireConfig = serde_json::from_str(text).unwrap();
+    assert_eq!(config.extra.len(), 2);
+    assert_eq!(config.extra["b"], serde_json::Value::Null);
+
+    let clashing = WireConfig {
+        id: "real".to_string(),
+        kind: None,
+        extra: Map::from_iter([
+            ("id".to_string(), json!("from-extra")),
+            ("kind".to_string(), json!("from-extra")),
+            ("b".to_string(), json!(1)),
+        ]),
+    };
+    // `kind` is unset, so the map's entry is the only one writing that key.
+    let expected = json!({"id": "real", "kind": "from-extra", "b": 1});
+    assert_eq!(serde_json::to_value(&clashing).unwrap(), expected);
+    let written_by_baml = to_json_sync(clashing).unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&written_by_baml).unwrap(),
+        expected
+    );
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_a_member_behind_an_alias_keeps_its_tag() {
+    assert_reads_and_writes_agree::<WireAliased>(r#"{"network":{"type":"use-default"}}"#);
+    assert_reads_and_writes_agree::<WireAliased>(r#"{"network":{"type":"future"}}"#);
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_an_optional_literal_is_checked_and_left_out() {
+    assert_reads_and_writes_agree::<WireOptionalTag>(r#"{"name":"n"}"#);
+    assert_reads_and_writes_agree::<WireOptionalTag>(r#"{"mode":"forward","name":"n"}"#);
+    let wrong = r#"{"mode":"backward","name":"n"}"#;
+    assert!(serde_json::from_str::<WireOptionalTag>(wrong).is_err());
+    assert!(from_json_sync::<WireOptionalTag>(wrong.to_string()).is_err());
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_a_tag_of_the_fallbacks_kind_reaches_the_fallback() {
+    assert_reads_and_writes_agree::<WireCoded>(r#"{"value":{"code":"two"}}"#);
+    assert_reads_and_writes_agree::<WireCoded>(r#"{"value":{"code":0}}"#);
+    let wrong_kind = r#"{"value":{"code":true}}"#;
+    assert!(serde_json::from_str::<WireCoded>(wrong_kind).is_err());
+    assert!(from_json_sync::<WireCoded>(wrong_kind.to_string()).is_err());
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_an_object_with_no_tag_is_an_error() {
+    for text in [r#"{"kind":"no type"}"#, r#"{"type":1}"#] {
+        assert!(serde_json::from_str::<Network>(text).is_err());
+        assert!(from_json_sync::<Network>(text.to_string()).is_err());
+    }
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_a_tag_holding_another_string_is_not_the_class() {
+    assert!(serde_json::from_str::<WireDefault>(r#"{"type":"other"}"#).is_err());
+    assert!(from_json_sync::<WireDefault>(r#"{"type":"other"}"#.to_string()).is_err());
 }

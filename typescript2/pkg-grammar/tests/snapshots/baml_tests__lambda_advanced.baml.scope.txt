@@ -616,7 +616,7 @@
 105:9-10     "("                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.begin.baml
 105:10-13    "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml keyword.declaration.binding.baml
 105:14-15    "y"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.pattern.for-in.baml meta.pattern.binding.baml variable.other.binding.baml
-105:16-18    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.in.baml
+105:16-18    "in"               source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml keyword.operator.expression.in.baml
 105:19-25    "mapped"           source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml meta.dotted-expression.baml variable.other.readwrite.baml
 105:25-26    ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.for.header.baml punctuation.definition.for-header.end.baml
 105:27-28    "{"                source.baml meta.function.baml meta.block.function.baml meta.statement.for.baml meta.block.code.baml punctuation.definition.block.begin.baml

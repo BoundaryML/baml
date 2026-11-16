@@ -5,6 +5,8 @@ pkgdesc="BAML wrapper - toolchain manager and launcher (prebuilt binary)"
 arch=('x86_64' 'aarch64')
 url="https://github.com/BoundaryML/baml"
 license=('Apache-2.0')
+# Stripping rewrites the executable and destroys the packed BAML payload.
+options=('!strip')
 provides=('baml')
 conflicts=('baml')
 

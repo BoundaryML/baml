@@ -1,7 +1,7 @@
 # Cloud v1 contract fixtures
 
 The cloud envelope, protobuf package, and JSON protocol remain v1. Embedded
-snapshots use CAS blob format v5 and snapshot hash format v5; `cloud-v1` names
+snapshots use CAS blob format v6 and snapshot hash format v6; `cloud-v1` names
 the outer protocol, not the embedded CAS version.
 
 Proposed client contract examples for sharing with BCS. **Not yet approved by
@@ -157,6 +157,15 @@ Merging it with the logical-size refresh re-encoded each v5 envelope with the
 vendored `protoc`, adding `logical_bytes_approx_v1: 16` to every CAS object. The
 same edit applied to the v4 envelopes reproduces the logical-size refresh byte
 for byte. Put lengths and SHA-256s follow the new bodies.
+
+The CAS v6 refresh (redacted values) changed no length. Each scalar blob differs
+from its v5 blob only in its header version and its ID, and each recording only
+in the snapshot IDs it names, so every envelope keeps its structure: the sources
+were regenerated with the source-inspection command, and in every envelope,
+prepare body and put manifest each v5 recording, blob, blob SHA-256 and snapshot
+ID was replaced by its v6 counterpart, and each CAS object's
+`snapshot_format_version` 5 by 6. Put SHA-256s follow the new bodies. The
+zero-candidate recording, server plans and dispositions are unchanged.
 
 Tests independently check envelope version, IDs, ordered membership, recording
 presence and exact source bytes, CAS format version and exact blob bytes, each

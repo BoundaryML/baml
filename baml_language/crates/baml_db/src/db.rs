@@ -1503,16 +1503,19 @@ mod tests {
     /// own manifests declare: a stdlib package that reaches a sibling it does
     /// not list, or lists a sibling that does not exist, fails here with the
     /// offending file and message rather than deep inside runtime lowering.
+    /// Warnings count too: stdlib diagnostics surface in every user's
+    /// `baml check`, so one stray warning here is noise for everyone (#5075).
     #[test]
     fn stdlib_compiles_cleanly_under_its_declared_graph() {
         let mut db = ProjectDatabase::new();
         db.ensure_stdlib_sources();
-        let errors: Vec<String> = crate::check::collect_diagnostics(&db)
+        let problems: Vec<String> = crate::check::collect_diagnostics(&db)
             .into_iter()
             .filter(|diagnostic| {
                 matches!(
                     diagnostic.severity,
                     baml_compiler_diagnostics::Severity::Error
+                        | baml_compiler_diagnostics::Severity::Warning
                 )
             })
             .map(|diagnostic| {
@@ -1525,9 +1528,9 @@ mod tests {
             })
             .collect();
         assert!(
-            errors.is_empty(),
-            "the embedded stdlib has errors under its declared graph:\n{}",
-            errors.join("\n")
+            problems.is_empty(),
+            "the embedded stdlib has errors or warnings under its declared graph:\n{}",
+            problems.join("\n")
         );
     }
 

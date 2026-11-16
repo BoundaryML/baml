@@ -218,6 +218,36 @@ async fn missing_auth_token_file_is_io_error() {
     assert_eq!(mock.http_calls(), 0);
 }
 
+/// The token itself put in `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` (which
+/// takes a path) must not reach the error, even when it looks like a path.
+#[tokio::test]
+async fn unreadable_auth_token_file_is_never_quoted() {
+    let mut texts = Vec::new();
+    // The second is a base64 token that starts with `/`, as one in 64 do.
+    for value in [
+        "eyJhbGciOiJSUzI1NiJ9.secret-token-value",
+        "/Zm9vYmFyc2VjcmV0dG9rZW4+SEKRIT==",
+    ] {
+        let mock = MockIo::new()
+            .env(
+                "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+                "http://169.254.170.23/v1/credentials",
+            )
+            .env("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", value)
+            .http(|_method, _url, headers| {
+                panic!("credential endpoint must not be called; headers: {headers:?}")
+            });
+        let err = resolve_credentials(&mock, None)
+            .await
+            .expect_err("unreadable auth token file must error");
+        texts.push(err.to_string());
+    }
+    for (text, secret) in texts.iter().zip(["secret-token-value", "SEKRIT"]) {
+        assert!(!text.contains(secret), "{text}");
+        assert!(text.contains("is not shown"), "{text}");
+    }
+}
+
 /// A non-200 response from the container endpoint surfaces as
 /// `ConfigError::Io`. (Upstream models 5xx as retryable; our slim resolver does
 /// not retry, so any non-200 is a terminal `Io` error.)

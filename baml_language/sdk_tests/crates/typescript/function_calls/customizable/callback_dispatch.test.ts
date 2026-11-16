@@ -2,7 +2,6 @@ import { CancelToken } from "./baml_sdk/baml/spawn/index.js";
 /** Shared callable dispatch contracts. Names/assertions match every SDK port.
  * Use the language's supported entry/callback forms; do not require a
  * particular thread, event loop, or context carrier in these shared cases.
- * Casts only admit Promise results omitted by current generated callback types.
  */
 import "./baml_sdk/index.js";
 import { BamlAbortError } from "@boundaryml/baml-bridge";
@@ -16,7 +15,7 @@ describe("callback_dispatch", () => {
       calls.push(value);
       return value + 1;
     };
-    expect(await baml.call_int_callback_async(callback, 6)).toBe(7);
+    expect(await baml.call_int_callback(callback, 6)).toBe(7);
     expect(calls).toEqual([6]);
   });
 
@@ -28,8 +27,8 @@ describe("callback_dispatch", () => {
       return value + 1;
     };
     expect(
-      await baml.call_int_callback_async(
-        callback as unknown as (value: number) => number,
+      await baml.call_int_callback(
+        callback,
         6,
       ),
     ).toBe(7);
@@ -50,8 +49,8 @@ describe("callback_dispatch", () => {
     };
     try {
       const calls = [0, 1, 2, 3].map((value) =>
-        baml.call_int_callback_async(
-          callback as unknown as (value: number) => number,
+        baml.call_int_callback(
+          callback,
           value,
         ),
       );
@@ -68,8 +67,8 @@ describe("callback_dispatch", () => {
       calls.push(value);
       return value + 1;
     };
-    expect(await baml.call_int_callback_async(callback, 1)).toBe(2);
-    expect(await baml.call_int_callback_async(callback, 2)).toBe(3);
+    expect(await baml.call_int_callback(callback, 1)).toBe(2);
+    expect(await baml.call_int_callback(callback, 2)).toBe(3);
     expect(calls).toEqual([1, 2]);
   });
 
@@ -79,7 +78,7 @@ describe("callback_dispatch", () => {
       calls.push(value);
       return String(value);
     };
-    expect(await baml.call_repeatedly_async(callback, 3)).toEqual([
+    expect(await baml.call_repeatedly(callback, 3)).toEqual([
       "0",
       "1",
       "2",
@@ -88,7 +87,7 @@ describe("callback_dispatch", () => {
   });
   it("cancelled_waiter_does_not_end_host_execution", async () => {
     for (const outcome of ["return", "throw"]) {
-      const ctx = CancelToken.new();
+      const ctx = CancelToken.new_sync();
       let markEntered!: () => void;
       const entered = new Promise<void>((resolve) => { markEntered = resolve; });
       let release!: () => void;
@@ -107,12 +106,12 @@ describe("callback_dispatch", () => {
         if (outcome === "throw") throw new Error("late host failure");
         return value + 1;
       };
-      const pending = baml.call_int_callback_async(
-        callback as unknown as (value: number) => number, 6, { $baml: { cancel: ctx } },
+      const pending = baml.call_int_callback(
+        callback, 6, { $baml: { cancel: ctx } },
       );
       try {
         await entered;
-        ctx.cancel();
+        ctx.cancel_sync();
         await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
         expect(exits).toEqual([]);
         release();
@@ -120,7 +119,7 @@ describe("callback_dispatch", () => {
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
         expect(exits).toEqual([6]);
         await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
-        expect(await baml.call_int_callback_async((value) => value + 1, 7)).toBe(8);
+        expect(await baml.call_int_callback((value) => value + 1, 7)).toBe(8);
       } finally {
         release();
         await pending.catch(() => {});

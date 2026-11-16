@@ -1519,6 +1519,7 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         let ty = bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),

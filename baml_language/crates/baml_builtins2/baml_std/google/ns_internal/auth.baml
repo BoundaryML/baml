@@ -27,8 +27,10 @@ function gcp_access_token(credentials_json: string?, scope: string) -> string {
 
 /// Resolves the project id from `credentials_json` when it carries one, else
 /// from the google-auth chain (`GOOGLE_CLOUD_PROJECT` / `GCLOUD_PROJECT`, the
-/// ADC and gcloud config files, the GCE metadata server). `null` means "not
-/// discoverable" — the caller reports it.
+/// ADC and gcloud config files, the GCE metadata server; the ADC credential
+/// files only without `credentials_json`). `null` means "not
+/// discoverable" — the caller reports it. A credential that cannot be used
+/// raises the error `gcp_access_token` would.
 function gcp_project_id(credentials_json: string?) -> string? {
     ai.internal._gcp_project_id(credentials_json)
 }

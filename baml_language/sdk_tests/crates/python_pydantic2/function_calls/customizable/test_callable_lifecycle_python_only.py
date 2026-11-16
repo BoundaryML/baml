@@ -30,15 +30,15 @@ async def test_closure_call_async_uses_invoking_loop_and_context_python_only():
         loop.call_soon(reply.set_result, value)
         return await reply
 
-    forward = await baml.make_callback_forwarder_async(callback)
+    forward = await baml.make_callback_forwarder(callback)
     request.set("coroutine creation")
-    pending = forward.call_async(1)
+    pending = forward(1)
     assert seen == []
     request.set("first execution")
     assert await pending == 1
     request.set("second execution")
-    assert await forward.call_async(value=2) == 2
-    unused = forward.call_async(3)
+    assert await forward(value=2) == 2
+    unused = forward(3)
     unused.close()
     assert seen == ["first execution", "second execution"]
 
@@ -55,13 +55,13 @@ def test_closure_call_async_can_be_reused_after_creation_loop_closes_python_only
 
     async def create():
         request.set("factory")
-        return await baml.make_callback_forwarder_async(callback)
+        return await baml.make_callback_forwarder(callback)
 
     forward = asyncio.run(create())
 
     async def invoke(label, value):
         request.set(label)
-        return await forward.call_async(value)
+        return await forward(value)
 
     assert asyncio.run(invoke("first", 1)) == 1
     assert asyncio.run(invoke("second", 2)) == 2
@@ -72,14 +72,14 @@ def test_closure_call_async_can_be_reused_after_creation_loop_closes_python_only
 # SDK_PARITY_LINT(skip): Python closure async entry argument and error semantics
 @pytest.mark.asyncio
 async def test_closure_call_async_preserves_binding_and_exception_identity_python_only():
-    build = baml.make_pair_builder(10)
-    assert await build.call_async(delta=2, label="Ada") == baml.Person(
+    build = baml.make_pair_builder_sync(10)
+    assert await build(delta=2, label="Ada") == baml.Person(
         name="Ada", age=12
     )
     with pytest.raises(TypeError, match="multiple values"):
-        await build.call_async(2, delta=3, label="Ada")
+        await build(2, delta=3, label="Ada")
     with pytest.raises(TypeError, match="unexpected keyword"):
-        await build.call_async(2, "Ada", unknown=3)
+        await build(2, "Ada", unknown=3)
 
     failure = ValueError("retained callback failed")
 
@@ -88,11 +88,11 @@ async def test_closure_call_async_preserves_binding_and_exception_identity_pytho
             raise failure
         return value
 
-    forward = await baml.make_callback_forwarder_async(callback)
+    forward = await baml.make_callback_forwarder(callback)
     with pytest.raises(ValueError) as caught:
-        await forward.call_async(1)
+        await forward(1)
     assert caught.value is failure
-    assert await forward.call_async(2) == 2
+    assert await forward(2) == 2
 
 
 # SDK_PARITY_LINT(skip): Python closure async entry cancellation delivery
@@ -107,8 +107,8 @@ async def test_closure_call_async_cancels_its_retained_callback_python_only():
         finally:
             exited.set()
 
-    forward = await baml.make_callback_forwarder_async(callback)
-    call = asyncio.create_task(forward.call_async(1))
+    forward = await baml.make_callback_forwarder(callback)
+    call = asyncio.create_task(forward(1))
     try:
         await asyncio.wait_for(entered.wait(), 3)
         call.cancel()
@@ -123,7 +123,7 @@ async def test_closure_call_async_cancels_its_retained_callback_python_only():
 # SDK_PARITY_LINT(skip): Python callback cancellation under an explicit controller
 @pytest.mark.asyncio
 async def test_repeated_abort_does_not_interrupt_async_callback_cleanup_python_only():
-    controller = CancelToken.new()
+    controller = CancelToken.new_sync()
     entered, cleaning, release, exited = (asyncio.Event() for _ in range(4))
 
     async def callback(value):
@@ -136,13 +136,13 @@ async def test_repeated_abort_does_not_interrupt_async_callback_cleanup_python_o
             exited.set()
 
     call = asyncio.create_task(
-        baml.call_int_callback_async(callback, 1, _baml={"cancel": controller})
+        baml.call_int_callback(callback, 1, _baml={"cancel": controller})
     )
     try:
         await asyncio.wait_for(entered.wait(), 3)
-        controller.cancel()
+        controller.cancel_sync()
         await asyncio.wait_for(cleaning.wait(), 3)
-        controller.cancel()
+        controller.cancel_sync()
         await asyncio.sleep(0)
         assert not exited.is_set()
         release.set()
@@ -157,7 +157,7 @@ async def test_repeated_abort_does_not_interrupt_async_callback_cleanup_python_o
 
 # SDK_PARITY_LINT(skip): Python cancellation on a bridge-owned callback loop
 def test_sync_entry_cancellation_reaches_async_callback_on_worker_loop_python_only():
-    controller = CancelToken.new()
+    controller = CancelToken.new_sync()
     entered, exited = threading.Event(), threading.Event()
 
     async def callback(value):
@@ -168,11 +168,11 @@ def test_sync_entry_cancellation_reaches_async_callback_on_worker_loop_python_on
             exited.set()
 
     with ThreadPoolExecutor(max_workers=1) as pool:
-        call = pool.submit(baml.call_int_callback, callback, 1, _baml={"cancel": controller})
+        call = pool.submit(baml.call_int_callback_sync, callback, 1, _baml={"cancel": controller})
         try:
             assert entered.wait(3)
         finally:
-            controller.cancel()
+            controller.cancel_sync()
         with pytest.raises(BamlCancelledError):
             call.result(timeout=3)
         assert exited.wait(3)
@@ -192,7 +192,7 @@ async def test_callback_suppresses_task_cancellation_and_returns_late_python_onl
             finished.set()
             return value
 
-    call = asyncio.create_task(baml.call_int_callback_async(callback, 1))
+    call = asyncio.create_task(baml.call_int_callback(callback, 1))
     try:
         await asyncio.wait_for(entered.wait(), 3)
         call.cancel()
@@ -200,7 +200,7 @@ async def test_callback_suppresses_task_cancellation_and_returns_late_python_onl
             await call
         await asyncio.wait_for(finished.wait(), 3)
         assert call.cancelled()
-        assert await baml.call_int_callback_async(lambda value: value, 2) == 2
+        assert await baml.call_int_callback(lambda value: value, 2) == 2
     finally:
         call.cancel()
         await asyncio.gather(call, return_exceptions=True)
@@ -218,7 +218,7 @@ async def test_suspended_callback_survives_gc_until_cancellation_cleanup_finishe
         finally:
             exited.set()
 
-    call = asyncio.create_task(baml.call_int_callback_async(callback, 1))
+    call = asyncio.create_task(baml.call_int_callback(callback, 1))
     try:
         await asyncio.wait_for(entered.wait(), 3)
         gc.collect()
@@ -252,11 +252,11 @@ async def test_callback_task_cancelled_before_first_execution_completes_call_pyt
     loop.set_task_factory(factory)
     try:
         with pytest.raises(asyncio.CancelledError):
-            await baml.call_int_callback_async(callback, 1)
+            await baml.call_int_callback(callback, 1)
         assert calls == []
     finally:
         loop.set_task_factory(previous_factory)
-    assert await baml.call_int_callback_async(callback, 2) == 2
+    assert await baml.call_int_callback(callback, 2) == 2
     assert calls == [2]
 
 
@@ -274,12 +274,12 @@ async def test_retained_host_callback_uses_later_invocations_application_context
         await asyncio.sleep(0)
         return value
 
-    forward = await baml.make_callback_forwarder_async(callback)
+    forward = await baml.make_callback_forwarder(callback)
     assert seen == []
     request.set("first invocation")
-    assert await baml.call_int_callback_async(forward, 1) == 1
+    assert await baml.call_int_callback(forward, 1) == 1
     request.set("second invocation")
-    assert await baml.call_int_callback_async(forward, 2) == 2
+    assert await baml.call_int_callback(forward, 2) == 2
     assert seen == ["first invocation", "second invocation"]
 
 
@@ -299,7 +299,7 @@ async def test_cancelling_call_delivers_cancellation_and_allows_callback_cleanup
             await release.wait()
             exited.set()
 
-    task = asyncio.create_task(baml.call_int_callback_async(callback, 7))
+    task = asyncio.create_task(baml.call_int_callback(callback, 7))
     try:
         await asyncio.wait_for(entered.wait(), 3)
         task.cancel()
@@ -309,7 +309,7 @@ async def test_cancelling_call_delivers_cancellation_and_allows_callback_cleanup
         with pytest.raises(asyncio.CancelledError):
             await task
         await asyncio.wait_for(exited.wait(), 3)
-        assert await baml.call_int_callback_async(lambda value: value, 8) == 8
+        assert await baml.call_int_callback(lambda value: value, 8) == 8
     finally:
         release.set()
         if not task.done():
@@ -341,9 +341,9 @@ async def test_taskgroup_failure_cancels_sibling_baml_call_and_preserves_error_p
 
     with pytest.raises(ExceptionGroup) as caught:  # noqa: F821 — Python 3.11+, guarded above
         async with asyncio.TaskGroup() as group:
-            call = group.create_task(baml.call_int_callback_async(callback, 7))
+            call = group.create_task(baml.call_int_callback(callback, 7))
             group.create_task(failing())
     assert caught.value.exceptions == (failure,)
     assert call.cancelled()
     await asyncio.wait_for(exited.wait(), 3)
-    assert await baml.call_int_callback_async(lambda value: value, 8) == 8
+    assert await baml.call_int_callback(lambda value: value, 8) == 8

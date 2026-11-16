@@ -208,101 +208,66 @@ pub fn impl_facts<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     block: ImplLoc<'db>,
 ) -> ImplHeaderResolution<'db> {
-    use baml_compiler2_hir::item_data::ImplSubjectData;
     let data = baml_compiler2_hir::item_data::impl_block_data(db, block);
     let file = block.file(db);
 
     // Set when the written for-target is not an implementor (E0138); the
     // header still lowers, so the facts stay available to the IDE.
     let mut not_implementor: Option<baml_type::Ty> = None;
-    // The generic frame and for-target, normalized to the free shape.
-    let (params, param_bounds, for_ty_pattern): (Vec<ParamTy>, Vec<Vec<baml_type::Interface>>, _) =
-        match &data.subject {
-            ImplSubjectData::InClass { class, .. } => {
-                let frame = crate::lower::class_generic_frame(db, *class);
-                let class_data = baml_compiler2_hir::item_data::class_data(db, *class);
-                let ctx = crate::lower::lower_ctx_for_file(db, file).with_frame(frame.clone());
-                let bounds = class_data
-                    .generic_params
-                    .iter()
-                    .map(|declared| {
-                        declared
-                            .bounds
-                            .iter()
-                            .filter_map(|&type_ref| {
-                                crate::lower::reject_holes(&ctx.lower_type_ref_at(
-                                    &class_data.type_refs,
-                                    type_ref,
-                                    crate::lower::TypePosition::ConstraintHead,
-                                ))
-                                .as_interface()
-                            })
-                            .collect()
-                    })
-                    .collect();
-                (
-                    frame,
-                    bounds,
-                    ClosedTy::from_plain(&crate::lower::class_self_ty(db, *class)),
-                )
-            }
-            ImplSubjectData::Free {
-                for_target,
-                generics,
-            } => {
-                let frame: Vec<ParamTy> = generics
-                    .iter()
-                    .enumerate()
-                    .map(|(index, param)| {
-                        ParamTy::new(
-                            u32::try_from(index).expect("impl generic index overflow"),
-                            param.name.clone(),
-                        )
-                    })
-                    .collect();
-                let ctx = crate::lower::lower_ctx_for_file(db, file).with_frame(frame.clone());
-                let bounds = generics
-                    .iter()
-                    .map(|param| {
-                        param
-                            .bounds
-                            .iter()
-                            .filter_map(|&type_ref| {
-                                crate::lower::reject_holes(&ctx.lower_type_ref_at(
-                                    &data.type_refs,
-                                    type_ref,
-                                    crate::lower::TypePosition::ConstraintHead,
-                                ))
-                                .as_interface()
-                            })
-                            .collect()
-                    })
-                    .collect();
-                let for_ty_plain =
-                    crate::lower::reject_holes(&ctx.lower_type_ref(&data.type_refs, *for_target));
-                // E0138, decided on the LOWERED form — never the normalized
-                // one. Lowering is exactly the right amount of resolution:
-                // it applies the builtin bridges (so `Future<T>` and `E.A`
-                // are seen for what they denote) and leaves alias heads in
-                // place — the gate expands those itself
-                // (`subject_head_is_implementor`) — while leaving unions
-                // uncollapsed (so `true | false` stays a union rather than
-                // becoming the valid subject `bool`). It is the collapse
-                // that made this gate and coherence disagree.
-                //
-                // The subject is REPLACED by the Error sentinel rather than
-                // withheld: the rest of the header still lowers, so the IDE
-                // keeps a fact set to describe, while every selection path
-                // sees a diagnosed sentinel instead of a subject no value
-                // inhabits.
-                if !subject_head_is_implementor(db, &for_ty_plain) {
-                    not_implementor = Some(for_ty_plain);
-                    (frame, bounds, ClosedTy::from_plain(&baml_type::Ty::error()))
-                } else {
-                    (frame, bounds, ClosedTy::from_plain(&for_ty_plain))
-                }
-            }
-        };
+    // The generic frame and for-target. Both spellings arrive in one shape
+    // (an in-body block carries its class's generics and the class as its
+    // for-target), so this is the one path.
+    let frame: Vec<ParamTy> = data
+        .generics
+        .iter()
+        .enumerate()
+        .map(|(index, param)| {
+            ParamTy::new(
+                u32::try_from(index).expect("impl generic index overflow"),
+                param.name.clone(),
+            )
+        })
+        .collect();
+    let ctx = crate::lower::lower_ctx_for_file(db, file).with_frame(frame.clone());
+    let param_bounds: Vec<Vec<baml_type::Interface>> = data
+        .generics
+        .iter()
+        .map(|param| {
+            param
+                .bounds
+                .iter()
+                .filter_map(|&type_ref| {
+                    crate::lower::reject_holes(&ctx.lower_type_ref_at(
+                        &data.type_refs,
+                        type_ref,
+                        crate::lower::TypePosition::ConstraintHead,
+                    ))
+                    .as_interface()
+                })
+                .collect()
+        })
+        .collect();
+    let for_ty_plain =
+        crate::lower::reject_holes(&ctx.lower_type_ref(&data.type_refs, data.for_target));
+    // E0138, decided on the LOWERED form — never the normalized one.
+    // Lowering is exactly the right amount of resolution: it applies the
+    // builtin bridges (so `Future<T>` and `E.A` are seen for what they
+    // denote) and leaves alias heads in place — the gate expands those itself
+    // (`subject_head_is_implementor`) — while leaving unions uncollapsed (so
+    // `true | false` stays a union rather than becoming the valid subject
+    // `bool`). It is the collapse that made this gate and coherence disagree.
+    //
+    // The subject is REPLACED by the Error sentinel rather than withheld: the
+    // rest of the header still lowers, so the IDE keeps a fact set to
+    // describe, while every selection path sees a diagnosed sentinel instead
+    // of a subject no value inhabits.
+    let for_ty_pattern = if subject_head_is_implementor(db, &for_ty_plain) {
+        ClosedTy::from_plain(&for_ty_plain)
+    } else {
+        not_implementor = Some(for_ty_plain);
+        ClosedTy::from_plain(&baml_type::Ty::error())
+    };
+    let params = frame;
 
     // The impl's own bounds ride along: `type Output = T.Item` must
     // find `Item`'s declaring interface through `T`'s declared bound.
@@ -1427,6 +1392,14 @@ const STRUCTURAL_INTERFACES: &[(&[&str], &str, baml_type::StructuralInterface)] 
     (&[], "Hash", baml_type::StructuralInterface::Hash),
 ];
 
+/// Whether `name` is the stdlib's `baml.json.json`, never a user alias with
+/// the same spelling.
+pub(crate) fn is_json_alias(db: &dyn baml_compiler2_hir::Db, name: &DeclName) -> bool {
+    lang_roots(db).is(baml_base::LangPackage::Baml, name.root())
+        && name.namespace().iter().map(Name::as_str).eq(["json"])
+        && name.name().as_str() == "json"
+}
+
 /// Recognize trusted language declarations, never user interfaces with the same spelling.
 pub fn structural_interface(
     db: &dyn baml_compiler2_hir::Db,
@@ -2099,22 +2072,31 @@ pub(crate) fn reduce_ground_projections_plain(
 }
 
 pub(crate) fn reduce_ground_projections(db: &dyn baml_compiler2_hir::Db, ty: &Ty, fuel: u32) -> Ty {
-    if fuel == 0 || !ty.has_projection() || ty.has_infer() {
+    if ty.has_infer() {
+        return ty.clone();
+    }
+    reduce_closed_projections(&crate::facts::Facts::new(db), ty, fuel)
+}
+
+/// [`reduce_ground_projections`] against the caller's facts, node by node:
+/// each projection with no inference variable of its own reduces, whatever
+/// the rest of the type carries.
+pub(crate) fn reduce_closed_projections(facts: &crate::facts::Facts<'_>, ty: &Ty, fuel: u32) -> Ty {
+    if fuel == 0 || !ty.has_projection() {
         return ty.clone();
     }
     let rebuilt = Ty::intern(
         ty.kind()
-            .map_children(|child| reduce_ground_projections(db, child, fuel)),
+            .map_children(|child| reduce_closed_projections(facts, child, fuel)),
     );
-    if let InferTy::AssociatedTypeProjection {
-        base,
-        interface,
-        member,
-        ..
-    } = rebuilt.kind()
+    if !rebuilt.has_infer()
+        && let InferTy::AssociatedTypeProjection {
+            base,
+            interface,
+            member,
+            ..
+        } = rebuilt.kind()
     {
-        let facts = crate::facts::Facts::new(db);
-        // The entry gate (`has_infer` bail) proved the whole tree closed.
         let closed = |ty: &Ty| -> baml_type::Ty {
             baml_type::interned::ClosedTy::try_from(ty)
                 .unwrap_or_else(|_| unreachable!("gated ground: no inference variables"))
@@ -2132,14 +2114,14 @@ pub(crate) fn reduce_ground_projections(db: &dyn baml_compiler2_hir::Db, ty: &Ty
         );
         if let baml_type::normalize::ProjectionStep::Reduced(step) =
             baml_type::normalize::TypeContext::project(
-                &facts,
+                facts,
                 &plain_base,
                 &plain_interface,
                 member,
                 fuel,
             )
         {
-            return reduce_ground_projections(db, &Ty::from_plain(&step), fuel - 1);
+            return reduce_closed_projections(facts, &Ty::from_plain(&step), fuel - 1);
         }
     }
     rebuilt

@@ -166,6 +166,11 @@ function _cleanup_begin<T>(value: T) -> bool throws never {
 /// `to_json` carries the structural rendering as its default body, so
 /// `implements baml.ToJson {}` with no override is valid and renders exactly
 /// like a non-implementor.
+///
+/// To rename a key, keep unlisted keys or leave out nulls, use the `@json`
+/// attributes instead: `@json.rename`, `@json.flatten`, `@json.fallback` and
+/// `@@json.omit_nulls`. They need no override, and generated `serde` impls
+/// follow them, which an override can't offer. A class can't have both.
 interface ToJson {
     function to_json(self) -> root.json.json throws root.json.SerializationError {
         root._to_json_default(self)
@@ -208,6 +213,11 @@ function _to_json_default<T>(value: T) -> root.json.json throws root.json.Serial
 ///
 /// `from_json` is required in an explicit implementation. The compiler supplies
 /// a structural implementation when no explicit implementation applies.
+///
+/// To read a renamed key, keep unlisted keys or pick a union member by its tag,
+/// use the `@json` attributes instead: `@json.rename`, `@json.flatten` and
+/// `@json.fallback`. They need no override, and generated `serde` impls follow
+/// them, which an override can't offer. A class can't have both.
 interface FromJson {
     function from_json(j: root.json.json) -> Self throws root.json.DecodeError;
 }

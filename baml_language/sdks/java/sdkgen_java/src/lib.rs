@@ -871,11 +871,15 @@ mod tests {
                     name: BaseName::new(p_name),
                     docstring: None,
                     ty,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 })
                 .collect(),
             static_methods: Vec::new(),
             instance_methods: Vec::new(),
             origin: origin(span),
+            json_omit_nulls: false,
         })
     }
 
@@ -892,11 +896,13 @@ mod tests {
                     name: BaseName::new("Positive"),
                     docstring: None,
                     value: "Positive".to_string(),
+                    json_rename: None,
                 },
                 EnumVariant {
                     name: BaseName::new("new"),
                     docstring: None,
                     value: "new".to_string(),
+                    json_rename: None,
                 },
             ],
             origin: origin(span),
@@ -959,6 +965,7 @@ mod tests {
             static_methods,
             instance_methods,
             origin: origin(span),
+            json_omit_nulls: false,
         })
     }
 
@@ -1346,6 +1353,9 @@ mod tests {
             name: BaseName::new("_inner"),
             docstring: None,
             ty: Ty::RustType,
+            json_fallback: false,
+            json_flatten: false,
+            json_rename: None,
         }];
         pool.insert(n, Symbol::Class(class));
         let out = emit_sdk(&pool);
@@ -2372,10 +2382,14 @@ mod tests {
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: t_typevar("T"),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
                 }],
                 static_methods: Vec::new(),
                 instance_methods: vec![pair_with],
                 origin: origin(0),
+                json_omit_nulls: false,
             }),
         );
         let out = emit_sdk(&pool);
@@ -2425,6 +2439,7 @@ mod tests {
                 static_methods: vec![new_m],
                 instance_methods: Vec::new(),
                 origin: origin(0),
+                json_omit_nulls: false,
             }),
         );
         let out = emit_sdk(&pool);

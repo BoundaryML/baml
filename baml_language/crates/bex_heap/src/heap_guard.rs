@@ -320,6 +320,19 @@ impl RootHaver for HeapGuard<'_> {
     }
 }
 impl HeapGuard<'_> {
+    /// Run `f` over every holder that is still registered: each task and
+    /// engine participant not currently executing, since the guard has
+    /// stopped every one.
+    pub fn for_each_holder(&mut self, mut f: impl FnMut(&mut dyn RootHaver)) {
+        for permit_holder in self.guard.iter() {
+            if let Some(permit_holder) = permit_holder.upgrade() {
+                let ptr = permit_holder.get();
+                // SAFETY: as in `visit_roots`.
+                f(unsafe { &mut *ptr });
+            }
+        }
+    }
+
     /// Gets the number of inactive permits when the heap guard was created.
     ///
     /// This means if a permit was dropped after parking, it will still be counted.

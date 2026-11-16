@@ -138,12 +138,6 @@ class Connection {
                     },
                 };
             }
-            // unreachable: the loop returns on a matching id or throws at EOF
-            throw root.errors.NetworkFailure { status_code: null,
-                provider: `mcp/${self.server_name}`,
-                detail: `no response for ${method}`,
-                raw_body: null,
-            }
         }) catch (e) {
             baml.errors.Timeout => {
                 throw root.errors.NetworkFailure { status_code: null,

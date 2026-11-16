@@ -1,0 +1,6 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function check(v: int | string) -> bool {
+    v is int
+}

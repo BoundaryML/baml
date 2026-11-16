@@ -8,7 +8,7 @@
 2:21-22      ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 2:23-25      "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.arrow.baml
 2:26-32      "string"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml support.type.primitive.baml
-2:33-39      "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.throws.baml
+2:33-39      "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.expression.throws.baml
 2:40-45      "never"            source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml support.type.primitive.baml
 2:45-46      ";"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml punctuation.terminator.statement.baml
 3:1-2        "}"                source.baml meta.interface.baml meta.interface.body.baml punctuation.definition.block.end.baml
@@ -22,7 +22,7 @@
 6:20-21      ")"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.parameters.baml punctuation.definition.parameters.end.baml
 6:22-24      "->"               source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.arrow.baml
 6:25-31      "string"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml support.type.primitive.baml
-6:32-38      "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.throws.baml
+6:32-38      "throws"           source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml keyword.operator.expression.throws.baml
 6:39-44      "never"            source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml meta.return-type.baml support.type.primitive.baml
 6:44-45      ";"                source.baml meta.interface.baml meta.interface.body.baml meta.function.signature.baml punctuation.terminator.statement.baml
 7:1-2        "}"                source.baml meta.interface.baml meta.interface.body.baml punctuation.definition.block.end.baml
@@ -60,7 +60,7 @@
 12:3-6       "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml keyword.declaration.binding.baml
 12:7-11      "type"             source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml keyword.declaration.type-binding.baml
 12:12-13     "U"                source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml entity.name.type.parameter.baml
-12:14-21     "extends"          source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml meta.type-parameter.bounds.baml keyword.operator.extends.baml
+12:14-21     "extends"          source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml meta.type-parameter.bounds.baml keyword.operator.expression.extends.baml
 12:22-27     "Named"            source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml meta.type-parameter.bounds.baml meta.type-reference.baml entity.name.type.baml
 12:28-29     "="                source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml keyword.operator.assignment.baml
 12:30-31     "t"                source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml meta.dotted-expression.baml variable.other.readwrite.baml
@@ -73,7 +73,7 @@
 13:3-6       "let"              source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml keyword.declaration.binding.baml
 13:7-11      "type"             source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml keyword.declaration.type-binding.baml
 13:12-13     "W"                source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml entity.name.type.parameter.baml
-13:14-21     "extends"          source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml meta.type-parameter.bounds.baml keyword.operator.extends.baml
+13:14-21     "extends"          source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml meta.type-parameter.bounds.baml keyword.operator.expression.extends.baml
 13:22-27     "Named"            source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml meta.type-parameter.bounds.baml meta.type-reference.baml entity.name.type.baml
 13:28-29     "&"                source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml meta.type-parameter.bounds.baml keyword.operator.type.baml
 13:30-36     "Tagged"           source.baml meta.function.baml meta.block.function.baml meta.statement.let-type.baml meta.type-parameter.bounds.baml meta.type-reference.baml entity.name.type.baml

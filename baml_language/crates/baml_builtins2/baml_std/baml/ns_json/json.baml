@@ -7,6 +7,9 @@
 /// outside the `int` range instead.
 ///
 /// Reach an arm with `match`, or hand the value to `to<T>`.
+///
+/// A class's own JSON shape is set with the `@json` attributes: `@json.rename`,
+/// `@json.flatten`, `@json.fallback` and `@@json.omit_nulls`.
 type json = null | bool | int | bigint | float | string | json[] | map<string, json>;
 
 /// Which names a class's fields and an enum's variants go by in JSON.
@@ -268,7 +271,8 @@ function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws S
 ///
 /// A class field whose type admits `null` may be absent, and then decodes to
 /// `null`: `T?`, `unknown`, and `json` all admit it. Every other field must
-/// be present. Unrecognized keys are ignored. A recursive alias decodes as
+/// be present. Unrecognized keys are ignored, unless a `@json.flatten` field
+/// holds them. A field reads from its `@json.rename` key. A recursive alias decodes as
 /// its definition. A `float` target takes a NaN or infinite `float` as it
 /// is.
 ///
@@ -293,6 +297,11 @@ function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws S
 /// Ties go to declaration order. When the most specific candidate fails
 /// deeper in, the next one is tried. A union inside a member resolves by the
 /// same rule.
+///
+/// A union with a `@json.fallback` member reads an object by its tag instead:
+/// the fallback class's literal fields name the tag, and the member holding
+/// that value is the one, read by the next literal field when several do.
+/// Failing after that is an error. A tag value no member has is the fallback.
 ///
 /// `T` matters here in a way it does not for `from`: decoding has only the
 /// target type to go on, so a wider `T` changes the result, not just its

@@ -1,11 +1,11 @@
-//! Cloud queries preserve the CLI's public exit-code contract.
+//! Cloud queries follow the CLI's exit-code and output contract.
 use std::process::Command;
 
 use serde_json::{Value, json};
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::path};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn cancelled_cloud_query_returns_the_cancellation_exit_code() {
+async fn cancelled_cloud_query_fails() {
     let server = MockServer::start().await;
     Mock::given(path("/v1/query"))
         .respond_with(|request: &Request| {
@@ -14,7 +14,12 @@ async fn cancelled_cloud_query_returns_the_cancellation_exit_code() {
                 "queryId": body["queryId"], "status": "cancelled"
             }});
             ResponseTemplate::new(200).set_body_raw(
-                format!("{}\n{outcome}\n", json!({"columns": []})),
+                // Frames that arrive before the cancellation are not a result.
+                format!(
+                    "{}\n{}\n{outcome}\n",
+                    json!({"columns": [{"name": "value", "type": "int64"}]}),
+                    json!({"row": [1]})
+                ),
                 "application/x-ndjson",
             )
         })
@@ -27,7 +32,7 @@ async fn cancelled_cloud_query_returns_the_cancellation_exit_code() {
             "--agent-skill-check",
             "off",
             "query",
-            "--format",
+            "--output-format",
             "json",
             "SELECT 1",
         ])
@@ -40,9 +45,10 @@ async fn cancelled_cloud_query_returns_the_cancellation_exit_code() {
         .env_remove("BOUNDARY_PROJECT")
         .output()
         .unwrap();
-    assert_eq!(output.status.code(), Some(4), "{output:?}");
-    let result: Value = serde_json::from_slice(&output.stdout)
-        .unwrap_or_else(|error| panic!("{error}: {output:?}"));
-    assert_eq!(result["outcome"]["status"], "cancelled");
-    assert_eq!(result["rows"], json!([]));
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(output.stdout.is_empty(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("cancelled"),
+        "{output:?}"
+    );
 }

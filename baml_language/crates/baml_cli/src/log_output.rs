@@ -41,11 +41,33 @@ impl LogLevel {
 pub(crate) struct LogOutput {
     level: LogLevel,
     command: &'static str,
+    stream: Stream,
+}
+
+#[derive(Clone, Copy)]
+enum Stream {
+    Stdout,
+    Stderr,
 }
 
 impl LogOutput {
-    pub(crate) fn new(level: LogLevel, command: &'static str) -> Self {
-        Self { level, command }
+    /// Logs of a program whose own output is the command's stdout (`run`).
+    pub(crate) fn passthrough(level: LogLevel, command: &'static str) -> Self {
+        Self {
+            level,
+            command,
+            stream: Stream::Stdout,
+        }
+    }
+
+    /// Logs of a command whose stdout carries a result (`test`): they are
+    /// status, so they go to stderr.
+    pub(crate) fn status(level: LogLevel, command: &'static str) -> Self {
+        Self {
+            level,
+            command,
+            stream: Stream::Stderr,
+        }
     }
 
     pub(crate) fn call_context(
@@ -74,7 +96,10 @@ impl LogOutput {
                     .as_deref()
                     .unwrap_or("info")
                     .to_ascii_uppercase();
-                println!("[{level}] {}", log.body);
+                match self.stream {
+                    Stream::Stdout => println!("[{level}] {}", log.body),
+                    Stream::Stderr => eprintln!("[{level}] {}", log.body),
+                }
             }
         }
         for failure in report.failures {
@@ -134,11 +159,11 @@ mod tests {
 
     #[test]
     fn call_context_creates_producer_only_when_enabled() {
-        let (_, producer) = LogOutput::new(LogLevel::Off, "test")
+        let (_, producer) = LogOutput::status(LogLevel::Off, "test")
             .call_context(FunctionCallContextBuilder::new(CallId::next()));
         assert!(producer.is_none());
 
-        let (_, producer) = LogOutput::new(LogLevel::Info, "test")
+        let (_, producer) = LogOutput::status(LogLevel::Info, "test")
             .call_context(FunctionCallContextBuilder::new(CallId::next()));
         assert!(producer.is_some());
     }

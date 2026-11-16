@@ -1,11 +1,11 @@
 //! Roundtrip coverage for `baml_sdk::aliases` — type aliases (incl. recursive).
 
-use baml_sdk::aliases::round_trip_string_list;
+use baml_sdk::aliases::round_trip_string_list_sync;
 
 #[test]
 fn test_aliases_round_trip_string_list() {
     assert_eq!(
-        round_trip_string_list(vec!["a".to_string(), "b".to_string()]).unwrap(),
+        round_trip_string_list_sync(vec!["a".to_string(), "b".to_string()]).unwrap(),
         vec!["a".to_string(), "b".to_string()]
     );
 }

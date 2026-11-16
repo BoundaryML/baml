@@ -5,10 +5,10 @@ import pytest
 from baml_bridge import BamlError
 from baml_sdk.ai.errors import InvalidResponse, ParseFailed, ProviderError
 from baml_sdk.ai_error_test import (
+    ExtractInt_stream_sync,
     ExtractInt_stream,
-    ExtractInt_stream_async,
-    ThrowInvalidResponse,
-    ThrowProviderError,
+    ThrowInvalidResponse_sync,
+    ThrowProviderError_sync,
 )
 
 
@@ -16,7 +16,7 @@ from baml_sdk.ai_error_test import (
 def test_invalid_response_preserves_wire_diagnostics():
     """Verify InvalidResponse retains wire diagnostics in a Python BamlError."""
     with pytest.raises(BamlError) as raised:
-        ThrowInvalidResponse()
+        ThrowInvalidResponse_sync()
     assert raised.value.class_name == "ai.errors.InvalidResponse"
     failure = raised.value.value
     assert isinstance(failure, InvalidResponse)
@@ -30,7 +30,7 @@ def test_invalid_response_preserves_wire_diagnostics():
 def test_provider_error_preserves_native_error_metadata():
     """Verify ProviderError retains native codes and body without a fake status."""
     with pytest.raises(BamlError) as raised:
-        ThrowProviderError()
+        ThrowProviderError_sync()
     assert raised.value.class_name == "ai.errors.ProviderError"
     failure = raised.value.value
     assert isinstance(failure, ProviderError)
@@ -44,9 +44,9 @@ def test_provider_error_preserves_native_error_metadata():
 # SDK_PARITY_LINT(skip): exercises Python BamlError and generated Pydantic payloads
 def test_stream_schema_failure_is_parse_failed():
     """Verify synchronous stream validation exposes ParseFailed and its diagnostic."""
-    stream = ExtractInt_stream()
+    stream = ExtractInt_stream_sync()
     with pytest.raises(BamlError) as raised:
-        stream.final()
+        stream.final_sync()
     assert raised.value.class_name == "ai.errors.ParseFailed"
     failure = raised.value.value
     assert isinstance(failure, ParseFailed)
@@ -58,9 +58,9 @@ def test_stream_schema_failure_is_parse_failed():
 # SDK_PARITY_LINT(skip): exercises the Python asyncio streaming bridge
 async def test_async_stream_schema_failure_is_parse_failed():
     """Verify asynchronous stream validation exposes ParseFailed and its diagnostic."""
-    stream = await ExtractInt_stream_async()
+    stream = await ExtractInt_stream()
     with pytest.raises(BamlError) as raised:
-        await stream.final_async()
+        await stream.final()
     assert isinstance(raised.value.value, ParseFailed)
     assert raised.value.value.raw_output == "not a number"
     assert raised.value.value.message

@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Pack the published wrapper archives from this release's compiler and hosts."""
+
+import argparse
+import os
+from pathlib import Path
+import subprocess
+import tarfile
+import tempfile
+import zipfile
+
+from baml_release_platforms import load_wrapper_targets, verify_wrapper_artifacts
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--toolchains", required=True, type=Path)
+    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--version", required=True)
+    args = parser.parse_args()
+
+    for setting in ("BAML_WRAPPER_BOUNDARY_API_KEY", "BAML_WRAPPER_BCS_PROJECT", "BAML_WRAPPER_BCS_ENVIRONMENT"):
+        if not os.environ.get(setting, "").strip():
+            parser.error(f"Missing wrapper BCS release configuration: {setting}")
+
+    toolchains = args.toolchains.resolve()
+    cli = toolchains / "toolchain-x86_64-unknown-linux-gnu/unpacked/bin/baml-cli"
+    targets = load_wrapper_targets()
+    # Validate all inputs before embedding credentials or producing archives.
+    hosts = {
+        target.triple: toolchains
+        / f"toolchain-{target.triple}/unpacked/bin/baml-pack-host{target.executable_suffix}"
+        for target in targets
+    }
+    for binary in (cli, *hosts.values()):
+        if not binary.is_file():
+            parser.error(f"Missing release toolchain executable: {binary}")
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="baml-wrapper-release-") as temporary:
+        for target in targets:
+            for variant in target.variants:
+                staging = Path(temporary) / target.triple / variant
+                binary = staging / "bin" / f"baml{target.executable_suffix}"
+                binary.parent.mkdir(parents=True)
+                command = [
+                    "python3",
+                    str(ROOT / "baml_language/wrapper/build"),
+                    "--cli",
+                    str(cli),
+                    "--pack-host",
+                    str(hosts[target.triple]),
+                    "--target",
+                    target.triple,
+                    "--version",
+                    args.version,
+                    "--output",
+                    str(binary),
+                    "--embed-telemetry",
+                    "--telemetry-project",
+                    os.environ["BAML_WRAPPER_BCS_PROJECT"],
+                    "--telemetry-environment",
+                    os.environ["BAML_WRAPPER_BCS_ENVIRONMENT"],
+                ]
+                if variant == "no-self-update":
+                    command.append("--no-self-update")
+                subprocess.run(command, check=True, cwd=ROOT)
+                # ZIP extraction does not preserve executable bits on Linux.
+                binary.chmod(0o755)
+                (staging / "LICENSE").write_bytes((ROOT / "LICENSE").read_bytes())
+                archive = args.out / target.asset_name(args.version, variant)
+                if target.executable_suffix:
+                    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
+                        output.write(binary, f"bin/baml{target.executable_suffix}")
+                        output.write(staging / "LICENSE", "LICENSE")
+                else:
+                    with tarfile.open(archive, "w:gz") as output:
+                        output.add(staging, arcname=".")
+    verify_wrapper_artifacts(args.out, args.version)
+
+
+if __name__ == "__main__":
+    main()

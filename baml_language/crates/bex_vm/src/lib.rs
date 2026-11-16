@@ -25,6 +25,8 @@ pub mod kperf;
 pub mod lang_items;
 pub mod llm_shape;
 mod model_usage;
+#[cfg(feature = "kperf")]
+pub mod op_mix;
 pub mod package_ai;
 pub mod package_baml;
 pub mod package_load;

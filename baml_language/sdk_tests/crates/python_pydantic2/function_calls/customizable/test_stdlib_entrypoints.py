@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from baml_sdk.baml.fs import exists
-from baml_sdk.baml.sys import argv
+from baml_sdk.baml.fs import exists_sync
+from baml_sdk.baml.sys import argv_sync
 
 
 def _generated_sdk_file(rel_path: str) -> str | None:
@@ -21,7 +21,7 @@ def _generated_sdk_file(rel_path: str) -> str | None:
 # program arguments, so the array is legitimately empty — the shape is what
 # this asserts.
 def test_stdlib_entrypoints_native_argv_callable_as_entry_point():
-    assert isinstance(argv(), list)
+    assert isinstance(argv_sync(), list)
 
 
 # `baml.fs.exists(path: string) -> bool` is a `$rust_io_function` →
@@ -29,7 +29,7 @@ def test_stdlib_entrypoints_native_argv_callable_as_entry_point():
 # filesystem sysop and return a bool. `.` exists in the generated fixture
 # directory on the test host.
 def test_stdlib_entrypoints_sysop_fs_exists_callable_as_entry_point():
-    assert exists(".") is True
+    assert exists_sync(".") is True
 
 
 def test_stdlib_entrypoints_compiler_intrinsics_are_not_emitted_as_entry_points():

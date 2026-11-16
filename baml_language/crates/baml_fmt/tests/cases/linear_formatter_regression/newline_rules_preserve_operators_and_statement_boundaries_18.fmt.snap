@@ -1,0 +1,9 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function example() -> int {
+    consume((x: int) -> int {
+        factory();
+        -x
+    })
+}

@@ -48,7 +48,7 @@ function HeadersAndComments() -> string {
     // Comment before header
     //## Header After Comment
 
-    /// Doc comment before header
+    // Comment before header (a `///` line documents a declaration, never a header)
     //### Header After Doc Comment
 
     x

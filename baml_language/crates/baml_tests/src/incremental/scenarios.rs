@@ -76,7 +76,7 @@ function Greet(name: string) -> string {
         |db| {
             query_semantic_index(db, file);
         },
-        &[("lex_file", 1)],
+        &[("parse_typed", 1)],
     );
 
     // Modify only the prompt (body change)
@@ -94,7 +94,7 @@ function Greet(name: string) -> string {
             query_semantic_index(db, file);
         },
         &[
-            ("lex_file", 1), // Must re-run: input text changed
+            ("parse_typed", 1), // Must re-run: input text changed
         ],
     );
 }
@@ -119,7 +119,7 @@ function OldName(x: string) -> string {
         |db| {
             query_semantic_index(db, file);
         },
-        &[("lex_file", 1)],
+        &[("parse_typed", 1)],
     );
 
     // Rename the function
@@ -136,7 +136,7 @@ function NewName(x: string) -> string {
         |db| {
             query_semantic_index(db, file);
         },
-        &[("lex_file", 1)],
+        &[("parse_typed", 1)],
     );
 }
 
@@ -165,7 +165,7 @@ class Address {
         |db| {
             query_semantic_index(db, file);
         },
-        &[("lex_file", 1)],
+        &[("parse_typed", 1)],
     );
 
     // Add a new class
@@ -191,7 +191,7 @@ class NewClass {
         |db| {
             query_semantic_index(db, file);
         },
-        &[("lex_file", 1)],
+        &[("parse_typed", 1)],
     );
 }
 
@@ -214,7 +214,7 @@ class MyClass {
         |db| {
             query_semantic_index(db, file);
         },
-        &[("lex_file", 1)],
+        &[("parse_typed", 1)],
     );
 
     // Add a comment
@@ -231,7 +231,7 @@ class MyClass {
         |db| {
             query_semantic_index(db, file);
         },
-        &[("lex_file", 1)],
+        &[("parse_typed", 1)],
     );
 }
 
@@ -277,7 +277,7 @@ class ClassA {
             query_semantic_index(db, file_b);
         },
         &[
-            ("lex_file", 0), // file_b unchanged
+            ("parse_typed", 0), // file_b unchanged
         ],
     );
 
@@ -287,7 +287,7 @@ class ClassA {
             query_semantic_index(db, file_a);
         },
         &[
-            ("lex_file", 1), // Must re-run: real file changed
+            ("parse_typed", 1), // Must re-run: real file changed
         ],
     );
 }
@@ -308,10 +308,10 @@ function Greet(name: string) -> string {
     );
 
     // First run
-    test_db.assert_executed(|db| query_semantic_index(db, file), &[("lex_file", 1)]);
+    test_db.assert_executed(|db| query_semantic_index(db, file), &[("parse_typed", 1)]);
 
     // Second run without changes - should be fully cached
-    test_db.assert_executed(|db| query_semantic_index(db, file), &[("lex_file", 0)]);
+    test_db.assert_executed(|db| query_semantic_index(db, file), &[("parse_typed", 0)]);
 }
 
 /// Test that whitespace-only changes don't unnecessarily invalidate compilation.
@@ -328,7 +328,7 @@ fn type_inference_cached_on_whitespace_change() {
     );
 
     // First run
-    test_db.assert_executed(|db| query_semantic_index(db, file), &[("lex_file", 1)]);
+    test_db.assert_executed(|db| query_semantic_index(db, file), &[("parse_typed", 1)]);
 
     // Add whitespace (blank lines at end)
     file.set_text(test_db.db_mut())
@@ -341,11 +341,11 @@ fn type_inference_cached_on_whitespace_change() {
 "##
         .to_string());
 
-    // After whitespace change: lex must re-run (input changed)
+    // After whitespace change: the parse must re-run (input changed)
     test_db.assert_executed(
         |db| query_semantic_index(db, file),
         &[
-            ("lex_file", 1), // Must re-run
+            ("parse_typed", 1), // Must re-run
         ],
     );
 }
@@ -366,7 +366,7 @@ function Greet(name: string) -> string {
     );
 
     // First run
-    test_db.assert_executed(|db| query_semantic_index(db, file), &[("lex_file", 1)]);
+    test_db.assert_executed(|db| query_semantic_index(db, file), &[("parse_typed", 1)]);
 
     // Change the return type
     file.set_text(test_db.db_mut()).to(r##"
@@ -378,7 +378,7 @@ function Greet(name: string) -> int {
     .to_string());
 
     // Signature changes must invalidate queries
-    test_db.assert_executed(|db| query_semantic_index(db, file), &[("lex_file", 1)]);
+    test_db.assert_executed(|db| query_semantic_index(db, file), &[("parse_typed", 1)]);
 }
 
 // ── Firewall queries ─────────────────────────────────────────────────────────
@@ -518,7 +518,6 @@ type ClassFingerprint = (
     Vec<baml_compiler2_hir::item_data::GenericParamData>,
     baml_compiler2_hir::type_ref::TypeRefStore,
     Vec<baml_compiler2_hir::item_data::FieldData>,
-    Vec<baml_compiler2_hir::item_data::ImplementsData>,
     baml_compiler2_hir::item_tree::ClassAttrs,
 );
 
@@ -533,7 +532,6 @@ fn class_fingerprint(
         data.generic_params.clone(),
         data.type_refs.clone(),
         data.fields.clone(),
-        data.implements.clone(),
         data.attrs.clone(),
     )
 }

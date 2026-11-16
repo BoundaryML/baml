@@ -37,7 +37,6 @@
 //! here.
 
 use baml_base::{Name, SourceFile};
-use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_ast::{Expr, ExprBody};
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -49,7 +48,7 @@ use baml_compiler2_hir::{
     },
 };
 use baml_compiler2_hir_ty::extern_loc::DefinitionRef;
-use rowan::NodeOrToken;
+use baml_syntax::token::{Ident, TokenSet as _};
 use text_size::{TextRange, TextSize};
 
 use crate::resolve::{Location, SymbolTarget, member_resolution_target, symbol_at};
@@ -140,14 +139,13 @@ fn find_item_usages(
             continue;
         }
 
-        let root = baml_compiler_parser::syntax_tree(db, sf);
-        for node_or_token in root.descendants_with_tokens() {
-            let NodeOrToken::Token(tok) = node_or_token else {
-                continue;
-            };
-            if tok.kind() != SyntaxKind::WORD || tok.text() != name_text {
+        let tree = baml_parser::typed_tree(db, sf);
+        let tokens = tree.tokens();
+        for idx in tokens.iter() {
+            if !Ident::KINDS.contains(tokens.kind(idx)) || tree.token_text(idx) != name_text {
                 continue;
             }
+            let range = tokens.range(idx);
 
             // Confirm this token resolves to the same definition — through
             // the same road goto-definition takes from it, which also names a
@@ -156,12 +154,9 @@ fn find_item_usages(
             // (`root.settings.TIMEOUT`), and at the name of a local `let`
             // that shadows the item it still sees the item, because the local
             // only comes into scope after its own statement.
-            let same = symbol_at(db, sf, tok.text_range().start()) == Some(SymbolTarget::Item(def));
+            let same = symbol_at(db, sf, range.start()) == Some(SymbolTarget::Item(def));
             if same {
-                results.push(Location {
-                    file: sf,
-                    range: tok.text_range(),
-                });
+                results.push(Location { file: sf, range });
             }
         }
     }

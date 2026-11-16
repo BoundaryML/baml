@@ -38,6 +38,7 @@ pub mod impls;
 pub mod infer;
 pub mod init_io;
 pub mod interfaces;
+pub mod json_attrs;
 pub mod layout;
 pub mod llm_output;
 pub mod lower;

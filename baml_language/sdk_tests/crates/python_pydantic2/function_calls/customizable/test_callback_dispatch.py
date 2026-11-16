@@ -19,7 +19,7 @@ async def test_callable_entry_invokes_callback():
         calls.append(value)
         return value + 1
 
-    assert await baml.call_int_callback_async(callback, 6) == 7
+    assert await baml.call_int_callback(callback, 6) == 7
     assert calls == [6]
 
 
@@ -32,7 +32,7 @@ async def test_callable_entry_waits_for_callback_completion():
         calls.append(value)
         return value + 1
 
-    assert await baml.call_int_callback_async(callback, 6) == 7
+    assert await baml.call_int_callback(callback, 6) == 7
     assert calls == [6]
 
 
@@ -49,7 +49,7 @@ async def test_concurrent_calls_keep_callback_results_independent():
         return value + 1
 
     calls = [
-        asyncio.create_task(baml.call_int_callback_async(callback, value))
+        asyncio.create_task(baml.call_int_callback(callback, value))
         for value in range(4)
     ]
     try:
@@ -71,8 +71,8 @@ async def test_completed_call_can_reuse_callback():
         calls.append(value)
         return value + 1
 
-    assert await baml.call_int_callback_async(callback, 1) == 2
-    assert await baml.call_int_callback_async(callback, 2) == 3
+    assert await baml.call_int_callback(callback, 1) == 2
+    assert await baml.call_int_callback(callback, 2) == 3
     assert calls == [1, 2]
 
 
@@ -84,7 +84,7 @@ async def test_repeated_dispatches_invoke_callback_in_order():
         calls.append(value)
         return str(value)
 
-    assert await baml.call_repeatedly_async(callback, 3) == ["0", "1", "2"]
+    assert await baml.call_repeatedly(callback, 3) == ["0", "1", "2"]
     assert calls == [0, 1, 2]
 
 
@@ -93,7 +93,7 @@ async def test_cancelled_waiter_does_not_end_host_execution():
     from baml_sdk.baml.spawn import CancelToken
 
     for late_error in (False, True):
-        ctx = CancelToken.new()
+        ctx = CancelToken.new_sync()
         entered = asyncio.Event()
         release = asyncio.Event()
         exited = asyncio.Event()
@@ -113,10 +113,10 @@ async def test_cancelled_waiter_does_not_end_host_execution():
                 raise ValueError("late host failure")
             return value + 1
 
-        pending = asyncio.create_task(baml.call_int_callback_async(callback, 6, _baml={"cancel": ctx}))
+        pending = asyncio.create_task(baml.call_int_callback(callback, 6, _baml={"cancel": ctx}))
         try:
             await asyncio.wait_for(entered.wait(), 3)
-            ctx.cancel()
+            ctx.cancel_sync()
             with pytest.raises(asyncio.CancelledError):
                 await asyncio.wait_for(pending, 3)
             assert not exited.is_set()
@@ -125,7 +125,7 @@ async def test_cancelled_waiter_does_not_end_host_execution():
             await asyncio.sleep(0)  # Let the adapter observe actual host exit.
             assert exits == [6]
             assert pending.cancelled()
-            assert await baml.call_int_callback_async(lambda value: value + 1, 7) == 8
+            assert await baml.call_int_callback(lambda value: value + 1, 7) == 8
         finally:
             release.set()
             if not pending.done():

@@ -8,9 +8,22 @@
 use std::collections::HashMap;
 
 /// A parsed INI file: ordered-insensitive map of section name → (key → value).
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct IniFile {
     sections: HashMap<String, HashMap<String, String>>,
+}
+
+/// A credentials file holds secret keys, so `Debug` shows section names only.
+impl std::fmt::Debug for IniFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Destructured so a new field has to be placed here deliberately.
+        let Self { sections } = self;
+        let mut names: Vec<&str> = sections.keys().map(String::as_str).collect();
+        names.sort_unstable();
+        f.debug_struct("IniFile")
+            .field("section_names", &names)
+            .finish()
+    }
 }
 
 impl IniFile {

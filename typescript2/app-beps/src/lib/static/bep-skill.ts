@@ -51,6 +51,30 @@ Comment types:
 - \`concern\` - Blocking issue that needs resolution
 - \`question\` - Needs clarification
 
+## BCS design proposals (BoundaryML team only)
+
+BCS proposals are Boundary Cloud system designs, kept apart from BEPs. Every \`./bep bcs\` command needs \`BCS_TOKEN\`, which a team member gets at /bcs/token on the site.
+
+\`\`\`bash
+./bep bcs pull                      # Fetch every BCS proposal into BCS/
+./bep bcs push <number> -n "note"   # Save local edits as a new version
+./bep bcs comments <number>         # Open threads, with each commented block's Markdown source
+./bep bcs reply <number> <id> "text" --agent claude   # Reply to a thread as the user's agent
+\`\`\`
+
+**When you, an agent, reply on a BCS proposal, always pass \`--agent\`**, with the first of these that is you:
+
+| \`--agent\` | Who |
+|---|---|
+| \`claude\` | Claude Code, or Claude anywhere (detected on its own in Claude Code) |
+| \`codex\` | OpenAI Codex, or ChatGPT |
+| \`gemini\` | Gemini CLI, or Gemini anywhere |
+| \`cursor\` | Cursor's agent |
+| \`copilot\` | GitHub Copilot |
+| your own short name | Any other agent, such as a team's bot (it shows with a generic icon) |
+
+The site then shows your logo next to the user's picture with "via <agent>", and Slack says "<user>'s agent replied". Without it, the reply looks as if the user typed it. Don't add your own "on behalf of" line: the label already says it. Get the user's OK before posting.
+
 ## BEP Writing Style
 
 Write like a [PEP](https://peps.python.org/) or [TC39 proposal](https://github.com/tc39/proposals).

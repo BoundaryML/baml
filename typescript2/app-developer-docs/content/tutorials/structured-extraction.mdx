@@ -35,13 +35,13 @@ baml check
 baml run extract_receipt -- --text 'Coffee x2 $3.00 each. Total $6.00.'
 ```
 
-To call it from Node.js, [generate the TypeScript SDK](/baml/bridges/typescript#generate-the-sdk), then use the async export from server-side application code:
+To call it from Node.js, [generate the TypeScript SDK](/baml/bridges/typescript#generate-the-sdk), then call the generated function from server-side application code:
 
 ```typescript
-import { extract_receipt_async } from "./baml_sdk/index.js"
+import { extract_receipt } from "./baml_sdk/index.js"
 
 export async function extractReceipt(text: string) {
-  const receipt = await extract_receipt_async(text)
+  const receipt = await extract_receipt(text)
 
   return {
     lineItems: receipt.items.length,

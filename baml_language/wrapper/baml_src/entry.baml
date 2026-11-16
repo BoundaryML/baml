@@ -1,69 +1,3 @@
-function root_help() -> null {
-    baml.io.println(
-        `
-            BAML
-
-            Usage: baml [--project <path>] <command> [args...]
-
-            Wrapper commands:
-              toolchain     Manage language toolchains
-              self-update   Update the wrapper executable
-
-            CLI commands (provided by the selected toolchain):
-              init, new, check, fmt, generate, test, run, pack, describe, query,
-              auth, feedback, ide, agent, playground, lsp, telemetry, clean, update, upgrade
-
-            Options:
-              --project <path>  Select a filesystem project
-              -h, --help       Show help
-              -V, --version    Report wrapper and selected CLI versions
-
-            Use baml help <command> for command help.
-        `,
-    );
-    null
-}
-
-function help(command: string = "") -> null {
-    let usage = match (command) {
-        "use" => "use [-g|--global] <selector>",
-        "install" => "install [<selector>] [--force]",
-        "update" => "update",
-        "status" => "status [--install] [--json]",
-        "list" => "list",
-        "uninstall" => "uninstall <version>",
-        _ => null,
-    };
-    if let usage: string = usage {
-        baml.io.println(`Usage: baml toolchain ${usage}`);
-        baml.io.println("Options: -h, --help");
-        if (command == "status") {
-            baml.io.println(
-                "Emit the active selector, concrete version, source, paths and installation state as JSON. --install installs an absent managed toolchain first.",
-            );
-        }
-        return null;
-    }
-    baml.io.println(
-        `
-            BAML toolchain management
-
-            Commands:
-              use [-g|--global] <selector>  Install if needed and select in the closest baml.toml
-                                       -g, --global selects in $BAML_HOME/config.toml instead
-              install [<selector>] [--force]
-              update
-              status [--install] [--json]
-              list
-              uninstall <version>
-
-            Selectors: canary, nightly, exact release version, or a local baml-cli path
-            Wrapper updates: baml self-update
-        `,
-    );
-    null
-}
-
 function fail(message: string) -> never throws baml.errors.InvalidArgument {
     throw baml.errors.InvalidArgument { message: message }
 }
@@ -86,17 +20,48 @@ function error_message(error: unknown) -> string {
     }
 }
 
+// Exit statuses, as the toolchain's CLI uses them.
+const EXIT_FAILURE = 1;
+
+const EXIT_USAGE = 2;
+
 function main() -> void throws never {
-    dispatch() catch (error) {
-        _ => {
-            baml.io.eprintln(`error: ${error_message(error)}`);
-            baml.sys.exit(1);
-        },
-    };
+    let argv = baml.sys.argv();
+    let args = argv.slice(2, argv.length());
+    let telemetry: WrapperTelemetry? = null;
+    let flush_executable: string? = null;
+    let internal_helper = args == [FLUSH_TELEMETRY_COMMAND] || args.at(0) == "--replace";
+    if (!internal_helper) {
+        let directory = baml.sys.current_dir() catch (error) {
+            _ => ""
+        };
+        telemetry = WrapperTelemetry.begin(args, directory);
+    }
+    defer {
+        // A rejected drain must retain its queue for a later invocation, without
+        // scheduling another helper that immediately retries the same rejection.
+        if (!internal_helper) { WrapperTelemetry.finish(telemetry, executable = flush_executable); }
+    }
+    // Retain command outcomes without recording arguments or error payloads.
+    flush_executable
+        = dispatch(telemetry, $trace = trace.span(inputs = false, output = false, error = false)) catch (error) {
+            _ => {
+                telemetry_event(telemetry, "wrapper_unhandled_error", fields = { "event_kind": "unhandled_error" });
+                baml.io.eprintln(`error: ${error_message(error)}`);
+                baml.sys.exit(
+                    if (error is root.clap.Error) {
+                        EXIT_USAGE
+                    } else {
+                        EXIT_FAILURE
+                    },
+                )
+            },
+        };
     baml.sys.exit(0);
 }
 
-function dispatch() -> null {
+// Self-update returns a copy safe for deferred telemetry delivery.
+function dispatch(telemetry: WrapperTelemetry?) -> string? {
     let argv = baml.sys.argv();
     let forwarded = argv.slice(2, argv.length());
     if (forwarded == [FLUSH_TELEMETRY_COMMAND]) {
@@ -107,54 +72,68 @@ function dispatch() -> null {
         WrapperUpdater.replace(forwarded.slice(1, forwarded.length()));
         return null;
     }
-    let paths = WrapperInvocation.parse(forwarded);
-    let args = paths.args;
-    paths.telemetry = WrapperTelemetry.begin(args, paths.directory);
-    defer { WrapperTelemetry.finish(paths.telemetry); }
-    if (args.length() == 0 || args == ["--help"] || args == ["-h"] || args == ["help"]) {
-        root_help();
-        return null;
-    }
-    if (args[0] == "help" && args.at(1) == "toolchain") {
-        paths.management(args.slice(2, args.length()).concat(["--help"]));
-        return null;
-    }
-    if (args[0] == "help" && args.at(1) == "self-update") {
-        ensure(args.length() == 2, "usage: baml help self-update");
-        baml.io.println(SELF_UPDATE_HELP);
-        return null;
-    }
-    match (args[0]) {
-        "--version" | "-V" => {
-            paths.print_version(args[0]);
+    let parsed = WrapperInvocation.parse(
+        forwarded,
+        $trace = trace.span(inputs = false, output = false, error = false),
+    );
+    let invocation = match (parsed) {
+        let display: root.clap.Error => {
+            baml.io.println(display.message);
             return null;
         },
-        "toolchain" => {
-            paths.management(args.slice(1, args.length()));
-            return null;
-        },
-        "self-update" => {
-            if (args == ["self-update", "--help"] || args == ["self-update", "-h"]) {
-                baml.io.println(SELF_UPDATE_HELP);
+        let invocation: WrapperInvocation => invocation,
+    };
+    invocation.telemetry = telemetry;
+    let matches = invocation.matches;
+    match (matches.sub) {
+        null => {
+            if (!matches.get_flag("version")) {
+                baml.io.println(ROOT_HELP);
                 return null;
             }
-            ensure(args.length() == 1, "unexpected self-update arguments");
-            WrapperUpdater.update(telemetry = paths.telemetry);
-            return null;
+            // Forward the spelling the user typed: the CLI answers to both.
+            invocation.print_version(
+                forwarded.find((arg) -> bool {
+                    arg == "-V"
+                })
+                    ?? "--version",
+            );
+            null
         },
-        _ => {},
+        let sub: root.clap.SubCommand => {
+            if (sub.matches.is_external()) {
+                let names = sub.matches.external_args();
+                // Help for a command of the CLI's is the CLI's to print.
+                if (sub.name != "help" || (names && !WRAPPER_COMMANDS.includes(names[0]))) {
+                    return invocation.launch(forwarded);
+                }
+                baml.io.println(WrapperCli.help_for(names));
+                return null;
+            }
+            match (sub.matches.sub) {
+                // `baml toolchain` or `baml self` alone: say what it can do.
+                null => {
+                    baml.io.println(WrapperCli.help_for([sub.name]));
+                    null
+                },
+                let action: root.clap.SubCommand => {
+                    // Reject a format the wrapper does not have before acting.
+                    WrapperCli.output_format(action.matches);
+                    match (sub.name) {
+                        "toolchain" => {
+                            invocation.manage(management_command(action.name, action.matches))
+                        },
+                        _ => {
+                            WrapperUpdater.update(
+                                telemetry = invocation.telemetry,
+                                $trace = trace.span(inputs = false, output = false, error = false),
+                            )
+                        },
+                    }
+                },
+            }
+        },
     }
-    let active = paths.selection();
-    let binary = active.ensure_installed(telemetry = paths.telemetry);
-    let warned = active.warn_if_outdated();
-    let refresh = spawn { active.refresh_channel() };
-    WrapperTelemetry.finish(paths.telemetry);
-    let result = baml.sys.run(binary, args = forwarded, env = { "BAML_CLI_ALLOW_DIRECT": "1" });
-    await refresh;
-    if (!warned) {
-        active.warn_if_outdated();
-    }
-    baml.sys.exit(result.exit_code)
 }
 
 function describe_selector(value: string) -> string {
@@ -186,5 +165,3 @@ function previous_selector(original: string, global: bool) -> string {
     }
     "not set"
 }
-
-const SELF_UPDATE_HELP = "baml self-update: update the wrapper executable independently of language toolchains; use baml toolchain status to check language updates";

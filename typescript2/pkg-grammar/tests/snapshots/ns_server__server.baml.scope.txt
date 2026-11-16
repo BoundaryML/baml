@@ -384,7 +384,7 @@
 66:73-75     "Io"               source.baml meta.function.baml meta.return-type.baml meta.type-reference.baml entity.name.type.baml
 66:75-76     ">"                source.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 66:77-78     "{"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.begin.baml
-67:5-10      "spawn"            source.baml meta.function.baml meta.block.function.baml meta.expression.spawn.baml keyword.operator.spawn.baml
+67:5-10      "spawn"            source.baml meta.function.baml meta.block.function.baml meta.expression.spawn.baml keyword.operator.expression.spawn.baml
 67:11-12     "{"                source.baml meta.function.baml meta.block.function.baml meta.expression.spawn.baml meta.block.code.baml punctuation.definition.block.begin.baml
 67:13-19     "handle"           source.baml meta.function.baml meta.block.function.baml meta.expression.spawn.baml meta.block.code.baml meta.function-call.baml entity.name.function.baml
 67:19-20     "("                source.baml meta.function.baml meta.block.function.baml meta.expression.spawn.baml meta.block.code.baml meta.function-call.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml

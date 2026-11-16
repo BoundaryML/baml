@@ -21,7 +21,9 @@ CASES = (
     ("transitional", "--local", "--local", 0, 0),
     ("legacy", "Usage: toolchain use VERSION", None, 0, 0),
     ("install failure", "--global", "--global", 0, 17),
+    # Wrappers through 0.2.5 fail `use --help`; ignore its output, use plainly.
     ("help failure", "--global", None, 19, 0),
+    ("help and install failure", "--global", None, 19, 17),
 )
 
 
@@ -102,14 +104,11 @@ class InstallerBootstrapTest(unittest.TestCase):
                         text=True,
                         check=False,
                     )
-                    self.assertEqual(
-                        result.returncode, help_exit or use_exit, result.stderr
-                    )
-                    expected = [["toolchain", "use", "--help"]]
-                    if not help_exit:
-                        expected.append(
-                            ["toolchain", "use", SELECTOR] + ([scope] if scope else [])
-                        )
+                    self.assertEqual(result.returncode, use_exit, result.stderr)
+                    expected = [
+                        ["toolchain", "use", "--help"],
+                        ["toolchain", "use", SELECTOR] + ([scope] if scope else []),
+                    ]
                     self.assertEqual(
                         [
                             json.loads(line)

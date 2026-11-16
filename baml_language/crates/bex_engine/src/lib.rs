@@ -104,12 +104,15 @@ pub use btel_types::ProcessStatus;
 pub use telemetry::TelemetryRecording;
 #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry_diagnostics"))]
 pub use telemetry::append_diagnostics_line;
+mod task_report;
+pub use task_report::{StuckTask, TaskReport, Waiting, WaitsOn};
 mod telemetry_network;
 mod telemetry_state;
 pub mod trace_heap;
 mod trace_value_encode;
 use std::{
     collections::{HashMap, VecDeque},
+    num::NonZeroU64,
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{
         Arc, Mutex,
@@ -187,28 +190,51 @@ impl Drop for GcCheckGuard<'_> {
     }
 }
 
-/// Sets the VM park request flag for the lifetime of a pending GC park request.
+/// The flag every VM polls to pause at its next safepoint, raised while any
+/// request to pause every task is open. The requests are counted, so one
+/// ending (a task report that gave up, say) cannot lower the flag while a
+/// collection still waits.
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Default)]
+struct ParkFlag {
+    raised: Arc<AtomicBool>,
+    open_requests: std::sync::Mutex<usize>,
+}
+
+/// One open request on a [`ParkFlag`], for the lifetime of a pending park.
 ///
 /// In particular, dropping the future returned by [`BexEngine::collect_garbage`]
 /// while it is waiting for active heap permits must not leave every VM believing
 /// that a park is still requested.
 #[cfg(not(target_arch = "wasm32"))]
 struct ParkRequestGuard {
-    park_requested: Arc<AtomicBool>,
+    flag: Arc<ParkFlag>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl ParkRequestGuard {
-    fn new(park_requested: Arc<AtomicBool>) -> Self {
-        park_requested.store(true, Ordering::Relaxed);
-        Self { park_requested }
+    fn new(flag: Arc<ParkFlag>) -> Self {
+        let mut open = flag
+            .open_requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *open += 1;
+        flag.raised.store(true, Ordering::Relaxed);
+        drop(open);
+        Self { flag }
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl Drop for ParkRequestGuard {
     fn drop(&mut self) {
-        self.park_requested.store(false, Ordering::Relaxed);
+        let mut open = self
+            .flag
+            .open_requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *open -= 1;
+        self.flag.raised.store(*open > 0, Ordering::Relaxed);
     }
 }
 
@@ -1036,6 +1062,18 @@ type ExtractedEnumDefinitions = (
     indexmap::IndexMap<::sys_types::DefKey, Vec<String>>,
 );
 
+/// The task id every `$init` VM runs under, and any VM that runs no code. It
+/// owns the `baml.sync.atomic` keys `$init`'s initializers take. `$init` VMs run
+/// one after another, before any other task exists, so they never contend and
+/// can share one id. Reserved outside the counter that numbers every other
+/// task, which starts at 1.
+const INIT_TASK: NonZeroU64 = NonZeroU64::MAX;
+
+/// How long [`BexEngine::task_report`] waits for every task to pause. Running
+/// tasks reach a safepoint quickly; only one busy in native code holds out.
+#[cfg(not(target_arch = "wasm32"))]
+const TASK_REPORT_PAUSE_LIMIT: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// The async runtime that drives VM execution.
 ///
 /// `BexEngine` is the main entry point for executing BAML programs.
@@ -1101,7 +1139,7 @@ type ExtractedEnumDefinitions = (
 pub struct BexEngine {
     // Test-only observation of boundary calls, including duplicates. No production sink.
     #[cfg(test)]
-    completed_threads: std::sync::Mutex<Vec<(u64, bex_vm::telemetry::InvocationOutcome)>>,
+    completed_threads: std::sync::Mutex<Vec<(NonZeroU64, bex_vm::telemetry::InvocationOutcome)>>,
     process_euid: ProcessEuid,
     launch_context: btel_types::context::Context,
     /// A panic escaped some root call: how a host that fails because of it
@@ -1174,7 +1212,7 @@ pub struct BexEngine {
     checking_gc: AtomicBool,
     /// Used to notify long-running threads that they should park the VM even if they aren't at a typical yield point.
     #[cfg(not(target_arch = "wasm32"))]
-    park_requested: Arc<AtomicBool>,
+    park_requested: Arc<ParkFlag>,
 
     /// Map of active function calls by ID.
     active_calls: Mutex<HashMap<CallId, ActiveCall>>,
@@ -1203,6 +1241,11 @@ pub struct BexEngine {
     dynamic_dispatch: Arc<bex_vm::package_load::DynDispatchTables>,
     /// Weak-table forwarding/sweep participant registered for every GC.
     _dynamic_dispatch_permit: bex_heap::InactiveHeapPermit<bex_vm::package_load::DynDispatchRoot>,
+
+    /// The `baml.sync.atomic` locks every VM of this engine shares.
+    monitors: Arc<bex_vm_types::MonitorTable>,
+    /// Forwards the lock table's keys on every GC.
+    _monitors_permit: bex_heap::InactiveHeapPermit<bex_vm::package_baml::MonitorRoot>,
 
     /// Builtin `baml.errors.*` / `baml.panics.*` class pointers, resolved once
     /// from `packages` and shared with every spawned VM (each `BexVm` would
@@ -1911,10 +1954,11 @@ impl BexEngine {
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
-        // Box every reachable `ConstValue::Float` into a compile-time
-        // `Object::Float` (floats can no longer live inline in `Value`).
-        // `bytecode.globals` are rewritten further down, during the
-        // `ConstValue` → `Value` conversion, using the returned index map.
+        // Box every reachable `ConstValue::Float` that has no inline `Value`
+        // encoding (NaN, ±inf, extreme magnitudes) into a compile-time
+        // `Object::Float`. `bytecode.globals` are rewritten further down,
+        // during the `ConstValue` → `Value` conversion, using the returned
+        // index map.
         let float_indices = bex_vm_types::types::box_compile_time_floats(
             &mut compile_time_objects,
             &bytecode.globals,
@@ -2036,13 +2080,14 @@ impl BexEngine {
             pending_globals[slot] = true;
         }
 
-        // Float globals were redirected to compile-time Object::Float entries
-        // by the boxing pre-pass above.
+        // Float globals with no inline encoding were redirected to
+        // compile-time Object::Float entries by the boxing pre-pass above; the
+        // rest resolve inline in `to_value`.
         let globals_vec: Vec<Value> = bytecode
             .globals
             .into_iter()
             .map(|cv| match cv {
-                bex_vm_types::ConstValue::Float(f) => {
+                bex_vm_types::ConstValue::Float(f) if float_indices.contains_key(&f.to_bits()) => {
                     let idx = float_indices[&f.to_bits()];
                     Value::object(heap.compile_time_ptr(idx))
                 }
@@ -2054,7 +2099,10 @@ impl BexEngine {
         let mut globals_pool = GlobalPool::from_vec(globals_vec);
 
         #[cfg(not(target_arch = "wasm32"))]
-        let park_requested = Arc::new(AtomicBool::new(false));
+        let park_requested = Arc::new(ParkFlag::default());
+
+        // Every VM shares the `baml.sync.atomic` lock table, `$init`'s too.
+        let monitors = Arc::new(bex_vm_types::MonitorTable::new());
 
         let telemetry = auto_telemetry_level
             .map(|auto_level| {
@@ -2132,13 +2180,15 @@ impl BexEngine {
                 // `StoreGlobal`s.
                 VmGlobals::Owned(std::mem::take(&mut globals_pool)),
                 #[cfg(not(target_arch = "wasm32"))]
-                Arc::clone(&park_requested),
+                Arc::clone(&park_requested.raised),
                 Arc::clone(&argv),
                 Arc::clone(&packages),
                 Arc::clone(&dynamic_dispatch),
                 Arc::clone(&error_class_ptrs),
                 Arc::clone(&panic_class_ptrs),
                 Arc::clone(&stdlib_heads),
+                Arc::clone(&monitors),
+                INIT_TASK,
                 EngineTelemetry::new_root(telemetry.as_ref()),
                 trace_scope,
             );
@@ -2298,6 +2348,10 @@ impl BexEngine {
             &heap_permit_manager,
             bex_vm::package_load::DynDispatchRoot::new(Arc::clone(&dynamic_dispatch)),
         );
+        let monitors_permit = permit_before_any_collector(
+            &heap_permit_manager,
+            bex_vm::package_baml::MonitorRoot::new(Arc::clone(&monitors)),
+        );
 
         // Build a default RuntimeIo from the SysOps table with an empty context.
         // This is replaced per-call in execute_sys_op with a live context that
@@ -2382,6 +2436,8 @@ impl BexEngine {
             packages,
             dynamic_dispatch,
             _dynamic_dispatch_permit: dynamic_dispatch_permit,
+            monitors,
+            _monitors_permit: monitors_permit,
             error_class_ptrs,
             panic_class_ptrs,
             stdlib_heads,
@@ -2450,8 +2506,9 @@ impl BexEngine {
         self.heap.function_metadata(active.proof(), id)
     }
 
-    fn next_bex_thread_id(&self) -> BexThreadId {
-        BexThreadId(self.next_thread_id.fetch_add(1, Ordering::Relaxed))
+    fn next_bex_thread_id(&self) -> NonZeroU64 {
+        NonZeroU64::new(self.next_thread_id.fetch_add(1, Ordering::Relaxed))
+            .expect("thread ids start at 1 and do not wrap")
     }
 
     /// Pre-extract LLM function metadata from heap objects.
@@ -2940,12 +2997,15 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             {
                 if past_deadline() {
-                    // Deadline reached: cancel cooperatively, give producers
-                    // one bounded window to settle, then force-settle the
-                    // rest so the drain below empties and shutdown completes.
+                    // Deadline reached: note where each task is while it
+                    // still is there, then cancel cooperatively, give
+                    // producers one bounded window to settle, and force-settle
+                    // the rest so the drain below empties and shutdown
+                    // completes.
+                    let report = self.task_report().await.unwrap_or_default();
                     let leaks = self
                         .futures
-                        .cancel_pending_futures(&self.heap_permit_manager)
+                        .cancel_pending_futures(&self.heap_permit_manager, &report)
                         .await;
                     let _ = tokio::time::timeout(CANCEL_SETTLE_GRACE, wait).await;
                     let forced = self
@@ -3112,7 +3172,8 @@ impl BexEngine {
         // converter, which reads the program through a VM.
         let permit = self.heap_permit_manager.new_permit(()).await;
         let active = permit.acquire().await;
-        let vm = self.new_vm(None);
+        // Runs no code, so it never holds a key: the reserved id is enough.
+        let vm = self.new_vm(INIT_TASK, None);
         let errors: Vec<_> = pending
             .into_iter()
             .map(|error| {
@@ -3180,6 +3241,99 @@ impl BexEngine {
     /// Statistics about the collection (live count, collected count, etc.)
     pub async fn collect_garbage(self: &Arc<Self>) -> bex_heap::GcStats {
         self.collect_garbage_with_reason("explicit").await
+    }
+
+    /// Every unfinished task: its stack, what it waits for, and each cycle of
+    /// tasks waiting on each other. Stops every task for the moment it takes,
+    /// as a collection does, so call it from outside a task: a caller holding
+    /// a heap permit would wait for itself. `None` when some task could not be
+    /// paused within two seconds (one busy in native code).
+    pub async fn task_report(self: &Arc<Self>) -> Option<TaskReport> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            tokio::time::timeout(TASK_REPORT_PAUSE_LIMIT, self.task_report_unbounded())
+                .await
+                .ok()
+        }
+        // No limit on one thread: a suspended task has given its permit back
+        // (collection relies on the same), and a task busy in native code
+        // holds the only thread, so no timer could fire anyway.
+        #[cfg(target_arch = "wasm32")]
+        {
+            Some(self.task_report_unbounded().await)
+        }
+    }
+
+    /// [`Self::task_report`] for a caller that is itself a task, parked in a
+    /// sys-op. The report is built on a task of its own: if the caller is
+    /// cancelled while it waits, its unpolled future must not keep a request
+    /// to pause every task queued ahead of the caller's own return.
+    async fn task_report_for_task(self: &Arc<Self>) -> TaskReport {
+        let (send, receive) = tokio::sync::oneshot::channel();
+        let engine = Arc::clone(self);
+        let build = async move {
+            let _ = send.send(engine.task_report().await.unwrap_or_default());
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        tokio::spawn(build);
+        #[cfg(target_arch = "wasm32")]
+        wasm_bindgen_futures::spawn_local(build);
+        receive.await.unwrap_or_default()
+    }
+
+    /// The report itself; [`Self::task_report`] bounds how long it may wait.
+    async fn task_report_unbounded(self: &Arc<Self>) -> TaskReport {
+        #[cfg(not(target_arch = "wasm32"))]
+        let park_request_guard = ParkRequestGuard::new(Arc::clone(&self.park_requested));
+        let mut heap_guard = self.heap_permit_manager.request_park().await;
+        #[cfg(not(target_arch = "wasm32"))]
+        drop(park_request_guard);
+        let mut seen = Vec::new();
+        let mut origins = HashMap::new();
+        heap_guard.for_each_holder(|holder| {
+            let Some(holder) = holder.as_any_mut() else {
+                return;
+            };
+            if let Some(thread) = holder.downcast_mut::<BexThread>() {
+                seen.push(task_report::SeenTask {
+                    id: thread.vm.thread_id,
+                    settles: thread.settles_future,
+                    parked: thread.parked.clone(),
+                    frames: thread.vm.stack_trace(),
+                });
+            } else if let Some(futures) = holder.downcast_mut::<future::FutureManagerInner>() {
+                origins.extend(futures.origins());
+            }
+        });
+        let blocked_by = self.monitors.blocked_by();
+        drop(heap_guard);
+        TaskReport::build(seen, &origins, &blocked_by)
+    }
+
+    /// `baml.future._task_stack` and `_task_report`: where the task settling
+    /// a future is, and what holds it up. Reading other tasks pauses every
+    /// task, which the caller's own permit would prevent, so it is answered
+    /// as an async operation: the event loop releases that permit first.
+    fn answer_task_query(self: &Arc<Self>, op: SysOp, args: &[BexExternalValue]) -> SysOpResult {
+        let future = match args.first() {
+            Some(BexExternalValue::Int(id)) => usize::try_from(*id).ok().map(FutureId::from_usize),
+            _ => None,
+        };
+        let engine = Arc::clone(self);
+        SysOpResult::Async(Box::pin(async move {
+            let report = match future {
+                Some(_) => engine.task_report_for_task().await,
+                None => TaskReport::default(),
+            };
+            Ok(if op == SysOp::BamlFutureTaskStack {
+                future
+                    .and_then(|future| report.task_settling(future))
+                    .map_or(BexExternalValue::Null, StuckTask::stack_trace_value)
+            } else {
+                let held_up = future.map(|future| report.holding_up(future));
+                BexExternalValue::String(held_up.unwrap_or_default().to_string().into())
+            })
+        }))
     }
 
     async fn collect_garbage_with_reason(
@@ -3767,35 +3921,50 @@ impl BexEngine {
         cancel: CancellationToken,
         inherited: Option<&InheritedInvocationState>,
     ) -> ActiveHeapPermit<BexThread> {
-        let mut vm = self.new_vm(match inherited.and_then(|state| state.ancestry.as_ref()) {
-            Some(ancestry) => EngineTelemetry::new_child(self.telemetry.as_ref(), Some(ancestry)),
-            None => EngineTelemetry::new_root(self.telemetry.as_ref()),
-        });
+        let mut vm = self.new_vm(
+            self.next_bex_thread_id(),
+            match inherited.and_then(|state| state.ancestry.as_ref()) {
+                Some(ancestry) => {
+                    EngineTelemetry::new_child(self.telemetry.as_ref(), Some(ancestry))
+                }
+                None => EngineTelemetry::new_root(self.telemetry.as_ref()),
+            },
+        );
         // BEP-034: wrap the root VM in a `BexThread` from the outset so the
         // permit's `RootHaver` is the thread (delegating to the inner VM).
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         vm.set_root_context(self.launch_context.clone());
-        vm.thread_id = self.next_bex_thread_id().0;
         let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
-        inactive.acquire().await
+        let mut permit = inactive.acquire().await;
+        // A callback a sys-op runs for its caller, such as a server's request
+        // handler, is a spawned future: its body runs from here. Unmarked, it
+        // would record its start at its completion, as if cancelled unstarted.
+        permit.vm.mark_telemetry_running();
+        permit
     }
 
-    /// A VM over this engine's heap and program, running nothing, recording
-    /// into `telemetry`.
-    fn new_vm(&self, telemetry: Option<bex_vm::telemetry::TelemetryState>) -> BexVm {
+    /// A VM over this engine's heap and program for task `thread_id`, running
+    /// nothing, recording into `telemetry`.
+    fn new_vm(
+        &self,
+        thread_id: NonZeroU64,
+        telemetry: Option<bex_vm::telemetry::TelemetryState>,
+    ) -> BexVm {
         // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
         BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
             #[cfg(not(target_arch = "wasm32"))]
-            Arc::clone(&self.park_requested),
+            Arc::clone(&self.park_requested.raised),
             Arc::clone(&self.argv),
             Arc::clone(&self.packages),
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.stdlib_heads),
+            Arc::clone(&self.monitors),
+            thread_id,
             telemetry,
             self.trace_scope,
         )
@@ -5247,7 +5416,7 @@ impl BexEngine {
         let call = bex_events::run::ThreadRef {
             process_euid: self.process_euid,
             engine_id: self.engine_id,
-            thread_id: BexThreadId(thread.vm.thread_id),
+            thread_id: BexThreadId(thread.vm.thread_id.get()),
         };
         capture
             .logger
@@ -5292,6 +5461,7 @@ impl BexEngine {
             ValueKind::Null => "null".to_string(),
             ValueKind::Bool(value) => value.to_string(),
             ValueKind::Int(value) => value.to_string(),
+            ValueKind::Float(value) => value.to_string(),
             ValueKind::OmittedArg => "<omitted argument>".to_string(),
             ValueKind::Object(ptr) => match unsafe { ptr.get() } {
                 Object::String(value) => value.to_string(),
@@ -5540,6 +5710,7 @@ impl BexEngine {
         self: &Arc<Self>,
         active: &mut Option<ActiveHeapPermit<BexThread>>,
         cancel: &TaskCancel,
+        reason: task_report::Parked,
         wait: impl std::future::Future<Output = T>,
     ) -> (Park<T>, Option<bex_vm::telemetry::ClockDuration>) {
         use bex_vm::telemetry::{ClockDuration, ClockInstant};
@@ -5553,6 +5724,7 @@ impl BexEngine {
         }
 
         let mut thread = active.take().expect("active execution permit");
+        thread.parked = Some(reason);
         let fired_at_park = cancel.is_cancelled();
         let shielded_at_park = fired_at_park && thread.vm_thread_is_shielded();
         let telemetry_wait = thread.vm.take_telemetry_wait().map(|(frame, start)| {
@@ -5596,6 +5768,7 @@ impl BexEngine {
             }
         };
         let thread = active.insert(thread);
+        thread.parked = None;
         let observed = telemetry_wait.is_some().then_some(elapsed);
         thread
             .vm
@@ -5743,7 +5916,7 @@ impl BexEngine {
         } else {
             cancel.child(linked)
         };
-        let child_thread_id = self.next_bex_thread_id().0;
+        let child_thread_id = self.next_bex_thread_id();
         // Provenance for shutdown leak reports: the written spawn
         // name when there is one, else the function this spawn
         // expression appears in.
@@ -5844,7 +6017,7 @@ impl BexEngine {
         name: Option<String>,
         call_id: CallId,
         future_id: FutureId,
-        thread_id: u64,
+        thread_id: NonZeroU64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         context: btel_types::context::Context,
         hook_suppression: bool,
@@ -5885,7 +6058,7 @@ impl BexEngine {
         name: Option<String>,
         call_id: CallId,
         future_id: FutureId,
-        thread_id: u64,
+        thread_id: NonZeroU64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         context: btel_types::context::Context,
         hook_suppression: bool,
@@ -5912,17 +6085,18 @@ impl BexEngine {
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
             #[cfg(not(target_arch = "wasm32"))]
-            Arc::clone(&self.park_requested),
+            Arc::clone(&self.park_requested.raised),
             Arc::clone(&self.argv),
             Arc::clone(&self.packages),
             Arc::clone(&self.dynamic_dispatch),
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.stdlib_heads),
+            Arc::clone(&self.monitors),
+            thread_id,
             EngineTelemetry::new_child(self.telemetry.as_ref(), telemetry.as_ref()),
             self.trace_scope,
         );
-        child_vm.thread_id = thread_id;
         if let Some(name) = &name {
             child_vm.set_telemetry_thread_name(name);
         }
@@ -5975,6 +6149,7 @@ impl BexEngine {
                 return;
             };
             // Admitted: the body runs from here, not from the spawn.
+            permit.parked = None;
             permit.vm.mark_telemetry_running();
 
             match engine
@@ -6164,7 +6339,7 @@ impl BexEngine {
                         // cancellation it received): per BEP-034 it runs to
                         // completion and its value stands, for a root call as
                         // for a spawned child.
-                        // A heap-boxed float is no handle: a function declared
+                        // A float (inline, or boxed) is no handle: a function declared
                         // `-> float` (or `-> float | ...`, `-> float?`) hands the
                         // host an inline `BexExternalValue::Float`, through the
                         // typed converter so the declared type's shape (a union
@@ -6435,7 +6610,14 @@ impl BexEngine {
                                 // before touching VM state.
 
                                 thread.vm.begin_sys_op_telemetry_wait();
-                                let (parked, waited) = self.park(&mut active, cancel, fut).await;
+                                let (parked, waited) = self
+                                    .park(
+                                        &mut active,
+                                        cancel,
+                                        task_report::Parked::SysOp(operation),
+                                        fut,
+                                    )
+                                    .await;
                                 thread = active.as_mut().expect("active execution permit");
                                 if let Some(waited) = waited {
                                     thread.vm.record_sysop_time(waited);
@@ -6618,7 +6800,7 @@ impl BexEngine {
                         let gc_requested = self.heap.should_gc();
                         #[cfg(not(target_arch = "wasm32"))]
                         let gc_requested =
-                            gc_requested || self.park_requested.load(Ordering::Relaxed);
+                            gc_requested || self.park_requested.raised.load(Ordering::Relaxed);
                         if gc_requested {
                             let resumed = self
                                 .gc_safepoint(active.take().expect("active execution permit"))
@@ -6673,7 +6855,14 @@ impl BexEngine {
                         // itself is cancelled (cascade only saves us when the
                         // awaited future is a descendant whose token derives
                         // from ours).
-                        let (parked, _) = self.park(&mut active, cancel, future).await;
+                        let (parked, _) = self
+                            .park(
+                                &mut active,
+                                cancel,
+                                task_report::Parked::Await(future_id),
+                                future,
+                            )
+                            .await;
                         thread = active.as_mut().expect("active execution permit");
                         match parked {
                             Park::Cancelled => {
@@ -6754,7 +6943,14 @@ impl BexEngine {
                                 r
                             })
                         };
-                        let (parked, _) = self.park(&mut active, cancel, first_settled).await;
+                        let (parked, _) = self
+                            .park(
+                                &mut active,
+                                cancel,
+                                task_report::Parked::AwaitAny(future_ids),
+                                first_settled,
+                            )
+                            .await;
                         thread = active.as_mut().expect("active execution permit");
                         match parked {
                             Park::Cancelled => {
@@ -6892,6 +7088,9 @@ impl BexEngine {
         runtime_schema: Option<&RuntimeSchemaOverlay>,
         network: Option<sys_types::network::NetworkContext>,
     ) -> SysOpResult {
+        if matches!(op, SysOp::BamlFutureTaskStack | SysOp::BamlFutureTaskReport) {
+            return self.answer_task_query(op, args);
+        }
         if op == SysOp::BamlSysCollectGarbage {
             // A collection cannot run while this VM holds its active heap
             // permit. Returning an async operation makes the event loop release
@@ -7995,19 +8194,16 @@ mod concurrent_tests {
     #[tokio::test]
     async fn cancelling_pending_gc_park_request_clears_vm_flag() {
         use std::{
-            sync::{
-                Arc,
-                atomic::{AtomicBool, Ordering},
-            },
+            sync::{Arc, atomic::Ordering},
             time::Duration,
         };
 
-        use super::ParkRequestGuard;
+        use super::{ParkFlag, ParkRequestGuard};
         use crate::HeapPermitManager;
 
         let permit_manager = Arc::new(HeapPermitManager::new());
         let active_permit = permit_manager.new_permit(()).await.acquire().await;
-        let park_requested = Arc::new(AtomicBool::new(false));
+        let park_requested = Arc::new(ParkFlag::default());
 
         let request = {
             let permit_manager = Arc::clone(&permit_manager);
@@ -8020,7 +8216,7 @@ mod concurrent_tests {
         };
 
         tokio::time::timeout(Duration::from_secs(1), async {
-            while !park_requested.load(Ordering::Relaxed) {
+            while !park_requested.raised.load(Ordering::Relaxed) {
                 tokio::task::yield_now().await;
             }
         })
@@ -8037,7 +8233,7 @@ mod concurrent_tests {
             .expect_err("aborted GC request should not complete normally");
         assert!(join_error.is_cancelled());
         assert!(
-            !park_requested.load(Ordering::Relaxed),
+            !park_requested.raised.load(Ordering::Relaxed),
             "cancelling the GC request must clear the VM park flag"
         );
 
@@ -8191,6 +8387,7 @@ mod type_identity_tests {
                 generic_param_count: 0,
                 owner: bex_vm_types::types::Owner::anonymous(),
                 telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                redact: false,
             })));
         let head = bex_vm_types::TypeHead::new(class, tag);
         let original = thread.vm.alloc_type(bex_vm_types::types::TypeValue::new(
@@ -8316,6 +8513,7 @@ mod type_identity_tests {
                     generic_param_count: 0,
                     owner: bex_vm_types::types::Owner::anonymous(),
                     telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                    redact: false,
                 })));
         let original = source_thread
             .vm

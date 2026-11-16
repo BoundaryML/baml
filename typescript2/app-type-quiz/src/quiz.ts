@@ -15,16 +15,16 @@
 
 import {
   type Answered,
-  adaptive_json,
-  answer_case,
-  describe_model,
+  adaptive_json_sync,
+  answer_case_sync,
+  describe_model_sync,
   engine,
-  fresh_profile,
+  fresh_profile_sync,
   type Given,
   Given as GivenClass,
   type Next,
-  next_prompt,
-  replay as replayAnswers,
+  next_prompt_sync,
+  replay_sync as replayAnswers,
   type Taken,
   Taken as TakenClass,
 } from '@quiz/sdk';
@@ -100,7 +100,7 @@ export function taken(item: string, seed: bigint, said: Given): Taken {
 export type KnobValues = ConstructorParameters<typeof engine.Knobs>[0];
 
 export function defaultKnobs(): Knobs {
-  return engine.default_knobs();
+  return engine.default_knobs_sync();
 }
 
 /**
@@ -110,7 +110,7 @@ export function defaultKnobs(): Knobs {
  * that panics outside them.
  */
 export function knobsFault(values: KnobValues): string | null {
-  return engine.knobs_fault(knobsFrom(values));
+  return engine.knobs_fault_sync(knobsFrom(values));
 }
 
 export function knobsFrom(values: KnobValues): Knobs {
@@ -124,11 +124,11 @@ export function knobValues(knobs: Knobs): KnobValues {
 
 /** What an answer is worth under `knobs`: right, wrong, and not sure. */
 export function pointsOf(knobs: Knobs): Points {
-  return engine.points(knobs);
+  return engine.points_sync(knobs);
 }
 
 export function freshProfile(): Profile {
-  return fresh_profile();
+  return fresh_profile_sync();
 }
 
 /** The profile every answer in `history` leads to, from nothing. */
@@ -138,7 +138,7 @@ export function replay(knobs: Knobs, history: Taken[]): Profile {
 
 /** Where a sitting stands: whether it is over and why, and what is known. */
 export function standingOf(profile: Profile, knobs: Knobs): Standing {
-  return engine.standing(profile, knobs);
+  return engine.standing_sync(profile, knobs);
 }
 
 /** The case the model would ask next, or `null` when the bank has nothing. */
@@ -148,7 +148,7 @@ export function nextPrompt(
   session: number,
   step: number,
 ): Next | null {
-  return next_prompt(profile, knobs, session, step);
+  return next_prompt_sync(profile, knobs, session, step);
 }
 
 /**
@@ -162,7 +162,7 @@ export function answerCase(
   seed: bigint,
   said: Given,
 ): Answered {
-  return answer_case(profile, knobs, item, seed, said);
+  return answer_case_sync(profile, knobs, item, seed, said);
 }
 
 /** The commit this build is of, stamped in at build time (vite.config.ts). */
@@ -180,10 +180,16 @@ export function transcriptJson(
   knobs: Knobs,
   history: Taken[],
 ): string {
-  return adaptive_json(session, full, knobs, history, __TYPE_QUIZ_COMMIT__);
+  return adaptive_json_sync(
+    session,
+    full,
+    knobs,
+    history,
+    __TYPE_QUIZ_COMMIT__,
+  );
 }
 
 /** What a learner who reasons as the naive model `id` does believes. */
 export function describeModel(id: string): string | null {
-  return describe_model(id);
+  return describe_model_sync(id);
 }

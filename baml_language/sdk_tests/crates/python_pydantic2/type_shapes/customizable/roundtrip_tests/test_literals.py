@@ -9,48 +9,48 @@ exercised here.
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk.literals import (
     Literals,
-    return_literal42,
-    return_literal_neg_one,
-    return_literal_draft,
-    return_literal_escaped,
-    return_literal_true,
-    return_literal_false,
-    round_trip_literal42,
-    round_trip_literal_draft,
-    round_trip_literal_escaped,
-    round_trip_literal_true,
-    round_trip_literal_false,
-    round_trip_literals,
+    return_literal42_sync,
+    return_literal_neg_one_sync,
+    return_literal_draft_sync,
+    return_literal_escaped_sync,
+    return_literal_true_sync,
+    return_literal_false_sync,
+    round_trip_literal42_sync,
+    round_trip_literal_draft_sync,
+    round_trip_literal_escaped_sync,
+    round_trip_literal_true_sync,
+    round_trip_literal_false_sync,
+    round_trip_literals_sync,
 )
 
 
 def test_literals_return_literals():
-    assert return_literal42() == 42
-    assert return_literal_neg_one() == -1
-    assert return_literal_draft() == "draft"
-    assert return_literal_escaped() == 'has "quotes"'
-    assert return_literal_true() is True
-    assert return_literal_false() is False
+    assert return_literal42_sync() == 42
+    assert return_literal_neg_one_sync() == -1
+    assert return_literal_draft_sync() == "draft"
+    assert return_literal_escaped_sync() == 'has "quotes"'
+    assert return_literal_true_sync() is True
+    assert return_literal_false_sync() is False
 
 
 def test_literals_round_trip_literal42():
-    assert round_trip_literal42(x=42) == 42
+    assert round_trip_literal42_sync(x=42) == 42
 
 
 def test_literals_round_trip_literal_draft():
-    assert round_trip_literal_draft(x="draft") == "draft"
+    assert round_trip_literal_draft_sync(x="draft") == "draft"
 
 
 def test_literals_round_trip_literal_escaped():
-    assert round_trip_literal_escaped(x='has "quotes"') == 'has "quotes"'
+    assert round_trip_literal_escaped_sync(x='has "quotes"') == 'has "quotes"'
 
 
 def test_literals_round_trip_literal_true():
-    assert round_trip_literal_true(x=True) is True
+    assert round_trip_literal_true_sync(x=True) is True
 
 
 def test_literals_round_trip_literal_false():
-    assert round_trip_literal_false(x=False) is False
+    assert round_trip_literal_false_sync(x=False) is False
 
 
 def test_literals_round_trip_literals():
@@ -61,14 +61,14 @@ def test_literals_round_trip_literals():
         literal_true=True,
         literal_false=False,
     )
-    assert round_trip_literals(l=lit) == lit
+    assert round_trip_literals_sync(l=lit) == lit
 
 
 def test_literals_round_trip_flag_mixed_literal_union():
-    from baml_sdk.literals import round_trip_flag
+    from baml_sdk.literals import round_trip_flag_sync
 
-    assert round_trip_flag(f="active") == "active"
-    r_int = round_trip_flag(f=1)
+    assert round_trip_flag_sync(f="active") == "active"
+    r_int = round_trip_flag_sync(f=1)
     assert r_int == 1 and not isinstance(r_int, bool)
-    r_bool = round_trip_flag(f=True)
+    r_bool = round_trip_flag_sync(f=True)
     assert r_bool is True

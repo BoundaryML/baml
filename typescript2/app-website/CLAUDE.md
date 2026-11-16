@@ -27,13 +27,24 @@ npm run format:fix # Fix formatting issues with Biome
 
 ### App Router Layout
 - `/app` - Next.js 15 App Router structure
-  - `/(marketing)` - Marketing pages route group
+  - `/(home)` - Every page: the Boundary homepage (`/`), the blog (`/blog`), and the other pages
+    (`/quickstart`, `/podcast`, `/who-are-we`, ...). One `layout.tsx` and
+    `globals.css`, in the `@boundaryml/brand` package's BAML lane (dark only, Clover accent),
+    fonts in `fonts/` (loaded by `fonts.ts`), the homepage's section styles in `styles/`. Pages
+    other than the homepage and the blog wrap themselves in `PageShell`
+    (`components/home/page-shell.tsx`) for the homepage's nav and footer. The nav's Platform menu
+    (`components/home/nav-menu.tsx`) links the homepage, /adopt, the blog, /podcast and
+    /who-are-we, and the bar links /pricing; the footer links only the blog
+  - `global-not-found.tsx` - The 404 page, which renders its own document with the same fonts,
+    stylesheet, and shell
   - `/_lib/config.tsx` - Site configuration and constants
-  - `/page.tsx` - Homepage
   - Layout uses server components by default
 
 ### Component Organization
 - `/components` - Reusable React components
+  - `/home` - The homepage's sections, nav and footer, which the blog shares.
+    `analytics.ts` tags CTAs for PostHog autocapture; `track.tsx` sends the named
+    `boundary_*` events
   - `/landing` - Landing page specific sections
   - `/magicui` - Animation and UI effect components
   - `/ui` - Base UI components (shadcn/ui based)

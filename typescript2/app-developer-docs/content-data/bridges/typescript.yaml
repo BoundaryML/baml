@@ -2,9 +2,9 @@ schemaVersion: 1
 id: typescript
 compatibility:
   - concern: Calls
-    behavior: Node.js exports synchronous functions and promise-returning _async variants.
+    behavior: Node.js exports promise-returning functions and blocking _sync variants.
   - concern: Names
-    behavior: The default preserve-case convention keeps BAML names. Async variants add _async.
+    behavior: The default preserve-case convention keeps BAML names. Blocking variants add _sync.
   - concern: Regeneration
     behavior: Generated files are replaced; application edits belong elsewhere.
 types:
@@ -27,7 +27,7 @@ types:
     host: Generated enum
     notes: Import the generated symbol instead of duplicating literals.
 transitions:
-  - Await the _async variants before using their results. Synchronous variants block until completion.
+  - Await generated functions before using their results. The _sync variants block until completion.
   - Regenerate after changing a BAML function, class, enum, or generator configuration.
   - Treat partial streaming values separately from the final typed result.
 gotchas:

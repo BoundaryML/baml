@@ -12,7 +12,7 @@ use crate::emit::function::SyncAsync;
 
 pub(crate) struct PyMethodBinding {
     /// Collision-allocated Python identifier for the method's direct, spec,
-    /// or stream role. The async role conventionally ends in `_async`.
+    /// or stream role. The sync role conventionally ends in `_sync`.
     pub(crate) py_name: String,
     /// FQN passed as the first arg to the factory call.
     pub(crate) baml_fqn: String,

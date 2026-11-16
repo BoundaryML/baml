@@ -128,6 +128,15 @@ pub enum SnapshotValue {
         name: LabelId,
     },
     Truncated(Limit),
+    /// A value the producer withheld, and why (format 6).
+    Redacted(RedactionReason),
+}
+
+/// Why a producer withheld a value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RedactionReason {
+    /// Its field or class is declared redacted.
+    Declared,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Description {

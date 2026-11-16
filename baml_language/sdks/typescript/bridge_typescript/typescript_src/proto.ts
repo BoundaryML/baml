@@ -125,30 +125,30 @@ export class BamlPrompt {
         );
     }
 
-    text(options?: BamlPromptCallOptions): string {
-        return this._callSync('ai.Prompt.text', options) as string;
-    }
-
-    async textAsync(options?: BamlPromptCallOptions): Promise<string> {
+    async text(options?: BamlPromptCallOptions): Promise<string> {
         return await this._callAsync('ai.Prompt.text', options) as string;
     }
 
-    /** Compatibility with the generated SDK's existing async-method spelling. */
-    async text_async(options?: BamlPromptCallOptions): Promise<string> {
-        return await this.textAsync(options);
+    textSync(options?: BamlPromptCallOptions): string {
+        return this._callSync('ai.Prompt.text', options) as string;
     }
 
-    messages(options?: BamlPromptCallOptions): BamlPromptMessage[] {
-        return this._callSync('ai.Prompt.messages', options) as BamlPromptMessage[];
+    /** Compatibility with the generated SDK's blocking-method spelling. */
+    text_sync(options?: BamlPromptCallOptions): string {
+        return this.textSync(options);
     }
 
-    async messagesAsync(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]> {
+    async messages(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]> {
         return await this._callAsync('ai.Prompt.messages', options) as BamlPromptMessage[];
     }
 
-    /** Compatibility with the generated SDK's existing async-method spelling. */
-    async messages_async(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]> {
-        return await this.messagesAsync(options);
+    messagesSync(options?: BamlPromptCallOptions): BamlPromptMessage[] {
+        return this._callSync('ai.Prompt.messages', options) as BamlPromptMessage[];
+    }
+
+    /** Compatibility with the generated SDK's blocking-method spelling. */
+    messages_sync(options?: BamlPromptCallOptions): BamlPromptMessage[] {
+        return this.messagesSync(options);
     }
 
     private _callSync(fqn: string, options?: BamlPromptCallOptions): unknown {
@@ -761,8 +761,10 @@ function decodeBamlClosure(
         }
         return invokeTarget(closure, kwargs, { $baml: baml }, asynchronous);
     };
-    const closure = (...args: unknown[]): unknown => prepare(args, false);
-    Object.defineProperty(closure, 'callAsync', { value: async (...args: unknown[]) => await prepare(args, true) });
+    // Calling a BAML closure is async, like a generated function; the
+    // blocking twin is `callSync`.
+    const closure = async (...args: unknown[]): Promise<unknown> => await prepare(args, true);
+    Object.defineProperty(closure, 'callSync', { value: (...args: unknown[]) => prepare(args, false) });
     bamlClosureHandles.set(closure, handle);
     return closure;
 }

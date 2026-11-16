@@ -11,7 +11,7 @@ use std::ffi::{c_char, c_void};
 
 use crate::{
     SdkError,
-    loader::{self, LoaderError, log},
+    loader::{self, LoaderError},
 };
 
 /// The engine's result-delivery callback. `content` is borrowed only for
@@ -229,7 +229,7 @@ struct BamlBridgeInfoV1 {
 
 fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     let path = loader::resolve_library_path(env)?;
-    log::debug(&format!("Loading BAML library from {}", path.display()));
+    log::debug!("Loading BAML library from {}", path.display());
 
     // SAFETY: loading a shared library runs its initializers; the
     // resolved file is the engine artifact this loader exists to load.
@@ -418,8 +418,7 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     api.take_status(registration)
         .map_err(LoaderError::VersionMismatch)?;
 
-    log::info(&format!("BAML (v{loaded_version}) loaded"));
-    log::debug(&format!("Library path: {}", path.display()));
+    log::debug!("Loaded BAML v{loaded_version} from {}", path.display());
 
     // The Api table's fn pointers point into the mapped library; keep it
     // mapped for the process lifetime.

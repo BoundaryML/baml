@@ -1,0 +1,106 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"//# Title\\n/// doc\\nfunction f() -> int { 1 }\\n/// doc first\\n//## Second-level title\\nfunction g() -> int {\\n  client: \\\"x\\\"\\n  prompt: \\\"y\\\"\\n}\\n//# one\\n//# two\\nfunction h() -> int { 1 }\\nclass C {\\n  //# method title\\n  function m(self) -> int { 1 }\\n}\\n\")"
+---
+SourceFile@0..238
+  items: FunctionDef@0..43
+    docs: HeaderLine@0..9
+      token: HeaderComment "//# Title" @0..9
+    docs: DocLine@10..17
+      token: DocComment "/// doc" @10..17
+    kw: Function "function" @18..26
+    name: Name@27..28
+      token: Word "f" @27..28
+    params: ParamList@28..30
+      l: LParen "(" @28..29
+      r: RParen ")" @29..30
+    ret: ReturnType@31..37
+      arrow: Arrow "->" @31..33
+      ty: PathType@34..37
+        head: Name@34..37
+          token: Word "int" @34..37
+    body: Block@38..43
+      l: LBrace "{" @38..39
+      tail: LiteralExpr@40..41
+        token: Integer "1" @40..41
+      r: RBrace "}" @42..43
+  items: FunctionDef@44..133
+    docs: DocLine@44..57
+      token: DocComment "/// doc first" @44..57
+    docs: HeaderLine@58..81
+      token: HeaderComment "//## Second-level title" @58..81
+    kw: Function "function" @82..90
+    name: Name@91..92
+      token: Word "g" @91..92
+    params: ParamList@92..94
+      l: LParen "(" @92..93
+      r: RParen ")" @93..94
+    ret: ReturnType@95..101
+      arrow: Arrow "->" @95..97
+      ty: PathType@98..101
+        head: Name@98..101
+          token: Word "int" @98..101
+    body: LlmBody@102..133
+      l: LBrace "{" @102..103
+      fields: ClientField@106..117
+        kw: Client "client" @106..112
+        colon: Colon ":" @112..113
+        value: StringLit@114..117
+          token: String "\"x\"" @114..117
+      fields: PromptField@120..131
+        kw: Prompt "prompt" @120..126
+        colon: Colon ":" @126..127
+        value: StringLit@128..131
+          token: String "\"y\"" @128..131
+      r: RBrace "}" @132..133
+  items: FunctionDef@134..175
+    docs: HeaderLine@134..141
+      token: HeaderComment "//# one" @134..141
+    docs: Bogus@142..149
+      tokens: HeaderComment "//# two" @142..149
+    kw: Function "function" @150..158
+    name: Name@159..160
+      token: Word "h" @159..160
+    params: ParamList@160..162
+      l: LParen "(" @160..161
+      r: RParen ")" @161..162
+    ret: ReturnType@163..169
+      arrow: Arrow "->" @163..165
+      ty: PathType@166..169
+        head: Name@166..169
+          token: Word "int" @166..169
+    body: Block@170..175
+      l: LBrace "{" @170..171
+      tail: LiteralExpr@172..173
+        token: Integer "1" @172..173
+      r: RBrace "}" @174..175
+  items: ClassDef@176..238
+    kw: Class "class" @176..181
+    name: Name@182..183
+      token: Word "C" @182..183
+    l: LBrace "{" @184..185
+    members: FunctionDef@207..236
+      docs: HeaderLine@188..204
+        token: HeaderComment "//# method title" @188..204
+      kw: Function "function" @207..215
+      name: Name@216..217
+        token: Word "m" @216..217
+      params: ParamList@217..223
+        l: LParen "(" @217..218
+        params: Param@218..222
+          name: Name@218..222
+            token: SelfValue "self" @218..222
+        r: RParen ")" @222..223
+      ret: ReturnType@224..230
+        arrow: Arrow "->" @224..226
+        ty: PathType@227..230
+          head: Name@227..230
+            token: Word "int" @227..230
+      body: Block@231..236
+        l: LBrace "{" @231..232
+        tail: LiteralExpr@233..234
+          token: Integer "1" @233..234
+        r: RBrace "}" @235..236
+    r: RBrace "}" @237..238
+---
+InvalidSyntax { message: "a function has one `//#` title; this is a second one", range: 142..149 }

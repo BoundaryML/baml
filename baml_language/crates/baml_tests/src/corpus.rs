@@ -430,23 +430,6 @@ fn corpus_snapshots() {
     }
 }
 
-/// Corpus files the formatter is known to reject today. Every entry MUST keep
-/// failing: a file that starts formatting makes the test fail until its entry
-/// is deleted, so this list cannot rot into a silent skip.
-///
-/// All of these are formatter strong-AST gaps for constructs the compiler
-/// accepts and compiles fine:
-// BUG: the formatter's strong-AST builder rejects array rest-binding patterns
-// (`if let [let a, ..let r] = xs`): "An element ... was a node when it should
-// have been a token".
-// BUG: the formatter's strong-AST builder rejects the `~` bitwise-not operator
-// ("Expected token/node unary operator, but found TILDE").
-const KNOWN_FORMATTER_REJECTS: &[&str] = &[
-    "ns_array_rest_binding/array_rest_binding.baml",
-    "ns_operators/operators.baml",
-    "ns_truthiness/truthiness.baml",
-];
-
 /// Formatter coverage for the corpus: selected files get an output snapshot;
 /// every corpus file must format successfully and idempotently.
 #[test]
@@ -459,25 +442,12 @@ fn corpus_formatter() {
     let mut violations: Vec<String> = Vec::new();
 
     for (rel, content) in &files {
-        let known_reject = KNOWN_FORMATTER_REJECTS.contains(&rel.as_str());
         let first = match baml_fmt::format(content, &options) {
-            Ok(_) if known_reject => {
-                violations.push(format!(
-                    "formatter unexpectedly succeeded on {rel}; \
-                     remove it from KNOWN_FORMATTER_REJECTS"
-                ));
-                continue;
-            }
             Ok(formatted) => formatted,
-            Err(_) if known_reject => continue,
             Err(e) => {
                 let rendered = match e {
                     baml_fmt::FormatterError::ParseErrors(e) => {
                         format!("=== PARSER ERROR ===\n{e:?}")
-                    }
-                    baml_fmt::FormatterError::StrongAstError(e) => {
-                        let e = e.print_with_file_context(rel, content);
-                        format!("=== STRONG AST ERROR ===\n{e}")
                     }
                 };
                 violations.push(format!("formatter rejected corpus file {rel}:\n{rendered}"));

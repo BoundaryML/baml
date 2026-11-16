@@ -13,7 +13,7 @@ and `ref-java-codegen-conventions.md`.
 Three fully decoupled tiers:
 
 1. **CLI — never on PyPI/npm.** Two binaries: the `baml` **wrapper**
-   (`crates/baml`) is a version manager à la rustup — it reads a
+   (`wrapper/`) is a version manager à la rustup — it reads a
    `[toolchain]` channel/version from `baml.toml`, installs toolchains
    under `~/.baml/toolchains/<version>/`, and execs the real
    **`baml-cli`** toolchain binary (`crates/baml_cli`: `generate`,

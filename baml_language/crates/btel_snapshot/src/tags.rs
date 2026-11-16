@@ -1,4 +1,4 @@
-//! Stable tag assignments shared by CAS blob and snapshot hash formats 1 to 5.
+//! Stable tag assignments shared by CAS blob and snapshot hash formats 1 to 6.
 //! Changing an assignment requires a format version change.
 
 use baml_type::MediaKind;
@@ -30,6 +30,20 @@ pub(super) enum ValueTag {
     External = 11,
     /// One object of a child blob that is not that blob's root.
     ExternalNode = 12,
+    /// A value withheld from the capture, and why (format 6): a `u32` body
+    /// length, then the body, which opens with a [`RedactionTag`]. A reader
+    /// skips a body whose reason it does not know.
+    Redacted = 13,
+}
+
+/// Why a value was redacted: the first byte of a redacted value's body.
+#[repr(u8)]
+pub(super) enum RedactionTag {
+    /// Its field or parameter is declared redacted. Nothing follows.
+    Declared = 0,
+    /// It matched a secret pattern. The rest of the body is the rule's ID,
+    /// UTF-8 and nonempty.
+    Pattern = 1,
 }
 
 #[repr(u8)]

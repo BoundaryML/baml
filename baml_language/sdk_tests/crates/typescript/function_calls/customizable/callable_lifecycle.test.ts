@@ -15,10 +15,10 @@ describe("callable_lifecycle", () => {
       calls.push(value);
       return value + 1;
     };
-    const forward = await baml.make_callback_forwarder_async(callback);
+    const forward = await baml.make_callback_forwarder(callback);
     expect(calls).toEqual([]);
-    expect(await baml.call_int_callback_async(forward, 6)).toBe(7);
-    expect(await baml.call_int_callback_async(forward, 7)).toBe(8);
+    expect(await baml.call_int_callback(forward, 6)).toBe(7);
+    expect(await baml.call_int_callback(forward, 7)).toBe(8);
     expect(calls).toEqual([6, 7]);
   });
 
@@ -28,15 +28,15 @@ describe("callable_lifecycle", () => {
       if (value === 1) throw failure;
       return value;
     };
-    const forward = await baml.make_callback_forwarder_async(callback);
-    await expect(baml.call_int_callback_async(forward, 1)).rejects.toBe(
+    const forward = await baml.make_callback_forwarder(callback);
+    await expect(baml.call_int_callback(forward, 1)).rejects.toBe(
       failure,
     );
-    expect(await baml.call_int_callback_async(forward, 2)).toBe(2);
+    expect(await baml.call_int_callback(forward, 2)).toBe(2);
   });
 
   it("cancelled_waiter_stays_cancelled_when_callback_returns_late", async () => {
-    const ctx = CancelToken.new();
+    const ctx = CancelToken.new_sync();
     let enter!: () => void;
     const entered = new Promise<void>((resolve) => {
       enter = resolve;
@@ -55,7 +55,7 @@ describe("callable_lifecycle", () => {
       exit();
       return value;
     };
-    const call = baml.call_int_callback_async(
+    const call = baml.call_int_callback(
       callback as unknown as (value: number) => number,
       1,
       { $baml: { cancel: ctx } },
@@ -63,17 +63,17 @@ describe("callable_lifecycle", () => {
     const outcome = call.catch((error: unknown) => error);
     try {
       await entered;
-      ctx.cancel();
+      ctx.cancel_sync();
       const cancellation = await outcome;
       expect(cancellation).toBeInstanceOf(BamlAbortError);
       release();
       await exited;
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
       expect(await outcome).toBe(cancellation);
-      expect(await baml.call_int_callback_async((value) => value, 2)).toBe(2);
+      expect(await baml.call_int_callback((value) => value, 2)).toBe(2);
     } finally {
       release();
-      ctx.cancel();
+      ctx.cancel_sync();
       await outcome;
     }
   });

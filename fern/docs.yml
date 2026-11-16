@@ -773,6 +773,9 @@ navigation:
           - page: "@alias / @@alias"
             slug: alias
             path: 03-reference/baml/attributes/alias.mdx
+          - page: "@json / @@json"
+            slug: json
+            path: 03-reference/baml/attributes/json.mdx
           - page: "@description / @@description"
             slug: description
             path: 03-reference/baml/attributes/description.mdx

@@ -31,12 +31,13 @@ use crate::replay_harness::{replay_server, replay_server_async};
 /// Sync `next()` yields a stream of partials and drains to `None`.
 #[test]
 fn test_streaming_e2e_stream() {
-    use baml_sdk::lorem::stream_e2e_extract_stream;
+    use baml_sdk::lorem::stream_e2e_extract_stream_sync;
 
     replay_server("replay_extract_string", || {
-        let stream = stream_e2e_extract_stream("ignored-by-replay-server".to_string()).unwrap();
+        let stream =
+            stream_e2e_extract_stream_sync("ignored-by-replay-server".to_string()).unwrap();
         let mut results = 0;
-        while let Some(v) = stream.next().unwrap() {
+        while let Some(v) = stream.next_sync().unwrap() {
             results += 1;
             // python: `isinstance(v, str)` — compile-time here.
             let _: String = v;
@@ -47,22 +48,22 @@ fn test_streaming_e2e_stream() {
             "expected stream.next() to yield at least 10 partials"
         );
         // python: `isinstance(stream.final(), str)` — compile-time here.
-        let _: String = stream.final_().unwrap();
+        let _: String = stream.final_sync().unwrap();
     });
 }
 
 /// Async sibling (python routes it over the pyo3-tokio path as
-/// `next_async()` / `final_async()`).
+/// `next()` / `final()`).
 #[tokio::test]
 async fn test_streaming_e2e_stream_async() {
-    use baml_sdk::lorem::stream_e2e_extract_stream_async;
+    use baml_sdk::lorem::stream_e2e_extract_stream;
 
     replay_server_async("replay_extract_string", async {
-        let stream = stream_e2e_extract_stream_async("ignored-by-replay-server".to_string())
+        let stream = stream_e2e_extract_stream("ignored-by-replay-server".to_string())
             .await
             .unwrap();
         let mut results = 0;
-        while let Some(v) = stream.next_async().await.unwrap() {
+        while let Some(v) = stream.next().await.unwrap() {
             results += 1;
             let _: String = v;
             assert!(results < 10_000, "stream.next() failed to terminate");
@@ -71,7 +72,7 @@ async fn test_streaming_e2e_stream_async() {
             results >= 10,
             "expected stream.next() to yield at least 10 partials"
         );
-        let _: String = stream.final_async().await.unwrap();
+        let _: String = stream.final_().await.unwrap();
     })
     .await;
 }
@@ -80,11 +81,11 @@ async fn test_streaming_e2e_stream_async() {
 /// returns only concrete host values.
 #[test]
 fn test_streaming_e2e_stream_collect_in_baml() {
-    use baml_sdk::lorem::{StreamE2ECollectResult, stream_e2e_collect};
+    use baml_sdk::lorem::{StreamE2ECollectResult, stream_e2e_collect_sync};
 
     replay_server("replay_extract_string", || {
         let result: StreamE2ECollectResult =
-            stream_e2e_collect("ignored-by-replay-server".to_string()).unwrap();
+            stream_e2e_collect_sync("ignored-by-replay-server".to_string()).unwrap();
         assert!(
             result.next_calls.len() >= 10,
             "expected at least 10 collected partials"
@@ -105,12 +106,13 @@ fn test_streaming_e2e_stream_collect_in_baml() {
 /// Sync `next()` yields >= 10 doc partials; `final()` is a typed `StreamingDoc`.
 #[test]
 fn test_streaming_e2e_stream_doc() {
-    use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream};
+    use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream_sync};
 
     replay_server("replay_extract_doc", || {
-        let stream = stream_e2e_extract_doc_stream("ignored-by-replay-server".to_string()).unwrap();
+        let stream =
+            stream_e2e_extract_doc_stream_sync("ignored-by-replay-server".to_string()).unwrap();
         let mut results = 0;
-        while let Some(v) = stream.next().unwrap() {
+        while let Some(v) = stream.next_sync().unwrap() {
             results += 1;
             // python: `isinstance(v, StreamingDoc)` — compile-time here.
             let _: &StreamingDoc = &v;
@@ -121,21 +123,21 @@ fn test_streaming_e2e_stream_doc() {
             "expected stream.next() to yield at least 10 partials"
         );
         // python: `isinstance(stream.final(), StreamingDoc)` — compile-time:
-        let _: StreamingDoc = stream.final_().unwrap();
+        let _: StreamingDoc = stream.final_sync().unwrap();
     });
 }
 
 /// Async sibling for a class `T` (python's pyo3-tokio path).
 #[tokio::test]
 async fn test_streaming_e2e_stream_doc_async() {
-    use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream_async};
+    use baml_sdk::lorem::{StreamingDoc, stream_e2e_extract_doc_stream};
 
     replay_server_async("replay_extract_doc", async {
-        let stream = stream_e2e_extract_doc_stream_async("ignored-by-replay-server".to_string())
+        let stream = stream_e2e_extract_doc_stream("ignored-by-replay-server".to_string())
             .await
             .unwrap();
         let mut results = 0;
-        while let Some(v) = stream.next_async().await.unwrap() {
+        while let Some(v) = stream.next().await.unwrap() {
             results += 1;
             let _: &StreamingDoc = &v;
             assert!(results < 10_000, "stream.next() failed to terminate");
@@ -144,7 +146,7 @@ async fn test_streaming_e2e_stream_doc_async() {
             results >= 10,
             "expected stream.next() to yield at least 10 partials"
         );
-        let _: StreamingDoc = stream.final_async().await.unwrap();
+        let _: StreamingDoc = stream.final_().await.unwrap();
     })
     .await;
 }
@@ -152,11 +154,11 @@ async fn test_streaming_e2e_stream_doc_async() {
 /// BAML-side class collection returns the concrete final value across FFI.
 #[test]
 fn test_streaming_e2e_stream_doc_collect_in_baml() {
-    use baml_sdk::lorem::{StreamingDoc, stream_e2e_collect_doc};
+    use baml_sdk::lorem::{StreamingDoc, stream_e2e_collect_doc_sync};
 
     replay_server("replay_extract_doc", || {
         let result: StreamingDoc =
-            stream_e2e_collect_doc("ignored-by-replay-server".to_string()).unwrap();
+            stream_e2e_collect_doc_sync("ignored-by-replay-server".to_string()).unwrap();
         let _ = result.title;
     });
 }

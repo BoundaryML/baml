@@ -1,0 +1,6 @@
+function f(aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> int {
+    if aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > 0 { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb + aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > 0 { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa > 0 { 1 } else { 2 }
+}

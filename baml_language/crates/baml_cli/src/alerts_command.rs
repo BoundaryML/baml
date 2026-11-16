@@ -1,19 +1,25 @@
-//! `baml alerts`: SQL that runs on a schedule in a Boundary environment and posts to Slack or a
-//! webhook when it returns rows. Alerts are kept by Boundary's control API; this command signs
-//! in with the saved `baml auth login` session and names the project and environment as
-//! `baml query` does.
-#![allow(
-    clippy::print_stdout,
-    reason = "listings and saved alerts are the command's output"
-)]
+//! `baml cloud alerts`: SQL that runs on a schedule in a Boundary environment and posts to Slack
+//! or a webhook when something is wrong. Alerts are kept by Boundary's control API; this command
+//! signs in with the saved `baml cloud auth login` session, and takes the project and environment
+//! from `baml cloud`'s `--project` and `--env`, as `baml cloud recordings` does.
 
-use std::{io::Read as _, path::PathBuf};
+use std::{
+    collections::HashMap,
+    io::{self, Read as _},
+    path::PathBuf,
+};
 
 use anyhow::{Context, Result, bail};
-use bcs_api::alerts::{Alert, Client, Condition, Definition, Destination, Notify, Run, Schedule};
+use bcs_api::alerts::{
+    Alert, Client, Condition, Definition, Destination, Notify, Run, RunPage, Schedule,
+};
 use clap::{Args, Parser, Subcommand};
+use serde::Serialize;
 
-use crate::ExitCode;
+use crate::{
+    output::{Command, CommandContext, Outcome, Report, Style},
+    recordings::CloudScope,
+};
 
 const DAYS: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
@@ -21,50 +27,46 @@ const DAYS: [&str; 7] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 #[derive(Debug, Parser)]
 #[command(after_long_help = "Examples:
   List an environment's alerts:
-    baml alerts list --project acme/ai-pipeline --environment production
+    baml cloud --project acme/app --env production alerts list
 
-  Post to #ai-pipeline when FindFacts failed in the last 15 minutes, checking every 15 minutes:
-    baml alerts create --name \"FindFacts errors\" --every 15m --to \"#ai-pipeline\" \\
-      --sql \"SELECT span_id, error_value FROM spans WHERE span_name = 'FindFacts'
-             AND error_value IS NOT NULL AND start_time > now() - INTERVAL '15 minutes'\"
+  Post to #ai-pipeline when errors.sql returns rows, checking every 15 minutes:
+    baml cloud alerts create --name errors --every 15m --to ai-pipeline --sql-file errors.sql
 
-  Check a query first with `baml query --project ... --environment ...`.")]
+  Check the SQL first with `baml cloud recordings query`.")]
 pub struct AlertsArgs {
     #[command(subcommand)]
     pub action: Action,
-
-    /// Boundary cloud project in org_handle/project_name form.
-    #[arg(
-        long,
-        id = "boundary_project",
-        value_name = "ORG/PROJECT",
-        global = true
-    )]
-    pub project: Option<String>,
-
-    /// Boundary cloud environment; defaults to your personal environment.
-    #[arg(long, global = true)]
-    pub environment: Option<String>,
-
-    /// Print JSON instead of a table.
-    #[arg(long, global = true)]
-    pub json: bool,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum Action {
     /// List the environment's alerts.
+    #[command(
+        after_long_help = "Examples:\n  Every alert, and whether it is firing:\n    baml cloud alerts list\n\n  As JSON:\n    baml --output-format json cloud alerts list"
+    )]
     List,
     /// Show one alert, with its SQL.
+    #[command(
+        after_long_help = "Examples:\n  By name:\n    baml cloud alerts show errors\n\n  As JSON:\n    baml --output-format json cloud alerts show errors"
+    )]
     Show {
         /// The alert's name or ID.
         alert: String,
     },
     /// Create an alert.
+    #[command(
+        after_long_help = "Examples:\n  Every 15 minutes, when the query returns rows:\n    baml cloud alerts create --name errors --every 15m --to ai-pipeline --sql-file errors.sql\n\n  Weekdays at 09:00 UTC:\n    baml cloud alerts create --name daily --at 09:00 --days mon-fri --to ops --sql-file d.sql\n\n  When a number in the first row is over 5:\n    baml cloud alerts create --name slow --every 1h --to ops --when \"p95 > 5\" --sql-file p.sql"
+    )]
     Create(CreateArgs),
     /// Save a new version of an alert; what is not given stays as it is.
+    #[command(
+        after_long_help = "Examples:\n  Check every 5 minutes instead:\n    baml cloud alerts update errors --every 5m\n\n  Remind every hour while it stays firing:\n    baml cloud alerts update errors --notify changes --remind 1h"
+    )]
     Update(UpdateArgs),
     /// List the runs that posted, failed or could not deliver, newest first.
+    #[command(
+        after_long_help = "Examples:\n  The latest runs:\n    baml cloud alerts runs\n\n  The 20 runs before run 120:\n    baml cloud alerts runs --limit 20 --before 120"
+    )]
     Runs {
         /// Runs to list.
         #[arg(long, default_value_t = 10)]
@@ -74,6 +76,7 @@ pub enum Action {
         before: Option<u64>,
     },
     /// Stop an alert's runs for a while, such as `24h`.
+    #[command(after_long_help = "Examples:\n  For a day:\n    baml cloud alerts mute errors 24h")]
     Mute {
         /// The alert's name or ID.
         alert: String,
@@ -81,16 +84,21 @@ pub enum Action {
         duration: String,
     },
     /// End an alert's mute.
+    #[command(after_long_help = "Examples:\n  Now:\n    baml cloud alerts unmute errors")]
     Unmute {
         /// The alert's name or ID.
         alert: String,
     },
     /// Delete an alert: it stops running.
+    #[command(after_long_help = "Examples:\n  By name:\n    baml cloud alerts delete errors")]
     Delete {
         /// The alert's name or ID.
         alert: String,
     },
     /// List where the environment's alerts can post. Add destinations in Studio.
+    #[command(
+        after_long_help = "Examples:\n  Every destination:\n    baml cloud alerts destinations"
+    )]
     Destinations,
 }
 
@@ -163,47 +171,22 @@ pub struct UpdateArgs {
 }
 
 impl AlertsArgs {
-    pub fn run(&self) -> Result<ExitCode> {
-        let context = AlertContext::open(self)?;
-        match &self.action {
-            Action::List => {
-                let alerts = context.client.list(&context.environment)?;
-                if self.json {
-                    print_json(&alerts)?;
-                } else if alerts.is_empty() {
-                    println!("No alerts in {}.", context.environment_name);
-                } else {
-                    for alert in &alerts {
-                        println!("{}", line(alert));
-                    }
-                }
-            }
+    /// Runs the action in the environment `scope` names: `baml cloud`'s `--project` and `--env`.
+    fn report(&self, scope: &CloudScope) -> Result<AlertsReport> {
+        let context = AlertContext::open(scope)?;
+        Ok(match &self.action {
+            Action::List => AlertsReport::Alerts(Listing {
+                environment: context.environment_name.clone(),
+                alerts: context.client.list(&context.environment)?,
+            }),
             Action::Show { alert } => {
                 let alert = context.alert(alert)?;
                 let definition = context.client.definition(&alert.id)?;
-                if self.json {
-                    print_json(&serde_json::json!({"alert": alert, "definition": definition}))?;
-                } else {
-                    let names = context.destination_names()?;
-                    println!("{}", line(&alert));
-                    let to: Vec<&str> = definition
-                        .destinations
-                        .iter()
-                        .map(|id| names.get(id).map_or(id.as_str(), String::as_str))
-                        .collect();
-                    println!("Posts to: {}", to.join(", "));
-                    println!(
-                        "Fires when: {}{}",
-                        describe_condition(&definition.condition),
-                        match definition.after {
-                            1 => String::new(),
-                            n => format!(", {n} checks in a row"),
-                        }
-                    );
-                    println!("Posts: {}", describe_notify(definition.notify));
-                    println!("Rows per message: {}", definition.message_rows);
-                    println!("\n{}", definition.sql.trim());
-                }
+                AlertsReport::Shown(Shown {
+                    destination_names: context.destination_names()?,
+                    alert,
+                    definition,
+                })
             }
             Action::Create(args) => {
                 let schedule = args
@@ -216,7 +199,7 @@ impl AlertsArgs {
                     .context("give the SQL: --sql, or --sql-file")?;
                 anyhow::ensure!(
                     !args.spec.to.is_empty(),
-                    "give where to post: --to <destination>; `baml alerts destinations` lists them"
+                    "give where to post: --to <destination>; `baml cloud alerts destinations` lists them"
                 );
                 let definition = Definition {
                     name: args.name.clone(),
@@ -229,13 +212,14 @@ impl AlertsArgs {
                         remind_seconds: None,
                     })?,
                 };
-                let saved = context.client.create(
-                    &context.environment,
-                    &definition,
-                    &schedule,
-                    args.spec.run_now,
-                )?;
-                context.print_saved(&saved, self.json)?;
+                AlertsReport::Saved(Saved {
+                    alert: context.client.create(
+                        &context.environment,
+                        &definition,
+                        &schedule,
+                        args.spec.run_now,
+                    )?,
+                })
             }
             Action::Update(args) => {
                 let alert = context.alert(&args.alert)?;
@@ -254,67 +238,169 @@ impl AlertsArgs {
                     notify: args.spec.notify(current.notify)?,
                 };
                 let schedule = args.spec.schedule()?.unwrap_or(alert.schedule.clone());
-                let saved = context.client.update(
-                    &alert.id,
-                    alert.version,
-                    &definition,
-                    &schedule,
-                    args.spec.run_now,
-                )?;
-                context.print_saved(&saved, self.json)?;
+                AlertsReport::Saved(Saved {
+                    alert: context.client.update(
+                        &alert.id,
+                        alert.version,
+                        &definition,
+                        &schedule,
+                        args.spec.run_now,
+                    )?,
+                })
             }
             Action::Runs { limit, before } => {
-                let page = context.client.runs(&context.environment, *limit, *before)?;
-                if self.json {
-                    print_json(&page)?;
-                } else if page.runs.is_empty() {
-                    println!("No runs have posted or failed yet.");
-                } else {
-                    for run in &page.runs {
-                        println!("{}", run_line(run));
-                    }
-                    if let Some(before) = page.next_before {
-                        println!("More: baml alerts runs --before {before}");
-                    }
-                }
+                AlertsReport::Runs(context.client.runs(&context.environment, *limit, *before)?)
             }
             Action::Mute { alert, duration } => {
                 let alert = context.alert(alert)?;
                 let until = now() + u64::from(parse_interval(duration)?);
-                let muted = context.client.mute(&alert.id, Some(until))?;
-                context.print_saved(&muted, self.json)?;
+                AlertsReport::Saved(Saved {
+                    alert: context.client.mute(&alert.id, Some(until))?,
+                })
             }
             Action::Unmute { alert } => {
                 let alert = context.alert(alert)?;
-                let unmuted = context.client.mute(&alert.id, None)?;
-                context.print_saved(&unmuted, self.json)?;
+                AlertsReport::Saved(Saved {
+                    alert: context.client.mute(&alert.id, None)?,
+                })
             }
             Action::Delete { alert } => {
                 let alert = context.alert(alert)?;
                 context.client.delete(&alert.id)?;
-                if self.json {
-                    print_json(&serde_json::json!({"deleted": alert.id}))?;
-                } else {
-                    println!("Deleted {} ({}).", alert.name, alert.id);
-                }
+                AlertsReport::Deleted(Deleted {
+                    deleted: alert.id,
+                    name: alert.name,
+                })
             }
-            Action::Destinations => {
-                let destinations = context.client.destinations(&context.environment)?;
-                if self.json {
-                    print_json(&destinations)?;
-                } else if destinations.is_empty() {
-                    println!("No destinations yet. Add a Slack channel or a webhook in Studio.");
-                } else {
-                    for destination in &destinations {
-                        println!(
-                            "{}  {}  {}",
-                            destination.id, destination.kind, destination.name
-                        );
+            Action::Destinations => AlertsReport::Destinations(Destinations {
+                destinations: context.client.destinations(&context.environment)?,
+            }),
+        })
+    }
+}
+
+/// `baml cloud alerts`: an action in the environment `baml cloud`'s scope names.
+pub(crate) struct CloudAlerts<'a> {
+    pub args: &'a AlertsArgs,
+    pub scope: &'a CloudScope,
+}
+
+impl Command for CloudAlerts<'_> {
+    type Output = AlertsReport;
+
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<AlertsReport>> {
+        Ok(Outcome::ok(self.args.report(self.scope)?))
+    }
+}
+
+/// What an action reports: text, or with `--output-format json` one JSON object.
+#[derive(Serialize)]
+#[serde(untagged)]
+pub(crate) enum AlertsReport {
+    Alerts(Listing),
+    Shown(Shown),
+    Saved(Saved),
+    Runs(RunPage),
+    Deleted(Deleted),
+    Destinations(Destinations),
+}
+
+#[derive(Serialize)]
+pub(crate) struct Listing {
+    environment: String,
+    alerts: Vec<Alert>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct Shown {
+    alert: Alert,
+    definition: Definition,
+    /// Destination names by ID, for the text view.
+    #[serde(skip)]
+    destination_names: HashMap<String, String>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct Saved {
+    alert: Alert,
+}
+
+#[derive(Serialize)]
+pub(crate) struct Deleted {
+    deleted: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+pub(crate) struct Destinations {
+    destinations: Vec<Destination>,
+}
+
+impl Report for AlertsReport {
+    fn text(&self, out: &mut dyn io::Write, _style: &Style) -> io::Result<()> {
+        match self {
+            Self::Alerts(listing) if listing.alerts.is_empty() => {
+                writeln!(out, "No alerts in {}.", listing.environment)
+            }
+            Self::Alerts(listing) => listing
+                .alerts
+                .iter()
+                .try_for_each(|alert| writeln!(out, "{}", line(alert))),
+            Self::Shown(shown) => {
+                let definition = &shown.definition;
+                writeln!(out, "{}", line(&shown.alert))?;
+                let to: Vec<&str> = definition
+                    .destinations
+                    .iter()
+                    .map(|id| {
+                        shown
+                            .destination_names
+                            .get(id)
+                            .map_or(id.as_str(), String::as_str)
+                    })
+                    .collect();
+                writeln!(out, "Posts to: {}", to.join(", "))?;
+                writeln!(
+                    out,
+                    "Fires when: {}{}",
+                    describe_condition(&definition.condition),
+                    match definition.after {
+                        1 => String::new(),
+                        n => format!(", {n} checks in a row"),
                     }
-                }
+                )?;
+                writeln!(out, "Posts: {}", describe_notify(definition.notify))?;
+                writeln!(out, "Rows per message: {}", definition.message_rows)?;
+                writeln!(out, "\n{}", definition.sql.trim())
             }
+            Self::Saved(saved) => writeln!(out, "{}", line(&saved.alert)),
+            Self::Runs(page) if page.runs.is_empty() => {
+                writeln!(out, "No runs have posted or failed yet.")
+            }
+            Self::Runs(page) => {
+                for run in &page.runs {
+                    writeln!(out, "{}", run_line(run))?;
+                }
+                if let Some(before) = page.next_before {
+                    writeln!(out, "More: baml cloud alerts runs --before {before}")?;
+                }
+                Ok(())
+            }
+            Self::Deleted(deleted) => {
+                writeln!(out, "Deleted {} ({}).", deleted.name, deleted.deleted)
+            }
+            Self::Destinations(list) if list.destinations.is_empty() => writeln!(
+                out,
+                "No destinations yet. Add a Slack channel or a webhook in Studio."
+            ),
+            Self::Destinations(list) => list.destinations.iter().try_for_each(|destination| {
+                writeln!(
+                    out,
+                    "{}  {}  {}",
+                    destination.id, destination.kind, destination.name
+                )
+            }),
         }
-        Ok(ExitCode::Success)
     }
 }
 
@@ -326,25 +412,25 @@ struct AlertContext {
 }
 
 impl AlertContext {
-    fn open(args: &AlertsArgs) -> Result<Self> {
+    fn open(scope: &CloudScope) -> Result<Self> {
         let root =
             crate::project_load::find_project_root_from(None)?.unwrap_or(std::env::current_dir()?);
         let settings = crate::cloud_config::Boundary::read(&root)?;
         let gateway = settings.endpoint()?;
         let stored = bcs_api::Store::new(&gateway)?
             .read()?
-            .context("alerts need your Boundary login: run `baml auth login`")?;
+            .context("alerts need your Boundary login: run `baml cloud auth login`")?;
         let session = bcs_api::Client::new(gateway)?.refresh(&stored)?;
         let control = bcs_api::alerts::control_endpoint(settings.control_api_url.as_deref())?;
         let client = Client::new(control, session.access_token)?;
-        let project = match args.project.clone() {
+        let project = match scope.project.clone() {
             Some(project) => Some(project),
             None => baml_env::string_var("BOUNDARY_PROJECT")?.or(settings.project),
         }
         .context("give the project: --project org_handle/project_name")?;
         let found = client
-            .environment(&project, args.environment.as_deref())
-            .with_context(|| match &args.environment {
+            .environment(&project, scope.env.as_deref())
+            .with_context(|| match &scope.env {
                 Some(name) => format!("no environment {name} in {project} that you can reach"),
                 None => format!("no personal environment of yours in {project}"),
             })?;
@@ -399,22 +485,13 @@ impl AlertContext {
             .collect()
     }
 
-    fn destination_names(&self) -> Result<std::collections::HashMap<String, String>> {
+    fn destination_names(&self) -> Result<HashMap<String, String>> {
         Ok(self
             .client
             .destinations(&self.environment)?
             .into_iter()
             .map(|destination| (destination.id, destination.name))
             .collect())
-    }
-
-    fn print_saved(&self, alert: &Alert, json: bool) -> Result<()> {
-        if json {
-            print_json(alert)
-        } else {
-            println!("{}", line(alert));
-            Ok(())
-        }
     }
 }
 
@@ -706,11 +783,6 @@ fn now() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs())
-}
-
-fn print_json<T: serde::Serialize + ?Sized>(value: &T) -> Result<()> {
-    println!("{}", serde_json::to_string_pretty(value)?);
-    Ok(())
 }
 
 #[cfg(test)]

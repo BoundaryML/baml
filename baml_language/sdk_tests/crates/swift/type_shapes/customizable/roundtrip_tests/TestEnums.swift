@@ -5,11 +5,11 @@ import Baml
 
 final class TestEnums: XCTestCase {
     func test_enums_pick_sentiment() throws {
-        XCTAssertEqual(try Baml.enums.pick_sentiment(b: true), .Positive)
-        XCTAssertEqual(try Baml.enums.pick_sentiment(b: false), .Negative)
+        XCTAssertEqual(try Baml.enums.pick_sentiment_sync(b: true), .Positive)
+        XCTAssertEqual(try Baml.enums.pick_sentiment_sync(b: false), .Negative)
     }
 
     func test_enums_round_trip_sentiment() throws {
-        XCTAssertEqual(try Baml.enums.round_trip_sentiment(s: .Negative), .Negative)
+        XCTAssertEqual(try Baml.enums.round_trip_sentiment_sync(s: .Negative), .Negative)
     }
 }

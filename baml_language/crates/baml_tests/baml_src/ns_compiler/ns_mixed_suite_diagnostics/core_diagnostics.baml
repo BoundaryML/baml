@@ -54,6 +54,43 @@ test "AnyClass blanket bound does not expose members on nonclasses" {
     )
 }
 
+test "runtime names accept what a declaration may be called" {
+    // Contextual keywords are names in source (`class C { prompt: string }`),
+    // so a runtime-built class takes them too; a reserved keyword is not.
+    let built = reflect.Class.new(
+        "Probe",
+        {
+            "prompt": string.type(),
+            "stream": int.type(),
+            "type": int.type(),
+            "_": int.type(),
+        },
+    );
+    assert.equal(built.name(), "Probe");
+    let rejected = reflect.Class.new("Nope", { "class": int.type() }) catch (error) {
+        reflect.errors.CompilationError => error.diagnostics[0].code,
+    };
+    assert.equal(rejected, "E0010")
+}
+
+test "an in-body implements block belongs to its own class, not a namesake" {
+    let diagnostics = root.compiler.CompileDiagnostics(
+        {
+            "main.baml": `
+                interface Sized { function size(self) -> int }
+                class A { n int }
+                class A {
+                    size int
+                    implements Sized { function size(self) -> int { self.size } }
+                }
+            `,
+        },
+    );
+    let codes = diagnostics.map((diagnostic) -> string { diagnostic.code });
+    assert.is_true(codes.includes("E0011"));
+    assert.is_true(!codes.includes("E0129"))
+}
+
 test "pending runtime type is not a static reflect Type" {
     root.compiler.AssertHasCode(
         {

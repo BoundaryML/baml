@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use bex_heap::TlabHolder;
+use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, PromptAst, PromptAstSimple, RootHaver, RootVisitor,
     types::{Object, Value},
@@ -420,7 +421,76 @@ fn prompt_content_values(vm: &mut BexVm, content: &PromptAstSimple) -> Vec<Value
     }
 }
 
+/// `ai.internal._describe_unreadable_credential_file`, by the classification
+/// `GOOGLE_APPLICATION_CREDENTIALS` errors use.
+#[cfg(not(target_arch = "wasm32"))]
+fn describe_unreadable_credential_file(
+    setting: &str,
+    value: &str,
+    read_error: &str,
+    document_option: &str,
+) -> String {
+    use google_cloud_auth::PathSetting;
+    let held = PathSetting::classify(value);
+    let described = held.describe_unreadable(setting);
+    match held {
+        PathSetting::Path(_) => format!("{described}: {read_error}"),
+        PathSetting::Document { .. } => {
+            format!("{described}; pass the document through {document_option} instead")
+        }
+        PathSetting::Empty
+        | PathSetting::QuotedPath(_)
+        | PathSetting::PaddedPath(_)
+        | PathSetting::Unrecognized { .. } => described,
+    }
+}
+
+/// `ai.internal._describe_unreadable_credential_file` where the classifier is
+/// not built: Google auth is native-only, so a credential file can name
+/// nothing usable here, and the value is described by its length alone.
+#[cfg(target_arch = "wasm32")]
+fn describe_unreadable_credential_file(
+    setting: &str,
+    value: &str,
+    _read_error: &str,
+    _document_option: &str,
+) -> String {
+    format!(
+        "{setting} names no readable file (the value, {} characters, is not shown)",
+        value.chars().count()
+    )
+}
+
 impl BamlNamespaceInternal for PackageAiImpl {
+    fn _sanitize_text(text: &BexStr) -> BexStr {
+        BexStr::from(btel_settings::network::sanitize_text(
+            text.as_str(),
+            btel_settings::network::Scrub::Log,
+        ))
+    }
+
+    fn _describe_unreadable_credential_file(
+        setting: &BexStr,
+        value: &BexStr,
+        read_error: &BexStr,
+        document_option: &BexStr,
+    ) -> BexStr {
+        BexStr::from(describe_unreadable_credential_file(
+            setting.as_str(),
+            value.as_str(),
+            read_error.as_str(),
+            document_option.as_str(),
+        ))
+    }
+
+    fn _sanitize_request_header(name: &BexStr, value: &BexStr) -> BexStr {
+        BexStr::from(btel_settings::network::sanitize_request_header(
+            name.as_str(),
+            value.as_str(),
+            btel_settings::network::Scrub::Log,
+        ))
+    }
+
     fn assemble_prompt(vm: &mut BexVm, parts: &[Value], values: &[Value]) -> NativeCallResult {
         let mut pending = Vec::new();
         for value in values.iter().copied() {

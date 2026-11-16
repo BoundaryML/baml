@@ -15,41 +15,41 @@ def test_raises_imports_symbols_reachable():
     import baml_sdk  # noqa: F401
     from baml_sdk.raises_test import (  # noqa: F401
         DocLoader,
-        InferredThrow,
-        LoadDoc,
-        PureLen,
-        Reparse,
+        InferredThrow_sync,
+        LoadDoc_sync,
+        PureLen_sync,
+        Reparse_sync,
     )
 
 
 def test_raises_union_throws_lists_all_names():
-    from baml_sdk.raises_test import LoadDoc
+    from baml_sdk.raises_test import LoadDoc_sync
 
-    doc = inspect.getdoc(LoadDoc)
+    doc = inspect.getdoc(LoadDoc_sync)
     assert doc is not None
     assert doc.rstrip().endswith("Raises:\n    ParseError, TimeoutError"), repr(doc)
 
 
 def test_raises_async_sibling_also_has_raises():
-    from baml_sdk.raises_test import LoadDoc_async
+    from baml_sdk.raises_test import LoadDoc
 
-    doc = inspect.getdoc(LoadDoc_async)
+    doc = inspect.getdoc(LoadDoc)
     assert doc is not None
     assert doc.rstrip().endswith("Raises:\n    ParseError, TimeoutError"), repr(doc)
 
 
 def test_raises_single_throws():
-    from baml_sdk.raises_test import Reparse
+    from baml_sdk.raises_test import Reparse_sync
 
-    doc = inspect.getdoc(Reparse)
+    doc = inspect.getdoc(Reparse_sync)
     assert doc is not None
     assert doc.rstrip().endswith("Raises:\n    ParseError"), repr(doc)
 
 
 def test_raises_summary_precedes_raises_block():
-    from baml_sdk.raises_test import LoadDoc
+    from baml_sdk.raises_test import LoadDoc_sync
 
-    doc = inspect.getdoc(LoadDoc)
+    doc = inspect.getdoc(LoadDoc_sync)
     assert doc is not None
     assert doc.startswith("Load a document from a path."), repr(doc)
     assert "\n\nRaises:\n" in doc, repr(doc)
@@ -58,17 +58,17 @@ def test_raises_summary_precedes_raises_block():
 def test_raises_inferred_contract_without_clause_still_raises():
     # No written `throws` clause, but the body throws ParseError — the
     # inferred contract (callable_throws) still surfaces a Raises block.
-    from baml_sdk.raises_test import InferredThrow
+    from baml_sdk.raises_test import InferredThrow_sync
 
-    doc = inspect.getdoc(InferredThrow)
+    doc = inspect.getdoc(InferredThrow_sync)
     assert doc is not None
     assert doc.rstrip().endswith("Raises:\n    ParseError"), repr(doc)
 
 
 def test_raises_non_throwing_function_has_no_raises_block():
-    from baml_sdk.raises_test import PureLen
+    from baml_sdk.raises_test import PureLen_sync
 
-    doc = inspect.getdoc(PureLen) or ""
+    doc = inspect.getdoc(PureLen_sync) or ""
     assert "Raises:" not in doc, repr(doc)
 
 

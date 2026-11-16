@@ -9,21 +9,24 @@ class ProjectConfiguration {
     }
 
     function validate(self) -> null {
-        let doc = baml.toml.Table.parse(self.text);
-        baml.json.to<ProjectShape>(doc.to_json(), naming = baml.json.Naming.Aliased);
+        let doc = parse_document(self.path, self.text);
+        // A field of the wrong type is reported with the file it is in.
+        baml.json.to<ProjectShape>(doc.to_json(), naming = baml.json.Naming.Aliased) catch (error) {
+            baml.json.DecodeError => fail(`${self.path}: ${error.message}`),
+        };
         // JSON renders TOML datetimes as strings. Check string-valued fields in
         // the original tree too, so a date cannot masquerade as a valid setting.
         for (let section in ["pack", "bridge", "boundary"]) {
             if let table: baml.toml.Table = table_at(doc, section, self.path) {
-                validate_strings(
-                    table,
-                    if (section == "boundary") {
-                        ["project", "api_url"]
-                    } else {
-                        ["telemetry_environment"]
-                    },
-                    self.path,
-                );
+                if (section == "boundary") {
+                    validate_strings(table, ["project", "api_url"], self.path);
+                } else if let build: baml.toml.Table = table_at(table, "build", self.path) {
+                    validate_strings(
+                        build,
+                        ["embed_telemetry_api_key_from_env_var", "embed_telemetry_env"],
+                        self.path,
+                    );
+                }
             }
         }
         if let dependencies: baml.toml.Table = table_at(doc, "dependencies", self.path) {
@@ -38,7 +41,13 @@ class ProjectConfiguration {
                 if let generator_options: baml.toml.Table = table_at(generators, key, self.path) {
                     validate_strings(
                         generator_options,
-                        ["output_type", "naming_convention", "output_dir", "sdk_import_path"],
+                        [
+                            "output_type",
+                            "naming_convention",
+                            "output_dir",
+                            "sdk_import_path",
+                            "package_name",
+                        ],
                         self.path,
                     );
                 }
@@ -113,7 +122,7 @@ class UserConfiguration {
     }
 
     function validate(self) -> null {
-        let doc = baml.toml.Table.parse(self.text);
+        let doc = parse_document(config_path(), self.text);
         if let defaults: baml.toml.Table = table_at(doc, "default", config_path()) {
             if let value: string = string_at(defaults, "selector", config_path()) {
                 validate_selector(value);
@@ -143,7 +152,7 @@ class ChannelState {
     }
 
     function validate_text(self, text: string) -> null {
-        let doc = baml.toml.Table.parse(text);
+        let doc = parse_document(self.path, text);
         if let channels: baml.toml.Table = table_at(doc, "channels", self.path) {
             for (let key in channels.items.keys()) {
                 let value = table_at(channels, key, self.path);

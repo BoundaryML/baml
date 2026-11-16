@@ -24,7 +24,7 @@ use crate::{
     CasId, TypeIdentity,
     graph::{
         BigintId, Declared, FieldEntry, Graph, LabelId, MapEntry, MediaSource, ObjectId, OwnedType,
-        Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId,
+        Range, RedactionReason, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId,
     },
     hash::{self, Absorb, Counter, Digest, HashSink, TypeLeaf},
     tags::{self, DeclarationTag, MediaSourceTag, ObjectTag, RootTag, ValueTag},
@@ -101,6 +101,9 @@ pub(crate) trait Visitor {
     fn bits(&mut self, bits: u64) -> Result<(), Self::Error>;
     /// A local number, child slot or enum variant.
     fn index(&mut self, index: u32) -> Result<(), Self::Error>;
+    /// Bytes written and hashed as they are, after a length that says how
+    /// many: a redacted value's body.
+    fn raw(&mut self, bytes: &[u8]) -> Result<(), Self::Error>;
     /// A length that is data, not the size of what follows.
     fn length(&mut self, length: usize) -> Result<(), Self::Error>;
     /// A string as a value or a name. Its digest is the handle's own.
@@ -233,6 +236,14 @@ fn value<V: Visitor, R: Resolver>(
         SnapshotValue::Truncated(limit) => {
             v.byte(ValueTag::Truncated as u8)?;
             v.byte(tags::limit(limit))
+        }
+        SnapshotValue::Redacted(reason) => {
+            let body = match reason {
+                RedactionReason::Declared => [tags::RedactionTag::Declared as u8],
+            };
+            v.byte(ValueTag::Redacted as u8)?;
+            v.index(u32::try_from(body.len()).unwrap_or_else(|_| unreachable!("one byte")))?;
+            v.raw(&body)
         }
     }
 }
@@ -453,7 +464,7 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
     }
 }
 
-/// Hash format 5 input: each piece as the encoding writes it, with a leaf's
+/// Hash format 6 input: each piece as the encoding writes it, with a leaf's
 /// content replaced by its digest. One stream hashes a whole blob, whether a
 /// [`hash::Hasher`] streams it or a [`hash::BlobHasher`] gathers it.
 impl<H: HashSink> Visitor for H {
@@ -476,6 +487,11 @@ impl<H: HashSink> Visitor for H {
     #[inline]
     fn index(&mut self, index: u32) -> Result<(), Self::Error> {
         self.number(u64::from(index));
+        Ok(())
+    }
+    #[inline]
+    fn raw(&mut self, bytes: &[u8]) -> Result<(), Self::Error> {
+        self.absorb(bytes);
         Ok(())
     }
     #[inline]
@@ -571,6 +587,11 @@ impl Visitor for Length {
         Ok(())
     }
     #[inline(always)]
+    fn raw(&mut self, bytes: &[u8]) -> Result<(), Self::Error> {
+        self.add(bytes.len());
+        Ok(())
+    }
+    #[inline(always)]
     fn index(&mut self, _: u32) -> Result<(), Self::Error> {
         self.add(4);
         Ok(())
@@ -653,6 +674,11 @@ where
     fn bits(&mut self, bits: u64) -> Result<(), Self::Error> {
         infallible(self.1.bits(bits));
         self.0.bits(bits)
+    }
+    #[inline(always)]
+    fn raw(&mut self, bytes: &[u8]) -> Result<(), Self::Error> {
+        infallible(self.1.raw(bytes));
+        self.0.raw(bytes)
     }
     #[inline(always)]
     fn index(&mut self, index: u32) -> Result<(), Self::Error> {

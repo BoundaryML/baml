@@ -1,0 +1,6 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(a: bool, b: bool) -> bool {
+    !(a && b)
+}

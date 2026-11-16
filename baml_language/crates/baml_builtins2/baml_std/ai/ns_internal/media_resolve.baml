@@ -46,7 +46,7 @@ function _resolve_media_content(
             _ => {
                 throw root.errors.NetworkFailure { status_code: null,
                     provider: "media",
-                    detail: `media URL ${media_url} could not be fetched: ${e.to_string()}`,
+                    detail: root.wire.redact_url_secrets(`media URL ${media_url} could not be fetched: ${e.to_string()}`),
                     raw_body: null,
                 }
             },
@@ -54,7 +54,7 @@ function _resolve_media_content(
         if (!response.ok()) {
             throw root.errors.NetworkFailure { status_code: null,
                 provider: "media",
-                detail: `media URL ${media_url} returned HTTP ${response.status_code}`,
+                detail: root.wire.redact_url_secrets(`media URL ${media_url} returned HTTP ${response.status_code}`),
                 raw_body: null,
             }
         }
@@ -63,7 +63,7 @@ function _resolve_media_content(
             _ => {
                 throw root.errors.NetworkFailure { status_code: null,
                     provider: "media",
-                    detail: `media URL ${media_url} body could not be read: ${e.to_string()}`,
+                    detail: root.wire.redact_url_secrets(`media URL ${media_url} body could not be read: ${e.to_string()}`),
                     raw_body: null,
                 }
             },

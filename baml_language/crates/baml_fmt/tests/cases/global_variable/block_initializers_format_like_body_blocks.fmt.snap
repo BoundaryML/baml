@@ -1,0 +1,7 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+const TOTAL = {
+    let a = 1;
+    a + 2
+};

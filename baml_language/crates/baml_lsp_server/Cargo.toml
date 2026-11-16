@@ -68,7 +68,7 @@ parking_lot = { workspace = true }
 reqwest = { workspace = true }
 rustls = { workspace = true, optional = true }
 serde = { workspace = true, features = [ "derive" ] }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "rt-multi-thread", "net", "time", "macros" ] }
 tokio-tungstenite = { workspace = true }

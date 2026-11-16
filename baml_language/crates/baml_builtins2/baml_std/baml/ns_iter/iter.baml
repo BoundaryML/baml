@@ -797,7 +797,6 @@ class Filter<T, E, E2> {
                     },
                 }
             }
-            Done {}
         }
     }
 }
@@ -843,7 +842,6 @@ class FilterMap<T, R, E, E2> {
                     },
                 }
             }
-            Done {}
         }
     }
 }
@@ -904,7 +902,6 @@ class FlatMap<T, R, E, E2, E3> {
                     },
                 }
             }
-            Done {}
         }
     }
 }
@@ -961,7 +958,6 @@ class Flatten<I extends Iterable<Item = R, Error = E3>, R, E, E3> {
                     },
                 }
             }
-            Done {}
         }
     }
 }

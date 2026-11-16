@@ -31,7 +31,7 @@ const packageRootExports = [
   "_currentTraceContextAsync",
   "_instrument",
   "_invoke",
-  "_invokeAsync",
+  "_invokeSync",
   "_withExecutionContext",
   "_seedGenericMediaHandle",
   "callFunction",

@@ -5,7 +5,8 @@
  * are request/response rather than subscriptions: the store publishes on an
  * interval and a bound query sees a frozen prefix of it. The list therefore
  * refreshes when the tab opens, when the project changes, and when a run
- * finishes; a run in flight is not streamed in.
+ * finishes, and re-reads on an interval while a run is in flight or has
+ * just finished; nothing is streamed in.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -46,6 +47,12 @@ export interface UseTelemetryOptions {
    * profiler has just sealed.
    */
   revision?: unknown;
+  /**
+   * A playground run is in flight. The store publishes it a moment after it
+   * starts, so a read taken as it starts does not list it, and without a
+   * listed running row nothing else would re-read until it ends.
+   */
+  running?: boolean;
 }
 
 /**
@@ -66,6 +73,14 @@ const RUNNING_POLL_MS = 2000;
  */
 const RECENT_INCOMPLETE_MS = 10 * 60_000;
 const STALE_POLL_MS = 30_000;
+
+/**
+ * How long to keep re-reading after a run completes. The store publishes
+ * what a run recorded a second or two after it happens, so the read a
+ * completion triggers can still miss the run. A run shorter than that,
+ * started with the tab open, would otherwise never be listed.
+ */
+const RUN_SETTLE_MS = 5000;
 
 /** How often to re-read the list, or null when nothing can change. */
 export function pollInterval(
@@ -103,6 +118,7 @@ export function useTelemetry({
   active,
   llmFunctions,
   revision,
+  running = false,
 }: UseTelemetryOptions): TelemetryState {
   const [executions, setExecutions] = useState<TelemetryExecution[]>([]);
   const [telemetry, setTelemetry] = useState<ExecutionTelemetry | null>(null);
@@ -194,10 +210,31 @@ export function useTelemetry({
     setSelectedId(null);
   }, [project]);
 
+  // A revision that changes with the project counts another project's runs;
+  // no run ended, and the project change has already re-read. A window the
+  // previous project's run opened has nothing to find in this one.
+  const [settleUntil, setSettleUntil] = useState(0);
+  const settled = useRef({ project, revision });
+  useEffect(() => {
+    const last = settled.current;
+    settled.current = { project, revision };
+    if (last.project !== project) {
+      setSettleUntil(0);
+      return;
+    }
+    if (Object.is(last.revision, revision)) return;
+    setSettleUntil(Date.now() + RUN_SETTLE_MS);
+  }, [project, revision]);
+
   const rows = useMemo(() => executions.map(toExecutionRow), [executions]);
   // An incomplete execution may still be recording, and only a re-read can
   // show its end arriving. Every re-read recomputes this with a fresh clock.
-  const poll = useMemo(() => pollInterval(rows, Date.now()), [rows]);
+  const poll = useMemo(() => {
+    const now = Date.now();
+    return running || now < settleUntil
+      ? RUNNING_POLL_MS
+      : pollInterval(rows, now);
+  }, [rows, running, settleUntil]);
 
   useEffect(() => {
     if (!active || !project || poll == null) return;

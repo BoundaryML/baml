@@ -123,16 +123,22 @@ describe('callFunctionSync', () => {
     });
 
     test('returned closure accepts args and decodes results', () => {
-        const addTen = callFunctionSync(rt, 'MakeAdder', { offset: 10 }).result() as (value: number) => number;
+        const addTen = callFunctionSync(rt, 'MakeAdder', { offset: 10 }).result() as {
+            (value: number): Promise<number>;
+            callSync(value: number): number;
+        };
         expect(typeof addTen).toBe('function');
-        expect(addTen(5)).toBe(15);
-        expect(addTen(7)).toBe(17);
+        expect(addTen.callSync(5)).toBe(15);
+        expect(addTen.callSync(7)).toBe(17);
     });
 
     test('returned closure is reusable and retains captures', () => {
-        const nextValue = callFunctionSync(rt, 'MakeCounter', { start: 40 }).result() as () => number;
-        expect(nextValue()).toBe(41);
-        expect(nextValue()).toBe(42);
+        const nextValue = callFunctionSync(rt, 'MakeCounter', { start: 40 }).result() as {
+            (): Promise<number>;
+            callSync(): number;
+        };
+        expect(nextValue.callSync()).toBe(41);
+        expect(nextValue.callSync()).toBe(42);
     });
 });
 
@@ -149,6 +155,12 @@ describe('callFunction (async)', () => {
 
     test('ChainedCalls', async () => {
         expect((await callFunction(rt, 'ChainedCalls', {})).result()).toBe(1);
+    });
+
+    test('returned closure is awaited', async () => {
+        const addTen = (await callFunction(rt, 'MakeAdder', { offset: 10 })).result() as (value: number) => Promise<number>;
+        expect(await addTen(5)).toBe(15);
+        expect(await addTen(7)).toBe(17);
     });
 
     test('async enum result — Heading', async () => {

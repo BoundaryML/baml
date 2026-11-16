@@ -1,0 +1,44 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function (x) -> {\\nclass {\\nenum E { A int | string }\\n\")"
+---
+SourceFile@0..51
+  items: FunctionDef@0..17
+    kw: Function "function" @0..8
+    name: <missing @9>
+    params: ParamList@9..12
+      l: LParen "(" @9..10
+      params: Param@10..11
+        name: Name@10..11
+          token: Word "x" @10..11
+        ascription: TypeAscription@<empty>
+          ty: <missing @11>
+      r: RParen ")" @11..12
+    ret: ReturnType@13..15
+      arrow: Arrow "->" @13..15
+      ty: <missing @16>
+    body: Block@16..17
+      l: LBrace "{" @16..17
+      r: <missing @18>
+  items: ClassDef@18..25
+    kw: Class "class" @18..23
+    name: <missing @24>
+    l: LBrace "{" @24..25
+    r: <missing @26>
+  items: EnumDef@26..51
+    kw: Enum "enum" @26..30
+    name: Name@31..32
+      token: Word "E" @31..32
+    l: LBrace "{" @33..34
+    members: EnumVariant@35..49
+      name: Name@35..36
+        token: Word "A" @35..36
+    r: RBrace "}" @50..51
+---
+UnexpectedToken { expected: "function name", found: "'('", range: 9..10 }
+UnexpectedToken { expected: "type annotation", found: "')'", range: 11..12 }
+UnexpectedToken { expected: "type", found: "'{'", range: 16..17 }
+UnexpectedToken { expected: "'}'", found: "class", range: 18..23 }
+UnexpectedToken { expected: "class name", found: "'{'", range: 24..25 }
+UnexpectedToken { expected: "'}'", found: "enum", range: 26..30 }
+InvalidSyntax { message: "enum variants cannot have type annotations", range: 37..49 }

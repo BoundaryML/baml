@@ -1,0 +1,70 @@
+# Runs the setup-baml and baml-action tests every day, and tells Slack when
+# they fail.
+#
+# Those tests install the published BAML wrapper, and pull requests run them
+# only when they touch the actions. A wrapper release that breaks the actions
+# changes none of their files, so before this check the first sign was users'
+# CI failing: wrapper 0.3.1 broke `setup-baml@v1` on 2026-11-06. The run is
+# after the nightly release, which publishes any new wrapper.
+#
+# The tests live in github-actions-ci.yml. The Slack job is here rather than
+# there because sync-github-actions-mirror.yml also calls those tests, and a
+# called workflow can't ask for more permissions than its caller grants.
+
+name: GitHub Actions nightly check
+
+on:
+  schedule:
+    # 11:37 UTC, after the nightly release (07:07 or 08:07 UTC) has finished.
+    - cron: "37 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test actions
+    uses: ./.github/workflows/github-actions-ci.yml
+    permissions:
+      contents: read
+      pull-requests: write
+
+  notify-slack:
+    name: Notify Slack on failure
+    needs: [test]
+    # Only canary may use the release environment's Slack token.
+    if: >-
+      ${{
+        always() &&
+        github.repository == 'BoundaryML/baml' &&
+        github.ref == 'refs/heads/canary' &&
+        (needs.test.result == 'failure' || needs.test.result == 'cancelled')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: infisical-github-baml-language-release
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          sparse-checkout: |
+            .github/actions/setup-mise
+            mise.toml
+            tools/
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: ./.github/actions/setup-mise
+        with:
+          install_args: uv
+      - name: Find failures and notify Slack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_CHANNEL: "#general"
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOUNDARY_BOT_TOKEN }}
+          SUBJECT: "setup-baml and baml-action nightly check"
+          DOCS: ".github/workflows/sync-github-actions-mirror.yml"
+          VERSION: ${{ github.sha }}
+        run: uv run --script tools/notify-release-failure.py

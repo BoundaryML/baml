@@ -1,0 +1,4 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+interface Marker<T> requires Base {}

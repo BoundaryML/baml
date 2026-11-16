@@ -1,0 +1,4 @@
+function f() -> int {
+    let x = the_data_table.rows_by_category[compute_the_category_key(the_first_component_value, the_second_component_value)];
+    x
+}

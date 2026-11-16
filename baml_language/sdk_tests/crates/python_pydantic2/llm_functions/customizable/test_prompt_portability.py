@@ -23,15 +23,15 @@ def _walk_dicts(value):
 # SDK_PARITY_LINT(skip): validates Python's portable Prompt and media wrapper surface
 def test_prompt_is_reusable_and_media_survives_request_preview():
     image = Image.from_base64(PNG_B64, "image/png")
-    spec = lorem.InspectMedia_spec(photo=image)
-    prompt = spec.prompt()
+    spec = lorem.InspectMedia_spec_sync(photo=image)
+    prompt = spec.prompt_sync()
 
-    first_text = prompt.text()
-    assert prompt.text() == first_text
+    first_text = prompt.text_sync()
+    assert prompt.text_sync() == first_text
 
-    first_messages = prompt.messages()
-    assert prompt.text() == first_text
-    second_messages = prompt.messages()
+    first_messages = prompt.messages_sync()
+    assert prompt.text_sync() == first_text
+    second_messages = prompt.messages_sync()
     assert len(first_messages) == len(second_messages) == 1
     assert first_messages[0].role == second_messages[0].role == "user"
     assert first_messages[0].parts[0] == second_messages[0].parts[0]
@@ -46,11 +46,11 @@ def test_prompt_is_reusable_and_media_survives_request_preview():
 
     # Rendering another portable Prompt from the same live spec must not
     # consume either the spec or the first Prompt's owned AST.
-    second_prompt = spec.prompt()
-    assert second_prompt.text() == first_text
-    assert second_prompt.messages()[0].parts[1].base64() == PNG_B64
+    second_prompt = spec.prompt_sync()
+    assert second_prompt.text_sync() == first_text
+    assert second_prompt.messages_sync()[0].parts[1].base64() == PNG_B64
 
-    request = spec.build_request()
+    request = spec.build_request_sync()
     body = json.loads(request.body)
     image_parts = [
         part for part in _walk_dicts(body) if part.get("type") == "input_image"
@@ -58,13 +58,13 @@ def test_prompt_is_reusable_and_media_survives_request_preview():
     assert len(image_parts) == 1
     assert image_parts[0]["image_url"] == "data:image/png;base64," + PNG_B64
 
-    assert spec.build_request().body == request.body
+    assert spec.build_request_sync().body == request.body
 
 
 # SDK_PARITY_LINT(skip): validates Python's generated FunctionSpec parse surface
 def test_function_spec_parse_replaces_the_parse_companion():
-    spec = lorem.ExtractResume_spec(text="Ada Lovelace")
-    parsed = spec.parse('{"name":"Ada Lovelace","email":null}')
+    spec = lorem.ExtractResume_spec_sync(text="Ada Lovelace")
+    parsed = spec.parse_sync('{"name":"Ada Lovelace","email":null}')
 
     assert isinstance(parsed, lorem.Resume)
     assert parsed.name == "Ada Lovelace"
@@ -74,18 +74,18 @@ def test_function_spec_parse_replaces_the_parse_companion():
 def test_function_spec_helpers_accept_invocation_controls():
     from baml_bridge import BamlCancelledError
 
-    spec = lorem.ExtractResume_spec(text="Ada Lovelace", _baml={})
-    assert spec.name(_baml={"timeout_ms": 1000})
+    spec = lorem.ExtractResume_spec_sync(text="Ada Lovelace", _baml={})
+    assert spec.name_sync(_baml={"timeout_ms": 1000})
     for method in ("name", "arguments", "output_type", "prompt", "tools", "requested_model", "build_request", "parse", "call"):
         args = ('{"name":"Ada","email":null}',) if method == "parse" else ()
         with pytest.raises(BamlCancelledError):
-            getattr(spec, method)(*args, _baml={"timeout_ms": 0})
+            getattr(spec, f"{method}_sync")(*args, _baml={"timeout_ms": 0})
 
 
 async def test_function_spec_helpers_accept_invocation_controls_async():
-    spec = await lorem.ExtractResume_spec_async(text="Ada Lovelace", _baml={})
-    assert await spec.name_async(_baml={"timeout_ms": 1000})
+    spec = await lorem.ExtractResume_spec(text="Ada Lovelace", _baml={})
+    assert await spec.name(_baml={"timeout_ms": 1000})
     for method in ("name", "arguments", "output_type", "prompt", "tools", "requested_model", "build_request", "parse", "call"):
         args = ('{"name":"Ada","email":null}',) if method == "parse" else ()
         with pytest.raises(asyncio.CancelledError):
-            await getattr(spec, f"{method}_async")(*args, _baml={"timeout_ms": 0})
+            await getattr(spec, method)(*args, _baml={"timeout_ms": 0})

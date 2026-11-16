@@ -133,6 +133,7 @@ fn collect<'db>(
                     MethodCallee::Virtual {
                         interface: DeclRef::Source(interface),
                         method,
+                        ..
                     },
                 ..
             } = resolution

@@ -153,30 +153,40 @@ test "server_bind_resolves_ephemeral_port" {
     assert.is_true(server_bind_resolves_ephemeral_port())
 }
 
-// Cancelling a serve frees the handler but keeps the port bound (the listener
-// lives in the `Server`), so the SAME server can be served again — here with a
-// different handler. The short sleep lets the cancelled serve settle (releasing
-// the "serving" flag) before re-serving. Distinct bodies ("first"/"second")
-// ensure the second serve really took over.
+// Cancellation must settle before the same listener can serve again.
+// Close each connection so the client cannot reuse a cancelled connection.
 function server_reserve_after_cancel() -> string {
     let server = baml.http.Server.bind("127.0.0.1:0");
+    let request = baml.http.Request {
+        method: "GET",
+        url: "http://" + server.addr + "/",
+        headers: { "connection": "close" },
+        body: "",
+    };
     let firstTask = spawn {
         server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
-            baml.http.Response.new(200, { }, "first".to_utf8())
+            baml.http.Response.new(200, {}, "first".to_utf8())
         })
     };
-    let served = baml.http.fetch("http://" + server.addr + "/").text();
+    defer { firstTask.cancel(); }
+    let served = baml.http.send(request).text();
 
     firstTask.cancel();
-    baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));  // let the cancelled serve release the "serving" flag
+    (await firstTask) catch (e) {
+        baml.panics.Cancelled => null
+    };
 
     let secondTask = spawn {
         server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
-            baml.http.Response.new(200, { }, "second".to_utf8())
+            baml.http.Response.new(200, {}, "second".to_utf8())
         })
     };
-    let served_again = baml.http.fetch("http://" + server.addr + "/").text();
+    defer { secondTask.cancel(); }
+    let served_again = baml.http.send(request).text();
     secondTask.cancel();
+    (await secondTask) catch (e) {
+        baml.panics.Cancelled => null
+    };
 
     served + "/" + served_again
 }

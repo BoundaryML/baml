@@ -16,7 +16,7 @@ mod common;
 
 use common::{MockIo, authorized_user_json, service_account_json, token_response};
 use forked_google_cloud_auth::{
-    AuthError, CLOUD_PLATFORM_SCOPE, HttpResponse, adc_available, token_from_adc,
+    AuthError, CLOUD_PLATFORM_SCOPE, HttpResponse, PathSetting, adc_available, token_from_adc,
     token_from_credentials_json, token_from_service_account_json,
 };
 
@@ -133,10 +133,11 @@ async fn gac_set_but_unreadable_is_an_error_not_a_fallthrough() {
         .http(|_m, _u, _h, _b| Ok(ok(token_response("ya29.never"))));
     let err = token_from_adc(&io, CLOUD_PLATFORM_SCOPE).await.unwrap_err();
     match &err {
-        AuthError::NoCredentials(msg) => {
-            assert!(msg.contains("/missing/adc.json"), "msg={msg}");
+        AuthError::UnusableCredentialPath { setting, held } => {
+            assert_eq!(*setting, "GOOGLE_APPLICATION_CREDENTIALS");
+            assert_eq!(*held, PathSetting::Path("/missing/adc.json".to_string()));
         }
-        other => panic!("expected NoCredentials, got {other:?}"),
+        other => panic!("expected UnusableCredentialPath, got {other:?}"),
     }
     assert_eq!(io.http_calls(), 0, "must not fall through to other sources");
 }

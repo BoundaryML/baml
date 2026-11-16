@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0029
+
+  × missing value
+   ╭─[main.baml:5:38]
+ 5 │ ╭─▶ function header_after_value() -> int {
+ 6 │ │       let x = 4;
+ 7 │ │       x + 1
+ 8 │ │       //# done
+ 9 │ ├─▶ }
+   · ╰──── expected `int`, but this block ends without a value
+   ╰────

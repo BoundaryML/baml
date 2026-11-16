@@ -1,0 +1,594 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== banned_expressions.baml ===
+SourceFile@50..2595
+  items: FunctionDef@50..100
+    kw: Function "function" @50..58
+    name: Name@59..62
+      token: Word "Foo" @59..62
+    params: ParamList@62..64
+      l: LParen "(" @62..63
+      r: RParen ")" @63..64
+    ret: ReturnType@65..71
+      arrow: Arrow "->" @65..67
+      ty: PathType@68..71
+        head: Name@68..71
+          token: Word "int" @68..71
+    body: Block@72..100
+      l: LBrace "{" @72..73
+      stmts: LetStmt@76..83
+        introducer: Let "let" @76..79
+        pattern: BindingPattern@80..81
+          name: Name@80..81
+            token: Word "a" @80..81
+        eq: Equals "=" @82..83
+        init: <missing @84>
+      stmts: LetStmt@84..94
+        introducer: Let "let" @84..87
+        pattern: BindingPattern@88..89
+          name: Name@88..89
+            token: Word "b" @88..89
+        eq: Equals "=" @90..91
+        init: LiteralExpr@92..94
+          token: Integer "42" @92..94
+      tail: PathExpr@97..98
+        head: Name@97..98
+          token: Word "a" @97..98
+      r: RBrace "}" @99..100
+  items: FunctionDef@168..206
+    kw: Function "function" @168..176
+    name: Name@177..180
+      token: Word "Bar" @177..180
+    params: ParamList@180..182
+      l: LParen "(" @180..181
+      r: RParen ")" @181..182
+    ret: ReturnType@183..189
+      arrow: Arrow "->" @183..185
+      ty: PathType@186..189
+        head: Name@186..189
+          token: Word "int" @186..189
+    body: Block@190..206
+      l: LBrace "{" @190..191
+      stmts: LetStmt@194..204
+        introducer: Let "let" @194..197
+        pattern: BindingPattern@198..199
+          name: Name@198..199
+            token: Word "b" @198..199
+        eq: Equals "=" @200..201
+        init: LiteralExpr@202..204
+          token: Integer "42" @202..204
+      r: RBrace "}" @205..206
+  items: FunctionDef@689..752
+    kw: Function "function" @689..697
+    name: Name@698..715
+      token: Word "ParenAssignSimple" @698..715
+    params: ParamList@715..717
+      l: LParen "(" @715..716
+      r: RParen ")" @716..717
+    ret: ReturnType@718..724
+      arrow: Arrow "->" @718..720
+      ty: PathType@721..724
+        head: Name@721..724
+          token: Word "int" @721..724
+    body: Block@725..752
+      l: LBrace "{" @725..726
+      stmts: LetStmt@729..740
+        introducer: Let "let" @729..732
+        pattern: BindingPattern@733..734
+          name: Name@733..734
+            token: Word "x" @733..734
+        eq: Equals "=" @735..736
+        init: LiteralExpr@737..739
+          token: Integer "10" @737..739
+        semi: Semicolon ";" @739..740
+      tail: ParenExpr@743..750
+        l: LParen "(" @743..744
+        inner: PathExpr@744..745
+          head: Name@744..745
+            token: Word "x" @744..745
+        r: RParen ")" @749..750
+      r: RBrace "}" @751..752
+  items: FunctionDef@808..874
+    kw: Function "function" @808..816
+    name: Name@817..836
+      token: Word "ParenCompoundAssign" @817..836
+    params: ParamList@836..838
+      l: LParen "(" @836..837
+      r: RParen ")" @837..838
+    ret: ReturnType@839..845
+      arrow: Arrow "->" @839..841
+      ty: PathType@842..845
+        head: Name@842..845
+          token: Word "int" @842..845
+    body: Block@846..874
+      l: LBrace "{" @846..847
+      stmts: LetStmt@850..861
+        introducer: Let "let" @850..853
+        pattern: BindingPattern@854..855
+          name: Name@854..855
+            token: Word "x" @854..855
+        eq: Equals "=" @856..857
+        init: LiteralExpr@858..860
+          token: Integer "10" @858..860
+        semi: Semicolon ";" @860..861
+      tail: ParenExpr@864..872
+        l: LParen "(" @864..865
+        inner: PathExpr@865..866
+          head: Name@865..866
+            token: Word "x" @865..866
+        r: RParen ")" @871..872
+      r: RBrace "}" @873..874
+  items: FunctionDef@933..1008
+    kw: Function "function" @933..941
+    name: Name@942..958
+      token: Word "ParenAssignInLet" @942..958
+    params: ParamList@958..960
+      l: LParen "(" @958..959
+      r: RParen ")" @959..960
+    ret: ReturnType@961..967
+      arrow: Arrow "->" @961..963
+      ty: PathType@964..967
+        head: Name@964..967
+          token: Word "int" @964..967
+    body: Block@968..1008
+      l: LBrace "{" @968..969
+      stmts: LetStmt@972..983
+        introducer: Let "let" @972..975
+        pattern: BindingPattern@976..977
+          name: Name@976..977
+            token: Word "x" @976..977
+        eq: Equals "=" @978..979
+        init: LiteralExpr@980..982
+          token: Integer "10" @980..982
+        semi: Semicolon ";" @982..983
+      stmts: LetStmt@986..1002
+        introducer: Let "let" @986..989
+        pattern: BindingPattern@990..991
+          name: Name@990..991
+            token: Word "y" @990..991
+        eq: Equals "=" @992..993
+        init: ParenExpr@994..1001
+          l: LParen "(" @994..995
+          inner: PathExpr@995..996
+            head: Name@995..996
+              token: Word "x" @995..996
+          r: RParen ")" @1000..1001
+        semi: Semicolon ";" @1001..1002
+      tail: PathExpr@1005..1006
+        head: Name@1005..1006
+          token: Word "y" @1005..1006
+      r: RBrace "}" @1007..1008
+  items: ClassDef@1243..1340
+    kw: Class "class" @1243..1248
+    name: Name@1249..1256
+      token: Word "Profile" @1249..1256
+    l: LBrace "{" @1257..1258
+    members: Field@1261..1272
+      name: Name@1261..1265
+        token: Word "name" @1261..1265
+      ty: PathType@1266..1272
+        head: Name@1266..1272
+          token: Word "string" @1266..1272
+    members: Field@1275..1290
+      name: Name@1275..1282
+        token: Word "address" @1275..1282
+      ty: OptionalType@1283..1290
+        inner: PathType@1283..1289
+          head: Name@1283..1289
+            token: Word "string" @1283..1289
+        q: Question "?" @1289..1290
+    members: Field@1293..1306
+      name: Name@1293..1299
+        token: Word "scores" @1293..1299
+      ty: OptionalType@1300..1306
+        inner: ArrayType@1300..1305
+          inner: PathType@1300..1303
+            head: Name@1300..1303
+              token: Word "int" @1300..1303
+          l: LBracket "[" @1303..1304
+          r: RBracket "]" @1304..1305
+        q: Question "?" @1305..1306
+    members: Field@1309..1338
+      name: Name@1309..1317
+        token: Word "settings" @1309..1317
+      ty: OptionalType@1318..1338
+        inner: PathType@1318..1337
+          head: Name@1318..1321
+            token: Map "map" @1318..1321
+          args: TypeArgs@1321..1337
+            l: Less "<" @1321..1322
+            args: PathType@1322..1328
+              head: Name@1322..1328
+                token: Word "string" @1322..1328
+            args: Comma "," @1328..1329
+            args: PathType@1330..1336
+              head: Name@1330..1336
+                token: Word "string" @1330..1336
+            r: Greater ">" @1336..1337
+        q: Question "?" @1337..1338
+    r: RBrace "}" @1339..1340
+  items: ClassDef@1342..1384
+    kw: Class "class" @1342..1347
+    name: Name@1348..1352
+      token: Word "User" @1348..1352
+    l: LBrace "{" @1353..1354
+    members: Field@1357..1363
+      name: Name@1357..1359
+        token: Word "id" @1357..1359
+      ty: PathType@1360..1363
+        head: Name@1360..1363
+          token: Word "int" @1360..1363
+    members: Field@1366..1382
+      name: Name@1366..1373
+        token: Word "profile" @1366..1373
+      ty: OptionalType@1374..1382
+        inner: PathType@1374..1381
+          head: Name@1374..1381
+            token: Word "Profile" @1374..1381
+        q: Question "?" @1381..1382
+    r: RBrace "}" @1383..1384
+  items: ClassDef@1386..1472
+    kw: Class "class" @1386..1391
+    name: Name@1392..1396
+      token: Word "Node" @1392..1396
+    l: LBrace "{" @1397..1398
+    members: Field@1401..1410
+      name: Name@1401..1406
+        token: Word "value" @1401..1406
+      ty: PathType@1407..1410
+        head: Name@1407..1410
+          token: Word "int" @1407..1410
+    members: Field@1413..1423
+      name: Name@1413..1417
+        token: Word "next" @1413..1417
+      ty: OptionalType@1418..1423
+        inner: PathType@1418..1422
+          head: Name@1418..1422
+            token: Word "Node" @1418..1422
+        q: Question "?" @1422..1423
+    members: Field@1426..1442
+      name: Name@1426..1434
+        token: Word "children" @1426..1434
+      ty: OptionalType@1435..1442
+        inner: ArrayType@1435..1441
+          inner: PathType@1435..1439
+            head: Name@1435..1439
+              token: Word "Node" @1435..1439
+          l: LBracket "[" @1439..1440
+          r: RBracket "]" @1440..1441
+        q: Question "?" @1441..1442
+    members: Field@1445..1470
+      name: Name@1445..1451
+        token: Word "labels" @1445..1451
+      ty: OptionalType@1452..1470
+        inner: PathType@1452..1469
+          head: Name@1452..1455
+            token: Map "map" @1452..1455
+          args: TypeArgs@1455..1469
+            l: Less "<" @1455..1456
+            args: PathType@1456..1462
+              head: Name@1456..1462
+                token: Word "string" @1456..1462
+            args: Comma "," @1462..1463
+            args: PathType@1464..1468
+              head: Name@1464..1468
+                token: Word "Node" @1464..1468
+            r: Greater ">" @1468..1469
+        q: Question "?" @1469..1470
+    r: RBrace "}" @1471..1472
+  items: FunctionDef@1615..1732
+    kw: Function "function" @1615..1623
+    name: Name@1624..1644
+      token: Word "ParenSafeAssignField" @1624..1644
+    params: ParamList@1644..1657
+      l: LParen "(" @1644..1645
+      params: Param@1645..1656
+        name: Name@1645..1649
+          token: Word "user" @1645..1649
+        ascription: TypeAscription@1649..1656
+          colon: Colon ":" @1649..1650
+          ty: OptionalType@1651..1656
+            inner: PathType@1651..1655
+              head: Name@1651..1655
+                token: Word "User" @1651..1655
+            q: Question "?" @1655..1656
+      r: RParen ")" @1656..1657
+    ret: ReturnType@1658..1668
+      arrow: Arrow "->" @1658..1660
+      ty: OptionalType@1661..1668
+        inner: PathType@1661..1667
+          head: Name@1661..1667
+            token: Word "string" @1661..1667
+        q: Question "?" @1667..1668
+    body: Block@1669..1732
+      l: LBrace "{" @1669..1670
+      stmts: LetStmt@1673..1721
+        introducer: Let "let" @1673..1676
+        pattern: BindingPattern@1677..1683
+          name: Name@1677..1683
+            token: Word "result" @1677..1683
+        eq: Equals "=" @1684..1685
+        init: ParenExpr@1686..1720
+          l: LParen "(" @1686..1687
+          inner: OptionalFieldAccessExpr@1687..1706
+            base: OptionalFieldAccessExpr@1687..1700
+              base: PathExpr@1687..1691
+                head: Name@1687..1691
+                  token: Word "user" @1687..1691
+              qdot: QuestionDot "?." @1691..1693
+              name: Name@1693..1700
+                token: Word "profile" @1693..1700
+            qdot: QuestionDot "?." @1700..1702
+            name: Name@1702..1706
+              token: Word "name" @1702..1706
+          r: RParen ")" @1719..1720
+        semi: Semicolon ";" @1720..1721
+      tail: PathExpr@1724..1730
+        head: Name@1724..1730
+          token: Word "result" @1724..1730
+      r: RBrace "}" @1731..1732
+  items: FunctionDef@1798..1897
+    kw: Function "function" @1798..1806
+    name: Name@1807..1827
+      token: Word "ParenSafeAssignIndex" @1807..1827
+    params: ParamList@1827..1842
+      l: LParen "(" @1827..1828
+      params: Param@1828..1841
+        name: Name@1828..1833
+          token: Word "items" @1828..1833
+        ascription: TypeAscription@1833..1841
+          colon: Colon ":" @1833..1834
+          ty: OptionalType@1835..1841
+            inner: ArrayType@1835..1840
+              inner: PathType@1835..1838
+                head: Name@1835..1838
+                  token: Word "int" @1835..1838
+              l: LBracket "[" @1838..1839
+              r: RBracket "]" @1839..1840
+            q: Question "?" @1840..1841
+      r: RParen ")" @1841..1842
+    ret: ReturnType@1843..1850
+      arrow: Arrow "->" @1843..1845
+      ty: OptionalType@1846..1850
+        inner: PathType@1846..1849
+          head: Name@1846..1849
+            token: Word "int" @1846..1849
+        q: Question "?" @1849..1850
+    body: Block@1851..1897
+      l: LBrace "{" @1851..1852
+      stmts: LetStmt@1855..1886
+        introducer: Let "let" @1855..1858
+        pattern: BindingPattern@1859..1865
+          name: Name@1859..1865
+            token: Word "result" @1859..1865
+        eq: Equals "=" @1866..1867
+        init: ParenExpr@1868..1885
+          l: LParen "(" @1868..1869
+          inner: OptionalIndexExpr@1869..1879
+            base: PathExpr@1869..1874
+              head: Name@1869..1874
+                token: Word "items" @1869..1874
+            qdot: QuestionDot "?." @1874..1876
+            l: LBracket "[" @1876..1877
+            index: LiteralExpr@1877..1878
+              token: Integer "0" @1877..1878
+            r: RBracket "]" @1878..1879
+          r: RParen ")" @1884..1885
+        semi: Semicolon ";" @1885..1886
+      tail: PathExpr@1889..1895
+        head: Name@1889..1895
+          token: Word "result" @1889..1895
+      r: RBrace "}" @1896..1897
+  items: FunctionDef@1961..2059
+    kw: Function "function" @1961..1969
+    name: Name@1970..1993
+      token: Word "ParenSafeCompoundAssign" @1970..1993
+    params: ParamList@1993..2006
+      l: LParen "(" @1993..1994
+      params: Param@1994..2005
+        name: Name@1994..1998
+          token: Word "user" @1994..1998
+        ascription: TypeAscription@1998..2005
+          colon: Colon ":" @1998..1999
+          ty: OptionalType@2000..2005
+            inner: PathType@2000..2004
+              head: Name@2000..2004
+                token: Word "User" @2000..2004
+            q: Question "?" @2004..2005
+      r: RParen ")" @2005..2006
+    ret: ReturnType@2007..2014
+      arrow: Arrow "->" @2007..2009
+      ty: OptionalType@2010..2014
+        inner: PathType@2010..2013
+          head: Name@2010..2013
+            token: Word "int" @2010..2013
+        q: Question "?" @2013..2014
+    body: Block@2015..2059
+      l: LBrace "{" @2015..2016
+      stmts: LetStmt@2019..2048
+        introducer: Let "let" @2019..2022
+        pattern: BindingPattern@2023..2029
+          name: Name@2023..2029
+            token: Word "result" @2023..2029
+        eq: Equals "=" @2030..2031
+        init: ParenExpr@2032..2047
+          l: LParen "(" @2032..2033
+          inner: OptionalFieldAccessExpr@2033..2041
+            base: PathExpr@2033..2037
+              head: Name@2033..2037
+                token: Word "user" @2033..2037
+            qdot: QuestionDot "?." @2037..2039
+            name: Name@2039..2041
+              token: Word "id" @2039..2041
+          r: RParen ")" @2046..2047
+        semi: Semicolon ";" @2047..2048
+      tail: PathExpr@2051..2057
+        head: Name@2051..2057
+          token: Word "result" @2051..2057
+      r: RBrace "}" @2058..2059
+  items: FunctionDef@2130..2224
+    kw: Function "function" @2130..2138
+    name: Name@2139..2160
+      token: Word "ParenSafeAssignReturn" @2139..2160
+    params: ParamList@2160..2173
+      l: LParen "(" @2160..2161
+      params: Param@2161..2172
+        name: Name@2161..2165
+          token: Word "user" @2161..2165
+        ascription: TypeAscription@2165..2172
+          colon: Colon ":" @2165..2166
+          ty: OptionalType@2167..2172
+            inner: PathType@2167..2171
+              head: Name@2167..2171
+                token: Word "User" @2167..2171
+            q: Question "?" @2171..2172
+      r: RParen ")" @2172..2173
+    ret: ReturnType@2174..2184
+      arrow: Arrow "->" @2174..2176
+      ty: OptionalType@2177..2184
+        inner: PathType@2177..2183
+          head: Name@2177..2183
+            token: Word "string" @2177..2183
+        q: Question "?" @2183..2184
+    body: Block@2185..2224
+      l: LBrace "{" @2185..2186
+      tail: ParenExpr@2189..2222
+        l: LParen "(" @2189..2190
+        inner: OptionalFieldAccessExpr@2190..2209
+          base: OptionalFieldAccessExpr@2190..2203
+            base: PathExpr@2190..2194
+              head: Name@2190..2194
+                token: Word "user" @2190..2194
+            qdot: QuestionDot "?." @2194..2196
+            name: Name@2196..2203
+              token: Word "profile" @2196..2203
+          qdot: QuestionDot "?." @2203..2205
+          name: Name@2205..2209
+            token: Word "name" @2205..2209
+        r: RParen ")" @2221..2222
+      r: RBrace "}" @2223..2224
+  items: FunctionDef@2293..2409
+    kw: Function "function" @2293..2301
+    name: Name@2302..2326
+      token: Word "ParenSafeAssignDeepChain" @2302..2326
+    params: ParamList@2326..2339
+      l: LParen "(" @2326..2327
+      params: Param@2327..2338
+        name: Name@2327..2331
+          token: Word "node" @2327..2331
+        ascription: TypeAscription@2331..2338
+          colon: Colon ":" @2331..2332
+          ty: OptionalType@2333..2338
+            inner: PathType@2333..2337
+              head: Name@2333..2337
+                token: Word "Node" @2333..2337
+            q: Question "?" @2337..2338
+      r: RParen ")" @2338..2339
+    ret: ReturnType@2340..2347
+      arrow: Arrow "->" @2340..2342
+      ty: OptionalType@2343..2347
+        inner: PathType@2343..2346
+          head: Name@2343..2346
+            token: Word "int" @2343..2346
+        q: Question "?" @2346..2347
+    body: Block@2348..2409
+      l: LBrace "{" @2348..2349
+      stmts: LetStmt@2352..2398
+        introducer: Let "let" @2352..2355
+        pattern: BindingPattern@2356..2362
+          name: Name@2356..2362
+            token: Word "result" @2356..2362
+        eq: Equals "=" @2363..2364
+        init: ParenExpr@2365..2397
+          l: LParen "(" @2365..2366
+          inner: FieldAccessExpr@2366..2391
+            base: OptionalIndexExpr@2366..2385
+              base: OptionalFieldAccessExpr@2366..2380
+                base: PathExpr@2366..2370
+                  head: Name@2366..2370
+                    token: Word "node" @2366..2370
+                qdot: QuestionDot "?." @2370..2372
+                name: Name@2372..2380
+                  token: Word "children" @2372..2380
+              qdot: QuestionDot "?." @2380..2382
+              l: LBracket "[" @2382..2383
+              index: LiteralExpr@2383..2384
+                token: Integer "0" @2383..2384
+              r: RBracket "]" @2384..2385
+            dot: Dot "." @2385..2386
+            name: Name@2386..2391
+              token: Word "value" @2386..2391
+          r: RParen ")" @2396..2397
+        semi: Semicolon ";" @2397..2398
+      tail: PathExpr@2401..2407
+        head: Name@2401..2407
+          token: Word "result" @2401..2407
+      r: RBrace "}" @2408..2409
+  items: FunctionDef@2477..2595
+    kw: Function "function" @2477..2485
+    name: Name@2486..2509
+      token: Word "ParenSafeAssignMapIndex" @2486..2509
+    params: ParamList@2509..2522
+      l: LParen "(" @2509..2510
+      params: Param@2510..2521
+        name: Name@2510..2514
+          token: Word "node" @2510..2514
+        ascription: TypeAscription@2514..2521
+          colon: Colon ":" @2514..2515
+          ty: OptionalType@2516..2521
+            inner: PathType@2516..2520
+              head: Name@2516..2520
+                token: Word "Node" @2516..2520
+            q: Question "?" @2520..2521
+      r: RParen ")" @2521..2522
+    ret: ReturnType@2523..2530
+      arrow: Arrow "->" @2523..2525
+      ty: OptionalType@2526..2530
+        inner: PathType@2526..2529
+          head: Name@2526..2529
+            token: Word "int" @2526..2529
+        q: Question "?" @2529..2530
+    body: Block@2531..2595
+      l: LBrace "{" @2531..2532
+      stmts: LetStmt@2535..2584
+        introducer: Let "let" @2535..2538
+        pattern: BindingPattern@2539..2545
+          name: Name@2539..2545
+            token: Word "result" @2539..2545
+        eq: Equals "=" @2546..2547
+        init: ParenExpr@2548..2583
+          l: LParen "(" @2548..2549
+          inner: FieldAccessExpr@2549..2577
+            base: OptionalIndexExpr@2549..2571
+              base: OptionalFieldAccessExpr@2549..2561
+                base: PathExpr@2549..2553
+                  head: Name@2549..2553
+                    token: Word "node" @2549..2553
+                qdot: QuestionDot "?." @2553..2555
+                name: Name@2555..2561
+                  token: Word "labels" @2555..2561
+              qdot: QuestionDot "?." @2561..2563
+              l: LBracket "[" @2563..2564
+              index: StringLit@2564..2570
+                token: String "\"main\"" @2564..2570
+              r: RBracket "]" @2570..2571
+            dot: Dot "." @2571..2572
+            name: Name@2572..2577
+              token: Word "value" @2572..2577
+          r: RParen ")" @2582..2583
+        semi: Semicolon ";" @2583..2584
+      tail: PathExpr@2587..2593
+        head: Name@2587..2593
+          token: Word "result" @2587..2593
+      r: RBrace "}" @2594..2595
+error @84..87: expected expression, found let
+error @744..749: assignment is not allowed in expression position; assignment is a statement
+error @865..871: assignment is not allowed in expression position; assignment is a statement
+error @995..1000: assignment is not allowed in expression position; assignment is a statement
+error @1687..1719: assignment is not allowed in expression position; assignment is a statement
+error @1869..1884: assignment is not allowed in expression position; assignment is a statement
+error @2033..2046: assignment is not allowed in expression position; assignment is a statement
+error @2190..2221: assignment is not allowed in expression position; assignment is a statement
+error @2366..2396: assignment is not allowed in expression position; assignment is a statement
+error @2549..2582: assignment is not allowed in expression position; assignment is a statement

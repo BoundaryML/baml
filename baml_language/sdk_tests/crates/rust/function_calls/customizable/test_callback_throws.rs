@@ -17,8 +17,8 @@
 
 use baml_bridge::Error;
 use baml_sdk::host_callable_tests::{
-    IntOrCbError, IntOrString, callback_error_caught, callback_error_replaced,
-    callback_error_rethrown,
+    IntOrCbError, IntOrString, callback_error_caught_sync, callback_error_replaced_sync,
+    callback_error_rethrown_sync,
 };
 
 /// An arbitrary host error with no BAML representation.
@@ -40,8 +40,8 @@ fn test_callback_throws_caught_and_replaced_makes_the_function_infallible() {
     // it `throws never` — `E = Infallible` no matter what the closure throws.
     // The effect param exists only in the callback bound.
     let cb = || Err::<i64, Boom>(Boom("boom".to_string()));
-    let _: Result<i64, Error<std::convert::Infallible>> = callback_error_caught(cb);
-    assert_eq!(callback_error_caught(cb).unwrap(), 0);
+    let _: Result<i64, Error<std::convert::Infallible>> = callback_error_caught_sync(cb);
+    assert_eq!(callback_error_caught_sync(cb).unwrap(), 0);
 }
 
 // SDK_PARITY_LINT(skip): validates Rust-specific inferred callback error unions
@@ -51,7 +51,7 @@ fn test_callback_throws_caught_then_rethrown_value_is_the_replacement_union() {
     // `1`, so `E = string | int` — a union with no effect param.
 
     // Callback succeeds → the trailing `throw 1` fires.
-    let err = callback_error_replaced(|| 0).expect_err("throws 1");
+    let err = callback_error_replaced_sync(|| 0).expect_err("throws 1");
     let Error::Thrown { value, .. } = err else {
         panic!("expected the int throw, got {err}");
     };
@@ -59,7 +59,7 @@ fn test_callback_throws_caught_then_rethrown_value_is_the_replacement_union() {
 
     // Callback throws → the catch fires `throw "oops"`.
     let cb = || Err::<i64, Boom>(Boom("ignored".to_string()));
-    let err = callback_error_replaced(cb).expect_err("catch throws \"oops\"");
+    let err = callback_error_replaced_sync(cb).expect_err("catch throws \"oops\"");
     let Error::Thrown { value, .. } = err else {
         panic!("expected the string throw, got {err}");
     };
@@ -77,7 +77,7 @@ fn test_callback_throws_rethrown_carries_the_effect_param_into_the_error_union()
     // from the closure.
 
     // Callback succeeds → `throw 1`; here `CbError` is `Infallible`.
-    let err = callback_error_rethrown(|| 0).expect_err("throws 1");
+    let err = callback_error_rethrown_sync(|| 0).expect_err("throws 1");
     let Error::Thrown { value, .. } = err else {
         panic!("expected the int throw, got {err}");
     };
@@ -90,7 +90,7 @@ fn test_callback_throws_rethrown_carries_the_effect_param_into_the_error_union()
         let raised = raised.clone();
         move || Err::<i64, Boom>(raised.clone())
     };
-    let err = callback_error_rethrown(cb).expect_err("catch re-throws e");
+    let err = callback_error_rethrown_sync(cb).expect_err("catch re-throws e");
     let Error::Thrown { value, .. } = err else {
         panic!("expected the re-thrown host error, got {err}");
     };

@@ -88,6 +88,14 @@ impl LazyBiasedMutex {
         self.enter_slow()
     }
 
+    /// Take the lock if nobody holds it, without waiting.
+    pub fn try_enter(&self) -> Option<AccessGuard<'_>> {
+        self.state
+            .compare_exchange(UNLOCKED, LOCKED, Ordering::Acquire, Ordering::Relaxed)
+            .is_ok()
+            .then_some(AccessGuard { lbm: self })
+    }
+
     /// Slow path, separated so the fast path inlines cleanly.
     #[cold]
     #[inline(never)]

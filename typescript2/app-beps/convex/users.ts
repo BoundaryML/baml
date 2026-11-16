@@ -1,5 +1,7 @@
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
-import { v } from "convex/values";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import { requireServerSecret } from "./serverSecret";
 import { userRole } from "./schema";
 import { internal } from "./_generated/api";
 
@@ -117,6 +119,78 @@ export const getOrCreate = mutation({
   },
 });
 
+type GitHubProfile = {
+  githubId: string;
+  name: string;
+  avatarUrl?: string;
+  // A verified @boundaryml.com email, which only the server (the GitHub callback) may give.
+  boundaryEmail?: string;
+};
+
+/**
+ * Finds the user for a GitHub account, or a passkey user of the same name not yet linked to
+ * GitHub, creating one if new. Only `trusted` callers (the server, with what GitHub verified)
+ * update an existing user.
+ */
+async function upsertGitHubUser(ctx: MutationCtx, profile: GitHubProfile, trusted: boolean) {
+  const isSpecialAccount = trusted && !!profile.boundaryEmail;
+  const sameName = await ctx.db
+    .query("users")
+    .withIndex("by_name", (q) => q.eq("name", profile.name))
+    .collect();
+  const existing =
+    (await ctx.db
+      .query("users")
+      .withIndex("by_github_id", (q) => q.eq("githubId", profile.githubId))
+      .unique()) ??
+    // A user from the old passkey login, linked to GitHub on their first GitHub sign-in.
+    sameName.find((user) => !user.githubId) ??
+    null;
+
+  if (existing && !trusted) return existing._id;
+  if (existing) {
+    const updates: Record<string, unknown> = {};
+    if (existing.githubId !== profile.githubId) updates.githubId = profile.githubId;
+    if (profile.avatarUrl && existing.avatarUrl !== profile.avatarUrl) {
+      updates.avatarUrl = profile.avatarUrl;
+    }
+    if (isSpecialAccount) {
+      updates.isSpecialAccount = true;
+      updates.boundaryEmail = profile.boundaryEmail;
+    }
+    if (Object.keys(updates).length > 0) await ctx.db.patch(existing._id, updates);
+    if (isSpecialAccount && !existing.slackUserId) {
+      await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
+        userId: existing._id,
+        email: profile.boundaryEmail!,
+      });
+    }
+    return existing._id;
+  }
+
+  const userId = await ctx.db.insert("users", {
+    name: profile.name,
+    githubId: profile.githubId,
+    avatarUrl: profile.avatarUrl,
+    role: "unset",
+    createdAt: Date.now(),
+    isSpecialAccount,
+    boundaryEmail: profile.boundaryEmail,
+  });
+  if (isSpecialAccount) {
+    await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
+      userId,
+      email: profile.boundaryEmail!,
+    });
+  }
+  return userId;
+}
+
+/**
+ * The browser's half of GitHub sign-in: the user ID for the account the callback sent it. The
+ * browser is not trusted with the team status, so `boundaryEmail` is accepted from older pages but
+ * ignored; the callback records it through recordGitHubSignIn.
+ */
 export const getOrCreateFromGitHub = mutation({
   args: {
     githubId: v.string(),
@@ -125,120 +199,35 @@ export const getOrCreateFromGitHub = mutation({
     boundaryEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const isSpecialAccount = !!args.boundaryEmail;
-
-    // Check if user exists by GitHub ID
-    const existingByGithub = await ctx.db
-      .query("users")
-      .withIndex("by_github_id", (q) => q.eq("githubId", args.githubId))
-      .unique();
-
-    if (existingByGithub) {
-      const updates: Record<string, unknown> = {};
-
-      // Update avatar if changed
-      if (args.avatarUrl && existingByGithub.avatarUrl !== args.avatarUrl) {
-        updates.avatarUrl = args.avatarUrl;
-      }
-
-      // Update special account status and boundaryEmail if they have one
-      if (isSpecialAccount) {
-        updates.isSpecialAccount = true;
-        updates.boundaryEmail = args.boundaryEmail;
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await ctx.db.patch(existingByGithub._id, updates);
-      }
-
-      // Schedule Slack lookup if special account and no slackUserId yet
-      if (isSpecialAccount && !existingByGithub.slackUserId) {
-        await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
-          userId: existingByGithub._id,
-          email: args.boundaryEmail!,
-        });
-      }
-
-      return existingByGithub._id;
-    }
-
-    // Check if user exists by name (for migration from passkey auth)
-    const existingByName = await ctx.db
-      .query("users")
-      .withIndex("by_name", (q) => q.eq("name", args.name))
-      .unique();
-
-    if (existingByName) {
-      // Link existing user to GitHub
-      const updates: Record<string, unknown> = {
-        githubId: args.githubId,
-        avatarUrl: args.avatarUrl,
-      };
-
-      if (isSpecialAccount) {
-        updates.isSpecialAccount = true;
-        updates.boundaryEmail = args.boundaryEmail;
-      }
-
-      await ctx.db.patch(existingByName._id, updates);
-
-      // Schedule Slack lookup if special account
-      if (isSpecialAccount && !existingByName.slackUserId) {
-        await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
-          userId: existingByName._id,
-          email: args.boundaryEmail!,
-        });
-      }
-
-      return existingByName._id;
-    }
-
-    // Create new user with default role (unset)
-    const userId = await ctx.db.insert("users", {
-      name: args.name,
-      githubId: args.githubId,
-      avatarUrl: args.avatarUrl,
-      role: "unset",
-      createdAt: Date.now(),
-      isSpecialAccount,
-      boundaryEmail: args.boundaryEmail,
-    });
-
-    // Schedule Slack lookup if special account
-    if (isSpecialAccount) {
-      await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
-        userId,
-        email: args.boundaryEmail!,
-      });
-    }
-
-    return userId;
+    return upsertGitHubUser(
+      ctx,
+      { githubId: args.githubId, name: args.name, avatarUrl: args.avatarUrl },
+      false
+    );
   },
 });
 
-export const create = mutation({
+/** The server's half of GitHub sign-in, with what GitHub verified: the account and its email. */
+export const recordGitHubSignIn = mutation({
   args: {
+    secret: v.string(),
+    githubId: v.string(),
     name: v.string(),
-    role: v.optional(userRole),
     avatarUrl: v.optional(v.string()),
+    boundaryEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("users", {
-      name: args.name,
-      role: args.role ?? "unset",
-      avatarUrl: args.avatarUrl,
-      createdAt: Date.now(),
-    });
-  },
-});
-
-export const updateRole = mutation({
-  args: {
-    id: v.id("users"),
-    role: userRole,
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { role: args.role });
+    requireServerSecret(args.secret);
+    return upsertGitHubUser(
+      ctx,
+      {
+        githubId: args.githubId,
+        name: args.name,
+        avatarUrl: args.avatarUrl,
+        boundaryEmail: args.boundaryEmail,
+      },
+      true
+    );
   },
 });
 
@@ -279,16 +268,6 @@ export const updateRoleWithPermissions = mutation({
   },
 });
 
-export const updateAvatar = mutation({
-  args: {
-    id: v.id("users"),
-    avatarUrl: v.string(),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { avatarUrl: args.avatarUrl });
-  },
-});
-
 // Internal mutation to link Slack user ID
 export const linkSlackUserId = internalMutation({
   args: {
@@ -303,110 +282,88 @@ export const linkSlackUserId = internalMutation({
 // ─────────────────────────────────────────────────────────────────────────────
 // API TOKEN MANAGEMENT
 // ─────────────────────────────────────────────────────────────────────────────
+// Tokens live in `apiTokens`, which only functions taking the server secret read: the app's
+// /api/token route issues them to BoundaryML organization members, checked at GitHub sign-in.
 
 function generateApiToken(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  const prefix = "bep_";
-  let token = prefix;
-  for (let i = 0; i < 32; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  let token = "bep_";
+  for (const byte of bytes) token += chars.charAt(byte % chars.length);
   return token;
 }
 
-// Check if user is allowed to have an API token (team members only)
-function canHaveApiToken(user: { role: string; isSpecialAccount?: boolean }): boolean {
-  return user.isSpecialAccount === true || hasTeamPermissions(user.role);
+async function userByToken(ctx: QueryCtx, token: string) {
+  if (!token) return null;
+  const row = await ctx.db
+    .query("apiTokens")
+    .withIndex("by_token", (q) => q.eq("token", token))
+    .unique();
+  return row ? await ctx.db.get(row.userId) : null;
 }
 
-// Get or generate API token for the current user (team members only)
-export const getOrCreateApiToken = mutation({
-  args: {
-    userId: v.id("users"),
-  },
+/**
+ * The API token of the user signed in with GitHub account `githubId`, made on first use; with
+ * `regenerate`, a new one that replaces it. Only the /api/token route calls this, after checking
+ * the viewer is a BoundaryML organization member.
+ */
+export const apiTokenFor = mutation({
+  args: { secret: v.string(), githubId: v.string(), regenerate: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
+    requireServerSecret(args.secret);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_github_id", (q) => q.eq("githubId", args.githubId))
+      .unique();
     if (!user) {
-      throw new Error("User not found");
+      throw new ConvexError({ kind: "missing", message: "Sign in with GitHub on this site first." });
     }
-
-    // Only team members can have API tokens
-    if (!canHaveApiToken(user)) {
-      throw new Error("Only BoundaryML team members can have API tokens");
+    const existing = await ctx.db
+      .query("apiTokens")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    if (existing.length > 0 && !args.regenerate) {
+      return { token: existing[0].token, isNew: false };
     }
-
-    // If user already has a token, return it
-    if (user.apiToken) {
-      return { token: user.apiToken, isNew: false };
-    }
-
-    // Generate a new token
+    for (const row of existing) await ctx.db.delete(row._id);
     const token = generateApiToken();
-    await ctx.db.patch(args.userId, { apiToken: token });
-
+    await ctx.db.insert("apiTokens", { userId: user._id, token, createdAt: Date.now() });
     return { token, isNew: true };
-  },
-});
-
-// Regenerate API token (invalidates the old one)
-export const regenerateApiToken = mutation({
-  args: {
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    // Only team members can have API tokens
-    if (!canHaveApiToken(user)) {
-      throw new Error("Only BoundaryML team members can have API tokens");
-    }
-
-    const token = generateApiToken();
-    await ctx.db.patch(args.userId, { apiToken: token });
-
-    return { token };
   },
 });
 
 // Get user by API token (for authentication) - internal version
 export const getByApiToken = internalQuery({
-  args: {
-    token: v.string(),
-  },
-  handler: async (ctx, args) => {
-    if (!args.token) return null;
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_api_token", (q) => q.eq("apiToken", args.token))
-      .unique();
-
-    return user;
-  },
+  args: { token: v.string() },
+  handler: async (ctx, args) => userByToken(ctx, args.token),
 });
 
 // Authenticate via API token - returns user info if valid
 export const authenticateWithToken = query({
-  args: {
-    token: v.string(),
-  },
+  args: { token: v.string() },
   handler: async (ctx, args) => {
-    if (!args.token) return null;
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_api_token", (q) => q.eq("apiToken", args.token))
-      .unique();
-
+    const user = await userByToken(ctx, args.token);
     if (!user) return null;
+    return { _id: user._id, name: user.name, role: user.role };
+  },
+});
 
-    return {
-      _id: user._id,
-      name: user.name,
-      role: user.role,
-    };
+/**
+ * Removes the tokens users had before they moved to `apiTokens`. They no longer work, but user
+ * documents still carry them to the browser until this runs once:
+ * `npx convex run users:clearLegacyApiTokens --prod`, or Functions in the Convex dashboard.
+ */
+export const clearLegacyApiTokens = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let cleared = 0;
+    for (const user of await ctx.db.query("users").collect()) {
+      if (user.apiToken !== undefined) {
+        await ctx.db.patch(user._id, { apiToken: undefined });
+        cleared++;
+      }
+    }
+    return { cleared };
   },
 });

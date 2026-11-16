@@ -34,13 +34,13 @@ import pytest
 import baml_sdk  # noqa: F401  — importing initializes the BAML runtime
 from baml_bridge import BamlCancelledError, call_function, get_runtime
 from baml_sdk.baml.spawn import CancelToken
-from baml_sdk import hello_world
+from baml_sdk import hello_world_sync
 from baml_sdk.baml import BamlError, BamlPanic
 from baml_sdk.baml.errors import InvalidArgument
 from baml_sdk.baml import json as baml_json
 from baml_sdk.baml.panics import UserPanic
-from baml_sdk.raises_test import LoadDoc, ParseError, Reparse
-from baml_sdk.throws_test import MyError, ParseJson, SleepMs, ThrowMyError
+from baml_sdk.raises_test import LoadDoc_sync, ParseError, Reparse_sync
+from baml_sdk.throws_test import MyError, ParseJson_sync, SleepMs_sync, ThrowMyError_sync
 
 # stdlib native builtins (`baml.json.parse`, `baml.sys.*`) can't be called as
 # top-level entry points, so the fixture wraps each in a bytecode function
@@ -54,7 +54,7 @@ def test_errors_stdlib_error_surfaces_as_baml_error():
     `baml_json.ParseError` (a plain pydantic model). Proves stdlib error classes
     surface structured, independent of any `throws` clause."""
     with pytest.raises(BamlError) as exc_info:
-        ParseJson(_BAD_JSON)
+        ParseJson_sync(_BAD_JSON)
     assert isinstance(exc_info.value.value, baml_json.ParseError)
 
 
@@ -62,7 +62,7 @@ def test_errors_user_throw_surfaces_declared_instance():
     """A user `throw` of a declared error → `BamlError` whose `.value` is
     the declared user error instance itself (not a `.code` sub-field)."""
     with pytest.raises(BamlError) as exc_info:
-        ThrowMyError()
+        ThrowMyError_sync()
     assert isinstance(exc_info.value.value, MyError)
 
 
@@ -79,9 +79,9 @@ def test_errors_union_throws_preserves_class_name():
     their `class_name` must agree.
     """
     with pytest.raises(BamlError) as single:
-        Reparse("x")
+        Reparse_sync("x")
     with pytest.raises(BamlError) as union:
-        LoadDoc("x")
+        LoadDoc_sync("x")
 
     assert single.value.class_name == "user.raises_test.ParseError"
     assert union.value.class_name == single.value.class_name
@@ -93,7 +93,7 @@ def test_errors_host_invalid_argument_wraps_baml_errors_invalid_argument():
     declare) → `BamlError` wrapping `baml.errors.InvalidArgument`,
     synthesized host-side rather than thrown from the VM."""
     with pytest.raises(BamlError) as exc_info:
-        hello_world(not_a_param=2)  # type: ignore[call-arg]
+        hello_world_sync(not_a_param=2)  # type: ignore[call-arg]
     assert isinstance(exc_info.value.value, InvalidArgument)
 
 
@@ -101,21 +101,21 @@ def test_errors_user_panic_surfaces_as_baml_panic():
     """A user-initiated panic via `baml.sys.panic` → `BamlPanic` whose
     `.value` is a `baml.panics.UserPanic` (routed by the namespace check,
     distinct from a host-synthesized `SdkPanic`)."""
-    from baml_sdk.throws_test import DoPanic
+    from baml_sdk.throws_test import DoPanic_sync
 
     with pytest.raises(BamlPanic) as exc_info:
-        DoPanic("user-initiated boom")
+        DoPanic_sync("user-initiated boom")
     assert isinstance(exc_info.value.value, UserPanic)
 
 
 async def test_errors_cancellation_surfaces_as_baml_panic():
     """Async cancellation maps to `asyncio.CancelledError` with BAML reason."""
     rt = get_runtime()
-    ctx = CancelToken.new()
+    ctx = CancelToken.new_sync()
 
     async def _abort_soon():
         await asyncio.sleep(0.1)
-        ctx.cancel()
+        ctx.cancel_sync()
 
     abort_task = asyncio.create_task(_abort_soon())
     with pytest.raises(asyncio.CancelledError) as exc_info:
@@ -129,7 +129,7 @@ def test_errors_str_is_non_empty():
     """`str(e)` is non-empty — guards the `@trace` / telemetry path, which
     records `str(e)`."""
     with pytest.raises(BamlError) as exc_info:
-        ParseJson(_BAD_JSON)
+        ParseJson_sync(_BAD_JSON)
     assert str(exc_info.value)
 
 
@@ -158,7 +158,7 @@ def test_errors_baml_error_carries_baml_trace():
     """`.baml_trace` is the list of rendered BAML stack frames (one per
     frame), pointing into the throwing function's `.baml` source."""
     with pytest.raises(BamlError) as exc_info:
-        ThrowMyError()
+        ThrowMyError_sync()
     trace = exc_info.value.baml_trace
     assert isinstance(trace, list) and trace, f"expected a non-empty list, got {trace!r}"
     # Most-recent-call-last: the throwing function is the last frame.
@@ -174,7 +174,7 @@ def test_errors_baml_trace_spliced_into_python_traceback():
     `traceback.format_exception` renders the `.baml` source frame inline (not
     as a detached blob)."""
     try:
-        ParseJson(_BAD_JSON)
+        ParseJson_sync(_BAD_JSON)
     except BamlError as e:
         # Bind inside the handler — Python unbinds `e` after the except block.
         rendered = "".join(traceback.format_exception(type(e), e, e.__traceback__))
@@ -206,8 +206,8 @@ def test_errors_baml_trace_spliced_into_python_traceback():
 _EXIT_SNIPPET = textwrap.dedent(
     """
     import baml_sdk  # initializes the runtime
-    from baml_sdk.throws_test import DoExit
-    DoExit({code})
+    from baml_sdk.throws_test import DoExit_sync
+    DoExit_sync({code})
     print("UNREACHABLE")  # os._exit must fire before this
     """
 )

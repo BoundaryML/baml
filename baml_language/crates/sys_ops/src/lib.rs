@@ -205,6 +205,91 @@ impl<T> io::IoNamespaceJson for T {
     }
 }
 
+// ============================================================================
+// `baml.future` — reading a running task's stack
+// ============================================================================
+
+/// Blanket impl: the engine answers `baml.future._task_stack` and
+/// `_task_report` itself, since they need every task paused; a provider never
+/// sees them.
+impl<T> io::IoNamespaceFuture for T {
+    fn _task_report(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        _future_id: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "task report".to_string(),
+            message: "only the engine can read a task's stack".to_string(),
+        })
+    }
+
+    fn _task_stack(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        _future_id: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<BexExternalValue>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "task report".to_string(),
+            message: "only the engine can read a task's stack".to_string(),
+        })
+    }
+}
+
+// ============================================================================
+// `baml.sync` — waiting for a contended `atomic` key or `Semaphore` slot
+// ============================================================================
+
+/// Blanket impl: the wait is the same on every host. Dropping the future
+/// (the task was cancelled) withdraws the task from the lock's queue.
+impl<T> io::IoNamespaceSync for T {
+    fn _wait(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        ticket: std::sync::Arc<dyn bex_vm_types::BexRustData>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use bex_vm_types::RustDataArc as _;
+        let got = ticket.payload_type_id();
+        match ticket.downcast_payload::<bex_vm_types::Waiter>() {
+            Ok(waiter) => SysOpOutput::async_op(async move {
+                waiter.granted().await;
+                Ok(())
+            }),
+            Err(_) => SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: std::any::TypeId::of::<bex_vm_types::Waiter>(),
+                got,
+            }),
+        }
+    }
+
+    fn _wait_permit(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        held: std::sync::Arc<dyn bex_vm_types::BexRustData>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use bex_vm_types::RustDataArc as _;
+        let got = held.payload_type_id();
+        match held.downcast_payload::<bex_vm_types::PermitState>() {
+            Ok(held) => SysOpOutput::async_op(async move {
+                held.wait().await;
+                Ok(())
+            }),
+            Err(_) => SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: std::any::TypeId::of::<bex_vm_types::PermitState>(),
+                got,
+            }),
+        }
+    }
+}
+
 mod schema {
     use std::collections::HashSet;
 
@@ -428,7 +513,16 @@ mod schema {
             .declared_variants
             .iter()
             .filter(move |variant| naming.shows(variant.skip))
-            .map(move |variant| (naming.key(&variant.name, variant.alias.as_deref()), variant))
+            .map(move |variant| {
+                (
+                    naming.key(
+                        &variant.name,
+                        variant.alias.as_deref(),
+                        variant.json_rename.as_deref(),
+                    ),
+                    variant,
+                )
+            })
     }
 
     /// The tagged object a media value takes in JSON, as `baml.json` writes
@@ -535,7 +629,11 @@ mod schema {
                         })?;
                     Ok(json!({
                         "type": "string",
-                        "const": self.naming.key(&variant.name, variant.alias.as_deref()),
+                        "const": self.naming.key(
+                            &variant.name,
+                            variant.alias.as_deref(),
+                            variant.json_rename.as_deref(),
+                        ),
                     }))
                 }
                 SapTy::Media(kind) => Ok(media_schema(*kind)),
@@ -646,15 +744,33 @@ mod schema {
                 .ok_or_else(|| format!("json_schema: unknown class `{}`", head.display_name()))?;
 
             let naming = self.naming;
+            // A `@json.fallback` class is any object it does not recognize,
+            // and a `@json.flatten` field is the keys no field names.
+            let fallback = class_def.fields.iter().any(|field| field.json_fallback);
+            let flatten = class_def.fields.iter().any(|field| field.json_flatten);
             let mut properties = serde_json::Map::new();
             let mut required = Vec::new();
-            for field in class_def
-                .fields
-                .iter()
-                .filter(|field| naming.shows(field.skip))
-            {
-                let key = naming.key(&field.name, field.alias.as_deref());
+            for field in class_def.fields.iter().filter(|field| {
+                naming.shows(field.skip) && !field.json_flatten && !field.json_fallback
+            }) {
+                let key = naming.key(
+                    &field.name,
+                    field.alias.as_deref(),
+                    field.json_rename.as_deref(),
+                );
                 let mut property = self.emit(&field.field_type)?;
+                // A fallback class's literals name its tag: any value of the
+                // tag's kind is one, which is what makes it the fallback.
+                if fallback && let Some(tag) = property.as_object_mut() {
+                    let kind = tag.remove("const").map(|value| match value {
+                        Value::Bool(_) => "boolean",
+                        Value::Number(_) => "number",
+                        _ => "string",
+                    });
+                    if let Some(kind) = kind {
+                        tag.insert("type".to_string(), json!(kind));
+                    }
+                }
                 describe(
                     &mut property,
                     documentation(field.description.as_deref(), field.docstring.as_deref()),
@@ -670,6 +786,9 @@ mod schema {
                 "properties": properties,
                 "required": required,
             });
+            if flatten || fallback {
+                object["additionalProperties"] = json!(true);
+            }
             describe(
                 &mut object,
                 documentation(
@@ -847,6 +966,9 @@ mod schema {
                 docstring: None,
                 alias: None,
                 skip: false,
+                json_rename: None,
+                json_flatten: false,
+                json_fallback: false,
                 stream_done: false,
                 must_exist: false,
             }
@@ -964,6 +1086,7 @@ mod schema {
                             docstring: None,
                             alias: Some("ready-now".to_string()),
                             skip: false,
+                            json_rename: None,
                         },
                         EnumVariantDefinition {
                             name: "Done".to_string(),
@@ -971,6 +1094,7 @@ mod schema {
                             docstring: None,
                             alias: None,
                             skip: false,
+                            json_rename: None,
                         },
                     ],
                 },
@@ -998,6 +1122,7 @@ mod schema {
                 docstring: None,
                 alias: None,
                 skip: false,
+                json_rename: None,
             }
         }
 

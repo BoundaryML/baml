@@ -141,8 +141,8 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
 
 // ── file_ast ──────────────────────────────────────────────────────────────────
 
-/// The CST → AST lowering output for one file: top-level items plus the
-/// lowering diagnostics and `env.*` references produced along the way.
+/// The syntax-tree → AST lowering output for one file: top-level items plus
+/// the lowering diagnostics and `env.*` references produced along the way.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileAst {
     pub items: Vec<baml_compiler2_ast::Item>,
@@ -150,16 +150,16 @@ pub struct FileAst {
     pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
-/// CST → AST lowering for one file, computed once and shared.
+/// Syntax-tree → AST lowering for one file, computed once and shared.
 ///
 /// Salsa-tracked because several different consumers need a file's AST items:
 /// `file_semantic_index` and the LSP check pass.
 /// Before this query existed each of them re-lowered the syntax tree from
-/// scratch; the repeated CST traversal was ~31% of cold-compile CPU on the
+/// scratch; the repeated tree traversal was ~31% of cold-compile CPU on the
 /// test corpus (see `crates/tools_compile_profile/README.md`, July 2026 audit).
 #[salsa::tracked(returns(ref))]
 pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
-    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let tree = baml_parser::typed_tree(db, file);
     // Root-relative: the path names the file's `$init_test_…` function, which
     // is part of the package's unit and must not carry the checkout's location.
     let path = file_package::root_relative_path(db, file);
@@ -178,9 +178,9 @@ pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
         )
     };
     let lower = if file.is_session_submission(db) {
-        baml_compiler2_ast::lower_session_file_with_path_and_test_owner
+        baml_compiler2_ast::lower_tree::lower_session_file
     } else {
-        baml_compiler2_ast::lower_file_with_path_and_test_owner
+        baml_compiler2_ast::lower_tree::lower_file
     };
     let (mut items, diagnostics, env_var_refs) =
         lower(&tree, Some(path.as_path()), Some(&test_owner));
@@ -208,9 +208,8 @@ pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
 /// `scope_bindings`) provide Salsa early-cutoff via `Arc` equality.
 #[salsa::tracked(returns(ref), no_eq)]
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
-    let tree = baml_compiler_parser::syntax_tree(db, file);
-    let file_range = tree.text_range();
-    // CST → AST lowering is shared via `file_ast` instead of being redone here.
+    let file_range = text_size::TextRange::up_to(text_size::TextSize::of(file.text(db)));
+    // Syntax-tree → AST lowering is shared via `file_ast` instead of being redone here.
     let ast = file_ast(db, file);
 
     let builder = SemanticIndexBuilder::new(db, file);

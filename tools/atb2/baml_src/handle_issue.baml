@@ -42,7 +42,7 @@ function handle_issue(
     mode: HandleMode = HandleMode.Live,
     update: bool = false,
     review: Review? = null,
-    /// A Slack thread that hears each stage: design pass, fix pass, gate, push.
+    // A Slack thread that hears each stage: design pass, fix pass, gate, push.
     thread: SlackRef? = null,
 ) -> Issue {
     if (review == null) {
@@ -1515,7 +1515,7 @@ function run_gate(worktree: string) -> GateResult {
             "baml-cli test baml_src",
             Cmd {
                 program: target_dir() + "/debug/baml-cli",
-                args: ["test", "--from", "crates/baml_tests/baml_src"],
+                args: ["test", "--project-dir", "crates/baml_tests/baml_src"],
                 cwd: wd,
                 timeout_ms: 1200000,
             },

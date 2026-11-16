@@ -71,11 +71,12 @@ async fn run(
 async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     let workspace = tempfile::tempdir().unwrap();
     let project = workspace.path().to_owned();
-    let telemetry = PlaygroundTelemetry::new(Arc::from(vec![project.clone()]));
+    let telemetry = PlaygroundTelemetry::default();
+    let served = [project.clone()];
     let project_text = project.display().to_string();
 
     // Nothing has run: an empty list that says so.
-    let (executions, missing) = telemetry.list_executions(&project_text).unwrap();
+    let (executions, missing) = telemetry.list_executions(&project_text, &served).unwrap();
     assert!(executions.is_empty() && missing);
 
     let engine = engine(&project);
@@ -85,9 +86,9 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     // The default recording flushes on a deadline; poll like the UI does.
     let listed = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            let (executions, missing) = telemetry.list_executions(&project_text).unwrap();
+            let (executions, missing) = telemetry.list_executions(&project_text, &served).unwrap();
             let gc_recorded = telemetry
-                .with_index(&project_text, |index| {
+                .with_index(&project_text, &served, |index| {
                     super::run(
                         index,
                         "SELECT COUNT(*) FROM spans WHERE span_name = 'baml.gc'",
@@ -113,7 +114,7 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     engine.collect_garbage().await;
     let listed = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            let (executions, _) = telemetry.list_executions(&project_text).unwrap();
+            let (executions, _) = telemetry.list_executions(&project_text, &served).unwrap();
             if executions.len() == 2 {
                 return executions;
             }
@@ -128,15 +129,15 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     let built = engine.source_snapshot_id();
     assert!(built.is_some());
     let opened = telemetry
-        .open_execution(&project_text, &newest, built)
+        .open_execution(&project_text, &served, &newest, built)
         .unwrap();
     assert_eq!(opened["execution"]["sourceState"], "verified");
     let edited = telemetry
-        .open_execution(&project_text, &newest, Some([0; 32]))
+        .open_execution(&project_text, &served, &newest, Some([0; 32]))
         .unwrap();
     assert_eq!(edited["execution"]["sourceState"], "stale");
     let unbuilt = telemetry
-        .open_execution(&project_text, &newest, None)
+        .open_execution(&project_text, &served, &newest, None)
         .unwrap();
     assert_eq!(unbuilt["execution"]["sourceState"], "unverified");
     assert_eq!(opened["execution"]["executionId"], newest);
@@ -178,7 +179,7 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     assert!(run(&engine, "boom").await.is_err());
     let failed = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            let (executions, _) = telemetry.list_executions(&project_text).unwrap();
+            let (executions, _) = telemetry.list_executions(&project_text, &served).unwrap();
             if let Some(failed) = executions.iter().find(|e| e["status"] == "failed") {
                 return failed["executionId"].as_str().unwrap().to_owned();
             }
@@ -188,7 +189,7 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     .await
     .expect("the failed run appears");
     let opened = telemetry
-        .open_execution(&project_text, &failed, None)
+        .open_execution(&project_text, &served, &failed, None)
         .unwrap();
     assert_eq!(opened["execution"]["totalErrors"], Value::Null);
     // The failed call's error, with the stack its context recorded.
@@ -206,7 +207,7 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     let value: Value = serde_json::from_str(error["value"].as_str().unwrap()).unwrap();
     assert_eq!(value["reason"], "boom");
     engine.shutdown().await;
-    let (executions, _) = telemetry.list_executions(&project_text).unwrap();
+    let (executions, _) = telemetry.list_executions(&project_text, &served).unwrap();
     assert_eq!(executions.len(), 3, "shutdown GC is not another run");
     assert!(executions.iter().all(|e| e["entryFqn"] == "user.main"));
 
@@ -214,7 +215,7 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     let elsewhere = tempfile::tempdir().unwrap();
     assert!(
         telemetry
-            .list_executions(&elsewhere.path().display().to_string())
+            .list_executions(&elsewhere.path().display().to_string(), &served)
             .is_err()
     );
 }
@@ -244,7 +245,8 @@ function main(name: string) -> string {
 "#;
     let workspace = tempfile::tempdir().unwrap();
     let project = workspace.path().to_owned();
-    let telemetry = PlaygroundTelemetry::new(Arc::from(vec![project.clone()]));
+    let telemetry = PlaygroundTelemetry::default();
+    let served = [project.clone()];
     let project_text = project.display().to_string();
     let engine = engine_for(&project, FETCHING);
     assert_eq!(
@@ -253,7 +255,7 @@ function main(name: string) -> string {
     );
     engine.shutdown().await;
     // The server's handler runs as a root call of its own.
-    let (executions, _) = telemetry.list_executions(&project_text).unwrap();
+    let (executions, _) = telemetry.list_executions(&project_text, &served).unwrap();
     let main = executions
         .iter()
         .find(|execution| execution["entryFqn"] == "user.main")
@@ -276,7 +278,7 @@ function main(name: string) -> string {
     assert_eq!(network[0][2], 1);
 
     let opened = telemetry
-        .open_execution(&project_text, &execution, None)
+        .open_execution(&project_text, &served, &execution, None)
         .unwrap();
     let calls = opened["calls"].as_array().unwrap();
     assert_eq!(calls.len(), 1, "{calls:#?}");

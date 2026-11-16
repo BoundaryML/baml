@@ -25,8 +25,8 @@ source: crates/baml_tests/src/generated_tests.rs
   × scoped type `T` cannot leave the block that binds it
     ╭─[scoped_type_escape.baml:40:5]
  40 │     risky<T>(as_t<T>("x"), false)
-    ·     ────┬───
-    ·         ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
+    ·     ──┬──
+    ·       ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
     ╰────
 
   [type] E0172
@@ -34,8 +34,8 @@ source: crates/baml_tests/src/generated_tests.rs
   × scoped type `T` cannot leave the block that binds it
     ╭─[scoped_type_escape.baml:47:9]
  47 │         risky<T>(as_t<T>("x"), false)
-    ·         ────┬───
-    ·             ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
+    ·         ──┬──
+    ·           ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
     ╰────
 
   [type] E0172
@@ -43,8 +43,8 @@ source: crates/baml_tests/src/generated_tests.rs
   × scoped type `T` cannot leave the block that binds it
     ╭─[scoped_type_escape.baml:56:9]
  56 │         risky<T>(as_t<T>("x"), true)
-    ·         ────┬───
-    ·             ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
+    ·         ──┬──
+    ·           ╰── this throws `Boom<T>`, which would be published past the block; catch it inside the block, or declare `throws unknown`
     ╰────
 
   [type] E0172
@@ -100,7 +100,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × declared throws is `string | Boom<unknown>`, but this function may also throw `Boom<T>`
     ╭─[scoped_type_escape.baml:96:5]
  96 │     risky<T>(as_t<T>("x"), true)
-    ·     ────────
+    ·     ─────
     ╰────
 
   [type] E0097

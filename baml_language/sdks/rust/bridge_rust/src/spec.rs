@@ -252,11 +252,11 @@ impl<Output> std::fmt::Debug for FunctionSpec<Output> {
 
 impl<Output: BamlValue> FunctionSpec<Output> {
     /// Execute the bound recipe using its default client.
-    pub fn call(&self) -> Result<Output, Error<Infallible>> {
-        self.call_with(CallOptions::new())
+    pub fn call_sync(&self) -> Result<Output, Error<Infallible>> {
+        self.call_sync_with(CallOptions::new())
     }
 
-    pub fn call_with(&self, options: CallOptions) -> Result<Output, Error<Infallible>> {
+    pub fn call_sync_with(&self, options: CallOptions) -> Result<Output, Error<Infallible>> {
         crate::runtime::invoke_sync("ai.FunctionSpec.call", |args| {
             args.receiver(self)?;
             options.append_to(args)?;
@@ -264,11 +264,11 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         })
     }
 
-    pub async fn call_async(&self) -> Result<Output, Error<Infallible>> {
-        self.call_async_with(CallOptions::new()).await
+    pub async fn call(&self) -> Result<Output, Error<Infallible>> {
+        self.call_with(CallOptions::new()).await
     }
 
-    pub async fn call_async_with(&self, options: CallOptions) -> Result<Output, Error<Infallible>> {
+    pub async fn call_with(&self, options: CallOptions) -> Result<Output, Error<Infallible>> {
         crate::runtime::invoke("ai.FunctionSpec.call", |args| {
             args.receiver(self)?;
             options.append_to(args)?;
@@ -278,7 +278,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     }
 
     /// Parse an existing model response using this spec's realized output.
-    pub fn parse(&self, json: impl Into<String>) -> Result<Output, Error<Infallible>> {
+    pub fn parse_sync(&self, json: impl Into<String>) -> Result<Output, Error<Infallible>> {
         let json = json.into();
         crate::runtime::invoke_sync("ai.FunctionSpec.parse", |args| {
             args.receiver(self)?;
@@ -287,7 +287,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         })
     }
 
-    pub async fn parse_async(&self, json: impl Into<String>) -> Result<Output, Error<Infallible>> {
+    pub async fn parse(&self, json: impl Into<String>) -> Result<Output, Error<Infallible>> {
         let json = json.into();
         crate::runtime::invoke("ai.FunctionSpec.parse", |args| {
             args.receiver(self)?;
@@ -298,14 +298,14 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     }
 
     /// Render the provider-neutral, portable prompt.
-    pub fn prompt(&self) -> Result<Prompt, Error<Infallible>> {
+    pub fn prompt_sync(&self) -> Result<Prompt, Error<Infallible>> {
         crate::runtime::invoke_sync("ai.FunctionSpec.prompt", |args| {
             args.receiver(self)?;
             Ok(Vec::new())
         })
     }
 
-    pub async fn prompt_async(&self) -> Result<Prompt, Error<Infallible>> {
+    pub async fn prompt(&self) -> Result<Prompt, Error<Infallible>> {
         crate::runtime::invoke("ai.FunctionSpec.prompt", |args| {
             args.receiver(self)?;
             Ok(Vec::new())
@@ -315,11 +315,11 @@ impl<Output: BamlValue> FunctionSpec<Output> {
 
     /// Build the provider request without invoking the model. The expected
     /// request type is inferred from assignment/return context.
-    pub fn build_request<Request: BamlValue>(&self) -> Result<Request, Error<Infallible>> {
-        self.build_request_with(CallOptions::new())
+    pub fn build_request_sync<Request: BamlValue>(&self) -> Result<Request, Error<Infallible>> {
+        self.build_request_sync_with(CallOptions::new())
     }
 
-    pub fn build_request_with<Request: BamlValue>(
+    pub fn build_request_sync_with<Request: BamlValue>(
         &self,
         options: CallOptions,
     ) -> Result<Request, Error<Infallible>> {
@@ -330,13 +330,11 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         })
     }
 
-    pub async fn build_request_async<Request: BamlValue>(
-        &self,
-    ) -> Result<Request, Error<Infallible>> {
-        self.build_request_async_with(CallOptions::new()).await
+    pub async fn build_request<Request: BamlValue>(&self) -> Result<Request, Error<Infallible>> {
+        self.build_request_with(CallOptions::new()).await
     }
 
-    pub async fn build_request_async_with<Request: BamlValue>(
+    pub async fn build_request_with<Request: BamlValue>(
         &self,
         options: CallOptions,
     ) -> Result<Request, Error<Infallible>> {
@@ -348,14 +346,14 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         .await
     }
 
-    pub fn name(&self) -> Result<String, Error<Infallible>> {
+    pub fn name_sync(&self) -> Result<String, Error<Infallible>> {
         crate::runtime::invoke_sync("ai.FunctionSpec.name", |args| {
             args.receiver(self)?;
             Ok(Vec::new())
         })
     }
 
-    pub async fn name_async(&self) -> Result<String, Error<Infallible>> {
+    pub async fn name(&self) -> Result<String, Error<Infallible>> {
         crate::runtime::invoke("ai.FunctionSpec.name", |args| {
             args.receiver(self)?;
             Ok(Vec::new())
@@ -426,7 +424,7 @@ impl<T> std::fmt::Debug for Stream<T> {
 impl<T: BamlValue> Stream<T> {
     /// Yield one partial, or `None` for the distinct `ai.stream.Done`
     /// sentinel. A nullable partial is therefore `Some(None)`, not done.
-    pub fn next(&self) -> Result<Option<T>, Error<Infallible>> {
+    pub fn next_sync(&self) -> Result<Option<T>, Error<Infallible>> {
         let value: wire::BamlOutboundValue =
             crate::runtime::invoke_sync("ai.stream.Stream.next", |args| {
                 args.receiver(self)?;
@@ -435,7 +433,7 @@ impl<T: BamlValue> Stream<T> {
         decode_stream_item(value).map_err(Error::Decode)
     }
 
-    pub async fn next_async(&self) -> Result<Option<T>, Error<Infallible>> {
+    pub async fn next(&self) -> Result<Option<T>, Error<Infallible>> {
         let value: wire::BamlOutboundValue =
             crate::runtime::invoke("ai.stream.Stream.next", |args| {
                 args.receiver(self)?;
@@ -446,14 +444,14 @@ impl<T: BamlValue> Stream<T> {
     }
 
     /// Drain the stream and return its settled output.
-    pub fn final_(&self) -> Result<T, Error<Infallible>> {
+    pub fn final_sync(&self) -> Result<T, Error<Infallible>> {
         crate::runtime::invoke_sync("ai.stream.Stream.final", |args| {
             args.receiver(self)?;
             Ok(Vec::new())
         })
     }
 
-    pub async fn final_async(&self) -> Result<T, Error<Infallible>> {
+    pub async fn final_(&self) -> Result<T, Error<Infallible>> {
         crate::runtime::invoke("ai.stream.Stream.final", |args| {
             args.receiver(self)?;
             Ok(Vec::new())
@@ -512,14 +510,14 @@ impl std::fmt::Debug for Prompt {
 }
 
 impl Prompt {
-    pub fn text(&self) -> Result<String, Error<Infallible>> {
+    pub fn text_sync(&self) -> Result<String, Error<Infallible>> {
         crate::runtime::invoke_sync("ai.Prompt.text", |args| {
             args.receiver(self)?;
             Ok(Vec::new())
         })
     }
 
-    pub async fn text_async(&self) -> Result<String, Error<Infallible>> {
+    pub async fn text(&self) -> Result<String, Error<Infallible>> {
         crate::runtime::invoke("ai.Prompt.text", |args| {
             args.receiver(self)?;
             Ok(Vec::new())
@@ -529,7 +527,16 @@ impl Prompt {
 
     /// Decode the structural message view selected by the caller's expected
     /// generated type.
-    pub fn messages<Messages: BamlValue>(&self) -> Result<Messages, Error<Infallible>> {
+    pub async fn messages<Messages: BamlValue>(&self) -> Result<Messages, Error<Infallible>> {
+        crate::runtime::invoke("ai.Prompt.messages", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
+        .await
+    }
+
+    /// Blocking twin of [`Prompt::messages`].
+    pub fn messages_sync<Messages: BamlValue>(&self) -> Result<Messages, Error<Infallible>> {
         crate::runtime::invoke_sync("ai.Prompt.messages", |args| {
             args.receiver(self)?;
             Ok(Vec::new())
@@ -587,7 +594,7 @@ impl __BamlValuePrivate for wire::BamlOutboundValue {
 }
 
 impl<Output: BamlValue> FunctionSpec<Output> {
-    pub fn call_with_options(
+    pub fn call_sync_with_options(
         &self,
         args: CallOptions,
         baml: impl Into<crate::invocation::InvocationOptions>,
@@ -602,7 +609,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
             baml.into(),
         )
     }
-    pub async fn call_async_with_options(
+    pub async fn call_with_options(
         &self,
         args: CallOptions,
         baml: impl Into<crate::invocation::InvocationOptions>,
@@ -618,7 +625,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         )
         .await
     }
-    pub fn parse_with_options(
+    pub fn parse_sync_with_options(
         &self,
         json: impl Into<String>,
         baml: impl Into<crate::invocation::InvocationOptions>,
@@ -633,7 +640,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
             baml.into(),
         )
     }
-    pub async fn parse_async_with_options(
+    pub async fn parse_with_options(
         &self,
         json: impl Into<String>,
         baml: impl Into<crate::invocation::InvocationOptions>,
@@ -649,7 +656,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         )
         .await
     }
-    pub fn prompt_with_options(
+    pub fn prompt_sync_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Prompt, Error<Infallible>> {
@@ -662,7 +669,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
             baml.into(),
         )
     }
-    pub async fn prompt_async_with_options(
+    pub async fn prompt_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Prompt, Error<Infallible>> {
@@ -676,7 +683,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         )
         .await
     }
-    pub fn build_request_with_options<Request: BamlValue>(
+    pub fn build_request_sync_with_options<Request: BamlValue>(
         &self,
         args: CallOptions,
         baml: impl Into<crate::invocation::InvocationOptions>,
@@ -691,7 +698,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
             baml.into(),
         )
     }
-    pub async fn build_request_async_with_options<Request: BamlValue>(
+    pub async fn build_request_with_options<Request: BamlValue>(
         &self,
         args: CallOptions,
         baml: impl Into<crate::invocation::InvocationOptions>,
@@ -707,7 +714,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
         )
         .await
     }
-    pub fn name_with_options(
+    pub fn name_sync_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<String, Error<Infallible>> {
@@ -720,7 +727,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
             baml.into(),
         )
     }
-    pub async fn name_async_with_options(
+    pub async fn name_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<String, Error<Infallible>> {
@@ -736,7 +743,7 @@ impl<Output: BamlValue> FunctionSpec<Output> {
     }
 }
 impl<T: BamlValue> Stream<T> {
-    pub fn next_with_options(
+    pub fn next_sync_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Option<T>, Error<Infallible>> {
@@ -750,7 +757,7 @@ impl<T: BamlValue> Stream<T> {
         )?;
         decode_stream_item(value).map_err(Error::Decode)
     }
-    pub async fn next_async_with_options(
+    pub async fn next_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Option<T>, Error<Infallible>> {
@@ -765,7 +772,7 @@ impl<T: BamlValue> Stream<T> {
         .await?;
         decode_stream_item(value).map_err(Error::Decode)
     }
-    pub fn final_with_options(
+    pub fn final_sync_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<T, Error<Infallible>> {
@@ -778,7 +785,7 @@ impl<T: BamlValue> Stream<T> {
             baml.into(),
         )
     }
-    pub async fn final_async_with_options(
+    pub async fn final_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<T, Error<Infallible>> {
@@ -794,7 +801,7 @@ impl<T: BamlValue> Stream<T> {
     }
 }
 impl Prompt {
-    pub fn text_with_options(
+    pub fn text_sync_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<String, Error<Infallible>> {
@@ -807,7 +814,7 @@ impl Prompt {
             baml.into(),
         )
     }
-    pub async fn text_async_with_options(
+    pub async fn text_with_options(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<String, Error<Infallible>> {
@@ -821,7 +828,7 @@ impl Prompt {
         )
         .await
     }
-    pub fn messages_with_options<Messages: BamlValue>(
+    pub fn messages_sync_with_options<Messages: BamlValue>(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Messages, Error<Infallible>> {
@@ -834,7 +841,7 @@ impl Prompt {
             baml.into(),
         )
     }
-    pub async fn messages_async_with_options<Messages: BamlValue>(
+    pub async fn messages_with_options<Messages: BamlValue>(
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Messages, Error<Infallible>> {

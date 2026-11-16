@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Build and smoke-test the exact binary package inside an ephemeral Arch container."""
+
+from __future__ import annotations
+
+import argparse
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tarfile
+import tempfile
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--package-dir", type=Path, required=True)
+    parser.add_argument("--wrapper-dir", type=Path, required=True)
+    parser.add_argument("--version", required=True)
+    args = parser.parse_args()
+    if os.geteuid() != 0 or 'ID=arch\n' not in Path("/etc/os-release").read_text():
+        parser.error("run as root inside an ephemeral Arch Linux container")
+    environment = dict(os.environ, DO_NOT_TRACK="1", BAML_TELEMETRY="off", BAML_WRAPPER_BCS_TELEMETRY="off", BOUNDARY_API_KEY="local")
+
+    def run(*command, capture=False, check=True):
+        return subprocess.run(command, env=environment, check=check, capture_output=capture, text=True)
+
+    run("useradd", "--create-home", "baml-release-test")
+    with tempfile.TemporaryDirectory(prefix="baml-aur-test-") as temporary:
+        work = Path(temporary)
+        for package in ("baml", "baml-bin"):
+            destination = work / package
+            shutil.copytree(args.package_dir / package, destination)
+        archives = list(args.wrapper_dir.glob(f"baml-wrapper-no-self-update-{args.version}-*-unknown-linux-gnu.tar.gz"))
+        if len(archives) != 2:
+            parser.error(f"expected two Linux GNU archives, found {len(archives)}")
+        for archive in archives:
+            shutil.copyfile(archive, work / "baml-bin" / archive.name)
+        run("chown", "-R", "baml-release-test:baml-release-test", str(work))
+        for package in ("baml", "baml-bin"):
+            directory = work / package
+            actual = run("runuser", "-u", "baml-release-test", "--", "makepkg", "--dir", str(directory), "--printsrcinfo", capture=True).stdout
+            expected = (directory / ".SRCINFO").read_text()
+            assert sorted(line.strip() for line in actual.splitlines() if line.strip()) == sorted(line.strip() for line in expected.splitlines() if line.strip()), f"{package} .SRCINFO differs from makepkg"
+        binary_dir = work / "baml-bin"
+        run("runuser", "-u", "baml-release-test", "--", "makepkg", "--dir", str(binary_dir), "--noconfirm")
+        packages = list(binary_dir.glob("baml-bin-*.pkg.tar.*"))
+        assert len(packages) == 1, packages
+        run("pacman", "-U", "--noconfirm", str(packages[0]))
+        target = "aarch64" if os.uname().machine == "aarch64" else "x86_64"
+        with tarfile.open(binary_dir / f"baml-wrapper-no-self-update-{args.version}-{target}-unknown-linux-gnu.tar.gz") as archive:
+            members = [member for member in archive.getmembers() if member.name.removeprefix("./") == "bin/baml" and member.isfile()]
+            assert len(members) == 1, members
+            assert Path("/usr/bin/baml").read_bytes() == archive.extractfile(members[0]).read(), "makepkg modified the packed executable"
+        fixture = work / "baml-cli"
+        fixture.write_text('#!/bin/sh\necho "Arch CLI fixture"\n')
+        fixture.chmod(0o755)
+        environment.update(BAML_HOME=str(work / "home"), BAML_TOOLCHAIN=str(fixture))
+        version = run("baml", "--version", capture=True).stdout
+        assert f"baml wrapper {args.version}" in version and "Arch CLI fixture" in version, version
+        assert "installed toolchains: (none)" in run("baml", "toolchain", "list", capture=True).stdout
+        disabled = run("baml", "self", "update", capture=True, check=False)
+        assert disabled.returncode == 1 and "baml self update is disabled in this build" in disabled.stderr, disabled
+        print("Arch makepkg metadata, package build, installed bytes, and wrapper smoke checks passed.")
+
+
+if __name__ == "__main__":
+    main()

@@ -20,7 +20,7 @@
 
 #![allow(unsafe_code)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, num::NonZeroU64, sync::Arc};
 
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
@@ -187,6 +187,15 @@ struct CallOptions<'a> {
     type_args: &'a [bex_vm_types::RealizedTy],
 }
 
+/// How [`BexVm::call_native_direct`] ended.
+enum NativeDirect {
+    /// The call needs the general path; nothing was changed.
+    NotTaken,
+    /// The native ran: hand this to the engine loop, as the general path
+    /// does.
+    Ran(Option<VmExecState>),
+}
+
 /// An interface bound as the VM checks it: the interface, its type arguments,
 /// and the associated types the bound pins.
 pub type BoundParts = (
@@ -219,11 +228,16 @@ struct TakenTypeArgs {
     tys: Vec<bex_vm_types::RealizedTy>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct StaticVirtualCallKey {
+/// One interface-dispatch site and what it dispatched on: the key of the
+/// static virtual-call and virtual-field caches. Lookups go through the
+/// borrowed [`VirtualSiteQuery`], which hashes and compares the same way, so
+/// a hit reads the receiver's and the interface's type arguments in place
+/// instead of cloning them into a key.
+#[derive(Clone, Debug)]
+struct VirtualSiteKey {
     caller_function_addr: usize,
     call_pc: usize,
-    receiver: StaticVirtualReceiverKey,
+    receiver: VirtualReceiverKey,
     /// The interface's nominal identity — which interface, independent of how
     /// it was instantiated. Hashes and compares as its tag, so this costs an
     /// integer rather than a name clone on every dispatch.
@@ -237,11 +251,10 @@ struct StaticVirtualCallKey {
     interface_args: Box<[bex_vm_types::RealizedTy]>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum StaticVirtualReceiverKey {
+#[derive(Clone, Debug)]
+enum VirtualReceiverKey {
     /// Static program classes have immutable, program-unique tags. Generic
-    /// arguments remain part of identity; the overwhelmingly common
-    /// non-generic case clones an empty box without allocating.
+    /// arguments remain part of identity.
     Class {
         type_tag: i64,
         type_args: Box<[bex_vm_types::RealizedTy]>,
@@ -251,12 +264,246 @@ enum StaticVirtualReceiverKey {
     Other(bex_vm_types::RealizedTy),
 }
 
+/// The borrowed form of a [`VirtualSiteKey`]: the receiver's and the
+/// interface's type arguments are read where they live (the instance and the
+/// interface operand's type object).
+#[derive(Debug, PartialEq, Hash)]
+struct VirtualSiteQuery<'a> {
+    caller_function_addr: usize,
+    call_pc: usize,
+    receiver: VirtualReceiverQuery<'a>,
+    interface_head: bex_vm_types::TypeHead,
+    interface_args: &'a [bex_vm_types::RealizedTy],
+}
+
+#[derive(Debug, PartialEq, Hash)]
+enum VirtualReceiverQuery<'a> {
+    Class {
+        type_tag: i64,
+        type_args: &'a [bex_vm_types::RealizedTy],
+    },
+    Other(&'a bex_vm_types::RealizedTy),
+}
+
+impl VirtualSiteQuery<'_> {
+    fn to_key(&self) -> VirtualSiteKey {
+        VirtualSiteKey {
+            caller_function_addr: self.caller_function_addr,
+            call_pc: self.call_pc,
+            receiver: match self.receiver {
+                VirtualReceiverQuery::Class {
+                    type_tag,
+                    type_args,
+                } => VirtualReceiverKey::Class {
+                    type_tag,
+                    type_args: type_args.into(),
+                },
+                VirtualReceiverQuery::Other(ty) => VirtualReceiverKey::Other(ty.clone()),
+            },
+            interface_head: self.interface_head,
+            interface_args: self.interface_args.into(),
+        }
+    }
+}
+
+impl VirtualSiteKey {
+    fn as_query(&self) -> VirtualSiteQuery<'_> {
+        VirtualSiteQuery {
+            caller_function_addr: self.caller_function_addr,
+            call_pc: self.call_pc,
+            receiver: match &self.receiver {
+                VirtualReceiverKey::Class {
+                    type_tag,
+                    type_args,
+                } => VirtualReceiverQuery::Class {
+                    type_tag: *type_tag,
+                    type_args,
+                },
+                VirtualReceiverKey::Other(ty) => VirtualReceiverQuery::Other(ty),
+            },
+            interface_head: self.interface_head,
+            interface_args: &self.interface_args,
+        }
+    }
+
+    /// Follow a collection. The key is weak: `false` when the caller or a
+    /// declaration it names is gone, and the entry must go with it.
+    fn forward(&mut self, visitor: &mut dyn RootVisitor) -> bool {
+        let Some(identity) = forward_cache_identity(self.caller_function_addr, visitor) else {
+            return false;
+        };
+        self.caller_function_addr = identity;
+        let receiver_live = match &mut self.receiver {
+            VirtualReceiverKey::Class {
+                type_tag: _,
+                type_args,
+            } => forward_weak_heads(type_args, visitor),
+            VirtualReceiverKey::Other(ty) => forward_weak_heads(std::slice::from_mut(ty), visitor),
+        };
+        receiver_live
+            && self.interface_head.visit_root_weak(visitor)
+            && forward_weak_heads(&mut self.interface_args, visitor)
+    }
+}
+
+impl std::hash::Hash for VirtualSiteKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_query().hash(state);
+    }
+}
+
+impl PartialEq for VirtualSiteKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_query() == other.as_query()
+    }
+}
+
+impl Eq for VirtualSiteKey {}
+
+impl indexmap::Equivalent<VirtualSiteKey> for VirtualSiteQuery<'_> {
+    fn equivalent(&self, key: &VirtualSiteKey) -> bool {
+        *self == key.as_query()
+    }
+}
+
+/// A per-site interface-dispatch cache. Fx-hashed: the keys are call sites
+/// and program types, never program input.
+type VirtualSiteCache<V> = IndexMap<VirtualSiteKey, V, rustc_hash::FxBuildHasher>;
+
 #[derive(Clone, Debug)]
 struct StaticVirtualCallTarget {
     /// Weak, like the key: the cache must not keep a runtime callee alive.
     callee: Weak,
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
+    /// The callee's value count when the site's pushed arguments are already
+    /// the callee's own slots (the site recorded no layout, or the layout it
+    /// recorded is the callee's), so a hit skips the layout lookup. `None`
+    /// when the arguments must be remapped, or when the entry was made by a
+    /// compiled body, which lays out its arguments itself.
+    arg_count: Option<usize>,
 }
+
+/// What the `LoadType` cache holds for one type constant of one function.
+enum LoadTypeSite {
+    /// A fully realized constant denotes the same type in every frame, so
+    /// every execution shares one object.
+    Realized(Weak),
+    /// A template over the frame's type arguments that reduces no
+    /// associated-type projection. Substituting it reads nothing but the
+    /// frame's arguments, so each argument list seen here keeps one object,
+    /// matched by equality. At most [`LOAD_TYPE_SITE_BINDINGS`] lists; the
+    /// oldest goes first.
+    Generic(SmallVec<[(Box<[bex_vm_types::RealizedTy]>, Weak); 2]>),
+    /// A template that reduces a projection. The reduction searches the
+    /// running code's impl world, which neither the function nor its frame
+    /// arguments pin down, so it is rebuilt on every execution.
+    Projection,
+}
+
+/// How many frame-argument lists one generic `LoadType` constant remembers.
+const LOAD_TYPE_SITE_BINDINGS: usize = 8;
+
+/// Follow a static-cache function identity through a collection. A
+/// compile-time function is keyed by its never-moving payload address (low
+/// bit clear); a runtime function by its object address tagged in the low
+/// bit, which is a weak reference: `None` once the function is gone.
+fn forward_cache_identity(identity: usize, visitor: &mut dyn RootVisitor) -> Option<usize> {
+    if identity & 1 == 0 {
+        return Some(identity);
+    }
+    let addr = (identity & !1) as *mut Object;
+    // SAFETY: the pointer is used only as a lookup key; it is never
+    // dereferenced, so validity of the pointee is not required.
+    #[cfg(not(feature = "heap_debug"))]
+    let mut key = unsafe { HeapPtr::from_ptr(addr) };
+    // SAFETY: as above; the epoch does not participate in `Eq`/`Hash`,
+    // so a zero epoch probes correctly.
+    #[cfg(feature = "heap_debug")]
+    let mut key = unsafe { HeapPtr::from_ptr(addr, 0) };
+    visitor
+        .visit_weak(&mut key)
+        .then(|| (key.as_ptr() as usize) | 1)
+}
+
+/// Whether every declaration the types name is still live, repointing each
+/// that moved.
+fn forward_weak_heads(tys: &mut [bex_vm_types::RealizedTy], visitor: &mut dyn RootVisitor) -> bool {
+    let mut live = true;
+    for ty in tys {
+        ty.visit_heads_mut(&mut |head: &mut TypeHead| {
+            live &= head.visit_root_weak(visitor);
+        });
+    }
+    live
+}
+
+/// The running frame's dispatch state, handed to [`BexVm::run_fast_path`]
+/// and back.
+#[derive(Clone, Copy)]
+struct DispatchState {
+    pc: usize,
+    code: &'static [u8],
+    function: &'static Function,
+    frame_idx: usize,
+    /// `locals_offset - 1` of the frame; see `BexVm::local_at`.
+    locals_base: usize,
+    runtime_package: HeapPtr,
+}
+
+/// Opcodes [`BexVm::run_fast_path`] can run. The full dispatch enters that
+/// fast path only in front of one of these; a wrong entry costs time, never
+/// correctness, since the fast path stops before anything it does not run.
+const FAST_PATH_OPS: [bool; 256] = {
+    use bex_vm_types::bytecode::OpCode as Op;
+    let ops = [
+        Op::LoadNull,
+        Op::LoadTrue,
+        Op::LoadFalse,
+        Op::LoadIntSmall,
+        Op::LoadConst,
+        Op::LoadVar,
+        Op::LoadVar2,
+        Op::StoreVar,
+        Op::StoreVar2,
+        Op::StoreVarLoadVar,
+        Op::Pop,
+        Op::Copy,
+        Op::AddInt,
+        Op::SubInt,
+        Op::MulInt,
+        Op::CmpIntEq,
+        Op::CmpIntNotEq,
+        Op::CmpIntLt,
+        Op::CmpIntLtEq,
+        Op::CmpIntGt,
+        Op::CmpIntGtEq,
+        Op::Not,
+        Op::Truthy,
+        Op::Jump,
+        Op::PopJumpIfFalse,
+        Op::PopJumpIfTrue,
+        Op::JumpIfFalse,
+        Op::JumpIfFalseOrPop,
+        Op::JumpIfTrueOrPop,
+        Op::JumpIfNotNullOrPop,
+        Op::LoadField,
+        Op::LoadFieldLocal,
+        Op::AddLocalSmall,
+        Op::LoadVarField,
+        Op::LoadVarFieldLocal,
+        Op::JumpIfLocalsCmp,
+        Op::JumpIfLocalConstCmp,
+        Op::CallExactArgs,
+        Op::Return,
+    ];
+    let mut table = [false; 256];
+    let mut i = 0;
+    while i < ops.len() {
+        table[ops[i] as usize] = true;
+        i += 1;
+    }
+    table
+};
 
 /// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
@@ -405,7 +652,7 @@ impl Frame {
 pub(crate) mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     use std::sync::atomic::AtomicBool;
-    use std::{collections::HashMap, sync::Arc};
+    use std::{collections::HashMap, num::NonZeroU64, sync::Arc};
 
     use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::{
@@ -479,6 +726,7 @@ pub(crate) mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         }))
     }
 
@@ -549,6 +797,7 @@ pub(crate) mod tests {
             cur_pc: 0,
             heap: Arc::clone(&heap),
             early_yield: early_yield_for_test(),
+            dispatch_fast_path: true,
             tlab: Tlab::new(heap),
             globals: VmGlobals::Owned(GlobalPool::new()),
             pending_globals: None,
@@ -556,11 +805,13 @@ pub(crate) mod tests {
             panic_class_ptrs: Arc::from(Vec::new()),
             stdlib_heads: Arc::new(crate::package_load::StdlibHeads::default()),
 
-            thread_id: 0,
+            thread_id: NonZeroU64::MIN,
+            monitors: crate::package_baml::TaskMonitors::new(Arc::default(), NonZeroU64::MIN),
 
             context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_trace: None,
+            thread_local_call: false,
             pending_trace_hooks: Vec::new(),
             held_traces: Vec::new(),
             trace_scope_frame: usize::MAX,
@@ -574,8 +825,11 @@ pub(crate) mod tests {
             compiled: super::compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
             static_load_type_cache: FxHashMap::default(),
-            static_virtual_call_cache: FxHashMap::default(),
+            static_virtual_call_cache: super::VirtualSiteCache::default(),
+            static_virtual_field_cache: super::VirtualSiteCache::default(),
             impl_cache: std::cell::RefCell::default(),
+            json_decode_cache: crate::package_baml::json::DecodeCache::default(),
+            enum_equals_memo: crate::package_baml::EnumEqualsMemo::default(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -609,7 +863,7 @@ pub(crate) mod tests {
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode::default(),
-            kind: FunctionKind::Native(native as *const ()),
+            kind: FunctionKind::Native(native as *const (), None),
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
@@ -856,7 +1110,7 @@ pub(crate) mod tests {
         let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(invoke)] else {
             unreachable!()
         };
-        function.kind = FunctionKind::Native(invoke_twice as NativeFunction as *const ());
+        function.kind = FunctionKind::Native(invoke_twice as NativeFunction as *const (), None);
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
         vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
         loop {
@@ -1280,6 +1534,7 @@ pub(crate) mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
             panic!("expected trampoline bytecode frame");
@@ -1337,6 +1592,7 @@ pub(crate) mod tests {
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
         })));
         vm.pending_call_type_args = vec![bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
@@ -1546,6 +1802,10 @@ impl CalleeParams<'_> {
 /// Other than that, pretty much everything is better in a stack VM, especially
 /// simplicity (we don't even need to figure out which registers to use and when
 /// to use them).
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent VM execution flags"
+)]
 pub struct BexVm {
     /// Call stack.
     ///
@@ -1578,6 +1838,12 @@ pub struct BexVm {
     pub heap: Arc<BexHeap>,
 
     pub early_yield: EarlyYieldCheck,
+
+    /// Whether the dispatch loop runs eligible instructions through
+    /// `run_fast_path` (the default). Turning it off runs every
+    /// instruction through the full dispatch; results must not change,
+    /// which `dispatch_fast_path_equivalence` checks.
+    pub dispatch_fast_path: bool,
 
     /// Thread-local allocation buffer (exclusive to this VM).
     pub tlab: Tlab,
@@ -1624,8 +1890,13 @@ pub struct BexVm {
     /// once from `packages` and shared across spawned VMs.
     stdlib_heads: Arc<crate::package_load::StdlibHeads>,
 
-    /// Engine-local logical thread identity for structured logs.
-    pub thread_id: u64,
+    /// Engine-local logical thread identity for structured logs, and the
+    /// task that owns the `baml.sync.atomic` locks this VM takes. Unique
+    /// among the engine's VMs; set at construction.
+    pub thread_id: NonZeroU64,
+
+    /// The engine's `baml.sync.atomic` locks, and what this VM holds of them.
+    pub(crate) monitors: crate::package_baml::TaskMonitors,
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
     pub(crate) telemetry: Option<TelemetryState>,
@@ -1665,6 +1936,9 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_trace: Option<CallTrace>,
+    /// Set by `CallLocal` for the call it starts: a native callee runs its
+    /// thread-local twin, which reads the receiver without its lock.
+    thread_local_call: bool,
     pending_trace_hooks: Vec<PendingTraceHook>,
     held_traces: Vec<(usize, CallTrace)>,
     /// Nearest frame with held configuration or an owned-span scope. Ordinary
@@ -1685,25 +1959,39 @@ pub struct BexVm {
     /// writeback appends `pending_call_type_args` to the new frame.
     pending_call_passes_type_args: bool,
 
-    /// Created-once immutable type objects for fully realized `LoadType`
-    /// constants in static functions. The compact numeric key keeps the
-    /// per-iteration lookup cheaper than re-hashing the full realized type.
-    /// Entries are weak both ways: one goes when its function or its type
-    /// object does, and a type nothing else holds is simply rebuilt.
-    /// Fx-hashed: the keys are function addresses and constant indexes, never
-    /// program input.
-    static_load_type_cache: FxHashMap<(usize, usize), Weak>,
+    /// Created-once immutable type objects for `LoadType` constants, keyed
+    /// by function identity and constant index: one object for a fully
+    /// realized constant, one per frame-argument list for a template over the
+    /// frame (see [`LoadTypeSite`]). The compact numeric key keeps the
+    /// per-iteration lookup cheaper than re-hashing a type. Entries are weak
+    /// throughout: one goes when its function, its type object or a
+    /// declaration its arguments name does, and a type nothing else holds is
+    /// simply rebuilt. Fx-hashed: the keys are function addresses and
+    /// constant indexes, never program input.
+    static_load_type_cache: FxHashMap<(usize, usize), LoadTypeSite>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
     /// dynamic builder registration remain live on every dynamic dispatch.
     /// Fx-hashed: the keys are call sites and program types, never program
     /// input.
-    static_virtual_call_cache: FxHashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
+    static_virtual_call_cache: VirtualSiteCache<StaticVirtualCallTarget>,
+    /// The field analogue of `static_virtual_call_cache`: the physical slot a
+    /// `VirtualLoadField`/`VirtualStoreField` site resolved for a receiver
+    /// type, under the same rule (only immutable program-image impls enter).
+    static_virtual_field_cache: VirtualSiteCache<usize>,
     /// This VM's impl-resolver answers. The resolver borrows it for a
     /// lookup or an insert only, never across a resolution, so a nested
     /// resolution can use it too.
     pub(crate) impl_cache: std::cell::RefCell<crate::impl_cache::ImplCache>,
+    /// What `baml.json` decoding has worked out about types (class plans,
+    /// provided `from_json`s, which types reach one), kept between calls.
+    /// Not a root: dropped at every collection.
+    pub(crate) json_decode_cache: crate::package_baml::json::DecodeCache,
+    /// Whether `==` on a compile-time enum is the structural default, per
+    /// resolution generation: the `CallEquals` fast path's one lookup. Holds
+    /// compile-time pointers only, so a collection has nothing to visit.
+    pub(crate) enum_equals_memo: crate::package_baml::EnumEqualsMemo,
 }
 
 /// VM execution state.
@@ -2124,21 +2412,6 @@ pub fn resolve_panic_class_ptrs(
         .collect()
 }
 
-/// Extract an `f64` if `value` carries a heap-boxed float.
-///
-/// Floats are no longer inline in `Value`; they live as `Object::Float(f64)`
-/// behind a `HeapPtr`. Returns `None` for any other variant (including ints —
-/// callers that want int→float promotion must combine this with `as_int`).
-#[inline]
-fn value_as_float(value: Value) -> Option<f64> {
-    let ptr = value.as_object_ptr()?;
-    // SAFETY: HeapPtr from a live Value is valid for read.
-    match unsafe { ptr.get() } {
-        Object::Float(f) => Some(*f),
-        _ => None,
-    }
-}
-
 /// The [`ConcreteRealizedTy::Function`] a callable *value* denotes: the
 /// `Function`'s stored signature templates, materialized against the realized
 /// type arguments that value carries.
@@ -2268,6 +2541,7 @@ fn value_type_tag(value: Value) -> i64 {
         ValueKind::Int(_) => type_tags::INT,
         ValueKind::Bool(_) => type_tags::BOOL,
         ValueKind::Null => type_tags::NULL,
+        ValueKind::Float(_) => type_tags::FLOAT,
         ValueKind::Object(ptr) => {
             // SAFETY: Reading type information from objects via HeapPtr.
             let obj = unsafe { ptr.get() };
@@ -2378,6 +2652,8 @@ impl BexVm {
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
         stdlib_heads: Arc<crate::package_load::StdlibHeads>,
+        monitors: Arc<bex_vm_types::MonitorTable>,
+        thread_id: NonZeroU64,
         telemetry: Option<TelemetryState>,
         trace_scope: btel_types::RecordingId,
     ) -> Self {
@@ -2412,6 +2688,7 @@ impl BexVm {
             cur_pc: 0,
             heap,
             early_yield,
+            dispatch_fast_path: true,
             tlab,
             globals,
             pending_globals: None,
@@ -2419,11 +2696,13 @@ impl BexVm {
             panic_class_ptrs,
             stdlib_heads,
 
-            thread_id: 0,
+            thread_id,
+            monitors: crate::package_baml::TaskMonitors::new(monitors, thread_id),
 
             context_transfers: Vec::new(),
             argv,
             pending_call_trace: None,
+            thread_local_call: false,
             pending_trace_hooks: Vec::new(),
             held_traces: Vec::new(),
             trace_scope_frame: usize::MAX,
@@ -2437,8 +2716,11 @@ impl BexVm {
             compiled: compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
             static_load_type_cache: FxHashMap::default(),
-            static_virtual_call_cache: FxHashMap::default(),
+            static_virtual_call_cache: VirtualSiteCache::default(),
+            static_virtual_field_cache: VirtualSiteCache::default(),
             impl_cache: std::cell::RefCell::default(),
+            json_decode_cache: crate::package_baml::json::DecodeCache::default(),
+            enum_equals_memo: crate::package_baml::EnumEqualsMemo::default(),
             telemetry,
             trace_scope,
             manual_activations: Vec::new(),
@@ -3207,6 +3489,39 @@ impl BexVm {
         self.take_type_args(start, type_arg_count)
     }
 
+    /// Take the `count` type operands below the top `value_count` values when
+    /// every one is an `Object::Type` built only from compiled declarations:
+    /// the case [`Self::take_type_args`] serves without a per-frame carrier.
+    /// Anything else (a kind view, a type naming a runtime declaration)
+    /// returns `None` and leaves the stack untouched, so the caller can take
+    /// the general path. Kept out of line so the non-generic exact call stays
+    /// as small as it was.
+    #[inline(never)]
+    fn take_plain_static_type_args(
+        &mut self,
+        count: usize,
+        value_count: usize,
+    ) -> Option<Vec<bex_vm_types::RealizedTy>> {
+        let start = self.stack.len().checked_sub(count + value_count)?;
+        let end = start + count;
+        let mut tys = Vec::with_capacity(count);
+        for slot in start..end {
+            let ptr = self.stack[StackIndex::from_raw(slot)].as_object_ptr()?;
+            let Object::Type(type_value) = self.get_object(ptr) else {
+                return None;
+            };
+            if !crate::reachable::is_statically_declared(&type_value.ty) {
+                return None;
+            }
+            tys.push(type_value.ty.clone());
+        }
+        drop(
+            self.stack
+                .drain(StackIndex::from_raw(start)..StackIndex::from_raw(end)),
+        );
+        Some(tys)
+    }
+
     fn pop_type_args(&mut self, count: usize) -> Result<TakenTypeArgs, VmError> {
         self.take_type_args_below_values(count, 0)
     }
@@ -3802,6 +4117,7 @@ impl BexVm {
             .unwrap_or_else(HeapPtr::null)
     }
 
+    #[inline]
     fn load_global_in(&self, package: HeapPtr, index: GlobalIndex) -> Value {
         if package.as_ptr().is_null() {
             return self.globals.get(self.proof(), index);
@@ -3855,6 +4171,18 @@ impl BexVm {
             return self.heap.compile_time_ptr(idx.into_raw());
         }
         self.package_object(package_ptr, idx)
+    }
+
+    /// [`Self::idx_to_ptr`] for an operand of a function whose runtime
+    /// package (`runtime_package_of`, null for a static function) the caller
+    /// already holds, as the dispatch loop does: no frame walk.
+    #[inline]
+    fn object_in(&self, package: HeapPtr, idx: ObjectIndex) -> HeapPtr {
+        if package.is_null() {
+            self.heap.compile_time_ptr(idx.into_raw())
+        } else {
+            self.package_object(package, idx)
+        }
     }
 
     /// The object at `idx` in the runtime package `package_ptr`.
@@ -3981,23 +4309,24 @@ impl BexVm {
     /// argument, zero (`0`, `0n`, `0.0`), and empty string/list/map/bytes
     /// are falsy; every other
     /// value - including `NaN`, instances, variants, closures, and
-    /// futures - is truthy. The scalar fast path never touches the heap;
-    /// only strings, containers, and the boxed numerics dereference.
+    /// futures - is truthy. The scalar fast path (inline floats included)
+    /// never touches the heap; only strings, containers, and the boxed
+    /// numerics dereference.
     pub fn is_truthy(&self, value: Value) -> bool {
-        use bex_vm_types::ValueKind;
-        match value.kind() {
-            ValueKind::Null | ValueKind::OmittedArg => false,
-            ValueKind::Bool(b) => b,
-            ValueKind::Int(v) => v != 0,
-            ValueKind::Object(ptr) => match self.get_object(ptr) {
-                Object::String(s) => !s.is_empty(),
-                Object::Array(arr) => !arr.is_empty(),
-                Object::Map(map) => !map.is_empty(),
-                Object::Uint8Array(bytes) => !bytes.is_empty(),
-                Object::Float(f) => *f != 0.0,
-                Object::Bigint(n) => n.sign() != num_bigint::Sign::NoSign,
-                _ => true,
-            },
+        if let Some(truthiness) = Self::scalar_truthiness(value) {
+            return truthiness;
+        }
+        let Some(ptr) = value.as_object_ptr() else {
+            unreachable!("scalar_truthiness covers every value that is not an object")
+        };
+        match self.get_object(ptr) {
+            Object::String(s) => !s.is_empty(),
+            Object::Array(arr) => !arr.is_empty(),
+            Object::Map(map) => !map.is_empty(),
+            Object::Uint8Array(bytes) => !bytes.is_empty(),
+            Object::Float(f) => *f != 0.0,
+            Object::Bigint(n) => n.sign() != num_bigint::Sign::NoSign,
+            _ => true,
         }
     }
 
@@ -4188,7 +4517,7 @@ impl BexVm {
     /// Whether `value` inhabits the singleton type denoted by `literal`.
     ///
     /// The runtime counterpart of `TyTemplate::Literal`: exact representation
-    /// *and* exact contents. A heap `Float` is not the int literal `1` however
+    /// *and* exact contents. A `float` is not the int literal `1` however
     /// close its magnitude, and a `bigint` is not an `int` — those are disjoint
     /// types (`TYPE_SYSTEM.md` "Concrete Types": no concrete type is a subtype
     /// of another), even though the `==` operator deliberately widens across
@@ -4214,13 +4543,9 @@ impl BexVm {
             // rejects `1.0` in type position), so this arm is unreachable from
             // BAML source. It is still answered exactly rather than defaulted,
             // so a future float-literal type cannot inherit a silent `false`.
-            baml_type::Literal::Float(repr) => match value.as_object_ptr() {
-                Some(ptr) => match self.get_object(ptr) {
-                    Object::Float(v) => repr.parse::<f64>().is_ok_and(|expected| *v == expected),
-                    _ => false,
-                },
-                None => false,
-            },
+            baml_type::Literal::Float(repr) => value
+                .as_float()
+                .is_some_and(|v| repr.parse::<f64>().is_ok_and(|expected| v == expected)),
         }
     }
 
@@ -4437,6 +4762,9 @@ impl BexVm {
         if value.is_null() {
             return Some(ConcreteRealizedTy::Null);
         }
+        if value.is_inline_float() {
+            return Some(ConcreteRealizedTy::Float);
+        }
         Some(match self.get_object(value.as_object_ptr()?) {
             Object::Float(_) => ConcreteRealizedTy::Float,
             Object::Bigint(_) => ConcreteRealizedTy::Bigint,
@@ -4576,31 +4904,99 @@ impl BexVm {
         })
     }
 
-    /// Build the allocation-light receiver half of a static virtual-dispatch
-    /// cache key. Static class tags are immutable and unique in one program,
-    /// so non-generic instances avoid rebuilding and hashing their qualified
-    /// class name on every method call. Runtime-built classes stay off this
-    /// cache because their dispatch tables are live.
-    fn static_virtual_receiver_key(&self, value: Value) -> Option<StaticVirtualReceiverKey> {
+    /// The receiver half of a virtual-site query, borrowed where it can be.
+    /// Static class tags are immutable and unique in one program, so an
+    /// instance of a compile-time class is keyed by its tag and its own type
+    /// arguments, read in place. Any other receiver (a primitive, a
+    /// container, an instance of a runtime-built class) is keyed by its
+    /// realized concrete type, built into `scratch`.
+    fn virtual_receiver_query<'a>(
+        &'a self,
+        value: Value,
+        scratch: &'a mut Option<bex_vm_types::RealizedTy>,
+    ) -> Option<VirtualReceiverQuery<'a>> {
         if let Some(ptr) = value.as_object_ptr()
             && let Object::Instance(instance) = self.get_object(ptr)
             && let Object::Class(class) = self.get_object(instance.class)
             && self.heap.is_compile_time_ptr(instance.class)
         {
-            return Some(StaticVirtualReceiverKey::Class {
+            return Some(VirtualReceiverQuery::Class {
                 type_tag: class.type_tag.as_i64(),
-                type_args: instance.class_type_args.clone(),
+                type_args: &instance.class_type_args,
             });
         }
-        self.value_concrete_ty(value)
-            .map(bex_vm_types::RealizedTy::from)
-            .map(StaticVirtualReceiverKey::Other)
+        *scratch = self
+            .value_concrete_ty(value)
+            .map(bex_vm_types::RealizedTy::from);
+        let scratch: &'a Option<bex_vm_types::RealizedTy> = scratch;
+        scratch.as_ref().map(VirtualReceiverQuery::Other)
+    }
+
+    /// The question a virtual-dispatch site asks its cache: this site, this
+    /// receiver type, this interface instantiation. `None` when the caller
+    /// has no cache identity or the receiver no concrete type. Everything is
+    /// borrowed except a non-instance receiver's type, which `scratch` holds.
+    fn virtual_site_query<'a>(
+        &'a self,
+        caller: Option<usize>,
+        receiver: Value,
+        iface_ptr: HeapPtr,
+        scratch: &'a mut Option<bex_vm_types::RealizedTy>,
+    ) -> Option<VirtualSiteQuery<'a>> {
+        let caller_function_addr = caller?;
+        let (interface_head, interface_args) = self.interface_operand_parts(iface_ptr);
+        Some(VirtualSiteQuery {
+            caller_function_addr,
+            call_pc: self.cur_pc,
+            receiver: self.virtual_receiver_query(receiver, scratch)?,
+            interface_head,
+            interface_args,
+        })
+    }
+
+    /// The interface a virtual operation's operand names, and its input
+    /// arguments, borrowed from the operand's type object. Associated types
+    /// are outputs and play no part in selecting an impl.
+    fn interface_operand_parts(
+        &self,
+        iface_ptr: HeapPtr,
+    ) -> (bex_vm_types::TypeHead, &[bex_vm_types::RealizedTy]) {
+        match self.get_object(iface_ptr) {
+            Object::Type(type_value) => match &type_value.ty {
+                bex_vm_types::RealizedTy::Interface(head, args, _assoc) => (*head, args),
+                other => unreachable!(
+                    "virtual operation interface operand must be an Interface type, found {other:?}"
+                ),
+            },
+            other => unreachable!(
+                "as_object_ptr(Type) guarantees a Type object, found {:?}",
+                ObjectType::of(other)
+            ),
+        }
+    }
+
+    /// The running function's identity in the static caches: the address of
+    /// a static function's never-moving payload, or a runtime function's
+    /// tagged object address (see [`Self::runtime_cache_function_addr`]).
+    #[inline]
+    fn static_cache_identity(
+        &self,
+        function: &Function,
+        runtime_package: HeapPtr,
+        frame_idx: usize,
+    ) -> Option<usize> {
+        if runtime_package.is_null() {
+            Some(std::ptr::from_ref(function) as usize)
+        } else {
+            self.runtime_cache_function_addr(self.frames[frame_idx].function())
+        }
     }
 
     /// Runtime callers use the same immutable-rule cache as static callers,
     /// but their movable function-object pointer is tagged for GC forwarding.
     /// Keep this uncommon key construction out of the ordinary interpreter
     /// path so static bytecode retains its existing hot-loop layout.
+    #[inline(never)]
     fn runtime_cache_function_addr(&self, callable: HeapPtr) -> Option<usize> {
         let function_object = match self.get_object(callable) {
             Object::Function(_) => callable,
@@ -4615,55 +5011,97 @@ impl BexVm {
             .then_some(function_object.as_ptr() as usize | 1)
     }
 
-    #[inline(never)]
-    fn runtime_virtual_call_cache_key(
+    /// The cached type object for `LoadType` constant `constant` of the
+    /// function `identity` names, as the frame at `frame_idx` would build it.
+    #[inline]
+    fn cached_load_type(
         &self,
-        callable: HeapPtr,
-        iface_value: Value,
-        receiver: Value,
-    ) -> Result<Option<StaticVirtualCallKey>, VmError> {
-        let Some(caller_function_addr) = self.runtime_cache_function_addr(callable) else {
-            return Ok(None);
-        };
-        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
-        let Object::Type(type_value) = self.get_object(iface_ptr) else {
-            unreachable!("as_object_ptr(Type) guarantees a Type object")
-        };
-        let (interface_head, interface_args) = match &type_value.ty {
-            bex_vm_types::RealizedTy::Interface(head, args, _) => (*head, args.clone()),
-            other => unreachable!(
-                "VirtualCall interface operand must be an Interface type, found {other:?}"
-            ),
-        };
-        Ok(self
-            .static_virtual_receiver_key(receiver)
-            .map(|receiver| StaticVirtualCallKey {
-                caller_function_addr,
-                call_pc: self.cur_pc,
-                receiver,
-                interface_head,
-                interface_args,
-            }))
+        identity: usize,
+        constant: usize,
+        frame_idx: usize,
+    ) -> Option<HeapPtr> {
+        match self.static_load_type_cache.get(&(identity, constant))? {
+            LoadTypeSite::Realized(ty) => Some(ty.ptr()),
+            LoadTypeSite::Generic(bindings) => {
+                let Frame::Bytecode(frame) = &self.frames[frame_idx] else {
+                    return None;
+                };
+                bindings
+                    .iter()
+                    .find(|(args, _)| args[..] == frame.type_args[..])
+                    .map(|(_, ty)| ty.ptr())
+            }
+            LoadTypeSite::Projection => None,
+        }
     }
 
+    /// Build the type object for `LoadType` constant `constant` and, when the
+    /// running function has a cache `identity`, remember it.
+    ///
+    /// A fully-realized template narrows to `RealizedTy` in a single
+    /// validation walk — no substitution environment needed. Otherwise its
+    /// frame refs resolve (and any projection reduces) against the frame's
+    /// realized type args; the result must be realized or it is an internal
+    /// error, never an `unknown` erasure.
     #[inline(never)]
-    fn runtime_load_type_cache_key(
-        &self,
-        frame_idx: usize,
-        template: &bex_vm_types::TyTemplate,
+    fn load_type_uncached(
+        &mut self,
+        function: &'static Function,
+        identity: Option<usize>,
         constant: usize,
-    ) -> Option<(usize, usize)> {
-        if <&bex_vm_types::RealizedTy>::try_from(template).is_err()
-            || !matches!(&self.frames[frame_idx],
-                Frame::Bytecode(frame)
-                    if !frame.binds_runtime_declaration(&self.heap))
-        {
-            return None;
+        frame_idx: usize,
+    ) -> Result<Value, VmError> {
+        let ConstValue::Type(template) = &function.bytecode.constants[constant] else {
+            return Err(VmInternalError::UnexpectedConstantKind.into());
+        };
+        let realized = <&bex_vm_types::RealizedTy>::try_from(template).ok();
+        let ty = match realized {
+            Some(realized) => realized.clone(),
+            None => {
+                let frame_type_args: &[bex_vm_types::RealizedTy] = match &self.frames[frame_idx] {
+                    Frame::Bytecode(frame) => &frame.type_args,
+                    Frame::Native(_) => &[],
+                };
+                template.substitute(frame_type_args, self).map_err(|e| {
+                    VmInternalError::TypeSubstitution {
+                        message: e.to_string(),
+                    }
+                })?
+            }
+        };
+        let ptr = self.tlab.alloc_type(TypeValue::new(ty));
+        let Some(identity) = identity else {
+            return Ok(Value::object(ptr));
+        };
+        let key = (identity, constant);
+        if realized.is_some() {
+            self.static_load_type_cache
+                .insert(key, LoadTypeSite::Realized(Weak::new(ptr)));
+        } else if template.has_projection() {
+            self.static_load_type_cache
+                .insert(key, LoadTypeSite::Projection);
+        } else {
+            let args: Box<[bex_vm_types::RealizedTy]> = match &self.frames[frame_idx] {
+                Frame::Bytecode(frame) => frame.type_args.as_slice().into(),
+                Frame::Native(_) => Box::default(),
+            };
+            let site = self
+                .static_load_type_cache
+                .entry(key)
+                .or_insert_with(|| LoadTypeSite::Generic(SmallVec::new()));
+            match site {
+                LoadTypeSite::Generic(bindings) => {
+                    if bindings.len() >= LOAD_TYPE_SITE_BINDINGS {
+                        bindings.remove(0);
+                    }
+                    bindings.push((args, Weak::new(ptr)));
+                }
+                LoadTypeSite::Realized(_) | LoadTypeSite::Projection => {
+                    unreachable!("a constant's template does not change kind")
+                }
+            }
         }
-        Some((
-            self.runtime_cache_function_addr(self.frames[frame_idx].function())?,
-            constant,
-        ))
+        Ok(Value::object(ptr))
     }
 
     /// `owner` if it is a runtime package: a compile-time package (a static
@@ -4741,15 +5179,8 @@ impl BexVm {
         &self,
         value: &Value,
     ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
-        let obj = self.get_object(ptr);
-        match obj {
-            Object::Array(arr) => Ok(arr.lock()),
-            _ => Err(VmInternalError::TypeError {
-                expected: ObjectType::Array.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
+        // SAFETY: the locked specialization needs no locality proof.
+        unsafe { self.as_array_in::<false>(*value) }
     }
 
     /// Get mutable array from a Value. Acquires the container's mutex;
@@ -4759,31 +5190,43 @@ impl BexVm {
         &mut self,
         value: &Value,
     ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
-        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
-        // Check type first to avoid borrow issues
-        if !matches!(self.get_object(ptr), Object::Array(_)) {
-            return Err(VmInternalError::TypeError {
-                expected: ObjectType::Array.into(),
-                got: ObjectType::of(self.get_object(ptr)).into(),
-            });
-        }
-        match self.get_object(ptr) {
-            Object::Array(arr) => Ok(arr.lock_mut(self.tlab.alloc_debt())),
-            _ => unreachable!("type was just checked"),
-        }
+        // SAFETY: the locked specialization needs no locality proof.
+        unsafe { self.as_array_mut_in::<false>(*value) }
+    }
+
+    /// [`Self::as_array`] for an array only this thread can reach, without
+    /// its lock.
+    ///
+    /// # Safety
+    ///
+    /// No other thread may reach the array while the guard lives; escape
+    /// analysis proves this at the call sites that select a `$local` builtin.
+    pub unsafe fn as_array_local(
+        &self,
+        value: &Value,
+    ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
+        // SAFETY: forwarded locality contract.
+        unsafe { self.as_array_in::<true>(*value) }
+    }
+
+    /// [`Self::as_array_mut`] for an array only this thread can reach,
+    /// without its lock.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::as_array_local`].
+    pub unsafe fn as_array_mut_local(
+        &mut self,
+        value: &Value,
+    ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
+        // SAFETY: forwarded locality contract.
+        unsafe { self.as_array_mut_in::<true>(*value) }
     }
 
     /// Get map from a Value. Acquires the container's mutex.
     pub fn as_map(&self, value: &Value) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
-        let index = self.as_object_ptr(*value, ObjectType::Map)?;
-        let obj = self.get_object(index);
-        match obj {
-            Object::Map(map) => Ok(map.lock()),
-            _ => Err(VmInternalError::TypeError {
-                expected: ObjectType::Map.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
+        // SAFETY: the locked specialization needs no locality proof.
+        unsafe { self.as_map_in::<false>(*value) }
     }
 
     /// Snapshot a string-keyed map for native string-only boundaries.
@@ -4802,17 +5245,119 @@ impl BexVm {
         &mut self,
         value: &Value,
     ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
-        let index = self.as_object_ptr(*value, ObjectType::Map)?;
-        // Check type first to avoid borrow issues
-        if !matches!(self.get_object(index), Object::Map(_)) {
-            return Err(VmInternalError::TypeError {
-                expected: ObjectType::Map.into(),
-                got: ObjectType::of(self.get_object(index)).into(),
-            });
+        // SAFETY: the locked specialization needs no locality proof.
+        unsafe { self.as_map_mut_in::<false>(*value) }
+    }
+
+    /// [`Self::as_map`] for a map only this thread can reach, without its
+    /// lock.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::as_array_local`].
+    pub unsafe fn as_map_local(
+        &self,
+        value: &Value,
+    ) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
+        // SAFETY: forwarded locality contract.
+        unsafe { self.as_map_in::<true>(*value) }
+    }
+
+    /// [`Self::as_map_mut`] for a map only this thread can reach, without
+    /// its lock.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::as_array_local`].
+    pub unsafe fn as_map_mut_local(
+        &mut self,
+        value: &Value,
+    ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
+        // SAFETY: forwarded locality contract.
+        unsafe { self.as_map_mut_in::<true>(*value) }
+    }
+
+    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
+    #[inline]
+    unsafe fn as_array_in<const THREAD_LOCAL: bool>(
+        &self,
+        value: Value,
+    ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(value, ObjectType::Array)?;
+        match self.get_object(ptr) {
+            Object::Array(container) => Ok(if THREAD_LOCAL {
+                // SAFETY: forwarded locality contract.
+                unsafe { container.lock_thread_local() }
+            } else {
+                container.lock()
+            }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: ObjectType::of(obj).into(),
+            }),
         }
-        match self.get_object(index) {
-            Object::Map(map) => Ok(map.lock_mut(self.tlab.alloc_debt())),
-            _ => unreachable!("type was just checked"),
+    }
+
+    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
+    #[inline]
+    unsafe fn as_array_mut_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        value: Value,
+    ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(value, ObjectType::Array)?;
+        match self.get_object(ptr) {
+            Object::Array(container) => Ok(if THREAD_LOCAL {
+                // SAFETY: forwarded locality contract.
+                unsafe { container.lock_mut_thread_local(self.tlab.alloc_debt()) }
+            } else {
+                container.lock_mut(self.tlab.alloc_debt())
+            }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
+    #[inline]
+    unsafe fn as_map_in<const THREAD_LOCAL: bool>(
+        &self,
+        value: Value,
+    ) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(value, ObjectType::Map)?;
+        match self.get_object(ptr) {
+            Object::Map(container) => Ok(if THREAD_LOCAL {
+                // SAFETY: forwarded locality contract.
+                unsafe { container.lock_thread_local() }
+            } else {
+                container.lock()
+            }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Map.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// With `THREAD_LOCAL`, the caller must prove only this task reaches the container.
+    #[inline]
+    unsafe fn as_map_mut_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        value: Value,
+    ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(value, ObjectType::Map)?;
+        match self.get_object(ptr) {
+            Object::Map(container) => Ok(if THREAD_LOCAL {
+                // SAFETY: forwarded locality contract.
+                unsafe { container.lock_mut_thread_local(self.tlab.alloc_debt()) }
+            } else {
+                container.lock_mut(self.tlab.alloc_debt())
+            }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Map.into(),
+                got: ObjectType::of(obj).into(),
+            }),
         }
     }
 
@@ -4843,8 +5388,9 @@ impl BexVm {
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
-        // Box every reachable `ConstValue::Float` into a compile-time
-        // `Object::Float` (floats can no longer live inline in `Value`).
+        // Box every reachable `ConstValue::Float` with no inline `Value`
+        // encoding (NaN, ±inf, extreme magnitudes) into a compile-time
+        // `Object::Float`.
         let float_indices = bex_vm_types::types::box_compile_time_floats(
             &mut compile_time_objects,
             &bytecode.globals,
@@ -4867,7 +5413,7 @@ impl BexVm {
             .globals
             .into_iter()
             .map(|cv| match cv {
-                bex_vm_types::ConstValue::Float(f) => {
+                bex_vm_types::ConstValue::Float(f) if float_indices.contains_key(&f.to_bits()) => {
                     let idx = float_indices[&f.to_bits()];
                     Value::object(heap.compile_time_ptr(idx))
                 }
@@ -4892,6 +5438,9 @@ impl BexVm {
             error_class_ptrs,
             panic_class_ptrs,
             stdlib_heads,
+            Arc::default(),
+            // The only task this standalone VM ever runs.
+            NonZeroU64::MIN,
             Some(TelemetryState::new_root(
                 Arc::new(crate::telemetry::TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -5227,7 +5776,7 @@ impl BexVm {
                     frame.instruction_ptr = stub + crate::compiled_rt::stub::START;
                 }
             }
-            FunctionKind::Native(_) | FunctionKind::SysOp(_) => {
+            FunctionKind::Native(..) | FunctionKind::SysOp(_) => {
                 if let Err(panic) = self.push_trampoline_frame(
                     dispatch_ptr,
                     args,
@@ -5308,7 +5857,7 @@ impl BexVm {
 
         self.pending_call_type_args.clear();
         match callable_kind {
-            FunctionKind::Native(_) => {
+            FunctionKind::Native(..) => {
                 for ty in type_args {
                     let ty_ptr = self.alloc_type(bex_vm_types::types::TypeValue::new(ty));
                     self.stack.try_push(Value::object(ty_ptr))?;
@@ -5324,7 +5873,7 @@ impl BexVm {
         }
 
         let instructions = match callable_kind {
-            FunctionKind::Native(_) => vec![
+            FunctionKind::Native(..) => vec![
                 Instruction::Call {
                     callee: callee_global,
                     ntypeargs,
@@ -6008,6 +6557,61 @@ impl BexVm {
         Ok(real_local_count)
     }
 
+    /// Context of the frame `run_compact` is dispatching, which is the top
+    /// frame: the same value [`Self::current_context`] finds by walking the
+    /// frame stack.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn dispatch_frame_context(&self, frame_idx: usize) -> &Context {
+        debug_assert_eq!(frame_idx + 1, self.frames.len());
+        let Some(Frame::Bytecode(frame)) = self.frames.get(frame_idx) else {
+            verifier_unreachable!()
+        };
+        &frame.context
+    }
+
+    /// Pop the returning bytecode frame and drop its owning fields in line
+    /// (the rest are `Copy`). Through `Option<Frame>`'s drop glue, every
+    /// return paid an out-of-line call even though a typical frame owns
+    /// nothing that needs freeing.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn pop_finished_bytecode_frame(&mut self) {
+        match self.frames.pop() {
+            Some(Frame::Bytecode(BytecodeFrame {
+                type_args, context, ..
+            })) => {
+                drop(type_args);
+                drop(context);
+            }
+            other => drop(other),
+        }
+    }
+
+    /// `locals_offset - 1` of the bytecode frame at `frame_idx`; see
+    /// [`Self::local_at`].
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn frame_locals_base(&self, frame_idx: usize) -> usize {
+        let Some(Frame::Bytecode(frame)) = self.frames.get(frame_idx) else {
+            verifier_unreachable!()
+        };
+        frame.locals_offset.raw().wrapping_sub(1)
+    }
+
+    /// Stack index of local `slot` (1-based) for a frame whose
+    /// `locals_offset - 1` is `locals_base`. Wrapping arithmetic keeps the
+    /// result exact for a frame at stack index 0 (`locals_base == usize::MAX`).
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn local_at(locals_base: usize, slot: usize) -> StackIndex {
+        debug_assert!(
+            slot > 0,
+            "local slot 0 is reserved and should never be materialized on stack"
+        );
+        StackIndex::from_raw(locals_base.wrapping_add(slot))
+    }
+
     #[inline]
     fn local_slot_stack_index(locals_offset: StackIndex, slot: usize) -> StackIndex {
         debug_assert!(
@@ -6286,26 +6890,40 @@ impl BexVm {
     /// Destructure a virtual-dispatch interface operand into the `(name, input args)`
     /// pair the impl resolver selects on. Associated types are *outputs* of an impl,
     /// so they are deliberately not part of the key.
-    fn pop_interface_operand(
+    /// The physical slot interface field `field_index` of the interface
+    /// operand `iface_value` lives at in `receiver`, through the per-site
+    /// cache. As for `VirtualCall`, only an answer from an immutable
+    /// program-image impl is remembered, keyed by the site, the receiver's
+    /// type and the interface instantiation; a hit allocates nothing.
+    fn virtual_field_slot(
         &mut self,
+        caller: Option<usize>,
+        receiver: Value,
         iface_value: Value,
-    ) -> Result<(bex_vm_types::TypeHead, Box<[bex_vm_types::RealizedTy]>), VmError> {
+        field_index: usize,
+    ) -> Result<usize, VmError> {
         let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
-        match self.get_object(iface_ptr) {
-            Object::Type(type_value) => match &type_value.ty {
-                bex_vm_types::RealizedTy::Interface(head, args, _assoc) => {
-                    Ok((*head, args.clone()))
-                }
-                other => unreachable!(
-                    "virtual field access interface operand must be an Interface type, \
-                     found {other:?}"
-                ),
-            },
-            other => unreachable!(
-                "as_object_ptr(Type) guarantees a Type object, found {:?}",
-                ObjectType::of(other)
-            ),
+        let cache_key = {
+            let mut scratch = None;
+            match self.virtual_site_query(caller, receiver, iface_ptr, &mut scratch) {
+                Some(query) => match self.static_virtual_field_cache.get(&query) {
+                    Some(slot) => return Ok(*slot),
+                    None => Some(query.to_key()),
+                },
+                None => None,
+            }
+        };
+        let (iface_head, iface_args) = self.interface_operand_parts(iface_ptr);
+        let (slot, is_static) = self.resolve_virtual_field_slot_and_origin(
+            receiver,
+            iface_head,
+            iface_args,
+            field_index,
+        )?;
+        if is_static && let Some(cache_key) = cache_key {
+            self.static_virtual_field_cache.insert(cache_key, slot);
         }
+        Ok(slot)
     }
 
     /// The receiver's physical field slot for interface field `field_index`: read
@@ -6318,12 +6936,25 @@ impl BexVm {
     /// before emitting the access, and `field_links` is total over the interface's
     /// declared fields (E0124) — so they surface as internal errors.
     fn resolve_virtual_field_slot(
-        &mut self,
+        &self,
         receiver: Value,
         iface_head: bex_vm_types::TypeHead,
         iface_args: &[bex_vm_types::RealizedTy],
         field_index: usize,
     ) -> Result<usize, VmError> {
+        self.resolve_virtual_field_slot_and_origin(receiver, iface_head, iface_args, field_index)
+            .map(|(slot, _)| slot)
+    }
+
+    /// [`Self::resolve_virtual_field_slot`], and whether the rule it read is
+    /// an immutable program-image rule.
+    fn resolve_virtual_field_slot_and_origin(
+        &self,
+        receiver: Value,
+        iface_head: bex_vm_types::TypeHead,
+        iface_args: &[bex_vm_types::RealizedTy],
+        field_index: usize,
+    ) -> Result<(usize, bool), VmError> {
         let self_ty =
             bex_vm_types::RealizedTy::from(self.value_concrete_ty(receiver).unwrap_or_else(|| {
                 unreachable!(
@@ -6333,12 +6964,17 @@ impl BexVm {
             }));
         let slot = crate::package_baml::ImplResolver::for_value(self, receiver)
             .resolve_implements_rule(&self_ty, iface_head, iface_args)
-            .and_then(|(rule, _bound_args)| rule.field_links.get(field_index).copied());
-        let slot = slot.ok_or_else(|| VmInternalError::UnresolvedVirtualFieldAccess {
-            interface: baml_type::HeadDisplay::head_display_name(&iface_head),
-            field_index,
-        })?;
-        Ok(slot as usize)
+            .and_then(|(rule, _bound_args)| {
+                let slot = rule.field_links.get(field_index).copied()?;
+                Some((slot as usize, rule.is_static()))
+            });
+        slot.ok_or_else(|| {
+            VmInternalError::UnresolvedVirtualFieldAccess {
+                interface: baml_type::HeadDisplay::head_display_name(&iface_head),
+                field_index,
+            }
+            .into()
+        })
     }
 
     /// Encode an i64 arithmetic result into the i63 range, or throw
@@ -6446,11 +7082,24 @@ impl BexVm {
     /// Cheap single-frame variant of `Self::capture_stack_trace`.
     pub fn current_function_name(&self) -> Option<String> {
         let frame = self.top_frame()?;
-        let func = self
-            .get_object(self.frame_callable(frame))
-            .as_callable()
-            .ok()?;
+        let func = self.callable_function(self.frame_callable(frame))?;
         Some(func.name())
+    }
+
+    /// The function the callable `callable` runs, for a frame that is named or
+    /// located in a trace. `as_callable` alone does not see through a
+    /// generic-function value, which is what a function held as a typed
+    /// function value is: the callee of `reflect.call_any`, and so every tool
+    /// an agent calls. A frame that could not be resolved used to drop out of
+    /// the stack trace without a word, taking the line that threw with it.
+    fn callable_function(&self, callable: HeapPtr) -> Option<&Function> {
+        match self.get_object(callable) {
+            Object::GenericFunction(generic) => {
+                let authored = self.generic_function_authored_ptr(generic).ok()?;
+                self.get_object(authored).as_function().ok()
+            }
+            object => object.as_callable().ok(),
+        }
     }
 
     /// Whether program global `slot` still waits for its initializer: true
@@ -6483,10 +7132,7 @@ impl BexVm {
                 {
                     return None;
                 }
-                let func = self
-                    .get_object(self.frame_callable(frame))
-                    .as_callable()
-                    .ok()?;
+                let func = self.callable_function(self.frame_callable(frame))?;
                 if !self.frame_is_bytecode(frame) {
                     return Some(StackFrame {
                         function_name: func.name(),
@@ -6583,6 +7229,25 @@ impl BexVm {
     }
 
     fn unwind_exception(
+        &mut self,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+        thrown: VmThrown,
+        entry: RaiseEntry,
+    ) -> Result<(), VmError> {
+        // Only the innermost span the error escapes records it by default.
+        let enclosing = self
+            .telemetry
+            .as_mut()
+            .and_then(crate::telemetry::TelemetryState::begin_unwind);
+        let result = self.unwind_exception_frames(frame_idx, function, thrown, entry);
+        if let Some(state) = self.telemetry.as_mut() {
+            state.end_unwind(enclosing);
+        }
+        result
+    }
+
+    fn unwind_exception_frames(
         &mut self,
         frame_idx: &mut usize,
         function: &mut &'static Function,
@@ -7322,6 +7987,144 @@ impl BexVm {
         })
     }
 
+    /// Enter a bytecode function or closure called through `CallIndirect` the
+    /// way `CallExactArgs` enters its callee, when the site pushed exactly the
+    /// callee's slots. Returns the entered function; the caller then switches
+    /// dispatch to it. `None` leaves everything untouched for the general
+    /// path, which handles compiled, hooked and pass-through callees, a
+    /// pending trace or type lane, layouts that need remapping, and every
+    /// other callable.
+    ///
+    /// Kept out of line: inlined into `run_compact`, it made every ordinary
+    /// exact call about ten instructions slower.
+    #[inline(never)]
+    fn enter_indirect_bytecode_call(
+        &mut self,
+        callee_ptr: HeapPtr,
+        frame_idx: usize,
+        caller: &'static Function,
+    ) -> Result<Option<&'static Function>, VmError> {
+        if self.pending_call_trace.is_some() || !self.pending_call_type_args.is_empty() {
+            return Ok(None);
+        }
+        // SAFETY: the active heap permit prevents collection during
+        // frame/stack growth, as at `CallExactArgs`; a closure's function
+        // lives at least as long as the closure.
+        let (callee, callee_fn_ptr, captured_type_args) = match unsafe { callee_ptr.get() } {
+            Object::Function(callee) => (callee, callee_ptr, &[][..]),
+            Object::Closure(closure) => match unsafe { closure.function.get() } {
+                Object::Function(callee) => {
+                    (callee, closure.function, &closure.captured_type_args[..])
+                }
+                _ => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        if !matches!(callee.kind, FunctionKind::Bytecode)
+            || callee.compiled_body.is_some()
+            || callee.trace_passthrough
+            || callee
+                .bytecode
+                .compact
+                .as_ref()
+                .is_none_or(|code| code.trace_hook_finish_pc.is_some())
+            || Self::recorded_call_layout(caller, self.cur_pc)
+                .is_some_and(|layout| !callee.argument_layout_is(layout))
+        {
+            return Ok(None);
+        }
+
+        let _popped_callee = self.stack.ensure_pop();
+        // Eager ok_or constructs/drops VmInternalError even on success.
+        #[expect(clippy::unnecessary_lazy_evaluations)]
+        let locals_offset = StackIndex::from_raw(
+            self.stack
+                .len()
+                .checked_sub(callee.arity)
+                .ok_or_else(|| VmInternalError::NotEnoughItemsOnStack(callee.arity))?,
+        );
+        let Frame::Bytecode(caller_frame) = &mut self.frames[frame_idx] else {
+            verifier_unreachable!()
+        };
+        caller_frame.faulting_pc = self.cur_pc;
+        self.reserve_call_frame()?;
+        self.reserve_stack(callee.real_local_count)?;
+        let context = self.dispatch_frame_context(frame_idx).clone();
+        if let Some(telemetry) = &mut self.telemetry {
+            telemetry.set_context(context.clone());
+        }
+        let frame_telemetry = if self.telemetry.is_some() {
+            self.enter_indirect_bytecode_telemetry(
+                frame_idx,
+                callee,
+                callee_fn_ptr,
+                locals_offset,
+                captured_type_args,
+            )
+        } else {
+            None
+        };
+        // Written in place, as in the general path.
+        self.frames.push_reserved_with(|| {
+            Frame::Bytecode(BytecodeFrame {
+                function: callee_ptr,
+                instruction_ptr: 0,
+                locals_offset,
+                // A closure made in a generic context reads the type
+                // arguments it captured.
+                type_args: captured_type_args.to_vec(),
+                faulting_pc: 0,
+                telemetry: frame_telemetry,
+                context,
+            })
+        });
+        if callee.real_local_count != 0 {
+            let new_len = self.stack.len() + callee.real_local_count;
+            self.resize_stack(new_len, Value::NULL)?;
+        }
+        Ok(Some(callee))
+    }
+
+    /// Telemetry entry for a bytecode callee `CallIndirect` enters directly:
+    /// what `execute_call_from_locals_offset` records for an untraced call
+    /// that passes no type arguments.
+    #[inline(never)]
+    fn enter_indirect_bytecode_telemetry(
+        &mut self,
+        frame_idx: usize,
+        callee: &Function,
+        callee_fn_ptr: HeapPtr,
+        locals_offset: StackIndex,
+        carried: &[bex_vm_types::RealizedTy],
+    ) -> Option<FrameTelemetry> {
+        // As the general path records it, with this instruction as the call site.
+        let caller = self.bytecode_caller(frame_idx);
+        let actual_caller = self
+            .visible_bytecode_caller(frame_idx)
+            .and_then(|at| self.frame_identity(at));
+        let caller_is_observed = self.frame_receipt(caller).is_some();
+        let caller_pc = self.caller_pc(caller, frame_idx, self.cur_pc);
+        let args = &self.stack.as_slice()
+            [locals_offset.raw()..locals_offset.raw().saturating_add(callee.arity)];
+        // SAFETY: arguments and callable remain live under the heap permit.
+        self.telemetry.as_mut().and_then(|telemetry| unsafe {
+            telemetry.enter_bytecode_with_trace(
+                callee,
+                callee_fn_ptr,
+                actual_caller,
+                caller_pc,
+                caller_is_observed,
+                args,
+                None,
+                CallTypeArgs {
+                    carried,
+                    passed: &[],
+                },
+                |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+            )
+        })
+    }
+
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
@@ -7331,6 +8134,7 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         let trace = self.pending_call_trace.take();
+        let thread_local = std::mem::take(&mut self.thread_local_call);
         let passes_type_args = std::mem::take(&mut self.pending_call_passes_type_args);
         // Record the caller's call-site PC before descending. Once a callee
         // frame is pushed, this (now-outer) frame is no longer the innermost, so
@@ -7467,7 +8271,11 @@ impl BexVm {
             .into());
         }
         match callee_kind {
-            FunctionKind::Native(func_ptr) => {
+            FunctionKind::Native(func_ptr, local) => {
+                let func_ptr = match local {
+                    Some(local) if thread_local => local,
+                    _ => func_ptr,
+                };
                 // Cast the type-erased pointer back to NativeFunction.
                 //
                 // SAFETY: The pointer was created by casting a NativeFunction to *const ()
@@ -7499,66 +8307,12 @@ impl BexVm {
                 }
                 self.settle();
 
-                // Run Rust native function, converting NativeCallResult → VmError.
                 match native_result {
                     NativeCallResult::Done(v) => {
                         self.push_stack(v)?;
                     }
-                    NativeCallResult::Error(e) => {
-                        return Err(self.native_error_to_vm_error(e));
-                    }
-                    NativeCallResult::YieldToCall {
-                        callee,
-                        args: mut callback_args,
-                        type_args: callback_type_args,
-                        continuation,
-                    } => {
-                        // Push a Native continuation frame, then dispatch the
-                        // callback through ECFLO. The exec loop's continuation
-                        // handler (at the top of the loop) will invoke the
-                        // continuation when the callback completes.
-                        self.reserve_call_frame()?;
-                        self.frames.push_reserved(Frame::Native(NativeFrame {
-                            function: callee_ptr,
-                            continuation,
-                            bytecode_caller: self.level_of(self.bytecode_caller(*frame_idx)),
-                        }));
-
-                        // If callee is a BoundMethod, insert receiver into args.
-                        let real_callee =
-                            self.resolve_bound_method_callee(callee, &mut callback_args)?;
-
-                        let arg_count = callback_args.len();
-                        let cb_locals = StackIndex::from_raw(self.stack.len());
-                        self.extend_stack(callback_args)?;
-
-                        let result = self.execute_call_from_locals_offset_with_type_args(
-                            real_callee,
-                            cb_locals,
-                            arg_count,
-                            CallOptions {
-                                type_args: &callback_type_args,
-                            },
-                            frame_idx,
-                            function,
-                        );
-
-                        // Update *frame_idx to point at the new topmost frame.
-                        // Required so the caller's tight inner-dispatch loop
-                        // detects the frame change (the pushed Native
-                        // continuation frame for the outer native that
-                        // yielded) and breaks out to let exec_compact's
-                        // continuation handler run it.  Without this, when the
-                        // recursive callback was itself a Native that returned
-                        // Done synchronously (no frame_idx update from the
-                        // recursion), the inner loop would continue stepping
-                        // the caller's bytecode with a stale Native frame on
-                        // top — eventually reading past the caller's code end.
-                        if !self.frames.is_empty() {
-                            *frame_idx = self.frames.len() - 1;
-                        }
-
-                        return result;
+                    other => {
+                        return self.finish_native_call(other, callee_ptr, frame_idx, function);
                     }
                 }
             }
@@ -7756,6 +8510,181 @@ impl BexVm {
         Ok(None)
     }
 
+    /// Complete a native call whose result is not a plain value: a thrown
+    /// error, or a callback the native yields to. A yield pushes the native's
+    /// continuation frame and dispatches the callback.
+    fn finish_native_call(
+        &mut self,
+        native_result: NativeCallResult,
+        callee_ptr: HeapPtr,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<VmExecState>, VmError> {
+        match native_result {
+            NativeCallResult::Done(v) => {
+                self.push_stack(v)?;
+                Ok(None)
+            }
+            NativeCallResult::Error(e) => Err(self.native_error_to_vm_error(e)),
+            NativeCallResult::YieldToCall {
+                callee,
+                args: mut callback_args,
+                type_args: callback_type_args,
+                continuation,
+            } => {
+                // Push a Native continuation frame, then dispatch the
+                // callback through ECFLO. The exec loop's continuation
+                // handler (at the top of the loop) will invoke the
+                // continuation when the callback completes.
+                self.reserve_call_frame()?;
+                self.frames.push_reserved(Frame::Native(NativeFrame {
+                    function: callee_ptr,
+                    continuation,
+                    bytecode_caller: self.level_of(self.bytecode_caller(*frame_idx)),
+                }));
+
+                // If callee is a BoundMethod, insert receiver into args.
+                let real_callee = self.resolve_bound_method_callee(callee, &mut callback_args)?;
+
+                let arg_count = callback_args.len();
+                let cb_locals = StackIndex::from_raw(self.stack.len());
+                self.extend_stack(callback_args)?;
+
+                let result = self.execute_call_from_locals_offset_with_type_args(
+                    real_callee,
+                    cb_locals,
+                    arg_count,
+                    CallOptions {
+                        type_args: &callback_type_args,
+                    },
+                    frame_idx,
+                    function,
+                );
+
+                // Update *frame_idx to point at the new topmost frame.
+                // Required so the caller's tight inner-dispatch loop
+                // detects the frame change (the pushed Native
+                // continuation frame for the outer native that
+                // yielded) and breaks out to let exec_compact's
+                // continuation handler run it.  Without this, when the
+                // recursive callback was itself a Native that returned
+                // Done synchronously (no frame_idx update from the
+                // recursion), the inner loop would continue stepping
+                // the caller's bytecode with a stale Native frame on
+                // top — eventually reading past the caller's code end.
+                if !self.frames.is_empty() {
+                    *frame_idx = self.frames.len() - 1;
+                }
+
+                result
+            }
+        }
+    }
+
+    /// Run the native builtin a `Call` site names without the general call
+    /// setup, when nothing about the call needs it: no `$trace`, no type lane
+    /// of an enclosing call, and a site that pushed exactly the native's
+    /// slots. The site's type operands, if any, become the type arguments the
+    /// native reads through [`Self::current_call_type_args`], and leave the
+    /// stack with its values. Returns [`NativeDirect::NotTaken`] without
+    /// touching anything when the call needs the general path.
+    ///
+    /// Every check is in here, out of line: `run_compact` is sensitive to
+    /// what its call arm holds, and code added there slowed unrelated
+    /// instructions.
+    #[inline(never)]
+    fn call_native_direct(
+        &mut self,
+        callee_value: Value,
+        thread_local: bool,
+        ntypeargs: usize,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+        return_pc: usize,
+    ) -> Result<NativeDirect, VmError> {
+        let Some(callee_ptr) = callee_value.as_object_ptr() else {
+            return Ok(NativeDirect::NotTaken);
+        };
+        // SAFETY: a function global lives for the whole program.
+        let Object::Function(callee) = (unsafe { callee_ptr.get() }) else {
+            return Ok(NativeDirect::NotTaken);
+        };
+        let FunctionKind::Native(native, local) = callee.kind else {
+            return Ok(NativeDirect::NotTaken);
+        };
+        if self.pending_call_trace.is_some() || !self.pending_call_type_args.is_empty() {
+            return Ok(NativeDirect::NotTaken);
+        }
+        if Self::recorded_call_layout(function, self.cur_pc)
+            .is_some_and(|layout| !callee.argument_layout_is(layout))
+        {
+            return Ok(NativeDirect::NotTaken);
+        }
+        let operand_count = callee.arity + ntypeargs;
+        let type_start = self
+            .stack
+            .len()
+            .checked_sub(operand_count)
+            .ok_or(VmInternalError::NotEnoughItemsOnStack(operand_count))?;
+        self.thread_local_call = false;
+
+        // The caller's return address and call site, as the general path
+        // records them, for a yield or an unwind out of the native.
+        let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {
+            verifier_unreachable!()
+        };
+        caller.instruction_ptr = return_pc;
+        caller.faulting_pc = self.cur_pc;
+
+        if ntypeargs != 0 {
+            // The lane is empty here; reusing its allocation keeps a generic
+            // builtin call (`xs.push(x)` passes `T`) from allocating.
+            let mut type_args = std::mem::take(&mut self.pending_call_type_args);
+            for slot in type_start..type_start + ntypeargs {
+                let value = self.stack[StackIndex::from_raw(slot)];
+                let ty = match value.as_object_ptr().map(|ptr| self.get_object(ptr)) {
+                    Some(Object::Type(type_value)) => type_value.ty.clone(),
+                    _ => self.type_operand_value(value)?.ty,
+                };
+                type_args.push(ty);
+            }
+            self.pending_call_type_args = type_args;
+        }
+
+        // As in the general path, a native keeps its own roots: the
+        // arguments leave the stack before it runs.
+        let args: SmallVec<[Value; 4]> = self.stack.as_slice()[type_start + ntypeargs..]
+            .iter()
+            .copied()
+            .collect();
+        self.stack.truncate(type_start);
+
+        let func_ptr = match local {
+            Some(local) if thread_local => local,
+            _ => native,
+        };
+        // SAFETY: as in `execute_call_from_locals_offset`, the pointer was
+        // cast from a `NativeFunction` in `attach_builtins`.
+        let func = unsafe { std::mem::transmute::<*const (), NativeFunction>(func_ptr) };
+        let native_result = func(self, &args);
+        // A native reads its type arguments while it runs, never from a
+        // continuation, exactly as the general path restores the lane here.
+        self.pending_call_type_args.clear();
+        self.settle();
+
+        match native_result {
+            NativeCallResult::Done(value) => {
+                self.push_stack(value)?;
+                Ok(NativeDirect::Ran(
+                    self.should_early_yield().then_some(VmExecState::EarlyYield),
+                ))
+            }
+            other => self
+                .finish_native_call(other, callee_ptr, frame_idx, function)
+                .map(NativeDirect::Ran),
+        }
+    }
+
     /// Convert a [`VmRustFnError`] into the corresponding [`VmError`].
     fn native_error_to_vm_error(&mut self, err: VmRustFnError) -> VmError {
         match err {
@@ -7784,11 +8713,33 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         // The caller's slice may borrow a frame, so copy before entering the callee.
-        let pending_type_args = options.type_args.to_vec();
+        self.execute_call_from_locals_offset_with_owned_type_args(
+            callee_ptr,
+            locals_offset,
+            arg_count,
+            options.type_args.to_vec(),
+            frame_idx,
+            function,
+        )
+    }
+
+    /// [`Self::execute_call_from_locals_offset_with_type_args`] for a caller
+    /// that owns the type arguments: they become the pending lane, and the
+    /// callee's frame, without a copy.
+    fn execute_call_from_locals_offset_with_owned_type_args(
+        &mut self,
+        callee_ptr: HeapPtr,
+        locals_offset: StackIndex,
+        arg_count: usize,
+        type_args: Vec<bex_vm_types::RealizedTy>,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<VmExecState>, VmError> {
+        let passes_type_args = !type_args.is_empty();
         self.save_call_types();
-        self.pending_call_type_args = pending_type_args;
+        self.pending_call_type_args = type_args;
         let frames_before = self.frames.len();
-        self.pending_call_passes_type_args = !options.type_args.is_empty();
+        self.pending_call_passes_type_args = passes_type_args;
         let result = self.execute_call_from_locals_offset(
             callee_ptr,
             locals_offset,
@@ -7807,12 +8758,34 @@ impl BexVm {
             && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frames_before)
             && frame.instruction_ptr != crate::compiled_rt::RUNNING
         {
-            frame
-                .type_args
-                .extend_from_slice(&self.pending_call_type_args);
+            if frame.type_args.is_empty() {
+                // A callee that carries no frame of its own (a plain
+                // function, not a closure or bound method) takes the lane
+                // as its frame. The lane is restored just below, so nothing
+                // reads it again.
+                std::mem::swap(&mut frame.type_args, &mut self.pending_call_type_args);
+            } else {
+                frame
+                    .type_args
+                    .extend_from_slice(&self.pending_call_type_args);
+            }
         }
         let _ = self.restore_call_types();
         result
+    }
+
+    /// The type arguments a virtually dispatched callee's frame starts with:
+    /// the resolved impl's frame, then the call's own method arguments.
+    #[inline]
+    fn seed_frame_type_args(
+        frame: &[bex_vm_types::RealizedTy],
+        method: Option<&TakenTypeArgs>,
+    ) -> Vec<bex_vm_types::RealizedTy> {
+        let method = method.map_or(&[][..], |method| &method.tys[..]);
+        let mut type_args = Vec::with_capacity(frame.len() + method.len());
+        type_args.extend_from_slice(frame);
+        type_args.extend_from_slice(method);
+        type_args
     }
 
     fn init_spread(
@@ -8518,22 +9491,39 @@ impl BexVm {
             .as_ref()
             .is_some_and(TelemetryState::is_disabled)
         {
-            self.telemetry.take().unwrap().abandon();
-            self.pending_telemetry_wait = None;
-            for frame in &mut self.frames {
-                if let Frame::Bytecode(frame) = frame {
-                    frame.telemetry = None;
-                }
+            self.drop_telemetry();
+        }
+    }
+
+    /// Stop observing this VM's execution, as when recording is off
+    /// (`BAML_TELEMETRY=off`): release its telemetry state and every frame's.
+    /// Frames remain executable. Execution then takes the same paths it
+    /// takes with recording off, including the dispatch loop's fast path for
+    /// plain calls and returns.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn disable_telemetry(&mut self) {
+        if self.telemetry.is_some() {
+            self.drop_telemetry();
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn drop_telemetry(&mut self) {
+        self.telemetry.take().unwrap().abandon();
+        self.pending_telemetry_wait = None;
+        for frame in &mut self.frames {
+            if let Frame::Bytecode(frame) = frame {
+                frame.telemetry = None;
             }
-            for frame in self.stack_view() {
-                if let FrameAt::Record(record) = frame {
-                    compiled_rt::record_ref(record).receipt.set(None);
-                }
+        }
+        for frame in self.stack_view() {
+            if let FrameAt::Record(record) = frame {
+                compiled_rt::record_ref(record).receipt.set(None);
             }
-            // An active `Span.run` scope observes through the same state.
-            for active in &mut self.manual_activations {
-                active.telemetry = None;
-            }
+        }
+        // An active `Span.run` scope observes through the same state.
+        for active in &mut self.manual_activations {
+            active.telemetry = None;
         }
     }
 
@@ -8637,8 +9627,24 @@ impl BexVm {
     }
 
     /// Push an operand with fallible backing growth.
-    #[inline]
+    ///
+    /// The common case writes into spare capacity behind one compare; only a
+    /// push that must grow the stack takes the out-of-line budgeted path.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     fn push_stack(&mut self, value: Value) -> Result<(), VmError> {
+        if self.stack.push_within_capacity(value) {
+            Ok(())
+        } else {
+            self.push_stack_grow(value)
+        }
+    }
+
+    /// [`Self::push_stack`] when the operand stack is full: grow it within the
+    /// thread's stack budget, or raise the allocation failure.
+    #[cold]
+    #[inline(never)]
+    fn push_stack_grow(&mut self, value: Value) -> Result<(), VmError> {
         self.stack
             .try_push(value)
             .map_err(|panic| VmError::thrown_fresh(self.panic_to_exception_value(panic)))
@@ -8829,13 +9835,11 @@ impl BexVm {
                 CmpOp::GtEq => l >= r,
             })
         } else if let (Some(l), Some(r)) = (
-            left.as_int()
-                .map(|i| i as f64)
-                .or_else(|| value_as_float(left)),
+            left.as_int().map(|i| i as f64).or_else(|| left.as_float()),
             right
                 .as_int()
                 .map(|i| i as f64)
-                .or_else(|| value_as_float(right)),
+                .or_else(|| right.as_float()),
         ) {
             // Float/float that emit could not specialize, or a mixed
             // `int`/float pair whose float side was statically erased. Both
@@ -8999,13 +10003,11 @@ impl BexVm {
                 BinOp::Shr => self.int_shr(l, r)?,
             }
         } else if let (Some(l), Some(r)) = (
-            left.as_int()
-                .map(|i| i as f64)
-                .or_else(|| value_as_float(left)),
+            left.as_int().map(|i| i as f64).or_else(|| left.as_float()),
             right
                 .as_int()
                 .map(|i| i as f64)
-                .or_else(|| value_as_float(right)),
+                .or_else(|| right.as_float()),
         ) {
             // IEEE-754 throughout, exactly like the specialized `DivFloat`
             // opcode and the `float` operator impls: a zero divisor yields
@@ -9026,7 +10028,7 @@ impl BexVm {
                     .into());
                 }
             };
-            Value::object(self.alloc_float(f))
+            self.float_value(f)
         } else if let Some(l) = self.bigint_operand_of(left)
             && let Some(r) = self.bigint_operand_of(right)
         {
@@ -9197,6 +10199,7 @@ impl BexVm {
                 );
                 if step_result.is_err() {
                     self.pending_call_trace = None;
+                    self.thread_local_call = false;
                 }
 
                 match step_result {
@@ -9234,6 +10237,684 @@ impl BexVm {
         }
     }
 
+    // ── Opcode semantics shared by `run_compact` and `run_fast_path` ──────
+    //
+    // Each instruction the fast path runs is defined once, here, and both
+    // loops call these. They differ only in what happens when a helper
+    // declines: the fast path hands the instruction back unexecuted, and
+    // the full dispatch raises the error or takes its general path.
+
+    /// Target of a branch whose `offset` is relative to `next_pc`, the end
+    /// of the branch instruction.
+    #[allow(
+        clippy::inline_always,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation
+    )]
+    #[inline(always)]
+    fn branch_target(next_pc: usize, offset: i32) -> usize {
+        (next_pc as i64 + i64::from(offset)) as usize
+    }
+
+    /// Whether `JumpIfFalse` jumps on `cond` (which it leaves on the stack).
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn jump_if_false_taken(cond: Value) -> bool {
+        cond == Value::bool(false)
+    }
+
+    /// Whether `PopJumpIfFalse` / `PopJumpIfTrue` (`op`) jumps on `cond`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn pop_jump_taken(op: bex_vm_types::bytecode::OpCode, cond: Value) -> bool {
+        cond == Value::bool(op == bex_vm_types::bytecode::OpCode::PopJumpIfTrue)
+    }
+
+    /// Whether `JumpIfFalseOrPop` / `JumpIfTrueOrPop` / `JumpIfNotNullOrPop`
+    /// (`op`) jumps on `cond`; when it does not, it pops `cond`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn jump_or_pop_taken(op: bex_vm_types::bytecode::OpCode, cond: Value) -> bool {
+        use bex_vm_types::bytecode::OpCode;
+        match op {
+            OpCode::JumpIfFalseOrPop => Self::jump_if_false_taken(cond),
+            OpCode::JumpIfTrueOrPop => cond == Value::bool(true),
+            _ => !cond.is_null(),
+        }
+    }
+
+    /// `MulInt` of two ints, or `None` when the product leaves the int range.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn int_mul(l: i64, r: i64) -> Option<Value> {
+        l.checked_mul(r).and_then(Value::try_int)
+    }
+
+    /// `CmpInt*` (`op`) on two `Int`-tagged values. Both carry the same tag
+    /// bit, so the tagged words, read as signed, order like their ints (see
+    /// `Value::tagged_int_add_checked`).
+    #[allow(clippy::inline_always, clippy::cast_possible_wrap)]
+    #[inline(always)]
+    fn int_compare(op: bex_vm_types::bytecode::OpCode, l: Value, r: Value) -> bool {
+        use bex_vm_types::bytecode::OpCode;
+        let (l, r) = (l.bits() as i64, r.bits() as i64);
+        match op {
+            OpCode::CmpIntEq => l == r,
+            OpCode::CmpIntNotEq => l != r,
+            OpCode::CmpIntLt => l < r,
+            OpCode::CmpIntLtEq => l <= r,
+            OpCode::CmpIntGt => l > r,
+            _ => {
+                debug_assert_eq!(op, OpCode::CmpIntGtEq);
+                l >= r
+            }
+        }
+    }
+
+    /// Truthiness of a value that needs no heap inspection: `false`, `null`,
+    /// an omitted argument and zero are falsy. `None` for a heap object; see
+    /// [`Self::is_truthy`].
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn scalar_truthiness(value: Value) -> Option<bool> {
+        use bex_vm_types::ValueKind;
+        match value.kind() {
+            ValueKind::Null | ValueKind::OmittedArg => Some(false),
+            ValueKind::Bool(b) => Some(b),
+            ValueKind::Int(v) => Some(v != 0),
+            // An inline float is a scalar too; a boxed one (NaN, inf, out of
+            // range) is an object and `is_truthy` reads it.
+            ValueKind::Float(f) => Some(f != 0.0),
+            ValueKind::Object(_) => None,
+        }
+    }
+
+    /// What `Not` / `Truthy` (`op`) push for an operand of `truthiness`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn truthiness_result(op: bex_vm_types::bytecode::OpCode, truthiness: bool) -> Value {
+        Value::bool(truthiness == (op == bex_vm_types::bytecode::OpCode::Truthy))
+    }
+
+    /// The field `LoadField` / `LoadFieldLocal` reads when `value` is an
+    /// instance with field `index` (`relaxed`: the instance is thread-local,
+    /// so the slot needs no ordering). `None` for any other operand, which
+    /// [`Self::load_field_error`] reports.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn instance_field(&self, value: Value, index: usize, relaxed: bool) -> Option<Value> {
+        let Object::Instance(instance) = self.get_object(value.as_object_ptr()?) else {
+            return None;
+        };
+        if relaxed {
+            instance.try_load_field_relaxed(index)
+        } else {
+            instance.try_load_field(index)
+        }
+    }
+
+    /// The error `LoadField` raises when [`Self::instance_field`] declines.
+    #[cold]
+    #[inline(never)]
+    fn load_field_error(&mut self, value: Value, index: usize) -> VmError {
+        let obj_ptr = match self.as_object_ptr(value, ObjectType::Instance) {
+            Ok(ptr) => ptr,
+            Err(error) => return error.into(),
+        };
+        match self.get_object(obj_ptr) {
+            Object::Instance(instance) => {
+                let length = instance.field_len();
+                self.invalid_field_access_error(index, length)
+            }
+            other => VmInternalError::TypeError {
+                expected: ObjectType::Instance.into(),
+                got: ObjectType::of(other).into(),
+            }
+            .into(),
+        }
+    }
+
+    /// Enter the plain bytecode callee of an exact call: record the caller's
+    /// return PC and call-site PC, push the callee frame with the caller's
+    /// context, and initialize the callee's locals to null.
+    ///
+    /// The caller is the top frame. A frame slot and `callee.real_local_count`
+    /// stack slots must already be reserved, and the arguments must be the
+    /// top `callee.arity` stack values, starting at `locals_offset`.
+    ///
+    /// The frame is pushed with an empty context and the caller's written
+    /// in after: with a cloned context live across the push's capacity
+    /// assertion, unwinding needs a landing pad, which in the fast path made
+    /// every entry save ten registers. The locals are filled with volatile
+    /// stores for the same reason: LLVM turns a plain fill into a `memset`
+    /// call.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn enter_exact_callee(
+        &mut self,
+        call_pc: usize,
+        return_pc: usize,
+        callee_ptr: HeapPtr,
+        callee: &Function,
+        locals_offset: StackIndex,
+        telemetry: Option<FrameTelemetry>,
+    ) {
+        let Some(Frame::Bytecode(caller)) = self.frames.last_mut() else {
+            verifier_unreachable!()
+        };
+        caller.instruction_ptr = return_pc;
+        caller.faulting_pc = call_pc;
+        self.frames.push_reserved_with(|| {
+            Frame::Bytecode(BytecodeFrame {
+                function: callee_ptr,
+                instruction_ptr: 0,
+                locals_offset,
+                type_args: Vec::new(),
+                faulting_pc: 0,
+                telemetry,
+                context: Context::default(),
+            })
+        });
+        let [.., Frame::Bytecode(caller), Frame::Bytecode(frame)] = &mut self.frames[..] else {
+            verifier_unreachable!()
+        };
+        let (base, len, capacity) = self.stack.raw_parts();
+        debug_assert!(capacity - len >= callee.real_local_count);
+        // SAFETY: the slot holds `Context::default()`, which owns nothing,
+        // so overwriting it without a drop leaks nothing. The locals fit in
+        // the reserved capacity, and `Value` is `Copy`.
+        unsafe {
+            std::ptr::write(&raw mut frame.context, caller.context.clone());
+            for slot in len..len + callee.real_local_count {
+                base.add(slot).write_volatile(Value::NULL);
+            }
+            self.stack.set_len(len + callee.real_local_count);
+        }
+    }
+
+    /// Replace the returning frame's slots, from `locals_offset` up, with
+    /// its result, the top stack value.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn leave_returning_frame_slots(&mut self, locals_offset: StackIndex) {
+        let result = self.stack.get_at(self.stack.ensure_stack_top());
+        // SAFETY: the compiler guarantees a result at or above the callee's
+        // locals base. That base is therefore an existing initialized slot,
+        // even for a zero-argument function with no locals. Value is Copy, so
+        // discarded slots need no drop. No allocation or GC point occurs
+        // between writing the result and shortening the stack to the caller's
+        // new top.
+        let consumed = self.stack.len() - locals_offset.raw();
+        unsafe { self.stack.replace_top_n_dynamic(consumed, result) };
+    }
+
+    /// Where dispatch continues in the bytecode frame at `frame_idx`, which
+    /// runs `function`.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn resume_state(&self, frame_idx: usize, function: &'static Function) -> DispatchState {
+        let Some(Frame::Bytecode(frame)) = self.frames.get(frame_idx) else {
+            verifier_unreachable!()
+        };
+        DispatchState {
+            pc: frame.instruction_ptr,
+            code: &function
+                .bytecode
+                .compact
+                .as_ref()
+                .expect("a bytecode frame's function has compact code")
+                .code,
+            function,
+            frame_idx,
+            locals_base: frame.locals_offset.raw().wrapping_sub(1),
+            runtime_package: self.runtime_package_of(function),
+        }
+    }
+
+    /// Run instructions from `state.pc` in the dispatch loop's fast path
+    /// until one it does not handle, then return with `state` describing the
+    /// frame and instruction the full dispatch continues with.
+    ///
+    /// The fast path covers what tight scalar loops and plain calls execute:
+    /// local and constant loads and stores, instance field loads, int
+    /// arithmetic and comparisons, truthiness, branches, and, when `CALLS`,
+    /// exact calls into and returns out of plain bytecode functions. It is
+    /// small and out of line so the program counter, stack top, and locals
+    /// base stay in registers; inside [`Self::run_compact`] they were
+    /// reloaded from spill slots on every instruction. It never allocates on
+    /// the VM heap, reaches a GC safepoint, runs native code, or polls for an
+    /// early yield, so nothing can observe the stack length it keeps in a
+    /// register; it publishes that length before returning. It does not
+    /// record `cur_pc`: nothing reads it during these instructions, and the
+    /// full dispatch records it for the instruction it runs next.
+    ///
+    /// The two variants trade entry cost against reach. Without `CALLS` the
+    /// loop is a leaf that saves almost nothing on entry, which matters for
+    /// code that alternates between it and the full dispatch (array and
+    /// float operations, allocation). With `CALLS` it also switches frames,
+    /// which needs more registers and a costlier entry, but keeps call-heavy
+    /// code out of the full dispatch entirely.
+    ///
+    /// Each arm runs only its common case. When an instruction would grow
+    /// the stack or frame stack, overflow, poll for an early yield, meet an
+    /// operand it does not handle, or involve telemetry, trace hooks, generic
+    /// type arguments, or a native frame, the loop stops *before* that
+    /// instruction, with no effect, and the full dispatch runs it. Every
+    /// result is therefore what the full dispatch alone would produce.
+    #[inline(never)]
+    #[allow(
+        unsafe_code,
+        clippy::too_many_lines,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::inline_always
+    )]
+    fn run_fast_path<const CALLS: bool>(&mut self, state: &mut DispatchState) {
+        use bex_vm_types::bytecode::OpCode;
+
+        #[inline(always)]
+        fn operand_u32(code: &[u8], at: usize) -> usize {
+            debug_assert!(at + 4 <= code.len());
+            // SAFETY: the encoder emits every operand in full.
+            u32::from_le(unsafe { code.as_ptr().add(at).cast::<u32>().read_unaligned() }) as usize
+        }
+        #[inline(always)]
+        fn operand_u16(code: &[u8], at: usize) -> usize {
+            debug_assert!(at + 2 <= code.len());
+            // SAFETY: the encoder emits every operand in full.
+            usize::from(u16::from_le(unsafe {
+                code.as_ptr().add(at).cast::<u16>().read_unaligned()
+            }))
+        }
+        #[inline(always)]
+        fn operand_i32(code: &[u8], at: usize) -> i32 {
+            debug_assert!(at + 4 <= code.len());
+            // SAFETY: the encoder emits every operand in full.
+            i32::from_le(unsafe { code.as_ptr().add(at).cast::<i32>().read_unaligned() })
+        }
+        // Branches: opcode and an i32 offset from the end of the instruction.
+        const BRANCH_LEN: usize = 5;
+        // `CallExactArgs`: opcode, u32 callee global, u16 type-arg count.
+        const CALL_EXACT_LEN: usize = 7;
+
+        let DispatchState {
+            mut pc,
+            mut code,
+            mut function,
+            mut frame_idx,
+            mut locals_base,
+            mut runtime_package,
+        } = *state;
+        let mut constants: &[Value] = &function.bytecode.resolved_constants;
+        let (base, mut sp, cap) = self.stack.raw_parts();
+        // SAFETY (every arm): the encoder validates each instruction's stack
+        // effect and local slots, so operand reads stay within `0..sp` and
+        // local slots within the frame. Pushes check `sp < cap` first, and
+        // nothing below grows the stack, so `base` stays valid.
+        unsafe {
+            macro_rules! at {
+                ($index:expr) => {
+                    *base.add($index)
+                };
+            }
+            macro_rules! local {
+                ($slot:expr) => {
+                    *base.add(Self::local_at(locals_base, $slot).raw())
+                };
+            }
+            loop {
+                let op: OpCode = std::mem::transmute(*code.get_unchecked(pc));
+                match op {
+                    OpCode::LoadNull | OpCode::LoadTrue | OpCode::LoadFalse => {
+                        if sp == cap {
+                            break;
+                        }
+                        at!(sp) = match op {
+                            OpCode::LoadNull => Value::NULL,
+                            OpCode::LoadTrue => Value::bool(true),
+                            _ => Value::bool(false),
+                        };
+                        sp += 1;
+                        pc += 1;
+                    }
+                    OpCode::LoadIntSmall => {
+                        if sp == cap {
+                            break;
+                        }
+                        let value = *code.get_unchecked(pc + 1) as i8;
+                        at!(sp) = Value::int(i64::from(value));
+                        sp += 1;
+                        pc += 2;
+                    }
+                    OpCode::LoadConst => {
+                        let Some(&value) = constants.get(operand_u32(code, pc + 1)) else {
+                            break;
+                        };
+                        if sp == cap {
+                            break;
+                        }
+                        at!(sp) = value;
+                        sp += 1;
+                        pc += 5;
+                    }
+                    OpCode::LoadVar => {
+                        if sp == cap {
+                            break;
+                        }
+                        at!(sp) = local!(operand_u32(code, pc + 1));
+                        sp += 1;
+                        pc += 5;
+                    }
+                    OpCode::LoadVar2 => {
+                        if cap - sp < 2 {
+                            break;
+                        }
+                        at!(sp) = local!(operand_u32(code, pc + 1));
+                        at!(sp + 1) = local!(operand_u32(code, pc + 5));
+                        sp += 2;
+                        pc += 9;
+                    }
+                    OpCode::StoreVar => {
+                        sp -= 1;
+                        local!(operand_u32(code, pc + 1)) = at!(sp);
+                        pc += 5;
+                    }
+                    OpCode::StoreVar2 => {
+                        local!(operand_u32(code, pc + 1)) = at!(sp - 1);
+                        local!(operand_u32(code, pc + 5)) = at!(sp - 2);
+                        sp -= 2;
+                        pc += 9;
+                    }
+                    OpCode::StoreVarLoadVar => {
+                        local!(operand_u32(code, pc + 1)) = at!(sp - 1);
+                        pc += 5;
+                    }
+                    OpCode::Pop => {
+                        sp -= operand_u32(code, pc + 1);
+                        pc += 5;
+                    }
+                    OpCode::Copy => {
+                        if sp == cap {
+                            break;
+                        }
+                        at!(sp) = at!(sp - 1 - operand_u32(code, pc + 1));
+                        sp += 1;
+                        pc += 5;
+                    }
+                    OpCode::LoadField | OpCode::LoadFieldLocal => {
+                        let Some(value) = self.instance_field(
+                            at!(sp - 1),
+                            operand_u32(code, pc + 1),
+                            op == OpCode::LoadFieldLocal,
+                        ) else {
+                            break;
+                        };
+                        at!(sp - 1) = value;
+                        pc += 5;
+                    }
+                    OpCode::AddLocalSmall => {
+                        let addend = Value::int(i64::from(*code.get_unchecked(pc + 9) as i8));
+                        let Some(sum) = Value::tagged_int_add_checked(
+                            local!(operand_u32(code, pc + 5)),
+                            addend,
+                        ) else {
+                            break;
+                        };
+                        local!(operand_u32(code, pc + 1)) = sum;
+                        pc += 10;
+                    }
+                    OpCode::LoadVarField | OpCode::LoadVarFieldLocal => {
+                        if sp == cap {
+                            break;
+                        }
+                        let Some(value) = self.instance_field(
+                            local!(operand_u32(code, pc + 1)),
+                            operand_u32(code, pc + 5),
+                            op == OpCode::LoadVarFieldLocal,
+                        ) else {
+                            break;
+                        };
+                        at!(sp) = value;
+                        sp += 1;
+                        pc += 9;
+                    }
+                    OpCode::AddInt | OpCode::SubInt => {
+                        let (l, r) = (at!(sp - 2), at!(sp - 1));
+                        let result = if op == OpCode::AddInt {
+                            Value::tagged_int_add_checked(l, r)
+                        } else {
+                            Value::tagged_int_sub_checked(l, r)
+                        };
+                        let Some(result) = result else { break };
+                        sp -= 1;
+                        at!(sp - 1) = result;
+                        pc += 1;
+                    }
+                    OpCode::MulInt => {
+                        let (Some(l), Some(r)) = (at!(sp - 2).as_int(), at!(sp - 1).as_int())
+                        else {
+                            std::hint::unreachable_unchecked()
+                        };
+                        let Some(result) = Self::int_mul(l, r) else {
+                            break;
+                        };
+                        sp -= 1;
+                        at!(sp - 1) = result;
+                        pc += 1;
+                    }
+                    OpCode::CmpIntEq
+                    | OpCode::CmpIntNotEq
+                    | OpCode::CmpIntLt
+                    | OpCode::CmpIntLtEq
+                    | OpCode::CmpIntGt
+                    | OpCode::CmpIntGtEq => {
+                        let result = Self::int_compare(op, at!(sp - 2), at!(sp - 1));
+                        sp -= 1;
+                        at!(sp - 1) = Value::bool(result);
+                        pc += 1;
+                    }
+                    OpCode::Not | OpCode::Truthy => {
+                        let Some(truthiness) = Self::scalar_truthiness(at!(sp - 1)) else {
+                            break;
+                        };
+                        at!(sp - 1) = Self::truthiness_result(op, truthiness);
+                        pc += 1;
+                    }
+                    // A branch that ticks the early-yield interval leaves the
+                    // tick that would elapse it to the full dispatch, which
+                    // polls.
+                    OpCode::Jump => {
+                        if !self.early_yield.tick_unless_due() {
+                            break;
+                        }
+                        pc = Self::branch_target(pc + BRANCH_LEN, operand_i32(code, pc + 1));
+                    }
+                    OpCode::PopJumpIfFalse | OpCode::PopJumpIfTrue => {
+                        if !self.early_yield.tick_unless_due() {
+                            break;
+                        }
+                        sp -= 1;
+                        pc = if Self::pop_jump_taken(op, at!(sp)) {
+                            Self::branch_target(pc + BRANCH_LEN, operand_i32(code, pc + 1))
+                        } else {
+                            pc + BRANCH_LEN
+                        };
+                    }
+                    OpCode::JumpIfLocalsCmp | OpCode::JumpIfLocalConstCmp => {
+                        let cmp: OpCode = std::mem::transmute(*code.get_unchecked(pc + 1));
+                        let l = local!(operand_u32(code, pc + 2));
+                        let rhs = operand_u32(code, pc + 6);
+                        let r = if op == OpCode::JumpIfLocalsCmp {
+                            local!(rhs)
+                        } else {
+                            let Some(&constant) = constants.get(rhs) else {
+                                break;
+                            };
+                            constant
+                        };
+                        if !self.early_yield.tick_unless_due() {
+                            break;
+                        }
+                        pc = if Self::int_compare(cmp, l, r) {
+                            Self::branch_target(pc + 14, operand_i32(code, pc + 10))
+                        } else {
+                            pc + 14
+                        };
+                    }
+                    OpCode::JumpIfFalse => {
+                        pc = if Self::jump_if_false_taken(at!(sp - 1)) {
+                            Self::branch_target(pc + BRANCH_LEN, operand_i32(code, pc + 1))
+                        } else {
+                            pc + BRANCH_LEN
+                        };
+                    }
+                    OpCode::JumpIfFalseOrPop
+                    | OpCode::JumpIfTrueOrPop
+                    | OpCode::JumpIfNotNullOrPop => {
+                        if !self.early_yield.tick_unless_due() {
+                            break;
+                        }
+                        if Self::jump_or_pop_taken(op, at!(sp - 1)) {
+                            pc = Self::branch_target(pc + BRANCH_LEN, operand_i32(code, pc + 1));
+                        } else {
+                            sp -= 1;
+                            pc += BRANCH_LEN;
+                        }
+                    }
+                    // `run_compact`'s `CallExactArgs` arm, for a plain,
+                    // non-generic bytecode callee with telemetry off. Both
+                    // enter the callee through `enter_exact_callee`.
+                    OpCode::CallExactArgs if CALLS => {
+                        if self.telemetry.is_some()
+                            || self.pending_call_trace.is_some()
+                            || !self.pending_call_type_args.is_empty()
+                            || operand_u16(code, pc + 5) != 0
+                        {
+                            break;
+                        }
+                        let callee_value = self.load_global_in(
+                            runtime_package,
+                            bex_vm_types::GlobalIndex::from_raw(operand_u32(code, pc + 1)),
+                        );
+                        let Some(callee_ptr) = callee_value.as_object_ptr() else {
+                            break;
+                        };
+                        let Object::Function(callee) = callee_ptr.get() else {
+                            break;
+                        };
+                        let Some(callee_code) = callee.bytecode.compact.as_ref() else {
+                            break;
+                        };
+                        if !matches!(callee.kind, FunctionKind::Bytecode)
+                            || callee.compiled_body.is_some()
+                            || sp < callee.arity
+                            || cap - sp < callee.real_local_count
+                            || self.frames.len() == self.frames.capacity()
+                            // Last check, so a handed-back call has not ticked.
+                            || !self.early_yield.tick_unless_due()
+                        {
+                            break;
+                        }
+                        self.thread_local_call = false;
+                        let locals_offset = sp - callee.arity;
+                        self.stack.set_len(sp);
+                        self.enter_exact_callee(
+                            pc,
+                            pc + CALL_EXACT_LEN,
+                            callee_ptr,
+                            callee,
+                            StackIndex::from_raw(locals_offset),
+                            None,
+                        );
+                        sp = self.stack.len();
+                        frame_idx += 1;
+                        function = callee;
+                        runtime_package = self.runtime_package_of(function);
+                        code = &callee_code.code;
+                        constants = &function.bytecode.resolved_constants;
+                        locals_base = locals_offset.wrapping_sub(1);
+                        pc = 0;
+                    }
+                    // `run_compact`'s `Return` arm, back into a plain bytecode
+                    // caller, with telemetry off and no model usage or trace
+                    // scope to settle. Both share `leave_returning_frame_slots`
+                    // and `resume_state`; only the frame pop differs (see
+                    // below).
+                    OpCode::Return if CALLS => {
+                        if self.telemetry.is_some()
+                            || frame_idx == 0
+                            || self.trace_scope_frame == frame_idx
+                            || matches!(
+                                function.body_meta,
+                                Some(bex_vm_types::FunctionMeta::ModelInvoke)
+                            )
+                        {
+                            break;
+                        }
+                        let (Some(Frame::Bytecode(caller)), Some(Frame::Bytecode(returning))) =
+                            (self.frames.get(frame_idx - 1), self.frames.get(frame_idx))
+                        else {
+                            break;
+                        };
+                        // Only a frame that owns nothing is popped here; see
+                        // the `mem::forget` below.
+                        if returning.telemetry.is_some()
+                            || returning.type_args.capacity() != 0
+                            || !returning.context.is_empty()
+                        {
+                            break;
+                        }
+                        let Object::Function(caller_function) = caller.function.get() else {
+                            break;
+                        };
+                        if !self.early_yield.tick_unless_due() {
+                            break;
+                        }
+                        let returned_locals = returning.locals_offset;
+                        self.stack.set_len(sp);
+                        self.leave_returning_frame_slots(returned_locals);
+                        sp = self.stack.len();
+                        // KEEP IN SYNC with `pop_finished_bytecode_frame`,
+                        // which the `Return` arm uses: the same pop, minus
+                        // the drops. Checked above: no type arguments
+                        // allocated and no context, and the other fields are
+                        // `Copy`. Dropping here would put calls that return
+                        // in this loop, which costs every entry a
+                        // register-saving prologue.
+                        std::mem::forget(self.frames.pop());
+                        frame_idx -= 1;
+                        DispatchState {
+                            pc,
+                            code,
+                            function,
+                            frame_idx,
+                            locals_base,
+                            runtime_package,
+                        } = self.resume_state(frame_idx, caller_function);
+                        constants = &function.bytecode.resolved_constants;
+                    }
+                    _ => break,
+                }
+                #[cfg(feature = "kperf")]
+                {
+                    self.op_count += 1;
+                    crate::op_mix::record(op as u8);
+                }
+            }
+            self.stack.set_len(sp);
+        }
+        *state = DispatchState {
+            pc,
+            code,
+            function,
+            frame_idx,
+            locals_base,
+            runtime_package,
+        };
+    }
+
     /// Run compact instructions, switching directly on exact calls and returns
     /// to bytecode callers. Native continuations and other frame transitions
     /// return to `exec_compact`, which retains PC writeback and error handling.
@@ -9265,18 +10946,15 @@ impl BexVm {
         // by our own encoder which guarantees correct sizes (verified by
         // debug_assert_eq!(code.len(), byte_offset) in lower_to_compact pass 2).
         // The PC always stays in bounds during well-formed execution.
+        // Each reader is one unaligned load: assembling the value from single
+        // bytes left LLVM emitting one `ldrb` per byte on some arms.
         #[inline(always)]
         unsafe fn read_u32_unchecked(code: &[u8], pc: &mut usize) -> u32 {
             unsafe {
                 let p = *pc;
-                let bytes = [
-                    *code.get_unchecked(p),
-                    *code.get_unchecked(p + 1),
-                    *code.get_unchecked(p + 2),
-                    *code.get_unchecked(p + 3),
-                ];
+                debug_assert!(p + 4 <= code.len());
                 *pc = p + 4;
-                u32::from_le_bytes(bytes)
+                u32::from_le(code.as_ptr().add(p).cast::<u32>().read_unaligned())
             }
         }
 
@@ -9284,9 +10962,9 @@ impl BexVm {
         unsafe fn read_u16_unchecked(code: &[u8], pc: &mut usize) -> u16 {
             unsafe {
                 let p = *pc;
-                let bytes = [*code.get_unchecked(p), *code.get_unchecked(p + 1)];
+                debug_assert!(p + 2 <= code.len());
                 *pc = p + 2;
-                u16::from_le_bytes(bytes)
+                u16::from_le(code.as_ptr().add(p).cast::<u16>().read_unaligned())
             }
         }
 
@@ -9294,14 +10972,9 @@ impl BexVm {
         unsafe fn read_i32_unchecked(code: &[u8], pc: &mut usize) -> i32 {
             unsafe {
                 let p = *pc;
-                let bytes = [
-                    *code.get_unchecked(p),
-                    *code.get_unchecked(p + 1),
-                    *code.get_unchecked(p + 2),
-                    *code.get_unchecked(p + 3),
-                ];
+                debug_assert!(p + 4 <= code.len());
                 *pc = p + 4;
-                i32::from_le_bytes(bytes)
+                i32::from_le(code.as_ptr().add(p).cast::<i32>().read_unaligned())
             }
         }
 
@@ -9317,10 +10990,56 @@ impl BexVm {
         // The current function's runtime package, derived once per function
         // switch rather than on every instruction that addresses an operand.
         let mut runtime_package = self.runtime_package_of(function);
+        // The current frame's `locals_offset - 1`, so local `slot` (1-based)
+        // lives at stack index `locals_base + slot`. Locals never move while a
+        // frame runs, so this stays in a register instead of re-reading the
+        // frame on every local access; it is refreshed wherever dispatch
+        // switches frames without returning.
+        let mut locals_base = self.frame_locals_base(*frame_idx);
 
         loop {
-            // Read opcode byte and advance PC past it.
+            // Run straight-line scalar code in the register-resident fast
+            // path; it stops before the first instruction it does not run,
+            // which the match below then executes.
             // SAFETY: PC is always in bounds (bytecode invariant).
+            #[allow(unsafe_code)]
+            let mut next = unsafe { *code.get_unchecked(*pc) };
+            if FAST_PATH_OPS[usize::from(next)] && self.dispatch_fast_path {
+                let mut state = DispatchState {
+                    pc: *pc,
+                    code,
+                    function,
+                    frame_idx: *frame_idx,
+                    locals_base,
+                    runtime_package,
+                };
+                // Straight-line code runs in the variant without calls: it
+                // is a leaf, so entering it is cheap for code that keeps
+                // switching between it and the match below. A call or
+                // return, reached directly or where that variant stops,
+                // enters the variant that switches frames, which then keeps
+                // running call-heavy code without coming back here.
+                let is_frame_switch =
+                    |byte: u8| byte == OpCode::CallExactArgs as u8 || byte == OpCode::Return as u8;
+                if !is_frame_switch(next) {
+                    self.run_fast_path::<false>(&mut state);
+                    *pc = state.pc;
+                    next = unsafe { *code.get_unchecked(*pc) };
+                }
+                if is_frame_switch(next) {
+                    self.run_fast_path::<true>(&mut state);
+                    // It may have entered or left frames; it stops at an
+                    // instruction boundary of whichever frame is on top.
+                    *pc = state.pc;
+                    *code = state.code;
+                    *function = state.function;
+                    *frame_idx = state.frame_idx;
+                    *dispatch_frame_idx = state.frame_idx;
+                    locals_base = state.locals_base;
+                    runtime_package = state.runtime_package;
+                }
+            }
+
             // Read opcode byte and advance PC past it.
             // SAFETY: PC is always in bounds (bytecode invariant).
             #[allow(unsafe_code)]
@@ -9329,6 +11048,7 @@ impl BexVm {
             #[cfg(feature = "kperf")]
             {
                 self.op_count += 1;
+                crate::op_mix::record(op_byte);
             }
 
             // Record the innermost frame's current instruction start cheaply (one
@@ -9346,29 +11066,24 @@ impl BexVm {
             // Tagged-int comparisons skip untagging by comparing bits directly
             // (see `Value::tagged_int_add_checked` for the encoding rationale; the
             // shift-left-by-1 preserves signed ordering between operands that
-            // share the same tag bit). Float comparisons unwrap two heap-boxed
-            // floats and apply the operator through `float_order` — BAML's total
+            // share the same tag bit). Float comparisons read two floats (inline
+            // or boxed) and apply the operator through `float_order` — BAML's total
             // float order, so these stay identical to the `exec_cmpop` fallback and
             // to `baml.ops.Compare for float`. Both operands are guaranteed Float by
             // the bytecode encoder, so the `else` arms are unreachable.
-            macro_rules! cmp_int_op {
-            ($op:tt) => {{
-                let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
-                let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
-                // SAFETY: the encoder validates two comparison operands.
-                self.stack
-                    .replace_top_n::<2>(Value::bool((l.bits() as i64) $op (r.bits() as i64)));
-            }};
-        }
             macro_rules! cmp_float_op {
                 ($op:expr) => {{
-                    let Some(r) =
-                        value_as_float(self.stack.get_at(self.stack.ensure_slot_from_top(0)))
+                    let Some(r) = self
+                        .stack
+                        .get_at(self.stack.ensure_slot_from_top(0))
+                        .as_float()
                     else {
                         std::hint::unreachable_unchecked()
                     };
-                    let Some(l) =
-                        value_as_float(self.stack.get_at(self.stack.ensure_slot_from_top(1)))
+                    let Some(l) = self
+                        .stack
+                        .get_at(self.stack.ensure_slot_from_top(1))
+                        .as_float()
                     else {
                         std::hint::unreachable_unchecked()
                     };
@@ -9409,30 +11124,59 @@ impl BexVm {
                     // ── LoadVar / StoreVar ────────────────────────────────────────
                     OpCode::LoadVar => {
                         let slot = { read_u32_unchecked(code, pc) as usize };
-                        // SAFETY: dispatch loop always runs with a Bytecode frame on top.
-                        #[allow(unsafe_code)]
-                        let Frame::Bytecode(bf) =
-                            (unsafe { self.frames.get_unchecked(*frame_idx) })
-                        else {
-                            unreachable!()
-                        };
-                        let stack_slot = Self::local_slot_stack_index(bf.locals_offset, slot);
-                        let value = self.stack.get_at(stack_slot);
+                        let value = self.stack.get_at(Self::local_at(locals_base, slot));
                         self.push_stack(value)?;
                     }
 
                     OpCode::StoreVar => {
                         let slot = { read_u32_unchecked(code, pc) as usize };
-                        // SAFETY: dispatch loop always runs with a Bytecode frame on top.
-                        #[allow(unsafe_code)]
-                        let Frame::Bytecode(bf) =
-                            (unsafe { self.frames.get_unchecked(*frame_idx) })
-                        else {
-                            unreachable!()
-                        };
-                        let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
                         let value = self.stack.ensure_pop();
-                        self.store_local_value(local_var_index, value);
+                        self.store_local_value(Self::local_at(locals_base, slot), value);
+                    }
+
+                    OpCode::ArrayIterNext | OpCode::ArrayIterNextLocal => {
+                        let iterator = { read_u32_unchecked(code, pc) as usize };
+                        let index = { read_u32_unchecked(code, pc) as usize };
+                        let iterator = Self::local_at(locals_base, iterator);
+                        let index = Self::local_at(locals_base, index);
+                        let array = self.stack.get_at(iterator);
+                        let Some(i) = self.stack.get_at(index).as_int() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&self.stack.get_at(index)),
+                            }
+                            .into());
+                        };
+                        let ptr = self.as_object_ptr(array, ObjectType::Array)?;
+                        // SAFETY (`_LOCAL`): see `ContainerLenLocal`.
+                        let element = match self.get_object(ptr) {
+                            Object::Array(arr) => {
+                                let guard = if op == OpCode::ArrayIterNextLocal {
+                                    arr.lock_thread_local()
+                                } else {
+                                    arr.lock()
+                                };
+                                usize::try_from(i).ok().and_then(|i| guard.get(i).copied())
+                            }
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Array.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        };
+                        let item = match element {
+                            Some(element) => {
+                                self.stack.set_at(index, Value::int(i + 1));
+                                element
+                            }
+                            None => {
+                                let done = self.lang_object(crate::lang_items::BAML_ITER_DONE);
+                                Value::object(self.alloc_instance(done, Vec::new()))
+                            }
+                        };
+                        self.push_stack(item)?;
                     }
 
                     // ── Operand-movement superinstructions (CPython-style) ────────
@@ -9440,15 +11184,8 @@ impl BexVm {
                     OpCode::LoadVar2 => {
                         let a = { read_u32_unchecked(code, pc) as usize };
                         let b = { read_u32_unchecked(code, pc) as usize };
-                        #[allow(unsafe_code)]
-                        let Frame::Bytecode(bf) =
-                            (unsafe { self.frames.get_unchecked(*frame_idx) })
-                        else {
-                            unreachable!()
-                        };
-                        let off = bf.locals_offset;
-                        let va = self.stack.get_at(Self::local_slot_stack_index(off, a));
-                        let vb = self.stack.get_at(Self::local_slot_stack_index(off, b));
+                        let va = self.stack.get_at(Self::local_at(locals_base, a));
+                        let vb = self.stack.get_at(Self::local_at(locals_base, b));
                         self.push_stack(va)?;
                         self.push_stack(vb)?;
                     }
@@ -9457,15 +11194,8 @@ impl BexVm {
                     OpCode::StoreVar2 => {
                         let a = { read_u32_unchecked(code, pc) as usize };
                         let b = { read_u32_unchecked(code, pc) as usize };
-                        #[allow(unsafe_code)]
-                        let Frame::Bytecode(bf) =
-                            (unsafe { self.frames.get_unchecked(*frame_idx) })
-                        else {
-                            unreachable!()
-                        };
-                        let off = bf.locals_offset;
-                        let sa = Self::local_slot_stack_index(off, a);
-                        let sb = Self::local_slot_stack_index(off, b);
+                        let sa = Self::local_at(locals_base, a);
+                        let sb = Self::local_at(locals_base, b);
                         let va = self.stack.ensure_pop();
                         let vb = self.stack.ensure_pop();
                         self.store_local_value(sa, va);
@@ -9474,13 +11204,37 @@ impl BexVm {
 
                     OpCode::StoreVarLoadVar => {
                         let slot = { read_u32_unchecked(code, pc) as usize };
-                        let Frame::Bytecode(bf) = &self.frames[*frame_idx] else {
-                            unreachable!()
-                        };
-                        let local_var_index = Self::local_slot_stack_index(bf.locals_offset, slot);
+                        let local_var_index = Self::local_at(locals_base, slot);
                         let value_slot = self.stack.ensure_slot_from_top(0);
                         let value = self.stack[value_slot];
                         self.store_local_value(local_var_index, value);
+                    }
+
+                    // ── Local-operand superinstructions ───────────────────────────
+                    // AddLocalSmall(dst, src, k) == `LoadVar(src); LoadIntSmall(k);
+                    // AddInt; StoreVar(dst)`, overflow included: that sequence
+                    // also leaves the stack as it found it when it raises.
+                    OpCode::AddLocalSmall => {
+                        let dst = { read_u32_unchecked(code, pc) as usize };
+                        let src = { read_u32_unchecked(code, pc) as usize };
+                        let r = Value::int(i64::from(read_i8_unchecked(code, pc)));
+                        let l = self.stack.get_at(Self::local_at(locals_base, src));
+                        let Some(sum) = Value::tagged_int_add_checked(l, r) else {
+                            return Err(self.tagged_int_overflow(l, '+', r));
+                        };
+                        self.store_local_value(Self::local_at(locals_base, dst), sum);
+                    }
+                    // LoadVarField(slot, i) == `LoadVar(slot); LoadField(i)`.
+                    OpCode::LoadVarField | OpCode::LoadVarFieldLocal => {
+                        let slot = { read_u32_unchecked(code, pc) as usize };
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let instance = self.stack.get_at(Self::local_at(locals_base, slot));
+                        let Some(value) =
+                            self.instance_field(instance, idx, op == OpCode::LoadVarFieldLocal)
+                        else {
+                            return Err(self.load_field_error(instance, idx));
+                        };
+                        self.push_stack(value)?;
                     }
 
                     // ── LoadGlobal / StoreGlobal ──────────────────────────────────
@@ -9515,32 +11269,20 @@ impl BexVm {
                     }
 
                     // ── LoadField / StoreField / InitField ────────────────────────
-                    OpCode::LoadField => {
+                    // `_LOCAL`: the instance is thread-local (escape analysis),
+                    // so the slot needs no ordering.
+                    OpCode::LoadField | OpCode::LoadFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let top = self.stack.ensure_pop();
-                        let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
-                        let load_result = {
-                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                                return Err(VmInternalError::TypeError {
-                                    expected: ObjectType::Instance.into(),
-                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                                }
-                                .into());
-                            };
-                            instance
-                                .try_load_field(idx)
-                                .ok_or_else(|| instance.field_len())
-                        };
-                        let value = match load_result {
-                            Ok(value) => value,
-                            Err(length) => {
-                                return Err(self.invalid_field_access_error(idx, length));
-                            }
+                        let Some(value) =
+                            self.instance_field(top, idx, op == OpCode::LoadFieldLocal)
+                        else {
+                            return Err(self.load_field_error(top, idx));
                         };
                         self.push_stack(value)?;
                     }
 
-                    OpCode::StoreField => {
+                    OpCode::StoreField | OpCode::StoreFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let new_value = self.stack.ensure_pop();
                         let instance_value = self.stack.ensure_pop();
@@ -9562,7 +11304,11 @@ impl BexVm {
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             unreachable!("already type-checked above");
                         };
-                        instance.store_field(idx, new_value);
+                        if op == OpCode::StoreFieldLocal {
+                            instance.store_field_relaxed(idx, new_value);
+                        } else {
+                            instance.store_field(idx, new_value);
+                        }
                     }
 
                     // ── VirtualLoadField / VirtualStoreField ──────────────────────
@@ -9574,14 +11320,11 @@ impl BexVm {
                     OpCode::VirtualLoadField => {
                         let field_index = { read_u32_unchecked(code, pc) as usize };
                         let iface_value = self.stack.ensure_pop();
-                        let (iface_qtn, iface_args) = self.pop_interface_operand(iface_value)?;
                         let receiver = self.stack.ensure_pop();
-                        let slot = self.resolve_virtual_field_slot(
-                            receiver,
-                            iface_qtn,
-                            &iface_args,
-                            field_index,
-                        )?;
+                        let caller =
+                            self.static_cache_identity(function, runtime_package, *frame_idx);
+                        let slot =
+                            self.virtual_field_slot(caller, receiver, iface_value, field_index)?;
                         let obj_ptr = self.as_object_ptr(receiver, ObjectType::Instance)?;
                         let load_result = {
                             let Object::Instance(instance) = self.get_object(obj_ptr) else {
@@ -9607,15 +11350,12 @@ impl BexVm {
                     OpCode::VirtualStoreField => {
                         let field_index = { read_u32_unchecked(code, pc) as usize };
                         let iface_value = self.stack.ensure_pop();
-                        let (iface_qtn, iface_args) = self.pop_interface_operand(iface_value)?;
                         let new_value = self.stack.ensure_pop();
                         let receiver = self.stack.ensure_pop();
-                        let slot = self.resolve_virtual_field_slot(
-                            receiver,
-                            iface_qtn,
-                            &iface_args,
-                            field_index,
-                        )?;
+                        let caller =
+                            self.static_cache_identity(function, runtime_package, *frame_idx);
+                        let slot =
+                            self.virtual_field_slot(caller, receiver, iface_value, field_index)?;
                         let obj_ptr = self.as_object_ptr(receiver, ObjectType::Instance)?;
                         let store_error = {
                             let Object::Instance(instance) = self.get_object(obj_ptr) else {
@@ -9782,8 +11522,10 @@ impl BexVm {
 
                     OpCode::AllocVariant => {
                         let raw = { read_u32_unchecked(code, pc) };
-                        let enum_ptr = self.idx_to_ptr(ObjectIndex::from_raw(raw as usize));
-                        let variant_count = {
+                        let enum_ptr =
+                            self.object_in(runtime_package, ObjectIndex::from_raw(raw as usize));
+                        let variant = self.stack.ensure_pop();
+                        let (variant_count, shared) = {
                             let Object::Enum(enm) = self.get_object(enum_ptr) else {
                                 return Err(VmInternalError::TypeError {
                                     expected: ObjectType::Enum.into(),
@@ -9791,9 +11533,19 @@ impl BexVm {
                                 }
                                 .into());
                             };
-                            enm.variants.len()
+                            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                            let shared = variant
+                                .as_int()
+                                .and_then(|index| enm.shared_variants.get(index as usize))
+                                .copied();
+                            (enm.variants.len(), shared)
                         };
-                        let variant = self.stack.ensure_pop();
+                        // A compile-time enum's variants are permanent shared
+                        // objects (see `Enum::shared_variants`).
+                        if let Some(variant_ptr) = shared {
+                            self.push_stack(Value::object(variant_ptr))?;
+                            continue;
+                        }
                         let Some(variant_index) = variant.as_int() else {
                             return Err(VmInternalError::TypeError {
                                 expected: bex_vm_types::types::Type::Int,
@@ -9959,6 +11711,7 @@ impl BexVm {
                                     OpCode::Call
                                         | OpCode::CallExactArgs
                                         | OpCode::CallHooked
+                                        | OpCode::CallLocal
                                         | OpCode::CallIndirect
                                         | OpCode::VirtualCall
                                 )
@@ -9968,13 +11721,24 @@ impl BexVm {
                         let value = self.stack.ensure_pop();
                         self.pending_call_trace = Some(self.trace_config(value)?);
                     }
-                    OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked => {
+                    OpCode::Call
+                    | OpCode::CallExactArgs
+                    | OpCode::CallHooked
+                    | OpCode::CallLocal => {
+                        // The general call path takes the builtin's twin.
+                        self.thread_local_call = op == OpCode::CallLocal;
                         let raw = read_u32_unchecked(code, pc);
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
 
                         let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                         let callee_value = self.load_global_in(runtime_package, callee_global);
 
+                        // `run_fast_path` runs the plain case of this exact
+                        // call itself (non-generic bytecode callee, telemetry
+                        // off) and hands every other case back here. A step
+                        // added to this path that applies to plain calls must
+                        // go into `enter_exact_callee`, which both share, or
+                        // become one of the fast path's hand-back guards.
                         if op == OpCode::CallExactArgs
                             && self.pending_call_trace.is_none()
                             && self.pending_call_type_args.is_empty()
@@ -9985,12 +11749,20 @@ impl BexVm {
                             // during frame/stack growth, just as in general call
                             // setup. Reload from rooted frames after any yield.
                             let callee_object: &'static Object = callee_ptr.get();
+                            // A generic callee's type operands sit below its
+                            // values. Plain static ones go straight into the
+                            // new frame; any other operand takes the general
+                            // path, which carries runtime declarations along.
                             if let Object::Function(callee) = callee_object
                                 && matches!(callee.kind, FunctionKind::Bytecode)
+                                && let Some(type_args) = if ntypeargs == 0 {
+                                    Some(Vec::new())
+                                } else {
+                                    self.take_plain_static_type_args(ntypeargs, callee.arity)
+                                }
                             {
                                 // `call_specialize` routes compiled callees through the general call path.
                                 debug_assert!(callee.compiled_body.is_none());
-                                debug_assert_eq!(ntypeargs, 0);
                                 // Eager ok_or constructs/drops VmInternalError
                                 // even on success; release assembly retains a
                                 // destructor call for that large enum.
@@ -10002,9 +11774,13 @@ impl BexVm {
                                 );
                                 self.reserve_call_frame()?;
                                 self.reserve_stack(callee.real_local_count)?;
-                                let context = self.current_context().clone();
-                                if let Some(telemetry) = &mut self.telemetry {
-                                    telemetry.set_context(context.clone());
+                                if self.telemetry.is_some() {
+                                    // The dispatching frame is the top frame, so its
+                                    // context is `current_context()` without the walk.
+                                    let context = self.dispatch_frame_context(*frame_idx).clone();
+                                    if let Some(telemetry) = &mut self.telemetry {
+                                        telemetry.set_context(context);
+                                    }
                                 }
                                 let frame_telemetry = if self.telemetry.is_some() {
                                     let actual_caller = self.frame_function_identity(*frame_idx);
@@ -10020,13 +11796,18 @@ impl BexVm {
                                         ..locals_offset.raw().saturating_add(callee.arity)];
                                     // SAFETY: arguments and callable remain live under the heap permit.
                                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
-                                        telemetry.enter_bytecode(
+                                        telemetry.enter_bytecode_with_trace(
                                             callee,
                                             callee_ptr,
                                             actual_caller,
                                             caller_pc,
                                             caller_is_observed,
                                             args,
+                                            None,
+                                            CallTypeArgs {
+                                                carried: &[],
+                                                passed: &type_args,
+                                            },
                                             |caller, callee| {
                                                 Self::register_call_path_functions(
                                                     &self.heap, caller, callee,
@@ -10037,25 +11818,21 @@ impl BexVm {
                                 } else {
                                     None
                                 };
-                                let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {
-                                    verifier_unreachable!()
-                                };
-                                caller.instruction_ptr = *pc;
-                                caller.faulting_pc = self.cur_pc;
-                                self.frames.push_reserved_with(|| {
-                                    Frame::Bytecode(BytecodeFrame {
-                                        function: callee_ptr,
-                                        instruction_ptr: 0,
-                                        locals_offset,
-                                        type_args: Vec::new(),
-                                        faulting_pc: 0,
-                                        telemetry: frame_telemetry,
-                                        context,
-                                    })
-                                });
-                                if callee.real_local_count != 0 {
-                                    let new_len = self.stack.len() + callee.real_local_count;
-                                    self.resize_stack(new_len, Value::NULL)?;
+                                // The fast path enters plain callees the same way.
+                                self.enter_exact_callee(
+                                    self.cur_pc,
+                                    *pc,
+                                    callee_ptr,
+                                    callee,
+                                    locals_offset,
+                                    frame_telemetry,
+                                );
+                                // Attached after the push so the frame of a
+                                // non-generic call is built exactly as before.
+                                if !type_args.is_empty()
+                                    && let Some(Frame::Bytecode(frame)) = self.frames.last_mut()
+                                {
+                                    frame.type_args = type_args;
                                 }
                                 *frame_idx = self.frames.len() - 1;
                                 *function = callee;
@@ -10070,8 +11847,27 @@ impl BexVm {
                                 *pc = 0;
                                 *code = &callee.bytecode.compact.as_ref().unwrap().code;
                                 *dispatch_frame_idx = *frame_idx;
+                                locals_base = locals_offset.raw().wrapping_sub(1);
                                 continue;
                             }
+                        }
+
+                        // A native builtin skips the general setup: no callee
+                        // unwrapping, no layout remap, no copy of its type
+                        // arguments. It returns to the engine loop as the
+                        // general path does: continuing here instead keeps the
+                        // whole loop state live across the call, and the
+                        // dispatch loop then spills `self` on every
+                        // instruction.
+                        if let NativeDirect::Ran(state) = self.call_native_direct(
+                            callee_value,
+                            op == OpCode::CallLocal,
+                            ntypeargs,
+                            frame_idx,
+                            function,
+                            *pc,
+                        )? {
+                            return Ok(state);
                         }
 
                         let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
@@ -10107,13 +11903,11 @@ impl BexVm {
                         } else {
                             let type_args =
                                 self.take_type_args_below_values(ntypeargs, arg_count)?;
-                            self.execute_call_from_locals_offset_with_type_args(
+                            self.execute_call_from_locals_offset_with_owned_type_args(
                                 callee_ptr,
                                 locals_offset,
                                 arg_count,
-                                CallOptions {
-                                    type_args: &type_args.tys,
-                                },
+                                type_args.tys,
                                 frame_idx,
                                 function,
                             )
@@ -10171,107 +11965,96 @@ impl BexVm {
                         // lane. The rule borrows `self`; scope it so the borrow ends
                         // before the `&mut self` call below.
                         let receiver = self.stack[StackIndex::from_raw(args_offset + self_arg)];
-                        let cache_key = if runtime_package.is_null() {
-                            let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
-                            let Object::Type(type_value) = self.get_object(iface_ptr) else {
-                                unreachable!("as_object_ptr(Type) guarantees a Type object")
-                            };
-                            let (interface_head, interface_args) = match &type_value.ty {
-                                bex_vm_types::RealizedTy::Interface(head, args, _) => {
-                                    (*head, args.clone())
-                                }
-                                other => unreachable!(
-                                    "VirtualCall interface operand must be an Interface type, found {other:?}"
-                                ),
-                            };
-                            self.static_virtual_receiver_key(receiver).map(|receiver| {
-                                StaticVirtualCallKey {
-                                    caller_function_addr: std::ptr::from_ref(*function) as usize,
-                                    call_pc: self.cur_pc,
-                                    receiver,
-                                    interface_head,
-                                    interface_args,
-                                }
-                            })
-                        } else {
-                            self.runtime_virtual_call_cache_key(
-                                self.frames[*frame_idx].function(),
-                                iface_value,
-                                receiver,
-                            )?
-                        };
-                        let cached_target = cache_key
-                            .as_ref()
-                            .and_then(|key| self.static_virtual_call_cache.get(key))
-                            .cloned();
-                        let (callee_ptr, mut type_args) = if let Some(target) = cached_target {
-                            (target.callee.ptr(), target.frame_type_args)
-                        } else {
-                            let method_name = self.as_string(&method_value)?.to_string();
-                            let (iface_qtn, iface_args) = {
-                                let iface_ptr =
-                                    self.as_object_ptr(iface_value, ObjectType::Type)?;
-                                match self.get_object(iface_ptr) {
-                                    // The interface's input args select among a type's
-                                    // impls of the same interface at several
-                                    // instantiations. Associated types are outputs,
-                                    // not part of the resolver key.
-                                    Object::Type(type_value) => match &type_value.ty {
-                                        bex_vm_types::RealizedTy::Interface(qtn, args, _assoc) => {
-                                            (*qtn, args.clone())
-                                        }
-                                        other => unreachable!(
-                                            "VirtualCall interface operand must be an Interface type, found {other:?}"
+                        let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
+                        let caller =
+                            self.static_cache_identity(function, runtime_package, *frame_idx);
+                        // Probe the per-site cache with a borrowed query: the
+                        // receiver's and the interface's type arguments are read
+                        // in place, so a hit allocates nothing beyond the callee
+                        // frame's own copy of its type arguments. A miss carries
+                        // the owned key out for the insert.
+                        let probe = {
+                            let mut scratch = None;
+                            match self.virtual_site_query(caller, receiver, iface_ptr, &mut scratch)
+                            {
+                                Some(query) => match self.static_virtual_call_cache.get(&query) {
+                                    Some(target) => Ok((
+                                        target.callee.ptr(),
+                                        Self::seed_frame_type_args(
+                                            &target.frame_type_args,
+                                            method_type_args.as_ref(),
                                         ),
-                                    },
-                                    other => unreachable!(
-                                        "as_object_ptr(Type) guarantees a Type object, found {:?}",
-                                        ObjectType::of(other)
-                                    ),
-                                }
-                            };
-                            // `Self` is the dispatch value's realized concrete type.
-                            let self_ty = bex_vm_types::RealizedTy::from(
-                                self.value_concrete_ty(receiver).unwrap_or_else(|| {
-                                    unreachable!(
-                                    "value of kind {:?} cannot be a virtual-call dispatch argument",
-                                        self.type_of(&receiver)
-                                    )
-                                }),
-                            );
-                            let resolver =
-                                crate::package_baml::ImplResolver::for_value(self, receiver);
-                            let implementation = resolver
-                                .resolve_implementation(&self_ty, iface_qtn, &iface_args)
-                                .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
-                                    method: method_name.clone(),
-                                })?;
-                            let (callee, frame) = resolver
-                                .implementation_method(&implementation, method_name.as_str())?;
-                            let cacheable = implementation.is_static();
-                            if cacheable && let Some(cache_key) = cache_key {
-                                self.static_virtual_call_cache.insert(
-                                    cache_key,
-                                    StaticVirtualCallTarget {
-                                        callee: Weak::new(callee),
-                                        frame_type_args: frame.clone(),
-                                    },
-                                );
+                                        target.arg_count,
+                                    )),
+                                    None => Err(Some(query.to_key())),
+                                },
+                                None => Err(None),
                             }
-                            (callee, frame)
                         };
-                        let nargs = match Self::recorded_call_layout(function, self.cur_pc) {
-                            Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
-                            None => nargs,
+                        let (callee_ptr, type_args, known_arg_count) = match probe {
+                            Ok(hit) => hit,
+                            Err(cache_key) => {
+                                let method_name = self.as_string(&method_value)?.to_string();
+                                // The interface's input args select among a type's
+                                // impls of the same interface at several
+                                // instantiations. Associated types are outputs,
+                                // not part of the resolver key.
+                                let (iface_qtn, iface_args) =
+                                    self.interface_operand_parts(iface_ptr);
+                                // `Self` is the dispatch value's realized concrete type.
+                                let self_ty = bex_vm_types::RealizedTy::from(
+                                    self.value_concrete_ty(receiver).unwrap_or_else(|| {
+                                        unreachable!(
+                                        "value of kind {:?} cannot be a virtual-call dispatch argument",
+                                            self.type_of(&receiver)
+                                        )
+                                    }),
+                                );
+                                let resolver =
+                                    crate::package_baml::ImplResolver::for_value(self, receiver);
+                                let implementation = resolver
+                                    .resolve_implementation(&self_ty, iface_qtn, iface_args)
+                                    .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
+                                        method: method_name.clone(),
+                                    })?;
+                                let (callee, frame) = resolver
+                                    .implementation_method(&implementation, method_name.as_str())?;
+                                let cacheable = implementation.is_static();
+                                // The receiver's class-level slots are realized by the
+                                // resolver off `Self` as head-carrying types, so
+                                // `reflect.Type.of<T>()` in an impl or default-method
+                                // body dereferences the caller's own declaration rather
+                                // than deriving a fresh identity for it.
+                                let type_args =
+                                    Self::seed_frame_type_args(&frame, method_type_args.as_ref());
+                                if cacheable && let Some(cache_key) = cache_key {
+                                    let arg_count =
+                                        match Self::recorded_call_layout(function, self.cur_pc) {
+                                            None => Some(nargs),
+                                            Some(layout) => self
+                                                .callee_params(callee)?
+                                                .layout_is(layout)
+                                                .then(|| layout.len()),
+                                        };
+                                    self.static_virtual_call_cache.insert(
+                                        cache_key,
+                                        StaticVirtualCallTarget {
+                                            callee: Weak::new(callee),
+                                            frame_type_args: frame,
+                                            arg_count,
+                                        },
+                                    );
+                                }
+                                (callee, type_args, None)
+                            }
                         };
-                        // The receiver's class-level slots are realized by the
-                        // resolver off `Self` as head-carrying types, so
-                        // `reflect.Type.of<T>()` in an impl or default-method
-                        // body dereferences the caller's own declaration rather
-                        // than deriving a fresh identity for it.
-                        if let Some(method) = method_type_args.as_ref() {
-                            type_args.extend_from_slice(&method.tys);
-                        }
+                        let nargs = match known_arg_count {
+                            Some(count) => count,
+                            None => match Self::recorded_call_layout(function, self.cur_pc) {
+                                Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
+                                None => nargs,
+                            },
+                        };
 
                         let locals_offset = StackIndex::from_raw(args_offset);
 
@@ -10293,13 +12076,11 @@ impl BexVm {
                                 function,
                             )
                         } else {
-                            self.execute_call_from_locals_offset_with_type_args(
+                            self.execute_call_from_locals_offset_with_owned_type_args(
                                 callee_ptr,
                                 locals_offset,
                                 nargs,
-                                CallOptions {
-                                    type_args: &type_args,
-                                },
+                                type_args,
                                 frame_idx,
                                 function,
                             )
@@ -10319,6 +12100,23 @@ impl BexVm {
                         let callee_value = self.stack[callee_slot];
                         let callee_ptr =
                             self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
+                        // Bytecode functions and closures stay in compact
+                        // dispatch, as at `CallExactArgs`.
+                        if let Some(callee) =
+                            self.enter_indirect_bytecode_call(callee_ptr, *frame_idx, function)?
+                        {
+                            *frame_idx = self.frames.len() - 1;
+                            *function = callee;
+                            runtime_package = self.runtime_package_of(function);
+                            if self.should_early_yield() {
+                                return Ok(Some(VmExecState::EarlyYield));
+                            }
+                            *pc = 0;
+                            *code = &callee.bytecode.compact.as_ref().unwrap().code;
+                            *dispatch_frame_idx = *frame_idx;
+                            locals_base = self.frame_locals_base(*frame_idx);
+                            continue;
+                        }
                         let obj = self.get_object(callee_ptr);
 
                         if let Object::HostClosure(host_closure) = obj {
@@ -10446,6 +12244,13 @@ impl BexVm {
                     }
 
                     // ── Return ────────────────────────────────────────────────────
+                    // `run_fast_path` runs the plain case of this return
+                    // itself (bytecode caller, telemetry off, no model usage,
+                    // trace scope or owned frame state) and hands every
+                    // other case back here. A step added here that applies to
+                    // plain returns must go into the helpers both share
+                    // (`leave_returning_frame_slots`, `resume_state`) or
+                    // become one of the fast path's hand-back guards.
                     OpCode::Return => {
                         let result = self.stack.get_at(self.stack.ensure_stack_top());
 
@@ -10475,20 +12280,17 @@ impl BexVm {
                             self.end_manual_activation(*frame_idx);
                         }
 
-                        // SAFETY: the compiler guarantees a result at or above the
-                        // callee's locals base. That base is therefore an existing
-                        // initialized slot, even for a zero-argument function with
-                        // no locals. Value is Copy, so discarded slots need no drop.
-                        // No allocation or GC point occurs between writing the
-                        // result and shortening the stack to the caller's new top.
-                        let consumed = self.stack.len() - locals_offset.raw();
-                        self.stack.replace_top_n_dynamic(consumed, result);
-                        // SAFETY: this instruction is executing the bytecode frame
-                        // accessed above; stack operations cannot remove that frame.
-                        self.frames.pop();
-                        let context = self.current_context().clone();
-                        if let Some(telemetry) = &mut self.telemetry {
-                            telemetry.set_context(context);
+                        // The fast path's `Return` shares this step and the
+                        // caller's `resume_state` below.
+                        self.leave_returning_frame_slots(locals_offset);
+                        // KEEP IN SYNC with the fast path's `Return`, which
+                        // pops a frame that owns nothing without the drops.
+                        self.pop_finished_bytecode_frame();
+                        if self.telemetry.is_some() {
+                            let context = self.current_context().clone();
+                            if let Some(telemetry) = &mut self.telemetry {
+                                telemetry.set_context(context);
+                            }
                         }
                         // Select the restored caller. Native continuations and
                         // early yields still hand this frame back to the outer loop.
@@ -10503,10 +12305,16 @@ impl BexVm {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
                         if let Frame::Bytecode(caller) = &self.frames[*frame_idx] {
-                            *pc = caller.instruction_ptr;
-                            *function = self.load_function(*frame_idx)?;
-                            runtime_package = self.runtime_package_of(function);
-                            *code = &function.bytecode.compact.as_ref().unwrap().code;
+                            let caller_function = match caller.function.get() {
+                                Object::Function(caller_fn) => caller_fn,
+                                _ => self.load_function(*frame_idx)?,
+                            };
+                            let next = self.resume_state(*frame_idx, caller_function);
+                            *pc = next.pc;
+                            *code = next.code;
+                            *function = next.function;
+                            locals_base = next.locals_base;
+                            runtime_package = next.runtime_package;
                             *dispatch_frame_idx = *frame_idx;
                             continue;
                         }
@@ -10685,8 +12493,7 @@ impl BexVm {
                     // ── Jump opcodes ──────────────────────────────────────────────
                     OpCode::Jump => {
                         let offset = read_i32_unchecked(code, pc);
-                        // offset is relative to instruction end (current pc)
-                        *pc = (*pc as i64 + offset as i64) as usize;
+                        *pc = Self::branch_target(*pc, offset);
                         if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
                         }
@@ -10695,8 +12502,31 @@ impl BexVm {
                     OpCode::PopJumpIfFalse | OpCode::PopJumpIfTrue => {
                         let offset = read_i32_unchecked(code, pc);
                         let cond = self.stack.ensure_pop();
-                        if cond == Value::bool(op == OpCode::PopJumpIfTrue) {
-                            *pc = (*pc as i64 + offset as i64) as usize;
+                        if Self::pop_jump_taken(op, cond) {
+                            *pc = Self::branch_target(*pc, offset);
+                        }
+                        if self.should_early_yield() {
+                            return Ok(Some(VmExecState::EarlyYield));
+                        }
+                    }
+
+                    // JumpIfLocalsCmp(cmp, a, b) == `LoadVar2(a, b); CmpInt*;
+                    // PopJumpIfTrue`, with a `PopJumpIfFalse` stored as the
+                    // negated comparison; the const form loads constant `b`.
+                    OpCode::JumpIfLocalsCmp | OpCode::JumpIfLocalConstCmp => {
+                        let cmp: OpCode = std::mem::transmute(*code.get_unchecked(*pc));
+                        *pc += 1;
+                        let a = { read_u32_unchecked(code, pc) as usize };
+                        let b = { read_u32_unchecked(code, pc) as usize };
+                        let offset = read_i32_unchecked(code, pc);
+                        let l = self.stack.get_at(Self::local_at(locals_base, a));
+                        let r = if op == OpCode::JumpIfLocalsCmp {
+                            self.stack.get_at(Self::local_at(locals_base, b))
+                        } else {
+                            function.bytecode.resolved_constants[b]
+                        };
+                        if Self::int_compare(cmp, l, r) {
+                            *pc = Self::branch_target(*pc, offset);
                         }
                         if self.should_early_yield() {
                             return Ok(Some(VmExecState::EarlyYield));
@@ -10707,8 +12537,8 @@ impl BexVm {
                         let offset = read_i32_unchecked(code, pc);
                         let top_slot = self.stack.ensure_stack_top();
                         let cond = self.stack[top_slot];
-                        if cond == Value::bool(false) {
-                            *pc = (*pc as i64 + offset as i64) as usize;
+                        if Self::jump_if_false_taken(cond) {
+                            *pc = Self::branch_target(*pc, offset);
                         }
                     }
 
@@ -10717,14 +12547,8 @@ impl BexVm {
                     | OpCode::JumpIfNotNullOrPop => {
                         let offset = read_i32_unchecked(code, pc);
                         let cond = self.stack[self.stack.ensure_stack_top()];
-                        let taken = match op {
-                            OpCode::JumpIfFalseOrPop => cond == Value::bool(false),
-                            OpCode::JumpIfTrueOrPop => cond == Value::bool(true),
-                            OpCode::JumpIfNotNullOrPop => !cond.is_null(),
-                            _ => unreachable!(),
-                        };
-                        if taken {
-                            *pc = (*pc as i64 + offset as i64) as usize;
+                        if Self::jump_or_pop_taken(op, cond) {
+                            *pc = Self::branch_target(*pc, offset);
                         } else {
                             self.stack.ensure_pop();
                         }
@@ -10881,69 +12705,13 @@ impl BexVm {
                     // ── LoadType ──────────────────────────────────────────────────
                     OpCode::LoadType => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
-                        let static_cache_key = match &function.bytecode.constants[idx] {
-                            ConstValue::Type(template)
-                                if runtime_package.is_null()
-                                    && <&bex_vm_types::RealizedTy>::try_from(template).is_ok()
-                                    && matches!(&self.frames[*frame_idx],
-                                    Frame::Bytecode(frame)
-                                        if !frame.binds_runtime_declaration(&self.heap)) =>
-                            {
-                                Some((std::ptr::from_ref(*function) as usize, idx))
-                            }
-                            ConstValue::Type(template) if !runtime_package.is_null() => {
-                                self.runtime_load_type_cache_key(*frame_idx, template, idx)
-                            }
-                            _ => None,
-                        };
-                        let cached_value = static_cache_key
-                            .and_then(|key| self.static_load_type_cache.get(&key).copied())
-                            .map(|ty| Value::object(ty.ptr()));
-                        let value = if let Some(value) = cached_value {
-                            value
-                        } else {
-                            let template = match &function.bytecode.constants[idx] {
-                                ConstValue::Type(t) => t.clone(),
-                                _ => {
-                                    return Err(VmInternalError::UnexpectedConstantKind.into());
-                                }
-                            };
-
-                            let value = {
-                                let ty: bex_vm_types::RealizedTy = {
-                                    // A fully-realized template narrows to `RealizedTy` in a
-                                    // single validation walk — no substitution environment
-                                    // needed. Otherwise resolve its frame refs (and reduce any
-                                    // projection) against the frame's realized type args; the
-                                    // result must be realized or it is an internal error, never
-                                    // a `unknown` erasure.
-                                    if let Ok(realized) =
-                                        <&bex_vm_types::RealizedTy>::try_from(&template)
-                                    {
-                                        realized.clone()
-                                    } else {
-                                        let frame_type_args =
-                                            if let Frame::Bytecode(bf) = &self.frames[*frame_idx] {
-                                                bf.type_args.clone()
-                                            } else {
-                                                vec![]
-                                            };
-                                        template.substitute(&frame_type_args, self).map_err(
-                                            |e| VmInternalError::TypeSubstitution {
-                                                message: e.to_string(),
-                                            },
-                                        )?
-                                    }
-                                };
-                                Value::object(self.tlab.alloc_type(TypeValue::new(ty)))
-                            };
-                            if let Some(cache_key) = static_cache_key
-                                && let Some(ptr) = value.as_object_ptr()
-                            {
-                                self.static_load_type_cache
-                                    .insert(cache_key, Weak::new(ptr));
-                            }
-                            value
+                        let identity =
+                            self.static_cache_identity(function, runtime_package, *frame_idx);
+                        let cached = identity
+                            .and_then(|identity| self.cached_load_type(identity, idx, *frame_idx));
+                        let value = match cached {
+                            Some(ty) => Value::object(ty),
+                            None => self.load_type_uncached(function, identity, idx, *frame_idx)?,
                         };
                         self.push_stack(value)?;
                     }
@@ -11323,7 +13091,11 @@ impl BexVm {
                     }
 
                     // ── Array / Map element ops ───────────────────────────────────
-                    OpCode::ContainerLen => {
+                    OpCode::ContainerLen | OpCode::ContainerLenLocal => {
+                        // SAFETY (`thread_local`): the emitter selects the
+                        // `_LOCAL` opcodes only where escape analysis proved
+                        // no other thread can reach the container.
+                        let thread_local = op == OpCode::ContainerLenLocal;
                         let container = self.stack.ensure_pop();
                         let Some(ptr) = container.as_object_ptr() else {
                             return Err(VmInternalError::TypeError {
@@ -11334,6 +13106,15 @@ impl BexVm {
                         };
                         #[allow(clippy::cast_possible_wrap)]
                         let len = match self.get_object(ptr) {
+                            Object::Array(arr) if thread_local => {
+                                arr.lock_thread_local().len() as i64
+                            }
+                            Object::Uint8Array(bytes) if thread_local => {
+                                bytes.lock_thread_local().len() as i64
+                            }
+                            Object::Map(map) if thread_local => {
+                                map.lock_thread_local().len() as i64
+                            }
                             Object::Array(arr) => arr.len() as i64,
                             Object::Uint8Array(bytes) => bytes.len() as i64,
                             Object::Map(map) => map.len() as i64,
@@ -11349,7 +13130,9 @@ impl BexVm {
                         self.push_stack(Value::int(len))?;
                     }
 
-                    OpCode::LoadArrayElement => {
+                    OpCode::LoadArrayElement | OpCode::LoadArrayElementLocal => {
+                        // SAFETY (`thread_local`): see `ContainerLenLocal`.
+                        let thread_local = op == OpCode::LoadArrayElementLocal;
                         let index_value = self.stack.ensure_pop();
                         let array_value = self.stack.ensure_pop();
                         let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
@@ -11369,7 +13152,11 @@ impl BexVm {
                         let load_result: Result<Value, (i64, usize)> = {
                             match self.get_object(array_obj_index) {
                                 Object::Array(arr) => {
-                                    let guard = arr.lock();
+                                    let guard = if thread_local {
+                                        arr.lock_thread_local()
+                                    } else {
+                                        arr.lock()
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => Ok(guard[idx]),
@@ -11377,7 +13164,11 @@ impl BexVm {
                                     }
                                 }
                                 Object::Uint8Array(bytes) => {
-                                    let guard = bytes.lock();
+                                    let guard = if thread_local {
+                                        bytes.lock_thread_local()
+                                    } else {
+                                        bytes.lock()
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
@@ -11411,7 +13202,9 @@ impl BexVm {
                         unreachable!("map indexing must be lowered through baml.Map.index");
                     }
 
-                    OpCode::StoreArrayElement => {
+                    OpCode::StoreArrayElement | OpCode::StoreArrayElementLocal => {
+                        // SAFETY (`thread_local`): see `ContainerLenLocal`.
+                        let thread_local = op == OpCode::StoreArrayElementLocal;
                         let new_value = self.stack.ensure_pop();
                         let index_value = self.stack.ensure_pop();
                         let array_value = self.stack.ensure_pop();
@@ -11429,7 +13222,12 @@ impl BexVm {
                         let store_result: Result<(), (i64, usize)> = {
                             match self.get_object(array_object_index) {
                                 Object::Array(arr) => {
-                                    let mut guard = arr.lock_mut(self.tlab.alloc_debt());
+                                    let debt = self.tlab.alloc_debt();
+                                    let mut guard = if thread_local {
+                                        arr.lock_mut_thread_local(debt)
+                                    } else {
+                                        arr.lock_mut(debt)
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => {
@@ -11447,7 +13245,12 @@ impl BexVm {
                                         }
                                         .into());
                                     };
-                                    let mut guard = bytes.lock_mut(self.tlab.alloc_debt());
+                                    let debt = self.tlab.alloc_debt();
+                                    let mut guard = if thread_local {
+                                        bytes.lock_mut_thread_local(debt)
+                                    } else {
+                                        bytes.lock_mut(debt)
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => {
@@ -11549,7 +13352,9 @@ impl BexVm {
                         let Some(l) = self.stack.ensure_pop().as_int() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = self.int_arith_result(l.checked_mul(r), l, '*', r)?;
+                        let Some(v) = Self::int_mul(l, r) else {
+                            return Err(self.integer_overflow(format!("{l} * {r} overflows int")));
+                        };
                         self.push_stack(v)?;
                     }
                     OpCode::DivInt => {
@@ -11595,33 +13400,33 @@ impl BexVm {
 
                     // ── Specialized float arithmetic (skip type dispatch) ─────────
                     OpCode::AddFloat => {
-                        let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(r) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(l) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = Value::object(self.alloc_float(l + r));
+                        let v = self.float_value(l + r);
                         self.push_stack(v)?;
                     }
                     OpCode::SubFloat => {
-                        let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(r) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(l) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = Value::object(self.alloc_float(l - r));
+                        let v = self.float_value(l - r);
                         self.push_stack(v)?;
                     }
                     OpCode::MulFloat => {
-                        let Some(r) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(r) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let Some(l) = value_as_float(self.stack.ensure_pop()) else {
+                        let Some(l) = self.stack.ensure_pop().as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = Value::object(self.alloc_float(l * r));
+                        let v = self.float_value(l * r);
                         self.push_stack(v)?;
                     }
                     OpCode::DivFloat => {
@@ -11631,23 +13436,29 @@ impl BexVm {
                         // about.
                         let right_v = self.stack.ensure_pop();
                         let left_v = self.stack.ensure_pop();
-                        let Some(r) = value_as_float(right_v) else {
+                        let Some(r) = right_v.as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let Some(l) = value_as_float(left_v) else {
+                        let Some(l) = left_v.as_float() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = Value::object(self.alloc_float(l / r));
+                        let v = self.float_value(l / r);
                         self.push_stack(v)?;
                     }
 
                     // ── Specialized int comparison (skip type dispatch) ───────────
-                    OpCode::CmpIntEq => cmp_int_op!(==),
-                    OpCode::CmpIntNotEq => cmp_int_op!(!=),
-                    OpCode::CmpIntLt => cmp_int_op!(<),
-                    OpCode::CmpIntLtEq => cmp_int_op!(<=),
-                    OpCode::CmpIntGt => cmp_int_op!(>),
-                    OpCode::CmpIntGtEq => cmp_int_op!(>=),
+                    OpCode::CmpIntEq
+                    | OpCode::CmpIntNotEq
+                    | OpCode::CmpIntLt
+                    | OpCode::CmpIntLtEq
+                    | OpCode::CmpIntGt
+                    | OpCode::CmpIntGtEq => {
+                        let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
+                        let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
+                        // SAFETY: the encoder validates two comparison operands.
+                        self.stack
+                            .replace_top_n::<2>(Value::bool(Self::int_compare(op, l, r)));
+                    }
 
                     // ── Specialized float comparison (skip type dispatch) ─────────
                     OpCode::CmpFloatEq => cmp_float_op!(CmpOp::Eq),
@@ -11758,19 +13569,70 @@ impl BexVm {
                     }
 
                     // ── Expanded unary ────────────────────────────────────────────
-                    OpCode::Not => {
-                        // `!` negates TRUTHINESS (B-1563) - `!0` and `if (0)`
-                        // agree, closing B-1071's asymmetry.
+                    // `!` negates TRUTHINESS (B-1563) - `!0` and `if (0)`
+                    // agree, closing B-1071's asymmetry.
+                    OpCode::Not | OpCode::Truthy => {
                         let val = self.stack.get_at(self.stack.ensure_stack_top());
                         let truthy = self.is_truthy(val);
                         // SAFETY: the encoder validates one input value.
-                        self.stack.replace_top_n::<1>(Value::bool(!truthy));
+                        self.stack
+                            .replace_top_n::<1>(Self::truthiness_result(op, truthy));
                     }
-                    OpCode::Truthy => {
+                    OpCode::IsNull => {
                         let val = self.stack.get_at(self.stack.ensure_stack_top());
-                        let truthy = self.is_truthy(val);
                         // SAFETY: the encoder validates one input value.
-                        self.stack.replace_top_n::<1>(Value::bool(truthy));
+                        self.stack.replace_top_n::<1>(Value::bool(val.is_null()));
+                    }
+                    OpCode::IsNotNull => {
+                        let val = self.stack.get_at(self.stack.ensure_stack_top());
+                        // SAFETY: the encoder validates one input value.
+                        self.stack.replace_top_n::<1>(Value::bool(!val.is_null()));
+                    }
+                    // `==`: decide the pair in place when no driver is needed,
+                    // otherwise call the driver exactly as `Call` would.
+                    OpCode::CallEquals => {
+                        let raw = read_u32_unchecked(code, pc);
+                        let b = self.stack.get_at(self.stack.ensure_slot_from_top(0));
+                        let a = self.stack.get_at(self.stack.ensure_slot_from_top(1));
+                        if let Some(equal) = crate::package_baml::equals_without_driver(self, a, b)
+                        {
+                            // SAFETY: the encoder validates two comparison operands.
+                            self.stack.replace_top_n::<2>(Value::bool(equal));
+                        } else {
+                            let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                            let callee_value = self.load_global_in(runtime_package, callee_global);
+                            let (callee_ptr, arg_count) =
+                                self.resolve_callable_target(callee_value)?;
+                            let locals_offset = StackIndex::from_raw(
+                                self.stack
+                                    .len()
+                                    .checked_sub(arg_count)
+                                    .ok_or(VmInternalError::NotEnoughItemsOnStack(arg_count))?,
+                            );
+                            let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                                verifier_unreachable!()
+                            };
+                            bf.instruction_ptr = *pc;
+                            return if self.pending_call_type_args.is_empty() {
+                                self.execute_call_from_locals_offset(
+                                    callee_ptr,
+                                    locals_offset,
+                                    arg_count,
+                                    frame_idx,
+                                    function,
+                                )
+                            } else {
+                                let type_args = self.take_type_args_below_values(0, arg_count)?;
+                                self.execute_call_from_locals_offset_with_owned_type_args(
+                                    callee_ptr,
+                                    locals_offset,
+                                    arg_count,
+                                    type_args.tys,
+                                    frame_idx,
+                                    function,
+                                )
+                            };
+                        }
                     }
                     OpCode::Neg => {
                         let val = self.stack.ensure_pop();
@@ -11786,8 +13648,8 @@ impl BexVm {
                                     );
                                 }
                             }
-                        } else if let Some(n) = value_as_float(val) {
-                            let v = Value::object(self.alloc_float(-n));
+                        } else if let Some(n) = val.as_float() {
+                            let v = self.float_value(-n);
                             self.push_stack(v)?;
                         } else if let Some(ptr) = val.as_object_ptr() {
                             // Bigint negation. Compute the negated value into an
@@ -11833,7 +13695,7 @@ impl BexVm {
                         let source_location = if let Frame::Bytecode(bf) = &self.frames[*frame_idx]
                         {
                             let pc = cur_pc;
-                            let func_obj = self.get_object(bf.function).as_callable().ok();
+                            let func_obj = self.callable_function(bf.function);
                             func_obj
                                 .and_then(|func| {
                                     if let Some(compact) = &func.bytecode.compact {
@@ -11880,6 +13742,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             cur_pc: _,
             heap: _,
             early_yield: _,
+            dispatch_fast_path: _,
             // Its cached cursor is layout, not a pointer; see `relocated`.
             tlab: _,
             globals,
@@ -11892,6 +13755,8 @@ impl ::bex_vm_types::RootHaver for BexVm {
             stdlib_heads: _,
             // Rooted by the engine's own `DynDispatchRoot` holder.
             dynamic_dispatch: _,
+            // Its keys are forwarded by the engine's own `MonitorRoot` holder.
+            monitors: _,
             thread_id: _,
             telemetry,
             trace_scope: _,
@@ -11900,6 +13765,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             context_transfers,
             argv: _,
             pending_call_trace: _,
+            thread_local_call: _,
             pending_trace_hooks: _,
             held_traces: _,
             trace_scope_frame: _,
@@ -11912,10 +13778,13 @@ impl ::bex_vm_types::RootHaver for BexVm {
             pending_call_type_args,
             compiled,
             impl_cache,
+            json_decode_cache,
             checkpoint_passed: _,
             pending_call_passes_type_args: _,
             static_load_type_cache,
             static_virtual_call_cache,
+            static_virtual_field_cache,
+            enum_equals_memo: _,
         } = self;
         debug_assert!(
             matches!(
@@ -11947,85 +13816,57 @@ impl ::bex_vm_types::RootHaver for BexVm {
 
         // The static caches are keyed by a function's address, tagged in the
         // low bit when it is a runtime function (a compile-time function is
-        // keyed by its pool index and never moves). A key is a weak reference:
+        // keyed by its payload address and never moves). A key is a weak reference:
         // the entry goes when its function does, and follows it otherwise.
-        let forward_identity = |identity: usize, visitor: &mut dyn RootVisitor| -> Option<usize> {
-            if identity & 1 == 0 {
-                return Some(identity);
-            }
-            let addr = (identity & !1) as *mut Object;
-            // SAFETY: the pointer is used only as a lookup key; it is never
-            // dereferenced, so validity of the pointee is not required.
-            #[cfg(not(feature = "heap_debug"))]
-            let mut key = unsafe { HeapPtr::from_ptr(addr) };
-            // SAFETY: as above; the epoch does not participate in `Eq`/`Hash`,
-            // so a zero epoch probes correctly.
-            #[cfg(feature = "heap_debug")]
-            let mut key = unsafe { HeapPtr::from_ptr(addr, 0) };
-            visitor
-                .visit_weak(&mut key)
-                .then(|| (key.as_ptr() as usize) | 1)
-        };
         let old_load_type_cache = std::mem::take(static_load_type_cache);
-        for ((identity, index), mut ty) in old_load_type_cache {
-            if let Some(identity) = forward_identity(identity, visitor)
-                && ty.visit(visitor)
-            {
-                static_load_type_cache.insert((identity, index), ty);
+        for ((identity, index), mut site) in old_load_type_cache {
+            let Some(identity) = forward_cache_identity(identity, visitor) else {
+                continue;
+            };
+            let live = match &mut site {
+                LoadTypeSite::Realized(ty) => ty.visit(visitor),
+                // Each binding is weak, its argument list and object alike.
+                // The site itself names nothing, so it stays even when every
+                // binding went.
+                LoadTypeSite::Generic(bindings) => {
+                    bindings.retain(|(args, ty)| {
+                        forward_weak_heads(args, visitor) && ty.visit(visitor)
+                    });
+                    true
+                }
+                LoadTypeSite::Projection => true,
+            };
+            if live {
+                static_load_type_cache.insert((identity, index), site);
             }
         }
-        // Whether every declaration the types name is still live, repointing
-        // each that moved.
-        let weak_heads = |tys: &mut [bex_vm_types::RealizedTy], visitor: &mut dyn RootVisitor| {
-            let mut live = true;
-            for ty in tys {
-                ty.visit_heads_mut(&mut |head: &mut TypeHead| {
-                    live &= head.visit_root_weak(visitor);
-                });
-            }
-            live
-        };
+        // The virtual-site caches are weak, key and value alike: an entry
+        // names a callee, an interface and the declarations in the receiver's
+        // and the call's type arguments, and must keep none of them alive.
+        // A key hashes its caller's address, which moves with a runtime
+        // function, and a dead entry must go, so the tables are rebuilt.
         let old_virtual_call_cache = std::mem::take(static_virtual_call_cache);
         for (mut key, mut target) in old_virtual_call_cache {
-            // The whole entry is weak, key and target alike: it names a callee,
-            // an interface and the declarations in the receiver's and the
-            // call's type arguments, and must keep none of them alive.
-            let StaticVirtualCallKey {
-                caller_function_addr,
-                call_pc: _,
-                receiver,
-                interface_head,
-                interface_args,
-            } = &mut key;
-            let StaticVirtualCallTarget {
-                callee,
-                frame_type_args,
-            } = &mut target;
-            let Some(identity) = forward_identity(*caller_function_addr, visitor) else {
-                continue;
-            };
-            let receiver_live = match receiver {
-                StaticVirtualReceiverKey::Class {
-                    type_tag: _,
-                    type_args,
-                } => weak_heads(&mut type_args[..], visitor),
-                StaticVirtualReceiverKey::Other(ty) => {
-                    weak_heads(std::slice::from_mut(ty), visitor)
-                }
-            };
-            if !(receiver_live
-                && callee.visit(visitor)
-                && interface_head.visit_root_weak(visitor)
-                && weak_heads(&mut interface_args[..], visitor)
-                && weak_heads(frame_type_args, visitor))
+            if key.forward(visitor)
+                && target.callee.visit(visitor)
+                && forward_weak_heads(&mut target.frame_type_args, visitor)
             {
-                continue;
+                static_virtual_call_cache.insert(key, target);
             }
-            *caller_function_addr = identity;
-            static_virtual_call_cache.insert(key, target);
+        }
+        let old_virtual_field_cache = std::mem::take(static_virtual_field_cache);
+        for (mut key, slot) in old_virtual_field_cache {
+            if key.forward(visitor) {
+                static_virtual_field_cache.insert(key, slot);
+            }
         }
         // Resolver answers, held weakly like the static caches above.
         impl_cache.get_mut().visit_weak(visitor);
+        // Decode lookups hold pointers too, but they are refilled in one
+        // decode call, so a collection drops them rather than forwarding
+        // them. Before the frames, so a suspended decode's class plans are
+        // its own when they are repointed.
+        json_decode_cache.clear();
 
         for ContextTransfer { handling, target } in context_transfers.iter_mut() {
             handling.visit_roots(visitor);

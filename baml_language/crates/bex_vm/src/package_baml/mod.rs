@@ -38,6 +38,7 @@ pub mod json;
 mod map;
 mod media;
 mod ops;
+pub(crate) use ops::{EnumEqualsMemo, equals_without_driver};
 mod ops_bitwise;
 mod ops_math;
 mod prompt;
@@ -54,6 +55,9 @@ pub use spawn::{
 };
 mod stack_trace;
 mod string;
+mod sync;
+pub use sync::MonitorRoot;
+pub(crate) use sync::TaskMonitors;
 mod sys;
 mod time;
 mod toml;
@@ -443,9 +447,10 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                         .map(|(_, resolve)| resolve);
                     match owner {
                         Some(resolve) => match resolve(key) {
-                            Some(native_function) => {
-                                bex_vm_types::FunctionKind::Native(native_function as *const ())
-                            }
+                            Some(native_function) => bex_vm_types::FunctionKind::Native(
+                                native_function as *const (),
+                                resolve(&format!("{key}$local")).map(|local| local as *const ()),
+                            ),
                             // A VM-owned key with no native is a build error,
                             // not a deferral: the package's generated trait
                             // requires an implementation for every
@@ -460,7 +465,9 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                         None => bex_vm_types::FunctionKind::NativeUnresolved,
                     }
                 }
-                bex_vm_types::FunctionKind::Native(ptr) => bex_vm_types::FunctionKind::Native(ptr),
+                bex_vm_types::FunctionKind::Native(ptr, local) => {
+                    bex_vm_types::FunctionKind::Native(ptr, local)
+                }
             };
             Object::Function(Box::new(bex_vm_types::Function {
                 identity: function.identity,

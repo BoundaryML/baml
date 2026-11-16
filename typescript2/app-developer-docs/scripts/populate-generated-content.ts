@@ -35,6 +35,7 @@ async function main(): Promise<void> {
       'organization',
       'database',
       'branch',
+      'expect-version',
     ],
     ['dry-run', 'production'],
   );
@@ -56,6 +57,15 @@ async function main(): Promise<void> {
     releasedAt: requireOperatorValue(parsedArguments, 'released-at'),
     sourceCommit: requireOperatorValue(parsedArguments, 'source-commit'),
   });
+  // The version comes from the binary's own `baml --version`, read by the same
+  // parser the CLI reference uses, so a release checks the toolchain it
+  // documents before anything is written.
+  const expectedVersion = parsedArguments.values.get('expect-version');
+  if (expectedVersion !== undefined && release.version !== expectedVersion) {
+    throw new Error(
+      `The selected baml binary runs toolchain ${release.version}, expected ${expectedVersion}.`,
+    );
+  }
 
   const bundle = projectDocumentRelease(release);
   const generationSummary = {

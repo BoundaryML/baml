@@ -30,7 +30,7 @@ final class TestMain: XCTestCase {
     }
 
     func test_main_root_foo_reachable() throws {
-        let f = try Baml.round_trip_foo(f: Baml.Foo(v: 3))
+        let f = try Baml.round_trip_foo_sync(f: Baml.Foo(v: 3))
         XCTAssertEqual(f, Baml.Foo(v: 3))
     }
 
