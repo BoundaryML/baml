@@ -22,6 +22,7 @@ use baml_sdkgen_types::{Symbol, SymbolPool, Ty};
 
 use crate::{
     analyze::{Analysis, ClassShape},
+    host_types::narrow_argument,
     idents,
 };
 
@@ -109,10 +110,11 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
     for (name, symbol) in symbols {
         let leaf = analysis.names.module_path(name).to_vec();
         let mut tys: Vec<&Ty> = Vec::new();
+        let mut argument_tys: Vec<Ty> = Vec::new();
         let mut throws_tys: Vec<&Ty> = Vec::new();
         match symbol {
             Symbol::Function(function) => {
-                tys.extend(function.arguments.iter().map(|a| &a.ty));
+                argument_tys.extend(function.arguments.iter().map(|a| narrow_argument(&a.ty)));
                 tys.push(&function.return_type);
                 if let Some(throws) = &function.throws {
                     throws_tys.push(throws);
@@ -127,7 +129,7 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
                 // the class's `impl` block translate against this same
                 // leaf's registry.
                 for method in class.static_methods.iter().chain(&class.instance_methods) {
-                    tys.extend(method.arguments.iter().map(|a| &a.ty));
+                    argument_tys.extend(method.arguments.iter().map(|a| narrow_argument(&a.ty)));
                     tys.push(&method.return_type);
                     if let Some(throws) = &method.throws {
                         throws_tys.push(throws);
@@ -142,7 +144,7 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
                 tys.push(&alias.resolves_to);
             }
         }
-        for ty in tys {
+        for ty in tys.into_iter().chain(&argument_tys) {
             register_unions_in(ty, &leaf, analysis, &mut registry);
         }
         for ty in throws_tys {

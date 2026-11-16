@@ -50,6 +50,8 @@ const BAML_BRIDGE_DEP: &str = r#"{ path = "../../../../../sdks/rust/bridge_rust"
 /// suite, not of the generated SDK itself.
 const MANIFEST_EXTRA: &str = r#"[dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time", "sync", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 "#;
 
 /// Whether a ported test file is compiled into the fixture's test suite.
@@ -73,6 +75,7 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     ),
     ("function_calls", "test_main.rs", Gate::Now),
     ("function_calls", "test_invocation.rs", Gate::Now),
+    ("function_calls", "test_tracing_layer.rs", Gate::Now),
     ("function_calls", "test_cancellation.rs", Gate::Now),
     (
         "function_calls",

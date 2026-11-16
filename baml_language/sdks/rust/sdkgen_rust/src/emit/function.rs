@@ -282,7 +282,8 @@ fn emit_binding(
             });
             continue;
         }
-        let ty = translate_ty::translate(&arg.ty, &gctx)
+        let host_ty = crate::host_types::narrow_argument(&arg.ty);
+        let ty = translate_ty::translate(&host_ty, &gctx)
             .map_err(|u| skip(format!("argument `{arg_name}`: {}", u.reason)))?;
         let slot =
             declared(&arg.ty).map_err(|u| skip(format!("argument `{arg_name}`: {}", u.reason)))?;
@@ -303,12 +304,12 @@ fn emit_binding(
             // Union-typed parameters accept anything convertible into the
             // synthesized enum, so call sites pass bare arm values
             // through the per-arm `From` impls.
-            if is_multi_arm_union(&arg.ty) {
+            if is_multi_arm_union(&host_ty) {
                 params.push(quote! { #param: impl ::std::convert::Into<#ty> });
                 converts.push(quote! {
                     let #param: #ty = ::std::convert::Into::into(#param);
                 });
-            } else if matches!(&arg.ty, baml_sdkgen_types::Ty::Class(..)) {
+            } else if matches!(&host_ty, baml_sdkgen_types::Ty::Class(..)) {
                 // Encoding only reads the argument, so class-typed
                 // parameters accept `value` or `&value` (or an `Arc`/`Box`
                 // of it): a caller reusing one value across calls does not

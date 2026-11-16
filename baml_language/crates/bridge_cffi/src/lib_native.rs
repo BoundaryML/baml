@@ -220,6 +220,60 @@ pub unsafe extern "C" fn trace_selection_ffi(
     }
 }
 
+/// Begin a host span from a borrowed JSON request.
+/// # Safety
+/// `request` must be readable for `len` bytes and the outputs writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn host_span_begin(
+    request: *const u8,
+    len: usize,
+    out_span: *mut u64,
+    out_state: *mut u64,
+) -> BamlCffiStatus {
+    if request.is_null() || out_span.is_null() || out_state.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    let request = unsafe { std::slice::from_raw_parts(request, len) };
+    match std::panic::catch_unwind(|| crate::host_instrumentation::begin_span(request)) {
+        Ok(Ok((span, state))) => {
+            unsafe {
+                out_span.write(span);
+                out_state.write(state);
+            }
+            BamlCffiStatus::Ok
+        }
+        Ok(Err(_)) => BamlCffiStatus::TypeMismatch,
+        Err(_) => BamlCffiStatus::InternalError,
+    }
+}
+
+/// End a host span with an optional borrowed tagged capture value.
+/// # Safety
+/// `value` must be null or readable for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn host_span_finish(
+    span: u64,
+    end: u32,
+    value: *const u8,
+    len: usize,
+) -> BamlCffiStatus {
+    let value = (!value.is_null()).then(|| unsafe { std::slice::from_raw_parts(value, len) });
+    let Some(value) = value.map_or(Some(None), |value| {
+        std::str::from_utf8(value).ok().map(Some)
+    }) else {
+        return BamlCffiStatus::TypeMismatch;
+    };
+    let finished = std::panic::catch_unwind(|| {
+        crate::host_instrumentation::HostSpanEnd::try_from(end)
+            .and_then(|end| crate::host_instrumentation::finish_span(span, end, value))
+    });
+    match finished {
+        Ok(Ok(())) => BamlCffiStatus::Ok,
+        Ok(Err(_)) => BamlCffiStatus::InvalidHandle,
+        Err(_) => BamlCffiStatus::InternalError,
+    }
+}
+
 /// Inspect a retained callback context without executing a BAML call.
 /// # Safety
 /// The output must point to writable storage and remains untouched on error.

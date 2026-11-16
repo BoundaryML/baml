@@ -167,6 +167,14 @@ pub type BamlTraceSelectionFn = unsafe extern "C" fn(
     out_selection: *mut Buffer,
     out_reservation: *mut u64,
 ) -> BamlCffiStatus;
+pub type BamlHostSpanBeginFn = unsafe extern "C" fn(
+    request: *const u8,
+    len: usize,
+    out_span: *mut u64,
+    out_state: *mut u64,
+) -> BamlCffiStatus;
+pub type BamlHostSpanFinishFn =
+    unsafe extern "C" fn(span: u64, end: u32, value: *const u8, len: usize) -> BamlCffiStatus;
 pub type BamlInvocationContextFn =
     unsafe extern "C" fn(key: u64, out_context: *mut Buffer) -> BamlCffiStatus;
 
@@ -335,6 +343,15 @@ pub struct BamlApiV1 {
     /// implies. Nothing is read. Ownership and output rules match
     /// `media_from_url`.
     pub media_from_file_content: BamlMediaFromFileContentFn,
+    /// Begin a host-owned span from a borrowed JSON request. The caller owns
+    /// the two returned handles: the span and the invocation state work inside
+    /// it inherits. Shutdown does not wait for an open span.
+    pub host_span_begin: BamlHostSpanBeginFn,
+    /// End a host span once: 0 makes no claim, then 1 ok, 2 errored,
+    /// 3 cancelled, 4 panicked. `value` is a borrowed tagged capture or null;
+    /// a span making no claim ignores it.
+    /// The caller still releases the span handle.
+    pub host_span_finish: BamlHostSpanFinishFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
@@ -372,6 +389,8 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     invocation_context: crate::invocation_context_ffi,
     media_name: crate::baml_media_name,
     media_from_file_content: crate::baml_media_from_file_content,
+    host_span_begin: crate::host_span_begin,
+    host_span_finish: crate::host_span_finish,
 };
 
 /// Return the immutable version-1 BAML C API function table.

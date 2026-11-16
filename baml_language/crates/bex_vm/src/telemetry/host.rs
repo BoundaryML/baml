@@ -231,4 +231,28 @@ impl TelemetryState {
         self.thread.active_id = frame.saved_parent_id;
         self.thread.active_call_path = frame.saved_call_path;
     }
+
+    /// Host exit that makes no claim about the outcome, as a manual span's
+    /// `close` does. Such a completion carries no value: readers reject one.
+    pub fn close_host(&mut self, frame: FrameTelemetry) {
+        let exited_at = self.clock.read();
+        let call_path = self.thread.active_call_path;
+        if let Some(id) = frame.span_id {
+            self.write_span(SpanRecord::ManualSpanCompletion(Box::new(
+                btel_records::ManualSpanCompletion {
+                    await_time: frame.await_duration,
+                    id,
+                    parent_id: frame.saved_parent_id,
+                    call_path,
+                    entered_at: frame.entered_at,
+                    exited_at,
+                    outcome: None,
+                    requires_announcement: frame.flags & REQUIRES_ANNOUNCEMENT != 0,
+                    captured_value: None,
+                },
+            )));
+        }
+        self.thread.active_id = frame.saved_parent_id;
+        self.thread.active_call_path = frame.saved_call_path;
+    }
 }

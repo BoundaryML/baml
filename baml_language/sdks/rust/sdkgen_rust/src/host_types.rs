@@ -1,4 +1,7 @@
-use baml_sdkgen_types::{CallableParam, Class, Function, Symbol, SymbolPool, Ty};
+use baml_base::qualified_name::BAML_JSON_JSON;
+use baml_sdkgen_types::{CallableParam, Class, Function, Name, Symbol, SymbolPool, Ty};
+
+const REFLECT_ANY_FUNCTION: &str = "reflect.AnyFunction";
 
 pub(crate) fn lower_unrepresentable_literals(pool: &SymbolPool) -> SymbolPool {
     pool.iter()
@@ -25,6 +28,39 @@ fn lower_function(function: &Function) -> Function {
     let mut function = function.clone();
     function.throws = function.throws.as_ref().map(widen_literals);
     function
+}
+
+/// The Rust type a host fills a parameter with: the part of the declared type
+/// it can supply, with `unknown` taken as JSON and a function-value arm dropped.
+/// The argument is still stated under the declared type, which is what the
+/// engine checks it against. Dropping an arm from a union that keeps several
+/// would make a generated enum disagree with its stated arms, so such a union
+/// stays as declared and its function skips.
+pub(crate) fn narrow_argument(ty: &Ty) -> Ty {
+    match ty {
+        Ty::Unknown => Ty::TypeAlias(Name::from_dotted_path(BAML_JSON_JSON)),
+        Ty::List(inner) => Ty::List(Box::new(narrow_argument(inner))),
+        Ty::Map { key, value } => Ty::Map {
+            key: key.clone(),
+            value: Box::new(narrow_argument(value)),
+        },
+        Ty::Union(members) => {
+            let kept: Vec<_> = members
+                .iter()
+                .filter(|member| !is_any_function(member))
+                .collect();
+            let arms = kept.iter().filter(|member| ***member != Ty::Null).count();
+            if kept.is_empty() || (kept.len() < members.len() && arms > 1) {
+                return ty.clone();
+            }
+            Ty::Union(kept.into_iter().map(narrow_argument).collect()).canonicalize()
+        }
+        _ => ty.clone(),
+    }
+}
+
+fn is_any_function(ty: &Ty) -> bool {
+    matches!(ty, Ty::Interface(name, ..) if name == &Name::from_dotted_path(REFLECT_ANY_FUNCTION))
 }
 
 fn widen_literals(ty: &Ty) -> Ty {

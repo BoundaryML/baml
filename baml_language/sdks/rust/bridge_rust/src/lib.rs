@@ -36,6 +36,8 @@ pub mod runtime;
 mod spec;
 #[cfg(test)]
 pub(crate) mod test_support;
+#[cfg(feature = "tracing")]
+pub mod tracing_layer;
 mod version;
 #[doc(hidden)]
 pub mod wire;

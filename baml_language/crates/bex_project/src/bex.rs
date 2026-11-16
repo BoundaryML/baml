@@ -28,6 +28,22 @@ pub trait Bex: Send + Sync {
         ))
     }
 
+    /// Like `begin_host_invocation`, but shutdown does not wait for the span.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn begin_detached_host_invocation(
+        self: Arc<Self>,
+        definition: &crate::HostDefinition,
+        inherited: Option<&crate::InheritedInvocationState>,
+        options: &crate::TraceOptionsData,
+        caller: &crate::HostCallSite,
+        inputs: Option<&crate::HostCapture>,
+    ) -> Result<crate::HostInvocation, RuntimeError> {
+        let _ = (definition, inherited, options, caller, inputs);
+        Err(RuntimeError::Other(
+            "runtime does not support host instrumentation".into(),
+        ))
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     async fn begin_stream_invocation(
         self: Arc<Self>,
@@ -124,6 +140,21 @@ impl Bex for BexEngine {
     ) -> Result<crate::HostInvocation, RuntimeError> {
         BexEngine::begin_host_invocation(&self, definition, inherited, options, caller, inputs)
             .map_err(RuntimeError::from)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn begin_detached_host_invocation(
+        self: Arc<Self>,
+        definition: &crate::HostDefinition,
+        inherited: Option<&crate::InheritedInvocationState>,
+        options: &crate::TraceOptionsData,
+        caller: &crate::HostCallSite,
+        inputs: Option<&crate::HostCapture>,
+    ) -> Result<crate::HostInvocation, RuntimeError> {
+        BexEngine::begin_detached_host_invocation(
+            &self, definition, inherited, options, caller, inputs,
+        )
+        .map_err(RuntimeError::from)
     }
 
     #[cfg(not(target_arch = "wasm32"))]

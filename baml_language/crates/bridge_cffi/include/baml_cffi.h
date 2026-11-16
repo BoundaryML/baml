@@ -348,6 +348,16 @@ typedef BamlCffiStatus (*BamlMediaFromFileContentFn)(int32_t media_kind,
                                                      uint64_t *out_key,
                                                      int32_t *out_handle_type);
 
+typedef BamlCffiStatus (*BamlHostSpanBeginFn)(const uint8_t *request,
+                                              size_t len,
+                                              uint64_t *out_span,
+                                              uint64_t *out_state);
+
+typedef BamlCffiStatus (*BamlHostSpanFinishFn)(uint64_t span,
+                                               uint32_t end,
+                                               const uint8_t *value,
+                                               size_t len);
+
 /**
  * First version of the shared BAML C API.
  *
@@ -582,6 +592,19 @@ typedef struct BamlApiV1 {
    * `media_from_url`.
    */
   BamlMediaFromFileContentFn media_from_file_content;
+  /**
+   * Begin a host-owned span from a borrowed JSON request. The caller owns
+   * the two returned handles: the span and the invocation state work inside
+   * it inherits. Shutdown does not wait for an open span.
+   */
+  BamlHostSpanBeginFn host_span_begin;
+  /**
+   * End a host span once: 0 makes no claim, then 1 ok, 2 errored,
+   * 3 cancelled, 4 panicked. `value` is a borrowed tagged capture or null;
+   * a span making no claim ignores it.
+   * The caller still releases the span handle.
+   */
+  BamlHostSpanFinishFn host_span_finish;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);
@@ -621,10 +644,10 @@ struct BamlBuffer initialize_runtime_from_blob_with_metadata(const uint8_t *byte
 }  // extern "C"
 #endif  // __cplusplus
 
-/* ABI revision 4 requires every operation through media_from_file_content. */
+/* ABI revision 5 requires every operation through host_span_finish. */
 #define BAML_API_V1_MIN_SIZE \
-  (offsetof(BamlApiV1, media_from_file_content) + \
-   sizeof(((BamlApiV1 *)0)->media_from_file_content))
+  (offsetof(BamlApiV1, host_span_finish) + \
+   sizeof(((BamlApiV1 *)0)->host_span_finish))
 
 /*
  * Validate the complete revision-4 table while permitting appended fields.
