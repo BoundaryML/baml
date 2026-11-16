@@ -788,13 +788,11 @@ impl NativeEntry {
     #[must_use]
     pub fn of(b: &NativeBuiltin, package: &str) -> Self {
         let (modules, name) = entry_segments(&b.path, package);
-        let mut path = format!("bex_vm::package_{package}::builtins");
-        for module in &modules {
-            path.push_str("::");
-            path.push_str(module);
-        }
-        path.push_str("::");
-        path.push_str(&name);
+        let path = std::iter::once(format!("bex_vm::package_{package}::builtins"))
+            .chain(modules)
+            .chain([name])
+            .collect::<Vec<_>>()
+            .join("::");
         Self {
             path,
             arity: entry_params(b).len(),
@@ -868,9 +866,6 @@ fn emit_entry_module(out: &mut String, root: &NamespaceNode, package: &str) {
         package,
         &package_trait_name(package),
     );
-    let impl_ty = format!("Package{}Impl", to_pascal_case(package));
-    let impl_ty = impl_ty.as_str();
-
     out.push_str(
         "/// One plain entry point per builtin, at its BAML path: `baml.Array.push` is\n\
          /// `builtins::Array::push`. Each is the builtin's `__entry_*`, whose\n\
@@ -880,7 +875,7 @@ fn emit_entry_module(out: &mut String, root: &NamespaceNode, package: &str) {
         "#[allow(non_snake_case, clippy::used_underscore_items, clippy::too_many_arguments)]\n",
     );
     out.push_str("pub mod builtins {\n    #[allow(unused_imports)]\n    use super::*;\n");
-    emit_entry_tree(out, &modules, &[], impl_ty, 1);
+    emit_entry_tree(out, &modules, &[], 1);
     out.push_str("}\n");
 }
 
@@ -933,14 +928,12 @@ fn push_entry(
 ) {
     let (module, name) = entry_segments(&b.path, package);
     let params = entry_params(b);
-    let signature = params.iter().fold(String::new(), |mut signature, param| {
-        write!(signature, ", {param}: Value").unwrap();
-        signature
-    });
+    let signature = entry_signature(b);
     let call_args = params.iter().fold(String::new(), |mut args, param| {
         write!(args, ", {param}").unwrap();
         args
     });
+    let impl_ty = format!("Package{}Impl", to_pascal_case(package));
     let body = modules.entry(module).or_default();
     // A builtin that cannot pause returns its body's `Result` itself; one
     // that can returns `NativeCallResult` from its entry.
@@ -960,7 +953,7 @@ fn push_entry(
         writeln!(
             body,
             "/// `{path}`{doc}\n#[inline]\npub fn {name}{suffix}(vm: &mut BexVm{signature}) -> {result_ty} {{\n    \
-             <{{IMPL}} as {trait_name}>::{call}\n}}",
+             <{impl_ty} as {trait_name}>::{call}\n}}",
             path = b.path,
         )
         .unwrap();
@@ -980,18 +973,15 @@ fn emit_entry_tree(
     out: &mut String,
     modules: &BTreeMap<Vec<String>, String>,
     prefix: &[String],
-    impl_ty: &str,
     depth: usize,
 ) {
     let indent = "    ".repeat(depth);
-    if let Some(body) = modules.get(prefix) {
-        for line in body.replace("{IMPL}", impl_ty).lines() {
-            if line.is_empty() {
-                out.push('\n');
-            } else {
-                writeln!(out, "{indent}{line}").unwrap();
-            }
-        }
+    for line in modules
+        .get(prefix)
+        .into_iter()
+        .flat_map(|body| body.lines())
+    {
+        writeln!(out, "{indent}{line}").unwrap();
     }
     let children: std::collections::BTreeSet<&String> = modules
         .keys()
@@ -1006,7 +996,7 @@ fn emit_entry_tree(
             "{indent}pub mod {child} {{\n{indent}    #[allow(unused_imports)]\n{indent}    use super::*;"
         )
         .unwrap();
-        emit_entry_tree(out, modules, &path, impl_ty, depth + 1);
+        emit_entry_tree(out, modules, &path, depth + 1);
         writeln!(out, "{indent}}}").unwrap();
     }
 }
@@ -1369,10 +1359,13 @@ fn emit_thread_local_twin(
         ),
     ]
     .iter()
-    .fold(glue_work(trait_name, method_name, b), |body, (locked, local)| {
-        replaced += body.matches(locked).count();
-        body.replace(locked, local)
-    });
+    .fold(
+        glue_work(trait_name, method_name, b),
+        |body, (locked, local)| {
+            replaced += body.matches(locked).count();
+            body.replace(locked, local)
+        },
+    );
     assert_eq!(
         replaced, 1,
         "baml codegen error: {} has a thread-local twin but its glue reads the receiver {replaced} times",
@@ -1507,7 +1500,6 @@ fn glue_work(trait_name: &str, method_name: &str, b: &NativeBuiltin) -> String {
     }
 
     let fallible = is_fallible(b);
-
 
     emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
 

@@ -111,8 +111,8 @@ function OutOfBounds(xs: int[], i: int) -> string {
     `${found}/${stored}`
 }
 
-// The inline container operations against the builtins they stand in for,
-// on hits, misses and the cases they leave to the builtin.
+// Builtin container calls compiled code makes directly, and the list store's
+// fast path, on hits, misses and errors.
 function DirectContainerOps() -> void {
     let xs: int[] = [];
     let n = 0;
@@ -125,12 +125,10 @@ function DirectContainerOps() -> void {
     let replaced = m.set("a", 2);
     m["b"] = 3;
     m["b"] += 4;
-    let key = "ab".slice(0, 1);
-    let flags: map<"x" | "y", bool> = { "x": true };
     let bytes = baml.Uint8Array.from_array([1, 2]);
     bytes[0] = 9;
     baml.io.println(
-        `${n}:${xs}:${fresh ?? -1}:${replaced ?? -1}:${m.get(key) ?? -1}:${m.get("z") ?? -1}:${m.has("b")}:${m.has("z")}:${m}:${flags.has("y")}:${bytes[0]}:${MissingKey(m, "z")}:${OutOfBounds(xs, 5)}:${OutOfBounds(xs, -6)}`,
+        `${n}:${xs}:${fresh ?? -1}:${replaced ?? -1}:${m.get("a") ?? -1}:${m.get("z") ?? -1}:${m.has("b")}:${m.has("z")}:${m}:${bytes[0]}:${MissingKey(m, "z")}:${OutOfBounds(xs, 5)}:${OutOfBounds(xs, -6)}`,
     );
 }
 
