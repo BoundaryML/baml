@@ -255,8 +255,7 @@ fn packed_modes_write_to_user_home_even_when_launched_in_another_project() {
     std::fs::create_dir(&launch).unwrap();
     common::write_project(&source, "function main() -> int { 9 }\n");
     common::write_project(&launch, "function main() -> int { 42 }\n");
-    // Packed artifacts only accept telemetry-mode overrides explicitly allowed
-    // by the publisher. This fixture tests recording roots with that opt-in.
+    // Use an explicit standard recording binding while testing recording roots.
     std::fs::OpenOptions::new()
         .append(true)
         .open(source.join("baml.toml"))
@@ -288,6 +287,7 @@ BAML_TELEMETRY = "BAML_TELEMETRY"
             .current_dir(&launch)
             .env("HOME", &home)
             .env("USERPROFILE", &home)
+            .env_remove("BAML_HOME")
             .env_remove("BOUNDARY_API_KEY")
             .env("BAML_TELEMETRY", "medium");
         if index == 1 {
