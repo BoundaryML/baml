@@ -942,8 +942,8 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                             // is the only local typed as one, which is what
                             // array iteration is recognised by
                             // (`escape::array_walks`).
-                            && !(matches!(body.locals[dest.0].ty, crate::RuntimeTy::List(_))
-                                && !matches!(body.locals[src.0].ty, crate::RuntimeTy::List(_))) =>
+                            && (!matches!(body.locals[dest.0].ty, crate::RuntimeTy::List(_))
+                                || matches!(body.locals[src.0].ty, crate::RuntimeTy::List(_))) =>
                     {
                         // A bare captured parameter would be its cell pointer,
                         // which no `Use` reads.
