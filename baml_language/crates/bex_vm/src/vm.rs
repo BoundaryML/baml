@@ -210,6 +210,33 @@ pub enum BoundCheck {
     NotImplemented,
 }
 
+/// Whether two realized types are the same type naming the same declaration
+/// objects. Equality alone compares a head by its tag, which a head that has
+/// not been bound to its declaration shares with one that has.
+fn same_realized_ty(left: &bex_vm_types::RealizedTy, right: &bex_vm_types::RealizedTy) -> bool {
+    if left != right {
+        return false;
+    }
+    let mut declarations: SmallVec<[HeapPtr; 4]> = SmallVec::new();
+    left.visit_heads(&mut |head| declarations.push(head.ptr()));
+    let mut at = 0;
+    let mut same = true;
+    right.visit_heads(&mut |head| {
+        same &= declarations.get(at) == Some(&head.ptr());
+        at += 1;
+    });
+    same && at == declarations.len()
+}
+
+/// How a native call ended.
+enum NativeCalled {
+    /// It returned, and its result is on the stack.
+    Returned,
+    /// It asked for a callback, which has been dispatched: the state to
+    /// hand the engine, if the dispatch produced one.
+    Dispatched(Option<VmExecState>),
+}
+
 /// The type arguments a call passes, realized. A type argument carries the
 /// declarations it names in its own heads, so nothing rides beside it: a
 /// `type` value has no identity of its own, and `LoadType<T>` builds one from
@@ -576,6 +603,8 @@ pub(crate) mod tests {
             compiled: super::compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
             static_load_type_cache: FxHashMap::default(),
+            slot_load_type_cache: FxHashMap::default(),
+            spare_type_args: Vec::new(),
             static_virtual_call_cache: FxHashMap::default(),
             impl_cache: std::cell::RefCell::default(),
             telemetry: Some(TelemetryState::new_root(
@@ -1704,6 +1733,19 @@ pub struct BexVm {
     /// Fx-hashed: the keys are function addresses and constant indexes, never
     /// program input.
     static_load_type_cache: FxHashMap<(usize, usize), Weak>,
+    /// The same, for a `LoadType` constant that is one frame slot (`T`) in a
+    /// static function: the type object last built at that site, with the
+    /// slot's type it was built from. A frame whose slot holds that type
+    /// again takes the object instead of building an equal one, so a loop in
+    /// a generic function that passes `T` on every trip builds it once. Only
+    /// frames that bind no runtime declaration use it, so the kept type names
+    /// compile-time declarations alone and needs no rooting.
+    slot_load_type_cache: FxHashMap<(usize, usize), (bex_vm_types::RealizedTy, Weak)>,
+    /// Emptied type-argument buffers, kept for their capacity: a call that
+    /// passes type arguments takes one for `pending_call_type_args` and
+    /// returns it when the call is over. Always empty vectors, so nothing
+    /// here is a root.
+    spare_type_args: Vec<Vec<bex_vm_types::RealizedTy>>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
@@ -2449,6 +2491,8 @@ impl BexVm {
             compiled: compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
             static_load_type_cache: FxHashMap::default(),
+            slot_load_type_cache: FxHashMap::default(),
+            spare_type_args: Vec::new(),
             static_virtual_call_cache: FxHashMap::default(),
             impl_cache: std::cell::RefCell::default(),
             telemetry,
@@ -3166,41 +3210,73 @@ impl BexVm {
     }
 
     fn take_type_args(&mut self, start: usize, count: usize) -> Result<TakenTypeArgs, VmError> {
+        let mut type_args = TakenTypeArgs {
+            tys: Vec::with_capacity(count),
+        };
+        self.take_type_args_into(start, count, &mut type_args.tys)?;
+        Ok(type_args)
+    }
+
+    /// Move the `count` type operands at `start` off the stack, appending the
+    /// type each denotes to `tys`.
+    fn take_type_args_into(
+        &mut self,
+        start: usize,
+        count: usize,
+        tys: &mut Vec<bex_vm_types::RealizedTy>,
+    ) -> Result<(), VmError> {
+        self.read_type_args_into(start, count, tys)?;
+        if count != 0 {
+            // The values above the operands move down over them.
+            let len = self.stack.len();
+            self.stack.copy_within(start + count..len, start);
+            self.stack.truncate(len - count);
+        }
+        Ok(())
+    }
+
+    /// Append to `tys` the type each of the `count` type operands at `start`
+    /// denotes, leaving the operands on the stack.
+    fn read_type_args_into(
+        &mut self,
+        start: usize,
+        count: usize,
+        tys: &mut Vec<bex_vm_types::RealizedTy>,
+    ) -> Result<(), VmError> {
         let end = start
             .checked_add(count)
             .filter(|end| *end <= self.stack.len())
             .ok_or(VmInternalError::NotEnoughItemsOnStack(count))?;
-        if count == 0 {
-            return Ok(TakenTypeArgs::default());
-        }
-        // Every type-operand position's contract is
-        // `reflect.Type | reflect.TypeView`; a kind view converts to the
-        // `type` value it wraps, so everything downstream sees `Object::Type`
-        // only. This is the same conversion `type_operand_value` applies (and
-        // is idempotent with it): normalizing the slots up front is what lets
-        // the all-static scan below read them without a fallible call, and
-        // what keeps a view from reaching the fast path's `Object::Type`
-        // assumption.
         for slot in start..end {
             let value = self.stack[StackIndex::from_raw(slot)];
-            if let Some(ty_value) =
-                crate::package_reflect::type_kinds::as_view_type_value(self, value)
+            // A `LoadType` operand is a `type` value already, which is every
+            // operand but one a program built as a kind view.
+            if let Some(ptr) = value.as_object_ptr()
+                && let Object::Type(type_value) = self.get_object(ptr)
             {
-                self.stack[StackIndex::from_raw(slot)] = ty_value;
+                tys.push(type_value.ty.clone());
+            } else {
+                tys.push(self.type_operand_value(value)?.ty);
             }
         }
-        let mut type_args = TakenTypeArgs {
-            tys: Vec::with_capacity(count),
-        };
-        for slot in start..end {
-            let value = self.stack[StackIndex::from_raw(slot)];
-            type_args.tys.push(self.type_operand_value(value)?.ty);
+        Ok(())
+    }
+
+    /// An empty buffer for a call's type arguments, with the capacity of an
+    /// earlier call's where one is spare.
+    fn spare_type_args(&mut self) -> Vec<bex_vm_types::RealizedTy> {
+        self.spare_type_args.pop().unwrap_or_default()
+    }
+
+    /// Give back a buffer [`Self::spare_type_args`] handed out.
+    fn recycle_type_args(&mut self, mut type_args: Vec<bex_vm_types::RealizedTy>) {
+        // Nested calls each hold one buffer; a few cover any realistic depth
+        // of natives calling back into natives.
+        const SPARE_TYPE_ARG_BUFFERS: usize = 8;
+        type_args.clear();
+        if type_args.capacity() != 0 && self.spare_type_args.len() < SPARE_TYPE_ARG_BUFFERS {
+            self.spare_type_args.push(type_args);
         }
-        drop(
-            self.stack
-                .drain(StackIndex::from_raw(start)..StackIndex::from_raw(end)),
-        );
-        Ok(type_args)
     }
 
     fn take_type_args_below_values(
@@ -7693,90 +7769,16 @@ impl BexVm {
                 // The explicit type parameters document exactly what we're doing.
                 let func = unsafe { std::mem::transmute::<*const (), NativeFunction>(func_ptr) };
 
-                // Native functions should manage their own gc roots (or never yield).
-                // They have no data on the stack.
-                // SmallVec avoids heap allocation for calls with ≤4 args (the common case).
-                let args: SmallVec<[Value; 4]> = self.stack.drain(locals_offset..).collect();
-
-                // A native reads its type args through
-                // `current_call_type_args()`. The direct-call path sets them
-                // from LoadType operands; an indirect call through a value
-                // carries them on the value (`let f = baml.json.decode<User>`
-                // on a `GenericFunction`, `let g = baml.json.decode; g<User>`
-                // on a closure, `xs.map` on a bound method whose receiver
-                // realized `T` and whose specialization appended `U, E`).
-                let restore_pending = !carried_type_args.is_empty();
-                if restore_pending {
-                    self.save_call_types();
-                    self.pending_call_type_args = carried_type_args.to_vec();
-                }
-                let native_result = func(self, &args);
-                if restore_pending {
-                    let _ = self.restore_call_types();
-                }
-                self.settle();
-
-                // Run Rust native function, converting NativeCallResult → VmError.
-                match native_result {
-                    NativeCallResult::Done(v) => {
-                        self.push_stack(v)?;
-                    }
-                    NativeCallResult::Error(e) => {
-                        return Err(self.native_error_to_vm_error(e));
-                    }
-                    NativeCallResult::YieldToCall {
-                        callee,
-                        args: mut callback_args,
-                        type_args: callback_type_args,
-                        continuation,
-                    } => {
-                        // Push a Native continuation frame, then dispatch the
-                        // callback through ECFLO. The exec loop's continuation
-                        // handler (at the top of the loop) will invoke the
-                        // continuation when the callback completes.
-                        self.reserve_call_frame()?;
-                        self.frames.push_reserved(Frame::Native(NativeFrame {
-                            function: callee_ptr,
-                            continuation,
-                            bytecode_caller: self.level_of(self.bytecode_caller(*frame_idx)),
-                        }));
-
-                        // If callee is a BoundMethod, insert receiver into args.
-                        let real_callee =
-                            self.resolve_bound_method_callee(callee, &mut callback_args)?;
-
-                        let arg_count = callback_args.len();
-                        let cb_locals = StackIndex::from_raw(self.stack.len());
-                        self.extend_stack(callback_args)?;
-
-                        let result = self.execute_call_from_locals_offset_with_type_args(
-                            real_callee,
-                            cb_locals,
-                            arg_count,
-                            CallOptions {
-                                type_args: &callback_type_args,
-                            },
-                            frame_idx,
-                            function,
-                        );
-
-                        // Update *frame_idx to point at the new topmost frame.
-                        // Required so the caller's tight inner-dispatch loop
-                        // detects the frame change (the pushed Native
-                        // continuation frame for the outer native that
-                        // yielded) and breaks out to let exec_compact's
-                        // continuation handler run it.  Without this, when the
-                        // recursive callback was itself a Native that returned
-                        // Done synchronously (no frame_idx update from the
-                        // recursion), the inner loop would continue stepping
-                        // the caller's bytecode with a stale Native frame on
-                        // top — eventually reading past the caller's code end.
-                        if !self.frames.is_empty() {
-                            *frame_idx = self.frames.len() - 1;
-                        }
-
-                        return result;
-                    }
+                if let NativeCalled::Dispatched(state) = self.call_native(
+                    func,
+                    callee_ptr,
+                    locals_offset.raw(),
+                    locals_offset.raw(),
+                    carried_type_args,
+                    frame_idx,
+                    function,
+                )? {
+                    return Ok(state);
                 }
             }
 
@@ -7973,6 +7975,112 @@ impl BexVm {
         Ok(None)
     }
 
+    /// Run the native `func`, the function of the callable `callee_ptr`, on
+    /// the values from `args_offset` to the top of the stack. The stack is
+    /// cut back to `result_offset`, at or below the values, before the call;
+    /// then the result is pushed, or the callback the native asked for is
+    /// entered with the native's continuation frame below it.
+    ///
+    /// A native reads its type arguments through `current_call_type_args()`.
+    /// A direct call has set them from its `LoadType` operands; a call
+    /// through a value carries them on the value (`let f =
+    /// baml.json.decode<User>` on a `GenericFunction`, `let g =
+    /// baml.json.decode; g<User>` on a closure, `xs.map` on a bound method
+    /// whose receiver realized `T` and whose specialization appended `U, E`),
+    /// and those are `carried_type_args`.
+    fn call_native(
+        &mut self,
+        func: NativeFunction,
+        callee_ptr: HeapPtr,
+        args_offset: usize,
+        result_offset: usize,
+        carried_type_args: &[bex_vm_types::RealizedTy],
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<NativeCalled, VmError> {
+        // Native functions should manage their own gc roots (or never yield).
+        // They have no data on the stack.
+        // SmallVec avoids heap allocation for calls with ≤4 args (the common case).
+        let args: SmallVec<[Value; 4]> =
+            SmallVec::from_slice(&self.stack.as_slice()[args_offset..]);
+        self.stack.truncate(result_offset);
+
+        let restore_pending = !carried_type_args.is_empty();
+        if restore_pending {
+            let mut carried = self.spare_type_args();
+            carried.extend_from_slice(carried_type_args);
+            self.save_call_types();
+            self.pending_call_type_args = carried;
+        }
+        let native_result = func(self, &args);
+        if restore_pending {
+            let carried = self.restore_call_types();
+            self.recycle_type_args(carried);
+        }
+        self.settle();
+
+        // Run Rust native function, converting NativeCallResult → VmError.
+        match native_result {
+            NativeCallResult::Done(v) => {
+                self.push_stack(v)?;
+                Ok(NativeCalled::Returned)
+            }
+            NativeCallResult::Error(e) => Err(self.native_error_to_vm_error(e)),
+            NativeCallResult::YieldToCall {
+                callee,
+                args: mut callback_args,
+                type_args: callback_type_args,
+                continuation,
+            } => {
+                // Push a Native continuation frame, then dispatch the
+                // callback through ECFLO. The exec loop's continuation
+                // handler (at the top of the loop) will invoke the
+                // continuation when the callback completes.
+                self.reserve_call_frame()?;
+                self.frames.push_reserved(Frame::Native(NativeFrame {
+                    function: callee_ptr,
+                    continuation,
+                    bytecode_caller: self.level_of(self.bytecode_caller(*frame_idx)),
+                }));
+
+                // If callee is a BoundMethod, insert receiver into args.
+                let real_callee = self.resolve_bound_method_callee(callee, &mut callback_args)?;
+
+                let arg_count = callback_args.len();
+                let cb_locals = StackIndex::from_raw(self.stack.len());
+                self.extend_stack(callback_args)?;
+
+                let result = self.execute_call_from_locals_offset_with_type_args(
+                    real_callee,
+                    cb_locals,
+                    arg_count,
+                    CallOptions {
+                        type_args: &callback_type_args,
+                    },
+                    frame_idx,
+                    function,
+                );
+
+                // Update *frame_idx to point at the new topmost frame.
+                // Required so the caller's tight inner-dispatch loop
+                // detects the frame change (the pushed Native
+                // continuation frame for the outer native that
+                // yielded) and breaks out to let exec_compact's
+                // continuation handler run it.  Without this, when the
+                // recursive callback was itself a Native that returned
+                // Done synchronously (no frame_idx update from the
+                // recursion), the inner loop would continue stepping
+                // the caller's bytecode with a stale Native frame on
+                // top — eventually reading past the caller's code end.
+                if !self.frames.is_empty() {
+                    *frame_idx = self.frames.len() - 1;
+                }
+
+                result.map(NativeCalled::Dispatched)
+            }
+        }
+    }
+
     /// Convert a [`VmRustFnError`] into the corresponding [`VmError`].
     fn native_error_to_vm_error(&mut self, err: VmRustFnError) -> VmError {
         match err {
@@ -8001,11 +8109,34 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         // The caller's slice may borrow a frame, so copy before entering the callee.
-        let pending_type_args = options.type_args.to_vec();
+        let mut pending_type_args = self.spare_type_args();
+        pending_type_args.extend_from_slice(options.type_args);
+        self.execute_call_from_locals_offset_with_pending_type_args(
+            callee_ptr,
+            locals_offset,
+            arg_count,
+            pending_type_args,
+            frame_idx,
+            function,
+        )
+    }
+
+    /// [`Self::execute_call_from_locals_offset_with_type_args`] for type
+    /// arguments the caller already owns, in a buffer from
+    /// [`Self::spare_type_args`].
+    fn execute_call_from_locals_offset_with_pending_type_args(
+        &mut self,
+        callee_ptr: HeapPtr,
+        locals_offset: StackIndex,
+        arg_count: usize,
+        pending_type_args: Vec<bex_vm_types::RealizedTy>,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<VmExecState>, VmError> {
         self.save_call_types();
+        self.pending_call_passes_type_args = !pending_type_args.is_empty();
         self.pending_call_type_args = pending_type_args;
         let frames_before = self.frames.len();
-        self.pending_call_passes_type_args = !options.type_args.is_empty();
         let result = self.execute_call_from_locals_offset(
             callee_ptr,
             locals_offset,
@@ -8024,11 +8155,17 @@ impl BexVm {
             && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frames_before)
             && frame.instruction_ptr != crate::compiled_rt::RUNNING
         {
-            frame
-                .type_args
-                .extend_from_slice(&self.pending_call_type_args);
+            if frame.type_args.is_empty() {
+                // Nothing carried: the frame takes the passed arguments whole.
+                std::mem::swap(&mut frame.type_args, &mut self.pending_call_type_args);
+            } else {
+                frame
+                    .type_args
+                    .extend_from_slice(&self.pending_call_type_args);
+            }
         }
-        let _ = self.restore_call_types();
+        let used = self.restore_call_types();
+        self.recycle_type_args(used);
         result
     }
 
@@ -10532,6 +10669,78 @@ impl BexVm {
                             }
                         }
 
+                        // A native function called by name, with the slots it
+                        // declares and no `$trace`: run it here and go on to
+                        // the next instruction. Any other callee, and a site
+                        // whose arguments need reshaping, takes the general
+                        // path below, which this must agree with.
+                        if self.pending_call_trace.is_none()
+                            && let Some(callee_ptr) = callee_value.as_object_ptr()
+                            // SAFETY: as for the bytecode callee above.
+                            && let Object::Function(callee) = unsafe { callee_ptr.get() }
+                            && let FunctionKind::Native(func_ptr, local) = callee.kind
+                            && Self::recorded_call_layout(function, self.cur_pc)
+                                .is_none_or(|layout| callee.argument_layout_is(layout))
+                        {
+                            let func_ptr = match local {
+                                Some(local) if op == OpCode::CallLocal => local,
+                                _ => func_ptr,
+                            };
+                            self.thread_local_call = false;
+                            // SAFETY: as in `execute_call_from_locals_offset`.
+                            let func = unsafe {
+                                std::mem::transmute::<*const (), NativeFunction>(func_ptr)
+                            };
+                            let input_count = callee.arity + ntypeargs;
+                            #[expect(clippy::unnecessary_lazy_evaluations)]
+                            let args_offset =
+                                self.stack.len().checked_sub(input_count).ok_or_else(|| {
+                                    VmInternalError::NotEnoughItemsOnStack(input_count)
+                                })?;
+                            let Frame::Bytecode(caller) = &mut self.frames[*frame_idx] else {
+                                verifier_unreachable!()
+                            };
+                            caller.instruction_ptr = *pc;
+                            caller.faulting_pc = self.cur_pc;
+                            // The native reads exactly the type arguments
+                            // this call passes, so an outer call's must be
+                            // set aside even when it passes none.
+                            let sets_type_args =
+                                ntypeargs != 0 || !self.pending_call_type_args.is_empty();
+                            if sets_type_args {
+                                let mut type_args = self.spare_type_args();
+                                self.read_type_args_into(args_offset, ntypeargs, &mut type_args)?;
+                                self.save_call_types();
+                                self.pending_call_type_args = type_args;
+                            }
+                            // The type operands sit below the values and go
+                            // with them.
+                            let called = self.call_native(
+                                func,
+                                callee_ptr,
+                                args_offset + ntypeargs,
+                                args_offset,
+                                &[],
+                                frame_idx,
+                                function,
+                            );
+                            if sets_type_args {
+                                let type_args = self.restore_call_types();
+                                self.recycle_type_args(type_args);
+                            }
+                            match called? {
+                                NativeCalled::Returned => {
+                                    if self.should_early_yield() {
+                                        return Ok(Some(VmExecState::EarlyYield));
+                                    }
+                                    // The native may have collected.
+                                    runtime_package = self.runtime_package_of(function);
+                                    continue;
+                                }
+                                NativeCalled::Dispatched(state) => return Ok(state),
+                            }
+                        }
+
                         let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
                         let arg_count = match Self::recorded_call_layout(function, self.cur_pc) {
                             Some(layout) => self.remap_call_arguments(layout, callee_ptr)?,
@@ -10563,15 +10772,13 @@ impl BexVm {
                                 function,
                             )
                         } else {
-                            let type_args =
-                                self.take_type_args_below_values(ntypeargs, arg_count)?;
-                            self.execute_call_from_locals_offset_with_type_args(
+                            let mut type_args = self.spare_type_args();
+                            self.take_type_args_into(args_offset, ntypeargs, &mut type_args)?;
+                            self.execute_call_from_locals_offset_with_pending_type_args(
                                 callee_ptr,
                                 locals_offset,
                                 arg_count,
-                                CallOptions {
-                                    type_args: &type_args.tys,
-                                },
+                                type_args,
                                 frame_idx,
                                 function,
                             )
@@ -10941,9 +11148,16 @@ impl BexVm {
                         // result and shortening the stack to the caller's new top.
                         let consumed = self.stack.len() - locals_offset.raw();
                         self.stack.replace_top_n_dynamic(consumed, result);
+                        // A generic frame's type arguments arrived in a buffer
+                        // the next call that passes any can use.
+                        let type_args = match &mut self.frames[*frame_idx] {
+                            Frame::Bytecode(frame) => std::mem::take(&mut frame.type_args),
+                            Frame::Native(_) => Vec::new(),
+                        };
                         // SAFETY: this instruction is executing the bytecode frame
                         // accessed above; stack operations cannot remove that frame.
                         self.frames.pop();
+                        self.recycle_type_args(type_args);
                         let context = self.current_context().clone();
                         if let Some(telemetry) = &mut self.telemetry {
                             telemetry.set_context(context);
@@ -11354,8 +11568,31 @@ impl BexVm {
                             }
                             _ => None,
                         };
+                        // A constant that is one frame slot, in a static
+                        // function whose frame binds no runtime declaration.
+                        let slot_cache_key = match &function.bytecode.constants[idx] {
+                            ConstValue::Type(bex_vm_types::TyTemplate::TypeArgRef(slot))
+                                if runtime_package.is_null()
+                                    && matches!(&self.frames[*frame_idx],
+                                    Frame::Bytecode(frame)
+                                        if !frame.binds_runtime_declaration(&self.heap)) =>
+                            {
+                                Some((std::ptr::from_ref(*function) as usize, idx, *slot as usize))
+                            }
+                            _ => None,
+                        };
                         let cached_value = static_cache_key
                             .and_then(|key| self.static_load_type_cache.get(&key).copied())
+                            .or_else(|| {
+                                let (function, constant, slot) = slot_cache_key?;
+                                let (built_from, ty) =
+                                    self.slot_load_type_cache.get(&(function, constant))?;
+                                let Frame::Bytecode(frame) = &self.frames[*frame_idx] else {
+                                    return None;
+                                };
+                                same_realized_ty(frame.type_args.get(slot)?, built_from)
+                                    .then_some(*ty)
+                            })
                             .map(|ty| Value::object(ty.ptr()));
                         let value = if let Some(value) = cached_value {
                             value
@@ -11400,6 +11637,16 @@ impl BexVm {
                             {
                                 self.static_load_type_cache
                                     .insert(cache_key, Weak::new(ptr));
+                            }
+                            if let Some((function, constant, slot)) = slot_cache_key
+                                && let Some(ptr) = value.as_object_ptr()
+                                && let Frame::Bytecode(frame) = &self.frames[*frame_idx]
+                                && let Some(slot_ty) = frame.type_args.get(slot)
+                            {
+                                self.slot_load_type_cache.insert(
+                                    (function, constant),
+                                    (slot_ty.clone(), Weak::new(ptr)),
+                                );
                             }
                             value
                         };
@@ -12472,6 +12719,8 @@ impl ::bex_vm_types::RootHaver for BexVm {
             checkpoint_passed: _,
             pending_call_passes_type_args: _,
             static_load_type_cache,
+            slot_load_type_cache,
+            spare_type_args: _,
             static_virtual_call_cache,
         } = self;
         debug_assert!(
@@ -12529,6 +12778,14 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 && ty.visit(visitor)
             {
                 static_load_type_cache.insert((identity, index), ty);
+            }
+        }
+        let old_slot_load_type_cache = std::mem::take(slot_load_type_cache);
+        for ((identity, index), (slot_ty, mut ty)) in old_slot_load_type_cache {
+            if let Some(identity) = forward_identity(identity, visitor)
+                && ty.visit(visitor)
+            {
+                slot_load_type_cache.insert((identity, index), (slot_ty, ty));
             }
         }
         // Whether every declaration the types name is still live, repointing
