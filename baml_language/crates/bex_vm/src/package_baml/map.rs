@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bex_vm_types::{
-    EntryId, MapData, MapReadGuard, MapWriteGuard, Object, RootHaver, RootVisitor, Value,
+    BexStr, EntryId, MapData, MapReadGuard, MapWriteGuard, Object, RootHaver, RootVisitor, Value,
 };
 
 use super::{BamlClassMap, Continuation, MapView, NativeCallResult, PackageBamlImpl};
@@ -33,6 +33,122 @@ struct MapDriver {
     thread_local: bool,
 }
 
+/// A key whose hash and equality need no VM code: no `Hash` or `Equals`
+/// implementation can run for it.
+enum PlainKey<'vm> {
+    Int(i64),
+    Str(&'vm BexStr),
+}
+
+impl<'vm> PlainKey<'vm> {
+    fn of(vm: &'vm BexVm, key: Value) -> Option<Self> {
+        if let Some(int) = key.as_int() {
+            return Some(Self::Int(int));
+        }
+        vm.as_string(&key).ok().map(Self::Str)
+    }
+
+    /// The hash the `Hash` driver would compute for this key.
+    fn hash(&self) -> u64 {
+        match self {
+            Self::Int(int) => bex_vm_types::map_int_hash(*int),
+            Self::Str(text) => bex_vm_types::map_string_hash(text.as_str()),
+        }
+    }
+
+    /// Whether `candidate` equals this key, or `None` for a candidate of
+    /// another kind, whose `Equals` may need VM code.
+    fn matches(&self, vm: &BexVm, candidate: Value) -> Option<bool> {
+        match self {
+            Self::Int(int) => candidate.as_int().map(|candidate| candidate == *int),
+            Self::Str(text) => vm
+                .as_string(&candidate)
+                .ok()
+                .map(|candidate| candidate == *text),
+        }
+    }
+}
+
+/// The map's backing store, read without its lock when it is thread-local.
+#[allow(unsafe_code)]
+fn read_entries(vm: &BexVm, map: Value, thread_local: bool) -> MapReadGuard<'_> {
+    let Object::Map(map) = vm.get_object(map.as_object_ptr().unwrap()) else {
+        unreachable!("map receiver was validated")
+    };
+    if thread_local {
+        // SAFETY: only the `$local` twins set `thread_local`, and the
+        // native backend selects those only for a receiver escape
+        // analysis proved thread-local.
+        unsafe { map.lock_thread_local() }
+    } else {
+        map.lock()
+    }
+}
+
+/// [`read_entries`] for writing.
+#[allow(unsafe_code)]
+fn write_entries(vm: &BexVm, map: Value, thread_local: bool) -> MapWriteGuard<'_> {
+    let Object::Map(map) = vm.get_object(map.as_object_ptr().unwrap()) else {
+        unreachable!("map receiver was validated")
+    };
+    let debt = vm.tlab.alloc_debt();
+    if thread_local {
+        // SAFETY: as for `read_entries`.
+        unsafe { map.lock_mut_thread_local(debt) }
+    } else {
+        map.lock_mut(debt)
+    }
+}
+
+/// The operation's result from what it found or replaced.
+fn operation_result(operation: Operation, previous: Option<Value>) -> NativeCallResult {
+    match operation {
+        Operation::Has => NativeCallResult::Done(Value::bool(previous.is_some())),
+        Operation::Index if previous.is_none() => {
+            NativeCallResult::Error(VmRustFnError::Panic(VmPanic::MapKeyNotFound))
+        }
+        _ => NativeCallResult::Done(previous.unwrap_or(Value::NULL)),
+    }
+}
+
+/// Run `operation` in one step under the map's lock when the key is a
+/// [`PlainKey`] and so is every key it is compared with: no VM code can run
+/// in between, so there is no snapshot to take or epoch to revalidate.
+/// `None` when a candidate in the key's bucket needs its own `Equals`; the
+/// caller then takes the general search.
+fn run_plain(
+    vm: &BexVm,
+    args: &[Value],
+    operation: Operation,
+    thread_local: bool,
+) -> Option<NativeCallResult> {
+    let key = PlainKey::of(vm, args[1])?;
+    let hash = key.hash();
+    let matches = |candidate: &Value| key.matches(vm, *candidate);
+    let previous = match operation {
+        Operation::Has | Operation::Get | Operation::Index => {
+            let entries = read_entries(vm, args[0], thread_local);
+            let found = entries.find_hashed(hash, matches).ok()?;
+            entries.get_if_epoch(entries.epoch(), found)
+        }
+        Operation::Set | Operation::GetOrInsert | Operation::Delete => {
+            let mut entries = write_entries(vm, args[0], thread_local);
+            let found = entries.find_hashed(hash, matches).ok()?;
+            let epoch = entries.epoch();
+            match operation {
+                Operation::Set => entries.set_if_epoch(epoch, found, hash, args[1], args[2]),
+                Operation::GetOrInsert if found.is_none() => entries
+                    .set_if_epoch(epoch, None, hash, args[1], args[2])
+                    .map(|_| Some(args[2])),
+                Operation::Delete => entries.remove_if_epoch(epoch, found),
+                _ => entries.get_if_epoch(epoch, found),
+            }
+        }
+    };
+    let previous = previous.expect("the search ran under the map's lock at its current epoch");
+    Some(operation_result(operation, previous))
+}
+
 impl MapDriver {
     fn start(
         vm: &mut BexVm,
@@ -43,11 +159,13 @@ impl MapDriver {
         if let Err(error) = vm.as_map(&args[0]) {
             return error.into();
         }
-        let string_hash = vm
-            .as_string(&args[1])
-            .ok()
-            .map(|key| bex_vm_types::map_string_hash(key.as_str()));
-        let (state, hasher) = if string_hash.is_some() {
+        if let Some(result) = run_plain(vm, args, operation, thread_local) {
+            return result;
+        }
+        // A plain key whose bucket holds a key with its own `Equals` keeps
+        // its native hash, so both searches find the same bucket.
+        let native_hash = PlainKey::of(vm, args[1]).map(|key| key.hash());
+        let (state, hasher) = if native_hash.is_some() {
             (Value::NULL, None)
         } else {
             let (state, hasher) = super::hasher::new_state(vm);
@@ -60,14 +178,14 @@ impl MapDriver {
             state,
             hasher,
             operation,
-            hash: string_hash.unwrap_or(0),
+            hash: native_hash.unwrap_or(0),
             epoch: 0,
             candidates: Vec::new(),
             cursor: 0,
-            hashing: string_hash.is_none(),
+            hashing: native_hash.is_none(),
             thread_local,
         };
-        if string_hash.is_some() {
+        if native_hash.is_some() {
             driver.snapshot(vm);
             return driver.drive(vm, None);
         }
@@ -75,35 +193,12 @@ impl MapDriver {
         super::chain(vm, result, Box::new(driver))
     }
 
-    /// The map's backing store, read without its lock when it is thread-local.
-    #[allow(unsafe_code)]
     fn entries<'vm>(&self, vm: &'vm BexVm) -> MapReadGuard<'vm> {
-        let Object::Map(map) = vm.get_object(self.map.as_object_ptr().unwrap()) else {
-            unreachable!("map receiver was validated")
-        };
-        if self.thread_local {
-            // SAFETY: only the `$local` twins set `thread_local`, and the
-            // native backend selects those only for a receiver escape
-            // analysis proved thread-local.
-            unsafe { map.lock_thread_local() }
-        } else {
-            map.lock()
-        }
+        read_entries(vm, self.map, self.thread_local)
     }
 
-    /// [`Self::entries`] for writing.
-    #[allow(unsafe_code)]
     fn entries_mut<'vm>(&self, vm: &'vm BexVm) -> MapWriteGuard<'vm> {
-        let Object::Map(map) = vm.get_object(self.map.as_object_ptr().unwrap()) else {
-            unreachable!("map receiver was validated")
-        };
-        let debt = vm.tlab.alloc_debt();
-        if self.thread_local {
-            // SAFETY: as for `entries`.
-            unsafe { map.lock_mut_thread_local(debt) }
-        } else {
-            map.lock_mut(debt)
-        }
+        write_entries(vm, self.map, self.thread_local)
     }
 
     fn snapshot(&mut self, vm: &BexVm) {
@@ -156,13 +251,7 @@ impl MapDriver {
                 matched = None;
                 continue;
             };
-            return match self.operation {
-                Operation::Has => NativeCallResult::Done(Value::bool(previous.is_some())),
-                Operation::Index if previous.is_none() => {
-                    NativeCallResult::Error(VmRustFnError::Panic(VmPanic::MapKeyNotFound))
-                }
-                _ => NativeCallResult::Done(previous.unwrap_or(Value::NULL)),
-            };
+            return operation_result(self.operation, previous);
         }
     }
 }

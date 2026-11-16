@@ -1,12 +1,11 @@
 //! Arithmetic over tagged values and unboxed numeric locals.
 
-use bex_heap::TlabHolder;
 use bex_vm_types::{BinOp, CmpOp, Object, UnaryOp, Value};
 
 use super::expect_int;
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
-    vm::{BexVm, value_as_float},
+    vm::BexVm,
 };
 
 impl BexVm {
@@ -26,16 +25,20 @@ impl BexVm {
         Ok(self.alloc_joined_string(result))
     }
 
-    #[inline]
+    /// The `Value` of a float: inline when it can be, boxed otherwise. See
+    /// [`bex_heap::Tlab::float_value`]. Compiled bodies keep float locals as
+    /// raw `f64` and box them through here.
+    #[inline(always)]
+    #[allow(clippy::inline_always)]
     pub fn float_value(&mut self, f: f64) -> Value {
-        Value::object(self.alloc_float(f))
+        self.tlab.float_value(f)
     }
 
     pub fn neg(&mut self, val: Value) -> Result<Value, Box<VmError>> {
         if let Some(n) = val.as_int() {
             return self.neg_i64(n).map(Value::int);
         }
-        if let Some(n) = value_as_float(val) {
+        if let Some(n) = val.as_float() {
             return Ok(self.float_value(-n));
         }
         if let Some(ptr) = val.as_object_ptr() {

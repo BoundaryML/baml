@@ -637,6 +637,9 @@ impl Walker<'_, '_> {
                 sink.int(vm, i);
                 return Ok(());
             }
+            // Like an int, an inline float cannot carry an override: `float`
+            // and `baml.ToJson` are both the `baml` package's (E0139).
+            ValueKind::Float(f) => return self.float(vm, value, f, sink),
             ValueKind::Object(ptr) => ptr,
         };
         if !spliced {
@@ -734,7 +737,7 @@ impl Walker<'_, '_> {
         Ok(())
     }
 
-    /// Write the float object `value`, holding `f`, as the sink takes it.
+    /// Write the float `value`, holding `f`, as the sink takes it.
     fn float(
         &self,
         vm: &mut BexVm,

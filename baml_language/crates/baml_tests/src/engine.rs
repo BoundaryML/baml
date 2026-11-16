@@ -139,9 +139,9 @@ pub fn display_user_functions_with_options(program: &Program, show_auto_derive: 
 /// anything can display a type, and an unbound head renders as its tag
 /// (`<unresolved type #…>`).
 ///
-/// Float constants are boxed into the pool first, exactly as the engine's
-/// load path does — `resolve_function_constants` (inside the heap build)
-/// refuses a raw `ConstValue::Float`.
+/// Float constants with no inline `Value` encoding are boxed into the pool
+/// first, exactly as the engine's load path does — `resolve_function_constants`
+/// (inside the heap build) refuses such a raw `ConstValue::Float`.
 pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
     let mut objects = program.objects.0.clone();
     for index in 0..objects.len() {
@@ -154,7 +154,11 @@ pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
             .iter()
             .enumerate()
             .filter_map(|(slot, constant)| match constant {
-                bex_vm_types::ConstValue::Float(value) => Some((slot, *value)),
+                bex_vm_types::ConstValue::Float(value)
+                    if bex_vm_types::Value::try_inline_float(*value).is_none() =>
+                {
+                    Some((slot, *value))
+                }
                 _ => None,
             })
             .collect();

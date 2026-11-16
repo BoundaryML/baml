@@ -151,7 +151,9 @@ fn writes_local(code: &bex_vm_types::bytecode::CompactCode, local: usize) -> boo
             return true;
         };
         let stored = match op {
-            OpCode::StoreVar | OpCode::StoreVarLoadVar => vec![operand(pc + 1)],
+            OpCode::StoreVar | OpCode::StoreVarLoadVar | OpCode::AddLocalSmall => {
+                vec![operand(pc + 1)]
+            }
             OpCode::StoreVar2 => vec![operand(pc + 1), operand(pc + 5)],
             OpCode::NarrowBind => vec![operand(pc + 5)],
             _ => Vec::new(),

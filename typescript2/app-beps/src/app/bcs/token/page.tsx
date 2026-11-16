@@ -36,7 +36,10 @@ export default async function BcsToken() {
           {`export BCS_TOKEN=<the token above>
 ./bep bcs pull                     # BCS/BCS-001-.../index.html
 ./bep bcs new "Title" design.html  # a new proposal
-./bep bcs push 1 -n "What changed" # a new version of BCS-001`}
+./bep bcs push 1 -n "What changed" # a new version of BCS-001
+./bep bcs comments 1               # its open threads, with each block's source
+./bep bcs reply 1 <id> "Text"      # reply to a thread
+./bep bcs reply 1 <id> "Text" --agent claude  # written by your agent`}
         </pre>
       </main>
     </div>

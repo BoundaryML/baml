@@ -41,12 +41,32 @@ struct ScriptExpansion {
     extra_args: Vec<String>,
 }
 
-/// A failed run ended the process with a panic when one escaped a root call.
-fn install_interrupts(rt: &tokio::runtime::Runtime) -> Result<baml_exec::Interrupts> {
+/// Signals cancel the root call; the first one first prints where every task
+/// is, so a run interrupted because it hung says why.
+fn install_interrupts(
+    rt: &tokio::runtime::Runtime,
+    engine: &Arc<BexEngine>,
+) -> Result<baml_exec::Interrupts> {
     let _guard = rt.enter();
-    baml_exec::Interrupts::install().context("failed to install signal handlers")
+    let engine = Arc::clone(engine);
+    let report: baml_exec::InterruptReport = Box::new(move || {
+        let engine = Arc::clone(&engine);
+        Box::pin(async move { print_task_report(&engine).await })
+    });
+    baml_exec::Interrupts::install_with_report(Some(report))
+        .context("failed to install signal handlers")
 }
 
+/// Print every unfinished task's stack, what it waits for, and any deadlock.
+async fn print_task_report(engine: &Arc<BexEngine>) {
+    match engine.task_report().await {
+        Some(report) if report.is_empty() => {}
+        Some(report) => eprint!("\ninterrupted: {report}"),
+        None => eprintln!("\ninterrupted: could not pause every task to report where it is"),
+    }
+}
+
+/// A failed run ended the process with a panic when one escaped a root call.
 fn failure_status(engine: &BexEngine) -> bex_engine::ProcessStatus {
     if engine.root_panicked() {
         bex_engine::ProcessStatus::Panicked
@@ -783,7 +803,7 @@ impl RunArgs {
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let output_format = output_format.unwrap_or(self.output_format);
-        let interrupts = install_interrupts(&rt)?;
+        let interrupts = install_interrupts(&rt, &engine)?;
         let log_output = self.log_output(output_format);
         let (call_context, logs) = Self::call_context(log_output, &interrupts);
         let dispatch_result = log_output.block_on(
@@ -1163,7 +1183,7 @@ impl RunArgs {
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let output_format = self.output_format;
-        let interrupts = install_interrupts(&rt)?;
+        let interrupts = install_interrupts(&rt, &engine)?;
         let log_output = self.log_output(output_format);
         let (call_context, logs) = Self::call_context(log_output, &interrupts);
         let host_cancel = call_context.cancel.clone();

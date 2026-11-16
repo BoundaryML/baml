@@ -841,14 +841,17 @@ pub enum SentinelKind {
     },
 }
 
-/// Box every unique `ConstValue::Float` reachable from `compile_time_objects`
-/// (in `Object::Function` constants) and `globals` into a fresh
-/// `Object::Float` entry appended to `compile_time_objects`, and rewrite the
-/// function `ConstValue::Float` entries to `ConstValue::Object(idx)`. Returns
-/// the bit-pattern → object-index map so callers can rewrite their globals.
+/// Box every unique `ConstValue::Float` with no inline `Value` encoding (NaN,
+/// `±inf`, extreme magnitudes — see [`Value::try_inline_float`]) reachable
+/// from `compile_time_objects` (in `Object::Function` constants) and `globals`
+/// into a fresh `Object::Float` entry appended to `compile_time_objects`, and
+/// rewrite those function `ConstValue::Float` entries to
+/// `ConstValue::Object(idx)`. Returns the bit-pattern → object-index map so
+/// callers can rewrite their globals.
 ///
-/// Required because the tagged-pointer `Value` encoding can no longer hold a
-/// float inline.
+/// Every other float constant stays a `ConstValue::Float` and resolves to an
+/// inline `Value` in [`ConstValue::to_value`], so a representable float is
+/// never boxed.
 ///
 /// Globals are *not* rewritten in place — callers typically need to consume
 /// them by value (to convert `ConstValue` → `Value`) and rewrite during that
@@ -862,7 +865,9 @@ pub fn box_compile_time_floats(
     for obj in &*compile_time_objects {
         if let Object::Function(func) = obj {
             for cv in &func.bytecode.constants {
-                if let ConstValue::Float(f) = cv {
+                if let ConstValue::Float(f) = cv
+                    && Value::try_inline_float(*f).is_none()
+                {
                     let next_idx = compile_time_objects.len() + float_indices.len();
                     float_indices.entry(f.to_bits()).or_insert(next_idx);
                 }
@@ -870,7 +875,9 @@ pub fn box_compile_time_floats(
         }
     }
     for cv in globals {
-        if let ConstValue::Float(f) = cv {
+        if let ConstValue::Float(f) = cv
+            && Value::try_inline_float(*f).is_none()
+        {
             let next_idx = compile_time_objects.len() + float_indices.len();
             float_indices.entry(f.to_bits()).or_insert(next_idx);
         }
@@ -886,8 +893,9 @@ pub fn box_compile_time_floats(
     for obj in compile_time_objects.iter_mut() {
         if let Object::Function(func) = obj {
             for cv in &mut func.bytecode.constants {
-                if let ConstValue::Float(f) = cv {
-                    let idx = float_indices[&f.to_bits()];
+                if let ConstValue::Float(f) = cv
+                    && let Some(&idx) = float_indices.get(&f.to_bits())
+                {
                     *cv = ConstValue::Object(crate::indexable::ObjectIndex::from_raw(idx));
                 }
             }
@@ -987,8 +995,8 @@ impl<O: Into<ObjectType>> From<O> for Type {
 impl Type {
     /// Get the type of a value.
     ///
-    /// Heap-boxed floats are normalised back to the top-level `Type::Float`
-    /// so callers comparing `expected` against `got` see the same variant
+    /// Floats, inline or heap-boxed, report the top-level `Type::Float` so
+    /// callers comparing `expected` against `got` see the same variant
     /// regardless of which side originated as an inline label vs. a
     /// runtime heap deref.
     pub fn of(value: &Value, when_object: impl FnOnce(HeapPtr) -> ObjectType) -> Self {
@@ -996,6 +1004,7 @@ impl Type {
             ValueKind::OmittedArg => Type::OmittedArg,
             ValueKind::Int(_) => Type::Int,
             ValueKind::Bool(_) => Type::Bool,
+            ValueKind::Float(_) => Type::Float,
             ValueKind::Object(ptr) => match when_object(ptr) {
                 ObjectType::Float => Type::Float,
                 other => Type::Object(other),
@@ -1055,6 +1064,7 @@ mod tests {
             other: indexmap::IndexMap::new(),
             owner: Owner::anonymous(),
             telemetry_definition: crate::DefinitionCell::default(),
+            shared_variants: Box::default(),
         }));
         assert!(
             program

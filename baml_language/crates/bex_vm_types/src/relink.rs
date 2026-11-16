@@ -60,6 +60,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::CallHooked { callee: slot, .. }
             | I::Call { callee: slot, .. }
             | I::CallLocal { callee: slot, .. }
+            | I::CallEquals(slot)
             | I::MakeGenericFunction { function: slot, .. }
             | I::MakeGenericBoundMethod { function: slot, .. } => {
                 $visit($operand::Global(slot));
@@ -76,6 +77,8 @@ macro_rules! visit_bytecode_index_operands {
             I::LoadField(..)
             | I::StoreField(..)
             | I::LoadFieldLocal(..)
+            | I::LoadVarField(..)
+            | I::LoadVarFieldLocal(..)
             | I::ArrayIterNext { .. }
             | I::ArrayIterNextLocal { .. }
             | I::StoreFieldLocal(..)
@@ -145,6 +148,8 @@ macro_rules! visit_bytecode_index_operands {
             | I::LoadArrayElementLocal
             | I::StoreArrayElementLocal
             | I::ContainerLenLocal
+            | I::IsNull
+            | I::IsNotNull
             | I::StoreMapElement
             | I::Spawn
             | I::Await
@@ -172,7 +177,10 @@ macro_rules! visit_bytecode_index_operands {
             | I::CaptureRef(..)
             | I::SendEvent
             | I::LoadVar2(..)
-            | I::StoreVar2(..) => {}
+            | I::StoreVar2(..)
+            | I::AddLocalSmall(..)
+            | I::JumpIfLocalsCmp { .. }
+            | I::JumpIfLocalConstCmp { .. } => {}
             }
         }
         // Constant-pool object references. Exhaustive on `ConstValue` so a new
