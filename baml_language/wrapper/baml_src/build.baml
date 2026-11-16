@@ -1,8 +1,4 @@
-// Replaced in the build's temporary project by baml_language/wrapper/build.
-function wrapper_version() -> string {
-    "0.4.0"
-}
-
+// Build settings replaced in the temporary project by baml_language/wrapper/build.
 function self_update_enabled() -> bool {
     true
 }

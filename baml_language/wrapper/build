@@ -17,7 +17,6 @@ parser.add_argument("--cli", type=Path, required=True)
 parser.add_argument("--pack-host", type=Path)
 parser.add_argument("--target")
 parser.add_argument("--output", type=Path, required=True)
-parser.add_argument("--version")
 parser.add_argument("--no-self-update", action="store_true")
 parser.add_argument(
     "--embed-telemetry",
@@ -30,10 +29,6 @@ args = parser.parse_args()
 if (args.telemetry_project or args.telemetry_environment) and not args.embed_telemetry:
     parser.error("telemetry project/environment require --embed-telemetry")
 release = tomllib.loads((repo / "baml_language/wrapper/release.toml").read_text())
-version = args.version or release["package"]["version"]
-# Wrapper release identifiers, e.g. 0.2.5 or 0.2.5-canary.1.
-if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", version):
-    parser.error("invalid wrapper version")
 with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
     project = Path(temporary) / "wrapper"
     shutil.copytree(repo / "baml_language/wrapper", project)
@@ -54,7 +49,6 @@ with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
         return content[:start] + section + content[end:]
 
     for table, name, value in (
-        ("package", "version", version),
         ("boundary", "project", args.telemetry_project),
         ("pack.build", "embed_telemetry_env", args.telemetry_environment),
     ):
@@ -62,7 +56,6 @@ with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
             content = set_manifest_value(content, table, name, value)
     manifest.write_text(content)
     constants = {
-        "wrapper_version": version,
         "self_update_enabled": not args.no_self_update,
         "telemetry_api_key": release["posthog"]["api_key"],
         "telemetry_default_host": release["posthog"]["host"],

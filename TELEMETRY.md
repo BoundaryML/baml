@@ -112,7 +112,7 @@ name = "my-app"
 version = "1.2.3-beta.4+build.5"
 ```
 
-`package.version` uses the existing package identity claim: an optional string, with surrounding whitespace trimmed and blank values treated as omitted. Non-string values are rejected. SemVer versions, including prerelease and build metadata, retain their spelling after trimming; other nonempty version strings are accepted by the existing manifest parser. Existing projects can omit it; BAML then adds no application version and does not infer one from the package name, Git, environment, or host language. The BAML-native wrapper's build stamps its release version into this same field.
+`package.version` uses the existing package identity claim: an optional string, with surrounding whitespace trimmed and blank values treated as omitted. Non-string values are rejected. SemVer versions, including prerelease and build metadata, retain their spelling after trimming; other nonempty version strings are accepted by the existing manifest parser. Existing projects can omit it; BAML then adds no application version and does not infer one from the package name, Git, environment, or host language. The BAML-native wrapper declares its release version in this same field.
 
 Source execution, `baml pack`, and every generated SDK bridge use this single field. There are no separate pack and bridge application-version settings. Packed programs and generated bridge bytecode carry the root application's version, rather than a dependency's version. Change the manifest and rebuild the packed program or regenerate the SDK to change its version. An in-memory source host can include the root `baml.toml` alongside its BAML source map.
 

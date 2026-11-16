@@ -110,7 +110,7 @@ class PackageManagerArtifactsTest(unittest.TestCase):
             self.assertIn("--bin baml-cli --bin baml-pack-host", aur_source)
             self.assertIn("python wrapper/build", aur_source)
             self.assertIn("--no-self-update", aur_source)
-            self.assertIn(f"--version {VERSION}", aur_source)
+            self.assertNotIn("--version", aur_source)
             self.assertIn("makedepends = python", (output / "aur/baml/.SRCINFO").read_text())
             self.assertIn(SOURCE_SHA256, aur_source)
             self.assertIn(f"export BAML_GIT_SHA={SOURCE_COMMIT}", aur_source)
@@ -149,7 +149,7 @@ build
                 check=True, capture_output=True, text=True,
             )
             self.assertIn(f"cargo build --release --frozen --bin baml-cli --bin baml-pack-host commit={SOURCE_COMMIT} toolchain=stable target=target", result.stdout)
-            self.assertIn(f"python wrapper/build --cli target/release/baml-cli --pack-host target/release/baml-pack-host --version {VERSION} --no-self-update --output target/release/baml commit={SOURCE_COMMIT}", result.stdout)
+            self.assertIn(f"python wrapper/build --cli target/release/baml-cli --pack-host target/release/baml-pack-host --no-self-update --output target/release/baml commit={SOURCE_COMMIT}", result.stdout)
 
     def test_rejects_an_invalid_source_commit_before_generating_packages(self):
         with tempfile.TemporaryDirectory() as temporary:
