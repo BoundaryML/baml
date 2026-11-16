@@ -1,5 +1,5 @@
-//! What decoding needs to know about a class, worked out once per call
-//! instead of once per instance.
+//! What decoding needs to know about a class, worked out once and kept with
+//! the VM's decode lookups instead of worked out once per instance.
 
 use std::sync::{Arc, OnceLock};
 
@@ -194,13 +194,19 @@ impl RootHaver for ClassPlan {
     }
 }
 
-/// The class plans one call has worked out, under its naming.
+/// The class and union plans worked out under one naming.
 pub(super) struct Plans {
     pub(super) naming: JsonNaming,
     classes: FxHashMap<(TypeHead, Box<[RealizedTy]>), Arc<ClassPlan>>,
     /// Each union met, with how it picks a member when it has a fallback.
     pub(super) unions: FxHashMap<Box<[RealizedTy]>, Option<Arc<super::union::UnionTags>>>,
+    /// Each union a decode failed against, with the members no JSON value
+    /// can be, for its error message.
+    pub(super) impossible: FxHashMap<Box<[RealizedTy]>, Impossible>,
 }
+
+/// The members of a union no JSON value can be: each one's index, with why.
+pub(super) type Impossible = Arc<[(usize, String)]>;
 
 impl Plans {
     pub(super) fn new(naming: JsonNaming) -> Self {
@@ -208,6 +214,7 @@ impl Plans {
             naming,
             classes: FxHashMap::default(),
             unions: FxHashMap::default(),
+            impossible: FxHashMap::default(),
         }
     }
 
@@ -228,9 +235,8 @@ impl Plans {
         Ok(plan)
     }
 
-    /// Forget every plan: after a collection their pointers may be stale.
-    pub(super) fn clear(&mut self) {
-        self.classes.clear();
-        self.unions.clear();
+    /// How many plans are kept.
+    pub(super) fn len(&self) -> usize {
+        self.classes.len() + self.unions.len() + self.impossible.len()
     }
 }

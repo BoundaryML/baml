@@ -2,7 +2,9 @@
 
 use std::{sync::Arc, time::Duration};
 
-use bex_engine::{BexEngine, EngineConfig, FunctionCallContextBuilder, TelemetryRecording};
+use bex_engine::{
+    BexEngine, BexExternalValue, EngineConfig, FunctionCallContextBuilder, TelemetryRecording,
+};
 use btel_bcs::delivery::DeliveryConfig;
 use btel_settings::artifact::{
     ArtifactTelemetry, InitialFailureAction, InitialFailurePolicy, RecordingLevel,
@@ -181,4 +183,72 @@ async fn later_rejection_never_becomes_an_initial_failure_for_any_policy() {
         assert!(engine.initial_cloud_authorization_error().is_none());
         assert!(engine.telemetry_result().unwrap().is_err());
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cloud_rejection_stops_export_but_keeps_trace_hooks_and_span_ids() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(400))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let engine = Arc::new(
+        BexEngine::new_with_config(
+            baml_test_support::compile_source(
+                r#"
+function select() -> trace.Options throws never {
+    trace.span(inputs = true).context(metadata = { "hook": true })
+}
+/// baml:$trace=select
+function target() -> bool {
+    assert.equal(trace.current_context().metadata["hook"], true);
+    trace.current_span_id() != null
+}
+function main() -> bool { target() }
+"#,
+            ),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            EngineConfig {
+                artifact_telemetry: Some(ArtifactTelemetry {
+                    initial_failure: InitialFailurePolicy {
+                        action: InitialFailureAction::Ignore,
+                        warning_message: None,
+                    },
+                    ..Default::default()
+                }),
+                recording: Some(TelemetryRecording::cloud(
+                    btel_settings::publisher::RecordingConfig::default(),
+                    btel_bcs::CloudPublisherConfig::default(),
+                    DeliveryConfig::new(server.uri().parse().unwrap()),
+                )),
+                clock_mode: btel_settings::clock::ClockMode::Monotonic,
+                ..Default::default()
+            },
+        )
+        .unwrap(),
+    );
+    let call = || {
+        engine.call_function(
+            "main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+    };
+    assert_eq!(call().await.unwrap(), BexExternalValue::Bool(true));
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while engine.telemetry_result().is_none() {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("the rejection is observable without another invocation");
+    assert!(engine.telemetry_result().unwrap().is_err());
+    // Export stopped; the program still sees its hooks and span ids.
+    assert_eq!(call().await.unwrap(), BexExternalValue::Bool(true));
+    engine.shutdown().await;
+    assert!(engine.telemetry_result().unwrap().is_err());
 }

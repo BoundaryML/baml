@@ -49,6 +49,9 @@ pub(crate) trait PullSink<'db> {
         right: &Operand<'db>,
     ) -> Result<(), Self::Error>;
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error>;
+    /// Complete `x == null` (or `x != null` when `negate`) after `x` alone
+    /// has been pulled: `null` is a constant with nothing to evaluate.
+    fn null_test(&mut self, negate: bool) -> Result<(), Self::Error>;
     fn concat_strings(&mut self, len: usize) -> Result<(), Self::Error>;
 
     fn alloc_array(&mut self, element_ty: &TyTemplate, len: usize) -> Result<(), Self::Error>;
@@ -401,6 +404,10 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
         Rvalue::TraceHookSettings { with_settings } => sink.trace_hook_settings(*with_settings),
         Rvalue::Use(operand) => walk_operand_pull(sink, operand),
         Rvalue::BinaryOp { op, left, right } => {
+            if let Some((tested, negate)) = rvalue.null_test() {
+                walk_operand_pull(sink, tested)?;
+                return sink.null_test(negate);
+            }
             walk_operand_pull(sink, left)?;
             walk_operand_pull(sink, right)?;
             sink.binary_op(*op, left, right)

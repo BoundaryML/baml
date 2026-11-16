@@ -651,6 +651,7 @@ fn primitive_text(vm: &BexVm, value: Value) -> Option<String> {
         ValueKind::Null => Some("null".to_string()),
         ValueKind::Int(i) => Some(i.to_string()),
         ValueKind::Bool(b) => Some(b.to_string()),
+        ValueKind::Float(f) => Some(bex_vm_types::format_float(f)),
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Float(f) => Some(bex_vm_types::format_float(*f)),
             _ => None,
@@ -693,7 +694,11 @@ pub(super) fn render_to_sink(
     }
     let ptr = match value.kind() {
         ValueKind::Object(ptr) => ptr,
-        ValueKind::Null | ValueKind::Int(_) | ValueKind::Bool(_) | ValueKind::OmittedArg => return,
+        ValueKind::Null
+        | ValueKind::Int(_)
+        | ValueKind::Bool(_)
+        | ValueKind::Float(_)
+        | ValueKind::OmittedArg => return,
     };
 
     // Override node: splice its precomputed `to_string` result in bare.
@@ -916,7 +921,11 @@ fn deep_copy_value_recursive(
     copied_objects: &mut HashMap<HeapPtr, HeapPtr>,
 ) -> Result<Value, VmInternalError> {
     Ok(match value.kind() {
-        ValueKind::OmittedArg | ValueKind::Null | ValueKind::Int(_) | ValueKind::Bool(_) => value,
+        ValueKind::OmittedArg
+        | ValueKind::Null
+        | ValueKind::Int(_)
+        | ValueKind::Bool(_)
+        | ValueKind::Float(_) => value,
 
         ValueKind::Object(ptr) => {
             if let Some(&new_ptr) = copied_objects.get(&ptr) {
@@ -1072,6 +1081,9 @@ fn value_type_name(vm: &BexVm, value: Value) -> String {
     if value.is_omitted() {
         return "omitted".to_string();
     }
+    if value.is_inline_float() {
+        return ObjectType::Float.to_string();
+    }
     if let Some(ptr) = value.as_object_ptr() {
         return ObjectType::of(vm.get_object(ptr)).to_string();
     }
@@ -1080,22 +1092,15 @@ fn value_type_name(vm: &BexVm, value: Value) -> String {
 
 /// Extracts a float from a validated `float[]` element. The `FloatStats` /
 /// `Summable` methods are declared on `float[]`, so by the time execution reaches
-/// the native path each element is a boxed float; any other tag is an upstream
+/// the native path each element is a float; any other tag is an upstream
 /// invariant violation.
 fn expect_float(vm: &BexVm, value: Value, fn_name: &str, index: usize) -> f64 {
-    let Some(ptr) = value.as_object_ptr() else {
+    value.as_float().unwrap_or_else(|| {
         unreachable!(
             "{fn_name}: expected float at index {index}, got {}",
             value_type_name(vm, value)
-        );
-    };
-    match vm.get_object(ptr) {
-        Object::Float(float) => *float,
-        _ => unreachable!(
-            "{fn_name}: expected float at index {index}, got {}",
-            value_type_name(vm, value)
-        ),
-    }
+        )
+    })
 }
 
 /// Extracts an `i64` from a validated `int[]` element. Ints are unboxed tagged

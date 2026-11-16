@@ -1970,6 +1970,17 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
+    /// Whether `func` is `baml.ops.equals_equals`, the `==` driver, whose
+    /// direct calls become [`Instruction::CallEquals`].
+    fn is_equals_driver(&self, func: FunctionRef<'ctx>) -> bool {
+        baml_compiler2_hir_ty::callable::lang_function(
+            self.db,
+            baml_base::LangPackage::Baml,
+            &["ops"],
+            "equals_equals",
+        ) == Some(func)
+    }
+
     /// The global slot `func` links as, or `None` when this program slots
     /// nothing for it — [`Self::slots`] is the one registry, keyed by
     /// declaration identity on both lanes. A `None` is a callee the program
@@ -2523,6 +2534,15 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                             callee: global_callee,
                             ntypeargs,
                         }
+                    } else if !*has_trace
+                        && ntypeargs == 0
+                        && argument_layout.is_none()
+                        && args.len() == 2
+                        && callee_item.is_some_and(|func| self.is_equals_driver(func))
+                    {
+                        // `==`: the VM decides the common pairs in place and
+                        // calls the driver for the rest.
+                        Instruction::CallEquals(global_callee)
                     } else if thread_local {
                         // A builtin on a thread-local receiver: its lock-free twin.
                         Instruction::CallLocal {
@@ -3488,6 +3508,15 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
 
     fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error> {
         self.emit(Self::unaryop_instruction(op));
+        Ok(())
+    }
+
+    fn null_test(&mut self, negate: bool) -> Result<(), Self::Error> {
+        self.emit(if negate {
+            Instruction::IsNotNull
+        } else {
+            Instruction::IsNull
+        });
         Ok(())
     }
 

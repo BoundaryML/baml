@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { createMetadata } from '@/app/_lib/metadata';
 import { section } from '@/components/home/analytics';
+import { FounderNote } from '@/components/home/founder-note';
 import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { Button, LINKS } from '@/components/home/ui';
 
@@ -107,6 +108,7 @@ export default function WhoAreWePage() {
             We're a small team rebuilding those foundations for a world where AI
             does most of it.
           </p>
+          <FounderNote />
         </div>
         <Image
           alt="The Boundary team"
