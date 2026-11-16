@@ -131,6 +131,7 @@ pub struct ArtifactTelemetry {
 pub enum DestinationOverrides {
     #[default]
     Default,
+    /// Retained only for reading older serialized policies; manifests cannot disable bindings.
     Disabled,
     Named {
         project: String,
@@ -398,9 +399,6 @@ impl ArtifactTelemetry {
                 names.get("BOUNDARY_API_KEY"),
             ) {
                 (None, None) => DestinationOverrides::Default,
-                (Some(toml::Value::Boolean(false)), Some(toml::Value::Boolean(false))) => {
-                    DestinationOverrides::Disabled
-                }
                 (Some(toml::Value::String(project)), Some(toml::Value::String(api_key)))
                     if valid_envvar(project)
                         && valid_envvar(api_key)
@@ -415,7 +413,7 @@ impl ArtifactTelemetry {
                 }
                 _ => {
                     return Err(PolicyError(format!(
-                        "{name}.env_var_names.BOUNDARY_PROJECT and BOUNDARY_API_KEY must both be false or distinct valid environment-variable names."
+                        "{name}.env_var_names.BOUNDARY_PROJECT and BOUNDARY_API_KEY must be distinct valid environment-variable names, specified together."
                     )));
                 }
             };
@@ -1124,7 +1122,7 @@ mod ingestion_tests {
         }
     }
     #[test]
-    fn embedded_defaults_do_not_read_ambient_identity_or_destination() {
+    fn embedded_defaults_and_legacy_disabled_bindings_do_not_read_ambient_destination() {
         for overrides in [
             DestinationOverrides::Default,
             DestinationOverrides::Disabled,
@@ -1210,23 +1208,34 @@ mod ingestion_tests {
     #[test]
     fn destination_bindings_are_a_pair_and_errors_are_actionable() {
         for table in ["pack", "bridge"] {
-            let manifest: toml::Value =
-                format!("[{table}.env_var_names]\nBOUNDARY_PROJECT = \"CUSTOM_PROJECT\"")
-                    .parse()
-                    .unwrap();
             let kind = if table == "pack" {
                 ArtifactKind::Pack
             } else {
                 ArtifactKind::Bridge
             };
-            assert_eq!(
-                ArtifactTelemetry::from_manifest(&manifest, kind)
-                    .unwrap_err()
-                    .to_string(),
-                format!(
-                    r#"{table}.env_var_names.BOUNDARY_PROJECT and BOUNDARY_API_KEY must both be false or distinct valid environment-variable names."#
-                )
-            );
+            for bindings in [
+                "BOUNDARY_PROJECT = \"CUSTOM_PROJECT\"",
+                "BOUNDARY_PROJECT = false\nBOUNDARY_API_KEY = false",
+                "BOUNDARY_PROJECT = false\nBOUNDARY_API_KEY = \"CUSTOM_KEY\"",
+                "BOUNDARY_PROJECT = \"CUSTOM_PROJECT\"\nBOUNDARY_API_KEY = false",
+                "BOUNDARY_PROJECT = true\nBOUNDARY_API_KEY = true",
+                "BOUNDARY_PROJECT = 1\nBOUNDARY_API_KEY = 2",
+                "BOUNDARY_PROJECT = [\"CUSTOM_PROJECT\"]\nBOUNDARY_API_KEY = [\"CUSTOM_KEY\"]",
+                "BOUNDARY_PROJECT = \"CUSTOM\"\nBOUNDARY_API_KEY = \"CUSTOM\"",
+                "BOUNDARY_PROJECT = \"A=B\"\nBOUNDARY_API_KEY = \"CUSTOM_KEY\"",
+            ] {
+                let manifest: toml::Value = format!("[{table}.env_var_names]\n{bindings}")
+                    .parse()
+                    .unwrap();
+                assert_eq!(
+                    ArtifactTelemetry::from_manifest(&manifest, kind)
+                        .unwrap_err()
+                        .to_string(),
+                    format!(
+                        "{table}.env_var_names.BOUNDARY_PROJECT and BOUNDARY_API_KEY must be distinct valid environment-variable names, specified together."
+                    )
+                );
+            }
         }
     }
     #[test]

@@ -98,37 +98,57 @@ naming_convention = "preserve-case"
 }
 
 #[tokio::test]
-async fn recording_binding_false_is_rejected_before_pack_or_generate_output() {
+async fn boolean_env_var_mappings_are_rejected_before_pack_or_generate_output() {
     let server = MockServer::start().await;
     for (command, table) in [("pack", "pack"), ("generate", "bridge")] {
         for embed in [false, true] {
-            let temp = tempfile::tempdir().unwrap();
-            common::write_project(temp.path(), "function main() -> int { 7 }\n");
-            std::fs::write(
-                temp.path().join("baml.toml"),
-                manifest(&format!("[{table}.env_var_names]\nBAML_TELEMETRY = false")),
-            )
-            .unwrap();
-            let mut args = vec![command];
-            if command == "pack" {
-                args.extend(["main", "-o", "out"]);
+            for (bindings, field, message) in [
+                (
+                    "BAML_TELEMETRY = false",
+                    "BAML_TELEMETRY",
+                    "must be a valid environment-variable name",
+                ),
+                (
+                    "BOUNDARY_PROJECT = false\nBOUNDARY_API_KEY = false",
+                    "BOUNDARY_PROJECT and BOUNDARY_API_KEY",
+                    "must be distinct valid environment-variable names",
+                ),
+                (
+                    "BOUNDARY_PROJECT = false\nBOUNDARY_API_KEY = \"ACME_KEY\"",
+                    "BOUNDARY_PROJECT and BOUNDARY_API_KEY",
+                    "must be distinct valid environment-variable names",
+                ),
+                (
+                    "BOUNDARY_PROJECT = \"ACME_PROJECT\"\nBOUNDARY_API_KEY = false",
+                    "BOUNDARY_PROJECT and BOUNDARY_API_KEY",
+                    "must be distinct valid environment-variable names",
+                ),
+            ] {
+                let temp = tempfile::tempdir().unwrap();
+                common::write_project(temp.path(), "function main() -> int { 7 }\n");
+                std::fs::write(
+                    temp.path().join("baml.toml"),
+                    manifest(&format!("[{table}.env_var_names]\n{bindings}")),
+                )
+                .unwrap();
+                let mut args = vec![command];
+                if command == "pack" {
+                    args.extend(["main", "-o", "out"]);
+                }
+                if embed {
+                    args.push("--embed-telemetry");
+                }
+                let output = cli(temp.path(), &server.uri(), &args);
+                assert!(!output.status.success(), "{command}/{embed}: {output:?}");
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                assert!(
+                    stderr.contains(&format!("{table}.env_var_names.{field} {message}")),
+                    "{command}/{embed}: {stderr}"
+                );
+                assert!(!temp.path().join("out").exists());
+                assert!(!temp.path().join("generated").exists());
+                assert!(server.received_requests().await.unwrap().is_empty());
             }
-            if embed {
-                args.push("--embed-telemetry");
-            }
-            let output = cli(temp.path(), &server.uri(), &args);
-            assert!(!output.status.success(), "{command}/{embed}: {output:?}");
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            assert!(
-                stderr.contains(&format!(
-                    "{table}.env_var_names.BAML_TELEMETRY must be a valid environment-variable name"
-                )),
-                "{command}/{embed}: {stderr}"
-            );
-            assert!(stderr.contains("omit this setting to use BAML_TELEMETRY"));
-            assert!(!temp.path().join("out").exists());
-            assert!(!temp.path().join("generated").exists());
-            assert!(server.received_requests().await.unwrap().is_empty());
         }
     }
 }
