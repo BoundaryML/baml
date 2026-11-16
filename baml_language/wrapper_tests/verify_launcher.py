@@ -222,8 +222,10 @@ class PackedLauncherTests(unittest.TestCase):
                             "SELECT input_args, output_value, error_value FROM spans",
                         )
                         self.assertNotIn("private-argument-sentinel", json.dumps(rows))
+                        # #5621 may retain its sanitized child exit-code output;
+                        # raw arguments and error payloads must remain absent.
                         self.assertTrue(
-                            all(row == [None, None, None] for row in rows), rows
+                            all(row[0] is None and row[2] is None for row in rows), rows
                         )
 
     def test_default_does_not_enable_recording_in_detached_flush_helper(self):
@@ -303,7 +305,7 @@ class PackedLauncherTests(unittest.TestCase):
             root, environment, "SELECT input_args, output_value, error_value FROM spans"
         )
         self.assertTrue(rows)
-        self.assertTrue(all(row == [None, None, None] for row in rows), rows)
+        self.assertTrue(all(row[0] is None and row[2] is None for row in rows), rows)
         self.assertNotIn(sentinel, json.dumps(rows))
 
     def test_helpers_invoked_through_launcher_do_not_apply_selected_default(self):
