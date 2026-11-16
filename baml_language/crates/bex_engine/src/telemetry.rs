@@ -567,7 +567,8 @@ impl TelemetryRecording {
             exit: Arc::clone(&self.exit),
             program_id,
             // The build names the git remote and branch: like the sources,
-            // it stays out of cloud recordings until source upload lands.
+            // it stays out of cloud recordings until source upload lands. A
+            // cloud recording drops the program identity too, in its builder.
             build: self
                 .build
                 .take()

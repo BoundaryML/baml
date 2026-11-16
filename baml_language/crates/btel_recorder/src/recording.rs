@@ -118,6 +118,7 @@ pub struct RecordingBuilder {
     pending_span_reservation: usize,
     span_credit: usize,
     metadata_replay: bool,
+    package_identity: bool,
     ended: bool,
 }
 impl RecordingBuilder {
@@ -141,6 +142,7 @@ impl RecordingBuilder {
             pending_span_reservation: 0,
             span_credit: 0,
             metadata_replay: false,
+            package_identity: true,
             ended: false,
         })
     }
@@ -148,6 +150,16 @@ impl RecordingBuilder {
     #[must_use]
     pub fn with_metadata_replay(mut self) -> Self {
         self.metadata_replay = true;
+        self
+    }
+
+    /// Leave out what format minor 14 added: the program identity, the
+    /// build, and each function's package hash. The files then read as
+    /// minor 13 or lower, for a destination that has not adopted 14.
+    #[must_use]
+    pub fn without_package_identity(mut self) -> Self {
+        self.package_identity = false;
+        self.buffer.functions.omit_package_identity();
         self
     }
 
@@ -252,6 +264,8 @@ impl RecordingBuilder {
         let process_exit = end
             .then(|| self.process.as_ref().and_then(|p| p.exit.get()))
             .flatten();
+        // The process, when the recording names its program and build.
+        let identity = self.process.as_ref().filter(|_| self.package_identity);
         let mut file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
                 format_major: encoding::FORMAT_MAJOR,
@@ -279,10 +293,7 @@ impl RecordingBuilder {
                         0
                     })
                     .max(
-                        if self
-                            .process
-                            .as_ref()
-                            .is_some_and(|p| p.program_id.is_some() || p.build.is_some())
+                        if identity.is_some_and(|p| p.program_id.is_some() || p.build.is_some())
                             || defines_package_identity(&ready.definitions)
                         {
                             btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR
@@ -306,12 +317,8 @@ impl RecordingBuilder {
                     .map(|p| p.info.started_at_unix_ns),
                 source_cas_id: self.process.as_ref().and_then(|p| p.source),
                 initial_context_cas_id: self.process.as_ref().and_then(|p| p.context),
-                program_id: self
-                    .process
-                    .as_ref()
-                    .and_then(|p| p.program_id)
-                    .map(|id| id.to_vec()),
-                build: self.process.as_ref().and_then(|p| p.build.clone()),
+                program_id: identity.and_then(|p| p.program_id).map(|id| id.to_vec()),
+                build: identity.and_then(|p| p.build.clone()),
             }),
             sequence: sequence.get(),
             definitions: Some(ready.definitions),
@@ -571,6 +578,13 @@ impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> RecordingPublisher<F, C> {
             receive_snapshot,
         })
     }
+    /// See [`RecordingBuilder::without_package_identity`].
+    #[must_use]
+    pub fn without_package_identity(mut self) -> Self {
+        self.builder = self.builder.without_package_identity();
+        self
+    }
+
     #[must_use]
     pub fn with_source_snapshot(mut self, source_snapshot_id: Option<[u8; 32]>) -> Self {
         self.builder = self.builder.with_source_snapshot(source_snapshot_id);
