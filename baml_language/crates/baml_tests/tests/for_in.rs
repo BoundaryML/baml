@@ -571,3 +571,36 @@ function main() -> int {
         .unwrap_or_else(|| panic!("no `main` in:\n{}", optimized.bytecode));
     assert!(!main.contains("virtual_call"), "{main}");
 }
+
+/// An optional array narrowed by a null test is an array where the loop is:
+/// the loop walks it by index.
+#[tokio::test]
+async fn a_loop_over_a_narrowed_optional_array_walks_it() {
+    let source = r#"
+function total(xs: int[]?) -> int {
+  let acc = 0;
+  if (xs != null) {
+    for (let x in xs) {
+      acc += x;
+    }
+  }
+  acc
+}
+
+function main() -> int {
+  total([1, 2, 3]) + total(null)
+}
+"#;
+    for opt in [OptLevel::One, OptLevel::Two] {
+        let output = run_test(source, "main", IndexMap::new(), opt).await;
+        assert_eq!(output.result.unwrap(), BexExternalValue::Int(6));
+        let total = output
+            .bytecode
+            .split("function total(")
+            .nth(1)
+            .and_then(|rest| rest.split("\nfunction ").next())
+            .unwrap_or_else(|| panic!("no `total` in:\n{}", output.bytecode));
+        assert!(total.contains("array_iter_next"), "{total}");
+        assert!(!total.contains("virtual_call"), "{total}");
+    }
+}

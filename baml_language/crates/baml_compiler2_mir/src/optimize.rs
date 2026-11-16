@@ -937,7 +937,13 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                         if src.0 >= 1
                             && src.0 <= arity
                             && defs[src.0] == 0
-                            && !place_bound.contains(dest) =>
+                            && !place_bound.contains(dest)
+                            // A copy that narrows the parameter to an array
+                            // is the only local typed as one, which is what
+                            // array iteration is recognised by
+                            // (`escape::array_walks`).
+                            && !(matches!(body.locals[dest.0].ty, crate::RuntimeTy::List(_))
+                                && !matches!(body.locals[src.0].ty, crate::RuntimeTy::List(_))) =>
                     {
                         // A bare captured parameter would be its cell pointer,
                         // which no `Use` reads.
