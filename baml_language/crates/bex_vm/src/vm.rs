@@ -728,6 +728,7 @@ pub(crate) mod tests {
             stdlib_heads: Arc::new(crate::package_load::StdlibHeads::default()),
 
             thread_id: NonZeroU64::MIN,
+            monitors: crate::package_baml::TaskMonitors::new(Arc::default(), NonZeroU64::MIN),
 
             context_transfers: Vec::new(),
             argv: Arc::from([]),
@@ -1805,9 +1806,13 @@ pub struct BexVm {
     /// once from `packages` and shared across spawned VMs.
     stdlib_heads: Arc<crate::package_load::StdlibHeads>,
 
-    /// Engine-local logical thread identity for structured logs. Unique among
-    /// the engine's VMs; set at construction.
+    /// Engine-local logical thread identity for structured logs, and the
+    /// task that owns the `baml.sync.atomic` locks this VM takes. Unique
+    /// among the engine's VMs; set at construction.
     pub thread_id: NonZeroU64,
+
+    /// The engine's `baml.sync.atomic` locks, and what this VM holds of them.
+    pub(crate) monitors: crate::package_baml::TaskMonitors,
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
     pub(crate) telemetry: Option<TelemetryState>,
@@ -2563,6 +2568,7 @@ impl BexVm {
         error_class_ptrs: Arc<[HeapPtr]>,
         panic_class_ptrs: Arc<[HeapPtr]>,
         stdlib_heads: Arc<crate::package_load::StdlibHeads>,
+        monitors: Arc<bex_vm_types::MonitorTable>,
         thread_id: NonZeroU64,
         telemetry: Option<TelemetryState>,
         trace_scope: btel_types::RecordingId,
@@ -2606,6 +2612,7 @@ impl BexVm {
             stdlib_heads,
 
             thread_id,
+            monitors: crate::package_baml::TaskMonitors::new(monitors, thread_id),
 
             context_transfers: Vec::new(),
             argv,
@@ -5313,6 +5320,7 @@ impl BexVm {
             error_class_ptrs,
             panic_class_ptrs,
             stdlib_heads,
+            Arc::default(),
             // The only task this standalone VM ever runs.
             NonZeroU64::MIN,
             Some(TelemetryState::new_root(
@@ -12518,6 +12526,8 @@ impl ::bex_vm_types::RootHaver for BexVm {
             stdlib_heads: _,
             // Rooted by the engine's own `DynDispatchRoot` holder.
             dynamic_dispatch: _,
+            // Its keys are forwarded by the engine's own `MonitorRoot` holder.
+            monitors: _,
             thread_id: _,
             telemetry,
             trace_scope: _,

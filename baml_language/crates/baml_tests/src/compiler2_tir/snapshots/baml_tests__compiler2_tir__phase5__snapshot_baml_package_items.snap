@@ -324,6 +324,12 @@ namespace baml.spawn:
   class Plan<T, E> { methods: [new, wrap, with] }
   class Root { methods: [new] }
   function __spawn<T, E>
+namespace baml.sync:
+  function _enter
+  function _exit
+  function _held<K>
+  function _wait
+  function atomic<R, E>
 namespace baml.sys:
   class HostInfo { methods: [] }
   class ProcessExit { methods: [ok] }
