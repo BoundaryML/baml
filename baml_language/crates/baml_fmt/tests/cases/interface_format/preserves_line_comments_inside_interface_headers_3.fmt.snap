@@ -1,0 +1,9 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+interface I {
+    function f(
+        self, // receiver
+        value: string, // parameter
+    ) -> string throws never;
+}

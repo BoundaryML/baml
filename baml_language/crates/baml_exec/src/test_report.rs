@@ -9,8 +9,6 @@
 // are defined in baml_std/testing/registry.baml. `self` is passed as the
 // first positional argument (the live registry handle).
 
-#![allow(clippy::print_stdout, clippy::print_stderr)]
-
 use std::{fmt::Write as _, sync::Arc, time::Duration};
 
 use anyhow::{Result, anyhow};
@@ -187,85 +185,6 @@ pub fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
 // ---------------------------------------------------------------------------
 // Rendering
 // ---------------------------------------------------------------------------
-
-/// Print a flat report the way `baml test` does and fold its counts into the
-/// running totals.
-///
-/// Both filtered and unfiltered runs go through the same aggregate path
-/// (filtered selections still run under their testset runners), so a failing
-/// leaf whose runner still passes the suite is reported as a *tolerated* failure
-/// — kept out of the hard `failed` count and not failing the command. Every
-/// leaf line uses the same canonical ID emitted by `baml test --list`; aggregate
-/// runner verdicts are labeled as aggregates rather than presented as test IDs.
-pub fn consume_flat_report(
-    flat: &FlatReport,
-    passed: &mut usize,
-    failed: &mut usize,
-    tolerated: &mut usize,
-    total: &mut usize,
-    command_failed: &mut bool,
-) {
-    *passed += flat.passed;
-    *failed += flat.failed;
-    *tolerated += flat.tolerated;
-    *total += flat.total;
-
-    // An empty selection (a filter that matched no testset tests) aggregates
-    // to a vacuous `pass` over zero tests. Printing a green aggregate pass
-    // for that contradicts the `NoTestsRun` exit the caller then returns and
-    // reads as success to anything parsing stdout, so skip the aggregate line
-    // entirely and let the caller's "no tests selected" guard speak.
-    //
-    // Guard *only* the vacuous-pass case: a zero-test report with a non-pass
-    // outcome must still fall through to the FAIL branch so it prints, sets
-    // `command_failed`, and synthesizes a displayed failure — a real failure
-    // is never silently dropped just because it carried no leaves.
-    if flat.is_vacuous_pass() {
-        return;
-    }
-
-    // Duration suffixes come from the parallel `*_ms` arrays; a missing or
-    // negative entry (fallback-correlated identities, expansion sentinels)
-    // prints the bare line the output always had.
-    let with_ms = |ms: &[i64], i: usize| -> String {
-        match ms.get(i) {
-            Some(ms) if *ms >= 0 => format!(" ({ms}ms)"),
-            _ => String::new(),
-        }
-    };
-    for (i, name) in flat.passed_names.iter().enumerate() {
-        println!("PASS {name}{}", with_ms(&flat.passed_ms, i));
-    }
-    for (i, name) in flat.tolerated_names.iter().enumerate() {
-        println!("TOLERATED {name}{}", with_ms(&flat.tolerated_ms, i));
-    }
-    for (i, name) in flat.failed_names.iter().enumerate() {
-        println!("FAIL {name}{}", with_ms(&flat.failed_ms, i));
-    }
-
-    if flat.outcome == "pass" {
-        if flat.tolerated > 0 {
-            println!(
-                "AGGREGATE PASS [outcome=pass; {} tolerated {}]",
-                flat.tolerated,
-                pluralize(flat.tolerated, "failure", "failures")
-            );
-        }
-    } else {
-        println!("AGGREGATE FAIL [outcome={}]", flat.outcome);
-        for message in &flat.messages {
-            eprintln!("  => {message}");
-        }
-        // A testset runner can fail the aggregate without marking any child
-        // failed. Count that verdict as one displayed failure so the summary
-        // does not read "0 failed" when the aggregate itself failed.
-        if flat.failed == 0 {
-            *failed += 1;
-            *total += 1;
-        }
-        *command_failed = true;
-    }
-}
 
 impl FlatReport {
     /// A selection that matched nothing: zero leaves, and nothing failed.
@@ -519,75 +438,6 @@ mod tests {
         assert_eq!(parsed.outcome, "pass");
         assert_eq!(parsed.total, 1);
         assert_eq!(parsed.passed_names, ["root::passes"]);
-    }
-
-    fn consume(report: &FlatReport) -> (usize, usize, usize, usize, bool) {
-        let (mut passed, mut failed, mut tolerated, mut total, mut command_failed) =
-            (0, 0, 0, 0, false);
-        consume_flat_report(
-            report,
-            &mut passed,
-            &mut failed,
-            &mut tolerated,
-            &mut total,
-            &mut command_failed,
-        );
-        (passed, failed, tolerated, total, command_failed)
-    }
-
-    #[test]
-    fn consume_empty_report_folds_zero_counts_without_printing_pass() {
-        // A no-match selector aggregates to a vacuous `pass` over zero tests.
-        // Folding it must leave every counter at zero (so the caller's
-        // `total == 0` guard fires "no tests selected") and must NOT print a
-        // green aggregate pass line contradicting the non-zero exit (B-628).
-        let parsed =
-            parse_flat_report(&flat_report("pass", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (0, 0, 0, 0, false));
-    }
-
-    #[test]
-    fn consume_empty_report_with_fail_outcome_still_propagates_failure() {
-        // The vacuous-pass skip must NOT swallow a zero-test report that
-        // reports a failure. A `total == 0 && outcome == "fail"` report has to
-        // fall through to the FAIL branch: it sets `command_failed` and
-        // synthesizes one displayed failure (so the summary isn't "0 failed"
-        // while the aggregate failed). Regression guard for the narrowed guard.
-        let parsed =
-            parse_flat_report(&flat_report("fail", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (0, 1, 0, 1, true));
-    }
-
-    #[test]
-    fn consume_aggregate_pass_with_tolerated_failure() {
-        // PassRate-style: aggregate passes; the failing leaf is tolerated, not hard.
-        let parsed =
-            parse_flat_report(&flat_report("pass", 2, 0, 1, 3, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (2, 0, 1, 3, false));
-    }
-
-    #[test]
-    fn consume_aggregate_fail_keeps_tolerated_out_of_failed() {
-        // A hard sibling fails the command; tolerated stays separate from failed.
-        let parsed = parse_flat_report(&flat_report(
-            "fail",
-            1,
-            1,
-            1,
-            3,
-            vec![string("hard/fails")],
-            Vec::new(),
-        ))
-        .unwrap();
-        assert_eq!(consume(&parsed), (1, 1, 1, 3, true));
-    }
-
-    #[test]
-    fn consume_fail_with_zero_hard_failed_synthesizes_one() {
-        // Runner fails the aggregate without marking any child failed.
-        let parsed =
-            parse_flat_report(&flat_report("fail", 1, 0, 0, 1, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (1, 1, 0, 2, true));
     }
 
     fn report(outcome: &str) -> FlatReport {

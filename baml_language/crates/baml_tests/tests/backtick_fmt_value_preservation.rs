@@ -14,7 +14,7 @@
 //!     we assert the stronger "not touched at all" property instead of a value
 //!     comparison that could miss a §13 change.
 
-use baml_db::baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+use baml_syntax::nodes::BacktickString;
 use baml_tests::engine::{TestDbExt, db_with_root};
 
 /// Apply the BEP-049 §12 dedent and then decode escapes, as the compiler does
@@ -33,10 +33,16 @@ fn backtick_value(node_text: &str) -> String {
 fn backtick_map(src: &str, f: impl Fn(&str) -> String) -> Vec<String> {
     let mut db = db_with_root(std::path::Path::new("."));
     let file = db.file("main.baml", src);
-    let tree: SyntaxNode = baml_db::baml_compiler_parser::syntax_tree(&db, file);
-    tree.descendants()
-        .filter(|n| n.kind() == SyntaxKind::BACKTICK_STRING_LITERAL)
-        .map(|n| f(&n.text().to_string()))
+    let tree = baml_parser::typed_tree(&db, file);
+    let mut ranges: Vec<_> = tree
+        .arenas()
+        .ids::<BacktickString>()
+        .map(|id| tree.tokens().text_range(tree.span(id)))
+        .collect();
+    ranges.sort_by_key(|range| range.start());
+    ranges
+        .into_iter()
+        .map(|range| f(&tree.text()[range]))
         .collect()
 }
 

@@ -2036,7 +2036,7 @@ function live_openrouter_answers() -> bool {
 
 testset "live" with testing.Sequential() {
     // Always registered, so a keyless `--profile live -i openai_chat` still
-    // selects something (an empty selection exits 5).
+    // selects something.
     test "preconditions" {
         assert.is_true(true)
     }

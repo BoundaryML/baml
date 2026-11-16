@@ -7,9 +7,12 @@ use std::{
     time::Duration,
 };
 
-use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
+use bex_engine::{
+    BexEngine, BexExternalValue, EngineConfig, FunctionCallContextBuilder, TelemetryRecording,
+};
 use btel_bcs::{delivery::DeliveryConfig, proto::CloudUploadEnvelope};
 use btel_recorder::{RecordingConfig, proto};
+use btel_types::context::{Context, ContextPatch, ContextValue};
 use prost::Message as _;
 use serde_json::{Value, json};
 use sys_native::SysOpsExt;
@@ -28,6 +31,8 @@ const SOURCE: &str =
     include_str!("../../baml_tests/baml_src/ns_cloud_telemetry/cloud_telemetry.baml");
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+/// Follow actual BCS upload references under snapshot pressure to verify
+/// automatic process metadata and unchanged per-invocation context delivery.
 async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressure() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
@@ -48,29 +53,40 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         .mount(&server)
         .await;
     let program = baml_test_support::compile_source(trace_context::SOURCE);
+    let launch_context = Context::default().with_patch(&ContextPatch {
+        metadata: [(
+            "root".into(),
+            Some(ContextValue::String("launch-value".into())),
+        )]
+        .into(),
+        distinct_id: Some("launch-user".into()),
+    });
     let engine = Arc::new(
-        BexEngine::new_with_telemetry_recording(
+        BexEngine::new_with_config(
             program,
             Arc::new(sys_native::SysOps::native()),
             vec![],
-            None,
-            btel_clock::ClockMode::Monotonic,
-            TelemetryRecording::cloud(
-                RecordingConfig::default(),
-                btel_bcs::CloudPublisherConfig {
-                    candidate_target: 1,
-                    max_pending_snapshots: 1,
-                    inline_target_bytes: 1024 * 1024,
-                    ..btel_bcs::CloudPublisherConfig::default()
-                },
-                DeliveryConfig {
-                    max_pending_snapshots: 1,
-                    max_candidates: 1,
-                    max_targets: 2,
-                    max_pending_plans: 1,
-                    ..DeliveryConfig::new(server.uri().parse().unwrap())
-                },
-            ),
+            EngineConfig {
+                launch_context,
+                clock_mode: btel_clock::ClockMode::Monotonic,
+                recording: Some(TelemetryRecording::cloud(
+                    RecordingConfig::default(),
+                    btel_bcs::CloudPublisherConfig {
+                        candidate_target: 1,
+                        max_pending_snapshots: 1,
+                        inline_target_bytes: 1024 * 1024,
+                        ..btel_bcs::CloudPublisherConfig::default()
+                    },
+                    DeliveryConfig {
+                        max_pending_snapshots: 1,
+                        max_candidates: 1,
+                        max_targets: 2,
+                        max_pending_plans: 1,
+                        ..DeliveryConfig::new(server.uri().parse().unwrap())
+                    },
+                )),
+                ..EngineConfig::default()
+            },
         )
         .unwrap(),
     );
@@ -120,6 +136,69 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
             assert_eq!(snapshot.id.as_bytes().as_slice(), object.snapshot_id);
             snapshots.insert(*snapshot.id.as_bytes(), snapshot);
         }
+    }
+    // Decode the actual BCS PUT payload and follow its process-context CAS
+    // reference. The caller supplied identity and ordinary metadata, but no
+    // system-populated fields.
+    assert!(!files.is_empty());
+    for file in &files {
+        let header = file.header.as_ref().unwrap();
+        assert!(header.command.is_empty(), "cloud arguments stay private");
+        assert_eq!(
+            header.baml_version.as_deref(),
+            Some(baml_version::CANONICAL_VERSION)
+        );
+        let id: btel_snapshot::CasId = header.initial_context_cas_id.unwrap().into();
+        let (identity, metadata) = trace_context::metadata(&snapshots[id.as_bytes()]);
+        assert_eq!(identity, Some("launch-user"));
+        assert_eq!(
+            metadata["root"],
+            &btel_snapshot::DecodedValue::String("launch-value".into())
+        );
+        assert_eq!(
+            metadata["baml.ctx.os"],
+            &btel_snapshot::DecodedValue::String(std::env::consts::OS.into())
+        );
+        assert_eq!(
+            metadata["baml.ctx.architecture"],
+            &btel_snapshot::DecodedValue::String(std::env::consts::ARCH.into())
+        );
+        assert_eq!(
+            metadata["baml.ctx.is_ci"],
+            &btel_snapshot::DecodedValue::Bool(baml_env::raw_var("CI").is_some_and(|value| {
+                !matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "" | "0" | "false" | "no" | "off"
+                )
+            }))
+        );
+        assert_eq!(
+            metadata.get("baml.ctx.agent_harness").copied(),
+            baml_env::agent::detect()
+                .ok()
+                .flatten()
+                .filter(|agent| {
+                    !agent.trim().is_empty()
+                        && agent.len() <= 128
+                        && !agent.chars().any(char::is_control)
+                })
+                .map(|agent| btel_snapshot::DecodedValue::String(agent.into()))
+                .as_ref()
+        );
+        let allowed = [
+            "os",
+            "os_version",
+            "os_distro",
+            "architecture",
+            "is_ci",
+            "agent_harness",
+        ];
+        assert!(metadata.keys().all(|key| {
+            *key == "root"
+                || key
+                    .strip_prefix("baml.ctx.")
+                    .is_some_and(|key| allowed.contains(&key))
+        }));
     }
     trace_context::assert_leaf_contexts(&files, &snapshots, 3);
 }

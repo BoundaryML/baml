@@ -112,14 +112,15 @@ export function createMetadata({
   };
 }
 
-/** The Open Graph fields the homepage and the blog share: the Boundary share card and the site name. */
+/** The Open Graph fields the homepage and the blog share: the site's share card, in the same dark
+ *  brand as every other page's (/api/og), and the site name. */
 export const OG_SITE = {
   images: [
     {
-      alt: 'Boundary',
+      alt: 'Boundary: the hyperobservable software stack',
       height: 630,
-      type: 'image/jpeg',
-      url: '/boundary/share.jpg',
+      type: 'image/png',
+      url: ogImagePath({ title: 'The hyperobservable software stack' }),
       width: 1200,
     },
   ],

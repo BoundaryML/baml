@@ -6,7 +6,7 @@
 //! CST `Option` handling in one layer so everything downstream gets clean
 //! typed data and can be constructed directly in tests without parsing.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use baml_base::{Name, Path};
 use la_arena::{Arena, Idx};
@@ -615,10 +615,10 @@ pub struct AstSourceMap {
     /// than highlight the binding, so the two spans cannot be the same
     /// entry. Absent for binds the compiler synthesizes, which have no name
     /// token to point at.
-    pub bind_name_spans: HashMap<PatId, TextRange>,
+    pub bind_name_spans: BTreeMap<PatId, TextRange>,
     /// The NAME token of each body `let type T = …` binding, as distinct from its
     /// statement's span. Absent when the statement has no name token.
-    pub type_binding_name_spans: HashMap<StmtId, TextRange>,
+    pub type_binding_name_spans: BTreeMap<StmtId, TextRange>,
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
@@ -627,18 +627,18 @@ pub struct AstSourceMap {
     /// receiver, differing only in how the receiver is written, so both
     /// record it here — an editor asking "what name is at this offset"
     /// must not have to know which spelling produced it.
-    pub member_access_member_spans: HashMap<ExprId, TextRange>,
+    pub member_access_member_spans: BTreeMap<ExprId, TextRange>,
     /// For multi-segment `Path` expressions, per-segment spans.
     /// `path_segment_spans[expr_id][i]` is the `TextRange` of `segments[i]`.
-    pub path_segment_spans: HashMap<ExprId, Vec<TextRange>>,
+    pub path_segment_spans: BTreeMap<ExprId, Vec<TextRange>>,
     /// For labeled call arguments, the span of the label name keyed by
     /// `(call_expr_id, argument_expr_id)`.
-    pub call_arg_label_spans: HashMap<(ExprId, ExprId), TextRange>,
+    pub call_arg_label_spans: BTreeMap<(ExprId, ExprId), TextRange>,
     /// For object-constructor fields, the span of the field name keyed by
     /// `(object_expr_id, value_expr_id)`.
-    pub object_field_name_spans: HashMap<(ExprId, ExprId), TextRange>,
+    pub object_field_name_spans: BTreeMap<(ExprId, ExprId), TextRange>,
     /// For lambda expressions, the spans of their parameter names in declaration order.
-    pub lambda_parameter_spans: HashMap<ExprId, Vec<TextRange>>,
+    pub lambda_parameter_spans: BTreeMap<ExprId, Vec<TextRange>>,
     /// Ids of compiler-synthesized nodes — desugarings that have no
     /// user-written source of their own (e.g. the `string.from(${…})` wrapper
     /// and the concat accumulator that backtick interpolation lowers to). Their
@@ -648,9 +648,9 @@ pub struct AstSourceMap {
     /// uniform replacement for fragile structural heuristics (e.g. comparing a
     /// call's span to its callee's). Populated at the `alloc_*` chokepoints
     /// during lowering, via a scoped "synthesizing" flag.
-    pub synthetic_exprs: HashSet<ExprId>,
-    pub synthetic_stmts: HashSet<StmtId>,
-    pub synthetic_patterns: HashSet<PatId>,
+    pub synthetic_exprs: BTreeSet<ExprId>,
+    pub synthetic_stmts: BTreeSet<StmtId>,
+    pub synthetic_patterns: BTreeSet<PatId>,
 }
 
 impl AstSourceMap {
@@ -659,19 +659,19 @@ impl AstSourceMap {
             expr_spans: Arena::new(),
             stmt_spans: Arena::new(),
             pattern_spans: Arena::new(),
-            bind_name_spans: HashMap::new(),
-            type_binding_name_spans: HashMap::new(),
+            bind_name_spans: BTreeMap::new(),
+            type_binding_name_spans: BTreeMap::new(),
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
-            member_access_member_spans: HashMap::new(),
-            path_segment_spans: HashMap::new(),
-            call_arg_label_spans: HashMap::new(),
-            object_field_name_spans: HashMap::new(),
-            lambda_parameter_spans: HashMap::new(),
-            synthetic_exprs: HashSet::new(),
-            synthetic_stmts: HashSet::new(),
-            synthetic_patterns: HashSet::new(),
+            member_access_member_spans: BTreeMap::new(),
+            path_segment_spans: BTreeMap::new(),
+            call_arg_label_spans: BTreeMap::new(),
+            object_field_name_spans: BTreeMap::new(),
+            lambda_parameter_spans: BTreeMap::new(),
+            synthetic_exprs: BTreeSet::new(),
+            synthetic_stmts: BTreeSet::new(),
+            synthetic_patterns: BTreeSet::new(),
         }
     }
 
@@ -1685,15 +1685,66 @@ pub struct FunctionDef {
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
+    /// The title of the `//#` header line directly above this declaration,
+    /// without its `#`s; the control-flow visualizer labels the function
+    /// with it. `None` for a function without one, or an empty title.
+    pub header_title: Option<std::string::String>,
     /// True when this fn is preceded by a `//baml:tagged_string` marker
     /// comment. BEP-049 §10: such fns are callable as tagged template
     /// tags (a tag name immediately followed by a backtick literal), and
     /// their first parameter must be `body: (...) -> TaggedString`.
     pub is_tagged_template_tag: bool,
+    /// The `//baml:` directives a native function is declared with.
+    pub directives: NativeDirectives,
     /// Declaration-only trace policy; resolved in the declaration scope.
     pub trace_hook: Option<TraceHookDirective>,
     pub span: TextRange,
     pub name_span: TextRange,
+}
+
+/// A `//baml:` directive a native function is declared with, read by the
+/// builtin codegen: how its `$rust_function` glue is bound.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeDirective {
+    /// `//baml:mut_self`: the glue takes `&mut self`.
+    MutSelf,
+    /// `//baml:vm`: the glue takes the VM.
+    Vm,
+    /// `//baml:mut_vm`: the glue takes the VM mutably.
+    MutVm,
+    /// `//baml:may_yield`: the glue may yield.
+    MayYield,
+    /// `//baml:fallible`: the glue may fail.
+    Fallible,
+    /// `//baml:local_twin`: the function has a local twin.
+    LocalTwin,
+}
+
+impl NativeDirective {
+    const fn bit(self) -> u8 {
+        1 << (self as u8)
+    }
+}
+
+/// The set of [`NativeDirective`]s written on a function. Each is a fact of
+/// the declaration; the codegen combines them.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct NativeDirectives(u8);
+
+impl NativeDirectives {
+    /// No directives.
+    pub const NONE: Self = Self(0);
+
+    /// This set with `directive` in it.
+    #[must_use]
+    pub const fn with(self, directive: NativeDirective) -> Self {
+        Self(self.0 | directive.bit())
+    }
+
+    /// Whether `directive` was written.
+    pub const fn has(self, directive: NativeDirective) -> bool {
+        self.0 & directive.bit() != 0
+    }
 }
 
 /// What produced a [`LambdaDef`], where that changes how TIR types it.
@@ -1873,8 +1924,6 @@ pub struct ClassDef {
     pub generic_params: Vec<GenericParam>,
     pub fields: Vec<FieldDef>,
     pub methods: Vec<FunctionDef>,
-    /// `implements I { ... }` blocks declared inside the class body (BEP-044).
-    pub implements: Vec<ImplementsBlockDef>,
     pub attributes: Vec<RawAttribute>,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<std::string::String>,
@@ -1884,8 +1933,8 @@ pub struct ClassDef {
 
 /// Definition of an `interface` declaration (BEP-044).
 ///
-/// Interfaces declare a contract over fields and methods. Classes opt in to
-/// the contract via [`ImplementsBlockDef`] inside the class body.
+/// Interfaces declare a contract over fields and methods. Types opt in to
+/// the contract with an `implements` block ([`ImplementsForDef`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceDef {
     pub name: Name,
@@ -1925,25 +1974,6 @@ pub struct MethodSigDef {
     pub name_span: TextRange,
 }
 
-/// One `implements I { ... }` block inside a class body (BEP-044).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImplementsBlockDef {
-    /// The target interface, captured as a `TypeExpr` so we can accept generic
-    /// parameterization like `implements Container<int>`. The path's first
-    /// segment is the interface name.
-    pub target: TypeExpr,
-    /// Explicit mappings from interface fields to class fields:
-    /// `interface_field as class_field`.
-    pub field_links: Vec<InterfaceFieldLinkDef>,
-    /// Associated type bindings, e.g. `type Item = int`.
-    pub associated_type_bindings: Vec<AssociatedTypeBindingDef>,
-    /// Method overrides / definitions inside this `implements` block.
-    pub methods: Vec<FunctionDef>,
-    /// True when this block came from top-level `implements I for T`.
-    pub is_out_of_body: bool,
-    pub span: TextRange,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InterfaceFieldLinkDef {
     pub interface_field: Name,
@@ -1953,7 +1983,23 @@ pub struct InterfaceFieldLinkDef {
     pub class_field_span: TextRange,
 }
 
-/// Top-level `implements I for T { ... }` block (BEP-044).
+/// Where an `implements` block was written. The in-body spelling is
+/// shorthand for the out-of-body one (`TYPE_SYSTEM.md`, "Interface
+/// Implementations"); the origin is kept for the rules that read it — an
+/// interface with fields can only be implemented in-body — and must not
+/// influence resolution, dispatch or coherence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ImplOrigin {
+    /// `class C<T> { implements I { … } }`: the block's generics are the
+    /// class's and its for-target is `C<T>`.
+    InBody,
+    /// `implements<…> I for T { … }` at the top level.
+    OutOfBody,
+}
+
+/// An `implements` block (BEP-044), in either spelling: `implements I for T
+/// { ... }` at the top level, or `implements I { ... }` inside the body of
+/// the class it is for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplementsForDef {
     /// Generic type parameters on the implements block, each with its set of
@@ -1970,8 +2016,75 @@ pub struct ImplementsForDef {
     pub associated_type_bindings: Vec<AssociatedTypeBindingDef>,
     /// Method definitions inside the block.
     pub methods: Vec<FunctionDef>,
+    pub origin: ImplOrigin,
     pub span: TextRange,
     pub docstring: Option<String>,
+}
+
+impl ImplementsForDef {
+    /// Whether this block implements for `class` itself; see
+    /// [`impl_is_for_class`].
+    pub fn is_for_class(&self, class: &ClassDef) -> bool {
+        impl_is_for_class(
+            self.origin,
+            self.generic_params.is_empty(),
+            &self.for_target,
+            &class.name,
+        )
+    }
+}
+
+/// Whether an `implements` block with these parts implements for the class
+/// named `class_name` itself: written in its body, or written out-of-body for
+/// exactly that class (no generics on the block, the class named bare). Such a
+/// block's generics are the class's and its for-type is the class applied to
+/// them; everything else is a free implementation with a for-type of its own.
+/// The ONE rule, read by the AST's consumers and by HIR's `class_impls`.
+pub fn impl_is_for_class(
+    origin: ImplOrigin,
+    no_generics: bool,
+    for_target: &TypeExpr,
+    class_name: &Name,
+) -> bool {
+    let TypeExprKind::Path {
+        path, generic_args, ..
+    } = &for_target.kind
+    else {
+        return false;
+    };
+    match origin {
+        ImplOrigin::InBody => path.last() == Some(class_name),
+        ImplOrigin::OutOfBody => {
+            no_generics
+                && generic_args.is_empty()
+                && matches!(path.segments(), [name] if name == class_name)
+        }
+    }
+}
+
+/// The type a class's in-body `implements` blocks are for: the class applied
+/// to its own generic parameters (`C<T, U>`), spanning its name.
+pub fn class_self_type(
+    class_name: &Name,
+    generic_params: &[GenericParam],
+    span: TextRange,
+) -> TypeExpr {
+    TypeExprKind::Path {
+        path: Path::bare(class_name.clone()),
+        generic_args: generic_params
+            .iter()
+            .map(|param| {
+                TypeExprKind::Path {
+                    path: Path::bare(param.name.clone()),
+                    generic_args: Vec::new(),
+                    associated_type_bindings: Vec::new(),
+                }
+                .at(param.name_span)
+            })
+            .collect(),
+        associated_type_bindings: Vec::new(),
+    }
+    .at(span)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

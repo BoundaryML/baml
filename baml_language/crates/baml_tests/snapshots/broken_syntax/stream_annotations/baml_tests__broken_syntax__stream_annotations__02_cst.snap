@@ -1,0 +1,694 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== main.baml ===
+SourceFile@243..2853
+  items: ClassDef@243..293
+    kw: Class "class" @243..248
+    name: Name@249..258
+      token: Word "Education" @249..258
+    l: LBrace "{" @259..260
+    members: Field@265..278
+      name: Name@265..271
+        token: Word "school" @265..271
+      ty: PathType@272..278
+        head: Name@272..278
+          token: Word "string" @272..278
+    members: Field@283..291
+      name: Name@283..287
+        token: Word "year" @283..287
+      ty: PathType@288..291
+        head: Name@288..291
+          token: Word "int" @288..291
+    r: RBrace "}" @292..293
+  items: ClassDef@295..339
+    kw: Class "class" @295..300
+    name: Name@301..307
+      token: Word "Person" @301..307
+    l: LBrace "{" @308..309
+    members: Field@314..325
+      name: Name@314..318
+        token: Word "name" @314..318
+      ty: PathType@319..325
+        head: Name@319..325
+          token: Word "string" @319..325
+    members: Field@330..337
+      name: Name@330..333
+        token: Word "age" @330..333
+      ty: PathType@334..337
+        head: Name@334..337
+          token: Word "int" @334..337
+    r: RBrace "}" @338..339
+  items: ClassDef@341..373
+    kw: Class "class" @341..346
+    name: Name@347..352
+      token: Word "Inner" @347..352
+    l: LBrace "{" @353..354
+    members: Field@359..371
+      name: Name@359..364
+        token: Word "value" @359..364
+      ty: PathType@365..371
+        head: Name@365..371
+          token: Word "string" @365..371
+    r: RBrace "}" @372..373
+  items: ClassDef@506..711
+    kw: Class "class" @506..511
+    name: Name@512..531
+      token: Word "ExplicitAnnotations" @512..531
+    l: LBrace "{" @532..533
+    members: Field@538..581
+      name: Name@538..542
+        token: Word "name" @538..542
+      ty: PathType@543..549
+        head: Name@543..549
+          token: Word "string" @543..549
+      attrs: Attribute@550..581
+        at: At "@" @550..551
+        path: DottedName@551..567
+          head: Name@551..557
+            token: Stream "stream" @551..557
+          dot: Dot "." @557..558
+          name: Name@558..567
+            token: Word "starts_as" @558..567
+        args: AttrArgs@567..581
+          l: LParen "(" @567..568
+          args: StringLit@568..580
+            token: String "\"Loading...\"" @568..580
+          r: RParen ")" @580..581
+    members: Field@586..612
+      name: Name@586..589
+        token: Word "gpa" @586..589
+      ty: PathType@590..595
+        head: Name@590..595
+          token: Word "float" @590..595
+      attrs: Attribute@596..612
+        at: At "@" @596..597
+        path: DottedName@597..612
+          head: Name@597..603
+            token: Stream "stream" @597..603
+          dot: Dot "." @603..604
+          name: Name@604..612
+            token: Word "not_null" @604..612
+    members: Field@617..666
+      name: Name@617..631
+        token: Word "certifications" @617..631
+      ty: ArrayType@632..643
+        inner: PathType@632..641
+          head: Name@632..641
+            token: Word "Education" @632..641
+        l: LBracket "[" @641..642
+        r: RBracket "]" @642..643
+      attrs: Attribute@644..666
+        at: At "@" @644..645
+        path: DottedName@645..656
+          head: Name@645..651
+            token: Stream "stream" @645..651
+          dot: Dot "." @651..652
+          name: Name@652..656
+            token: Type "type" @652..656
+        args: AttrArgs@656..666
+          l: LParen "(" @656..657
+          args: Name@657..666
+            token: Word "Education" @657..666
+          r: <missing @666>
+    members: Bogus@666..667
+      tokens: LBracket "[" @666..667
+    members: Bogus@667..668
+      tokens: RBracket "]" @667..668
+    members: Bogus@668..669
+      tokens: RParen ")" @668..669
+    members: Field@674..709
+      name: Name@674..682
+        token: Word "internal" @674..682
+      ty: PathType@683..689
+        head: Name@683..689
+          token: Word "string" @683..689
+      attrs: Attribute@690..709
+        at: At "@" @690..691
+        path: DottedName@691..702
+          head: Name@691..697
+            token: Stream "stream" @691..697
+          dot: Dot "." @697..698
+          name: Name@698..702
+            token: Type "type" @698..702
+        args: AttrArgs@702..709
+          l: LParen "(" @702..703
+          args: Name@703..708
+            token: Word "never" @703..708
+          r: RParen ")" @708..709
+    r: RBrace "}" @710..711
+  items: ClassDef@812..934
+    kw: Class "class" @812..817
+    name: Name@818..826
+      token: Word "WithDone" @818..826
+    l: LBrace "{" @827..828
+    members: Field@833..859
+      name: Name@833..837
+        token: Type "type" @833..837
+      ty: LiteralType@838..846
+        value: String "\"resume\"" @838..846
+      attrs: Attribute@847..859
+        at: At "@" @847..848
+        path: DottedName@848..859
+          head: Name@848..854
+            token: Stream "stream" @848..854
+          dot: Dot "." @854..855
+          name: Name@855..859
+            token: Word "done" @855..859
+    members: Field@864..888
+      name: Name@864..868
+        token: Word "name" @864..868
+      ty: PathType@869..875
+        head: Name@869..875
+          token: Word "string" @869..875
+      attrs: Attribute@876..888
+        at: At "@" @876..877
+        path: DottedName@877..888
+          head: Name@877..883
+            token: Stream "stream" @877..883
+          dot: Dot "." @883..884
+          name: Name@884..888
+            token: Word "done" @884..888
+    members: Field@893..932
+      name: Name@893..895
+        token: Word "id" @893..895
+      ty: PathType@896..902
+        head: Name@896..902
+          token: Word "string" @896..902
+      attrs: Attribute@903..915
+        at: At "@" @903..904
+        path: DottedName@904..915
+          head: Name@904..910
+            token: Stream "stream" @904..910
+          dot: Dot "." @910..911
+          name: Name@911..915
+            token: Word "done" @911..915
+      attrs: Attribute@916..932
+        at: At "@" @916..917
+        path: DottedName@917..932
+          head: Name@917..923
+            token: Stream "stream" @917..923
+          dot: Dot "." @923..924
+          name: Name@924..932
+            token: Word "not_null" @924..932
+    r: RBrace "}" @933..934
+  items: ClassDef@936..999
+    kw: Class "class" @936..941
+    name: Name@942..953
+      token: Word "AtomicPoint" @942..953
+    l: LBrace "{" @954..955
+    members: BlockAttr@960..973
+      at: AtAt "@@" @960..962
+      path: DottedName@962..973
+        head: Name@962..968
+          token: Stream "stream" @962..968
+        dot: Dot "." @968..969
+        name: Name@969..973
+          token: Word "done" @969..973
+    members: Field@978..985
+      name: Name@978..979
+        token: Word "x" @978..979
+      ty: PathType@980..985
+        head: Name@980..985
+          token: Word "float" @980..985
+    members: Field@990..997
+      name: Name@990..991
+        token: Word "y" @990..991
+      ty: PathType@992..997
+        head: Name@992..997
+          token: Word "float" @992..997
+    r: RBrace "}" @998..999
+  items: ClassDef@1001..1095
+    kw: Class "class" @1001..1006
+    name: Name@1007..1025
+      token: Word "AtomicWithOverride" @1007..1025
+    l: LBrace "{" @1026..1027
+    members: BlockAttr@1032..1045
+      at: AtAt "@@" @1032..1034
+      path: DottedName@1034..1045
+        head: Name@1034..1040
+          token: Stream "stream" @1034..1040
+        dot: Dot "." @1040..1041
+        name: Name@1041..1045
+          token: Word "done" @1041..1045
+    members: Field@1050..1057
+      name: Name@1050..1051
+        token: Word "x" @1050..1051
+      ty: PathType@1052..1057
+        head: Name@1052..1057
+          token: Word "float" @1052..1057
+    members: Field@1062..1093
+      name: Name@1062..1063
+        token: Word "y" @1062..1063
+      ty: PathType@1064..1069
+        head: Name@1064..1069
+          token: Word "float" @1064..1069
+      attrs: Attribute@1070..1093
+        at: At "@" @1070..1071
+        path: DottedName@1071..1087
+          head: Name@1071..1077
+            token: Stream "stream" @1071..1077
+          dot: Dot "." @1077..1078
+          name: Name@1078..1087
+            token: Word "starts_as" @1078..1087
+        args: AttrArgs@1087..1093
+          l: LParen "(" @1087..1088
+          args: Name@1088..1092
+            token: Null "null" @1088..1092
+          r: RParen ")" @1092..1093
+    r: RBrace "}" @1094..1095
+  items: ClassDef@1226..1305
+    kw: Class "class" @1226..1231
+    name: Name@1232..1248
+      token: Word "NotNullEducation" @1232..1248
+    l: LBrace "{" @1249..1250
+    members: BlockAttr@1255..1272
+      at: AtAt "@@" @1255..1257
+      path: DottedName@1257..1272
+        head: Name@1257..1263
+          token: Stream "stream" @1257..1263
+        dot: Dot "." @1263..1264
+        name: Name@1264..1272
+          token: Word "not_null" @1264..1272
+    members: Field@1277..1290
+      name: Name@1277..1283
+        token: Word "school" @1277..1283
+      ty: PathType@1284..1290
+        head: Name@1284..1290
+          token: Word "string" @1284..1290
+    members: Field@1295..1303
+      name: Name@1295..1299
+        token: Word "year" @1295..1299
+      ty: PathType@1300..1303
+        head: Name@1300..1303
+          token: Word "int" @1300..1303
+    r: RBrace "}" @1304..1305
+  items: EnumDef@1307..1375
+    kw: Enum "enum" @1307..1311
+    name: Name@1312..1325
+      token: Word "NotNullStatus" @1312..1325
+    l: LBrace "{" @1326..1327
+    members: BlockAttr@1332..1349
+      at: AtAt "@@" @1332..1334
+      path: DottedName@1334..1349
+        head: Name@1334..1340
+          token: Stream "stream" @1334..1340
+        dot: Dot "." @1340..1341
+        name: Name@1341..1349
+          token: Word "not_null" @1341..1349
+    members: EnumVariant@1354..1360
+      name: Name@1354..1360
+        token: Word "Active" @1354..1360
+    members: EnumVariant@1365..1373
+      name: Name@1365..1373
+        token: Word "Inactive" @1365..1373
+    r: RBrace "}" @1374..1375
+  items: ClassDef@1377..1551
+    kw: Class "class" @1377..1382
+    name: Name@1383..1400
+      token: Word "ReferencesNotNull" @1383..1400
+    l: LBrace "{" @1401..1402
+    members: Field@1407..1418
+      name: Name@1407..1411
+        token: Word "name" @1407..1411
+      ty: PathType@1412..1418
+        head: Name@1412..1418
+          token: Word "string" @1412..1418
+    members: Field@1423..1449
+      name: Name@1423..1432
+        token: Word "education" @1423..1432
+      ty: PathType@1433..1449
+        head: Name@1433..1449
+          token: Word "NotNullEducation" @1433..1449
+    members: Field@1454..1474
+      name: Name@1454..1460
+        token: Word "status" @1454..1460
+      ty: PathType@1461..1474
+        head: Name@1461..1474
+          token: Word "NotNullStatus" @1461..1474
+    members: Field@1479..1508
+      name: Name@1479..1489
+        token: Word "educations" @1479..1489
+      ty: ArrayType@1490..1508
+        inner: PathType@1490..1506
+          head: Name@1490..1506
+            token: Word "NotNullEducation" @1490..1506
+        l: LBracket "[" @1506..1507
+        r: RBracket "]" @1507..1508
+    members: Field@1513..1549
+      name: Name@1513..1531
+        token: Word "optional_education" @1513..1531
+      ty: OptionalType@1532..1549
+        inner: PathType@1532..1548
+          head: Name@1532..1548
+            token: Word "NotNullEducation" @1532..1548
+        q: Question "?" @1548..1549
+    r: RBrace "}" @1550..1551
+  items: ClassDef@1652..1876
+    kw: Class "class" @1652..1657
+    name: Name@1658..1673
+      token: Word "AnnotatedResume" @1658..1673
+    l: LBrace "{" @1674..1675
+    members: Field@1680..1704
+      name: Name@1680..1684
+        token: Word "name" @1680..1684
+      ty: PathType@1685..1691
+        head: Name@1685..1691
+          token: Word "string" @1685..1691
+      attrs: Attribute@1692..1704
+        at: At "@" @1692..1693
+        path: DottedName@1693..1704
+          head: Name@1693..1699
+            token: Stream "stream" @1693..1699
+          dot: Dot "." @1699..1700
+          name: Name@1700..1704
+            token: Word "done" @1700..1704
+    members: Field@1709..1735
+      name: Name@1709..1712
+        token: Word "gpa" @1709..1712
+      ty: PathType@1713..1718
+        head: Name@1713..1718
+          token: Word "float" @1713..1718
+      attrs: Attribute@1719..1735
+        at: At "@" @1719..1720
+        path: DottedName@1720..1735
+          head: Name@1720..1726
+            token: Stream "stream" @1720..1726
+          dot: Dot "." @1726..1727
+          name: Name@1727..1735
+            token: Word "not_null" @1727..1735
+    members: Field@1740..1784
+      name: Name@1740..1745
+        token: Word "title" @1740..1745
+      ty: PathType@1746..1752
+        head: Name@1746..1752
+          token: Word "string" @1746..1752
+      attrs: Attribute@1753..1784
+        at: At "@" @1753..1754
+        path: DottedName@1754..1770
+          head: Name@1754..1760
+            token: Stream "stream" @1754..1760
+          dot: Dot "." @1760..1761
+          name: Name@1761..1770
+            token: Word "starts_as" @1761..1770
+        args: AttrArgs@1770..1784
+          l: LParen "(" @1770..1771
+          args: StringLit@1771..1783
+            token: String "\"Loading...\"" @1771..1783
+          r: RParen ")" @1783..1784
+    members: Field@1789..1827
+      name: Name@1789..1800
+        token: Word "internal_id" @1789..1800
+      ty: PathType@1801..1807
+        head: Name@1801..1807
+          token: Word "string" @1801..1807
+      attrs: Attribute@1808..1827
+        at: At "@" @1808..1809
+        path: DottedName@1809..1820
+          head: Name@1809..1815
+            token: Stream "stream" @1809..1815
+          dot: Dot "." @1815..1816
+          name: Name@1816..1820
+            token: Type "type" @1816..1820
+        args: AttrArgs@1820..1827
+          l: LParen "(" @1820..1821
+          args: Name@1821..1826
+            token: Word "never" @1821..1826
+          r: RParen ")" @1826..1827
+    members: Field@1832..1874
+      name: Name@1832..1837
+        token: Word "token" @1832..1837
+      ty: PathType@1838..1844
+        head: Name@1838..1844
+          token: Word "string" @1838..1844
+      attrs: Attribute@1845..1857
+        at: At "@" @1845..1846
+        path: DottedName@1846..1857
+          head: Name@1846..1852
+            token: Stream "stream" @1846..1852
+          dot: Dot "." @1852..1853
+          name: Name@1853..1857
+            token: Word "done" @1853..1857
+      attrs: Attribute@1858..1874
+        at: At "@" @1858..1859
+        path: DottedName@1859..1874
+          head: Name@1859..1865
+            token: Stream "stream" @1859..1865
+          dot: Dot "." @1865..1866
+          name: Name@1866..1874
+            token: Word "not_null" @1866..1874
+    r: RBrace "}" @1875..1876
+  items: EnumDef@1969..2016
+    kw: Enum "enum" @1969..1973
+    name: Name@1974..1980
+      token: Word "Status" @1974..1980
+    l: LBrace "{" @1981..1982
+    members: EnumVariant@1987..1994
+      name: Name@1987..1994
+        token: Word "Loading" @1987..1994
+    members: EnumVariant@1999..2004
+      name: Name@1999..2004
+        token: Word "Ready" @1999..2004
+    members: EnumVariant@2009..2014
+      name: Name@2009..2014
+        token: Word "Error" @2009..2014
+    r: RBrace "}" @2015..2016
+  items: ClassDef@2018..2115
+    kw: Class "class" @2018..2023
+    name: Name@2024..2038
+      token: Word "StatusResponse" @2024..2038
+    l: LBrace "{" @2039..2040
+    members: Field@2045..2094
+      name: Name@2045..2051
+        token: Word "status" @2045..2051
+      ty: PathType@2052..2058
+        head: Name@2052..2058
+          token: Word "Status" @2052..2058
+      attrs: Attribute@2059..2094
+        at: At "@" @2059..2060
+        path: DottedName@2060..2076
+          head: Name@2060..2066
+            token: Stream "stream" @2060..2066
+          dot: Dot "." @2066..2067
+          name: Name@2067..2076
+            token: Word "starts_as" @2067..2076
+        args: AttrArgs@2076..2094
+          l: LParen "(" @2076..2077
+          args: StringLit@2077..2093
+            token: String "\"Status.Loading\"" @2077..2093
+          r: RParen ")" @2093..2094
+    members: Field@2099..2113
+      name: Name@2099..2106
+        token: Word "message" @2099..2106
+      ty: PathType@2107..2113
+        head: Name@2107..2113
+          token: Word "string" @2107..2113
+    r: RBrace "}" @2114..2115
+  items: ClassDef@2256..2449
+    kw: Class "class" @2256..2261
+    name: Name@2262..2283
+      token: Word "TypeCategoryOverrides" @2262..2283
+    l: LBrace "{" @2284..2285
+    members: Field@2290..2325
+      name: Name@2290..2295
+        token: Word "items" @2290..2295
+      ty: ArrayType@2296..2304
+        inner: PathType@2296..2302
+          head: Name@2296..2302
+            token: Word "Person" @2296..2302
+        l: LBracket "[" @2302..2303
+        r: RBracket "]" @2303..2304
+      attrs: Attribute@2305..2325
+        at: At "@" @2305..2306
+        path: DottedName@2306..2317
+          head: Name@2306..2312
+            token: Stream "stream" @2306..2312
+          dot: Dot "." @2312..2313
+          name: Name@2313..2317
+            token: Type "type" @2313..2317
+        args: AttrArgs@2317..2325
+          l: LParen "(" @2317..2318
+          args: Name@2318..2324
+            token: Word "string" @2318..2324
+          r: RParen ")" @2324..2325
+    members: Field@2330..2361
+      name: Name@2330..2335
+        token: Word "maybe" @2330..2335
+      ty: OptionalType@2336..2343
+        inner: PathType@2336..2342
+          head: Name@2336..2342
+            token: Word "string" @2336..2342
+        q: Question "?" @2342..2343
+      attrs: Attribute@2344..2361
+        at: At "@" @2344..2345
+        path: DottedName@2345..2356
+          head: Name@2345..2351
+            token: Stream "stream" @2345..2351
+          dot: Dot "." @2351..2352
+          name: Name@2352..2356
+            token: Type "type" @2352..2356
+        args: AttrArgs@2356..2361
+          l: LParen "(" @2356..2357
+          args: Name@2357..2360
+            token: Word "int" @2357..2360
+          r: RParen ")" @2360..2361
+    members: Field@2366..2401
+      name: Name@2366..2374
+        token: Word "internal" @2366..2374
+      ty: PathType@2375..2381
+        head: Name@2375..2381
+          token: Word "string" @2375..2381
+      attrs: Attribute@2382..2401
+        at: At "@" @2382..2383
+        path: DottedName@2383..2394
+          head: Name@2383..2389
+            token: Stream "stream" @2383..2389
+          dot: Dot "." @2389..2390
+          name: Name@2390..2394
+            token: Type "type" @2390..2394
+        args: AttrArgs@2394..2401
+          l: LParen "(" @2394..2395
+          args: Name@2395..2400
+            token: Word "never" @2395..2400
+          r: RParen ")" @2400..2401
+    members: Field@2406..2447
+      name: Name@2406..2410
+        token: Word "data" @2406..2410
+      ty: PathType@2411..2427
+        head: Name@2411..2414
+          token: Map "map" @2411..2414
+        args: TypeArgs@2414..2427
+          l: Less "<" @2414..2415
+          args: PathType@2415..2421
+            head: Name@2415..2421
+              token: Word "string" @2415..2421
+          args: Comma "," @2421..2422
+          args: PathType@2423..2426
+            head: Name@2423..2426
+              token: Word "int" @2423..2426
+          r: Greater ">" @2426..2427
+      attrs: Attribute@2428..2447
+        at: At "@" @2428..2429
+        path: DottedName@2429..2440
+          head: Name@2429..2435
+            token: Stream "stream" @2429..2435
+          dot: Dot "." @2435..2436
+          name: Name@2436..2440
+            token: Type "type" @2436..2440
+        args: AttrArgs@2440..2447
+          l: LParen "(" @2440..2441
+          args: Name@2441..2446
+            token: Word "never" @2441..2446
+          r: RParen ")" @2446..2447
+    r: RBrace "}" @2448..2449
+  items: ClassDef@2554..2853
+    kw: Class "class" @2554..2559
+    name: Name@2560..2574
+      token: Word "WithDesugaring" @2560..2574
+    l: LBrace "{" @2575..2576
+    members: Field@2581..2612
+      name: Name@2581..2592
+        token: Word "done_string" @2581..2592
+      ty: PathType@2593..2599
+        head: Name@2593..2599
+          token: Word "string" @2593..2599
+      attrs: Attribute@2600..2612
+        at: At "@" @2600..2601
+        path: DottedName@2601..2612
+          head: Name@2601..2607
+            token: Stream "stream" @2601..2607
+          dot: Dot "." @2607..2608
+          name: Name@2608..2612
+            token: Word "done" @2608..2612
+    members: Field@2617..2656
+      name: Name@2617..2632
+        token: Word "not_null_string" @2617..2632
+      ty: PathType@2633..2639
+        head: Name@2633..2639
+          token: Word "string" @2633..2639
+      attrs: Attribute@2640..2656
+        at: At "@" @2640..2641
+        path: DottedName@2641..2656
+          head: Name@2641..2647
+            token: Stream "stream" @2641..2647
+          dot: Dot "." @2647..2648
+          name: Name@2648..2656
+            token: Word "not_null" @2648..2656
+    members: Field@2661..2698
+      name: Name@2661..2675
+        token: Word "not_null_class" @2661..2675
+      ty: PathType@2676..2681
+        head: Name@2676..2681
+          token: Word "Inner" @2676..2681
+      attrs: Attribute@2682..2698
+        at: At "@" @2682..2683
+        path: DottedName@2683..2698
+          head: Name@2683..2689
+            token: Stream "stream" @2683..2689
+          dot: Dot "." @2689..2690
+          name: Name@2690..2698
+            token: Word "not_null" @2690..2698
+    members: Field@2703..2757
+      name: Name@2703..2720
+        token: Word "done_and_not_null" @2703..2720
+      ty: PathType@2721..2727
+        head: Name@2721..2727
+          token: Word "string" @2721..2727
+      attrs: Attribute@2728..2740
+        at: At "@" @2728..2729
+        path: DottedName@2729..2740
+          head: Name@2729..2735
+            token: Stream "stream" @2729..2735
+          dot: Dot "." @2735..2736
+          name: Name@2736..2740
+            token: Word "done" @2736..2740
+      attrs: Attribute@2741..2757
+        at: At "@" @2741..2742
+        path: DottedName@2742..2757
+          head: Name@2742..2748
+            token: Stream "stream" @2742..2748
+          dot: Dot "." @2748..2749
+          name: Name@2749..2757
+            token: Word "not_null" @2749..2757
+    members: Field@2762..2799
+      name: Name@2762..2772
+        token: Word "type_never" @2762..2772
+      ty: PathType@2773..2779
+        head: Name@2773..2779
+          token: Word "string" @2773..2779
+      attrs: Attribute@2780..2799
+        at: At "@" @2780..2781
+        path: DottedName@2781..2792
+          head: Name@2781..2787
+            token: Stream "stream" @2781..2787
+          dot: Dot "." @2787..2788
+          name: Name@2788..2792
+            token: Type "type" @2788..2792
+        args: AttrArgs@2792..2799
+          l: LParen "(" @2792..2793
+          args: Name@2793..2798
+            token: Word "never" @2793..2798
+          r: RParen ")" @2798..2799
+    members: Field@2804..2851
+      name: Name@2804..2822
+        token: Word "type_never_literal" @2804..2822
+      ty: LiteralType@2823..2831
+        value: String "\"resume\"" @2823..2831
+      attrs: Attribute@2832..2851
+        at: At "@" @2832..2833
+        path: DottedName@2833..2844
+          head: Name@2833..2839
+            token: Stream "stream" @2833..2839
+          dot: Dot "." @2839..2840
+          name: Name@2840..2844
+            token: Type "type" @2840..2844
+        args: AttrArgs@2844..2851
+          l: LParen "(" @2844..2845
+          args: Name@2845..2850
+            token: Word "never" @2845..2850
+          r: RParen ")" @2850..2851
+    r: RBrace "}" @2852..2853
+error @666..667: expected ')', found '['
+error @666..667: expected Unexpected token in class body, found '['
+error @667..668: expected Unexpected token in class body, found ']'
+error @668..669: expected Unexpected token in class body, found ')'

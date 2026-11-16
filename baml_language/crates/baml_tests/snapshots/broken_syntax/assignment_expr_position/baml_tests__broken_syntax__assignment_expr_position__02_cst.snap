@@ -1,0 +1,46 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== main.baml ===
+SourceFile@280..378
+  items: FunctionDef@280..378
+    kw: Function "function" @280..288
+    name: Name@289..322
+      token: Word "assignment_in_expression_position" @289..322
+    params: ParamList@322..324
+      l: LParen "(" @322..323
+      r: RParen ")" @323..324
+    ret: ReturnType@325..331
+      arrow: Arrow "->" @325..327
+      ty: PathType@328..331
+        head: Name@328..331
+          token: Word "int" @328..331
+    body: Block@332..378
+      l: LBrace "{" @332..333
+      stmts: LetStmt@338..349
+        introducer: Let "let" @338..341
+        pattern: BindingPattern@342..343
+          name: Name@342..343
+            token: Word "x" @342..343
+        eq: Equals "=" @344..345
+        init: LiteralExpr@346..348
+          token: Integer "10" @346..348
+        semi: Semicolon ";" @348..349
+      stmts: LetStmt@354..370
+        introducer: Let "let" @354..357
+        pattern: BindingPattern@358..359
+          name: Name@358..359
+            token: Word "y" @358..359
+        eq: Equals "=" @360..361
+        init: ParenExpr@362..369
+          l: LParen "(" @362..363
+          inner: PathExpr@363..364
+            head: Name@363..364
+              token: Word "x" @363..364
+          r: RParen ")" @368..369
+        semi: Semicolon ";" @369..370
+      tail: PathExpr@375..376
+        head: Name@375..376
+          token: Word "y" @375..376
+      r: RBrace "}" @377..378
+error @363..368: assignment is not allowed in expression position; assignment is a statement

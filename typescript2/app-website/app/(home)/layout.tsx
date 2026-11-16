@@ -1,23 +1,23 @@
-import appleIcon from '@boundaryml/brand/logo/favicon/boundary/apple-touch-icon.png';
-import favicon32 from '@boundaryml/brand/logo/favicon/boundary/favicon-32.png';
 import type { Metadata, Viewport } from 'next';
 import { OG_SITE, SITE_URL, TWITTER_HANDLE } from '@/app/_lib/metadata';
 import { SiteStructuredData } from '@/components/structured-data';
 import { AnalyticsProvider } from '@/context/analytics';
 import { FONT_VARIABLES } from './fonts';
+import appleIcon from './icons/apple-touch-icon.png';
+import favicon32 from './icons/favicon-32.png';
 import './globals.css';
 
 // The site's root layout. Every page follows the brand package's BAML lane (Clover purple on a dark
 // theme) and loads ./globals.css. Pages other than the homepage and the blog use PageShell
 // (components/home/page-shell.tsx) for the homepage's nav and footer.
 
-const TITLE = 'Boundary | The unified software stack for agents';
+const TITLE = 'Boundary | The hyperobservable software stack';
 const DESCRIPTION =
   'BAML is one toolchain from the compiler to production. Build, test, trace, query, and alert on your code with tools that all read the same types.';
 
 export const metadata: Metadata = {
   description: DESCRIPTION,
-  // The brand package's Boundary favicons.
+  // The Boundary alt mark, from ./icons. Both PNGs are rendered from ./icons/favicon.svg.
   icons: { apple: appleIcon.src, icon: favicon32.src },
   metadataBase: new URL(SITE_URL),
   openGraph: {

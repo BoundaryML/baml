@@ -47,51 +47,32 @@ pub struct Interface {
     pub span: TextRange,
 }
 
-/// What an `implements` block applies to. Unifying the owner with the for-target
-/// makes "in-body with an explicit for-target" and "out-of-body without one"
-/// both unrepresentable.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ImplSubject {
-    /// `implements I { … }` in a class body (or a simple `implement I for C`
-    /// merged onto `C`). The for-type is the class itself; the generics are the
-    /// class's. `out_of_body` records the syntactic origin for diagnostics only
-    /// — it must NOT influence resolution, dispatch, or coherence.
-    InClass {
-        class: LocalItemId<ClassMarker>,
-        out_of_body: bool,
-    },
-    /// `implement<…> I for <for_target> { … }`: an explicit for-type plus the
-    /// block's own generic parameters.
-    Free {
-        for_target: ast::TypeExpr,
-        generics: Vec<GenericParam>,
-    },
-}
-
-/// A unified `implements` block (both kinds) stored in the `ItemTree`, keyed by
-/// a stable `LocalItemId<ImplMarker>`. The interface target is kept as a raw
-/// `TypeExpr` here; resolution to an `InterfaceLoc` + `Ty` happens lazily in the
-/// `impl_data` query so HIR construction stays independent of name resolution.
+/// An `implements` block stored in the `ItemTree`, keyed by a stable
+/// `LocalItemId<ImplMarker>`. Both spellings arrive in one shape: the AST
+/// gives an in-body `implements I { … }` the class's generics and the class as
+/// its for-target (`TYPE_SYSTEM.md`, "Interface Implementations"), so there is
+/// one path from here on. `origin` records how it was written, for the rules
+/// that read provenance — an interface with fields is implemented in-body —
+/// and must NOT influence resolution, dispatch, or coherence. The targets are
+/// kept as raw `TypeExpr`s here; resolution happens lazily in the `impl_data`
+/// query so HIR construction stays independent of name resolution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImplBlock {
-    pub subject: ImplSubject,
+    pub for_target: ast::TypeExpr,
+    pub generics: Vec<GenericParam>,
+    pub origin: ast::ImplOrigin,
+    /// The class whose body an in-body block was written in: its identity,
+    /// recorded as the builder walks the items (a class's in-body blocks
+    /// directly follow it), so attachment never goes through the name.
+    /// `None` for an out-of-body block.
+    pub owner: Option<LocalItemId<ClassMarker>>,
     pub interface_target: ast::TypeExpr,
     pub field_links: Vec<InterfaceFieldLink>,
     pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
     pub methods: Vec<LocalItemId<FunctionMarker>>,
     pub span: TextRange,
-    /// Leading `///` docstring — populated for free `implements … for …`
-    /// blocks; in-body `implements I { … }` blocks do not carry one today.
+    /// Leading `///` docstring; an in-body block carries none.
     pub docstring: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImplementsBlock {
-    pub target: ast::TypeExpr,
-    pub field_links: Vec<InterfaceFieldLink>,
-    pub associated_type_bindings: Vec<ast::AssociatedTypeBindingDef>,
-    pub is_out_of_body: bool,
-    pub span: TextRange,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

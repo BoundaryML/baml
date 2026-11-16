@@ -94,7 +94,7 @@ impl Parser<'_> {
 pub(super) fn number_value(vm: &mut BexVm, number: Number<'_>) -> Result<Value, Stop> {
     if !number.integral {
         let float = number.as_f64().ok_or(Stop)?;
-        return Ok(Value::object(vm.alloc_float(float)));
+        return Ok(vm.float_value(float));
     }
     if let Some(int) = number.as_i64().and_then(Value::try_int) {
         return Ok(int);

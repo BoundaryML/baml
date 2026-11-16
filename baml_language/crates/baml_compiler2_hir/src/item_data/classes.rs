@@ -2,13 +2,10 @@ use baml_base::Name;
 use text_size::TextRange;
 
 use crate::{
-    item_data::common::{
-        AssociatedTypeBindingData, AssociatedTypeBindingSourceMap, FieldData, GenericParamData,
-        InterfaceFieldLinkData, InterfaceFieldLinkSourceMap, lower_generic_params,
-    },
+    item_data::common::{FieldData, GenericParamData, lower_generic_params},
     item_tree::ClassAttrs,
     loc::{ClassLoc, FunctionLoc},
-    type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore},
+    type_ref::{TypeRefBuilder, TypeRefSourceMap, TypeRefStore},
 };
 
 /// Span-free semantic data for a `class` declaration.
@@ -21,26 +18,15 @@ pub struct ClassData<'db> {
     pub name: Name,
     /// Generic type parameters, each with its conjunction of bounds.
     pub generic_params: Vec<GenericParamData>,
-    /// Every type reference in this class's *signature* — bounds, field types,
-    /// and `implements` targets. Scoped to the item, so edits to sibling items
-    /// cannot renumber these ids.
+    /// Every type reference in this class's *signature* — bounds and field
+    /// types. Scoped to the item, so edits to sibling items cannot renumber
+    /// these ids.
     pub type_refs: TypeRefStore,
     pub fields: Vec<FieldData>,
     pub methods: Vec<FunctionLoc<'db>>,
-    pub implements: Vec<ImplementsData>,
     /// The class's lowered `@@` attributes.
     pub attrs: ClassAttrs,
     pub docstring: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImplementsData {
-    pub target: TypeRefId,
-    pub field_links: Vec<InterfaceFieldLinkData>,
-    pub associated_type_bindings: Vec<AssociatedTypeBindingData>,
-    /// Syntactic origin, for diagnostics only — it must NOT influence
-    /// resolution, dispatch, or coherence.
-    pub is_out_of_body: bool,
 }
 
 /// Spans for a `Class`, parallel to [`ClassData`].
@@ -54,15 +40,6 @@ pub struct ClassSourceMap {
     pub type_refs: TypeRefSourceMap,
     /// Name span per field, parallel to [`ClassData::fields`].
     pub field_name_spans: Vec<TextRange>,
-    /// Parallel to [`ClassData::implements`].
-    pub implements: Vec<ImplementsSourceMap>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImplementsSourceMap {
-    pub span: TextRange,
-    pub field_links: Vec<InterfaceFieldLinkSourceMap>,
-    pub associated_type_bindings: Vec<AssociatedTypeBindingSourceMap>,
 }
 
 /// Semantic data for one class. Span-free — see the module docs.
@@ -84,8 +61,8 @@ pub fn class_source_map<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> Cl
 /// arena. The split into two queries is purely about what each one lets
 /// downstream depend on.
 ///
-/// Type refs are allocated in a fixed order (bounds, then fields, then
-/// `implements` targets) so that ids are a pure function of the class's shape.
+/// Type refs are allocated in a fixed order (bounds, then fields) so that ids
+/// are a pure function of the class's shape.
 fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, ClassSourceMap) {
     let file = class.file(db);
     let item_tree = crate::file_item_tree(db, file);
@@ -107,57 +84,7 @@ fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, 
         })
         .collect();
 
-    let implements: Vec<ImplementsData> = data
-        .implements
-        .iter()
-        .map(|block| ImplementsData {
-            target: type_refs.lower(&block.target),
-            field_links: block
-                .field_links
-                .iter()
-                .map(|link| InterfaceFieldLinkData {
-                    interface_field: link.interface_field.clone(),
-                    class_field: link.class_field.clone(),
-                })
-                .collect(),
-            associated_type_bindings: block
-                .associated_type_bindings
-                .iter()
-                .map(|binding| AssociatedTypeBindingData {
-                    name: binding.name.clone(),
-                    type_ref: binding.type_expr.as_ref().map(|te| type_refs.lower(te)),
-                })
-                .collect(),
-            is_out_of_body: block.is_out_of_body,
-        })
-        .collect();
-
     let (store, spans) = type_refs.finish();
-
-    let implements_spans = data
-        .implements
-        .iter()
-        .map(|block| ImplementsSourceMap {
-            span: block.span,
-            field_links: block
-                .field_links
-                .iter()
-                .map(|link| InterfaceFieldLinkSourceMap {
-                    span: link.span,
-                    interface_field_span: link.interface_field_span,
-                    class_field_span: link.class_field_span,
-                })
-                .collect(),
-            associated_type_bindings: block
-                .associated_type_bindings
-                .iter()
-                .map(|binding| AssociatedTypeBindingSourceMap {
-                    span: binding.span,
-                    name_span: binding.name_span,
-                })
-                .collect(),
-        })
-        .collect();
 
     (
         ClassData {
@@ -170,7 +97,6 @@ fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, 
                 .iter()
                 .map(|method| FunctionLoc::new(db, file, *method))
                 .collect(),
-            implements,
             attrs: data.attrs.clone(),
             docstring: data.docstring.clone(),
         },
@@ -187,7 +113,6 @@ fn lower<'db>(db: &'db dyn crate::Db, class: ClassLoc<'db>) -> (ClassData<'db>, 
                 .get(&class.id(db))
                 .cloned()
                 .unwrap_or_default(),
-            implements: implements_spans,
         },
     )
 }

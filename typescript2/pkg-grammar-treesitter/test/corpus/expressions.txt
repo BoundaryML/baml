@@ -746,3 +746,50 @@ function f() -> int {
                     (identifier))))))))
       (expression_statement
         (number)))))
+
+==================
+function companions
+==================
+
+let a = Extract@spec("raw").parse(reply);
+let b = Extract@parse(reply);
+let c = Extract @spec("raw");
+
+---
+
+(source_file
+  (let_declaration
+    (type_pattern
+      (type_path
+        (identifier)))
+    (call_expression
+      (member_expression
+        (call_expression
+          (companion_expression
+            (identifier)
+            (property_identifier))
+          (arguments
+            (string)))
+        (property_identifier))
+      (arguments
+        (identifier))))
+  (let_declaration
+    (type_pattern
+      (type_path
+        (identifier)))
+    (call_expression
+      (companion_expression
+        (identifier)
+        (property_identifier))
+      (arguments
+        (identifier))))
+  (let_declaration
+    (type_pattern
+      (type_path
+        (identifier)))
+    (call_expression
+      (companion_expression
+        (identifier)
+        (property_identifier))
+      (arguments
+        (string)))))

@@ -4,7 +4,7 @@ expression: outcome.dump
 ---
 455..462 'bad_pop': throws never
 485..631 '{\n   ...  r\n}': !error
-491..496 'let r': !error
+495..496 'r': !error
 499..538 'match ...=> x }': !error
 506..517 'h.items.pop': (self: T[]) -> T | null throws never
 506..519 'h.items.pop()': T | null

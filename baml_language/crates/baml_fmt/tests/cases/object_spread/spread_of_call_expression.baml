@@ -1,0 +1,12 @@
+class P {
+    name: string,
+    score: int,
+}
+
+function base() -> P {
+    P { name: "b", score: 0 }
+}
+
+function f() -> P {
+    P { ...base(), score: 1 }
+}

@@ -1189,7 +1189,7 @@ async fn futures_record_when_they_were_scheduled_and_started() {
         }
 
         function main(n: int) -> int {
-            let one = baml.spawn.Limit.new(1);
+            let one = baml.sync.Semaphore.new(1);
             let first = spawn with one { work(200) };
             // Waits for `first` to finish.
             let second = spawn with one { work(100) };

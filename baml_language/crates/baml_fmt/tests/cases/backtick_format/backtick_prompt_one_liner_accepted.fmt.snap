@@ -1,0 +1,7 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function Demo() -> string {
+    client: "openai/gpt-4o"
+    prompt: `Just one line`
+}

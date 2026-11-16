@@ -1,0 +1,9 @@
+function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
+    let v = if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } - aaaaaaaaaaaaaaaaaaaa
+    let w = aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    let y = aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb + aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    let z = g(aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
+    let l = g((x: int) -> int { aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb })
+    let e = aaaaaaaaaaaaaaaaaaaa == bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa
+    if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } < v + w + y + z
+}

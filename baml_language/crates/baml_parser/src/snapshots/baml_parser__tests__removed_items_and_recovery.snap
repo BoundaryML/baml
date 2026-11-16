@@ -1,0 +1,131 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"client<llm> GPT { provider openai }\\nretry_policy R { max_retries 3 }\\ngenerator g { output_type python }\\ntemplate_string Tpl(x: string) #\\\"hi\\\"#\\ntype_builder { class X { a int } }\\ndynamic class D { a int }\\ntest Legacy { functions [F] args { a 1 } }\\nclasss Oops { a int }\\ntyppe Two = int\\n\")"
+---
+SourceFile@0..283
+  items: RemovedItem@0..35
+    kw: Client "client" @0..6
+    head: Less "<" @6..7
+    head: Word "llm" @7..10
+    head: Greater ">" @10..11
+    name: Name@12..15
+      token: Word "GPT" @12..15
+    body: LBrace "{" @16..17
+    body: Whitespace " " @17..18
+    body: Word "provider" @18..26
+    body: Whitespace " " @26..27
+    body: Word "openai" @27..33
+    body: Whitespace " " @33..34
+    body: RBrace "}" @34..35
+  items: RemovedItem@36..68
+    kw: RetryPolicy "retry_policy" @36..48
+    name: Name@49..50
+      token: Word "R" @49..50
+    body: LBrace "{" @51..52
+    body: Whitespace " " @52..53
+    body: Word "max_retries" @53..64
+    body: Whitespace " " @64..65
+    body: Integer "3" @65..66
+    body: Whitespace " " @66..67
+    body: RBrace "}" @67..68
+  items: RemovedItem@69..103
+    kw: Generator "generator" @69..78
+    name: Name@79..80
+      token: Word "g" @79..80
+    body: LBrace "{" @81..82
+    body: Whitespace " " @82..83
+    body: Word "output_type" @83..94
+    body: Whitespace " " @94..95
+    body: Word "python" @95..101
+    body: Whitespace " " @101..102
+    body: RBrace "}" @102..103
+  items: RemovedItem@104..141
+    kw: TemplateString "template_string" @104..119
+    name: Name@120..123
+      token: Word "Tpl" @120..123
+    body: LParen "(" @123..124
+    body: Word "x" @124..125
+    body: Colon ":" @125..126
+    body: Whitespace " " @126..127
+    body: Word "string" @127..133
+    body: RParen ")" @133..134
+    body: Whitespace " " @134..135
+    body: LegacyHashString "#\"hi\"#" @135..141
+  items: RemovedItem@142..176
+    kw: TypeBuilder "type_builder" @142..154
+    body: LBrace "{" @155..156
+    body: Whitespace " " @156..157
+    body: Class "class" @157..162
+    body: Whitespace " " @162..163
+    body: Word "X" @163..164
+    body: Whitespace " " @164..165
+    body: LBrace "{" @165..166
+    body: Whitespace " " @166..167
+    body: Word "a" @167..168
+    body: Whitespace " " @168..169
+    body: Word "int" @169..172
+    body: Whitespace " " @172..173
+    body: RBrace "}" @173..174
+    body: Whitespace " " @174..175
+    body: RBrace "}" @175..176
+  items: RemovedItem@177..202
+    kw: Dynamic "dynamic" @177..184
+    head: Class "class" @185..190
+    name: Name@191..192
+      token: Word "D" @191..192
+    body: LBrace "{" @193..194
+    body: Whitespace " " @194..195
+    body: Word "a" @195..196
+    body: Whitespace " " @196..197
+    body: Word "int" @197..200
+    body: Whitespace " " @200..201
+    body: RBrace "}" @201..202
+  items: RemovedItem@203..245
+    kw: Test "test" @203..207
+    name: Name@208..214
+      token: Word "Legacy" @208..214
+    body: LBrace "{" @215..216
+    body: Whitespace " " @216..217
+    body: Word "functions" @217..226
+    body: Whitespace " " @226..227
+    body: LBracket "[" @227..228
+    body: Word "F" @228..229
+    body: RBracket "]" @229..230
+    body: Whitespace " " @230..231
+    body: Word "args" @231..235
+    body: Whitespace " " @235..236
+    body: LBrace "{" @236..237
+    body: Whitespace " " @237..238
+    body: Word "a" @238..239
+    body: Whitespace " " @239..240
+    body: Integer "1" @240..241
+    body: Whitespace " " @241..242
+    body: RBrace "}" @242..243
+    body: Whitespace " " @243..244
+    body: RBrace "}" @244..245
+  items: Bogus@246..267
+    tokens: Word "classs" @246..252
+    tokens: Whitespace " " @252..253
+    tokens: Word "Oops" @253..257
+    tokens: Whitespace " " @257..258
+    tokens: LBrace "{" @258..259
+    tokens: Whitespace " " @259..260
+    tokens: Word "a" @260..261
+    tokens: Whitespace " " @261..262
+    tokens: Word "int" @262..265
+    tokens: Whitespace " " @265..266
+    tokens: RBrace "}" @266..267
+  items: Bogus@268..283
+    tokens: Word "typpe" @268..273
+    tokens: Whitespace " " @273..274
+    tokens: Word "Two" @274..277
+    tokens: Whitespace " " @277..278
+    tokens: Equals "=" @278..279
+    tokens: Whitespace " " @279..280
+    tokens: Word "int" @280..283
+---
+RemovedFeature { message: "`type_builder` blocks were removed; runtime type construction is `reflect` (BEP-066)", range: 142..154 }
+RemovedFeature { message: "`dynamic class` definitions were removed; runtime type construction is `reflect` (BEP-066)", range: 177..184 }
+RemovedFeature { message: "Legacy test declarations were removed. Use an expression-body test with a quoted name, for example: `test \"Name\" { assert.equal(Foo(...), expected) }`.", range: 203..214 }
+InvalidSyntax { message: "unknown keyword `classs`; expected `class`, `enum`, `function`, `client`, `generator`, `test`, or `type`", range: 246..252 }
+InvalidSyntax { message: "unknown keyword `typpe`; did you mean `type`? usage: `type Name = expression`", range: 268..273 }

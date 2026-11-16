@@ -1,0 +1,11 @@
+class Session {
+    client: string,
+}
+
+function use_it(client: Session, f: (client: Session) -> int) -> int {
+    let s = Session { client: client.client };
+    if (s.client == client.client.to_upper_case()) {
+        return f(client);
+    }
+    0
+}

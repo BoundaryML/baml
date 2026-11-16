@@ -34,6 +34,8 @@ pub struct FunctionData {
     pub throws: Option<TypeRefId>,
     pub metadata: ast::FunctionMetadata,
     pub docstring: Option<String>,
+    /// The `//#` title directly above the declaration, for the visualizer.
+    pub header_title: Option<String>,
     /// Set when the fn def had a `//baml:tagged_string` marker.
     pub is_tagged_template_tag: bool,
 }
@@ -455,6 +457,7 @@ fn lower<'db>(
             throws,
             metadata: data.metadata,
             docstring: data.docstring.clone(),
+            header_title: data.header_title.clone(),
             is_tagged_template_tag: data.is_tagged_template_tag,
         },
         FunctionSourceMap {

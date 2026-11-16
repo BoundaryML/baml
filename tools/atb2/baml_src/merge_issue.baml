@@ -45,11 +45,11 @@ function merge_issue(
     pr: string,
     mode: HandleMode = HandleMode.Live,
     max_rounds: int = 3,
-    /// The store's issue the PR belongs to, for the merge_rounds rows.
+    // The store's issue the PR belongs to, for the merge_rounds rows.
     issue_id: string? = null,
-    /// A Slack thread that hears the start, every round and the result.
+    // A Slack thread that hears the start, every round and the result.
     thread: SlackRef? = null,
-    /// A Slack user id to @mention on the result line (the requester).
+    // A Slack user id to @mention on the result line (the requester).
     mention: string? = null,
 ) -> MergeResult {
     let started = baml.time.Instant.now();

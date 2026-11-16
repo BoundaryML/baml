@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × generic class destructure `Box { ... }` must specify type arguments
-    ╭─[main.baml:11:5]
+    ╭─[main.baml:11:9]
  11 │     let Box { value } = boxed;
-    ·     ─────────────────
+    ·         ─────────────
     ╰────

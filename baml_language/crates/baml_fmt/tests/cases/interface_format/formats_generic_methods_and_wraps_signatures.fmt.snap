@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+interface I {
+    function convert<T extends Display>(
+        self,
+        first: T,
+        second: string,
+    ) -> map<string, T> throws never;
+}

@@ -37,9 +37,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: llm.Response. Did you mean `root.llm.Response`?
-    ╭─[main.baml:30:5]
+    ╭─[main.baml:30:9]
  30 │     let llm.Response { text } = response;
-    ·     ─────────────────────────
+    ·         ─────────────────────
     ╰────
 
   [type] E0002

@@ -1,0 +1,4 @@
+version: 1
+previews:
+  refs: ["*/trunk-template-*"]
+  ttl_days: 7

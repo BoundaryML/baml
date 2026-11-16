@@ -81,6 +81,8 @@ pub struct ParsedTargetArgs {
     /// Raw `--json-args <SOURCE>` value (inline JSON, `@path`, or `-` for
     /// stdin) before [`crate::load_json_source`] turns it into a `Value`.
     pub json_source: Option<String>,
+    /// `--output-format`, when given among the target's own flags.
+    pub output_format: Option<crate::OutputFormat>,
 }
 
 /// Run `tokens` through a clap [`Command`] built from `func_info`.
@@ -119,6 +121,7 @@ pub fn parse_target_argv(
     Ok(ParsedTargetArgs {
         cli_values,
         json_source,
+        output_format: matches.get_one("output-format").copied(),
     })
 }
 
@@ -177,6 +180,7 @@ pub fn parse_multi_target_argv(
         ParsedTargetArgs {
             cli_values,
             json_source,
+            output_format: sub_matches.get_one("output-format").copied(),
         },
     ))
 }
@@ -321,6 +325,16 @@ fn build_target_command_with_name(
                 "Pass arguments as JSON (inline string, `@path/to/file`, or `-` for stdin). \
                  Required for class/list/map/union parameters.",
             ),
+    );
+
+    // Parameter flags are the parameter names verbatim, and a BAML
+    // identifier cannot contain `-`, so this can never collide with one.
+    cmd = cmd.arg(
+        Arg::new("output-format")
+            .long("output-format")
+            .value_name("FORMAT")
+            .value_parser(clap::value_parser!(crate::OutputFormat))
+            .help("Format the returned value [default: text]"),
     );
 
     // List non-primitive parameters in an `after_help` block so users

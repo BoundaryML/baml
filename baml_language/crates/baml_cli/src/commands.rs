@@ -1,11 +1,25 @@
-// Wires up the BAML CLI subcommands: Run, Generate, Test, and
-// Format. `baml run` is the top-level entry for
-// standalone execution.
+// The BAML CLI command tree and its dispatcher.
+//
+// Rules (BEP-086):
+// - Anything that needs a Boundary Cloud account lives under `baml cloud`.
+// - A command that runs against local or cloud data exists as both
+//   `baml local <cmd>` and `baml cloud <cmd>`, with the same args and output.
+// - `--project-dir` is always the local path; under `baml cloud`, `--project`
+//   is always the cloud project.
+// - `login`, `logout` and `query` are the only shortcuts. Docs, help examples
+//   and agents use the explicit commands.
+// - Commands return a `Report`; only the dispatcher writes stdout.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::{Args, CommandFactory, Parser, Subcommand};
+
+use crate::{
+    ExitCode,
+    output::{run_command, run_raw},
+    recordings::{Backend, CloudScope, Query, RecordingsCommands},
+};
 
 pub(crate) const fn release_version() -> &'static str {
     baml_version::CANONICAL_VERSION
@@ -52,7 +66,6 @@ pub(crate) struct RuntimeCli {
     )]
     version: Option<bool>,
 
-    /// Specifies a subcommand to run.
     #[command(subcommand)]
     pub(crate) command: Commands,
 
@@ -66,36 +79,25 @@ pub(crate) struct RuntimeCli {
 
 #[derive(Args, Clone, Debug, Default)]
 pub(crate) struct GlobalArgs {
-    /// Suppress nonessential output.
+    /// Discover the BAML project from this path.
     #[arg(
-        short,
-        long,
-        action = clap::ArgAction::Count,
+        long = "project-dir",
+        value_name = "PATH",
         global = true,
         help_heading = "Global options",
         display_order = 10
     )]
-    pub quiet: u8,
+    pub project_dir: Option<PathBuf>,
 
-    /// Increase diagnostic verbosity. Repeatable.
+    /// Print no status or progress on stderr.
     #[arg(
         short,
         long,
-        action = clap::ArgAction::Count,
         global = true,
         help_heading = "Global options",
         display_order = 20
     )]
-    pub verbose: u8,
-
-    /// Discover the BAML project from this path.
-    #[arg(
-        long,
-        value_name = "PATH",
-        help_heading = "Global options",
-        display_order = 60
-    )]
-    pub project: Option<PathBuf>,
+    pub quiet: bool,
 }
 
 #[derive(Args, Clone, Debug, Default)]
@@ -114,70 +116,20 @@ pub(crate) struct CompilerArgs {
 
 #[derive(Subcommand, Debug)]
 pub(crate) enum Commands {
-    // TODO: All other commands are disabled for now as they depend on baml_runtime
-    // #[command(about = "Initialize a new BAML project.")]
-    // Init(baml_runtime::cli::init::InitArgs),
-
-    // #[command(about = "Runs all generators in the baml_src directory")]
-    // Generate(baml_runtime::cli::generate::GenerateArgs),
-
-    // #[command(about = "Checks for errors and warnings in the baml_src directory")]
-    // Check(baml_runtime::cli::check::CheckArgs),
-    #[command(about = "Check BAML source files for compiler errors")]
-    Check(crate::check_command::CheckArgs),
-
-    #[command(about = "Profile cleanup (currently unavailable)")]
-    Clean(crate::clean_command::CleanArgs),
-
-    #[command(about = "Describe a BAML symbol", name = "describe")]
-    Describe(crate::describe_command::DescribeArgs),
-    #[command(about = "Query BTEL recordings with SQL")]
-    Query(crate::query_command::QueryArgs),
-
-    // #[command(about = "Starts a server that translates LLM responses to BAML responses")]
-    // Serve(baml_runtime::cli::serve::ServeArgs),
-
-    // #[command(about = "Starts a development server")]
-    // Dev(baml_runtime::cli::dev::DevArgs),
-    #[command(
-        subcommand,
-        about = "Manage authentication",
-        long_about = "Manage the identity used by BAML services.\n\nUse `baml auth login` to authenticate, `baml auth status` to verify authentication and inspect the selected project, and `baml auth logout` to remove the authenticated session.",
-        after_long_help = "Examples:\n  Log in:\n    baml auth login\n\n  Verify authentication and show the selected project:\n    baml auth status\n\n  Log out:\n    baml auth logout"
-    )]
-    Auth(crate::auth::AuthCommands),
-
-    #[command(
-        about = "Show wrapper and language toolchain update commands",
-        visible_alias = "upgrade"
-    )]
-    Update,
-
-    #[command(about = "Report an issue or improvement to Boundary")]
-    Feedback(crate::feedback_command::FeedbackArgs),
-
-    #[command(about = "Format BAML source files", name = "fmt")]
-    Format(crate::format::FormatArgs),
-
-    // #[command(about = "Run BAML tests")]
-    // Test(baml_runtime::cli::testing::TestArgs),
-
-    // #[command(about = "Print HIR from BAML files", hide = true)]
-    // DumpHIR(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
-
-    // #[command(about = "Print Bytecode from BAML files", hide = true)]
-    // DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
-    #[command(about = "Generate client code from BAML definitions")]
-    Generate(crate::generate::GenerateArgs),
-
-    #[command(about = "Run BAML tests")]
-    Test(crate::test_command::TestArgs),
+    #[command(about = "Create a new BAML project directory")]
+    New(crate::init_command::NewArgs),
 
     #[command(about = "Initialize a new BAML project (creates baml.toml)")]
     Init(crate::init_command::InitArgs),
 
-    #[command(about = "Create a new BAML project directory")]
-    New(crate::init_command::NewArgs),
+    #[command(about = "Check BAML source files for compiler errors")]
+    Check(crate::check_command::CheckArgs),
+
+    #[command(about = "Format BAML source files", name = "fmt")]
+    Format(crate::format::FormatArgs),
+
+    #[command(about = "Run BAML tests")]
+    Test(crate::test_command::TestArgs),
 
     #[command(about = "Run a BAML function or script")]
     Run(crate::run_command::RunArgs),
@@ -185,38 +137,71 @@ pub(crate) enum Commands {
     #[command(about = "Package a BAML target as a standalone executable")]
     Pack(crate::pack_command::PackArgs),
 
-    #[command(
-        about = "Install or manage IDE integration assets",
-        after_long_help = "Examples:\n  Install into the detected editor:\n    baml ide install\n\n  Install into Cursor:\n    baml ide install --cursor"
-    )]
-    Ide(crate::ide_command::IdeArgs),
+    #[command(about = "Generate client code from BAML definitions")]
+    Generate(crate::generate::GenerateArgs),
 
-    #[command(
-        about = "Install the toolchain's BAML agent skill for this project",
-        after_long_help = "Examples:\n  Install the bundled skill:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project ./my-project"
-    )]
-    Agent(crate::agent_command::AgentArgs),
-
-    #[command(
-        about = "Open the BAML playground in a browser",
-        after_long_help = "Examples:\n  Open the nearest project:\n    baml playground\n\n  Serve a project without opening a browser:\n    baml playground --project ./my-project --no-open"
-    )]
-    Playground(crate::playground_command::PlaygroundArgs),
+    #[command(about = "Describe a BAML symbol")]
+    Describe(crate::describe_command::DescribeArgs),
 
     #[command(name = "codequality", about = "Show code quality metrics")]
     CodeQuality(crate::codequality_command::CodeQualityArgs),
 
-    #[command(about = "Start a language server", name = "lsp")]
-    LanguageServer(crate::lsp::LanguageServerArgs),
+    #[command(
+        about = "Open the BAML playground in a browser",
+        after_long_help = "Examples:\n  Open the nearest project:\n    baml playground\n\n  Serve a project without opening a browser:\n    baml playground --project-dir ./my-project --no-open"
+    )]
+    Playground(crate::playground_command::PlaygroundArgs),
 
-    #[command(about = "Display documentation for a command")]
-    Help(crate::help_command::HelpArgs),
+    #[command(
+        subcommand,
+        about = "Commands that also exist under `baml cloud`, run on this machine",
+        after_long_help = "Examples:\n  Query this project's local recordings:\n    baml local recordings query \"SELECT span_name FROM spans LIMIT 5\""
+    )]
+    Local(LocalCommands),
+
+    #[command(
+        about = "Boundary Cloud: everything that needs an account",
+        after_long_help = "Examples:\n  Log in:\n    baml cloud auth login\n\n  Query your cloud recordings:\n    baml cloud recordings query \"SELECT span_name FROM spans LIMIT 5\""
+    )]
+    Cloud(CloudArgs),
+
+    #[command(
+        about = "Shortcut for `recordings query`: cloud when logged in, otherwise local",
+        after_long_help = crate::recordings::QUERY_HELP
+    )]
+    Query(crate::recordings::QueryArgs),
+
+    #[command(about = "Shortcut for `baml cloud auth login`")]
+    Login(crate::auth::LoginArgs),
+
+    #[command(about = "Shortcut for `baml cloud auth logout`")]
+    Logout(crate::auth::LogoutArgs),
+
+    #[command(
+        subcommand,
+        about = "Install or manage IDE integration assets",
+        after_long_help = "Examples:\n  Install into the detected editor:\n    baml ide install\n\n  Install into Cursor:\n    baml ide install --cursor"
+    )]
+    Ide(crate::ide_command::IdeCommand),
+
+    #[command(
+        subcommand,
+        about = "Install the toolchain's BAML agent skill for this project",
+        after_long_help = "Examples:\n  Install the bundled skill:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project-dir ./my-project"
+    )]
+    Agent(crate::agent_command::AgentCommand),
 
     #[command(
         about = "Show or change BAML CLI telemetry preferences",
         after_long_help = "Examples:\n  Show the current setting:\n    baml telemetry\n\n  Opt out:\n    baml telemetry disable"
     )]
     Telemetry(crate::telemetry_command::TelemetryArgs),
+
+    #[command(about = "Display documentation for a command")]
+    Help(crate::help_command::HelpArgs),
+
+    #[command(about = "Start a language server", name = "lsp")]
+    LanguageServer(crate::lsp::LanguageServerArgs),
 
     // The detached telemetry flush child (see `telemetry::queue`). Spawned
     // by the CLI itself on exit / rotation; hidden from help but callable
@@ -227,59 +212,62 @@ pub(crate) enum Commands {
         hide = true
     )]
     FlushTelemetry(crate::telemetry_command::FlushTelemetryArgs),
-    // #[command(about = "Start an interactive REPL for BAML expressions", hide = true)]
-    // Repl(baml_runtime::cli::repl::ReplArgs),
+}
 
-    // #[command(about = "Optimize prompts using GEPA algorithm")]
-    // Optimize(baml_runtime::cli::optimize::OptimizeArgs),
+/// Commands with a `baml cloud` twin. Nothing else belongs here.
+#[derive(Subcommand, Debug)]
+pub(crate) enum LocalCommands {
+    #[command(
+        subcommand,
+        about = "Query this project's local recordings with SQL",
+        after_long_help = "Examples:\n  Run a query:\n    baml local recordings query \"SELECT span_name FROM spans LIMIT 5\"\n\n  List the relations:\n    baml local recordings schema"
+    )]
+    Recordings(RecordingsCommands),
+}
+
+#[derive(Args, Debug)]
+pub(crate) struct CloudArgs {
+    #[command(flatten)]
+    pub scope: CloudScope,
+
+    #[command(subcommand)]
+    pub command: CloudCommands,
+}
+
+#[derive(Subcommand, Debug)]
+pub(crate) enum CloudCommands {
+    #[command(
+        subcommand,
+        about = "Manage authentication",
+        long_about = "Manage the identity used by Boundary Cloud.\n\nUse `baml cloud auth login` to authenticate, `baml cloud auth status` to verify authentication and inspect the selected project, and `baml cloud auth logout` to remove the authenticated session.",
+        after_long_help = "Examples:\n  Log in:\n    baml cloud auth login\n\n  Verify authentication and show the selected project:\n    baml cloud auth status\n\n  Log out:\n    baml cloud auth logout"
+    )]
+    Auth(crate::auth::AuthCommands),
+
+    #[command(
+        subcommand,
+        about = "Query your Boundary Cloud recordings with SQL",
+        after_long_help = "Examples:\n  Run a query:\n    baml cloud recordings query \"SELECT span_name FROM spans LIMIT 5\"\n\n  Pick the project and environment:\n    baml cloud recordings query \"SELECT span_name FROM spans\" --project acme/app --env staging"
+    )]
+    Recordings(RecordingsCommands),
 }
 
 impl RuntimeCli {
     pub(crate) fn command() -> clap::Command {
         let mut command = <Self as CommandFactory>::command();
-        // Query owns `--project` as a cloud handle. Before the subcommand, the root flag
-        // still selects a source path; other subcommands inherit the source-path flag.
-        let project = command
-            .get_arguments()
-            .find(|arg| arg.get_id() == "project")
-            .expect("the source project argument exists")
-            .clone()
-            .global(true);
-        command = command.mut_subcommands(|subcommand| {
-            if subcommand.get_name() == "query" {
-                subcommand
-            } else {
-                subcommand.arg(project.clone())
-            }
-        });
         configure_help_hints(&mut command, &[]);
         command
     }
 
-    /// Parse CLI arguments.
-    ///
-    /// Parameters:
-    /// - `argv`: Raw process argument vector (`argv[0]` program name followed by CLI tokens).
-    ///
-    /// Returns:
-    /// - A fully parsed [`RuntimeCli`] value.
-    ///
-    /// Errors/Panics:
-    /// - Does not return recoverable errors. On parse failures this calls clap's
-    ///   `err.exit()` and terminates the process, matching normal CLI behavior.
-    /// - Does not panic.
-    ///
-    /// This should be used for CLI invocations instead of `RuntimeCli::parse_from`.
+    /// Parse CLI arguments. On a parse failure this prints clap's error and
+    /// exits with status 2, matching normal CLI behavior.
     pub fn parse_from_smart(argv: Vec<String>) -> Self {
         use clap::FromArgMatches;
 
         let mut command = RuntimeCli::command();
 
-        // BEP-027 §"`--` separator" — note: clap already prints a
-        // helpful "to pass '<flag>' as a value, use '-- <flag>'" tip on
-        // `ErrorKind::UnknownArgument`, so we don't need to add our own.
-        // The error format ships with `[-- <TARGET_ARGS>...]` in the
-        // usage line as further reinforcement.
+        // BEP-027 "`--` separator": clap already prints a helpful "to pass
+        // '<flag>' as a value, use '-- <flag>'" tip on an unknown argument.
         let matches = match command.try_get_matches_from_mut(argv) {
             Ok(matches) => matches,
             Err(err) => err.exit(),
@@ -290,15 +278,6 @@ impl RuntimeCli {
             Err(err) => err.exit(),
         };
 
-        if cli.global.project.is_some() && cli.command.has_legacy_project() {
-            RuntimeCli::command()
-                .error(
-                    clap::error::ErrorKind::ArgumentConflict,
-                    "the argument '--project <PATH>' cannot be used with its deprecated alias",
-                )
-                .exit();
-        }
-        cli.command.apply_project(cli.global.project.as_deref());
         // Record the invoked subcommand's clap name for telemetry, straight
         // from the parsed matches so it always matches what clap registered.
         cli.invoked_subcommand = matches.subcommand_name().map(str::to_string);
@@ -320,8 +299,8 @@ impl RuntimeCli {
         cli
     }
 
-    pub fn run(&self) -> Result<crate::ExitCode> {
-        crate::reporter::init(self.global.quiet, self.global.verbose);
+    pub fn run(&self) -> Result<ExitCode> {
+        crate::reporter::init(self.global.quiet);
 
         // The detached telemetry flush child must run before (and without)
         // `record_invocation` below: recording its own invocation would
@@ -329,16 +308,13 @@ impl RuntimeCli {
         if let Commands::FlushTelemetry(args) = &self.command {
             return args.run();
         }
-        if let Commands::Help(args) = &self.command {
-            crate::output::init(self.output)?;
-            return args.run(crate::output::policy().stdout.color);
-        }
 
         // Resolve every output dial once, before any subcommand writes.
         crate::output::init(self.output)?;
+        let cx = crate::output::context(self.output.format, self.global.project_dir.clone());
 
         if self.command.requires_agent_skill() {
-            crate::skill_check::check(self.command.agent_skill_project_path())?;
+            crate::skill_check::check(cx.project_dir.as_deref())?;
         }
 
         // Fire anonymous, best-effort telemetry for this invocation. The
@@ -346,129 +322,71 @@ impl RuntimeCli {
         // of the guard (after the match below returns) the queue file is
         // sealed and a detached child process delivers it after this
         // process has already exited. It never fails or delays the command.
-        let _telemetry = crate::telemetry::record_invocation(
-            self.invoked_subcommand.as_deref().unwrap_or("unknown"),
-        );
+        // `help` only renders text, so it is not recorded.
+        let _telemetry = (!matches!(self.command, Commands::Help(_))).then(|| {
+            crate::telemetry::record_invocation(
+                self.invoked_subcommand.as_deref().unwrap_or("unknown"),
+            )
+        });
 
+        let cx = &cx;
         match &self.command {
-            Commands::Update => {
-                use std::io::Write as _;
-                writeln!(
-                    std::io::stdout(),
-                    "BAML has two independent updates:\n  baml self-update        Update the wrapper executable\n  baml toolchain update   Update the selected canary/nightly language toolchain, including baml-cli\nExact-version and local-path selections do not advance with toolchain update.\nNo update was performed."
-                )?;
-                Ok(crate::ExitCode::Success)
-            }
-            Commands::Init(args) => args.run(),
-            Commands::New(args) => args.run(),
-            Commands::Check(args) => args.run(),
-            Commands::Clean(args) => args.run(),
-            Commands::Describe(args) => args.run(),
-            Commands::Query(args) => args.run(),
-            Commands::Run(args) => args.run(),
-            Commands::Pack(args) => args.run(),
-            Commands::Ide(args) => args.run(),
-            Commands::Agent(args) => args.run(),
-            Commands::Generate(args) => args.run(),
-            Commands::Test(args) => args.run(),
-            Commands::Playground(args) => args.run(),
-            Commands::LanguageServer(args) => match args.run() {
-                Ok(()) => Ok(crate::ExitCode::Success),
-                Err(e) => {
-                    crate::reporter::print_error(e);
-                    Ok(crate::ExitCode::Other)
-                }
+            Commands::New(args) => run_command(args, cx),
+            Commands::Init(args) => run_command(args, cx),
+            Commands::Check(args) => run_command(args, cx),
+            Commands::Format(args) => run_command(args, cx),
+            Commands::Test(args) => run_command(args, cx),
+            Commands::Run(args) => run_raw(args, cx),
+            Commands::Pack(args) => run_command(args, cx),
+            Commands::Generate(args) => run_command(args, cx),
+            Commands::Describe(args) => run_command(args, cx),
+            Commands::CodeQuality(args) => run_command(args, cx),
+            Commands::Playground(args) => run_command(args, cx),
+            Commands::Local(LocalCommands::Recordings(command)) => command.run(cx, Backend::Local),
+            Commands::Cloud(cloud) => match &cloud.command {
+                CloudCommands::Auth(command) => command.run(cx, &cloud.scope),
+                CloudCommands::Recordings(command) => command.run(cx, Backend::Cloud(&cloud.scope)),
             },
-            Commands::Auth(args) => args.run(),
-            Commands::Feedback(args) => args.run(),
-            // Handled before telemetry and command-side effects above.
-            Commands::Help(args) => args.run(crate::output::policy().stdout.color),
-            Commands::Telemetry(args) => args.run(),
+            Commands::Query(args) => run_command(
+                &Query {
+                    args,
+                    backend: Backend::Auto,
+                },
+                cx,
+            ),
+            Commands::Login(args) => crate::auth::AuthCommands::run_one(args, cx),
+            Commands::Logout(args) => crate::auth::AuthCommands::run_one(args, cx),
+            Commands::Ide(crate::ide_command::IdeCommand::Install(args)) => run_command(args, cx),
+            Commands::Agent(crate::agent_command::AgentCommand::Install(args)) => {
+                run_command(args, cx)
+            }
+            Commands::Telemetry(args) => run_command(args, cx),
+            Commands::Help(args) => run_command(args, cx),
+            Commands::LanguageServer(args) => run_raw(args, cx),
             // Handled by the early return above, before telemetry wiring.
             Commands::FlushTelemetry(args) => args.run(),
-            Commands::CodeQuality(args) => args.run(),
-            Commands::Format(args) => args.run(),
         }
     }
 }
 
 impl Commands {
-    fn agent_skill_project_path(&self) -> Option<&Path> {
-        match self {
-            Self::Check(args) => args.from.as_deref(),
-            Self::Describe(args) => args.from.as_deref(),
-            Self::Query(args) => args.from.as_deref(),
-            Self::Format(args) => args.from.as_deref(),
-            Self::Generate(args) => match &args.command {
-                Some(crate::generate::GenerateCommand::Add(args)) => args.from.as_deref(),
-                None => args.from.as_deref(),
-            },
-            Self::Test(args) => args.from.as_deref(),
-            Self::Run(args) => args.from.as_deref(),
-            Self::Pack(args) => args.from.as_deref(),
-            Self::Playground(args) => args.from.as_deref(),
-            _ => None,
-        }
-    }
-
+    /// Commands an agent runs while writing BAML need the matching skill.
     fn requires_agent_skill(&self) -> bool {
         matches!(
             self,
-            Self::Check(_)
-                | Self::Describe(_)
-                | Self::Query(_)
-                | Self::Format(_)
-                | Self::Generate(_)
-                | Self::Test(_)
+            Self::New(_)
                 | Self::Init(_)
-                | Self::New(_)
+                | Self::Check(_)
+                | Self::Format(_)
+                | Self::Test(_)
                 | Self::Run(_)
                 | Self::Pack(_)
+                | Self::Generate(_)
+                | Self::Describe(_)
                 | Self::Playground(_)
+                | Self::Query(_)
+                | Self::Local(_)
         )
-    }
-
-    fn has_legacy_project(&self) -> bool {
-        match self {
-            Self::Check(args) => args.from.is_some(),
-            Self::Clean(args) => args.from.is_some(),
-            Self::Query(args) => args.from.is_some(),
-            Self::Format(args) => args.from.is_some(),
-            Self::Describe(args) => args.from.is_some(),
-            Self::Generate(args) => args.has_legacy_project(),
-            Self::Test(args) => args.from.is_some(),
-            Self::Run(args) => args.from.is_some(),
-            Self::Pack(args) => args.from.is_some(),
-            Self::Playground(args) => args.from.is_some(),
-            Self::Agent(crate::agent_command::AgentArgs {
-                command: crate::agent_command::AgentCommand::Install(args),
-            }) => args.dir.is_some(),
-            _ => false,
-        }
-    }
-
-    fn apply_project(&mut self, project: Option<&Path>) {
-        let Some(project) = project else {
-            return;
-        };
-        let project = project.to_path_buf();
-        match self {
-            Self::Check(args) => args.from = Some(project.clone()),
-            Self::Clean(args) => args.from = Some(project.clone()),
-            Self::Query(args) => args.from = Some(project.clone()),
-            Self::Format(args) => args.from = Some(project.clone()),
-            Self::Describe(args) => args.from = Some(project.clone()),
-            Self::Generate(args) => args.apply_project(&project),
-            Self::Test(args) => args.from = Some(project.clone()),
-            Self::Run(args) => args.from = Some(project.clone()),
-            Self::Pack(args) => args.from = Some(project.clone()),
-            Self::Playground(args) => args.from = Some(project.clone()),
-            Self::CodeQuality(args) => args.from = Some(project.clone()),
-            Self::Agent(crate::agent_command::AgentArgs {
-                command: crate::agent_command::AgentCommand::Install(args),
-            }) => args.dir = Some(project),
-            _ => {}
-        }
     }
 }
 
@@ -501,31 +419,110 @@ fn configure_help_hints(command: &mut clap::Command, path: &[String]) {
 mod tests {
     use super::*;
 
-    const PUBLIC_COMMAND_PATHS: &[&[&str]] = &[
-        &[],
-        &["check"],
-        &["describe"],
-        &["auth"],
-        &["auth", "login"],
-        &["auth", "status"],
-        &["auth", "logout"],
-        &["feedback"],
-        &["fmt"],
-        &["generate"],
-        &["test"],
-        &["init"],
-        &["new"],
-        &["run"],
-        &["pack"],
-        &["ide"],
-        &["ide", "install"],
-        &["agent"],
-        &["agent", "install"],
-        &["playground"],
-        &["lsp"],
-        &["help"],
-        &["telemetry"],
-    ];
+    fn parse(argv: &[&str]) -> RuntimeCli {
+        RuntimeCli::parse_from_smart(argv.iter().map(|arg| (*arg).to_owned()).collect())
+    }
+
+    fn help_for(args: &[&str]) -> String {
+        RuntimeCli::command()
+            .try_get_matches_from(args)
+            .expect_err("help request should render clap help")
+            .to_string()
+    }
+
+    /// Every visible command path, depth first.
+    fn public_command_paths() -> Vec<Vec<String>> {
+        fn walk(command: &clap::Command, path: &[String], out: &mut Vec<Vec<String>>) {
+            out.push(path.to_vec());
+            for child in command.get_subcommands().filter(|c| !c.is_hide_set()) {
+                let mut child_path = path.to_vec();
+                child_path.push(child.get_name().to_owned());
+                walk(child, &child_path, out);
+            }
+        }
+        let mut paths = Vec::new();
+        walk(&RuntimeCli::command(), &[], &mut paths);
+        paths
+    }
+
+    /// The whole public surface: every command, positional, flag, value
+    /// name, default and env var. A change here is a change to the CLI's
+    /// contract and must be reviewed as one.
+    #[test]
+    fn surface_is_snapshot_tested() {
+        fn walk(command: &clap::Command, path: &str, inherited: &[clap::Id], out: &mut String) {
+            use std::fmt::Write as _;
+            let hidden = if command.is_hide_set() {
+                " (hidden)"
+            } else {
+                ""
+            };
+            writeln!(out, "{path}{hidden}").unwrap();
+            let mut args: Vec<String> = command
+                .get_arguments()
+                .filter(|arg| !inherited.contains(arg.get_id()))
+                .map(|arg| {
+                    let mut line = String::from("  ");
+                    match (arg.get_short(), arg.get_long()) {
+                        (Some(short), Some(long)) => write!(line, "-{short}, --{long}").unwrap(),
+                        (None, Some(long)) => write!(line, "--{long}").unwrap(),
+                        (Some(short), None) => write!(line, "-{short}").unwrap(),
+                        (None, None) => write!(line, "<{}>", arg.get_id()).unwrap(),
+                    }
+                    if arg.get_action().takes_values() && arg.get_long().is_some() {
+                        let names = arg.get_value_names().map_or_else(String::new, |names| {
+                            names
+                                .iter()
+                                .map(ToString::to_string)
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        });
+                        write!(line, " <{names}>").unwrap();
+                    }
+                    let defaults: Vec<_> = arg
+                        .get_default_values()
+                        .iter()
+                        .map(|value| value.to_string_lossy())
+                        .collect();
+                    if !defaults.is_empty() {
+                        write!(line, " [default: {}]", defaults.join(",")).unwrap();
+                    }
+                    if let Some(env) = arg.get_env() {
+                        write!(line, " [env: {}]", env.to_string_lossy()).unwrap();
+                    }
+                    if arg.is_global_set() {
+                        line.push_str(" [global]");
+                    }
+                    if arg.is_hide_set() {
+                        line.push_str(" (hidden)");
+                    }
+                    line
+                })
+                .collect();
+            args.sort();
+            for arg in args {
+                writeln!(out, "{arg}").unwrap();
+            }
+            let globals: Vec<clap::Id> = command
+                .get_arguments()
+                .filter(|arg| arg.is_global_set())
+                .map(|arg| arg.get_id().clone())
+                .collect();
+            for child in command.get_subcommands() {
+                walk(
+                    child,
+                    &format!("{path} {}", child.get_name()),
+                    &globals,
+                    out,
+                );
+            }
+        }
+        let mut command = RuntimeCli::command();
+        command.build();
+        let mut surface = String::new();
+        walk(&command, "baml", &[], &mut surface);
+        insta::assert_snapshot!("cli_surface", surface);
+    }
 
     #[test]
     fn release_version_matches_compile_time_setting() {
@@ -536,22 +533,19 @@ mod tests {
     /// telemetry, straight from the parsed matches.
     #[test]
     fn parse_records_invoked_subcommand_name() {
-        let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "fmt".into()]);
-        assert_eq!(cli.invoked_subcommand.as_deref(), Some("fmt"));
-
-        let cli = RuntimeCli::parse_from_smart(vec!["baml-cli".into(), "check".into()]);
-        assert_eq!(cli.invoked_subcommand.as_deref(), Some("check"));
+        assert_eq!(
+            parse(&["baml", "fmt"]).invoked_subcommand.as_deref(),
+            Some("fmt")
+        );
+        assert_eq!(
+            parse(&["baml", "check"]).invoked_subcommand.as_deref(),
+            Some("check")
+        );
     }
 
     #[test]
     fn test_command_records_explicit_global_color_override() {
-        let cli = RuntimeCli::parse_from_smart(vec![
-            "baml-cli".into(),
-            "test".into(),
-            "--color".into(),
-            "always".into(),
-        ]);
-        let Commands::Test(args) = cli.command else {
+        let Commands::Test(args) = parse(&["baml", "test", "--color", "always"]).command else {
             panic!("expected test command")
         };
         assert_eq!(
@@ -560,106 +554,118 @@ mod tests {
         );
     }
 
-    fn help_for(args: &[&str]) -> String {
-        let mut command = RuntimeCli::command();
-        command
-            .try_get_matches_from_mut(args)
-            .expect_err("help request should render clap help")
-            .to_string()
-    }
-
-    fn help_for_path(path: &[&str], flag: &str) -> String {
-        let mut args = vec!["baml-cli"];
-        args.extend_from_slice(path);
-        args.push(flag);
-        help_for(&args)
+    #[test]
+    fn help_presents_the_public_baml_command() {
+        for (args, usage) in [
+            (
+                &["baml-cli", "--help"][..],
+                "Usage: baml [OPTIONS] <COMMAND>",
+            ),
+            (
+                &["baml-cli", "pack", "--help"],
+                "Usage: baml pack [OPTIONS] [FUNCTION]",
+            ),
+            (
+                &["baml-cli", "ide", "--help"],
+                "Usage: baml ide [OPTIONS] <COMMAND>",
+            ),
+            (
+                &["baml-cli", "check", "--help"],
+                "Usage: baml check [OPTIONS]",
+            ),
+        ] {
+            let help = help_for(args);
+            assert!(help.contains(usage), "{help}");
+            assert!(!help.contains("Usage: baml-cli"), "{help}");
+        }
     }
 
     #[test]
-    fn root_help_presents_public_baml_command() {
-        let help = help_for(&["baml-cli", "--help"]);
-        assert!(help.contains("Usage: baml [OPTIONS] <COMMAND>"), "{help}");
-        assert!(!help.contains("Usage: baml-cli"), "{help}");
-    }
-
-    #[test]
-    fn pack_help_presents_public_baml_command() {
-        let help = help_for(&["baml-cli", "pack", "--help"]);
-        assert!(
-            help.contains("Usage: baml pack [OPTIONS] [FUNCTION]"),
-            "{help}"
-        );
-        assert!(!help.contains("Usage: baml-cli pack"), "{help}");
-    }
-
-    #[test]
-    fn ide_help_presents_public_baml_command() {
-        let help = help_for(&["baml-cli", "ide", "--help"]);
-        assert!(
-            help.contains("Usage: baml ide [OPTIONS] <COMMAND>"),
-            "{help}"
-        );
-        assert!(!help.contains("Usage: baml-cli ide"), "{help}");
-    }
-
-    #[test]
-    fn root_help_lists_check_command() {
-        let help = help_for(&["baml-cli", "--help"]);
-        assert!(help.contains("check"), "{help}");
-        assert!(
-            help.contains("Check BAML source files for compiler errors"),
-            "{help}"
-        );
-    }
-
-    #[test]
-    fn check_help_includes_global_project_option() {
-        let help = help_for(&["baml-cli", "check", "--help"]);
-        assert!(help.contains("Usage: baml check [OPTIONS]"), "{help}");
-        assert!(help.contains("--project <PATH>"), "{help}");
-    }
-
-    #[test]
-    fn query_keeps_cloud_project_separate_from_source_project_path() {
-        let cli = RuntimeCli::parse_from_smart(
+    fn global_flags_work_before_or_after_the_subcommand() {
+        for argv in [
             [
                 "baml",
-                "query",
-                "SELECT 1",
-                "--project",
-                "acme/app",
-                "--environment",
-                "staging",
-            ]
-            .map(str::to_owned)
-            .to_vec(),
-        );
-        assert!(cli.global.project.is_none());
-        let Commands::Query(args) = cli.command else {
-            panic!("expected query");
-        };
-        assert_eq!(args.project.as_deref(), Some("acme/app"));
-        assert_eq!(args.environment.as_deref(), Some("staging"));
-        assert!(args.from.is_none());
-
-        let cli = RuntimeCli::parse_from_smart(
+                "--project-dir",
+                "workspace",
+                "--output-format",
+                "json",
+                "check",
+            ],
             [
                 "baml",
-                "--project",
-                "/tmp/source-app",
-                "query",
-                "SELECT 1",
-                "--project",
-                "acme/app",
-            ]
-            .map(str::to_owned)
-            .to_vec(),
+                "check",
+                "--project-dir",
+                "workspace",
+                "--output-format",
+                "json",
+            ],
+        ] {
+            let cli = parse(&argv);
+            assert_eq!(cli.global.project_dir, Some(PathBuf::from("workspace")));
+            assert_eq!(cli.output.format, crate::output::OutputFormat::Json);
+        }
+    }
+
+    /// `--project-dir` is always the local path; under `baml cloud`,
+    /// `--project` is always the cloud project.
+    #[test]
+    fn cloud_project_is_separate_from_the_local_project_dir() {
+        let cli = parse(&[
+            "baml",
+            "--project-dir",
+            "/tmp/source-app",
+            "cloud",
+            "recordings",
+            "query",
+            "SELECT 1",
+            "--project",
+            "acme/app",
+            "--env",
+            "staging",
+        ]);
+        assert_eq!(
+            cli.global.project_dir,
+            Some(PathBuf::from("/tmp/source-app"))
         );
-        let Commands::Query(args) = cli.command else {
-            panic!("expected query");
+        let Commands::Cloud(cloud) = cli.command else {
+            panic!("expected cloud");
         };
-        assert_eq!(args.project.as_deref(), Some("acme/app"));
-        assert_eq!(args.from.as_deref(), Some(Path::new("/tmp/source-app")));
+        assert_eq!(cloud.scope.project.as_deref(), Some("acme/app"));
+        assert_eq!(cloud.scope.env.as_deref(), Some("staging"));
+    }
+
+    /// The old spellings are gone, not deprecated.
+    #[test]
+    fn removed_spellings_do_not_parse() {
+        for argv in [
+            &["baml", "check", "--project", "x"][..],
+            &["baml", "check", "--from", "x"],
+            &["baml", "check", "-v"],
+            &["baml", "check", "--no-progress"],
+            &["baml", "auth", "login"],
+            &["baml", "clean"],
+            &["baml", "update"],
+            &["baml", "upgrade"],
+            &["baml", "query", "SELECT 1", "--local"],
+            &["baml", "query", "--schema"],
+            &["baml", "query", "SELECT 1", "--project", "acme/app"],
+            &["baml", "query", "SELECT 1", "--format", "json"],
+            &["baml", "cloud", "query", "SELECT 1"],
+            &["baml", "describe", "--json"],
+            &["baml", "describe", "--budget", "5"],
+            &["baml", "describe", "--symbols"],
+            &["baml", "describe", "baml", "--export"],
+            &["baml", "pack", "main", "--output-format", "debug"],
+            &["baml", "run", "main", "--output-format", "debug"],
+            &["baml", "codequality", "--output-format", "table"],
+            &["baml", "agent", "install", "--dir", "x"],
+        ] {
+            assert!(
+                RuntimeCli::command().try_get_matches_from(argv).is_err(),
+                "`{}` should not parse",
+                argv.join(" ")
+            );
+        }
     }
 
     #[test]
@@ -675,26 +681,14 @@ mod tests {
 
     #[test]
     fn generate_accepts_bare_and_add_forms() {
-        let cli = RuntimeCli::parse_from_smart(vec![
-            "baml-cli".into(),
-            "generate".into(),
-            "--from".into(),
-            ".".into(),
-        ]);
-        let Commands::Generate(args) = cli.command else {
+        let Commands::Generate(args) = parse(&["baml", "generate"]).command else {
             panic!("expected generate command");
         };
         assert!(args.command.is_none());
 
-        let cli = RuntimeCli::parse_from_smart(vec![
-            "baml-cli".into(),
-            "generate".into(),
-            "add".into(),
-            "python/pydantic2".into(),
-            "--project".into(),
-            "workspace".into(),
-        ]);
-        let Commands::Generate(args) = cli.command else {
+        let Commands::Generate(args) =
+            parse(&["baml", "generate", "add", "python/pydantic2"]).command
+        else {
             panic!("expected generate command");
         };
         let Some(crate::generate::GenerateCommand::Add(args)) = args.command else {
@@ -704,24 +698,23 @@ mod tests {
             args.output_type,
             baml_sdkgen_types::OutputType::PythonPydantic
         );
-        assert_eq!(args.from, Some(PathBuf::from("workspace")));
     }
 
     #[test]
     fn output_dials_are_global_and_independent() {
-        let cli = RuntimeCli::parse_from_smart(vec![
-            "baml-cli".into(),
-            "check".into(),
-            "--output-preset".into(),
-            "human".into(),
-            "--color".into(),
-            "never".into(),
-            "--hyperlinks".into(),
-            "always".into(),
-            "--diagnostic-format".into(),
-            "agent".into(),
-            "--agent-skill-check".into(),
-            "off".into(),
+        let cli = parse(&[
+            "baml",
+            "check",
+            "--output-preset",
+            "human",
+            "--color",
+            "never",
+            "--hyperlinks",
+            "always",
+            "--diagnostic-format",
+            "agent",
+            "--agent-skill-check",
+            "off",
         ]);
 
         assert_eq!(cli.output.preset, crate::output::OutputPreset::Human);
@@ -744,6 +737,7 @@ mod tests {
     fn output_dials_have_no_environment_mirrors() {
         let command = RuntimeCli::command();
         for id in [
+            "format",
             "preset",
             "color",
             "hyperlinks",
@@ -764,7 +758,7 @@ mod tests {
             (
                 &["run"],
                 &[
-                    "--output-format <FORMAT>\n          Format returned values [default: debug] [possible values: debug, json]",
+                    "--output-format <FORMAT>\n          What goes to stdout [default: text] [possible values: text, json, jsonl]",
                     "--color <WHEN>\n          Control ANSI colors [possible values: auto, always, never]",
                     "--output-preset <PRESET>\n          Select output defaults [default: auto] [possible values: auto, human, agent]",
                     "--hyperlinks <WHEN>\n          Control terminal hyperlinks [possible values: auto, always, never]",
@@ -775,18 +769,6 @@ mod tests {
                 &["test"],
                 &[
                     "--log <LEVEL>\n          Set the BAML log level; overrides BAML_LOG [default: info] [possible values: off, error,\n          warn, info, debug, trace]",
-                ],
-            ),
-            (
-                &["pack"],
-                &[
-                    "--output-format <FORMAT>\n          Format returned values [default: json] [possible values: debug, json]",
-                ],
-            ),
-            (
-                &["telemetry"],
-                &[
-                    "[ACTION]\n          Telemetry action [default: status] [possible values: status, enable, disable]",
                 ],
             ),
         ];
@@ -828,10 +810,16 @@ mod tests {
 
     #[test]
     fn short_and_long_help_flags_render_the_same_concise_help() {
-        for path in PUBLIC_COMMAND_PATHS {
+        for path in public_command_paths() {
+            let help = |flag: &str| {
+                let mut args = vec!["baml-cli"];
+                args.extend(path.iter().map(String::as_str));
+                args.push(flag);
+                help_for(&args)
+            };
             assert_eq!(
-                help_for_path(path, "-h"),
-                help_for_path(path, "--help"),
+                help("-h"),
+                help("--help"),
                 "help differs for `baml {}`",
                 path.join(" ")
             );
@@ -840,8 +828,12 @@ mod tests {
 
     #[test]
     fn every_public_command_has_detailed_examples() {
-        for path in PUBLIC_COMMAND_PATHS.iter().filter(|path| !path.is_empty()) {
-            let help = crate::help_command::render_for_test(path);
+        for path in public_command_paths()
+            .iter()
+            .filter(|path| !path.is_empty())
+        {
+            let path: Vec<&str> = path.iter().map(String::as_str).collect();
+            let help = crate::help_command::render_for_test(&path);
             assert!(
                 help.contains("Examples:"),
                 "`baml help {}` has no examples:\n{help}",
@@ -855,163 +847,88 @@ mod tests {
         }
     }
 
+    /// Every `baml ...` line in every command's help examples parses, and
+    /// none of them uses a shortcut (docs use the explicit commands).
     #[test]
-    fn documented_examples_parse() {
-        let examples: &[&[&str]] = &[
-            &["baml", "check"],
-            &["baml", "check", "--project", "./my-project"],
-            &["baml", "auth", "status"],
-            &["baml", "auth", "logout"],
-            &["baml", "auth", "login"],
-            &["baml", "auth", "login", "--no-open"],
-            &["baml", "describe"],
-            &["baml", "describe", "baml"],
-            &["baml", "describe", "baml.json"],
-            &["baml", "describe", "Array"],
-            &["baml", "describe", "String.split"],
-            &["baml", "describe", "match"],
-            &["baml", "test", "--list"],
-            &["baml", "test", "-i", "root.payments::*"],
-            &["baml", "test", "-i", "*::integration::*", "-x", "slow"],
-            &["baml", "run", "main", "--", "--name", "Ada"],
-            &[
-                "baml",
-                "run",
-                "--function",
-                "Extract",
-                "--",
-                "Extract",
-                "--text",
-                "input.txt",
-            ],
-            &["baml", "run", "-e", "1 + 2"],
-            &["baml", "run", "--file", "script.baml"],
-            &["baml", "run", "--list"],
-            &["baml", "pack", "main"],
-            &["baml", "pack", "main", "--output", "./my-tool"],
-            &[
-                "baml",
-                "pack",
-                "--function",
-                "Extract",
-                "--function",
-                "Classify",
-                "--output",
-                "./baml-tools",
-            ],
-            &["baml", "pack", "--file", "script.baml", "main"],
-            &[
-                "baml",
-                "feedback",
-                "--title",
-                "Issue (parser): panics on nested unions",
-            ],
-            &[
-                "baml",
-                "feedback",
-                "--title",
-                "...",
-                "--description",
-                "Minimum repro: class A { ... }",
-            ],
-            &["baml", "feedback", "-"],
-            &[
-                "baml",
-                "feedback",
-                "--title",
-                "...",
-                "--files",
-                "screenshot.png",
-                "--files",
-                "repro.baml",
-            ],
-            &["baml", "feedback", "list", "--status", "open"],
-            &["baml", "feedback", "view", "a1b2c3d4"],
-            &["baml", "fmt"],
-            &["baml", "fmt", "baml_src/main.baml"],
-            &["baml", "fmt", "--dry-run"],
-            &["baml", "generate"],
-            &["baml", "generate", "--project", "./my-project"],
-            &["baml", "generate", "--output-dir", "./generated"],
-            &["baml", "init"],
-            &["baml", "init", "./my-project", "--name", "my_project"],
-            &["baml", "new", "./my-project"],
-            &["baml", "new", "./my-project", "--name", "my_project"],
-            &["baml", "ide", "install"],
-            &["baml", "ide", "install", "--cursor"],
-            &["baml", "ide", "install", "--output-dir", "./extensions"],
-            &["baml", "agent", "install"],
-            &["baml", "agent", "install", "--project", "./my-project"],
-            &["baml", "playground"],
-            &[
-                "baml",
-                "playground",
-                "--project",
-                "./my-project",
-                "--no-open",
-            ],
-            &[
-                "baml",
-                "playground",
-                "--file",
-                "script.baml",
-                "--port",
-                "4265",
-            ],
-            &["baml", "lsp"],
-            &["baml", "lsp", "--workspace", "./my-project"],
-            &["baml", "help", "run"],
-            &["baml", "help", "test"],
-        ];
-
-        for example in examples {
-            RuntimeCli::command()
-                .try_get_matches_from(*example)
-                .unwrap_or_else(|error| panic!("`{}` did not parse: {error}", example.join(" ")));
+    fn documented_examples_parse_and_avoid_shortcuts() {
+        for path in public_command_paths() {
+            let path: Vec<&str> = path.iter().map(String::as_str).collect();
+            let help = crate::help_command::render_for_test(&path);
+            let Some(examples) = help.split("Examples:").nth(1) else {
+                continue;
+            };
+            let examples = examples.split("\n\n\n").next().unwrap_or(examples);
+            for line in examples.lines().map(str::trim) {
+                // Pipelines and elided values are illustrations, not argv.
+                if !line.starts_with("baml ") || line.contains('|') || line.contains("...") {
+                    continue;
+                }
+                let argv = shell_words(line);
+                RuntimeCli::command()
+                    .try_get_matches_from(&argv)
+                    .unwrap_or_else(|error| panic!("`{line}` did not parse: {error}"));
+                let is_shortcut_help =
+                    matches!(path.first(), Some(&("query" | "login" | "logout")));
+                let shortcut = matches!(argv[1].as_str(), "query" | "login" | "logout");
+                // The one sanctioned mention: the query help shows its own shortcut.
+                let allowed = argv[1] == "query" && help.contains("Whichever you are set up for");
+                assert!(
+                    is_shortcut_help || !shortcut || allowed,
+                    "`baml help {}` documents the shortcut `{line}`",
+                    path.join(" ")
+                );
+            }
         }
+    }
+
+    /// Splits an example line on whitespace, honoring single and double quotes.
+    fn shell_words(line: &str) -> Vec<String> {
+        let mut words = Vec::new();
+        let mut word = String::new();
+        let mut quote = None;
+        let mut in_word = false;
+        for c in line.chars() {
+            match quote {
+                Some(q) if c == q => quote = None,
+                Some(_) => word.push(c),
+                None if c == '"' || c == '\'' => {
+                    quote = Some(c);
+                    in_word = true;
+                }
+                None if c.is_whitespace() => {
+                    if in_word {
+                        words.push(std::mem::take(&mut word));
+                        in_word = false;
+                    }
+                }
+                None => {
+                    word.push(c);
+                    in_word = true;
+                }
+            }
+        }
+        if in_word {
+            words.push(word);
+        }
+        words
     }
 
     /// `run -e` accepts hyphen-prefixed values without consuming run flags.
     #[test]
     fn run_expression_accepts_hyphen_prefixed_value_and_preserves_run_flags() {
-        let cli = RuntimeCli::parse_from_smart(vec![
-            "baml-cli".into(),
-            "run".into(),
-            "-e".into(),
-            "-7 % 3".into(),
-            "--project".into(),
-            "project".into(),
-        ]);
+        let cli = parse(&["baml", "run", "-e", "-7 % 3", "--project-dir", "project"]);
+        assert_eq!(cli.global.project_dir, Some(PathBuf::from("project")));
         let Commands::Run(args) = cli.command else {
             panic!("expected run command");
         };
         assert_eq!(args.expression.as_deref(), Some("-7 % 3"));
-        assert_eq!(args.from, Some(std::path::PathBuf::from("project")));
-    }
-
-    #[test]
-    fn project_is_global_before_or_after_the_subcommand() {
-        for argv in [
-            vec!["baml", "--project", "workspace", "check"],
-            vec!["baml", "check", "--project", "workspace"],
-        ] {
-            let cli = RuntimeCli::parse_from_smart(argv.into_iter().map(str::to_string).collect());
-            let Commands::Check(args) = cli.command else {
-                panic!("expected check command");
-            };
-            assert_eq!(args.from, Some(PathBuf::from("workspace")));
-        }
     }
 
     #[test]
     fn compiler_features_are_scoped_and_cargo_shaped() {
-        let cli = RuntimeCli::parse_from_smart(vec![
-            "baml".into(),
-            "check".into(),
-            "-F".into(),
-            "beta,display_all_warnings".into(),
-        ]);
-        let Commands::Check(args) = cli.command else {
+        let Commands::Check(args) =
+            parse(&["baml", "check", "-F", "beta,display_all_warnings"]).command
+        else {
             panic!("expected check command");
         };
         assert_eq!(args.compiler.features, ["beta", "display_all_warnings"]);
@@ -1024,23 +941,5 @@ mod tests {
         assert!(help.contains("[possible values: beta,"), "{help}");
         assert!(help.contains("display_all_warnings]"), "{help}");
         assert!(!help.contains("Available features:"), "{help}");
-    }
-
-    #[test]
-    fn agent_project_selects_install_root() {
-        let cli = RuntimeCli::parse_from_smart(vec![
-            "baml".into(),
-            "agent".into(),
-            "install".into(),
-            "--project".into(),
-            "workspace".into(),
-        ]);
-        let Commands::Agent(crate::agent_command::AgentArgs {
-            command: crate::agent_command::AgentCommand::Install(args),
-        }) = cli.command
-        else {
-            panic!("expected agent install command");
-        };
-        assert_eq!(args.dir, Some(PathBuf::from("workspace")));
     }
 }

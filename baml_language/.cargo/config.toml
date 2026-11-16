@@ -9,8 +9,9 @@ rustflags = ["-C", "link-arg=/STACK:67108864"]
 [target.wasm32-unknown-unknown]
 rustflags = [ "--cfg", 'getrandom_backend="wasm_js"' ]
 
-# Give every cargo-spawned thread the same generous stack (libtest's per-test
-# threads especially) so in-process compiler tests don't overflow on Windows.
-# Virtual reserve only — already ample on Linux/macOS.
+# Give every cargo-spawned thread (libtest's per-test threads especially) the
+# stack the shipped CLI gives its compile workers (`baml_cli::main` builds
+# rayon's pool with 16 MiB), so in-process compiler tests overflow exactly
+# where the CLI would, on Windows too. Virtual reserve only.
 [env]
-RUST_MIN_STACK = "67108864"
+RUST_MIN_STACK = "16777216"

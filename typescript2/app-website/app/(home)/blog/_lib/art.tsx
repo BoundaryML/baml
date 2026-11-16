@@ -17,7 +17,7 @@ const DISPLAY = { fontFamily: 'var(--font-display)' };
 const WRONG = '#f0857a';
 
 const KEYWORDS =
-  /("[^"]*"|\/\/.*$|```\w*|\b(?:function|let|if|else|while|for|in|match|enum|return|break)\b)/;
+  /("[^"]*"|\/\/.*$|```\w*|\b(?:function|let|if|else|while|for|in|match|enum|return|break|loop|continue)\b)/;
 
 /** One line of code, colored: keywords in the accent, strings in white, comments muted. */
 function CodeLine({
@@ -532,8 +532,65 @@ function Pivots({ id }: { id: string }) {
   );
 }
 
+/** "Compiling BAML to Rust": a BAML function beside the Rust the new backend emits for it, with the
+ *  post's headline speedup. Both listings are copied from the post. */
+function CompilingToRust({ id }: { id: string }) {
+  return (
+    <>
+      <Pane id={`${id}-a`} title="sum.baml" w={HALF} x={LEFT}>
+        <Code
+          lines={[
+            'function sum(xs: int[]) -> int {',
+            '  let total = 0;',
+            '  let i = 0;',
+            '  while (i < xs.length()) {',
+            '    total += xs[i];',
+            '    i += 1;',
+            '  }',
+            '  total',
+            '}',
+          ].map((text) => ({ text }))}
+          size={15}
+          x={LEFT + 32}
+        />
+        <Stat label="Interpreted" value="1×" w={HALF} x={LEFT} />
+      </Pane>
+      <Pane id={`${id}-b`} title="user_sum.rs" w={HALF} x={RIGHT}>
+        <Code
+          lines={[
+            "'l1: loop {",
+            '    l5 = l3;',
+            '    l6 = expect_int(vm.container_len(l1)?)?;',
+            '    l4 = l5 < l6;',
+            '    if l4 {',
+            '        l9 = l3;',
+            '        l7 = expect_int(vm.load_array_element(l1, Value::int(l9))?)?;',
+            '        l2 = vm.add_i64(l2, l7)?;',
+            '        l3 = vm.add_i64(l3, 1)?;',
+            "        continue 'l1;",
+            '    } else {',
+            '        return Ok(l2);',
+            '    }',
+            '}',
+          ].map((text) => ({ text }))}
+          size={15}
+          x={RIGHT + 32}
+        />
+        <Stat
+          color="var(--color-clover)"
+          label="Compiled, up to"
+          value="34×"
+          w={HALF}
+          x={RIGHT}
+        />
+      </Pane>
+    </>
+  );
+}
+
 const ART: Record<string, (props: { id: string }) => ReactNode> = {
   '5-years-12-pivots': Pivots,
+  'compiling-baml-to-rust': CompilingToRust,
   'schema-aligned-parsing': SchemaAlignedParsing,
   'structured-output-from-llms': ComparisonChart,
   'structured-outputs-create-false-confidence': FalseConfidence,
@@ -556,14 +613,22 @@ export function checkArt(posts: Post[]) {
   }
 }
 
-/** A post's drawing inside its own body. */
-export function PostDrawing({ alt, slug }: { alt: string; slug: string }) {
+/** A post's drawing inside its own body, or wherever else the post is featured. */
+export function PostDrawing({
+  alt,
+  className = 'my-8',
+  slug,
+}: {
+  alt: string;
+  className?: string;
+  slug: string;
+}) {
   const Art = ART[slug];
   if (!Art) return null;
   return (
     <svg
       aria-label={alt}
-      className="not-prose my-8 aspect-[1200/630] w-full overflow-hidden rounded-xl bg-raised"
+      className={`not-prose aspect-[1200/630] w-full overflow-hidden rounded-xl bg-raised ${className}`}
       role="img"
       // Post bodies redefine --muted as a dark background color.
       style={{ '--muted': '#828280' } as CSSProperties}

@@ -202,6 +202,7 @@ pub(crate) fn build_enum_object<'db>(
         other: indexmap::IndexMap::new(),
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        shared_variants: Box::default(),
     }
 }
 

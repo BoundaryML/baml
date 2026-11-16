@@ -1,0 +1,21 @@
+/// Documented.
+// a plain comment between the doc and the keyword
+function f() -> int {
+    1
+}
+
+class Person {
+    /// The name.
+    // docs:start
+    /// Still the name.
+    /* block */
+    name string
+    // docs:end
+    age int
+}
+
+enum Status {
+    /// Up.
+    // between
+    Active
+}

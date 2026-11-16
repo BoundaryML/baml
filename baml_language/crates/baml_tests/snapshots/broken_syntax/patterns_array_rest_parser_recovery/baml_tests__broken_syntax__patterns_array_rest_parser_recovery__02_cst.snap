@@ -1,0 +1,389 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== patterns_array_rest_parser_recovery.baml ===
+SourceFile@241..1220
+  items: FunctionDef@241..385
+    kw: Function "function" @241..249
+    name: Name@250..270
+      token: Word "double_rest_bindings" @250..270
+    params: ParamList@270..281
+      l: LParen "(" @270..271
+      params: Param@271..280
+        name: Name@271..273
+          token: Word "xs" @271..273
+        ascription: TypeAscription@273..280
+          colon: Colon ":" @273..274
+          ty: ArrayType@275..280
+            inner: PathType@275..278
+              head: Name@275..278
+                token: Word "int" @275..278
+            l: LBracket "[" @278..279
+            r: RBracket "]" @279..280
+      r: RParen ")" @280..281
+    ret: ReturnType@282..288
+      arrow: Arrow "->" @282..284
+      ty: PathType@285..288
+        head: Name@285..288
+          token: Word "int" @285..288
+    body: Block@289..385
+      l: LBrace "{" @289..290
+      tail: MatchExpr@295..383
+        kw: Match "match" @295..300
+        scrutinee: MatchParen@301..305
+          l: LParen "(" @301..302
+          expr: PathExpr@302..304
+            head: Name@302..304
+              token: Word "xs" @302..304
+          r: RParen ")" @304..305
+        l: LBrace "{" @306..307
+        arms: MatchArm@316..362
+          pattern: ArrayPattern@316..334
+            l: LBracket "[" @316..317
+            elements: RestPattern@317..324
+              dots: DotDot ".." @317..319
+              pattern: BindingPattern@319..324
+                introducer: Let "let" @319..322
+                name: Name@323..324
+                  token: Word "a" @323..324
+            elements: Comma "," @324..325
+            elements: RestPattern@326..333
+              dots: DotDot ".." @326..328
+              pattern: BindingPattern@328..333
+                introducer: Let "let" @328..331
+                name: Name@332..333
+                  token: Word "b" @332..333
+            r: RBracket "]" @333..334
+          arrow: FatArrow "=>" @335..337
+          body: BinaryExpr@338..361
+            lhs: CallExpr@338..348
+              callee: PathExpr@338..346
+                head: Name@338..339
+                  token: Word "a" @338..339
+                dot: Dot "." @339..340
+                name: Name@340..346
+                  token: Word "length" @340..346
+              args: ArgList@346..348
+                l: LParen "(" @346..347
+                r: RParen ")" @347..348
+            op: Plus "+" @349..350
+            rhs: CallExpr@351..361
+              callee: PathExpr@351..359
+                head: Name@351..352
+                  token: Word "b" @351..352
+                dot: Dot "." @352..353
+                name: Name@353..359
+                  token: Word "length" @353..359
+              args: ArgList@359..361
+                l: LParen "(" @359..360
+                r: RParen ")" @360..361
+          comma: Comma "," @361..362
+        arms: MatchArm@371..377
+          pattern: WildcardPattern@371..372
+            underscore: Underscore "_" @371..372
+          arrow: FatArrow "=>" @373..375
+          body: LiteralExpr@376..377
+            token: Integer "0" @376..377
+        r: RBrace "}" @382..383
+      r: RBrace "}" @384..385
+  items: FunctionDef@453..580
+    kw: Function "function" @453..461
+    name: Name@462..486
+      token: Word "spread_token_is_not_rest" @462..486
+    params: ParamList@486..497
+      l: LParen "(" @486..487
+      params: Param@487..496
+        name: Name@487..489
+          token: Word "xs" @487..489
+        ascription: TypeAscription@489..496
+          colon: Colon ":" @489..490
+          ty: ArrayType@491..496
+            inner: PathType@491..494
+              head: Name@491..494
+                token: Word "int" @491..494
+            l: LBracket "[" @494..495
+            r: RBracket "]" @495..496
+      r: RParen ")" @496..497
+    ret: ReturnType@498..504
+      arrow: Arrow "->" @498..500
+      ty: PathType@501..504
+        head: Name@501..504
+          token: Word "int" @501..504
+    body: Block@505..580
+      l: LBrace "{" @505..506
+      tail: MatchExpr@511..578
+        kw: Match "match" @511..516
+        scrutinee: MatchParen@517..521
+          l: LParen "(" @517..518
+          expr: PathExpr@518..520
+            head: Name@518..520
+              token: Word "xs" @518..520
+          r: RParen ")" @520..521
+        l: LBrace "{" @522..523
+        arms: MatchArm@532..557
+          pattern: ArrayPattern@532..542
+            l: LBracket "[" @532..533
+            elements: BindingPattern@536..541
+              introducer: Let "let" @536..539
+              name: Name@540..541
+                token: Word "r" @540..541
+            r: RBracket "]" @541..542
+          arrow: FatArrow "=>" @543..545
+          body: CallExpr@546..556
+            callee: PathExpr@546..554
+              head: Name@546..547
+                token: Word "r" @546..547
+              dot: Dot "." @547..548
+              name: Name@548..554
+                token: Word "length" @548..554
+            args: ArgList@554..556
+              l: LParen "(" @554..555
+              r: RParen ")" @555..556
+          comma: Comma "," @556..557
+        arms: MatchArm@566..572
+          pattern: WildcardPattern@566..567
+            underscore: Underscore "_" @566..567
+          arrow: FatArrow "=>" @568..570
+          body: LiteralExpr@571..572
+            token: Integer "0" @571..572
+        r: RBrace "}" @577..578
+      r: RBrace "}" @579..580
+  items: FunctionDef@616..732
+    kw: Function "function" @616..624
+    name: Name@625..650
+      token: Word "rest_missing_binding_name" @625..650
+    params: ParamList@650..661
+      l: LParen "(" @650..651
+      params: Param@651..660
+        name: Name@651..653
+          token: Word "xs" @651..653
+        ascription: TypeAscription@653..660
+          colon: Colon ":" @653..654
+          ty: ArrayType@655..660
+            inner: PathType@655..658
+              head: Name@655..658
+                token: Word "int" @655..658
+            l: LBracket "[" @658..659
+            r: RBracket "]" @659..660
+      r: RParen ")" @660..661
+    ret: ReturnType@662..668
+      arrow: Arrow "->" @662..664
+      ty: PathType@665..668
+        head: Name@665..668
+          token: Word "int" @665..668
+    body: Block@669..732
+      l: LBrace "{" @669..670
+      tail: MatchExpr@675..730
+        kw: Match "match" @675..680
+        scrutinee: MatchParen@681..685
+          l: LParen "(" @681..682
+          expr: PathExpr@682..684
+            head: Name@682..684
+              token: Word "xs" @682..684
+          r: RParen ")" @684..685
+        l: LBrace "{" @686..687
+        arms: MatchArm@696..709
+          pattern: ArrayPattern@696..703
+            l: LBracket "[" @696..697
+            elements: RestPattern@697..702
+              dots: DotDot ".." @697..699
+            r: RBracket "]" @702..703
+          arrow: FatArrow "=>" @704..706
+          body: LiteralExpr@707..708
+            token: Integer "1" @707..708
+          comma: Comma "," @708..709
+        arms: MatchArm@718..724
+          pattern: WildcardPattern@718..719
+            underscore: Underscore "_" @718..719
+          arrow: FatArrow "=>" @720..722
+          body: LiteralExpr@723..724
+            token: Integer "0" @723..724
+        r: RBrace "}" @729..730
+      r: RBrace "}" @731..732
+  items: FunctionDef@771..887
+    kw: Function "function" @771..779
+    name: Name@780..800
+      token: Word "rest_bare_ascription" @780..800
+    params: ParamList@800..811
+      l: LParen "(" @800..801
+      params: Param@801..810
+        name: Name@801..803
+          token: Word "xs" @801..803
+        ascription: TypeAscription@803..810
+          colon: Colon ":" @803..804
+          ty: ArrayType@805..810
+            inner: PathType@805..808
+              head: Name@805..808
+                token: Word "int" @805..808
+            l: LBracket "[" @808..809
+            r: RBracket "]" @809..810
+      r: RParen ")" @810..811
+    ret: ReturnType@812..818
+      arrow: Arrow "->" @812..814
+      ty: PathType@815..818
+        head: Name@815..818
+          token: Word "int" @815..818
+    body: Block@819..887
+      l: LBrace "{" @819..820
+      tail: MatchExpr@825..885
+        kw: Match "match" @825..830
+        scrutinee: MatchParen@831..835
+          l: LParen "(" @831..832
+          expr: PathExpr@832..834
+            head: Name@832..834
+              token: Word "xs" @832..834
+          r: RParen ")" @834..835
+        l: LBrace "{" @836..837
+        arms: MatchArm@846..864
+          pattern: ArrayPattern@846..858
+            l: LBracket "[" @846..847
+            elements: RestPattern@847..849
+              dots: DotDot ".." @847..849
+            elements: TypePattern@852..857
+              ty: ArrayType@852..857
+                inner: PathType@852..855
+                  head: Name@852..855
+                    token: Word "int" @852..855
+                l: LBracket "[" @855..856
+                r: RBracket "]" @856..857
+            r: RBracket "]" @857..858
+          arrow: FatArrow "=>" @859..861
+          body: LiteralExpr@862..863
+            token: Integer "1" @862..863
+          comma: Comma "," @863..864
+        arms: MatchArm@873..879
+          pattern: WildcardPattern@873..874
+            underscore: Underscore "_" @873..874
+          arrow: FatArrow "=>" @875..877
+          body: LiteralExpr@878..879
+            token: Integer "0" @878..879
+        r: RBrace "}" @884..885
+      r: RBrace "}" @886..887
+  items: FunctionDef@934..1055
+    kw: Function "function" @934..942
+    name: Name@943..967
+      token: Word "rest_wildcard_ascription" @943..967
+    params: ParamList@967..978
+      l: LParen "(" @967..968
+      params: Param@968..977
+        name: Name@968..970
+          token: Word "xs" @968..970
+        ascription: TypeAscription@970..977
+          colon: Colon ":" @970..971
+          ty: ArrayType@972..977
+            inner: PathType@972..975
+              head: Name@972..975
+                token: Word "int" @972..975
+            l: LBracket "[" @975..976
+            r: RBracket "]" @976..977
+      r: RParen ")" @977..978
+    ret: ReturnType@979..985
+      arrow: Arrow "->" @979..981
+      ty: PathType@982..985
+        head: Name@982..985
+          token: Word "int" @982..985
+    body: Block@986..1055
+      l: LBrace "{" @986..987
+      tail: MatchExpr@992..1053
+        kw: Match "match" @992..997
+        scrutinee: MatchParen@998..1002
+          l: LParen "(" @998..999
+          expr: PathExpr@999..1001
+            head: Name@999..1001
+              token: Word "xs" @999..1001
+          r: RParen ")" @1001..1002
+        l: LBrace "{" @1003..1004
+        arms: MatchArm@1013..1032
+          pattern: ArrayPattern@1013..1026
+            l: LBracket "[" @1013..1014
+            elements: RestPattern@1014..1017
+              dots: DotDot ".." @1014..1016
+              pattern: WildcardPattern@1016..1017
+                underscore: Underscore "_" @1016..1017
+            elements: TypePattern@1020..1025
+              ty: ArrayType@1020..1025
+                inner: PathType@1020..1023
+                  head: Name@1020..1023
+                    token: Word "int" @1020..1023
+                l: LBracket "[" @1023..1024
+                r: RBracket "]" @1024..1025
+            r: RBracket "]" @1025..1026
+          arrow: FatArrow "=>" @1027..1029
+          body: LiteralExpr@1030..1031
+            token: Integer "1" @1030..1031
+          comma: Comma "," @1031..1032
+        arms: MatchArm@1041..1047
+          pattern: WildcardPattern@1041..1042
+            underscore: Underscore "_" @1041..1042
+          arrow: FatArrow "=>" @1043..1045
+          body: LiteralExpr@1046..1047
+            token: Integer "0" @1046..1047
+        r: RBrace "}" @1052..1053
+      r: RBrace "}" @1054..1055
+  items: FunctionDef@1106..1220
+    kw: Function "function" @1106..1114
+    name: Name@1115..1133
+      token: Word "nested_double_rest" @1115..1133
+    params: ParamList@1133..1144
+      l: LParen "(" @1133..1134
+      params: Param@1134..1143
+        name: Name@1134..1136
+          token: Word "xs" @1134..1136
+        ascription: TypeAscription@1136..1143
+          colon: Colon ":" @1136..1137
+          ty: ArrayType@1138..1143
+            inner: PathType@1138..1141
+              head: Name@1138..1141
+                token: Word "int" @1138..1141
+            l: LBracket "[" @1141..1142
+            r: RBracket "]" @1142..1143
+      r: RParen ")" @1143..1144
+    ret: ReturnType@1145..1151
+      arrow: Arrow "->" @1145..1147
+      ty: PathType@1148..1151
+        head: Name@1148..1151
+          token: Word "int" @1148..1151
+    body: Block@1152..1220
+      l: LBrace "{" @1152..1153
+      tail: MatchExpr@1158..1218
+        kw: Match "match" @1158..1163
+        scrutinee: MatchParen@1164..1168
+          l: LParen "(" @1164..1165
+          expr: PathExpr@1165..1167
+            head: Name@1165..1167
+              token: Word "xs" @1165..1167
+          r: RParen ")" @1167..1168
+        l: LBrace "{" @1169..1170
+        arms: MatchArm@1179..1197
+          pattern: ArrayPattern@1179..1191
+            l: LBracket "[" @1179..1180
+            elements: RestPattern@1180..1190
+              dots: DotDot ".." @1180..1182
+              pattern: ArrayPattern@1182..1190
+                l: LBracket "[" @1182..1183
+                elements: RestPattern@1183..1185
+                  dots: DotDot ".." @1183..1185
+                elements: Comma "," @1185..1186
+                elements: RestPattern@1187..1189
+                  dots: DotDot ".." @1187..1189
+                r: RBracket "]" @1189..1190
+            r: RBracket "]" @1190..1191
+          arrow: FatArrow "=>" @1192..1194
+          body: LiteralExpr@1195..1196
+            token: Integer "1" @1195..1196
+          comma: Comma "," @1196..1197
+        arms: MatchArm@1206..1212
+          pattern: WildcardPattern@1206..1207
+            underscore: Underscore "_" @1206..1207
+          arrow: FatArrow "=>" @1208..1210
+          body: LiteralExpr@1211..1212
+            token: Integer "0" @1211..1212
+        r: RBrace "}" @1217..1218
+      r: RBrace "}" @1219..1220
+error @328..331: expected only one '..' rest pattern is allowed in an array pattern, found let
+error @533..536: expected pattern, found '...'
+error @702..703: expected identifier after 'let', found ']'
+error @850..851: expected pattern, found ':'
+error @850..851: expected ',' or ']' after array pattern element, found ':'
+error @1018..1019: expected ',' or ']' after array pattern element, found ':'
+error @1189..1190: expected only one '..' rest pattern is allowed in an array pattern, found ']'

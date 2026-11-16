@@ -45,6 +45,25 @@
   text-wrap: balance;
 }
 
+/* "hyperobservability" and "hyperobservable" (the Hyper component) in a heading are set in the pixel
+   font; in body text they keep the text's font. */
+:is(h1, h2, h3, h4, .v4-h1, .v4-h2, .v4-h3) .hyper {
+  font-family: var(--font-geist-pixel);
+}
+
+/* The homepage's two heading tiers: every section heading at the size .v4-h3 has elsewhere, and
+   every heading inside a section (a box's title, a step, a column) one tier below it. */
+.home-page .v4-h2 {
+  font-size: clamp(26px, 3vw, 40px);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+.home-page .v4-h3 {
+  font-size: clamp(20px, 2.1vw, 28px);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
 /* Body: Geist Regular, 20px, 140%, 0. */
 .v4-body {
   font-family: var(--font-sans);
@@ -86,7 +105,97 @@
   --ds-lit-shadow: none;
 }
 
-/* The hero diagram's sizes (components/home/tracker.tsx): its padding, its deploy label's row, its rows, and the return line
+/* The hero diagram's glimmer, once it has played: one light going around BAML's loop at a steady
+   speed. It crosses the bar between the two places the Improve line joins it (the first 44% of
+   the cycle), then runs the Improve line back (the rest), with no pause between. Both halves are
+   separate animations, so components/home/tracker.tsx gives each a negative delay from the same
+   clock (glintDelay) to keep them in step whenever either one mounts. Opacity, transform and a
+   dash offset only. */
+.tracker-glint-across,
+.tracker-glint-down,
+.tracker-glint-return {
+  animation-duration: 3200ms;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.tracker-glint-across {
+  animation-name: tracker-glint-across;
+  will-change: transform, opacity;
+}
+.tracker-glint-down {
+  animation-name: tracker-glint-down;
+  will-change: transform, opacity;
+}
+.tracker-glint-return {
+  filter: drop-shadow(0 0 3px var(--ds-accent-ink));
+  stroke-dasharray: 10 200;
+  stroke-dashoffset: 5;
+  animation-name: tracker-glint-return;
+}
+/* The band is 10% of its track wide and starts and ends centered on the joins. The handoffs
+   overlap: near the end join the band fades out as the dash fades in and sets off, and back at
+   build the dash fades out as the band fades in, so the light changes form without a blink. */
+@keyframes tracker-glint-across {
+  0% {
+    opacity: 0;
+    transform: translate3d(-5%, 0, 0);
+  }
+  6% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 1;
+  }
+  48% {
+    opacity: 0;
+    transform: translate3d(104%, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(104%, 0, 0);
+  }
+}
+@keyframes tracker-glint-down {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -5%, 0);
+  }
+  6% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 1;
+  }
+  48% {
+    opacity: 0;
+    transform: translate3d(0, 104%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 104%, 0);
+  }
+}
+/* The dash (10 of the line's 100) sets off centered on the end join and finishes centered on the
+   build join, where the band takes over. */
+@keyframes tracker-glint-return {
+  0%,
+  40% {
+    stroke-dashoffset: 5;
+    opacity: 0;
+  }
+  47% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -95;
+    opacity: 0;
+  }
+}
+
+/* The hero diagram's sizes (components/home/tracker.tsx): its padding, its deploy label's row, its rows, the gap above BAML's row, and the return line
    under BAML's bar. On a screen shorter than 900px they shrink so the whole diagram, BAML's bar
    included, sits nearer the fold. Plain CSS, so the short-screen sizes reliably win over the
    breakpoints'. */
@@ -95,13 +204,15 @@
   --tracker-pad: 0.75rem;
   --tracker-row: 2.75rem;
   --tracker-ret: 2.25rem;
+  --tracker-gap: 0.5rem;
 }
 @media (min-width: 48rem) {
   .tracker {
-    --tracker-head: 1.75rem;
+    --tracker-head: 2.5rem;
     --tracker-pad: 1.5rem;
     --tracker-row: 3.5rem;
     --tracker-ret: 3rem;
+    --tracker-gap: 2.5rem;
   }
 }
 @media (min-width: 64rem) {
@@ -114,6 +225,7 @@
     --tracker-pad: 1rem;
     --tracker-row: 2.75rem;
     --tracker-ret: 2.25rem;
+    --tracker-gap: 1.75rem;
   }
 }
 
@@ -142,10 +254,11 @@
 }
 @media (min-width: 48rem) and (max-height: 700px) {
   .tracker {
-    --tracker-head: 1.25rem;
+    --tracker-head: 2rem;
     --tracker-pad: 0.75rem;
     --tracker-row: 2.5rem;
     --tracker-ret: 2rem;
+    --tracker-gap: 1rem;
   }
   .hero-top {
     padding-top: 1.5rem;
@@ -153,16 +266,12 @@
   .hero-diagram {
     margin-top: 1.75rem;
   }
-  /* The logos already say it. */
-  .tracker-caption {
-    display: none;
-  }
 }
 
 /* The hero headline also scales with the screen's height, so a short window keeps room for the
    diagram. */
 .hero-title {
-  /* The floor drops below 36px on phones narrower than 400px, so "hyper-observable", which never
+  /* The floor drops below 36px on phones narrower than 400px, so "hyperobservable", which never
      breaks, still fits on one line at 320px. */
   font-size: clamp(min(36px, 9vw), min(4.6vw, 7.5vh), 64px);
 }
@@ -233,5 +342,67 @@
   }
   to {
     box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+/* The hero team chat's Decision tag (components/home/hyperobs.tsx): it pops in once its message has
+   arrived, and small stars burst out from it, each toward its own --dx and --dy. */
+@keyframes decision-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes decision-spark {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy));
+  }
+}
+.decision-pop {
+  animation: decision-pop 600ms 250ms ease-out both;
+}
+.decision-spark {
+  animation: decision-spark 800ms 300ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .decision-pop,
+  .decision-spark {
+    animation: none;
+  }
+  .decision-spark {
+    display: none;
+  }
+}
+
+/* The rotating word in the hyperobservability heading: each new word rises in. */
+@keyframes heading-swap {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.25em, 0);
+  }
+}
+.heading-swap {
+  display: inline-block;
+  animation: heading-swap 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .heading-swap {
+    animation: none;
   }
 }

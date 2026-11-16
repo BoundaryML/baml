@@ -1,3 +1,5 @@
+import { fetchPlaylistVideos, lengthFor, viewsFor } from './youtube-views';
+
 type ExternalEpisode = {
   folder: string;
   guid: string;
@@ -31,6 +33,10 @@ export type PodcastEpisode = {
   topics: string[];
   codeUrl?: string;
   youtubeUrl?: string;
+  /** YouTube views, when there's a video. */
+  views?: number;
+  /** The video's length in seconds, when known. */
+  seconds?: number;
   slug: string;
 };
 
@@ -354,7 +360,7 @@ function mapExternalEpisodes(
  * Fetches the episodes from the ai-that-works feed, revalidated every ten
  * minutes. Falls back to the bundled episodes if the feed fails.
  */
-export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
+async function fetchFeedEpisodes(): Promise<PodcastEpisode[]> {
   try {
     // Hard timeout so a stalled connection (e.g. rate-limited from a CI/build
     // egress IP) falls back to bundled data instead of hanging the build.
@@ -385,4 +391,45 @@ export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
     );
     return fallbackEpisodes;
   }
+}
+
+/**
+ * The episodes with their YouTube views. An episode the feed hasn't linked a video for yet gets the
+ * playlist video published in the week after it aired, if there is one.
+ */
+export async function fetchPodcastEpisodes(): Promise<PodcastEpisode[]> {
+  const [episodes, videos] = await Promise.all([
+    fetchFeedEpisodes(),
+    fetchPlaylistVideos(),
+  ]);
+  const linked = new Set(
+    episodes.map((e) => getYouTubeVideoId(e.youtubeUrl)).filter(Boolean),
+  );
+  const WEEK = 7 * 24 * 60 * 60 * 1000;
+  const withIds = episodes.map((e) => {
+    let id = getYouTubeVideoId(e.youtubeUrl);
+    if (!id) {
+      const aired = new Date(e.date).getTime();
+      const match = videos
+        .filter((v) => !linked.has(v.id))
+        .map((v) => ({ ...v, at: new Date(v.published).getTime() }))
+        .filter((v) => v.at >= aired && v.at - aired < WEEK)
+        .sort((a, b) => a.at - b.at)[0];
+      if (match) {
+        id = match.id;
+        linked.add(id);
+      }
+    }
+    return { e, id };
+  });
+  return withIds.map(({ e, id }) =>
+    id
+      ? {
+          ...e,
+          seconds: lengthFor(id),
+          views: viewsFor(id, videos),
+          youtubeUrl: e.youtubeUrl ?? `https://www.youtube.com/watch?v=${id}`,
+        }
+      : e,
+  );
 }

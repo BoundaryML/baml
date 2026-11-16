@@ -1,0 +1,15 @@
+class Ok {
+    value: string,
+}
+
+class Warn {
+    value: string,
+}
+
+function f(r: Ok | Warn) -> string {
+    if let s: Ok | Warn = r {
+        s.value
+    } else {
+        "none"
+    }
+}

@@ -65,7 +65,7 @@ impl fmt::Display for InvalidIdentifierKind {
 
 /// Check a runtime-supplied name with the compiler lexer's identifier rules.
 pub fn is_baml_identifier(value: &str) -> bool {
-    baml_compiler_lexer::is_baml_identifier(value)
+    baml_syntax::lexer::is_identifier(value)
 }
 
 /// E0010 — a runtime-supplied declaration name is not a BAML identifier.

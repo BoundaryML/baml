@@ -33,7 +33,9 @@ class Row:
 
     def command(self, workload, artifact, jobs, warmup):
         if self.is_baml:
-            return [str(artifact), "--jobs", str(jobs), "--warmup", str(warmup)]
+            # A packed executable prints its result as text by default; the
+            # harness reads one JSON report line.
+            return [str(artifact), "--jobs", str(jobs), "--warmup", str(warmup), "--output-format", "json"]
         if self.kind == "python":
             return ["python3", "-S", str(DRIVERS / "driver.py"), str(workload["files"]["python"]), str(jobs), str(warmup)]
         return [self.kind, str(DRIVERS / "driver.js"), str(workload["files"]["js"]), str(jobs), str(warmup)]

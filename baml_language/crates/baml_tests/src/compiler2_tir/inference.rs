@@ -513,7 +513,7 @@ implements ToJson for Dog {
     );
 
     assert_eq!(
-        baml_compiler2_hir::item_data::file_free_impls(&db, impl_file).len(),
+        baml_compiler2_hir::item_data::file_impls(&db, impl_file).len(),
         1,
         "cross-file class target must remain a first-class out-of-body impl record"
     );

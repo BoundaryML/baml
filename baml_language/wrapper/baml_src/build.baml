@@ -1,13 +1,13 @@
 // Replaced in the build's temporary project by baml_language/wrapper/build.
 function wrapper_version() -> string {
-    "0.3.0"
+    "0.4.0"
 }
 
 function self_update_enabled() -> bool {
     true
 }
 
-// Pack builds derive these from the Rust wrapper's PostHog constants.
+// Pack builds take these from `wrapper/release.toml`.
 // Direct development execution leaves telemetry disabled.
 function telemetry_api_key() -> string {
     ""

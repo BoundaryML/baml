@@ -37,7 +37,7 @@ fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
     let out_bin = dir.join("out");
     let mut cmd = Command::new(&built.baml_cli);
     cmd.arg("pack")
-        .arg("--from")
+        .arg("--project-dir")
         .arg(dir)
         .arg("-o")
         .arg(&out_bin);
@@ -305,7 +305,7 @@ fn pack_e2e_omits_compile_file_status() {
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_HOME", common::shared_baml_home())
         .arg("pack")
-        .arg("--from")
+        .arg("--project-dir")
         .arg(tmp.path())
         .arg("-o")
         .arg(&out_bin)
@@ -375,45 +375,30 @@ fn pack_e2e_hermetic_baml_file() {
     assert!(String::from_utf8_lossy(&run_out.stdout).contains("hermetic"));
 }
 
-/// The baked-in output format actually governs the running binary.
-/// Default is JSON; the stdout must parse as a JSON document. If the
-/// envelope's `output_format` weren't honored, `debug` formatting would
-/// leak through and this would fail.
+/// A packed binary picks its output format at run time, like `baml run`:
+/// text by default, `--output-format json` among a typed target's flags.
 #[test]
-fn pack_e2e_output_format_json_baked_in() {
-    let built = common::ensure_built();
-    let (_tmp, bin) = pack_project(built, "function main() -> int { 42 }\n", &["main"]);
-    let out = run(&bin, &[]);
-    assert!(out.status.success());
-    let stdout = String::from_utf8(out.stdout).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(stdout.trim())
-        .unwrap_or_else(|_| panic!("stdout should be valid JSON; got: {stdout}"));
-    assert_eq!(parsed, serde_json::json!(42));
-}
-
-/// `--output-format debug` at pack time should reach the packed binary
-/// and change its runtime output. Using a string target because that's
-/// where the two formats render differently (debug uses Rust's
-/// `{:?}` escaping; JSON uses `"…"` as a `serde_json` value).
-#[test]
-fn pack_e2e_output_format_debug_baked_in() {
+fn pack_e2e_output_format_is_a_runtime_flag() {
     let built = common::ensure_built();
     let (_tmp, bin) = pack_project(
         built,
-        "function main() -> string { \"hello\" }\n",
-        &["main", "--output-format", "debug"],
+        "class Point {\n    x: int,\n}\n\nfunction main(x: int) -> Point {\n    Point { x: x }\n}\n",
+        &["main"],
     );
-    let out = run(&bin, &[]);
-    assert!(out.status.success());
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    // Debug format writes the string; a JSON-default build would also
-    // write a string — but in debug mode it's NOT wrapped in the JSON
-    // pretty-printer, so there's no extra whitespace / quoting artifacts.
-    // Easiest distinguishing check: debug output is one line ending
-    // with the string; JSON pretty-print output would be the same for
-    // a simple string, so we verify the content is there and trust the
-    // envelope roundtrip test below for separation.
-    assert!(stdout.contains("hello"));
+
+    let text = run(&bin, &["--x", "42"]);
+    assert!(text.status.success(), "{text:?}");
+    let stdout = String::from_utf8(text.stdout).unwrap();
+    assert!(stdout.contains("42"), "{stdout}");
+    assert!(
+        serde_json::from_str::<serde_json::Value>(stdout.trim()).is_err(),
+        "the default is text, not JSON: {stdout}"
+    );
+
+    let json = run(&bin, &["--x", "42", "--output-format", "json"]);
+    assert!(json.status.success(), "{json:?}");
+    let parsed: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(parsed, serde_json::json!({"x": 42}));
 }
 
 /// `baml.sys.exit(n)` must cross the subprocess boundary unchanged.
@@ -579,7 +564,7 @@ fn rust_pack_from_outside_workspace_with_cargo_overrides() {
             .args(["pack", "main", "--rust", "--rust-profile", "fast"])
             .arg("--rust-workspace")
             .arg(workspace)
-            .arg("--from")
+            .arg("--project-dir")
             .arg(project.path())
             .arg("--output")
             .arg(&output_path)

@@ -109,10 +109,10 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0176
 
   × `root` is the path to this package and cannot name a binding, an item, or a type parameter
-    ╭─[main.baml:51:5]
+    ╭─[main.baml:51:9]
  51 │     let root = 1
-    ·     ────┬───
-    ·         ╰── `root` is this package
+    ·         ──┬─
+    ·           ╰── `root` is this package
     ╰────
 
   [hir] E0176
@@ -127,10 +127,10 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0176
 
   × `root` is the path to this package and cannot name a binding, an item, or a type parameter
-    ╭─[main.baml:61:10]
+    ╭─[main.baml:61:14]
  61 │     for (let root in items) {
-    ·          ────┬───
-    ·              ╰── `root` is this package
+    ·              ──┬─
+    ·                ╰── `root` is this package
     ╰────
 
   [hir] E0176

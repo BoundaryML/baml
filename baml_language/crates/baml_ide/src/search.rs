@@ -358,13 +358,9 @@ fn ranked_candidates(
             db.unwind_if_revision_cancelled();
             for &block in item_data::file_impls(db, file) {
                 let data = item_data::impl_block_data(db, block);
-                let for_display = match &data.subject {
-                    item_data::ImplSubjectData::InClass { class, .. } => {
-                        item_data::class_data(db, *class).name.as_str().to_string()
-                    }
-                    item_data::ImplSubjectData::Free { for_target, .. } => {
-                        data.type_refs.display(*for_target).to_string()
-                    }
+                let for_display = match item_data::impl_enclosing_class(db, block) {
+                    Some(class) => item_data::class_data(db, class).name.as_str().to_string(),
+                    None => data.type_refs.display(data.for_target).to_string(),
                 };
                 for &method in &data.methods {
                     let func = item_data::function_data(db, method);

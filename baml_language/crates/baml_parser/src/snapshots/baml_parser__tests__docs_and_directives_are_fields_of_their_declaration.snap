@@ -1,0 +1,82 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: tree(text)
+---
+SourceFile@16..251
+  items: FunctionDef@16..145
+    docs: DocLine@16..25
+      token: DocComment "/// Adds." @16..25
+    docs: DocLine@60..70
+      token: DocComment "/// Twice." @60..70
+    docs: Directive@71..86
+      token: DirectiveComment "//baml:mut_self" @71..86
+    docs: Directive@87..113
+      token: DocComment "/// baml:$trace=trace.span" @87..113
+    kw: Function "function" @114..122
+    name: Name@123..124
+      token: Word "f" @123..124
+    params: ParamList@124..132
+      l: LParen "(" @124..125
+      params: Param@125..131
+        name: Name@125..126
+          token: Word "x" @125..126
+        ascription: TypeAscription@126..131
+          colon: Colon ":" @126..127
+          ty: PathType@128..131
+            head: Name@128..131
+              token: Word "int" @128..131
+      r: RParen ")" @131..132
+    ret: ReturnType@133..139
+      arrow: Arrow "->" @133..135
+      ty: PathType@136..139
+        head: Name@136..139
+          token: Word "int" @136..139
+    body: Block@140..145
+      l: LBrace "{" @140..141
+      tail: PathExpr@142..143
+        head: Name@142..143
+          token: Word "x" @142..143
+      r: RBrace "}" @144..145
+  items: ClassDef@155..204
+    kw: Class "class" @155..160
+    name: Name@161..162
+      token: Word "C" @161..162
+    l: LBrace "{" @163..164
+    members: Field@167..190
+      docs: DocLine@167..181
+        token: DocComment "/// The field." @167..181
+      name: Name@184..185
+        token: Word "x" @184..185
+      colon: Colon ":" @185..186
+      ty: PathType@187..190
+        head: Name@187..190
+          token: Word "int" @187..190
+    members: BlockAttr@193..202
+      at: AtAt "@@" @193..195
+      path: DottedName@195..202
+        head: Name@195..202
+          token: Dynamic "dynamic" @195..202
+    r: RBrace "}" @203..204
+  items: TypeAliasDef@206..229
+    docs: DocLine@206..215
+      token: DocComment "/// alias" @206..215
+    kw: Type "type" @216..220
+    name: Name@221..222
+      token: Word "A" @221..222
+    eq: Equals "=" @223..224
+    ty: PathType@225..228
+      head: Name@225..228
+        token: Word "int" @225..228
+    semi: Semicolon ";" @228..229
+  items: LetItem@230..251
+    docs: DocLine@230..240
+      token: DocComment "/// global" @230..240
+    stmt: LetStmt@241..251
+      introducer: Let "let" @241..244
+      pattern: BindingPattern@245..246
+        name: Name@245..246
+          token: Word "g" @245..246
+      eq: Equals "=" @247..248
+      init: LiteralExpr@249..250
+        token: Integer "1" @249..250
+      semi: Semicolon ";" @250..251

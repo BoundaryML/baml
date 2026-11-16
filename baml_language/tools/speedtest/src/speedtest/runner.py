@@ -71,7 +71,7 @@ def build_baml(cli, workload, stage, backend="vm", rust_build_dir=None):
         shutil.copy(SETUP_DRIVER if _has_setup(workload["baml"]) else DRIVER, src / "speedtest_driver.baml")
     out = project / "workload"
     out.unlink(missing_ok=True)
-    command = [str(cli), "--no-progress", "--color", "never", "pack",
+    command = [str(cli), "--color", "never", "pack",
                "main" if backend == "rt" else "speedtest_driver", "-o", str(out)]
     if backend != "vm":
         command += ["--rust", "--rust-workspace", str(_repo_root()),

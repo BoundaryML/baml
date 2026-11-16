@@ -1,0 +1,11 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+class Agent {
+    client: string?,
+}
+
+function f(a: Agent) -> string? {
+    let c = a.client;
+    c
+}

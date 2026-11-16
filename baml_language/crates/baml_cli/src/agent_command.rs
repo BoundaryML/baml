@@ -1,24 +1,19 @@
 use std::{
     fs,
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
-    process::Command,
+    process,
 };
 
 use anyhow::{Context, Result, anyhow, ensure};
 use clap::Args;
+use serde::Serialize;
 
-use crate::ExitCode;
+use crate::output::{Command, CommandContext, Outcome, Report, Style};
 
 pub(crate) const SKILL_NAME: &str = "baml-core";
 pub(crate) const SKILL_TEMPLATE: &str = include_str!("../../../../skills/baml-core/SKILL.md");
 const TOOLCHAIN_VERSION_PLACEHOLDER: &str = "{{BAML_TOOLCHAIN_VERSION}}";
-
-#[derive(Args, Clone, Debug)]
-pub(crate) struct AgentArgs {
-    #[command(subcommand)]
-    pub command: AgentCommand,
-}
 
 #[derive(clap::Subcommand, Clone, Debug)]
 pub(crate) enum AgentCommand {
@@ -34,12 +29,8 @@ Examples:
     baml agent install
 
   Install the bundled skill in a specific project:
-    baml agent install --project ./my-project")]
-pub(crate) struct AgentInstallArgs {
-    /// Deprecated alias for `--project`.
-    #[arg(long, value_name = "PATH", hide = true)]
-    pub dir: Option<PathBuf>,
-}
+    baml agent install --project-dir ./my-project")]
+pub(crate) struct AgentInstallArgs {}
 
 #[derive(Debug)]
 struct Skill<'a> {
@@ -47,17 +38,25 @@ struct Skill<'a> {
     content: &'a str,
 }
 
-impl AgentArgs {
-    pub fn run(&self) -> Result<ExitCode> {
-        match &self.command {
-            AgentCommand::Install(args) => args.run(),
-        }
+/// Where the skill was installed.
+#[derive(Debug, Serialize)]
+pub(crate) struct AgentInstalled {
+    pub root: PathBuf,
+    /// Skill files written, relative to `root`.
+    pub skills: Vec<PathBuf>,
+}
+
+impl Report for AgentInstalled {
+    fn text(&self, out: &mut dyn Write, _style: &Style) -> io::Result<()> {
+        writeln!(out, "{}", success_message(&self.root))
     }
 }
 
-impl AgentInstallArgs {
-    pub fn run(&self) -> Result<ExitCode> {
-        let root = match &self.dir {
+impl Command for AgentInstallArgs {
+    type Output = AgentInstalled;
+
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<AgentInstalled>> {
+        let root = match &cx.project_dir {
             Some(dir) => explicit_install_root(dir)?,
             None => detect_install_root()?,
         };
@@ -69,8 +68,11 @@ impl AgentInstallArgs {
                 content: &content,
             }],
         )?;
-        print_success(&root)?;
-        Ok(ExitCode::Success)
+        let skills = SKILLS_DIRS
+            .iter()
+            .map(|dir| Path::new(dir).join(SKILL_NAME).join("SKILL.md"))
+            .collect();
+        Ok(Outcome::ok(AgentInstalled { root, skills }))
     }
 }
 
@@ -155,7 +157,7 @@ fn detect_install_root_in(cwd: &Path, git_toplevel: Option<&Path>, home: Option<
 
 /// Canonicalized toplevel of the git repo containing `dir`, if any.
 fn git_toplevel(dir: &Path) -> Option<PathBuf> {
-    let output = Command::new("git")
+    let output = process::Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(dir)
         .output()
@@ -181,9 +183,13 @@ fn user_home_dir() -> Option<PathBuf> {
         .and_then(|home| home.canonicalize().ok())
 }
 
+/// Claude Code reads `.claude/skills`; Codex and OpenCode read `.agents/skills`.
+const SKILLS_DIRS: [&str; 2] = [".agents/skills", ".claude/skills"];
+
 fn install_skills(root: &Path, skills: &[Skill<'_>]) -> Result<()> {
-    install_skills_to(root, Path::new(".agents").join("skills"), skills)?;
-    install_skills_to(root, Path::new(".claude").join("skills"), skills)?;
+    for dir in SKILLS_DIRS {
+        install_skills_to(root, PathBuf::from(dir), skills)?;
+    }
     Ok(())
 }
 
@@ -308,11 +314,6 @@ fn success_message(root: &Path) -> String {
         "Installed the BAML agent skill bundled with this toolchain in {}\n\nClaude Code:\n  .claude/skills/baml-core/SKILL.md\n\nCodex / OpenCode:\n  .agents/skills/baml-core/SKILL.md\n\nReplaced skills are kept in baml-old_skills/ next to the new one.\n\nRestart any already-running agent session to pick it up.",
         root.display()
     )
-}
-
-fn print_success(root: &Path) -> Result<()> {
-    writeln!(std::io::stdout(), "{}", success_message(root))?;
-    Ok(())
 }
 
 #[cfg(test)]

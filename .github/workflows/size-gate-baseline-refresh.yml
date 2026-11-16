@@ -18,10 +18,12 @@ name: Size Gate — Daily Baseline Refresh
 # CI runs), which is where a human sees and signs off on any ceiling bump.
 
 on:
-  schedule:
-    # Daily at 09:17 UTC. Scheduled runs use the workflow file on the repo's
-    # default branch; the job always checks out canary explicitly below.
-    - cron: "17 9 * * *"
+  # Schedule disabled while the size-gate job in ci.yaml is disabled: without
+  # it no canary run uploads the reports this workflow adopts.
+  # schedule:
+  #   # Daily at 09:17 UTC. Scheduled runs use the workflow file on the repo's
+  #   # default branch; the job always checks out canary explicitly below.
+  #   - cron: "17 9 * * *"
   workflow_dispatch:
     inputs:
       branch:

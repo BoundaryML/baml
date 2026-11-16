@@ -1,18 +1,14 @@
 import { createMetadata } from '@/app/_lib/metadata';
 import { section } from '@/components/home/analytics';
 import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
-import { Button } from '@/components/home/ui';
-import { HeroSection } from './_components/hero-section';
-import { PodcastEpisodesGrid } from './_components/podcast-episodes-grid';
+import { Button, LINKS } from '@/components/home/ui';
+import { CALENDAR, HeroSection, TWITCH } from './_components/hero-section';
+import {
+  EpisodeCard,
+  PodcastEpisodesGrid,
+} from './_components/podcast-episodes-grid';
 import { fallbackEpisodes, fetchPodcastEpisodes } from './podcast-data';
-
-// The live sessions are the main thing to subscribe to, so the event calendar gets the accent fill.
-const podcastPlatforms = [
-  { label: 'Subscribe on the event calendar', url: 'https://lu.ma/baml' },
-  { label: 'Subscribe on Discord', url: 'https://boundaryml.com/discord' },
-  { label: 'Subscribe on GitHub', url: 'https://github.com/boundaryml/baml' },
-  { label: 'Subscribe on YouTube', url: 'https://www.youtube.com/@boundaryml' },
-];
+import { formatViews } from './youtube-views';
 
 export const metadata = createMetadata({
   description:
@@ -27,22 +23,63 @@ export const metadata = createMetadata({
     '🦄 ai that works: Weekly AI Development Sessions | BAML Podcast',
 });
 
-/** The podcast index, in the homepage's BAML lane. It isn't linked from the nav or the footer. */
+/** The podcast index, in the homepage's BAML lane: the show and its numbers, the most-watched
+ *  episodes, then every episode. The nav's Platform menu links it. */
 export default async function PodcastPage() {
   const fetched = await fetchPodcastEpisodes();
-  const podcastEpisodes = fetched.length > 0 ? fetched : fallbackEpisodes;
+  const episodes = (fetched.length > 0 ? fetched : fallbackEpisodes).filter(
+    (ep) => !ep.featured,
+  );
+  const total = episodes.reduce((n, ep) => n + (ep.views ?? 0), 0);
+  const first = episodes.reduce(
+    (min, ep) => (ep.date < min ? ep.date : min),
+    episodes[0]?.date ?? '',
+  );
+  const since = first
+    ? new Date(first).toLocaleDateString('en-US', {
+        month: 'long',
+        timeZone: 'UTC',
+        year: 'numeric',
+      })
+    : '';
+  const popular = [...episodes]
+    .filter((ep) => ep.views !== undefined)
+    .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
+    .slice(0, 3);
+
   return (
     <PageShell>
-      <HeroSection />
+      <HeroSection
+        episodes={episodes.length}
+        since={since}
+        views={formatViews(total)}
+      />
+
+      {popular.length > 0 && (
+        <section
+          {...section('podcast_popular')}
+          aria-labelledby="popular"
+          className={`${PAGE_WRAP} pb-16 md:pb-20`}
+        >
+          <h2 className="v4-h3 text-head" id="popular">
+            Most watched
+          </h2>
+          <ul className="mt-6 grid gap-x-5 gap-y-9 md:grid-cols-3">
+            {popular.map((ep) => (
+              <li key={ep.id}>
+                <EpisodeCard episode={ep} large />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section
         {...section('podcast_episodes')}
         aria-label="Episodes"
-        className={`${PAGE_WRAP} pb-16 md:pb-24`}
+        className={`${PAGE_WRAP} border-t border-rule pt-14 pb-16 md:pt-16 md:pb-24`}
       >
-        <PodcastEpisodesGrid
-          episodes={podcastEpisodes.filter((ep) => !ep.featured)}
-        />
+        <PodcastEpisodesGrid episodes={episodes} />
       </section>
 
       <section
@@ -55,19 +92,19 @@ export default async function PodcastPage() {
             Never miss an episode
           </h2>
           <p className="mt-6 max-w-[36rem] v4-body text-ink-2">
-            Join our weekly sessions and learn how to build AI that actually
-            works in production.
+            Join live on Twitch every week, or catch the recording on YouTube.
           </p>
           <div className="mt-8 flex flex-wrap gap-2.5">
-            {podcastPlatforms.map((platform, i) => (
-              <Button
-                href={platform.url}
-                key={platform.url}
-                variant={i === 0 ? 'primary' : 'secondary'}
-              >
-                {platform.label}
-              </Button>
-            ))}
+            <Button href={CALENDAR}>Add to your calendar</Button>
+            <Button href={TWITCH} variant="secondary">
+              Follow on Twitch
+            </Button>
+            <Button href={LINKS.youtube} variant="secondary">
+              Subscribe on YouTube
+            </Button>
+            <Button href="/discord" variant="secondary">
+              Join the Discord
+            </Button>
           </div>
         </div>
       </section>

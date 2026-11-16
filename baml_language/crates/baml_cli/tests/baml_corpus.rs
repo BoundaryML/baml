@@ -63,7 +63,7 @@ fn run_baml_tests(project: &str, telemetry: &str) {
     #[cfg(not(unix))]
     let _ = &cache_dir;
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"))
-        .args(["test", "--from", project])
+        .args(["test", "--project-dir", project])
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_TELEMETRY", telemetry)
         .env("BAML_HOME", &home)

@@ -205,14 +205,19 @@ def vm_program_stderr(result, report):
     return stderr[:terminal.start()] if terminal else stderr
 
 
+# `baml test` exits 1 on test failure; CLIs saved before BEP-086 exit 2. Either
+# way a run that failed tests still prints its BAML_CORPUS_REPORT line.
+VM_TEST_EXIT_CODES = (0, 1, 2)
+
+
 def vm_leaf(result, name):
-    if result["timeout"] or result["code"] not in (0, 2):
+    if result["timeout"] or result["code"] not in VM_TEST_EXIT_CODES:
         return None
     try:
         report, output = marker_parts(result, "BAML_CORPUS_REPORT\t")
     except RuntimeError:
         return None
-    if result["code"] == 2 and report.get("outcome") == "pass":
+    if result["code"] != 0 and report.get("outcome") == "pass":
         return None  # An unhandled spawned task failed after the leaf report.
     selected = report["passed"] + report["failed"] + report["tolerated"]
     if selected != [name] or report["total"] != 1:
@@ -360,7 +365,7 @@ def cached_invoke(argv, *, cache, **kwargs):
     if cache.exists():
         return json.loads(cache.read_text())
     result = invoke(argv, **kwargs)
-    if not result["timeout"] and result["code"] in (0, 2) and "BAML_CORPUS_REPORT\t" in result["stdout"]:
+    if not result["timeout"] and result["code"] in VM_TEST_EXIT_CODES and "BAML_CORPUS_REPORT\t" in result["stdout"]:
         write_json(cache, result)
     return result
 
@@ -406,7 +411,7 @@ def main():
     if source_cli != cli:
         shutil.copy2(source_cli, cli)
     corpus = workspace / "crates/baml_tests/baml_src"
-    command = [cli, "--agent-skill-check", "off", "test", "--from", corpus, "--corpus-report", "--max-concurrency", "1", "--log", "trace", "--color", "never", "--no-progress"]
+    command = [cli, "--agent-skill-check", "off", "test", "--project-dir", corpus, "--corpus-report", "--max-concurrency", "1", "--log", "trace", "--color", "never"]
     selectors = [] if args.select is None else ["-i", args.select]
     env.pop("BAML_RT_CORPUS_SELECT", None)
     if args.select is not None:
@@ -427,7 +432,7 @@ def main():
     selection_key = hashlib.sha256(json.dumps(selectors).encode()).hexdigest()[:20]
     reference = cached_invoke(full_command + selectors, cache=oracle_cache / f"corpus-{selection_key}.json",
                               env=env, cwd=workspace, timeout=3600, evidence=scratch / "vm-corpus")
-    if reference["timeout"] or reference["code"] not in (0, 2):
+    if reference["timeout"] or reference["code"] not in VM_TEST_EXIT_CODES:
         raise RuntimeError(f"VM corpus failed before producing a reference: {reference['stderr'][-5000:]}")
     vm = marker(reference, "BAML_CORPUS_REPORT\t")
     vm_names = vm["passed"] + vm["failed"] + vm["tolerated"]
@@ -445,7 +450,7 @@ def main():
     env["BAML_RT_CORPUS_ADMISSION_CACHE"] = str(scratch / "admission" / hashlib.sha256(cli.read_bytes()).hexdigest())
     native_originals = scratch / "native-compile-originals"
     restore_native_compilation_entries(scratch / "admission", native_originals)
-    pack_command = [cli, "--agent-skill-check", "off", "pack", "--tests", "--rust", "--rt", "--from", corpus, "--rust-profile", "fast", "--rust-workspace", workspace, "--rust-build-dir", scratch / "pack", "-o", binary]
+    pack_command = [cli, "--agent-skill-check", "off", "pack", "--tests", "--rust", "--rt", "--project-dir", corpus, "--rust-profile", "fast", "--rust-workspace", workspace, "--rust-build-dir", scratch / "pack", "-o", binary]
     for attempt in range(len(vm_names) + 1):
         pack = invoke(pack_command, env=env, cwd=workspace, timeout=7200, evidence=scratch / f"pack-{attempt}")
         expired = pack.get("admission_timeout") or pack.get("admission_crash")

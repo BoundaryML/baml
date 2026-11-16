@@ -104,7 +104,7 @@ class VersionSelector {
         }
 
         function update(self, telemetry: WrapperTelemetry?) -> null {
-            baml.io.println(
+            baml.io.eprintln(
                 `active selector ${self.value} is an exact version and does not advance automatically`,
             );
             null
@@ -235,7 +235,7 @@ class PathSelector {
         }
 
         function update(self, telemetry: WrapperTelemetry?) -> null {
-            baml.io.println(
+            baml.io.eprintln(
                 `active selector ${self.value} is a local path and does not advance automatically`,
             );
             null

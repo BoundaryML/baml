@@ -45,6 +45,16 @@ test "failed compile exposes structured diagnostic fidelity" {
     assert.equal(diagnostic.related_info.length(), 0)
 }
 
+test "const introducer warns in if let" {
+    let diagnostics = root.compiler.CompileSuccessDiagnostics(
+        { "warning.baml": "function f(x: int?) -> int {\n  if const y: int = x { y } else { 0 }\n}\n" },
+    );
+    let matches = diagnostics.filter((diagnostic) -> bool {
+        diagnostic.message.includes("treated like `let`")
+    });
+    assert.equal(matches.length(), 1)
+}
+
 test "successful public compile exposes warnings" {
     let diagnostics = root.compiler.CompileSuccessDiagnostics(
         { "warning.baml": prompt("${for (const x in [1, 2])}${x}${endfor}") },

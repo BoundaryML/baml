@@ -1,0 +1,4 @@
+interface I {function f(self) -> string // result
+ throws never // throws
+ function g(self) -> int throws never // default
+ { 1 }}

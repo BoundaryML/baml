@@ -63,7 +63,7 @@ cp "$package" "$feed/baml-bridge.$version.nupkg"
 
 if [[ -z "$generated_source_root" ]]; then
   (cd "$language_root" && cargo run --quiet -p baml_cli -- \
-    generate --from "$fixture")
+    generate --project-dir "$fixture")
   generated_source_root="$fixture/baml_sdk"
 else
   generated_source_root="$(cd "$generated_source_root" && pwd -P)"

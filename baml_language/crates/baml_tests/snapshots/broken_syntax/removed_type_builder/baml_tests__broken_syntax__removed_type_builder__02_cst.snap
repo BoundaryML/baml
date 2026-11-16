@@ -1,0 +1,115 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== removed_type_builder.baml ===
+SourceFile@331..723
+  items: FunctionDef@331..556
+    kw: Function "function" @331..339
+    name: Name@340..358
+      token: Word "LlmWithTypeBuilder" @340..358
+    params: ParamList@358..377
+      l: LParen "(" @358..359
+      params: Param@359..376
+        name: Name@359..368
+          token: Word "from_text" @359..368
+        ascription: TypeAscription@368..376
+          colon: Colon ":" @368..369
+          ty: PathType@370..376
+            head: Name@370..376
+              token: Word "string" @370..376
+      r: RParen ")" @376..377
+    ret: ReturnType@378..387
+      arrow: Arrow "->" @378..380
+      ty: PathType@381..387
+        head: Name@381..387
+          token: Word "string" @381..387
+    body: LlmBody@388..556
+      l: LBrace "{" @388..389
+      fields: ClientField@392..420
+        kw: Client "client" @392..398
+        colon: Colon ":" @398..399
+        value: StringLit@400..420
+          token: String "\"openai/gpt-4o-mini\"" @400..420
+      fields: PromptField@423..438
+        kw: Prompt "prompt" @423..429
+        colon: Colon ":" @429..430
+        value: BacktickString@431..438
+          open: BacktickStart "`" @431..432
+          parts: TemplateChunk "Hello" @432..437
+          close: BacktickEnd "`" @437..438
+      fields: Bogus@441..554
+        tokens: TypeBuilder "type_builder" @441..453
+        tokens: Whitespace " " @453..454
+        tokens: LBrace "{" @454..455
+        tokens: Newline "\n" @455..456
+        tokens: Whitespace "    " @456..460
+        tokens: Class "class" @460..465
+        tokens: Whitespace " " @465..466
+        tokens: Word "LlmInner" @466..474
+        tokens: Whitespace " " @474..475
+        tokens: LBrace "{" @475..476
+        tokens: Newline "\n" @476..477
+        tokens: Whitespace "      " @477..483
+        tokens: Word "foo" @483..486
+        tokens: Whitespace " " @486..487
+        tokens: Word "string" @487..493
+        tokens: Newline "\n" @493..494
+        tokens: Whitespace "    " @494..498
+        tokens: RBrace "}" @498..499
+        tokens: Newline "\n" @499..500
+        tokens: Whitespace "    " @500..504
+        tokens: Dynamic "dynamic" @504..511
+        tokens: Whitespace " " @511..512
+        tokens: Class "class" @512..517
+        tokens: Whitespace " " @517..518
+        tokens: Word "LlmDynamic" @518..528
+        tokens: Whitespace " " @528..529
+        tokens: LBrace "{" @529..530
+        tokens: Newline "\n" @530..531
+        tokens: Whitespace "      " @531..537
+        tokens: Word "bar" @537..540
+        tokens: Whitespace " " @540..541
+        tokens: Word "int" @541..544
+        tokens: Newline "\n" @544..545
+        tokens: Whitespace "    " @545..549
+        tokens: RBrace "}" @549..550
+        tokens: Newline "\n" @550..551
+        tokens: Whitespace "  " @551..553
+        tokens: RBrace "}" @553..554
+      r: RBrace "}" @555..556
+  items: RemovedItem@593..647
+    kw: TypeBuilder "type_builder" @593..605
+    body: LBrace "{" @606..607
+    body: Newline "\n" @607..608
+    body: Whitespace "  " @608..610
+    body: Class "class" @610..615
+    body: Whitespace " " @615..616
+    body: Word "TopLevelInner" @616..629
+    body: Whitespace " " @629..630
+    body: LBrace "{" @630..631
+    body: Newline "\n" @631..632
+    body: Whitespace "    " @632..636
+    body: Word "z" @636..637
+    body: Whitespace " " @637..638
+    body: Word "int" @638..641
+    body: Newline "\n" @641..642
+    body: Whitespace "  " @642..644
+    body: RBrace "}" @644..645
+    body: Newline "\n" @645..646
+    body: RBrace "}" @646..647
+  items: RemovedItem@679..723
+    kw: Dynamic "dynamic" @679..686
+    head: Class "class" @687..692
+    name: Name@693..708
+      token: Word "TopLevelDynamic" @693..708
+    body: LBrace "{" @709..710
+    body: Newline "\n" @710..711
+    body: Whitespace "  " @711..713
+    body: Word "w" @713..714
+    body: Whitespace " " @714..715
+    body: Word "string" @715..721
+    body: Newline "\n" @721..722
+    body: RBrace "}" @722..723
+error @441..453: `type_builder` blocks were removed; runtime type construction is `reflect` (BEP-066)
+error @593..605: `type_builder` blocks were removed; runtime type construction is `reflect` (BEP-066)
+error @679..686: `dynamic class` definitions were removed; runtime type construction is `reflect` (BEP-066)

@@ -14,11 +14,14 @@ use crate::{BexEngine, EngineError, RuntimeCompiler};
 
 const BOUNDARY_API_KEY: &str = "BOUNDARY_API_KEY";
 
+mod environment;
+
 /// One recording per engine, delivered to local files or BCS. Cloud payload
 /// failures discard that payload and allow later delivery. Initial cloud authorization
-/// failure warns and disables recording by default; artifacts can explicitly opt into
-/// aborting execution. Later revocation only disables recording. Local storage
-/// and fatal worker failures disable recording. Delivery errors remain available through
+/// failure warns and stops the export by default; artifacts can explicitly opt into
+/// aborting execution. Later revocation only stops the export. A stopped export
+/// never disables recording, so span ids and `$trace` hooks keep working. Local
+/// storage and fatal worker failures disable recording. Delivery errors remain available through
 /// `BexEngine::telemetry_result` and initial refusal through
 /// `BexEngine::initial_cloud_authorization_error`.
 pub struct TelemetryRecording {
@@ -498,10 +501,18 @@ impl TelemetryRecording {
         Arc::clone(&self.exit)
     }
 
+    /// Assemble process identity and its captured context. Cloud recordings add
+    /// allowlisted environment metadata and omit arguments/sources; local
+    /// recordings retain the caller's context and existing debugging details.
     fn process(
         &self,
         launch_context: &btel_types::context::Context,
     ) -> btel_recorder::ProcessRecording {
+        let recorded_context = if matches!(self.destination, Destination::Cloud { .. }) {
+            environment::context(launch_context)
+        } else {
+            launch_context.clone()
+        };
         btel_recorder::ProcessRecording {
             info: btel_types::ProcessInfo {
                 process_id: bex_events::ids::ProcessEuid::current().0,
@@ -530,7 +541,7 @@ impl TelemetryRecording {
             })
             .flatten(),
             context: btel_snapshot::context::capture(
-                launch_context,
+                &recorded_context,
                 &btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default()),
             ),
             exit: Arc::clone(&self.exit),
@@ -708,7 +719,8 @@ impl TelemetryRecording {
                                 InitialFailureAction::Ignore => {}
                             }
                         }
-                        failure.disable(btel_processor::RuntimeError(error.to_string()));
+                        // Only the export stops: execution keeps its spans and hooks.
+                        failure.fail_export(btel_processor::RuntimeError(error.to_string()));
                         if !matches!(
                             error,
                             btel_bcs::delivery::DeliveryError::InitialAuthorization(_)
@@ -733,7 +745,7 @@ impl TelemetryRecording {
                         handle
                     }
                     Err(error) => {
-                        control.disable(btel_processor::RuntimeError(error.to_string()));
+                        control.fail_export(btel_processor::RuntimeError(error.to_string()));
                         btel_bcs::delivery::BcsDeliveryHandle::disabled(error, delivery_config)
                     }
                 };
@@ -1246,6 +1258,8 @@ mod source_privacy_tests {
     use super::*;
 
     #[test]
+    /// Cloud process snapshots gain environment metadata without source text;
+    /// local snapshots retain their sources and unmodified launch context.
     fn cloud_recordings_exclude_sources_while_local_recordings_remain_readable() {
         let sources = vec![(
             "main.baml".to_owned(),
@@ -1273,6 +1287,23 @@ mod source_privacy_tests {
                 .process(&btel_types::context::Context::default())
                 .sources
                 .is_none()
+        );
+        let context = btel_types::context::Context::default();
+        let snapshot = |context: &btel_types::context::Context| {
+            btel_snapshot::context::capture(
+                context,
+                &btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default()),
+            )
+            .unwrap()
+            .root_id()
+        };
+        assert_eq!(
+            local.process(&context).context.unwrap().root_id(),
+            snapshot(&context)
+        );
+        assert_ne!(
+            cloud.process(&context).context.unwrap().root_id(),
+            snapshot(&context)
         );
     }
 }

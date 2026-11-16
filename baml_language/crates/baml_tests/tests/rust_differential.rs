@@ -629,7 +629,7 @@ fn pack_result_options<'a>(
         workspace.display().to_string(),
         "--rust-build-dir".into(),
         build.display().to_string(),
-        "--from".into(),
+        "--project-dir".into(),
         source.display().to_string(),
         "-o".into(),
         executable.display().to_string(),

@@ -1,0 +1,328 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== main.baml ===
+SourceFile@366..976
+  items: ClassDef@366..443
+    kw: Class "class" @366..371
+    name: Name@372..378
+      token: Word "Config" @372..378
+    l: LBrace "{" @379..380
+    members: Field@383..420
+      name: Name@383..387
+        token: Word "mode" @383..387
+      ty: UnionType@388..404
+        first: LiteralType@388..395
+          value: String "\"fa\\st\"" @388..395
+        pipe: Pipe "|" @396..397
+        ty: LiteralType@398..404
+          value: String "\"slow\"" @398..404
+      attrs: Attribute@405..420
+        at: At "@" @405..406
+        path: DottedName@406..411
+          head: Name@406..411
+            token: Word "alias" @406..411
+        args: AttrArgs@411..420
+          l: LParen "(" @411..412
+          args: StringLit@412..419
+            token: String "\"mo\\de\"" @412..419
+          r: RParen ")" @419..420
+    members: BlockAttr@423..441
+      at: AtAt "@@" @423..425
+      path: DottedName@425..430
+        head: Name@425..430
+          token: Word "alias" @425..430
+      args: AttrArgs@430..441
+        l: LParen "(" @430..431
+        args: StringLit@431..440
+          token: String "\"con\\gig\"" @431..440
+        r: RParen ")" @440..441
+    r: RBrace "}" @442..443
+  items: EnumDef@445..480
+    kw: Enum "enum" @445..449
+    name: Name@450..455
+      token: Word "Level" @450..455
+    l: LBrace "{" @456..457
+    members: EnumVariant@460..478
+      name: Name@460..463
+        token: Word "Low" @460..463
+      attrs: Attribute@464..478
+        at: At "@" @464..465
+        path: DottedName@465..470
+          head: Name@465..470
+            token: Word "alias" @465..470
+        args: AttrArgs@470..478
+          l: LParen "(" @470..471
+          args: StringLit@471..477
+            token: String "\"lo\\w\"" @471..477
+          r: RParen ")" @477..478
+    r: RBrace "}" @479..480
+  items: TypeAliasDef@482..502
+    kw: Type "type" @482..486
+    name: Name@487..491
+      token: Word "Mode" @487..491
+    eq: Equals "=" @492..493
+    ty: LiteralType@494..501
+      value: String "\"fa\\st\"" @494..501
+    semi: Semicolon ";" @501..502
+  items: FunctionDef@504..548
+    kw: Function "function" @504..512
+    name: Name@513..525
+      token: Word "literal_type" @513..525
+    params: ParamList@525..535
+      l: LParen "(" @525..526
+      params: Param@526..534
+        name: Name@526..527
+          token: Word "x" @526..527
+        ascription: TypeAscription@527..534
+          colon: Colon ":" @527..528
+          ty: LiteralType@529..534
+            value: String "\"a\\d\"" @529..534
+      r: RParen ")" @534..535
+    ret: ReturnType@536..542
+      arrow: Arrow "->" @536..538
+      ty: PathType@539..542
+        head: Name@539..542
+          token: Word "int" @539..542
+    body: Block@543..548
+      l: LBrace "{" @543..544
+      tail: LiteralExpr@545..546
+        token: Integer "1" @545..546
+      r: RBrace "}" @547..548
+  items: FunctionDef@550..637
+    kw: Function "function" @550..558
+    name: Name@559..567
+      token: Word "patterns" @559..567
+    params: ParamList@567..578
+      l: LParen "(" @567..568
+      params: Param@568..577
+        name: Name@568..569
+          token: Word "x" @568..569
+        ascription: TypeAscription@569..577
+          colon: Colon ":" @569..570
+          ty: PathType@571..577
+            head: Name@571..577
+              token: Word "string" @571..577
+      r: RParen ")" @577..578
+    ret: ReturnType@579..585
+      arrow: Arrow "->" @579..581
+      ty: PathType@582..585
+        head: Name@582..585
+          token: Word "int" @582..585
+    body: Block@586..637
+      l: LBrace "{" @586..587
+      tail: MatchExpr@590..635
+        kw: Match "match" @590..595
+        scrutinee: MatchParen@596..599
+          l: LParen "(" @596..597
+          expr: PathExpr@597..598
+            head: Name@597..598
+              token: Word "x" @597..598
+          r: RParen ")" @598..599
+        l: LBrace "{" @600..601
+        arms: MatchArm@606..619
+          pattern: TypePattern@606..613
+            ty: LiteralType@606..613
+              value: String "\"fa\\st\"" @606..613
+          arrow: FatArrow "=>" @614..616
+          body: LiteralExpr@617..618
+            token: Integer "1" @617..618
+          comma: Comma "," @618..619
+        arms: MatchArm@624..631
+          pattern: WildcardPattern@624..625
+            underscore: Underscore "_" @624..625
+          arrow: FatArrow "=>" @626..628
+          body: LiteralExpr@629..630
+            token: Integer "2" @629..630
+          comma: Comma "," @630..631
+        r: RBrace "}" @634..635
+      r: RBrace "}" @636..637
+  items: FunctionDef@639..852
+    kw: Function "function" @639..647
+    name: Name@648..659
+      token: Word "expressions" @648..659
+    params: ParamList@659..670
+      l: LParen "(" @659..660
+      params: Param@660..669
+        name: Name@660..661
+          token: Word "x" @660..661
+        ascription: TypeAscription@661..669
+          colon: Colon ":" @661..662
+          ty: PathType@663..669
+            head: Name@663..669
+              token: Word "string" @663..669
+      r: RParen ")" @669..670
+    ret: ReturnType@671..680
+      arrow: Arrow "->" @671..673
+      ty: PathType@674..680
+        head: Name@674..680
+          token: Word "string" @674..680
+    body: Block@681..852
+      l: LBrace "{" @681..682
+      stmts: LetStmt@685..701
+        introducer: Let "let" @685..688
+        pattern: BindingPattern@689..690
+          name: Name@689..690
+            token: Word "s" @689..690
+        eq: Equals "=" @691..692
+        init: StringLit@693..700
+          token: String "\"bad\\d\"" @693..700
+        semi: Semicolon ";" @700..701
+      stmts: LetStmt@704..728
+        introducer: Let "let" @704..707
+        pattern: BindingPattern@708..709
+          name: Name@708..709
+            token: Word "b" @708..709
+        eq: Equals "=" @710..711
+        init: StringLit@712..727
+          token: ByteString "b\"\\u{41}é\\x80\"" @712..727
+        semi: Semicolon ";" @727..728
+      stmts: LetStmt@731..804
+        introducer: Let "let" @731..734
+        pattern: BindingPattern@735..736
+          name: Name@735..736
+            token: Word "t" @735..736
+        eq: Equals "=" @737..738
+        init: BacktickString@739..803
+          open: BacktickStart "`" @739..740
+          parts: TemplateChunk "one\\q" @740..745
+          parts: TemplateInterp@745..749
+            open: DollarLBrace "${" @745..747
+            tail: PathExpr@747..748
+              head: Name@747..748
+                token: Word "x" @747..748
+            close: RBrace "}" @748..749
+          parts: TemplateChunk "two\\z" @749..754
+          parts: TemplateFor@754..795
+            open: TemplateForOpen@754..775
+              open: DollarLBrace "${" @754..756
+              kw: For "for" @756..759
+              header: ParenForInHeader@760..774
+                l: LParen "(" @760..761
+                header: ForInHeader@761..773
+                  introducer: Let "let" @761..764
+                  pattern: BindingPattern@765..766
+                    name: Name@765..766
+                      token: Word "y" @765..766
+                  in_kw: In "in" @767..769
+                  iter: ArrayLiteral@770..773
+                    l: LBracket "[" @770..771
+                    value: PathExpr@771..772
+                      head: Name@771..772
+                        token: Word "x" @771..772
+                    r: RBracket "]" @772..773
+                r: RParen ")" @773..774
+              close: RBrace "}" @774..775
+            body: TemplateChunk "in\\xZZ " @775..782
+            body: TemplateInterp@782..786
+              open: DollarLBrace "${" @782..784
+              tail: PathExpr@784..785
+                head: Name@784..785
+                  token: Word "y" @784..785
+              close: RBrace "}" @785..786
+            close: TemplateEndTag@786..795
+              open: DollarLBrace "${" @786..788
+              kw: Endfor "endfor" @788..794
+              close: RBrace "}" @794..795
+          parts: TemplateInterp@795..802
+            open: DollarLBrace "${" @795..797
+            tail: StringLit@797..801
+              token: String "\"\\d\"" @797..801
+            close: RBrace "}" @801..802
+          close: BacktickEnd "`" @802..803
+        semi: Semicolon ";" @803..804
+      stmts: LetStmt@807..821
+        introducer: Let "let" @807..810
+        pattern: BindingPattern@811..812
+          name: Name@811..812
+            token: Word "r" @811..812
+        eq: Equals "=" @813..814
+        init: StringLit@815..820
+          token: RawString "r\"\\d\"" @815..820
+        semi: Semicolon ";" @820..821
+      stmts: LetStmt@824..846
+        introducer: Let "let" @824..827
+        pattern: BindingPattern@828..829
+          name: Name@828..829
+            token: Word "o" @828..829
+        eq: Equals "=" @830..831
+        init: MapLiteral@832..845
+          l: LBrace "{" @832..833
+          entries: MapEntry@834..843
+            key: StringLit@834..840
+              token: String "\"ke\\y\"" @834..840
+            colon: Colon ":" @840..841
+            value: LiteralExpr@842..843
+              token: Integer "1" @842..843
+          r: RBrace "}" @844..845
+        semi: Semicolon ";" @845..846
+      tail: PathExpr@849..850
+        head: Name@849..850
+          token: Word "s" @849..850
+      r: RBrace "}" @851..852
+  items: FunctionDef@854..939
+    kw: Function "function" @854..862
+    name: Name@863..869
+      token: Word "Prompt" @863..869
+    params: ParamList@869..880
+      l: LParen "(" @869..870
+      params: Param@870..879
+        name: Name@870..871
+          token: Word "x" @870..871
+        ascription: TypeAscription@871..879
+          colon: Colon ":" @871..872
+          ty: PathType@873..879
+            head: Name@873..879
+              token: Word "string" @873..879
+      r: RParen ")" @879..880
+    ret: ReturnType@881..890
+      arrow: Arrow "->" @881..883
+      ty: PathType@884..890
+        head: Name@884..890
+          token: Word "string" @884..890
+    body: LlmBody@891..939
+      l: LBrace "{" @891..892
+      fields: ClientField@895..918
+        kw: Client "client" @895..901
+        colon: Colon ":" @901..902
+        value: StringLit@903..918
+          token: String "\"openai/gpt-4o\"" @903..918
+      fields: PromptField@921..937
+        kw: Prompt "prompt" @921..927
+        colon: Colon ":" @927..928
+        value: StringLit@929..937
+          token: String "\"hel\\lo\"" @929..937
+      r: RBrace "}" @938..939
+  items: TestDef@941..976
+    kw: Test "test" @941..945
+    name: StringLit@946..953
+      token: String "\"na\\me\"" @946..953
+    body: Block@954..976
+      l: LBrace "{" @954..955
+      stmts: LetStmt@958..974
+        introducer: Let "let" @958..961
+        pattern: BindingPattern@962..969
+          name: Name@962..969
+            token: Word "_unused" @962..969
+        eq: Equals "=" @970..971
+        init: LiteralExpr@972..973
+          token: Integer "1" @972..973
+        semi: Semicolon ";" @973..974
+      r: RBrace "}" @975..976
+error @391..393: unknown escape sequence "\s" - did you mean "\\s" (escaped backslash)?
+error @415..417: unknown escape sequence "\d" - did you mean "\\d" (escaped backslash)?
+error @435..437: unknown escape sequence "\g" - did you mean "\\g" (escaped backslash)?
+error @474..476: unknown escape sequence "\w" - did you mean "\\w" (escaped backslash)?
+error @497..499: unknown escape sequence "\s" - did you mean "\\s" (escaped backslash)?
+error @531..533: unknown escape sequence "\d" - did you mean "\\d" (escaped backslash)?
+error @609..611: unknown escape sequence "\s" - did you mean "\\s" (escaped backslash)?
+error @697..699: unknown escape sequence "\d" - did you mean "\\d" (escaped backslash) or r"\d" (raw string)?
+error @714..720: invalid escape sequence b"\u{41}" - byte strings can't contain Unicode escapes; did you mean b"\x41" (UTF-8 bytes)?
+error @720..722: non-ASCII character b"é" in byte string - did you mean b"\xC3\xA9" (UTF-8 bytes)?
+error @743..745: unknown escape sequence `\q` - did you mean `\\q` (escaped backslash)?
+error @752..754: unknown escape sequence `\z` - did you mean `\\z` (escaped backslash)?
+error @777..779: invalid escape sequence `\x` - `\x` must be followed by exactly two hex digits
+error @798..800: unknown escape sequence "\d" - did you mean "\\d" (escaped backslash) or r"\d" (raw string)?
+error @837..839: unknown escape sequence "\y" - did you mean "\\y" (escaped backslash) or r"\y" (raw string)?
+error @933..935: unknown escape sequence "\l" - did you mean "\\l" (escaped backslash) or r"\l" (raw string)?
+error @949..951: unknown escape sequence "\m" - did you mean "\\m" (escaped backslash) or r"\m" (raw string)?

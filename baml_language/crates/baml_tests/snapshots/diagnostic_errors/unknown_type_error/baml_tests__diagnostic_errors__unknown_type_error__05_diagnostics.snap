@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 42069
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] E0002
@@ -24,7 +23,7 @@ assertion_line: 42069
   × unresolved type: unknown_optional
     ╭─[unknown_type_error.baml:13:19]
  13 │ function Baz() -> unknown_optional? {
-    ·                   ─────────────────
+    ·                   ────────────────
     ╰────
 
   [type] E0002

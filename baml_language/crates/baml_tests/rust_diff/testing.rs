@@ -39,7 +39,7 @@ pub fn run() {
                 .join(if rt { "rt-build" } else { "vm-build" })
                 .display()
                 .to_string(),
-            "--from".into(),
+            "--project-dir".into(),
             source.display().to_string(),
             "-o".into(),
             executable.display().to_string(),

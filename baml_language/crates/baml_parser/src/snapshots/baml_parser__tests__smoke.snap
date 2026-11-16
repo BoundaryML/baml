@@ -1,0 +1,18 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: tree(text)
+---
+SourceFile@0..20
+  items: ClassDef@0..20
+    kw: Class "class" @0..5
+    name: Name@6..9
+      token: Word "Foo" @6..9
+    l: LBrace "{" @10..11
+    members: Field@12..18
+      name: Name@12..13
+        token: Word "x" @12..13
+      colon: Colon ":" @13..14
+      ty: PathType@15..18
+        head: Name@15..18
+          token: Word "int" @15..18
+    r: RBrace "}" @19..20

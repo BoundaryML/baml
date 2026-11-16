@@ -58,8 +58,6 @@ pub fn playground_cursor_context(
     file_path: &str,
     byte_offset: u32,
 ) -> CursorContext {
-    use baml_db::baml_compiler_syntax::SyntaxKind;
-
     let empty = CursorContext {
         function_name: None,
         is_workflow: false,
@@ -83,20 +81,15 @@ pub fn playground_cursor_context(
         return empty;
     };
 
-    // 3. Check if cursor is inside a HEADER_COMMENT node — these need
-    //    special handling since their tokens don't resolve via name lookup.
-    if let Some(parent) = token.parent() {
-        if parent
-            .ancestors()
-            .any(|n| n.kind() == SyntaxKind::HEADER_COMMENT)
-        {
-            return cursor_context_positional(db, files, source_file, offset);
-        }
+    // 3. A `//#` header is one token that no name lookup resolves: these
+    //    need positional handling.
+    if token.kind() == baml_syntax::token::TokenKind::HeaderComment {
+        return cursor_context_positional(db, files, source_file, offset);
     }
 
     // 4. For WORD tokens, try name resolution first (handles function
     //    definitions, call sites, local variables).
-    if token.kind() == SyntaxKind::WORD {
+    if token.is_ident() {
         let name = baml_base::Name::from(token.text().to_string());
 
         let resolved = baml_compiler2_hir::resolve::resolve_name_at(db, source_file, offset, &name);

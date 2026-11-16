@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { createMetadata } from '@/app/_lib/metadata';
 import { DiscordCard } from '@/components/community-cards';
 import { section } from '@/components/home/analytics';
-import { BOOK } from '@/components/home/links';
+import { SIGNUP } from '@/components/home/links';
 import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { Button, Cmd } from '@/components/home/ui';
 // CONTENT PARITY: keep substantive copy and commands in sync with
@@ -263,7 +263,7 @@ export default function QuickstartPage() {
                 it up with you.
               </p>
               <div className="mt-auto pt-1">
-                <Button href={BOOK}>Book a call</Button>
+                <Button href={SIGNUP}>Get early access</Button>
               </div>
             </div>
             <DiscordCard />
@@ -304,7 +304,7 @@ export default function QuickstartPage() {
             <p className={`mt-4 border-l-2 border-rule pl-4 ${BODY}`}>
               The <Cmd>baml</Cmd> command is a version manager, so it rarely
               needs updating. Update it with your package manager (
-              <Cmd>brew upgrade baml</Cmd>) or with <Cmd>baml self-update</Cmd>.
+              <Cmd>brew upgrade baml</Cmd>) or with <Cmd>baml self update</Cmd>.
               If you change your project&rsquo;s toolchain version, run{' '}
               <Cmd>baml agent install</Cmd> again when the CLI asks. If
               something doesn&rsquo;t work, tell us on Discord.

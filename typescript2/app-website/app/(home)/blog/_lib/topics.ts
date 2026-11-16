@@ -50,11 +50,13 @@ export function isListed(post: Post) {
   return Boolean(post.isPublished) && !post.archived;
 }
 
-/** The oldest date the blog index lists. Older posts stay at their URLs, in the RSS feed, and in
- *  "Read next", but the index only shows what was written since BAML's current direction. */
-export const INDEX_SINCE = '2026-09-01';
+/** The first date the blog index shows: posts dated before it are left off. It is a fixed date,
+ *  not a rolling window, so the index never empties as time passes. Move it by hand to hide or
+ *  show more. */
+const INDEX_SINCE = '2026-09-12';
 
-/** Whether a post shows on the blog index: listed, and dated on or after `INDEX_SINCE`. */
+/** Whether a post shows on the blog index: a listed post dated INDEX_SINCE or later. Older posts
+ *  keep their URLs and stay in the feed and in "Read next"; only the index leaves them out. */
 export function isOnIndex(post: Post) {
   return isListed(post) && isoPostDate(post.date) >= INDEX_SINCE;
 }

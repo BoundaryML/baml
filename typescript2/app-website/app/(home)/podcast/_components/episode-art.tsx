@@ -1,6 +1,7 @@
 import { Play } from 'lucide-react';
 import Image from 'next/image';
 import type { PodcastEpisode } from '../podcast-data';
+import { formatLength } from '../youtube-views';
 
 /** The video ID from a YouTube watch, short, or embed URL, or null if there isn't one. */
 export const getYouTubeVideoId = (url: string) => {
@@ -43,6 +44,11 @@ export function EpisodeArt({
             <Play className="size-[18px] ml-0.5" fill="currentColor" />
           </span>
         </div>
+        {episode.seconds !== undefined && (
+          <span className="absolute right-2 bottom-2 rounded bg-black/80 px-1.5 py-0.5 text-[12px] font-medium tabular-nums text-white">
+            {formatLength(episode.seconds)}
+          </span>
+        )}
       </>
     );
   }

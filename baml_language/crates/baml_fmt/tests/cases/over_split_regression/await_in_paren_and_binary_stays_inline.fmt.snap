@@ -1,0 +1,11 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function main() -> string {
+    let f = spawn { compute() };
+    "got " + (await f)
+}
+
+function compute() -> string {
+    "x"
+}

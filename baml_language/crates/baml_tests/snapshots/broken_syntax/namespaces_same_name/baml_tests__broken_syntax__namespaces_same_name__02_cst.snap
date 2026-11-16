@@ -1,0 +1,193 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== main.baml ===
+SourceFile@179..728
+  items: FunctionDef@179..276
+    kw: Function "function" @179..187
+    name: Name@188..198
+      token: Word "GetLlmText" @188..198
+    params: ParamList@198..200
+      l: LParen "(" @198..199
+      r: RParen ")" @199..200
+    ret: ReturnType@201..221
+      arrow: Arrow "->" @201..203
+      ty: PathType@204..221
+        head: Name@204..208
+          token: Word "root" @204..208
+        dot: Dot "." @208..209
+        name: Name@209..212
+          token: Word "llm" @209..212
+        dot: Dot "." @212..213
+        name: Name@213..221
+          token: Word "Response" @213..221
+    body: Block@222..276
+      l: LBrace "{" @222..223
+      tail: ObjectLiteral@228..274
+        ctor: PathExpr@228..245
+          head: Name@228..232
+            token: Word "root" @228..232
+          dot: Dot "." @232..233
+          name: Name@233..236
+            token: Word "llm" @233..236
+          dot: Dot "." @236..237
+          name: Name@237..245
+            token: Word "Response" @237..245
+        l: LBrace "{" @246..247
+        members: ObjectField@248..262
+          key: DottedName@248..252
+            head: Name@248..252
+              token: Word "text" @248..252
+          colon: Colon ":" @252..253
+          value: StringLit@254..261
+            token: String "\"hello\"" @254..261
+          comma: Comma "," @261..262
+        members: ObjectField@263..272
+          key: DottedName@263..269
+            head: Name@263..269
+              token: Word "tokens" @263..269
+          colon: Colon ":" @269..270
+          value: LiteralExpr@271..272
+            token: Integer "5" @271..272
+        r: RBrace "}" @273..274
+      r: RBrace "}" @275..276
+  items: FunctionDef@278..379
+    kw: Function "function" @278..286
+    name: Name@287..300
+      token: Word "GetHttpStatus" @287..300
+    params: ParamList@300..302
+      l: LParen "(" @300..301
+      r: RParen ")" @301..302
+    ret: ReturnType@303..324
+      arrow: Arrow "->" @303..305
+      ty: PathType@306..324
+        head: Name@306..310
+          token: Word "root" @306..310
+        dot: Dot "." @310..311
+        name: Name@311..315
+          token: Word "http" @311..315
+        dot: Dot "." @315..316
+        name: Name@316..324
+          token: Word "Response" @316..324
+    body: Block@325..379
+      l: LBrace "{" @325..326
+      tail: ObjectLiteral@331..377
+        ctor: PathExpr@331..349
+          head: Name@331..335
+            token: Word "root" @331..335
+          dot: Dot "." @335..336
+          name: Name@336..340
+            token: Word "http" @336..340
+          dot: Dot "." @340..341
+          name: Name@341..349
+            token: Word "Response" @341..349
+        l: LBrace "{" @350..351
+        members: ObjectField@352..364
+          key: DottedName@352..358
+            head: Name@352..358
+              token: Word "status" @352..358
+          colon: Colon ":" @358..359
+          value: LiteralExpr@360..363
+            token: Integer "200" @360..363
+          comma: Comma "," @363..364
+        members: ObjectField@365..375
+          key: DottedName@365..369
+            head: Name@365..369
+              token: Word "body" @365..369
+          colon: Colon ":" @369..370
+          value: StringLit@371..375
+            token: String "\"ok\"" @371..375
+        r: RBrace "}" @376..377
+      r: RBrace "}" @378..379
+  items: FunctionDef@610..728
+    kw: Function "function" @610..618
+    name: Name@619..637
+      token: Word "ThrowsHttpResponse" @619..637
+    params: ParamList@637..639
+      l: LParen "(" @637..638
+      r: RParen ")" @638..639
+    ret: <missing @640>
+    throws: ThrowsClause@640..665
+      kw: Throws "throws" @640..646
+      ty: PathType@647..665
+        head: Name@647..651
+          token: Word "root" @647..651
+        dot: Dot "." @651..652
+        name: Name@652..656
+          token: Word "http" @652..656
+        dot: Dot "." @656..657
+        name: Name@657..665
+          token: Word "Response" @657..665
+    body: Block@666..728
+      l: LBrace "{" @666..667
+      tail: ThrowExpr@672..726
+        kw: Throw "throw" @672..677
+        payload: ObjectLiteral@678..726
+          ctor: PathExpr@678..696
+            head: Name@678..682
+              token: Word "root" @678..682
+            dot: Dot "." @682..683
+            name: Name@683..687
+              token: Word "http" @683..687
+            dot: Dot "." @687..688
+            name: Name@688..696
+              token: Word "Response" @688..696
+          l: LBrace "{" @697..698
+          members: ObjectField@699..711
+            key: DottedName@699..705
+              head: Name@699..705
+                token: Word "status" @699..705
+            colon: Colon ":" @705..706
+            value: LiteralExpr@707..710
+              token: Integer "500" @707..710
+            comma: Comma "," @710..711
+          members: ObjectField@712..724
+            key: DottedName@712..716
+              head: Name@712..716
+                token: Word "body" @712..716
+            colon: Colon ":" @716..717
+            value: StringLit@718..724
+              token: String "\"boom\"" @718..724
+          r: RBrace "}" @725..726
+      r: RBrace "}" @727..728
+error @640..646: expected return type (->), found throws
+=== ns_http/types.baml ===
+SourceFile@76..125
+  items: ClassDef@76..125
+    kw: Class "class" @76..81
+    name: Name@82..90
+      token: Word "Response" @82..90
+    l: LBrace "{" @91..92
+    members: Field@97..107
+      name: Name@97..103
+        token: Word "status" @97..103
+      ty: PathType@104..107
+        head: Name@104..107
+          token: Word "int" @104..107
+    members: Field@112..123
+      name: Name@112..116
+        token: Word "body" @112..116
+      ty: PathType@117..123
+        head: Name@117..123
+          token: Word "string" @117..123
+    r: RBrace "}" @124..125
+=== ns_llm/types.baml ===
+SourceFile@76..125
+  items: ClassDef@76..125
+    kw: Class "class" @76..81
+    name: Name@82..90
+      token: Word "Response" @82..90
+    l: LBrace "{" @91..92
+    members: Field@97..108
+      name: Name@97..101
+        token: Word "text" @97..101
+      ty: PathType@102..108
+        head: Name@102..108
+          token: Word "string" @102..108
+    members: Field@113..123
+      name: Name@113..119
+        token: Word "tokens" @113..119
+      ty: PathType@120..123
+        head: Name@120..123
+          token: Word "int" @120..123
+    r: RBrace "}" @124..125

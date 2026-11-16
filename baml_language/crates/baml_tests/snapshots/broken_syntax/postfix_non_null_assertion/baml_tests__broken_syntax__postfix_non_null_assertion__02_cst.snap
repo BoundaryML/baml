@@ -1,0 +1,73 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== main.baml ===
+SourceFile@278..384
+  items: FunctionDef@278..384
+    kw: Function "function" @278..286
+    name: Name@287..288
+      token: Word "f" @287..288
+    params: ParamList@288..299
+      l: LParen "(" @288..289
+      params: Param@289..298
+        name: Name@289..291
+          token: Word "xs" @289..291
+        ascription: TypeAscription@291..298
+          colon: Colon ":" @291..292
+          ty: ArrayType@293..298
+            inner: PathType@293..296
+              head: Name@293..296
+                token: Word "int" @293..296
+            l: LBracket "[" @296..297
+            r: RBracket "]" @297..298
+      r: RParen ")" @298..299
+    ret: ReturnType@300..306
+      arrow: Arrow "->" @300..302
+      ty: PathType@303..306
+        head: Name@303..306
+          token: Word "int" @303..306
+    body: Block@307..384
+      l: LBrace "{" @307..308
+      tail: IfExpr@313..382
+        kw: If "if" @313..315
+        cond: ParenExpr@316..333
+          l: LParen "(" @316..317
+          inner: BinaryExpr@317..332
+            lhs: CallExpr@317..328
+              callee: PathExpr@317..326
+                head: Name@317..319
+                  token: Word "xs" @317..319
+                dot: Dot "." @319..320
+                name: Name@320..326
+                  token: Word "length" @320..326
+              args: ArgList@326..328
+                l: LParen "(" @326..327
+                r: RParen ")" @327..328
+            op: Greater ">" @329..330
+            rhs: LiteralExpr@331..332
+              token: Integer "0" @331..332
+          r: RParen ")" @332..333
+        then_branch: Block@334..359
+          l: LBrace "{" @334..335
+          tail: CallExpr@344..352
+            callee: PathExpr@344..349
+              head: Name@344..346
+                token: Word "xs" @344..346
+              dot: Dot "." @346..347
+              name: Name@347..349
+                token: Word "at" @347..349
+            args: ArgList@349..352
+              l: LParen "(" @349..350
+              args: Arg@350..351
+                value: LiteralExpr@350..351
+                  token: Integer "0" @350..351
+              r: RParen ")" @351..352
+          r: RBrace "}" @358..359
+        kw: Else "else" @360..364
+        body: Block@365..382
+          l: LBrace "{" @365..366
+          tail: LiteralExpr@375..376
+            token: Integer "0" @375..376
+          r: RBrace "}" @381..382
+      r: RBrace "}" @383..384
+error @352..353: unexpected '!'; BAML has no non-null assertion operator — unwrap optionals with '?? <default>' or 'if let x: T = opt { ... }'

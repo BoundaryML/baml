@@ -1,0 +1,13 @@
+function f() -> int {
+    let result = root
+        .ai
+        .Agent<Itinerary>
+        .new()
+        .run(
+            plan_trip_spec(
+                "plan a weekend trip to yosemite with plenty of hiking and rest",
+                root.anthropic.Client.new(),
+            ),
+        );
+    result
+}

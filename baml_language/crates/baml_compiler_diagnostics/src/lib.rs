@@ -7,7 +7,7 @@
 //!
 //! ## Architecture
 //!
-//! All compiler phases produce their own error types (`ParseError`, `TypeError`, etc.)
+//! Compiler phases produce their own error types (`TypeError`, `NameError`, the parser's `ParseError`)
 //! but they all implement `ToDiagnostic` to convert to a unified `Diagnostic` type.
 //! This enables:
 //!
@@ -18,10 +18,9 @@
 //! ## Usage
 //!
 //! ```ignore
-//! use baml_compiler_diagnostics::{ParseError, ToDiagnostic, RenderConfig, render_diagnostic};
+//! use baml_compiler_diagnostics::{ToDiagnostic, RenderConfig, render_diagnostic};
 //!
-//! let error = ParseError::UnexpectedToken { ... };
-//! let diagnostic = error.to_diagnostic();
+//! let diagnostic = type_error.to_diagnostic();
 //! let output = render_diagnostic(&diagnostic, &sources, &file_paths, &RenderConfig::default());
 //! ```
 //!
@@ -41,7 +40,7 @@ pub mod to_diagnostic;
 // Re-export error types
 // Re-export the unified diagnostic types
 pub use diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, ToDiagnostic};
-pub use errors::{ErrorContext, NameError, ParseError, TypeError};
+pub use errors::{ErrorContext, NameError, TypeError};
 pub use highlight::{
     DiagnosticMessageHighlightError, DiagnosticMessageHighlighter, HighlightAttributes,
     HighlightColor, HighlightSpan, HighlightStyle, SourceHighlights,
@@ -51,3 +50,4 @@ pub use message::{
 };
 // Re-export the rendering functions and types
 pub use render::{RenderConfig, render_diagnostic};
+pub use to_diagnostic::typed_parse_error_diagnostic;

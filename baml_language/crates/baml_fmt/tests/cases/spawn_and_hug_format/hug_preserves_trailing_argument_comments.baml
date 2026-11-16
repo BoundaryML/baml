@@ -1,0 +1,6 @@
+function f() -> int {
+    consume(0, /* before spawn */ spawn {
+        let x = 1;
+        x
+    } /* after spawn */, /* after comma */)
+}

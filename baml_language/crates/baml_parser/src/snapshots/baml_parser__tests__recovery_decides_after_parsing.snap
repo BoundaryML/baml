@@ -1,0 +1,113 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"type V = int | ( < ) -> string throws never\\ntype A = (]) -> int\\n@@a({{ x }) function f() -> int { x }\\n@@foo(1) class A { }\\ntype K = ( , T as I).Key\\n\")"
+---
+SourceFile@0..147
+  items: TypeAliasDef@0..43
+    kw: Type "type" @0..4
+    name: Name@5..6
+      token: Word "V" @5..6
+    eq: Equals "=" @7..8
+    ty: UnionType@9..43
+      first: PathType@9..12
+        head: Name@9..12
+          token: Word "int" @9..12
+      pipe: Pipe "|" @13..14
+      ty: FunctionType@15..43
+        l: LParen "(" @15..16
+        params: FunctionTypeParam@17..18
+          ty: <missing @19>
+        r: RParen ")" @19..20
+        arrow: Arrow "->" @21..23
+        ret: PathType@24..30
+          head: Name@24..30
+            token: Word "string" @24..30
+        throws: ThrowsClause@31..43
+          kw: Throws "throws" @31..37
+          ty: PathType@38..43
+            head: Name@38..43
+              token: Word "never" @38..43
+  items: TypeAliasDef@44..54
+    kw: Type "type" @44..48
+    name: Name@49..50
+      token: Word "A" @49..50
+    eq: Equals "=" @51..52
+    ty: ParenType@53..54
+      l: LParen "(" @53..54
+      inner: <missing @54>
+      r: <missing @54>
+  items: Bogus@54..63
+    tokens: RBracket "]" @54..55
+    tokens: RParen ")" @55..56
+    tokens: Whitespace " " @56..57
+    tokens: Arrow "->" @57..59
+    tokens: Whitespace " " @59..60
+    tokens: Word "int" @60..63
+  items: Bogus@64..147
+    tokens: AtAt "@@" @64..66
+    tokens: Word "a" @66..67
+    tokens: LParen "(" @67..68
+    tokens: LBrace "{" @68..69
+    tokens: LBrace "{" @69..70
+    tokens: Whitespace " " @70..71
+    tokens: Word "x" @71..72
+    tokens: Whitespace " " @72..73
+    tokens: RBrace "}" @73..74
+    tokens: RParen ")" @74..75
+    tokens: Whitespace " " @75..76
+    tokens: Function "function" @76..84
+    tokens: Whitespace " " @84..85
+    tokens: Word "f" @85..86
+    tokens: LParen "(" @86..87
+    tokens: RParen ")" @87..88
+    tokens: Whitespace " " @88..89
+    tokens: Arrow "->" @89..91
+    tokens: Whitespace " " @91..92
+    tokens: Word "int" @92..95
+    tokens: Whitespace " " @95..96
+    tokens: LBrace "{" @96..97
+    tokens: Whitespace " " @97..98
+    tokens: Word "x" @98..99
+    tokens: Whitespace " " @99..100
+    tokens: RBrace "}" @100..101
+    tokens: Newline "\n" @101..102
+    tokens: AtAt "@@" @102..104
+    tokens: Word "foo" @104..107
+    tokens: LParen "(" @107..108
+    tokens: Integer "1" @108..109
+    tokens: RParen ")" @109..110
+    tokens: Whitespace " " @110..111
+    tokens: Class "class" @111..116
+    tokens: Whitespace " " @116..117
+    tokens: Word "A" @117..118
+    tokens: Whitespace " " @118..119
+    tokens: LBrace "{" @119..120
+    tokens: Whitespace " " @120..121
+    tokens: RBrace "}" @121..122
+    tokens: Newline "\n" @122..123
+    tokens: Type "type" @123..127
+    tokens: Whitespace " " @127..128
+    tokens: Word "K" @128..129
+    tokens: Whitespace " " @129..130
+    tokens: Equals "=" @130..131
+    tokens: Whitespace " " @131..132
+    tokens: LParen "(" @132..133
+    tokens: Whitespace " " @133..134
+    tokens: Comma "," @134..135
+    tokens: Whitespace " " @135..136
+    tokens: Word "T" @136..137
+    tokens: Whitespace " " @137..138
+    tokens: As "as" @138..140
+    tokens: Whitespace " " @140..141
+    tokens: Word "I" @141..142
+    tokens: RParen ")" @142..143
+    tokens: Dot "." @143..144
+    tokens: Word "Key" @144..147
+---
+InvalidSyntax { message: "a function type cannot declare generic parameters", range: 17..18 }
+UnexpectedToken { expected: "function type parameter list", found: "')'", range: 19..20 }
+UnexpectedToken { expected: "type", found: "']'", range: 54..55 }
+InvalidSyntax { message: "Unexpected ']' in type expression", range: 54..55 }
+UnexpectedToken { expected: "')'", found: "']'", range: 54..55 }
+UnexpectedToken { expected: "top-level declaration", found: "']'", range: 54..55 }
+InvalidSyntax { message: "a `@@` attribute is written inside the body of the class, enum or interface it describes", range: 64..147 }

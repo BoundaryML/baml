@@ -2117,8 +2117,6 @@ fn exported_impls(
     db: &dyn baml_compiler2_hir::Db,
     pkg_id: baml_base::SourceRoot,
 ) -> Vec<ExportedImpl> {
-    use baml_compiler2_hir::item_data::ImplSubjectData;
-
     let mut rows = Vec::new();
     for &block in crate::impls::package_impl_locs(db, pkg_id) {
         let Some(facts) = crate::impls::impl_facts(db, block).resolved() else {
@@ -2150,17 +2148,17 @@ fn exported_impls(
                 exported_function(db, method, &name, generic_params.len())
             })
             .collect();
-        let origin = match &data.subject {
-            ImplSubjectData::InClass {
-                class,
-                out_of_body: false,
-            } => ExportedImplOrigin::InBodyClass {
-                class_qtn: crate::lower::class_qualified_name(db, *class),
-            },
-            ImplSubjectData::InClass {
-                out_of_body: true, ..
+        let origin = match (
+            data.origin,
+            baml_compiler2_hir::item_data::impl_enclosing_class(db, block),
+        ) {
+            (baml_compiler2_ast::ImplOrigin::InBody, Some(class)) => {
+                ExportedImplOrigin::InBodyClass {
+                    class_qtn: crate::lower::class_qualified_name(db, class),
+                }
             }
-            | ImplSubjectData::Free { .. } => ExportedImplOrigin::OutOfBody,
+            (baml_compiler2_ast::ImplOrigin::InBody, None)
+            | (baml_compiler2_ast::ImplOrigin::OutOfBody, _) => ExportedImplOrigin::OutOfBody,
         };
         rows.push(ExportedImpl {
             interface: facts.interface.to_plain(),

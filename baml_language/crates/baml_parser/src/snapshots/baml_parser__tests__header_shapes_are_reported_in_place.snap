@@ -1,0 +1,66 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"type M = `a${1}b`;\\nfunction f() -> string {\\n  for x in xs { x }\\n  let t = ``;\\n  t\\n}\\nfunction g() -> int { 1 }\\n\")"
+---
+SourceFile@0..110
+  items: TypeAliasDef@0..18
+    kw: Type "type" @0..4
+    name: Name@5..6
+      token: Word "M" @5..6
+    eq: Equals "=" @7..8
+    ty: LiteralType@9..17
+      value: BacktickString@9..17
+        open: BacktickStart "`" @9..10
+        parts: TemplateChunk "a" @10..11
+        parts: TemplateInterp@11..15
+          open: DollarLBrace "${" @11..13
+          tail: LiteralExpr@13..14
+            token: Integer "1" @13..14
+          close: RBrace "}" @14..15
+        parts: TemplateChunk "b" @15..16
+        close: BacktickEnd "`" @16..17
+    semi: Semicolon ";" @17..18
+  items: FunctionDef@19..110
+    kw: Function "function" @19..27
+    name: Name@28..29
+      token: Word "f" @28..29
+    params: ParamList@29..31
+      l: LParen "(" @29..30
+      r: RParen ")" @30..31
+    ret: ReturnType@32..41
+      arrow: Arrow "->" @32..34
+      ty: PathType@35..41
+        head: Name@35..41
+          token: Word "string" @35..41
+    body: Block@42..110
+      l: LBrace "{" @42..43
+      stmts: ForStmt@46..63
+        kw: For "for" @46..49
+        header: Bogus@50..57
+          tokens: Word "x" @50..51
+          tokens: Whitespace " " @51..52
+          tokens: In "in" @52..54
+          tokens: Whitespace " " @54..55
+          tokens: Word "xs" @55..57
+        body: Block@58..63
+          l: LBrace "{" @58..59
+          tail: PathExpr@60..61
+            head: Name@60..61
+              token: Word "x" @60..61
+          r: RBrace "}" @62..63
+      stmts: LetStmt@66..110
+        introducer: Let "let" @66..69
+        pattern: BindingPattern@70..71
+          name: Name@70..71
+            token: Word "t" @70..71
+        eq: Equals "=" @72..73
+        init: BacktickString@74..110
+          open: BacktickStart "``" @74..76
+          parts: TemplateChunk ";\n  t\n}\nfunction g() -> int { 1 }\n" @76..110
+          close: <missing @74>
+      r: <missing @110>
+---
+InvalidSyntax { message: "a backtick string is not a type; a literal type is a quoted string or a number", range: 9..10 }
+UnexpectedToken { expected: "'let'", found: "identifier", range: 50..51 }
+InvalidSyntax { message: "Unclosed backtick string (expected ``); use \"\" for an empty string (BEP-049 §8)", range: 74..76 }
+UnexpectedEof { expected: "'}'", range: 110..110 }

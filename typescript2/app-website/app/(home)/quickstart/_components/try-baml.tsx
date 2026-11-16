@@ -184,7 +184,7 @@ const ENV_OPTS: Opt[] = [
 ];
 
 // Host-language bridges. `add` is the exact output_type accepted by
-// `baml bridge add`, straight from OutputType::add_name in
+// `baml generate add`, straight from OutputType::add_name in
 // baml_cli/src/generate.rs — the names are not free-form, so keep them in sync
 // with that enum. `next` is what the CLI reports as the remaining host-side
 // step. It renders as terminal output rather than as an instruction, so this
@@ -204,7 +204,7 @@ type Bridge = {
 // the transcript elides it as <version> rather than guessing.
 const BRIDGES: Bridge[] = [
   {
-    add: 'python/pydantic',
+    add: 'python/pydantic2',
     id: 'py',
     label: 'Python',
     logo: 'python',
@@ -314,8 +314,8 @@ const BRIDGE_TARGETS = BRIDGES.map((b) => {
 function bridgeLines(b: Bridge): Line[] {
   const add =
     b.add === 'go'
-      ? 'baml bridge add go --sdk-import-path <MODULE>/baml_sdk'
-      : `baml bridge add ${b.add}`;
+      ? 'baml generate add go --sdk-import-path <MODULE>/baml_sdk'
+      : `baml generate add ${b.add}`;
   return [
     {
       cmd: add,
@@ -323,7 +323,7 @@ function bridgeLines(b: Bridge): Line[] {
       out: ['added generator to baml.toml', ...b.next.map((n) => `next: ${n}`)],
     },
     {
-      cmd: 'baml bridge generate',
+      cmd: 'baml generate',
       note: '# after every change to your .baml files',
       out: ['wrote baml_sdk/'],
     },
@@ -344,8 +344,8 @@ Then set up the project:
 - \`baml run main\`
 
 If this repo already has an app in another language, wire up the bridge so it
-can call BAML directly. Run \`baml bridge add <target>\` once, then
-\`baml bridge generate\` whenever the .baml files change. The add command prints
+can call BAML directly. Run \`baml generate add <target>\` once, then
+\`baml generate\` whenever the .baml files change. The add command prints
 the host package to install. Targets:
 ${BRIDGE_TARGETS}
 
