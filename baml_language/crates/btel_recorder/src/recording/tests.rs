@@ -1918,6 +1918,7 @@ fn package_identity_is_recorded_unless_the_destination_declines_it() {
     assert_eq!(header.build, None);
     assert_eq!(unit, None);
     assert!(header.format_minor < btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR);
+}
 
 #[test]
 fn a_log_carries_its_line_and_raises_the_file_minor_only_with_one() {
