@@ -20,6 +20,21 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 BUILDER = ROOT / "baml_language/wrapper/build"
 MARKER = "BAML_WRAPPER_LAUNCHER_DEFAULT"
+PROCESS_ENV_KEYS = {
+    "PATH",
+    "SYSTEMROOT",
+    "WINDIR",
+    "COMSPEC",
+    "PATHEXT",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "LD_LIBRARY_PATH",
+    "DYLD_LIBRARY_PATH",
+    "LANG",
+    "LC_ALL",
+    "__CF_USER_TEXT_ENCODING",
+}
 PROBE = """
 import json, os, signal, sys
 if sys.argv[1:2] == ['signal']:
@@ -48,9 +63,12 @@ class WrapperLauncherTests(unittest.TestCase):
         self.launcher = self.root / "launch.py"
         self.probe = self.root / "probe.py"
         self.probe.write_text(PROBE)
-        self.environment = dict(os.environ)
-        self.environment.pop("BAML_TELEMETRY", None)
-        self.environment.pop(MARKER, None)
+        # Probe output and failed environment assertions must never contain
+        # ambient credentials (including unrelated CI provider/cache secrets).
+        self.environment = {
+            key: value for key, value in os.environ.items() if key in PROCESS_ENV_KEYS
+        }
+        self.environment.update(HOME=str(self.root), USERPROFILE=str(self.root))
         # Keep the test host Python isolated from locale coercion and, on
         # Windows, able to find its installation after copying python.exe.
         self.environment.update(PYTHONCOERCECLOCALE="0", PYTHONHOME=sys.base_prefix)

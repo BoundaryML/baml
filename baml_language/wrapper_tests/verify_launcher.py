@@ -17,6 +17,21 @@ from environment import test_environment
 
 ROOT = Path(__file__).resolve().parents[2]
 MARKER = "BAML_WRAPPER_LAUNCHER_DEFAULT"
+PROCESS_ENV_KEYS = {
+    "PATH",
+    "SYSTEMROOT",
+    "WINDIR",
+    "COMSPEC",
+    "PATHEXT",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "LD_LIBRARY_PATH",
+    "DYLD_LIBRARY_PATH",
+    "LANG",
+    "LC_ALL",
+    "__CF_USER_TEXT_ENCODING",
+}
 
 
 class PackedLauncherTests(unittest.TestCase):
@@ -26,12 +41,18 @@ class PackedLauncherTests(unittest.TestCase):
         cls.addClassCleanup(cls.temporary.cleanup)
         cls.root = Path(cls.temporary.name)
         cls.environment = dict(
-            test_environment(os.environ),
+            test_environment(
+                {
+                    key: value
+                    for key, value in os.environ.items()
+                    if key in PROCESS_ENV_KEYS
+                }
+            ),
             BAML_CLI_ALLOW_DIRECT="1",
             DEV_BAML_CLI_DISABLE_AGENT_DETECTION="1",
         )
-        cls.environment.pop(MARKER, None)
-        cls.environment.pop("BAML_CONTEXT", None)
+        # No ambient credentials can reach probes or failed assertion output.
+        cls.environment.update(HOME=str(cls.root), USERPROFILE=str(cls.root))
         cls.environment["BAML_HOME"] = str(cls.root / "build-home")
         cls.launchers = {}
         cls.binaries = {}
