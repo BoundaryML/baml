@@ -1980,7 +1980,7 @@ impl TirTypeError {
                 TirTypeError::TupleElementNotAssignable => {
                     write!(
                         f,
-                        "cannot replace a tuple slot: tuple slots are immutable; build a new tuple instead (mutable children can still be changed)"
+                        "cannot assign to a tuple field: tuples are immutable; build a new tuple instead"
                     )
                 }
                 TirTypeError::TupleIndexOutOfRange {
