@@ -77,9 +77,6 @@ function DispatchKnown() -> void {
         }
     }
     baml.io.println(`${DxTotal(shapes)}:${DxArea(DxRect { w: 7, h: 3 })}`);
-}
-
-function DispatchThrows() -> void {
     let thrown = DxArea(DxSquare { side: -2 }) catch (e) {
         let s: string => s,
     };
@@ -97,11 +94,8 @@ function DispatchSuspends() -> void {
 function DispatchOptional() -> void {
     let shapes: DxShape[] = [DxPadded { side: 4 }, DxSquare { side: 4 }, DxPadded { side: 1 }];
     baml.io.println(`${DxTotal(shapes)}`);
-}
-
-function DispatchGeneric() -> void {
-    let shapes: DxShape[] = [DxBox<int> { side: 2 }, DxRect { w: 5, h: 1 }, DxBox<string> { side: 3 }];
-    baml.io.println(`${DxTotal(shapes)}`);
+    let generic: DxShape[] = [DxBox<int> { side: 2 }, DxRect { w: 5, h: 1 }, DxBox<string> { side: 3 }];
+    baml.io.println(`${DxTotal(generic)}`);
 }
 
 interface DxLabeled {
@@ -141,9 +135,6 @@ function DxShout(value: unknown) -> string {
 function DispatchDefault() -> void {
     let out = [DxShout(DxLoud { label: "a" }), DxShout(DxPlain { label: "b" }), DxShout(DxQuiet { label: "c" })];
     baml.io.println(out.join(","));
-}
-
-function DispatchRuntimeClass() -> void {
     let minted = reflect.Class.new(
         "DxRow",
         { "label": string.type() },

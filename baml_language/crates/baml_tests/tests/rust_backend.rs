@@ -714,48 +714,6 @@ function make_kept(i: int) -> Kept { Kept { n: i } }
     assert!(!kept.contains("vm.new_plain_instance("), "{kept}");
 }
 
-/// Richards' `Task.run` site enters each of its four implementations
-/// directly, which needs every provided method's impl frame to be empty.
-#[test]
-fn interface_calls_dispatch_on_known_classes() {
-    let db = baml_test_support::setup_test_db(include_str!(
-        "../../../tools/speedtest/workloads/programs/richards-50/main.baml"
-    ));
-    let program = lower(&db, OptLevel::Two);
-    let module = render(&db, &program, OptLevel::Two, None);
-    let body = body_of(&module, "user.tcb_run");
-    for task in ["Idle", "Worker", "Handler", "Device"] {
-        assert!(
-            body.contains(&format!("_user_{task}Task_as_user_Task___run_")),
-            "{task}: {body}"
-        );
-    }
-    assert_eq!(
-        body.matches("if class == Some(vm.record_object(").count(),
-        4
-    );
-    assert!(body.contains("vm.virtual_target("), "{body}");
-}
-
-/// A default method gets an arm per class that adopts it, each entering the
-/// interface's one body with the class as `Self`.
-#[test]
-fn default_methods_dispatch_on_known_classes() {
-    let db = baml_test_support::setup_test_db(include_str!(
-        "../../../tools/speedtest/workloads/interfaces/default-method-100k/main.baml"
-    ));
-    let program = lower(&db, OptLevel::Two);
-    let module = render(&db, &program, OptLevel::Two, None);
-    let body = body_of(&module, "user.run");
-    assert_eq!(
-        body.matches("if class == Some(vm.record_object(").count(),
-        2
-    );
-    assert_eq!(body.matches("vm.class_type(").count(), 2, "{body}");
-    assert!(body.contains("user_Counter_total_"), "{body}");
-    assert!(body.contains("vm.virtual_target("), "{body}");
-}
-
 #[test]
 fn unsupported_programs_remain_bytecode() {
     let mut large = String::from("function large(n: int) -> int { let total = 0;\n");

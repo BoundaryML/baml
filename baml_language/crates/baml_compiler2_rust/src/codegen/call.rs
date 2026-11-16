@@ -41,8 +41,8 @@ impl<'db> Generator<'_, 'db> {
         let shape = call_shape(self.body, args, ntypeargs, &self.analysis.static_types);
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
         let types = self.type_operands("call", type_args)?;
-        if let (FunctionKind::Bytecode, Some(symbol)) = (info.kind, self.symbols.get(&object)) {
-            return self.compiled_call(block, object, symbol, &name, info, layout, args, &types);
+        if info.kind == FunctionKind::Bytecode && self.symbols.contains_key(&object) {
+            return self.compiled_call(block, object, &name, layout, args, &types);
         }
         let values = self.laid_out_args(block, &name, info, layout, args)?;
         let args = format!("&[{}]", values.join(", "));
@@ -92,20 +92,16 @@ impl<'db> Generator<'_, 'db> {
     }
 
     /// [`Self::compiled_entry`] with its error routed.
-    #[allow(clippy::too_many_arguments)]
     fn compiled_call(
         &mut self,
         block: BlockId,
         object: usize,
-        symbol: &str,
         name: &str,
-        info: &Function,
         layout: Option<&baml_type::CallLayout>,
         args: &[Operand<'db>],
         types: &[String],
     ) -> Gen<Expr> {
-        let (call, repr) =
-            self.compiled_entry(block, object, symbol, name, info, layout, args, types)?;
+        let (call, repr) = self.compiled_entry(block, object, name, layout, args, types)?;
         let code = self.call_code(block, object, &call)?;
         Ok(Expr::new(code, repr))
     }
@@ -113,18 +109,18 @@ impl<'db> Generator<'_, 'db> {
     /// Use a typed direct entry when the callee has no VM-frame state and the
     /// VM allows it: the call's `R<_>` expression and the representation of
     /// its result.
-    #[allow(clippy::too_many_arguments)]
     fn compiled_entry(
         &mut self,
         block: BlockId,
         object: usize,
-        symbol: &str,
         name: &str,
-        info: &Function,
         layout: Option<&baml_type::CallLayout>,
         args: &[Operand<'db>],
         types: &[String],
     ) -> Gen<(String, Repr)> {
+        let symbol = self.symbols[&object].clone();
+        let index = self.index;
+        let info = index.info(object);
         let site = self.site_pc(block);
         let callee = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
         // A generic callee's frame starts with the call's type arguments (a
@@ -473,7 +469,6 @@ impl<'db> Generator<'_, 'db> {
             default,
         } in arms
         {
-            let symbol = self.symbols[&object].clone();
             let class_ptr = format!("vm.record_object(fr, ObjectIndex::from_raw({class}))");
             // A default body's frame is `Self`, the receiver's class.
             let types = if default {
@@ -481,16 +476,8 @@ impl<'db> Generator<'_, 'db> {
             } else {
                 Vec::new()
             };
-            let (call, repr) = self.compiled_entry(
-                block,
-                object,
-                &symbol,
-                index.display(object),
-                index.info(object),
-                None,
-                args,
-                &types,
-            )?;
+            let (call, repr) =
+                self.compiled_entry(block, object, index.display(object), None, args, &types)?;
             let bindings = std::mem::take(&mut self.pending).concat();
             let call = match repr {
                 Repr::Value => call,
@@ -525,7 +512,7 @@ impl<'db> Generator<'_, 'db> {
         };
         let arms: Vec<_> = self
             .index
-            .class_dispatch(interface, method)
+            .class_implementations(interface, method)
             .into_iter()
             .filter(|arm| {
                 self.symbols.contains_key(&arm.body) && self.index.info(arm.body).arity == arity
