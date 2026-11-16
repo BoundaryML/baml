@@ -291,8 +291,8 @@ fn owned_rust_type(
 fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
     match ty {
         BamlType::Int => quote! { Result<i64, AccessError> },
-        // Float is heap-boxed (`Object::Float`); the accessor needs a
-        // `PermitProof` to deref the pointer soundly.
+        // A float may be heap-boxed (`Object::Float`: NaN, ±inf, extreme
+        // magnitudes); the accessor needs a `PermitProof` to deref it soundly.
         BamlType::Float => {
             *needs_heap = true;
             quote! { Result<f64, AccessError> }
@@ -499,7 +499,7 @@ fn into_owned_expr(
         BamlType::Int | BamlType::Bool => {
             quote! { self.#field_ident()? }
         }
-        // Float accessor is now heap-aware (`Object::Float` deref).
+        // Float accessor is heap-aware (a boxed `Object::Float` derefs).
         BamlType::Float => quote! { self.#field_ident(heap, permit)? },
         BamlType::String => quote! { self.#field_ident(heap, permit)?.to_string() },
         BamlType::RustType => quote! { self.#field_ident(heap, permit)? },

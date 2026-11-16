@@ -1176,6 +1176,25 @@ pub enum Instruction {
         iterator: usize,
         index: usize,
     },
+    /// `x == null`: pops a value and pushes whether it is `null`. `null` is
+    /// the one value of its kind and never equal to anything else, so this is
+    /// the whole of `baml.ops.equals_equals(x, null)`.
+    ///
+    /// Stack: `[value]` -> `[bool]`
+    IsNull,
+    /// `x != null`: [`Self::IsNull`], negated.
+    ///
+    /// Stack: `[value]` -> `[bool]`
+    IsNotNull,
+    /// `a == b` through `callee`, the `baml.ops.equals_equals` driver, with
+    /// the pairs that need no driver decided in place: identical values,
+    /// primitives, strings, floats, operands of different kinds, and two
+    /// variants of an enum whose equality is the structural default. Every
+    /// other pair calls `callee` exactly as [`Self::Call`] would, with the
+    /// same two value arguments and no type arguments.
+    ///
+    /// Stack: `[a, b]` -> `[bool]`
+    CallEquals(GlobalIndex),
 }
 
 /// Compact bytecode opcodes.
@@ -1420,6 +1439,11 @@ pub enum OpCode {
     // u32 iterator slot + u32 index slot; appended to preserve discriminants.
     ArrayIterNext,
     ArrayIterNextLocal,
+    // `== null` / `!= null`, no operands; appended to preserve discriminants.
+    IsNull,
+    IsNotNull,
+    // `==` with inline fast paths: u32 driver global, like `SysOp`.
+    CallEquals,
     // Local-operand superinstructions, appended to preserve discriminants.
     // u32 destination slot + u32 source slot + i8 addend.
     AddLocalSmall,
@@ -1557,7 +1581,8 @@ impl OpCode {
             | Self::JumpIfTrueOrPop
             | Self::JumpIfNotNullOrPop
             | Self::VirtualLoadField
-            | Self::VirtualStoreField => 5,
+            | Self::VirtualStoreField
+            | Self::CallEquals => 5,
 
             // 7-byte: opcode + u16 nargs + u16 ntypeargs + u16 self_arg
             Self::VirtualCall => 7,
@@ -1582,7 +1607,9 @@ impl OpCode {
             | Self::ResumeCompiled
             | Self::LoadArrayElementLocal
             | Self::StoreArrayElementLocal
-            | Self::ContainerLenLocal => 1,
+            | Self::ContainerLenLocal
+            | Self::IsNull
+            | Self::IsNotNull => 1,
             Self::AllocInstance
             | Self::Call
             | Self::CallExactArgs
@@ -1774,6 +1801,9 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::JumpIfLocalsCmp as u8 => Ok(Self::JumpIfLocalsCmp),
             x if x == Self::JumpIfLocalConstCmp as u8 => Ok(Self::JumpIfLocalConstCmp),
             x if x == Self::StoreFieldLocal as u8 => Ok(Self::StoreFieldLocal),
+            x if x == Self::IsNull as u8 => Ok(Self::IsNull),
+            x if x == Self::IsNotNull as u8 => Ok(Self::IsNotNull),
+            x if x == Self::CallEquals as u8 => Ok(Self::CallEquals),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1808,6 +1838,9 @@ impl std::fmt::Display for OpCode {
             Self::JumpIfLocalsCmp => "JUMP_IF_LOCALS_CMP",
             Self::JumpIfLocalConstCmp => "JUMP_IF_LOCAL_CONST_CMP",
             Self::StoreFieldLocal => "STORE_FIELD_LOCAL",
+            Self::IsNull => "IS_NULL",
+            Self::IsNotNull => "IS_NOT_NULL",
+            Self::CallEquals => "CALL_EQUALS",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -2264,6 +2297,9 @@ impl std::fmt::Display for Instruction {
                 write!(f, "ARRAY_ITER_NEXT_LOCAL {iterator} {index}")
             }
             Instruction::StoreVar2(a, b) => write!(f, "STORE_VAR2 {a} {b}"),
+            Instruction::IsNull => f.write_str("IS_NULL"),
+            Instruction::IsNotNull => f.write_str("IS_NOT_NULL"),
+            Instruction::CallEquals(callee) => write!(f, "CALL_EQUALS {callee}"),
             Instruction::AddLocalSmall(dst, src, value) => {
                 write!(f, "ADD_LOCAL_SMALL {dst} {src} {value}")
             }
@@ -2792,6 +2828,8 @@ impl Bytecode {
                 | Instruction::LoadArrayElementLocal
                 | Instruction::StoreArrayElementLocal
                 | Instruction::ContainerLenLocal
+                | Instruction::IsNull
+                | Instruction::IsNotNull
                 | Instruction::Spawn
                 | Instruction::AwaitAny => {}
 
@@ -2884,6 +2922,7 @@ impl Bytecode {
                 Instruction::LoadGlobal(g)
                 | Instruction::StoreGlobal(g)
                 | Instruction::SysOp(g)
+                | Instruction::CallEquals(g)
                 | Instruction::MakeBoundMethod(g) => {
                     code.extend_from_slice(
                         &u32::try_from(g.into_raw())
@@ -3340,6 +3379,9 @@ impl Bytecode {
             Instruction::InitInstance(_) => OpCode::InitInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
             Instruction::SysOp(_) => OpCode::SysOp,
+            Instruction::IsNull => OpCode::IsNull,
+            Instruction::IsNotNull => OpCode::IsNotNull,
+            Instruction::CallEquals(_) => OpCode::CallEquals,
 
             Instruction::Spawn => OpCode::Spawn,
             Instruction::CallHooked { .. } => OpCode::CallHooked,
@@ -3880,6 +3922,12 @@ mod compact_tests {
                     ntypeargs: 1,
                 },
                 OpCode::CallLocal,
+            ),
+            (Instruction::IsNull, OpCode::IsNull),
+            (Instruction::IsNotNull, OpCode::IsNotNull),
+            (
+                Instruction::CallEquals(GlobalIndex::from_raw(3)),
+                OpCode::CallEquals,
             ),
         ] {
             let bc = make_bytecode(vec![instruction], Vec::new());

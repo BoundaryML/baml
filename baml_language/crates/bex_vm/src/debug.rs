@@ -145,6 +145,7 @@ pub(crate) fn display_instruction(
         Instruction::Call { callee, .. }
         | Instruction::CallLocal { callee, .. }
         | Instruction::CallHooked { callee, .. }
+        | Instruction::CallEquals(callee)
         | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
@@ -336,6 +337,8 @@ pub(crate) fn display_instruction(
         | Instruction::SendEvent
         | Instruction::ContainerLen
         | Instruction::ContainerLenLocal
+        | Instruction::IsNull
+        | Instruction::IsNotNull
         | Instruction::Spawn
         | Instruction::LoadType(_)
         | Instruction::BindType(_)
@@ -509,6 +512,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::Call { .. }
         | Instruction::CallLocal { .. }
         | Instruction::CallHooked { .. }
+        | Instruction::CallEquals(_)
         | Instruction::BeginTraceHook(_)
         | Instruction::EndTraceHook
         | Instruction::TraceHookHidden
@@ -555,6 +559,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Style::new().green(),
         Instruction::SendEvent => Style::new().green().bright(),
         Instruction::ContainerLen | Instruction::ContainerLenLocal => Style::new().cyan(),
+        Instruction::IsNull | Instruction::IsNotNull => Style::new().yellow(),
     }
 }
 
@@ -1084,6 +1089,7 @@ fn display_instruction_textual(
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallHooked { .. } => format!("call_hooked {}", meta_str(&"")),
         Instruction::CallLocal { .. } => format!("call_local {}", meta_str(&"")),
+        Instruction::CallEquals(_) => format!("call_equals {}", meta_str(&"")),
         Instruction::BeginTraceHook(value) => format!("begin_trace_hook {value}"),
         Instruction::EndTraceHook => "end_trace_hook".into(),
         Instruction::TraceHookHidden => "trace_hook_hidden".into(),
@@ -1193,6 +1199,8 @@ fn display_instruction_textual(
         Instruction::SendEvent => "send_event".to_string(),
         Instruction::ContainerLen => "container_len".to_string(),
         Instruction::ContainerLenLocal => "container_len_local".to_string(),
+        Instruction::IsNull => "is_null".to_string(),
+        Instruction::IsNotNull => "is_not_null".to_string(),
     }
 }
 
@@ -1359,6 +1367,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::Call { .. }
         | Instruction::CallLocal { .. }
         | Instruction::CallHooked { .. }
+        | Instruction::CallEquals(_)
         | Instruction::BeginTraceHook(_)
         | Instruction::EndTraceHook
         | Instruction::TraceHookHidden
@@ -1482,6 +1491,8 @@ pub fn display_compact_bytecode(
             | OpCode::SendEvent
             | OpCode::ContainerLen
             | OpCode::ContainerLenLocal
+            | OpCode::IsNull
+            | OpCode::IsNotNull
             | OpCode::Spawn
             | OpCode::Add
             | OpCode::Sub
@@ -1581,6 +1592,7 @@ pub fn display_compact_bytecode(
             | OpCode::InitInstance
             | OpCode::AllocVariant
             | OpCode::SysOp
+            | OpCode::CallEquals
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType

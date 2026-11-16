@@ -16,15 +16,15 @@ use bex_vm::{
     BexVm,
     package_baml::{BamlPackageBaml, NativeCallResult, PackageBamlImpl},
 };
-use bex_vm_types::{Value, types::Object};
+use bex_vm_types::Value;
 
 fn make_vm() -> BexVm {
     let program = compile_source("function noop() -> int { 0 }");
     BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program")
 }
 
-fn alloc_float(vm: &mut BexVm, value: f64) -> Value {
-    Value::object(vm.tlab.alloc(Object::Float(value)))
+fn float(vm: &mut BexVm, value: f64) -> Value {
+    vm.float_value(value)
 }
 
 /// Invoke a `baml.ops.*` comparison builtin and return its boolean result.
@@ -63,18 +63,20 @@ fn string_eq_compares_by_value() {
 
 /// `Equals` is reflexive, so `float`'s `eq` departs from IEEE on NaN: every NaN
 /// equals every other NaN (and itself). `-0.0 == 0.0` still holds, as under
-/// IEEE. Pinned here on distinct heap boxes, so no same-pointer shortcut can
-/// mask a non-reflexive leaf.
+/// IEEE. NaNs are boxed (distinct heap boxes, so no same-pointer shortcut can
+/// mask a non-reflexive leaf); the numbers here are inline.
 #[test]
 fn float_eq_is_reflexive() {
     let mut vm = make_vm();
-    let one = alloc_float(&mut vm, 1.5);
-    let one_b = alloc_float(&mut vm, 1.5);
-    let two = alloc_float(&mut vm, 2.5);
-    let nan = alloc_float(&mut vm, f64::NAN);
-    let nan_b = alloc_float(&mut vm, f64::from_bits(0xFFF8_0000_DEAD_BEEF));
-    let pos_zero = alloc_float(&mut vm, 0.0);
-    let neg_zero = alloc_float(&mut vm, -0.0);
+    let one = float(&mut vm, 1.5);
+    let one_b = float(&mut vm, 1.5);
+    let two = float(&mut vm, 2.5);
+    let nan = float(&mut vm, f64::NAN);
+    let nan_b = float(&mut vm, f64::from_bits(0xFFF8_0000_DEAD_BEEF));
+    let pos_zero = float(&mut vm, 0.0);
+    let neg_zero = float(&mut vm, -0.0);
+    assert!(one.is_inline_float() && pos_zero.is_inline_float() && neg_zero.is_inline_float());
+    assert!(nan.is_object() && nan_b.is_object() && nan != nan_b);
 
     assert!(call_bool(&mut vm, FLOAT_EQ, &[one, one_b]));
     assert!(!call_bool(&mut vm, FLOAT_EQ, &[one, two]));

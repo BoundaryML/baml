@@ -440,7 +440,9 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         .alloc_bigint(big.clone()),
                 )
             }
-            BexExternalValue::Float(float) => self.alloc(Object::Float(*float)),
+            BexExternalValue::Float(float) => {
+                self.holder.holder_mut().tlab_mut().float_value(*float)
+            }
             BexExternalValue::Bool(b) => Value::bool(*b),
             BexExternalValue::String(s) => {
                 Value::object(self.holder.holder_mut().tlab_mut().alloc_string(s.clone()))

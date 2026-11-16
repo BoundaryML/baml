@@ -7167,6 +7167,12 @@ impl<'db> LoweringContext<'db> {
     /// Literals widen to their base primitive; everything else (mixed primitives,
     /// `uint8array`, enums, classes, containers, unions, interfaces, `unknown`)
     /// goes through the driver.
+    ///
+    /// A `null` operand is the exception: `null` is the one value of its type
+    /// and the driver finds it equal to `null` alone, never running a custom
+    /// `Equals` (that needs two operands of one type). So `x == null` for any
+    /// `x` is a test of `x` against the `null` word, which the emitter turns
+    /// into `IsNull` / `IsNotNull`.
     fn equality_uses_primitive_opcode(&self, lhs: AstExprId, rhs: AstExprId) -> Lowered<bool> {
         fn prim_class(ty: &RuntimeTy) -> Option<u8> {
             use baml_base::Literal;
@@ -7180,8 +7186,13 @@ impl<'db> LoweringContext<'db> {
                 _ => return None,
             })
         }
-        let l = prim_class(&self.expr_ty(lhs)?);
-        Ok(l.is_some() && l == prim_class(&self.expr_ty(rhs)?))
+        let lhs_ty = self.expr_ty(lhs)?;
+        let rhs_ty = self.expr_ty(rhs)?;
+        if matches!(lhs_ty, RuntimeTy::Null) || matches!(rhs_ty, RuntimeTy::Null) {
+            return Ok(true);
+        }
+        let l = prim_class(&lhs_ty);
+        Ok(l.is_some() && l == prim_class(&rhs_ty))
     }
 
     /// Lower `==`/`!=` through the `baml.ops.equals_equals` driver — the general
