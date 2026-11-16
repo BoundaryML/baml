@@ -403,16 +403,8 @@ impl<'db> Generator<'_, 'db> {
         // Without a record of its own when the callee is frameless, so LLVM
         // can inline the variant and keep the struct's fields in registers.
         let body = format!("{symbol}_stack{params:x}(vm, fr{direct_args}, {callee_mask})");
-        let call = self.frameless_or(
-            object,
-            &site,
-            &body,
-            &[],
-            "&[]",
-            "vm.direct_calls()",
-            &direct,
-            &boxed,
-        );
+        let recorded = format!("if vm.direct_calls() {{ {direct} }} else {{ {boxed} }}");
+        let call = self.frameless_or(object, &site, &body, None, "vm.direct_calls()", &recorded);
         let code = self.fallible(block, &call)?;
         Ok(Expr::new(code, signature.ret))
     }
