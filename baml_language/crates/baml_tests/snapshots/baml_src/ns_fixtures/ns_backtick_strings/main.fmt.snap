@@ -103,7 +103,11 @@ function BacktickInterpBlockBody(items: int[]) -> string {
 
 // Interpolation calling another function.
 function bangs(n: int) -> string {
-    if (n <= 0) { "" } else { "!" + bangs(n - 1) }
+    if (n <= 0) {
+        ""
+    } else {
+        "!" + bangs(n - 1)
+    }
 }
 
 function BacktickInterpCallsFn() -> string {

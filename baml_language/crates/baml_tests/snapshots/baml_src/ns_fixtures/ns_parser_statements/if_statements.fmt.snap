@@ -3,10 +3,10 @@ source: crates/baml_tests/src/corpus.rs
 ---
 function ConditionalLogic(age: int) -> string {
     if (age < 18) {
-      return "minor";
+        return "minor";
     } else if (age < 65) {
-      return "adult";
+        return "adult";
     } else {
-      return "senior";
+        return "senior";
     }
 }

@@ -70,33 +70,37 @@ fn own_line_comments_lead_the_following_child() {
 }
 
 #[test]
-fn end_of_line_comments_trail_the_preceding_child() {
+fn end_of_line_comments_follow_the_separator_or_child_before_them() {
     assert_eq!(
         attachments(
             "function f() -> int {\n    let a = 1; // same line\n    // own line\n    a\n}\n"
         ),
         [
-            "// same line -> Trailing LetStmt [EndOfLine]",
+            "// same line -> Dangling(after \";\") LetStmt [EndOfLine]",
             "// own line -> Leading PathExpr [OwnLine]",
         ]
     );
     assert_eq!(
         attachments("function f() -> int {\n    g();\n    // after the last\n}\n"),
-        ["// after the last -> Trailing ExprStmt [OwnLine]"]
+        ["// after the last -> Dangling(after \";\") ExprStmt [OwnLine]"]
+    );
+    assert_eq!(
+        attachments("function f() -> int {\n    g() // after the last\n}\n"),
+        ["// after the last -> Trailing CallExpr [EndOfLine]"]
     );
 }
 
 #[test]
-fn a_comment_after_a_list_separator_belongs_to_the_item_before_it() {
-    // `,` belongs to the argument list, not to `a`; the comment still trails
-    // `a`, where a line suffix prints it after the comma.
+fn a_comment_after_a_separator_dangles_after_it() {
+    // `,` belongs to the argument list, `|` to the union: the comment is
+    // printed right after the separator, whoever owns it.
     assert_eq!(
         attachments("function f() -> int {\n    g(a, // c\n      b)\n}\n"),
-        ["// c -> Trailing Arg [EndOfLine]"]
+        ["// c -> Dangling(after \",\") ArgList [EndOfLine]"]
     );
     assert_eq!(
         attachments("type T = A | // c\n    B;\n"),
-        ["// c -> Trailing PathType [EndOfLine]"]
+        ["// c -> Dangling(after \"|\") UnionType [EndOfLine]"]
     );
 }
 
@@ -181,15 +185,15 @@ fn a_run_of_comments_on_one_line_is_placed_as_one() {
     assert_eq!(
         attachments("function f() -> int {\n    foo(); /* x */ // y\n    bar()\n}\n"),
         [
-            "/* x */ -> Trailing ExprStmt [EndOfLine]",
-            "// y -> Trailing ExprStmt [EndOfLine]",
+            "/* x */ -> Dangling(after \";\") ExprStmt [EndOfLine]",
+            "// y -> Dangling(after \";\") ExprStmt [EndOfLine]",
         ]
     );
     assert_eq!(
         attachments("function f() -> int {\n    g(a, /* x */ // y\n      b)\n}\n"),
         [
-            "/* x */ -> Trailing Arg [EndOfLine]",
-            "// y -> Trailing Arg [EndOfLine]",
+            "/* x */ -> Dangling(after \",\") ArgList [EndOfLine]",
+            "// y -> Dangling(after \",\") ArgList [EndOfLine]",
         ]
     );
 }
@@ -262,15 +266,17 @@ fn a_node_s_comments_are_one_run_in_print_order() {
     assert_eq!(tree.arenas().kind_name(stmt), "ExprStmt");
     assert_eq!(comments.of(stmt).len(), 3);
     assert_eq!(comments.leading(stmt).len(), 1);
-    assert!(comments.dangling(stmt).is_empty());
-    assert_eq!(comments.trailing(stmt).len(), 2);
+    assert_eq!(comments.dangling(stmt).len(), 2);
+    assert!(comments.trailing(stmt).is_empty());
+    let semi = comments.dangling(stmt)[0].position;
+    assert!(matches!(semi, Position::Dangling { after: Some(_) }));
     assert_eq!(
         comments
             .of(stmt)
             .iter()
             .map(|c| c.position)
             .collect::<Vec<_>>(),
-        [Position::Leading, Position::Trailing, Position::Trailing]
+        [Position::Leading, semi, semi]
     );
     assert_eq!(
         comments.gap_before_node(&tree, stmt),
@@ -290,7 +296,7 @@ fn leading_and_trailing_comments_print_where_they_were_written() {
     let body = d.concat([
         docs::leading(d, &tree, comments.leading(stmt)),
         d.text("g();"),
-        docs::trailing(d, &tree, comments.trailing(stmt)),
+        docs::dangling(d, &tree, comments.dangling(stmt), true),
     ]);
     let root = d.concat([
         d.text("{"),

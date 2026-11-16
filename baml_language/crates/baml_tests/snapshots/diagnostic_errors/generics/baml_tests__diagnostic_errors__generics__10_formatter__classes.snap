@@ -237,6 +237,6 @@ class Foo<T> {
 function bare_in_union_param(f: Foo<int> | Foo) -> string {
     match (f) {
         Foo<int> => "specific",
-        Foo      => "bare",
+        Foo => "bare",
     }
 }

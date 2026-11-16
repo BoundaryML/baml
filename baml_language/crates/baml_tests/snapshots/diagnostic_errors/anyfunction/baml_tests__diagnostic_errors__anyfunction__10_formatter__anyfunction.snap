@@ -12,7 +12,7 @@ class MyTool {
 implement reflect.AnyFunction for MyTool {}
 
 function pick<T extends reflect.AnyFunction>(f: T) -> T throws never {
-    return f
+    return f;
 }
 
 class Holder<T extends reflect.AnyFunction> {
@@ -37,10 +37,10 @@ class Doc {
 }
 
 function web_search(q: string) -> Doc[] throws ToolError {
-    if q == "boom" {
-        throw ToolError { message: "no results" }
+    if (q == "boom") {
+        throw ToolError { message: "no results" };
     }
-    return [Doc { title: q }]
+    return [Doc { title: q }];
 }
 
 function main() -> int throws never {
@@ -49,5 +49,5 @@ function main() -> int throws never {
     let not_a_fn: reflect.AnyFunction = 42;
     let narrow: reflect.AnyFunction<Returns = Doc[]> = web_search;
     let bad_widen: reflect.AnyFunction<Returns = string> = narrow;
-    return 0
+    return 0;
 }

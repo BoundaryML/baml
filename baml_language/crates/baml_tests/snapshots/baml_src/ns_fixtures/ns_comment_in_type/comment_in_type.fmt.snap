@@ -22,7 +22,7 @@ string
 
 // Another test - comment immediately after arrow
 function CommentAfterArrow() -> // inline comment
-string {
+        string {
     client: TestClient
     prompt: `test`
 }

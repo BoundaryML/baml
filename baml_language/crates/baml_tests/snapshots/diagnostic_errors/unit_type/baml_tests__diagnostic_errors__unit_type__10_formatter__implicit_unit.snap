@@ -63,46 +63,64 @@ function block_argument() -> int {
 }
 
 function lambda_body() -> int {
-    let f = () -> int? { side(); };
+    let f = () -> int? {
+        side();
+    };
     1
 }
 
 function if_else_arm(c: bool) -> int? {
-    if (c) { side(); } else { 1 }
+    if (c) {
+        side();
+    } else {
+        1
+    }
 }
 
 function match_arm(x: int) -> int? {
     match (x) {
-      1 => { side(); },
-      _ => 2,
+        1 => {
+            side();
+        },
+        _ => 2,
     }
 }
 
 // --- an `if` with no `else` ---
 
 function lone_if_body(c: bool) -> int? {
-    if (c) { side(); }
+    if (c) {
+        side();
+    }
 }
 
 function lone_if_bound(c: bool) -> int {
-    let x: int? = if (c) { side(); };
+    let x: int? = if (c) {
+        side();
+    };
     1
 }
 
 // The branch's value is not what is reported: the `if` itself is refused.
 function lone_if_with_value(c: bool) -> int {
-    let x: int? = if (c) { 1 };
+    let x: int? = if (c) {
+        1
+    };
     2
 }
 
 // --- a bare `return;` ---
 
 function bare_return(c: bool) -> int? {
-    if (c) { return; }
+    if (c) {
+        return;
+    }
     1
 }
 
 function bare_return_unknown(c: bool) -> unknown {
-    if (c) { return; }
+    if (c) {
+        return;
+    }
     1
 }

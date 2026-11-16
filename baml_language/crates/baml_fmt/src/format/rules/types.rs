@@ -129,17 +129,26 @@ impl FormatNode for FunctionTypeParam {
 impl FormatNode for OptionalType {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
-        f.docs.concat([f.alt(node.inner), f.token(node.q)])
+        // `?` cannot start a line: it tucks in before a pending comment.
+        let d = f.docs;
+        d.concat([
+            f.alt(node.inner),
+            d.text(f.tree.token_text(node.q.idx)),
+            f.comments_after(node.q.idx),
+        ])
     }
 }
 
-/// `T[]`
+/// `T[]` — the `[` cannot start a line, so it is text that tucks in before
+/// a pending comment.
 impl FormatNode for ArrayType {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
-        f.docs.concat([
+        let d = f.docs;
+        d.concat([
             f.alt(node.inner),
-            f.token(node.l),
+            d.text(f.tree.token_text(node.l.idx)),
+            f.comments_after(node.l.idx),
             f.token(f.tree.present(node.r)),
         ])
     }

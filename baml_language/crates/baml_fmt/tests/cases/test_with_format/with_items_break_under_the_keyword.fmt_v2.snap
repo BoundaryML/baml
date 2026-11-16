@@ -3,7 +3,11 @@ source: crates/baml_fmt/tests/cases.rs
 ---
 function f() -> int {
     let g = baml.spawn.Limit.new(2);
-    let h = spawn with baml.spawn.Limit.new(2), another_limit_value, third_one {
+    let h = spawn with
+        baml.spawn.Limit.new(2),
+        another_limit_value,
+        third_one
+    {
         42
     };
     await h

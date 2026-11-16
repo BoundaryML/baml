@@ -1,0 +1,8 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    let Point { xxxx, yyyy } =
+        compute_point(aaa);
+    0
+}

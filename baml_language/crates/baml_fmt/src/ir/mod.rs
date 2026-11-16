@@ -53,17 +53,20 @@
 //!   suffix is pending.
 //! * `Doc::EXPAND_PARENT` — forces the enclosing group to break.
 //! * `best_fitting` — ordered layouts, most flat first: the printer prints
-//!   the first one whose first line fits, with what follows it on that line,
-//!   or the last one if none does. This is how "all arguments on one line /
-//!   hug the last argument / one per line" is expressed without any rule
-//!   computing widths itself.
+//!   the first one that fits, or the last one if none does. A variant fits
+//!   when its first line does, with what follows it on that line, or — one
+//!   marked [`Doc::all_lines`] — when every line of it does. This is how
+//!   "all arguments on one line / hug the last argument / one per line" is
+//!   expressed without any rule computing widths itself, and how a layout
+//!   that is worth choosing only whole (a right-hand side moved to its own
+//!   line) is asked for.
 //!
 //! # Printing
 //!
 //! A group containing a forced break (a hard or empty line, an
 //! `EXPAND_PARENT`, a multi-line `text` or `line_suffix`, a `trailing_line`,
-//! an `expanded_group`, an `if_break` with one in either arm) always prints
-//! broken, so `if (c) { … }` with a block body breaks its enclosing group
+//! an `expanded_group`, an `if_break` with one in the arm that prints when
+//! its group is flat) always prints broken, so `if (c) { … }` with a block body breaks its enclosing group
 //! without the rule saying so. The flag does not cross into `best_fitting`
 //! variants: a forced break inside a variant is that variant's own business,
 //! and the most flat variant never has one.
@@ -74,7 +77,8 @@
 //! the layout each named group was given. A group's fits-check is a pure
 //! function of that state — it measures the group flat together with what
 //! follows it up to the first line break, and so does the check of a
-//! `best_fitting` variant, as in Prettier and Biome.
+//! `best_fitting` variant, as in Prettier and Biome, unless the variant asks
+//! to be measured whole.
 //!
 //! The output is a flat sequence of borrowed text, deferred line ends and
 //! newlines, written once at the end. It keeps these promises: a line the
@@ -95,4 +99,4 @@ mod printer;
 mod tests;
 
 pub(crate) use doc::display_width;
-pub use doc::{Doc, Docs, GroupId, SuffixWidth, VerbatimPiece};
+pub use doc::{Doc, Docs, GroupId, Measure, SuffixWidth, Variant, VerbatimPiece};

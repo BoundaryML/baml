@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function block_does_not_leak(b: bool) -> int {
     if (b) {
-      let a = 1;
+        let a = 1;
     };
     a
 }

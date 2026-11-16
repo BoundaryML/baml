@@ -4,7 +4,7 @@
 use std::{
     fmt::{self, Write as _},
     hash::{Hash, Hasher},
-    iter, ptr,
+    ptr,
 };
 
 use bumpalo::Bump;
@@ -24,6 +24,39 @@ pub(crate) enum LineMode {
     Hard,
     /// Always a newline followed by exactly one blank line.
     Empty,
+}
+
+/// How much of a [`Docs::best_fitting`] variant a fits-check measures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Measure {
+    /// Its first line, with what follows it on that line; the lines after a
+    /// break inside it are its own business. A hugged last argument is
+    /// chosen when `f(a, (x) -> {` fits, however long the body's lines are,
+    /// as in Prettier and Biome.
+    FirstLine,
+    /// Every line of it, each within the line width, and then what follows
+    /// its last line: a layout worth choosing only when the whole of it fits
+    /// — a right-hand side moved to a line of its own, a member chain broken
+    /// so that its last call's arguments stay on one line.
+    AllLines,
+}
+
+/// One layout of a [`Docs::best_fitting`], with how it is measured. A `Doc`
+/// converts into one measured by its first line; [`Doc::all_lines`] makes
+/// the other.
+#[derive(Debug, Clone, Copy)]
+pub struct Variant<'a> {
+    pub doc: Doc<'a>,
+    pub measure: Measure,
+}
+
+impl<'a> From<Doc<'a>> for Variant<'a> {
+    fn from(doc: Doc<'a>) -> Self {
+        Self {
+            doc,
+            measure: Measure::FirstLine,
+        }
+    }
 }
 
 /// A document, or any part of one.
@@ -57,7 +90,9 @@ impl<'a> VerbatimPiece<'a> {
 /// exist before it does; for every other variant the kind decides. A forced
 /// break is a hard or empty line, an `EXPAND_PARENT`, a text with a newline
 /// in it, a trailing line, or an expanded group; a group with one inside
-/// always prints broken.
+/// always prints broken. An `if_break` carries one only through the arm that
+/// prints when its group is flat: a break in the other arm prints once that
+/// group is broken anyway, so it forces nothing.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Node<'a> {
     /// A run of text. With a newline in it, the later lines are printed as
@@ -72,9 +107,8 @@ pub(crate) enum Node<'a> {
     /// the line the node is printed on and `source_indent`, the indentation
     /// of the line the text started on in the source. Code (`forced`)
     /// breaks the enclosing groups; a literal does not, and is measured by
-    /// its first line. — but it
-    /// [spans lines](Doc::spans_lines), which a list it is not the last
-    /// item of must know.
+    /// its first line — but it [spans lines](Doc::spans_lines), which a list
+    /// it is not the last item of must know.
     Verbatim {
         /// The text in pieces, each moved with the node or kept exactly: a
         /// string literal or template inside moved code keeps its lines.
@@ -122,18 +156,15 @@ pub(crate) enum Node<'a> {
     },
     LineSuffixBoundary,
     ExpandParent,
-    /// Two or more layouts, most flat first and most expanded last: the
-    /// shape itself holds the "two or more". A forced break inside a variant
+    /// Two or more layouts, most flat first and most expanded last; the
+    /// last is printed when no other fits. A forced break inside a variant
     /// is resolved when that variant is chosen, not by breaking what encloses
     /// it, so this never counts as forced — and the most flat variant never
     /// contains one: [`Docs::best_fitting`], the only way to make one, drops
     /// such a variant and puts an `EXPAND_PARENT` before the choice instead,
     /// since every layout of content that is sure to break is multi-line.
     BestFitting {
-        most_flat: Doc<'a>,
-        /// The more expanded layouts, in order; the last is printed when no
-        /// other fits.
-        expansions: &'a nunny::Slice<Doc<'a>>,
+        variants: &'a nunny::Slice<Variant<'a>>,
     },
 }
 
@@ -167,6 +198,11 @@ impl<'a> GroupId<'a> {
         debug_assert!(matches!(group.node(), Node::Group { named: true, .. }));
         Self(group.0)
     }
+
+    /// Whether the group always prints broken.
+    fn is_forced(self) -> bool {
+        matches!(self.0, Node::Group { forced: true, .. })
+    }
 }
 
 impl PartialEq for GroupId<'_> {
@@ -188,38 +224,28 @@ impl<'a> Doc<'a> {
         *self.0
     }
 
-    /// Whether the node is sure to take more than one line: a forced break,
-    /// or a multi-line literal anywhere in it. A literal is an atom to the
-    /// group around it — `f(`…`)` stays on the line it starts on — but the
-    /// item after it in a list would land on its closing line, so a list
-    /// breaks when any item but the last spans lines, as a run of
-    /// attributes does.
-    pub fn spans_lines(self) -> bool {
-        match self.node() {
-            Node::Verbatim { .. } => true,
-            Node::BestFitting { most_flat, .. } => most_flat.spans_lines(),
-            Node::Concat { children, .. } => children.iter().any(|child| child.spans_lines()),
-            Node::Group { content, .. } | Node::Indent { content, .. } => {
-                self.forced() || content.spans_lines()
-            }
-            Node::IfBreak { .. } => self.will_break(),
-            _ => self.forced(),
-        }
-    }
-
     /// Whether the node is sure to print a line break: [`Self::forced`],
     /// looking into a `best_fitting` as well — at the variant it prints when
     /// flat, which is a broken layout once every flatter one is ruled out
     /// (a call hugging a multi-line lambda). What a layout decision asks
-    /// before putting such a node on one line with something after it.
+    /// before putting such a node on one line with something after it. An
+    /// `if_break` is sure only when both its arms are, or the named group it
+    /// follows is sure to break and so is the arm that prints then.
     pub(crate) fn will_break(self) -> bool {
         match self.node() {
-            Node::BestFitting { most_flat, .. } => most_flat.will_break(),
+            Node::BestFitting { variants } => variants.first().doc.will_break(),
             Node::Concat { children, .. } => children.iter().any(|child| child.will_break()),
             Node::Group { content, .. } | Node::Indent { content, .. } => {
                 self.forced() || content.will_break()
             }
-            Node::IfBreak { breaks, flat, .. } => breaks.will_break() || flat.will_break(),
+            Node::IfBreak {
+                group,
+                breaks,
+                flat,
+                ..
+            } => {
+                breaks.will_break() && (flat.will_break() || group.is_some_and(GroupId::is_forced))
+            }
             _ => self.forced(),
         }
     }
@@ -244,9 +270,37 @@ impl<'a> Doc<'a> {
         }
     }
 
+    /// Whether the node is sure to take more than one line: sure to print a
+    /// line break (`will_break`), or a multi-line literal anywhere in it. A literal is an atom to the
+    /// group around it — `f(`…`)` stays on the line it starts on — but the
+    /// item after it in a list would land on its closing line, so a list
+    /// breaks when any item but the last spans lines, as an operator chain
+    /// and a run of attributes do.
+    pub fn spans_lines(self) -> bool {
+        match self.node() {
+            Node::Verbatim { .. } => true,
+            Node::BestFitting { variants } => variants.first().doc.spans_lines(),
+            Node::Concat { children, .. } => children.iter().any(|child| child.spans_lines()),
+            Node::Group { content, .. } | Node::Indent { content, .. } => {
+                self.forced() || content.spans_lines()
+            }
+            Node::IfBreak { .. } => self.will_break(),
+            _ => self.forced(),
+        }
+    }
+
     /// Lay the document out within `options.line_width` columns.
     pub fn print(self, options: FormatOptions) -> String {
         printer::print(self, options)
+    }
+
+    /// This document as a [`Docs::best_fitting`] variant chosen only when
+    /// every line of it fits ([`Measure::AllLines`]).
+    pub fn all_lines(self) -> Variant<'a> {
+        Variant {
+            doc: self,
+            measure: Measure::AllLines,
+        }
     }
 }
 
@@ -345,8 +399,7 @@ impl<'a> Docs<'a> {
     /// enclosing groups to break and is measured by its first line, so
     /// `f(`…`)` hugs it, as a long string is hugged. It does
     /// [span lines](Doc::spans_lines), which a list it is not the last item
-    /// of breaks for. Text with no newline is
-    /// plain text.
+    /// of breaks for. Text with no newline is plain text.
     pub fn literal(self, text: &str) -> Doc<'a> {
         let text = self.bump.alloc_str(text);
         match text.split_once('\n') {
@@ -452,25 +505,30 @@ impl<'a> Docs<'a> {
     }
 
     /// `breaks` when the enclosing group is broken, `flat` when it is flat.
+    /// A forced break in `flat` forces the group, which then prints
+    /// `breaks`; one in `breaks` alone forces nothing.
     pub fn if_break(self, breaks: Doc<'a>, flat: Doc<'a>) -> Doc<'a> {
         self.alloc(Node::IfBreak {
             group: None,
             breaks,
             flat,
-            forced: breaks.forced() || flat.forced(),
+            forced: flat.forced(),
         })
     }
 
     /// `breaks` when the named group is broken, `flat` when it is flat. A
     /// group that has not been printed yet counts as flat, so this is sound
     /// only after the group it names: every use refers back to a group
-    /// printed earlier in the document.
+    /// printed earlier in the document. This forces the enclosing group when
+    /// `flat` does, or when the named group is sure to break and `breaks`
+    /// does: a `{` on a line of its own after a broken signature forces
+    /// nothing while the signature may still fit.
     pub fn if_group_breaks(self, group: GroupId<'a>, breaks: Doc<'a>, flat: Doc<'a>) -> Doc<'a> {
         self.alloc(Node::IfBreak {
             group: Some(group),
             breaks,
             flat,
-            forced: breaks.forced() || flat.forced(),
+            forced: flat.forced() || (group.is_forced() && breaks.forced()),
         })
     }
 
@@ -501,9 +559,11 @@ impl<'a> Docs<'a> {
     }
 
     /// Ordered layouts, most flat first and most expanded last: the first
-    /// whose first line fits, with what follows it on that line, is printed,
-    /// else the last. A layout choice needs at least two variants, which the
-    /// array length enforces at compile time.
+    /// that fits is printed, else the last. A variant fits when its first
+    /// line does, with what follows it on that line, or — for one marked
+    /// [`Doc::all_lines`] — when every line of it does. A layout choice
+    /// needs at least two variants, which the array length enforces at
+    /// compile time.
     ///
     /// A most flat variant with a forced break in it could never print flat,
     /// so it is left out — as a group with one is never flat — and the
@@ -511,33 +571,50 @@ impl<'a> Docs<'a> {
     /// more than one line whichever layout is chosen, and the groups around
     /// it must know: an [`EXPAND_PARENT`](Doc::EXPAND_PARENT) goes before
     /// the choice, as Prettier puts a `breakParent` before a conditional
-    /// group whose one-line form will break.
-    pub fn best_fitting<const N: usize>(self, variants: [Doc<'a>; N]) -> Doc<'a> {
+    /// group whose one-line form will break. An object literal holding a
+    /// call with a multi-line lambda in it breaks one field per line, and an
+    /// `if` condition holding one puts the condition on lines of its own.
+    pub fn best_fitting<V: Into<Variant<'a>>, const N: usize>(self, variants: [V; N]) -> Doc<'a> {
         const {
             assert!(N >= 2, "best_fitting needs two or more variants");
         }
+        let variants = variants.map(Into::into);
         let (kept, sure_to_break) = match &variants[..] {
-            [flat, ..] if !flat.forced() => (&variants[..], false),
+            [flat, ..] if !flat.doc.forced() => (&variants[..], false),
             [_, rest @ ..] => (rest, true),
             [] => unreachable!("two or more variants"),
         };
         let choice = match kept {
-            [only] => *only,
-            [most_flat, expansions @ ..] => {
-                let expansions = nunny::Slice::new(self.slice(expansions.iter().copied()))
-                    .unwrap_or_else(|| unreachable!("two or more variants, one dropped at most"));
-                self.alloc(Node::BestFitting {
-                    most_flat: *most_flat,
-                    expansions,
-                })
-            }
-            [] => unreachable!("two or more variants, one dropped at most"),
+            [only] => only.doc,
+            kept => self.choice(kept),
         };
         if sure_to_break {
             self.concat([Doc::EXPAND_PARENT, choice])
         } else {
             choice
         }
+    }
+
+    /// [`Self::best_fitting`] for variants whose most flat one may hold a
+    /// forced break that every variant shares at its end — a `catch` with
+    /// its arms after a member chain: the chain prints on one line and the
+    /// arms break on lines of their own, as hard lines do in any layout.
+    /// Nothing is dropped and nothing forces the parent; the caller has made
+    /// sure that what comes before the shared tail prints flat and puts an
+    /// [`EXPAND_PARENT`](Doc::EXPAND_PARENT) before the choice itself when
+    /// the content is sure to break.
+    pub fn layouts<V: Into<Variant<'a>>, const N: usize>(self, variants: [V; N]) -> Doc<'a> {
+        const {
+            assert!(N >= 2, "layouts needs two or more variants");
+        }
+        self.choice(&variants.map(Into::into))
+    }
+
+    fn choice(self, variants: &[Variant<'a>]) -> Doc<'a> {
+        self.alloc(Node::BestFitting {
+            variants: nunny::Slice::new(self.slice_of(variants.iter().copied()))
+                .unwrap_or_else(|| unreachable!("two or more variants")),
+        })
     }
 }
 
@@ -556,12 +633,9 @@ fn collect_referenced_groups<'a>(doc: Doc<'a>, referenced: &mut Vec<GroupId<'a>>
                 collect_referenced_groups(child, referenced);
             }
         }
-        Node::BestFitting {
-            most_flat,
-            expansions,
-        } => {
-            for &variant in iter::once(&most_flat).chain(expansions.iter()) {
-                collect_referenced_groups(variant, referenced);
+        Node::BestFitting { variants } => {
+            for variant in variants {
+                collect_referenced_groups(variant.doc, referenced);
             }
         }
         Node::Group { content, .. } | Node::Indent { content, .. } => {
@@ -692,14 +766,18 @@ impl<'a> Display<'a> {
             }
             Node::LineSuffixBoundary => self.out.push_str("line_suffix_boundary"),
             Node::ExpandParent => self.out.push_str("expand_parent"),
-            Node::BestFitting {
-                most_flat,
-                expansions,
-            } => {
+            Node::BestFitting { variants } => {
                 self.out.push_str("(best_fitting");
-                for &variant in iter::once(&most_flat).chain(expansions.iter()) {
+                for variant in variants {
                     self.out.push(' ');
-                    self.doc(variant);
+                    match variant.measure {
+                        Measure::FirstLine => self.doc(variant.doc),
+                        Measure::AllLines => {
+                            self.out.push_str("(all_lines ");
+                            self.doc(variant.doc);
+                            self.out.push(')');
+                        }
+                    }
                 }
                 self.out.push(')');
             }

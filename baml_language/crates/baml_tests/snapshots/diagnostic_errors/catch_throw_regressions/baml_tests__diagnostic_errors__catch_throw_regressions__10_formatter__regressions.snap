@@ -14,7 +14,7 @@ enum Status {
 function AlwaysThrowsStatus(n: int) -> Status {
     match (n) {
         0 => throw "http_error",
-        _ => throw 404
+        _ => throw 404,
     }
 }
 
@@ -26,9 +26,9 @@ function WrapperAlwaysThrows(n: int) -> Status {
 // Catch chain should not include phantom `Status` in result type.
 function CatchAlwaysThrows(n: int) -> string {
     WrapperAlwaysThrows(n) catch (e) {
-        string => "http!"
+        string => "http!",
     } catch (e2) {
-        int => "index!"
+        int => "index!",
     }
 }
 
@@ -38,19 +38,19 @@ function ThrowsAllStatusVariants(n: int) -> Status {
         1 => throw Status.HttpError,
         2 => throw Status.IndexError,
         3 => throw Status.AuthError,
-        _ => throw Status.SomeOtherError
+        _ => throw Status.SomeOtherError,
     }
 }
 
 function CatchAllStatusVariants(n: int) -> string {
     ThrowsAllStatusVariants(n) catch (e) {
-        Status.HttpError => "http!"
+        Status.HttpError => "http!",
     } catch (e) {
-        Status.IndexError => "index!"
+        Status.IndexError => "index!",
     } catch (e) {
-        Status.AuthError => "auth!"
+        Status.AuthError => "auth!",
     } catch (e) {
-        Status.SomeOtherError => "other!"
+        Status.SomeOtherError => "other!",
     }
 }
 
@@ -58,7 +58,7 @@ function CatchAllStatusVariants(n: int) -> string {
 function RecA(n: int) -> string {
     match (n) {
         0 => throw "boom",
-        _ => RecB(n)
+        _ => RecB(n),
     }
 }
 
@@ -68,7 +68,7 @@ function RecB(n: int) -> string {
 
 function CatchRecursiveThrow(n: int) -> string {
     RecB(n) catch (e) {
-        string => "handled"
+        string => "handled",
     }
 }
 
@@ -82,7 +82,7 @@ function GenerateWithBuildError(ok: bool) -> string {
         throw BuildError { reason: "generate failed" };
     };
     if (ok) {
-        throw "string"
+        throw "string";
     }
     "ok"
 }

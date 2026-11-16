@@ -20,19 +20,27 @@
 //!   statement), else trails the preceding one (`// c` after the last
 //!   statement of a block, `// c` between a `///` line and the keyword it
 //!   documents), else dangles (`// c` in an empty block);
-//! * at the end of a line of code: it trails the preceding child
-//!   (`a; // c`), else dangles after the token before it (`{ // c`,
-//!   `function // c`, `= // c`), which a rule prints on that token's line;
+//! * at the end of a line of code: after a separator it dangles after that
+//!   separator, of the node owning it (`a, // c`, `a; // c`); else it
+//!   trails the preceding child (`a // c`), else dangles after the token
+//!   before it (`{ // c`, `function // c`, `= // c`), which a rule prints
+//!   on that token's line;
 //! * between code on one line (so a `/* */`): it trails the preceding child
 //!   (`a /* c */, b`), else leads the following one (`= /* c */ 2`), else
 //!   dangles after the token before it (`map /* c */ {`).
 //!
 //! A comment never crosses a token of the enclosing node to reach a child
-//! on the far side of it. The one exception: a comment directly after a
-//! separator the enclosing node owns (`a, // c` in an argument list,
-//! `A | // c` in a union) belongs to the item before the separator, as it
-//! would if the item owned its separator, when no child follows it on the
-//! line.
+//! on the far side of it, with one exception: a comment on a line that ends
+//! before the enclosing node's terminator (`a // c` then `;` or `,`)
+//! dangles after that terminator, which the rules print right after the
+//! node whatever it was written like, so that re-reading the output
+//! attaches it the same way.
+//!
+//! The rules print a token of the source on a new line when a line comment
+//! is pending on the current one ([`Formatter::token`](crate::format::Formatter::token)), so a comment is
+//! never overtaken by a token it preceded; only the punctuation the
+//! formatter owns — a separator, a bracket that cannot start a line — is
+//! tucked in before it.
 //!
 //! Where a comment sits is judged against the code around it, so a run of
 //! comments on one line is one unit; what separates a comment from its
@@ -395,6 +403,21 @@ impl<'t> Sweep<'t> {
         };
         let preceding = prev.and_then(child);
         let following = next.and_then(child);
+        // A separator directly before the comment: the comment dangles
+        // after it, of whichever node owns it — the item, when the item
+        // owns its separator, else the list — so that it is printed right
+        // after the separator, behind any comment the terminator rule below
+        // moved past it.
+        let after_separator = prev
+            .filter(|prev| SEPARATORS.contains(tokens.kind(prev.token)))
+            .map(|separator| {
+                (
+                    separator.owner,
+                    Position::Dangling {
+                        after: Some(separator.token),
+                    },
+                )
+            });
         // The item before a separator the enclosing node owns.
         let before_separator = || {
             prev.filter(|prev| {
@@ -407,36 +430,46 @@ impl<'t> Sweep<'t> {
             prev.is_none_or(|prev| self.newlines_between(prev.token, token) > 0),
             next.is_none_or(|next| self.newlines_between(token, next.token) > 0),
         );
-        // A comment ending a line before the enclosing node's terminator —
-        // the `;` or `,` that is its last token — is the whole node's
-        // trailing comment: a rule prints the terminator and then the
+        // A comment on a line that ends before the enclosing node's
+        // terminator — the `;` or `,` that is its last token — dangles
+        // after that terminator: a rule prints the terminator and then the
         // comment, and re-reading that output attaches the comment the same
         // way, so the layout does not change between passes. A comment on
         // the same line as the terminator stays where it was written.
-        let before_terminator = placement == Placement::EndOfLine
-            && next.is_some_and(|next| {
-                next.owner == enclosing
-                    && SEPARATORS.contains(tokens.kind(next.token))
-                    && TokenIdx(next.token.0 + 1) == self.tree.arenas().span(enclosing).end()
-            });
+        let terminator = (placement != Placement::SameLine)
+            .then(|| {
+                next.filter(|next| {
+                    next.owner == enclosing
+                        && SEPARATORS.contains(tokens.kind(next.token))
+                        && TokenIdx(next.token.0 + 1) == self.tree.arenas().span(enclosing).end()
+                })
+            })
+            .flatten();
         let dangling = (
             enclosing,
             Position::Dangling {
                 after: prev.map(|prev| prev.token),
             },
         );
-        let (node, position) = if before_terminator {
-            (enclosing, Position::Trailing)
+        let (node, position) = if let Some(terminator) = terminator {
+            (
+                enclosing,
+                Position::Dangling {
+                    after: Some(terminator.token),
+                },
+            )
         } else {
             match placement {
-                Placement::OwnLine => match (preceding.or_else(before_separator), following) {
-                    (_, Some(following)) => (following, Position::Leading),
-                    (Some(preceding), None) => (preceding, Position::Trailing),
-                    (None, None) => dangling,
+                Placement::OwnLine => match (following, after_separator, preceding) {
+                    (Some(following), _, _) => (following, Position::Leading),
+                    (None, Some(after_separator), _) => after_separator,
+                    (None, None, Some(preceding)) => (preceding, Position::Trailing),
+                    (None, None, None) => dangling,
                 },
-                Placement::EndOfLine => match preceding.or_else(before_separator) {
-                    Some(preceding) => (preceding, Position::Trailing),
-                    None => dangling,
+                Placement::EndOfLine => match (after_separator, preceding) {
+                    (Some(after_separator), _) => after_separator,
+                    (None, Some(preceding)) => (preceding, Position::Trailing),
+                    (None, None) => dangling,
                 },
                 Placement::SameLine => match (preceding, following) {
                     (Some(preceding), _) => (preceding, Position::Trailing),

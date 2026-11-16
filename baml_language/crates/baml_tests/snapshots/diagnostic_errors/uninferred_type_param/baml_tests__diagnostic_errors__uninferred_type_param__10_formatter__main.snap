@@ -127,7 +127,11 @@ function decided_then_operated() -> int {
 }
 
 function pick_compared<T extends baml.ops.Compare>(a: T, b: T) -> T {
-    if (a < b) { a } else { b }
+    if (a < b) {
+        a
+    } else {
+        b
+    }
 }
 
 function decided_then_bounded() -> int {
@@ -143,7 +147,11 @@ interface Maker {
 }
 
 function bounded_effect<E extends Maker>(cb: (() -> int throws E)? = null) -> int throws E {
-    if (cb != null) { cb() } else { E.make() }
+    if (cb != null) {
+        cb()
+    } else {
+        E.make()
+    }
 }
 
 function bounded_effect_slot() -> int {

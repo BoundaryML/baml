@@ -17,7 +17,9 @@ const THRESHOLD: int = 1;
 
 function return_in_a_parameter_default(
     a: int = {
-        if (THRESHOLD > 0) { return "str"; }
+        if (THRESHOLD > 0) {
+            return "str";
+        }
         3
     },
 ) -> int {
@@ -39,7 +41,9 @@ function return_in_a_template_inside_a_lambda(a: int) -> int {
 
 // Controls: a lambda's own `return`, in a default and in an interpolation.
 function lambda_in_a_default_returns_from_the_lambda(
-    a: () -> int = () -> int { return 3; },
+    a: () -> int = () -> int {
+        return 3;
+    },
 ) -> int {
     a()
 }

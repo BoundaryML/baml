@@ -11,7 +11,9 @@ use std::iter;
 
 use rustc_hash::FxHashMap;
 
-use super::doc::{Doc, GroupId, LineMode, Node, SuffixWidth, VerbatimPiece, display_width};
+use super::doc::{
+    Doc, GroupId, LineMode, Measure, Node, SuffixWidth, VerbatimPiece, display_width,
+};
 use crate::FormatOptions;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,8 +155,6 @@ impl<'a> Output<'a> {
             .any(|item| matches!(item, Item::Tail(_) | Item::TailLine { .. }))
     }
 
-    /// Whether the line being written has anything on it: text, or a tail
-    /// that will render on it.
     /// Whether the line being written has text on it.
     fn line_has_text(&self) -> bool {
         self.items[self.line..]
@@ -177,8 +177,8 @@ impl<'a> Output<'a> {
 
     /// A space between two things on the line being written: nothing at the
     /// start of a line, where there is nothing before it to separate — a
-    /// block comment that follows a line break leaves the space before it at
-    /// the start of the next line.
+    /// line comment that ended the previous line leaves the space after its
+    /// token at the start of the next.
     fn push_space(&mut self) {
         if self.line_has_text() {
             self.push_str(" ", 1);
@@ -618,7 +618,9 @@ impl<'a> Printer<'a> {
                 };
                 let mode = if doc.forced() {
                     Mode::Break
-                } else if (mode == Mode::Flat && self.out.measured_fits) || self.fits(flat, rest) {
+                } else if (mode == Mode::Flat && self.out.measured_fits)
+                    || self.fits(flat, Measure::FirstLine, rest)
+                {
                     self.out.measured_fits = true;
                     Mode::Flat
                 } else {
@@ -665,34 +667,31 @@ impl<'a> Printer<'a> {
                 }
             }
             Node::ExpandParent => {}
-            Node::BestFitting {
-                most_flat,
-                expansions,
-            } => {
+            Node::BestFitting { variants } => {
                 if mode == Mode::Flat {
                     return self.print(
                         Piece {
-                            doc: most_flat,
+                            doc: variants.first().doc,
                             ..piece
                         },
                         rest,
                     );
                 }
-                let (most_expanded, middle) = expansions.split_last();
-                for &variant in iter::once(&most_flat).chain(middle) {
+                let (most_expanded, candidates) = variants.split_last();
+                for variant in candidates {
                     let candidate = Piece {
-                        doc: variant,
+                        doc: variant.doc,
                         mode: Mode::Flat,
                         indent,
                     };
-                    if self.fits(candidate, rest) {
+                    if self.fits(candidate, variant.measure, rest) {
                         self.out.measured_fits = true;
                         return self.print(candidate, rest);
                     }
                 }
                 self.print(
                     Piece {
-                        doc: *most_expanded,
+                        doc: most_expanded.doc,
                         mode: Mode::Break,
                         indent,
                     },
@@ -712,16 +711,19 @@ impl<'a> Printer<'a> {
     }
 
     /// Whether `candidate`, laid out in its given mode, fits in the room left
-    /// on the current line, followed by whatever comes after it up to the
-    /// next line break.
-    fn fits(&self, candidate: Piece<'a>, rest: Option<&Rest<'_, 'a>>) -> bool {
+    /// on the current line — up to the first line break in it, or on every
+    /// line of it, per `measure` — followed by whatever comes after it up to
+    /// the next line break.
+    fn fits(&self, candidate: Piece<'a>, measure: Measure, rest: Option<&Rest<'_, 'a>>) -> bool {
         let room = Room {
             remaining: i64::from(self.layout.line_width) - i64::from(self.out.column()),
             has_suffix: self.out.has_pending_tail(),
             has_text: self.out.line_has_text(),
         };
-        let measured = self.measure(candidate, room).and_then(|room| {
-            Rest::pieces(rest).try_fold(room, |room, piece| self.measure(piece, room))
+        let measured = self.measure(candidate, room, measure).and_then(|room| {
+            Rest::pieces(rest).try_fold(room, |room, piece| {
+                self.measure(piece, room, Measure::FirstLine)
+            })
         });
         match measured {
             // Nothing left to measure before the document ends: it all fit.
@@ -730,8 +732,27 @@ impl<'a> Printer<'a> {
         }
     }
 
-    fn measure(&self, piece: Piece<'a>, room: Room) -> Measured {
+    /// The room on a fresh line indented by `indent`, for a measurement that
+    /// goes on past a line break.
+    fn line_room(&self, indent: u32) -> Room {
+        Room {
+            remaining: i64::from(self.layout.line_width) - i64::from(indent),
+            has_suffix: false,
+            has_text: false,
+        }
+    }
+
+    /// Measure `piece` against `room`. A line break ends the measurement
+    /// with a verdict of fits, or — measuring all lines — starts a fresh
+    /// line's room and goes on. The lines of a multi-line text are as
+    /// written and end the measurement either way: they are an atom to the
+    /// layout, and what a more expanded layout would do to them is nothing.
+    fn measure(&self, piece: Piece<'a>, room: Room, measure: Measure) -> Measured {
         let Piece { doc, mode, indent } = piece;
+        let line_break = || match measure {
+            Measure::FirstLine => Err(Verdict::Fits),
+            Measure::AllLines => Ok(self.line_room(indent)),
+        };
         match doc.node() {
             Node::Text { width, forced, .. } => {
                 let room = room.consume(width)?;
@@ -745,9 +766,7 @@ impl<'a> Printer<'a> {
             Node::Line(line) => match (mode, line) {
                 (Mode::Flat, LineMode::Soft) => Ok(room),
                 (Mode::Flat, LineMode::SoftOrSpace) => room.space(),
-                (Mode::Flat, LineMode::Hard | LineMode::Empty) | (Mode::Break, _) => {
-                    Err(Verdict::Fits)
-                }
+                (Mode::Flat, LineMode::Hard | LineMode::Empty) | (Mode::Break, _) => line_break(),
             },
             Node::Concat { children, .. } => children.iter().try_fold(room, |room, &child| {
                 self.measure(
@@ -756,6 +775,7 @@ impl<'a> Printer<'a> {
                         ..piece
                     },
                     room,
+                    measure,
                 )
             }),
             Node::Group { content, .. } => {
@@ -767,6 +787,7 @@ impl<'a> Printer<'a> {
                         indent,
                     },
                     room,
+                    measure,
                 )
             }
             Node::Indent { content, .. } => self.measure(
@@ -776,6 +797,7 @@ impl<'a> Printer<'a> {
                     ..piece
                 },
                 room,
+                measure,
             ),
             Node::IfBreak {
                 group,
@@ -793,6 +815,7 @@ impl<'a> Printer<'a> {
                         ..piece
                     },
                     room,
+                    measure,
                 )
             }
             Node::LineSuffix { width, fit, .. } => match fit {
@@ -804,28 +827,56 @@ impl<'a> Printer<'a> {
             Node::TrailingLine { .. } => Ok(room.with_suffix()),
             Node::LineSuffixBoundary => {
                 if room.has_suffix {
-                    Err(Verdict::Fits)
+                    line_break()
                 } else {
                     Ok(room)
                 }
             }
             Node::ExpandParent => Ok(room),
-            Node::BestFitting {
-                most_flat,
-                expansions,
-            } => {
-                let chosen = match mode {
-                    Mode::Flat => most_flat,
-                    Mode::Break => *expansions.last(),
-                };
-                self.measure(
+            // Printed flat, the most flat variant it is. Printed broken, the
+            // printer will pick the first variant that fits once it gets
+            // there, so what is being measured now — content before it on
+            // the line, or a forced group around it — fits if any variant
+            // lets it: the one that gets furthest is the measure, as a
+            // `line` in Prettier's break mode is a newline. A right-hand
+            // side that may move to a line of its own leaves the pattern
+            // before it on one line, as rustfmt does.
+            Node::BestFitting { variants } => match mode {
+                Mode::Flat => self.measure(
                     Piece {
-                        doc: chosen,
+                        doc: variants.first().doc,
                         ..piece
                     },
                     room,
-                )
-            }
+                    measure,
+                ),
+                Mode::Break => variants
+                    .iter()
+                    .map(|variant| {
+                        self.measure(
+                            Piece {
+                                doc: variant.doc,
+                                ..piece
+                            },
+                            room,
+                            measure,
+                        )
+                    })
+                    .reduce(furthest)
+                    .unwrap_or_else(|| unreachable!("two or more variants")),
+            },
         }
+    }
+}
+
+/// Of two measurements, the one that gets furthest: a verdict of fits (the
+/// line ended with room to spare) over room still being used, and more
+/// room over less; an overflow only when both overflow.
+fn furthest(a: Measured, b: Measured) -> Measured {
+    match (a, b) {
+        (Err(Verdict::Fits), _) | (_, Err(Verdict::Fits)) => Err(Verdict::Fits),
+        (Ok(a), Ok(b)) => Ok(if a.remaining >= b.remaining { a } else { b }),
+        (Ok(room), Err(Verdict::Overflows)) | (Err(Verdict::Overflows), Ok(room)) => Ok(room),
+        (Err(Verdict::Overflows), Err(Verdict::Overflows)) => Err(Verdict::Overflows),
     }
 }

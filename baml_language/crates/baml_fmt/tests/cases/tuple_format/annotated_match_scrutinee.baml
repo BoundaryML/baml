@@ -1,0 +1,12 @@
+function f(a: int, b: string?) -> int {
+    match ((a, b): (int, string?)) {
+        (0, null) => 0,
+        _ => 1,
+    }
+}
+
+function g(x: int) -> int {
+    match ( x :int ) {
+        _ => 1,
+    }
+}

@@ -7,9 +7,10 @@
 //! "The same" allows exactly what the rules canonicalise: a member's or
 //! statement's optional separator (`,`, `;`, a field's `:`), a list's
 //! separators, `=>` for `->`, `implement` for `implements`, the order of an
-//! LLM body's fields, a stray `;`, the parentheses around a loop condition
-//! or `for` header, and the layout of a multi-line backtick string (its
-//! dedented text is what is compared).
+//! LLM body's fields, a stray `;`, the parentheses around a loop or `if`
+//! condition, a `match` scrutinee or a `for` header, the `;` that closes a
+//! diverging tail (`{ throw x }` → `{ throw x; }`), and the layout of a
+//! multi-line backtick string (its dedented text is what is compared).
 
 use std::fmt;
 
@@ -20,6 +21,8 @@ use baml_syntax::{
     token::{TokenIdx, TokenKind},
     tree::{AnyNodeId, Missing, NodeUnion as _, TokenRange, TreeWalk as _, Visitor},
 };
+
+use crate::format::diverges;
 
 /// How a formatted output fails the oracle.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -247,12 +250,22 @@ fn member_spine(tree: &FileTree, id: AnyNodeId) -> Option<Spine> {
 
 /// The node `id` stands for in the compared shape: none for a stray `;`,
 /// which the rules drop; the inner node for parentheses the rules add
-/// around a loop condition or `for` header, however many; else itself.
+/// around a loop or `if` condition, a `match` scrutinee or a `for` header,
+/// however many; the expression of a diverging expression statement, which
+/// the rules make of a diverging tail (`{ throw x }` → `{ throw x; }`);
+/// else itself.
 fn seen_through(tree: &FileTree, id: AnyNodeId) -> Option<AnyNodeId> {
     match id.typed() {
         AnyId::EmptyStmt(_) => None,
+        AnyId::ExprStmt(stmt) if diverges(tree.get(stmt).expr) => {
+            Some(tree.get(stmt).expr.node_id())
+        }
         AnyId::ParenExpr(paren) => {
             let inner = tree.get(paren).inner;
+            seen_through(tree, inner.ok()?.node_id())
+        }
+        AnyId::MatchParen(paren) if tree.get(paren).ascription.is_none() => {
+            let inner = tree.get(paren).expr;
             seen_through(tree, inner.ok()?.node_id())
         }
         AnyId::ParenForInHeader(paren) => Some(AnyNodeId::of(tree.get(paren).header)),

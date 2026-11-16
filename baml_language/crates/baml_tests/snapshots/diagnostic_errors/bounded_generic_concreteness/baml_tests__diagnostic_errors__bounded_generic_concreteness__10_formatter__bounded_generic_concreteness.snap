@@ -75,10 +75,10 @@ function rejected() -> void {
     let either: A | B = A {};
     pair(a, b);
     pair_with_callback(a, b);
-    pair_with_callback(a, b, done = () -> void { });
+    pair_with_callback(a, b, done = () -> void {});
     pair_with_callback<Combinable>(a, b);
     pair_with_callback(either, either);
-    second_bounded(1, a, () -> void { });
+    second_bounded(1, a, () -> void {});
     Pairer { key: a }.pair(a, b);
     // Two faults: `T = Combinable` is not concrete, and nothing determines
     // the class's `K`.
@@ -90,8 +90,8 @@ function accepted() -> void {
     let a: Combinable = A {};
     pair(A {}, A {});
     pair_with_callback(A {}, A {});
-    pair_with_callback(B {}, B {}, done = () -> void { });
-    second_bounded(a, A {}, () -> void { });
+    pair_with_callback(B {}, B {}, done = () -> void {});
+    second_bounded(a, A {}, () -> void {});
     unbounded(a);
     Pairer { key: a }.pair(A {}, A {});
     // The type-argument channel fills the class frame and then the

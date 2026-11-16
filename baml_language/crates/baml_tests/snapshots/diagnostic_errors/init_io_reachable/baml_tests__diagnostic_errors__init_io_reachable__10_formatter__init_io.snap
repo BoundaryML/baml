@@ -64,10 +64,8 @@ client ViaSpawn = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = sp
 // `baml.env.Ref` holding the variable's NAME. Nothing is read until the
 // credential is used at request time, so `$init` performs no io. If this ever
 // starts erroring, the whole EnvRef feature is broken.
-client LateBoundRef = openai.ResponsesClient.new(
-    model = "gpt-4o-mini",
-    api_key = env.OPENAI_API_KEY,
-);
+client LateBoundRef =
+    openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = env.OPENAI_API_KEY);
 
 // ── CLEAN: a closure that reads env but is STORED, never invoked ─────────────
 // `pick_eager` takes the thunk and drops it. Nothing runs the lambda during
@@ -97,9 +95,7 @@ class InitKeyStore {
     key: string,
 
     function read(self) -> string {
-        baml.sync.atomic(self, () -> string {
-            self.key
-        })
+        baml.sync.atomic(self, () -> string { self.key })
     }
 }
 

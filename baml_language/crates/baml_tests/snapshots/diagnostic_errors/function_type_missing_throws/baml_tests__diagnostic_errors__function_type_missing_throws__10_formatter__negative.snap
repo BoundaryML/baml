@@ -32,6 +32,6 @@ function lambda_param() -> int {
 
 function match_pattern(cb: (value: int) -> int) -> int {
     match (cb) {
-      let f: (value: int) -> int => f(1)
+        let f: (value: int) -> int => f(1),
     }
 }

@@ -12,6 +12,7 @@ use super::{FormatNode, Formatter};
 use crate::{comments::docs, ir::Doc};
 
 mod attrs;
+pub(in crate::format) mod control;
 mod exprs;
 mod items;
 mod patterns;
@@ -81,9 +82,6 @@ macro_rules! verbatim {
 verbatim! {
     // items
     RemovedItem, JinjaArg,
-    // control flow
-    CatchExpr, CatchClause, CatchArm, IfExpr, IfLetExpr, MatchExpr, MatchParen, MatchArm, LambdaExpr,
-    SpawnExpr,
     // the parts of a template, printed by the template as a whole
     TemplateInterp, TemplateFor, TemplateForOpen, TemplateIf, TemplateIfOpen, TemplateElif,
     TemplateElse, TemplateEndTag,

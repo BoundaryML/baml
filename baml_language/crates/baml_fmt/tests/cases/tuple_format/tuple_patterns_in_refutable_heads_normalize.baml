@@ -1,0 +1,8 @@
+function f(t: (int, string)?, ts: (int, string)[]) -> int {
+    if let ( let a , _ , ) = t { a } else { 0 }
+    if const ( const b , ) = (1,) { b } else { 0 }
+    while let ( let c , ) = (1,) { break; }
+    let ( let d , _ ) = t else { return 0; };
+    for (let ( let e , let g ) in ts) { e; }
+    d
+}

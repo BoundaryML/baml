@@ -3,13 +3,11 @@ source: crates/baml_fmt/tests/cases.rs
 ---
 function f(p: string?) -> int {
     match (p) {
-        null => {
-        },
+        null => {},
         let t: string => {
             log(t);
         },
     }
-    if (p == null) {
-    }
+    if (p == null) {}
     0
 }

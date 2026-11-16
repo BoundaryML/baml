@@ -31,5 +31,5 @@ function run_hidden(handler: HiddenHandler, value: int) -> string {
 }
 
 function return_closure(handler: (value: int) -> string) -> (value: int) -> string throws never {
-    return (value: int) -> string { handler(value) }
+    return (value: int) -> string { handler(value) };
 }

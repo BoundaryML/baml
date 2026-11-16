@@ -25,7 +25,9 @@ function echo<T>(v: T) -> T throws never {
 }
 
 function risky<T>(v: T, fail: bool) -> int throws Boom<T> {
-    if (fail) { throw Boom<T> { payload: v } }
+    if (fail) {
+        throw Boom<T> { payload: v };
+    }
     0
 }
 

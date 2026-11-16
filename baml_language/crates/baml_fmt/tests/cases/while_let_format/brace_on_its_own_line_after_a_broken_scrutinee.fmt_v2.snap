@@ -7,9 +7,8 @@ function f() -> int {
     {
         g();
     }
-    let x: int = obj.call(aaaaa, bbbbb).other(
-        aaaaaa,
-    )
+    let x: int = obj.call(aaaaa, bbbbb)
+        .other(aaaaaa)
     else {
         return 0;
     };

@@ -2,9 +2,10 @@
 //! `;` — except one that ends in a block, which keeps the `;` it was
 //! written with, since as the last statement a `;` is what makes it a
 //! statement rather than the block's tail — a stray `;` printing nothing, a
-//! block's tail bare. Loop conditions and `for` headers are parenthesised; a block in
-//! statement position is always broken, and a block that is only a tail may
-//! stay on one line elsewhere.
+//! block's tail bare. Loop conditions and `for` headers are parenthesised. A
+//! block or `if` chain in statement position is always broken; a block that
+//! is only a tail may stay on one line elsewhere. What follows a `let`'s or
+//! an assignment's `=` is laid out by [`Formatter::assigned`].
 
 use baml_syntax::{
     nodes::{
@@ -12,20 +13,20 @@ use baml_syntax::{
         EmptyStmt, ExprStmt, ForInHeader, ForStmt, HeaderStmt, LetElse, LetStmt, ParenForInHeader,
         TypeBindingStmt, WhileLetStmt, WhileStmt,
     },
+    token::TokenIdx,
     tree::Id,
 };
 
+use super::control::statement;
 use crate::{
     format::{FormatNode, Formatter},
-    ir::Doc,
+    ir::{Doc, GroupId},
 };
 
 /// A block in expression position: `{ x }` when it is only a tail and fits.
 impl FormatNode for Block {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
-        let node = f.tree.get(id);
-        let tail_only = f.tree.list(node.stmts).is_empty() && node.tail.is_some();
-        f.block_parts(id, tail_only)
+        f.block(id, f.tail_only(id))
     }
 }
 
@@ -50,7 +51,7 @@ impl FormatNode for ExprStmt {
         } else {
             f.separator(node.semi, ";")
         };
-        f.docs.concat([f.alt(node.expr), semi])
+        f.docs.concat([statement(f, node.expr), semi])
     }
 }
 
@@ -58,13 +59,16 @@ impl FormatNode for ExprStmt {
 fn assign<'a>(f: &Formatter<'a>, id: Id<AssignStmt>, semi: Doc<'a>) -> Doc<'a> {
     let node = f.tree.get(id);
     let d = f.docs;
+    let mut tokens = node.op.tokens();
+    let first = tokens
+        .next()
+        .unwrap_or_else(|| unreachable!("an operator has a token"));
     d.concat([
         f.alt(node.target),
         Doc::SPACE,
-        d.text(node.op.op().spelling()),
-        d.concat(node.op.tokens().map(|token| f.comments_after(token))),
-        Doc::SPACE,
-        f.alt(f.tree.present(node.value)),
+        f.spelled(node.op.op().spelling(), first),
+        d.concat(tokens.map(|token| f.comments_after(token))),
+        f.assigned(node.op.tokens(), f.tree.present(node.value)),
         semi,
     ])
 }
@@ -83,11 +87,17 @@ impl FormatNode for EmptyStmt {
     }
 }
 
-/// The initialiser after a `let`'s `=` and the `else` branch after it, if
-/// any. The initialiser stays on the `=` line; with an `else`, when it broke
-/// over several lines the `else {` takes a line of its own, as rustfmt puts
-/// it, so that it is read against the `let`.
-fn initialiser<'a>(f: &Formatter<'a>, init: AnyExpr, else_branch: Option<LetElse>) -> Doc<'a> {
+/// The initialiser after a `let`'s `=` (`eq`) and the `else` branch after
+/// it, if any. Without an `else`, the initialiser is laid out by
+/// [`Formatter::assigned`]. With one, it stays on the `=` line so that the
+/// `else {` is read against the `let`, and when it broke over several lines
+/// the `else {` takes a line of its own, as rustfmt puts it.
+fn initialiser<'a>(
+    f: &Formatter<'a>,
+    eq: TokenIdx,
+    init: AnyExpr,
+    else_branch: Option<LetElse>,
+) -> Doc<'a> {
     let d = f.docs;
     match else_branch {
         Some(else_branch) => {
@@ -101,7 +111,7 @@ fn initialiser<'a>(f: &Formatter<'a>, init: AnyExpr, else_branch: Option<LetElse
                 f.expanded_block(f.tree.present(else_branch.block)),
             ])
         }
-        None => d.concat([Doc::SPACE, f.alt(init)]),
+        None => f.assigned([eq], init),
     }
 }
 
@@ -115,7 +125,12 @@ fn let_stmt<'a>(f: &Formatter<'a>, id: Id<LetStmt>, semi: Doc<'a>) -> Doc<'a> {
         f.alt(f.tree.present(node.pattern)),
         Doc::SPACE,
         f.token(f.tree.present(node.eq)),
-        initialiser(f, f.tree.present(node.init), node.else_branch),
+        initialiser(
+            f,
+            f.tree.present(node.eq).idx,
+            f.tree.present(node.init),
+            node.else_branch,
+        ),
         semi,
     ])
 }
@@ -142,7 +157,12 @@ impl FormatNode for TypeBindingStmt {
                 .map_or(Doc::NIL, |bounds| d.concat([Doc::SPACE, f.node(bounds)])),
             Doc::SPACE,
             f.token(f.tree.present(node.eq)),
-            initialiser(f, f.tree.present(node.init), node.else_branch),
+            initialiser(
+                f,
+                f.tree.present(node.eq).idx,
+                f.tree.present(node.init),
+                node.else_branch,
+            ),
             f.separator(node.semi, ";"),
         ])
     }
@@ -159,15 +179,27 @@ impl FormatNode for DeferStmt {
     }
 }
 
-/// A loop condition in its parentheses, added when the source left them
-/// out.
-fn parenthesised<'a>(f: &Formatter<'a>, cond: AnyExpr) -> Doc<'a> {
+/// A loop or `if` condition, or a `match` scrutinee, in its parentheses,
+/// added when the source left them out — laid out as a written pair is
+/// ([`ParenExpr`](baml_syntax::nodes::ParenExpr)), so that the next pass,
+/// which reads them as one, agrees.
+pub(super) fn parenthesised<'a>(f: &Formatter<'a>, cond: AnyExpr) -> Doc<'a> {
+    let d = f.docs;
     match cond {
         AnyExpr::Paren(_) => f.alt(cond),
-        _ => f
-            .docs
-            .concat([f.docs.text("("), f.alt(cond), f.docs.text(")")]),
+        _ => paren_group(f, d.text("("), f.alt(cond), d.text(")")),
     }
+}
+
+/// `(inner)`, the inside on a line of its own when it does not fit.
+fn paren_group<'a>(f: &Formatter<'a>, l: Doc<'a>, inner: Doc<'a>, r: Doc<'a>) -> Doc<'a> {
+    let d = f.docs;
+    d.group(d.concat([
+        l,
+        d.indent(d.concat([Doc::SOFT_LINE, inner])),
+        Doc::SOFT_LINE,
+        r,
+    ]))
 }
 
 /// `while (cond) { … }`
@@ -190,7 +222,7 @@ impl FormatNode for WhileLetStmt {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
         let d = f.docs;
-        let (header, group) = d.group_with_id(d.concat([
+        let (header, group): (Doc<'a>, GroupId<'a>) = d.group_with_id(d.concat([
             f.token(node.kw),
             Doc::SPACE,
             f.token(node.introducer),
@@ -257,17 +289,6 @@ impl FormatNode for ParenForInHeader {
             f.token(f.tree.present(node.r)),
         )
     }
-}
-
-/// `(inner)`, the inside on a line of its own when it does not fit.
-fn paren_group<'a>(f: &Formatter<'a>, l: Doc<'a>, inner: Doc<'a>, r: Doc<'a>) -> Doc<'a> {
-    let d = f.docs;
-    d.group(d.concat([
-        l,
-        d.indent(d.concat([Doc::SOFT_LINE, inner])),
-        Doc::SOFT_LINE,
-        r,
-    ]))
 }
 
 /// `(init; cond; step)`, each part optional: `(;;)` at the least. When it

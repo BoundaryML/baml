@@ -8,7 +8,10 @@ use baml_syntax::{
     tree::{AnyNodeId, Id, List, NodeUnion, SepItem},
 };
 
-use super::Formatter;
+use super::{
+    Formatter,
+    rules::control::{diverges, statement},
+};
 use crate::{
     comments::gap_before,
     ir::{Doc, GroupId},
@@ -27,7 +30,8 @@ pub struct ListItem<'a> {
 
 /// Whether a node ends in braces of its own that can break instead of the
 /// construct around it: a block, an `if`, a `match`, a `catch`, a lambda or
-/// a `spawn`. An operator after one stays on its `}` line.
+/// a `spawn`. A right-hand side like that stays on the `=` line, and an
+/// operator after one stays on its `}` line.
 pub(super) fn braced(id: AnyNodeId) -> bool {
     matches!(
         id.typed(),
@@ -105,9 +109,7 @@ impl<'a> Formatter<'a> {
 
     /// `{ … }` around `members`, one per line, indented, with the blank
     /// lines between them kept (one at most) and none at the edges; `{}`
-    /// when there are no members and no comments inside, and with only
-    /// comments inside, those on the braces' line when they fit there
-    /// (`{ /* c */ }`), else the closing brace on a line of its own.
+    /// when there are no members and no comments inside.
     pub fn body(
         &self,
         node: AnyNodeId,
@@ -122,18 +124,56 @@ impl<'a> Formatter<'a> {
     /// `{ … }` around `items`, each printed by [`Formatter::any`]: one per
     /// line, indented, with the blank lines between them kept (one at most)
     /// and none at the edges; `{}` when there are no items and no comments
-    /// inside, and with only comments inside, those on the braces' line
-    /// when they fit there (`{ /* c */ }`), else the closing brace on a line
-    /// of its own. With `flat`, a single item may stay on the braces' line
-    /// when it fits (`{ x }`). The comments after `{` are printed inside the
+    /// inside. With `flat`, a single item may stay on the braces' line when
+    /// it fits (`{ x }`). The comments after `{` are printed inside the
     /// indentation, with the items. A comment that ended the line before `{`
     /// still does: the brace then starts the next line, as it did in the
     /// source.
+    ///
+    /// The braces are a group either way. A broken body's group is forced by
+    /// the line breaks between its items, and a forced group prints in break
+    /// mode even inside a layout that was chosen flat (a member chain's, a
+    /// call's), so that what follows an item on its line — an arm's body
+    /// after its `=>` — is measured up to its first possible line break, as
+    /// anywhere else, rather than whole.
     pub fn braced(
         &self,
         node: AnyNodeId,
         l: Token<punct::LBrace>,
         items: &[AnyNodeId],
+        r: Token<punct::RBrace>,
+        flat: bool,
+    ) -> Doc<'a> {
+        self.docs
+            .group(self.braced_parts(node, l, items, r, flat, |item| self.any(item)))
+    }
+
+    /// [`Self::braced`] without its group, for a layout that decides the
+    /// braces' lines together with more than one pair: an `if` chain breaks
+    /// every block or none. Each item is printed by `item`.
+    pub fn braced_parts(
+        &self,
+        node: AnyNodeId,
+        l: Token<punct::LBrace>,
+        items: &[AnyNodeId],
+        r: Token<punct::RBrace>,
+        flat: bool,
+        item: impl Fn(AnyNodeId) -> Doc<'a>,
+    ) -> Doc<'a> {
+        let items: Vec<(AnyNodeId, Doc<'a>)> = items.iter().map(|&id| (id, item(id))).collect();
+        self.braced_items(node, l, &items, r, flat)
+    }
+
+    /// [`Self::braced_parts`] over items already printed, so that two
+    /// layouts of one block (flat and broken) share them. Braces with
+    /// nothing inside print as `{}`; with only comments, the comments go
+    /// inside them on the braces' line when they fit there (`{ /* c */ }`),
+    /// else the closing brace takes a line of its own.
+    pub fn braced_items(
+        &self,
+        node: AnyNodeId,
+        l: Token<punct::LBrace>,
+        items: &[(AnyNodeId, Doc<'a>)],
         r: Token<punct::RBrace>,
         flat: bool,
     ) -> Doc<'a> {
@@ -144,7 +184,7 @@ impl<'a> Formatter<'a> {
                 return d.concat([Doc::LINE_SUFFIX_BOUNDARY, d.text("{"), self.token(r)]);
             }
             let comments = self.comments_after(l.idx);
-            let close = if comments.forced() {
+            let close = if comments.will_break() {
                 Doc::HARD_LINE
             } else {
                 Doc::SPACE
@@ -163,56 +203,164 @@ impl<'a> Formatter<'a> {
         } else {
             Doc::HARD_LINE
         };
-        let inside = items.iter().enumerate().map(|(i, &item)| {
-            let line = if i == 0 { edge } else { self.line_before(item) };
-            d.concat([line, self.any(item)])
+        let inside = items.iter().enumerate().map(|(i, &(id, doc))| {
+            let line = if i == 0 { edge } else { self.line_before(id) };
+            d.concat([line, doc])
         });
-        let doc = d.concat([
+        d.concat([
             Doc::LINE_SUFFIX_BOUNDARY,
             d.text("{"),
             d.indent(d.concat(std::iter::once(self.comments_after(l.idx)).chain(inside))),
             edge,
             self.token(r),
-        ]);
-        if flat { d.group(doc) } else { doc }
+        ])
     }
 
     /// A block in statement position — a body, a loop's, an `else`'s —
     /// always broken, its leading and trailing comments around it.
     pub fn expanded_block(&self, id: Id<Block>) -> Doc<'a> {
-        self.with_comments(id, self.block_parts(id, false))
+        self.with_comments(id, self.block(id, false))
+    }
+
+    /// A block in both of its layouts, its comments around each — on one
+    /// line when it is only a tail and fits, and broken — built from one
+    /// printing of its statements, for a lambda whose body is laid out both
+    /// ways by the call it is an argument of.
+    pub fn block_forms(&self, id: Id<Block>) -> (Doc<'a>, Doc<'a>) {
+        let node = self.tree.get(id);
+        let items = self.block_items(id);
+        let any = AnyNodeId::of(id);
+        let r = self.tree.present(node.r);
+        let flat = self.braced_items(any, node.l, &items, r, self.tail_only(id));
+        let flat = if self.tail_only(id) {
+            self.docs.group(flat)
+        } else {
+            flat
+        };
+        (
+            self.with_comments(id, flat),
+            self.with_comments(id, self.braced_items(any, node.l, &items, r, false)),
+        )
+    }
+
+    /// Whether a block is only a tail — `{ x }` — the shape that may stay on
+    /// one line. A diverging tail (`{ throw x }`) is printed as a statement,
+    /// so it is not one.
+    pub fn tail_only(&self, id: Id<Block>) -> bool {
+        let node = self.tree.get(id);
+        self.tree.list(node.stmts).is_empty() && node.tail.is_some_and(|tail| !diverges(tail))
     }
 
     /// The braces and contents of a block: its statements and tail one per
-    /// line (a stray `;` prints nothing, so its line is not there). With
-    /// `flat`, a block that is only a tail may stay on one line.
+    /// line (a stray `;` prints nothing, so its line is not there), the tail
+    /// in statement position (an `if` there breaks, as in rustfmt, and a
+    /// diverging tail is closed with `;`). With `flat`, a block that is only
+    /// a tail may stay on one line.
+    pub fn block(&self, id: Id<Block>, flat: bool) -> Doc<'a> {
+        let doc = self.block_parts(id, flat);
+        if flat { self.docs.group(doc) } else { doc }
+    }
+
+    /// [`Self::block`] without its group (see [`Self::braced_parts`]).
     pub fn block_parts(&self, id: Id<Block>, flat: bool) -> Doc<'a> {
         let node = self.tree.get(id);
-        let items: Vec<AnyNodeId> = self
-            .tree
-            .list(node.stmts)
-            .iter()
-            .map(NodeUnion::node_id)
-            .chain(node.tail.map(|tail| tail.node_id()))
-            .collect();
-        self.braced(
+        self.braced_items(
             AnyNodeId::of(id),
             node.l,
-            &items,
+            &self.block_items(id),
             self.tree.present(node.r),
             flat,
         )
     }
 
+    /// A block's statements and tail, each printed: the tail in statement
+    /// position, a diverging one closed with `;`.
+    fn block_items(&self, id: Id<Block>) -> Vec<(AnyNodeId, Doc<'a>)> {
+        let node = self.tree.get(id);
+        self.tree
+            .list(node.stmts)
+            .iter()
+            .map(|stmt| (stmt.node_id(), self.alt(*stmt)))
+            .chain(node.tail.map(|tail| {
+                let doc = if diverges(tail) {
+                    self.docs
+                        .concat([statement(self, tail), self.docs.text(";")])
+                } else {
+                    statement(self, tail)
+                };
+                (tail.node_id(), doc)
+            }))
+            .collect()
+    }
+
+    /// The right-hand side after an assignment's `=` (or an arm's `=>`),
+    /// whose tokens are `op`, as rustfmt's `choose_rhs` lays it out: on the
+    /// same line when it fits there flat; else on a line of its own,
+    /// indented, when it fits there whole; else on the same line, broken.
+    /// It stays on the same line when it is sure to break (a lambda with
+    /// statements in its body), when it ends in a block of its own that can
+    /// break instead — an `if`, `match`, `catch`, lambda, `spawn` or block:
+    /// `let x = if (c) {` over its branches, never `let x =` over a one-line
+    /// `if` — and when a comment sits between the operator and it: a line
+    /// comment there ends the line, and the right-hand side follows one
+    /// level in.
+    pub fn assigned(
+        &self,
+        op: impl IntoIterator<Item = TokenIdx>,
+        rhs: impl NodeUnion + Copy,
+    ) -> Doc<'a> {
+        let id = rhs.node_id();
+        self.assigned_doc(op, id, self.any(id))
+    }
+
+    /// [`Self::assigned`] over the right-hand side's document `doc`, already
+    /// printed by [`Self::any`], for a caller that lays the same document
+    /// out another way too.
+    pub fn assigned_doc(
+        &self,
+        op: impl IntoIterator<Item = TokenIdx>,
+        id: AnyNodeId,
+        doc: Doc<'a>,
+    ) -> Doc<'a> {
+        let d = self.docs;
+        let same_line = d.concat([Doc::SPACE, doc]);
+        let commented = op.into_iter().any(|token| self.has_comments_after(token))
+            || !self.comments.leading(id).is_empty();
+        if commented {
+            return d.indent(same_line);
+        }
+        if braced(id) || doc.will_break() {
+            return same_line;
+        }
+        d.best_fitting([
+            same_line.into(),
+            d.indent(d.concat([Doc::HARD_LINE, doc])).all_lines(),
+            same_line.into(),
+        ])
+    }
+
     /// What goes between a header and its body's `{`: a space, or — when
     /// `header` names a group that broke, a signature's `throws` clause or
-    /// a `requires` list over several lines — a line break, so that the `{`
-    /// takes a line of its own, as rustfmt puts it after a broken `where`
-    /// clause. A space when there is no such group.
+    /// an `if let`'s scrutinee over several lines — a line break, so that
+    /// the `{` takes a line of its own, as rustfmt puts it after a broken
+    /// `where` clause. A space when there is no such group.
     pub fn brace_after(&self, header: Option<GroupId<'a>>) -> Doc<'a> {
         header.map_or(Doc::SPACE, |group| {
             self.docs.if_group_breaks(group, Doc::HARD_LINE, Doc::SPACE)
         })
+    }
+
+    /// The body after a header (see [`Self::brace_after`]): its `flat` form,
+    /// or its `broken` form once the header's group broke and put the `{`
+    /// on a line of its own — a one-line body under a multi-line header
+    /// reads as part of it.
+    pub fn body_after(
+        &self,
+        header: Option<GroupId<'a>>,
+        flat: Doc<'a>,
+        broken: Doc<'a>,
+    ) -> Doc<'a> {
+        header.map_or(flat, |group| self.docs.if_group_breaks(group, broken, flat))
     }
 
     /// `( … )` around a separated list: all on one line, or one item per
@@ -291,7 +439,7 @@ impl<'a> Formatter<'a> {
         let last = items.len().checked_sub(1);
         let inside = items.iter().enumerate().map(|(i, item)| {
             let separator = match (item.comma, Some(i) == last) {
-                (Some(comma), false) => self.token_at(comma),
+                (Some(comma), false) => self.separator_at(Some(comma), ","),
                 (None, false) => d.text(","),
                 (Some(comma), true) => d.concat([
                     d.if_break(d.text(","), Doc::NIL),
@@ -357,7 +505,7 @@ impl<'a> Formatter<'a> {
         let last = items.len().checked_sub(1);
         let inside = items.iter().enumerate().map(|(i, item)| {
             let separator = match (item.comma, Some(i) == last) {
-                (Some(comma), false) => self.token_at(comma),
+                (Some(comma), false) => d.concat([d.text(","), self.comments_after(comma)]),
                 (None, false) => d.text(","),
                 (Some(comma), true) => d.concat([
                     d.if_break(d.text(","), Doc::NIL),
@@ -417,7 +565,7 @@ impl<'a> Formatter<'a> {
                 .enumerate()
                 .flat_map(|(i, (&SepItem { sep, .. }, &doc))| {
                     let separator = match (sep, Some(i) == last) {
-                        (Some(comma), false) => self.token(comma),
+                        (Some(comma), false) => self.separator(Some(comma), ","),
                         (None, false) => d.text(","),
                         (Some(comma), true) => self.comments_after(comma.idx),
                         (None, true) => Doc::NIL,
@@ -428,7 +576,10 @@ impl<'a> Formatter<'a> {
     }
 
     /// A member's separator: the written `,` or `;` is replaced by `text`
-    /// (and its comments kept); an unwritten one is added.
+    /// (and its comments kept); an unwritten one is added. The separator is
+    /// text, not a token: it tucks in before a line comment pending on its
+    /// line (`a, // c`), as the comments it follows are attached as if it
+    /// came first.
     pub fn separator<S: TokenSet>(&self, written: Option<Token<S>>, text: &'a str) -> Doc<'a> {
         self.separator_at(written.map(|token| token.idx), text)
     }
@@ -439,6 +590,15 @@ impl<'a> Formatter<'a> {
         match written {
             Some(token) => d.concat([d.text(text), self.comments_after(token)]),
             None => d.text(text),
+        }
+    }
+
+    /// Punctuation the source may leave out (`name: T` or `name T`): the
+    /// token as written, else `text`.
+    pub fn punct<S: TokenSet>(&self, written: Option<Token<S>>, text: &'a str) -> Doc<'a> {
+        match written {
+            Some(token) => self.token(token),
+            None => self.docs.text(text),
         }
     }
 }

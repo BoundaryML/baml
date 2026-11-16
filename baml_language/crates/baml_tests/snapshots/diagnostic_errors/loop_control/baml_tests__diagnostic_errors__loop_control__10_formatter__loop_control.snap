@@ -38,7 +38,9 @@ function break_in_a_while_condition(a: int) -> int {
     while (
         {
             n += 1;
-            if (n > a) { break; }
+            if (n > a) {
+                break;
+            }
             true
         }
     ) {}
@@ -48,7 +50,9 @@ function break_in_a_while_condition(a: int) -> int {
 function break_in_a_while_let_scrutinee(a: int) -> int {
     let n = 0;
     while let v: int = {
-        if (n > a) { break; }
+        if (n > a) {
+            break;
+        }
         n
     }
     {
@@ -63,7 +67,9 @@ function break_in_the_update_expression(a: int) -> int {
         let j = 0;
         i < 3;
         i = {
-            if (a > 0) { break; }
+            if (a > 0) {
+                break;
+            }
             i + 1
         }
     ) {}

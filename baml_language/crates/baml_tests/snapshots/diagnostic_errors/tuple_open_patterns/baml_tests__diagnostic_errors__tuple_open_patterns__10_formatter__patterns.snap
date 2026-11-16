@@ -2,21 +2,21 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function cannot_assume_concrete_slots<T>(value: T | (int, bool)) -> int {
-    match value {
+    match (value) {
         (let number, _) => number + 1,
         _ => 0,
     }
 }
 
 function cannot_consume_open_holder<T>(value: T | null) -> null {
-    match value {
+    match (value) {
         (let a, let b) => null,
         _ => value,
     }
 }
 
 function cannot_retag_open_holder<T>(value: T) -> (unknown, unknown) {
-    match value {
+    match (value) {
         (let a, let b) => value,
         _ => (null, null),
     }

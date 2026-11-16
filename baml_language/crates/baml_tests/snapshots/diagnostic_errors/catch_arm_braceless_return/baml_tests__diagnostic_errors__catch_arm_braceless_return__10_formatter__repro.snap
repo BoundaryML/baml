@@ -14,7 +14,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
 function callee(x: int) -> bool throws string {
     if (x == 0) {
-      throw "boom"
+        throw "boom";
     }
     true
 }
@@ -23,6 +23,6 @@ function callee(x: int) -> bool throws string {
 // Expect exactly one diagnostic: `type mismatch: expected bool, got string`.
 function caller(x: int) -> bool {
     callee(x) catch (e) {
-      string => return e
+        string => return e,
     }
 }

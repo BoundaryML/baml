@@ -71,12 +71,12 @@ const HOME = baml.env.get("HOME");
 
 // ── A throw nothing catches would stop the program from starting (warning) ──
 function may_fail() -> int throws string {
-    throw "failed"
+    throw "failed";
 }
 
 const UNCAUGHT = may_fail();
 
 // ── Clean: a caught throw ────────────────────────────────────────────────────
 const CAUGHT = may_fail() catch (e) {
-    string => 0
+    string => 0,
 };

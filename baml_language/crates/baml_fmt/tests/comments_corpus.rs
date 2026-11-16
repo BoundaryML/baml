@@ -108,8 +108,17 @@ fn every_corpus_comment_is_attached_once_to_a_node_beside_it() {
                                 ) && within(owned_before(&index, separator))
                             })
                     }
+                    // Directly after the token, or on a line that ends before
+                    // the node's terminator, which the comment is moved past.
                     Position::Dangling { after: Some(token) } => {
-                        prev == Some(token) && index.token_owner(token) == Some(comment.node)
+                        index.token_owner(token) == Some(comment.node)
+                            && (prev == Some(token)
+                                || (owned_after(tree, &index, comment.token) == Some(token)
+                                    && matches!(
+                                        tokens.kind(token),
+                                        TokenKind::Comma | TokenKind::Semicolon
+                                    )
+                                    && TokenIdx(token.0 + 1) == span.end()))
                     }
                     Position::Dangling { after: None } => {
                         prev.is_none() && comment.node == tree.root_id()

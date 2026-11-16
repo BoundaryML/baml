@@ -74,13 +74,7 @@ impl Signature {
     /// on a line of its own when the tail broke.
     fn doc<'a>(&self, f: &Formatter<'a>) -> (Doc<'a>, Option<GroupId<'a>>) {
         let d = f.docs;
-        let (tail, tail_group) = d.group_with_id(d.concat([
-            Doc::SPACE,
-            f.node(self.ret),
-            self.throws.map_or(Doc::NIL, |throws| {
-                d.indent(d.concat([Doc::SOFT_LINE_OR_SPACE, f.node(throws)]))
-            }),
-        ]));
+        let (tail, tail_group) = signature_tail(f, f.node(self.ret), self.throws);
         let signature = d.concat([
             f.docs(self.docs, self.kw.idx),
             f.token(self.kw),
@@ -99,11 +93,30 @@ impl Signature {
 /// the parameters then decide for themselves.
 pub(super) fn signature<'a>(f: &Formatter<'a>, params: Doc<'a>, tail: Doc<'a>) -> Doc<'a> {
     let d = f.docs;
-    if tail.forced() {
+    if tail.will_break() {
         d.concat([d.group(params), tail])
     } else {
         d.group(d.concat([params, tail]))
     }
+}
+
+/// ` -> R throws E` after a parameter list, a function's or a lambda's: a
+/// named group with `throws E` on a line of its own under the return type
+/// when it does not fit beside it, as a `where` clause goes. Grouped
+/// together with the parameters by the caller, so that they break first.
+pub(super) fn signature_tail<'a>(
+    f: &Formatter<'a>,
+    ret: Doc<'a>,
+    throws: Option<Id<ThrowsClause>>,
+) -> (Doc<'a>, GroupId<'a>) {
+    let d = f.docs;
+    d.group_with_id(d.concat([
+        Doc::SPACE,
+        ret,
+        throws.map_or(Doc::NIL, |throws| {
+            d.indent(d.concat([Doc::SOFT_LINE_OR_SPACE, f.node(throws)]))
+        }),
+    ]))
 }
 
 impl FormatNode for FunctionDef {
@@ -149,14 +162,14 @@ impl FormatNode for MethodSig {
     }
 }
 
-/// `-> T`; a `=>` written in its place is printed as `->`.
+/// `-> T`; a `=>` written in its place is printed as `->`. After a comment
+/// that ends the line before it, the arrow starts the next one level in.
 impl FormatNode for ReturnType {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
         let d = f.docs;
         d.concat([
-            d.text("->"),
-            f.comments_after(node.arrow.idx),
+            d.indent(f.spelled("->", node.arrow.idx)),
             Doc::SPACE,
             f.alt(f.tree.present(node.ty)),
         ])
@@ -204,7 +217,7 @@ impl FormatNode for TypeAscription {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
         f.docs.concat([
-            f.separator(node.colon, ":"),
+            f.punct(node.colon, ":"),
             Doc::SPACE,
             f.alt(f.tree.present(node.ty)),
         ])
@@ -338,7 +351,7 @@ impl FormatNode for Field {
             f.docs(node.docs, name),
             d.group(d.concat([
                 f.node(node.name),
-                f.separator(node.colon, ":"),
+                f.punct(node.colon, ":"),
                 Doc::SPACE,
                 f.alt(f.tree.present(node.ty)),
                 attributes(f, node.attrs),
@@ -491,8 +504,7 @@ impl FormatNode for ImplementsBlock {
         let d = f.docs;
         d.concat([
             f.docs(node.docs, node.kw.idx),
-            d.text("implements"),
-            f.comments_after(node.kw.idx),
+            f.spelled("implements", node.kw.idx),
             Doc::SPACE,
             f.alt(f.tree.present(node.target)),
             Doc::SPACE,
@@ -530,8 +542,7 @@ impl FormatNode for ImplementsFor {
         ]));
         d.concat([
             f.docs(node.docs, node.kw.idx),
-            d.text("implement"),
-            f.comments_after(node.kw.idx),
+            f.spelled("implement", node.kw.idx),
             node.generics.map_or(Doc::NIL, |generics| f.node(generics)),
             Doc::SPACE,
             f.leading_of(target),
@@ -569,6 +580,9 @@ impl FormatNode for InterfaceFieldLink {
 // Aliases, clients, tests, globals
 // ---------------------------------------------------------------------------
 
+/// `type Name = T;` — the type stays on the `=` line and breaks at its own
+/// points (a union one `| member` per line), never moving whole to the
+/// next line as an expression may.
 impl FormatNode for TypeAliasDef {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
@@ -597,14 +611,12 @@ impl FormatNode for ClientValueDef {
             f.node(node.name),
             Doc::SPACE,
             f.token(node.eq),
-            Doc::SPACE,
-            f.alt(f.tree.present(node.value)),
+            f.assigned([node.eq.idx], f.tree.present(node.value)),
             f.separator(node.semi, ";"),
         ])
     }
 }
 
-/// `test "name" with a, b { … }`
 /// `test "name" with a, b { … }`: the `with` items break one per line
 /// under the keyword when they do not fit, and the `{` then takes a line of
 /// its own (see [`Formatter::separated`]).

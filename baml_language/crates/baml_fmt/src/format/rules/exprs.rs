@@ -18,10 +18,12 @@
 //! operand that broke inside braces of its own stays on its `}`. Operators
 //! of different rows nest. A member chain breaks in the order: all on one
 //! line; the last call's last argument hugged (a lambda, `spawn`, object,
-//! array or map, or a sole nested call); only the last call's arguments
-//! broken; else every call on its own line under the receiver, plain
-//! accesses glued to the call before them. Every layout shares one printing
-//! of the arguments, so nesting costs no more than its size.
+//! array or map, or a sole nested call); every call on its own line under
+//! the receiver, plain accesses glued to the call before them, when each of
+//! those lines then fits whole; only the last call's arguments broken; else
+//! every call on its own line with the arguments breaking as they must.
+//! Every layout shares one printing of the arguments, so nesting costs no
+//! more than its size.
 
 use baml_syntax::{
     nodes::{
@@ -37,6 +39,7 @@ use baml_syntax::{
     tree::{AnyNodeId, Id, NodeUnion as _, SepItem},
 };
 
+use super::control::{lambda, spawn};
 use crate::{
     comments::docs,
     format::{
@@ -315,9 +318,13 @@ fn chain_members<'a>(
 /// The operator's spelling, with the comments after its tokens.
 fn operator<'a>(f: &Formatter<'a>, op: BinaryOpTok) -> Doc<'a> {
     let d = f.docs;
+    let mut tokens = op.tokens();
+    let first = tokens
+        .next()
+        .unwrap_or_else(|| unreachable!("an operator has a token"));
     d.concat(
-        std::iter::once(d.text(op.op().spelling()))
-            .chain(op.tokens().map(|token: TokenIdx| f.comments_after(token))),
+        std::iter::once(f.spelled(op.op().spelling(), first))
+            .chain(tokens.map(|token: TokenIdx| f.comments_after(token))),
     )
 }
 
@@ -365,14 +372,15 @@ impl FormatNode for BinaryExpr {
     }
 }
 
-/// `expr is pattern`
+/// `expr is pattern`; after a comment that ends the expression's line, the
+/// `is` starts the next one level in.
 impl FormatNode for IsExpr {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
-        f.docs.concat([
+        let d = f.docs;
+        d.concat([
             f.alt(node.expr),
-            Doc::SPACE,
-            f.token(node.is_kw),
+            d.indent(d.concat([Doc::SPACE, f.token(node.is_kw)])),
             Doc::SPACE,
             f.alt(f.tree.present(node.pattern)),
         ])
@@ -387,36 +395,37 @@ impl FormatNode for UnaryExpr {
     }
 }
 
+/// `kw operand`.
+fn keyword_operand<'a, S: baml_syntax::token::TokenSet>(
+    f: &Formatter<'a>,
+    kw: baml_syntax::token::Token<S>,
+    operand: Option<AnyExpr>,
+) -> Doc<'a> {
+    let d = f.docs;
+    d.concat([
+        f.token(kw),
+        operand.map_or(Doc::NIL, |operand| d.concat([Doc::SPACE, f.alt(operand)])),
+    ])
+}
+
 impl FormatNode for AwaitExpr {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
-        f.docs.concat([
-            f.token(node.kw),
-            Doc::SPACE,
-            f.alt(f.tree.present(node.operand)),
-        ])
+        keyword_operand(f, node.kw, Some(f.tree.present(node.operand)))
     }
 }
 
 impl FormatNode for ThrowExpr {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
-        f.docs.concat([
-            f.token(node.kw),
-            Doc::SPACE,
-            f.alt(f.tree.present(node.payload)),
-        ])
+        keyword_operand(f, node.kw, Some(f.tree.present(node.payload)))
     }
 }
 
 impl FormatNode for ReturnExpr {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
-        f.docs.concat([
-            f.token(node.kw),
-            node.value
-                .map_or(Doc::NIL, |value| f.docs.concat([Doc::SPACE, f.alt(value)])),
-        ])
+        keyword_operand(f, node.kw, node.value)
     }
 }
 
@@ -632,9 +641,9 @@ impl FormatNode for Arg {
 
 /// An argument in both of its layouts: as one item of the list, and hugged
 /// — broken against the parentheses as the last argument, `f(a, (x) -> {`
-/// — when it may be: a lambda or `spawn` as it prints, a literal with one
-/// element per line, or, as the only argument, a call (rustfmt's overflow
-/// of a nested call: `f(g(` on one line, `g`'s arguments broken).
+/// — when it may be: a lambda or `spawn` with its body broken, a literal
+/// with one element per line, or, as the only argument, a call (rustfmt's
+/// overflow of a nested call: `f(g(` on one line, `g`'s arguments broken).
 /// A multi-line template needs no hugging: it is an atom measured by its
 /// first line, so `f(`…`)` stays as it is. Both layouts are built from one
 /// printing of the argument's parts, so nested calls cost no more than
@@ -649,9 +658,19 @@ fn arg_forms<'a>(f: &Formatter<'a>, arg: Id<Arg>, sole: bool) -> ArgForms<'a> {
     let node = f.tree.get(arg);
     let value = argument(f, f.tree.present(node.value));
     let (flat, hugged) = match value {
-        AnyExpr::Lambda(_) | AnyExpr::Spawn(_) => {
-            let doc = f.alt(value);
-            (doc, Some(doc))
+        AnyExpr::Lambda(id) => {
+            let forms = lambda(f, id);
+            (
+                f.with_comments(id, forms.flat),
+                Some(f.with_comments(id, forms.hugged)),
+            )
+        }
+        AnyExpr::Spawn(id) => {
+            let forms = spawn(f, id);
+            (
+                f.with_comments(id, forms.flat),
+                Some(f.with_comments(id, forms.hugged)),
+            )
         }
         AnyExpr::Array(id) => {
             let parts = array_parts(f, id);
@@ -677,7 +696,7 @@ fn arg_forms<'a>(f: &Formatter<'a>, arg: Id<Arg>, sole: bool) -> ArgForms<'a> {
             )
         }
         AnyExpr::Call(id) if sole && matches!(f.tree.get(id).callee, AnyExpr::Path(_)) => {
-            let chain = Chain::of(f, value).doc(f);
+            let chain = Chain::of(f, value).doc(f, Doc::NIL);
             (
                 f.with_comments(id, chain),
                 Some(f.with_comments(id, d.expanded_group(chain))),
@@ -835,12 +854,16 @@ impl<'a> Link<'a> {
         matches!(self, Self::Plain { field: true, .. })
     }
 
-    /// The link as it prints on a line.
-    fn doc(&self, d: Docs<'a>) -> Doc<'a> {
+    /// The link as it prints on a line. As a `continuation` — on the line
+    /// of what it follows, which may end in a line comment — the `.name` or
+    /// `?.` that starts the next line then goes one level in; in the
+    /// expanded layout the links are indented already.
+    fn doc(&self, d: Docs<'a>, continuation: bool) -> Doc<'a> {
+        let step = |doc: Doc<'a>| if continuation { d.indent(doc) } else { doc };
         match *self {
-            Self::Plain { doc, .. } => doc,
-            Self::Call { prefix, ref args } => d.concat([prefix, args.choice]),
-            Self::Index { prefix, parts } => d.concat([prefix, d.group(parts)]),
+            Self::Plain { doc, .. } => step(doc),
+            Self::Call { prefix, ref args } => d.concat([step(prefix), args.choice]),
+            Self::Index { prefix, parts } => d.concat([step(prefix), d.group(parts)]),
         }
     }
 }
@@ -957,7 +980,12 @@ impl<'a> Chain<'a> {
                 let node = tree.get(spec);
                 self.walk(f, node.base, false);
                 self.links.push(Link::Plain {
-                    doc: d.concat([f.token(node.at), f.token(tree.present(node.selector))]),
+                    // `@` cannot start a line: it tucks in before a pending comment.
+                    doc: d.concat([
+                        d.text(tree.token_text(node.at.idx)),
+                        f.comments_after(node.at.idx),
+                        f.token(tree.present(node.selector)),
+                    ]),
                     field: false,
                 });
             }
@@ -1029,16 +1057,22 @@ impl<'a> Chain<'a> {
         }
     }
 
-    /// The chain laid out: on one line; the last call's last argument
-    /// hugged; only the last call's (or index's) brackets broken, the plain
-    /// accesses after it following; every call on its own line. A forced
-    /// break before the last call (a multi-line lambda, a comment) leaves
-    /// only the last.
-    fn doc(&self, f: &Formatter<'a>) -> Doc<'a> {
+    /// The chain laid out, `tail` after it on its last line: on one line;
+    /// the last call's last argument hugged; every call on its own line when
+    /// each line then fits whole; only the last call's (or index's)
+    /// brackets broken, the plain accesses after it following; every call
+    /// on its own line. A forced break before the last call (a multi-line
+    /// lambda, a comment) leaves only the last.
+    fn doc(&self, f: &Formatter<'a>, tail: Doc<'a>) -> Doc<'a> {
         let d = f.docs;
-        let links = |links: &[Link<'a>]| d.concat(links.iter().map(|link| link.doc(d)));
+        let links = |links: &[Link<'a>]| d.concat(links.iter().map(|link| link.doc(d, true)));
         let Some(last_at) = self.links.iter().rposition(|link| !link.is_plain()) else {
-            return d.concat([self.first, self.first_trailing, links(&self.links)]);
+            return d.concat([
+                self.first,
+                d.indent(self.first_trailing),
+                links(&self.links),
+                tail,
+            ]);
         };
         let (prefix, rest) = self.links.split_at(last_at);
         let (last, suffix) = rest
@@ -1046,48 +1080,70 @@ impl<'a> Chain<'a> {
             .unwrap_or_else(|| unreachable!("`last_at` indexes a link"));
         let before_last = d.concat([self.first, self.first_trailing, links(prefix)]);
         if before_last.will_break() {
-            return self.expanded(f);
+            return self.expanded(f, tail);
         }
-        let suffix = links(suffix);
-        let flat = d.concat([before_last, last.doc(d), suffix]);
-        let expanded = self.expanded(f);
-        match *last {
+        let suffix = d.concat([links(suffix), tail]);
+        let flat = d.concat([before_last, last.doc(d, true), suffix]);
+        let expanded = self.expanded(f, tail);
+        let (tail_broken, hug) = match *last {
             Link::Call {
                 prefix: qdot,
                 ref args,
-            } => {
-                let tail_broken = d.concat([before_last, qdot, args.broken, suffix]);
-                match args.hugged {
-                    Some(hug) => d.best_fitting([
-                        flat,
-                        d.concat([before_last, qdot, hug, suffix]),
-                        tail_broken,
-                        expanded,
-                    ]),
-                    None => d.best_fitting([flat, tail_broken, expanded]),
-                }
-            }
+            } => (
+                d.concat([before_last, qdot, args.broken, suffix]),
+                args.hugged
+                    .map(|hug| d.concat([before_last, qdot, hug, suffix])),
+            ),
             Link::Index {
                 prefix: qdot,
                 parts,
-            } => d.best_fitting([
-                flat,
+            } => (
                 d.concat([before_last, qdot, d.expanded_group(parts), suffix]),
-                expanded,
-            ]),
+                None,
+            ),
             Link::Plain { .. } => unreachable!("`last_at` is not a plain link"),
+        };
+        // The flat variant may hold a forced break — the last call's
+        // arguments break for a multi-line lambda, the tail's `catch` arms
+        // break — and still print the chain itself on one line: those parts
+        // lay themselves out in any mode (a forced group prints broken, a
+        // hard line breaks). What came before the last call was checked
+        // above. The groups around the chain must know, though, that it is
+        // sure to break.
+        let choice = match hug {
+            Some(hug) => d.layouts([
+                flat.into(),
+                hug.into(),
+                expanded.all_lines(),
+                tail_broken.into(),
+                expanded.into(),
+            ]),
+            None => d.layouts([
+                flat.into(),
+                expanded.all_lines(),
+                tail_broken.into(),
+                expanded.into(),
+            ]),
+        };
+        if flat.forced() {
+            d.concat([Doc::EXPAND_PARENT, choice])
+        } else {
+            choice
         }
     }
 
-    /// Every call on a line of its own, indented under the receiver. The
-    /// receiver keeps the calls made directly on it and the plain accesses
-    /// up to the first call's name; that first call stays on the line when
-    /// it fits; the plain accesses between calls are glued to the call they
-    /// follow, those after the last call form a line of their own. The
-    /// receiver's trailing comments stay on its line when they fit there;
-    /// ones that end the line go inside the indentation, and every access
-    /// after the receiver then starts a line one level in.
-    fn expanded(&self, f: &Formatter<'a>) -> Doc<'a> {
+    /// Every call on a line of its own, indented under the receiver, `tail`
+    /// on the last of them. The receiver keeps the calls made directly on
+    /// it and the plain accesses up to the first call's name; that first
+    /// call stays on the line when it fits; the plain accesses between calls
+    /// are glued to the call they precede, those after the last call form a
+    /// line of their own. A line can only start with a named access
+    /// (`.name`): a call, an index, a generic application, `@spec` or a
+    /// tagged template after a line break would not parse as part of the
+    /// chain, so a run with no named access before its calls joins the line
+    /// before it. The receiver's trailing comments go inside the indentation
+    /// with the first call.
+    fn expanded(&self, f: &Formatter<'a>, tail: Doc<'a>) -> Doc<'a> {
         let d = f.docs;
         let mut rest: &[Link<'a>] = &self.links;
         // The receiver's trailing comments stay in order: on its line after
@@ -1100,12 +1156,12 @@ impl<'a> Chain<'a> {
         if !trailing_ends_line {
             head.push(self.first_trailing);
         }
-        while let Some((link, tail)) = rest.split_first() {
+        while let Some((link, after)) = rest.split_first() {
             if link.is_plain() {
                 break;
             }
-            head.push(link.doc(d));
-            rest = tail;
+            head.push(link.doc(d, false));
+            rest = after;
         }
         let plain_run = rest.iter().take_while(|link| link.is_plain()).count();
         let glued = if trailing_ends_line {
@@ -1123,19 +1179,31 @@ impl<'a> Chain<'a> {
         } else {
             Doc::NIL
         };
-        head.extend(rest[..glued].iter().map(|link| link.doc(d)));
+        head.extend(rest[..glued].iter().map(|link| link.doc(d, false)));
         rest = &rest[glued..];
-        let mut groups: Vec<Doc<'a>> = Vec::new();
+        let mut groups: Vec<Vec<Doc<'a>>> = Vec::new();
         while !rest.is_empty() {
             let plain = rest.iter().take_while(|link| link.is_plain()).count();
             let callish = rest[plain..]
                 .iter()
                 .take_while(|link| !link.is_plain())
                 .count();
-            let (group, tail) = rest.split_at(plain + callish);
-            groups.push(d.concat(group.iter().map(|link| link.doc(d))));
-            rest = tail;
+            let (run, after) = rest.split_at(plain + callish);
+            rest = after;
+            // The run starts a line at its first named access; what comes
+            // before that stays on the line before.
+            let starts = run[..plain].iter().position(Link::is_field);
+            let (joined, group) = run.split_at(starts.unwrap_or(run.len()));
+            let joined = joined.iter().map(|link| link.doc(d, false));
+            match groups.last_mut() {
+                Some(previous) => previous.extend(joined),
+                None => head.extend(joined),
+            }
+            if !group.is_empty() {
+                groups.push(group.iter().map(|link| link.doc(d, false)).collect());
+            }
         }
+        let groups: Vec<Doc<'a>> = groups.into_iter().map(|group| d.concat(group)).collect();
         let mut doc = vec![d.concat(head)];
         match groups.split_first() {
             Some((first_group, later)) => {
@@ -1149,13 +1217,48 @@ impl<'a> Chain<'a> {
                     Doc::SOFT_LINE
                 };
                 doc.push(d.group(d.indent(d.concat([inner_trailing, first_line, *first_group]))));
-                doc.push(d.indent(
-                    d.concat(later.iter().map(|group| d.concat([Doc::HARD_LINE, *group]))),
-                ));
+                doc.push(
+                    d.indent(
+                        d.concat(
+                            later
+                                .iter()
+                                .map(|group| d.concat([Doc::HARD_LINE, *group]))
+                                .chain([tail]),
+                        ),
+                    ),
+                );
             }
-            None => doc.push(inner_trailing),
+            None => doc.extend([inner_trailing, tail]),
         }
         d.concat(doc)
+    }
+}
+
+/// `expr` with `tail` after it on its last line: for a member chain, inside
+/// the chain's indentation when the chain breaks, so that a `catch` after a
+/// broken chain hangs off its last call rather than sitting at the indent
+/// of the chain's first line; for anything else, simply after it.
+pub(super) fn with_tail<'a>(f: &Formatter<'a>, expr: AnyExpr, tail: Doc<'a>) -> Doc<'a> {
+    let d = f.docs;
+    match expr {
+        AnyExpr::Path(_)
+        | AnyExpr::GenericApply(_)
+        | AnyExpr::FieldAccess(_)
+        | AnyExpr::OptionalFieldAccess(_)
+        | AnyExpr::Upcast(_)
+        | AnyExpr::Spec(_)
+        | AnyExpr::TaggedTemplate(_)
+        | AnyExpr::Call(_)
+        | AnyExpr::OptionalCall(_)
+        | AnyExpr::Index(_)
+        | AnyExpr::OptionalIndex(_) => {
+            let id = expr.node_id();
+            d.concat([
+                f.leading_of(id),
+                Chain::of(f, expr).doc(f, d.concat([f.trailing_of(id), tail])),
+            ])
+        }
+        _ => d.concat([f.alt(expr), tail]),
     }
 }
 
@@ -1163,7 +1266,7 @@ macro_rules! chain_rules {
     ($($node:ident => $variant:ident),* $(,)?) => {
         $(impl FormatNode for $node {
             fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
-                Chain::of(f, AnyExpr::$variant(id)).doc(f)
+                Chain::of(f, AnyExpr::$variant(id)).doc(f, Doc::NIL)
             }
         })*
     };

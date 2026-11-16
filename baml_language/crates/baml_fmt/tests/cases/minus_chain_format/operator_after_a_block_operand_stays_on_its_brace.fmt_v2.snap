@@ -2,7 +2,11 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function f(c: bool) -> int {
-    let v = if (c) { let t = aaaaaaaa; t } else { bbbbbbbb }
-        - aaaaaaaa;
+    let v = if (c) {
+        let t = aaaaaaaa;
+        t
+    } else {
+        bbbbbbbb
+    } - aaaaaaaa;
     v
 }

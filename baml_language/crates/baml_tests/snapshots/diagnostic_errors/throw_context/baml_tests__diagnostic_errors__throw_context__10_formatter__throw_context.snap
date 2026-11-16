@@ -22,13 +22,17 @@ function openClause() -> void throws int[] | _ {
 }
 
 function isolatedCatch() -> void throws int[] {
-    { throw []; } catch (e) {
+    {
+        throw [];
+    } catch (e) {
         _ => throw [1],
     };
 }
 
 function isolatedLambda() -> void throws int[] {
-    let f = () -> { throw []; };
+    let f = () -> {
+        throw [];
+    };
     throw [1];
 }
 

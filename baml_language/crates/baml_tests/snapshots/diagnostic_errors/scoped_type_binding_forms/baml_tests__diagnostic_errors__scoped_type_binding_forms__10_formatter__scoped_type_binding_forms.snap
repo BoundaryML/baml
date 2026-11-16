@@ -60,16 +60,16 @@ function pending_operand() -> int {
 // from. Each bound is reported on its own; the binding keeps the rest.
 function bounds_are_interfaces(t: reflect.Type) -> int {
     let type A extends Wrapper<int> = t else {
-        return 0
+        return 0;
     };
     let type B extends Missing = t else {
-        return 0
+        return 0;
     };
     let type C extends reflect.AnyFunction = t else {
-        return 0
+        return 0;
     };
     let type D extends Named & Holder<_> = t else {
-        return 0
+        return 0;
     };
     1
 }
@@ -79,7 +79,7 @@ function bounds_are_interfaces(t: reflect.Type) -> int {
 function the_binding_is_not_in_scope_yet(t: reflect.Type) -> int {
     let type T extends Holder<T> = t else {
         let unseen: T? = null;
-        return 0
+        return 0;
     };
     1
 }
@@ -106,7 +106,7 @@ function bounded_needs_else(t: reflect.Type) -> int throws never {
 // the throws a declared clause must name.
 function bound_check_does_not_throw(t: reflect.Type) -> int throws never {
     let type T extends Named = t else {
-        return 0
+        return 0;
     };
     1
 }

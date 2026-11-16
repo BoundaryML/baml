@@ -68,7 +68,7 @@ class ImplementsErrorArg {
     v: int,
     implements RequiresErrorArg {
         function c(self) -> int {
-            return 0
+            return 0;
         }
     }
 }

@@ -51,7 +51,11 @@ function catch_arm_may_not_run(a: int, xs: int[]) -> int {
     let x: int | Tag = a;
     x = a;
     for (let v in xs) {
-        let r = thrower(v) catch (e) { _ => { return 5; } };
+        let r = thrower(v) catch (e) {
+            _ => {
+                return 5;
+            },
+        };
         x = Tag {};
     }
     let u: int = x;
@@ -64,7 +68,10 @@ function null_coalesce_fallback_in_a_branch(a: int, o: int?) -> int {
     x = a;
     if (a > 0) {
         x = Tag {};
-        let w = o ?? { return 5; };
+        let w = o
+            ?? {
+                return 5;
+            };
     }
     let u: int = x;
     u

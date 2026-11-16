@@ -36,6 +36,9 @@ use crate::{
 mod layout;
 mod rules;
 
+pub use layout::ListItem;
+pub(crate) use rules::control::diverges;
+
 /// What a rule builds its document with.
 #[derive(Debug, Clone, Copy)]
 pub struct Formatter<'a> {
@@ -101,18 +104,28 @@ impl<'a> Formatter<'a> {
     }
 
     /// A token as written, followed by the comments that dangle after it.
+    /// It starts a new line when a line comment is pending on the current
+    /// one: nothing a rule prints this way goes in front of a comment it
+    /// followed in the source. Punctuation the formatter owns — a separator
+    /// it makes canonical, a bracket that cannot start a line — is printed
+    /// as text instead, and tucks in before such a comment.
     pub fn token<S: TokenSet>(&self, token: Token<S>) -> Doc<'a> {
-        self.docs.concat([
-            self.docs.text(self.tree.token_text(token.idx)),
-            self.comments_after(token.idx),
-        ])
+        self.token_at(token.idx)
     }
 
     /// [`Self::token`] by index, for a token a rule reaches without its
     /// marker type.
     pub fn token_at(&self, token: TokenIdx) -> Doc<'a> {
+        self.spelled(self.tree.token_text(token), token)
+    }
+
+    /// [`Self::token`] with a canonical spelling in place of the token's
+    /// own: `->` for a `=>` arrow, `implements` for `implement`, an
+    /// operator's spelling for its tokens.
+    pub fn spelled(&self, text: &'a str, token: TokenIdx) -> Doc<'a> {
         self.docs.concat([
-            self.docs.text(self.tree.token_text(token)),
+            Doc::LINE_SUFFIX_BOUNDARY,
+            self.docs.text(text),
             self.comments_after(token),
         ])
     }
@@ -260,9 +273,9 @@ macro_rules! dispatch {
             }
 
             /// [`Self::any`] without the node's leading and trailing
-            /// comments, for a rule that places them itself — inside a group
-            /// the node starts, say ([`Self::leading_of`],
-            /// [`Self::trailing_of`]).
+            /// comments, for a rule that places them itself — inside the
+            /// indentation of a chain the node starts, say
+            /// ([`Self::leading_of`], [`Self::trailing_of`]).
             pub fn bare(&self, id: AnyNodeId) -> Doc<'a> {
                 match id.typed() {
                     $(AnyId::$node(id) => <nodes::$node as FormatNode>::fmt(id, self),)*

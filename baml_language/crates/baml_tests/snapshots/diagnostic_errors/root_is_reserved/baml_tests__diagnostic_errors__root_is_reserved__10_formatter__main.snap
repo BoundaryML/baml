@@ -56,29 +56,27 @@ function binding() -> int {
 }
 
 function lambda() -> int {
-    let f = (root: int) => { root };
+    let f = (root: int) -> { root };
     f(1)
 }
 
 function loop_binding(items: int[]) -> int {
     for (let root in items) {
-        return root
+        return root;
     }
     0
 }
 
 function caught() -> int {
-    {
-        1
-    } catch (root) {
-        _ => 2
+    { 1 } catch (root) {
+        _ => 2,
     }
 }
 
 function matched(value: int | string) -> int {
     match (value) {
         let root: int => root,
-        _ => 0
+        _ => 0,
     }
 }
 
@@ -90,7 +88,7 @@ function destructured(holder: Holder<int>) -> int {
 function array_pattern(items: int[]) -> int {
     match (items) {
         [let root, ..] => root,
-        _ => 0
+        _ => 0,
     }
 }
 

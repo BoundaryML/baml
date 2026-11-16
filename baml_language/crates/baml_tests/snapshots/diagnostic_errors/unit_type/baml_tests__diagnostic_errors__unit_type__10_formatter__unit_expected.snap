@@ -20,7 +20,9 @@ function tail_in_null() -> null {
 }
 
 function nested_tail() -> void {
-    { produce() }
+    {
+        produce()
+    }
 }
 
 function lambda_tail() -> int {
@@ -31,13 +33,17 @@ function lambda_tail() -> int {
 
 function match_arm_tail(x: int) -> void {
     match (x) {
-      1 => { produce() },
-      _ => null,
+        1 => { produce() },
+        _ => null,
     }
 }
 
 function if_else_tail(c: bool) -> void {
-    if (c) { produce() } else { produce(); }
+    if (c) {
+        produce()
+    } else {
+        produce();
+    }
 }
 
 // A block annotated with the unit type is no different from a body.
@@ -64,28 +70,38 @@ function annotated_value() -> int {
 // An `if` with no `else` evaluates to the unit value, so its branch must be
 // unit too — whether the `if` is a unit body's value or bound to a name.
 function lone_if_tail(c: bool) -> void {
-    if (c) { produce() }
+    if (c) {
+        produce()
+    }
 }
 
 function lone_if_binding(c: bool) -> int {
-    let x = if (c) { produce() };
+    let x = if (c) {
+        produce()
+    };
     1
 }
 
 function lone_if_let_binding(v: int?) -> int {
-    let x = if let n: int = v { n };
+    let x = if let n: int = v {
+        n
+    };
     1
 }
 
 // Each branch is held to the unit type on its own: one mistake does not hide
 // the other.
 function else_if_chain_tails(a: bool, b: bool) -> void {
-    if (a) { produce() } else if (b) { produce() }
+    if (a) {
+        produce()
+    } else if (b) {
+        produce()
+    }
 }
 
 function catch_arm_tails() -> void {
     { produce() } catch (e) {
-      _ => { produce() },
+        _ => { produce() },
     }
 }
 

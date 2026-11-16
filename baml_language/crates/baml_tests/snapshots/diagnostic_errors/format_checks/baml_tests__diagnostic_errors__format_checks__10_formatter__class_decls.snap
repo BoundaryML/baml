@@ -99,9 +99,9 @@ TriviaClass // 4 name trailing
 // 5 open brace leading
 { // 6 open brace trailing
     // 7 field leading
-    name: // 8 field name trailing
+    name // 8 field name trailing
     // 9 colon leading
-    // 10 colon trailing
+    : // 10 colon trailing
     // 11 type leading
     string, // 12 type trailing
     // 13 close brace leading
@@ -117,8 +117,9 @@ TriviaClassBlock /* 4 name trailing */
 /* 5 open brace leading */
 { /* 6 open brace trailing */
     /* 7 field leading */
-    name /* 8 field name trailing */: /* 10 colon trailing */
+    name /* 8 field name trailing */
     /* 9 colon leading */
+    : /* 10 colon trailing */
     /* 11 type leading */
     string, /* 12 type trailing */
     /* 13 close brace leading */
@@ -129,9 +130,9 @@ TriviaClassBlock /* 4 name trailing */
 // ===== Trivia on field with attributes (line comments) =====
 class TriviaFieldAttrs {
     // 1 field leading
-    name: // 2 field name trailing
+    name // 2 field name trailing
     // 3 colon leading
-    // 4 colon trailing
+    : // 4 colon trailing
     // 5 type leading
     string // 6 type trailing
         // 7 attr leading
@@ -147,8 +148,9 @@ class TriviaFieldAttrs {
 // ===== Trivia on field with attributes (block comments) =====
 class TriviaFieldAttrsBlock {
     /* 1 field leading */
-    name /* 2 field name trailing */: /* 4 colon trailing */
+    name /* 2 field name trailing */
     /* 3 colon leading */
+    : /* 4 colon trailing */
     /* 5 type leading */
     string /* 6 type trailing */
         /* 7 attr leading */
@@ -164,31 +166,27 @@ class TriviaFieldAttrsBlock {
 // ===== Trivia on field with long wrapping type (line comments) =====
 class TriviaLongFieldType {
     // 1 field leading
-    data: // 2 field name trailing
+    data // 2 field name trailing
     // 3 colon leading
-    // 4 colon trailing
+    : // 4 colon trailing
     // 5 type leading
     map< // 6 map trailing
         // 7 open angle trailing
         // 8 key type leading
-        string // 9 key type trailing
-        , // 10 comma trailing
+        string, // 9 key type trailing
+        // 10 comma trailing
         // 11 value type leading
         int // 12 first trailing
-        // 13 pipe trailing
-            |
+            | // 13 pipe trailing
             // 14 second leading
             string // 15 second trailing
-            // 16 pipe trailing
-            |
+            | // 16 pipe trailing
             // 17 third leading
             bool // 18 third trailing
-            // 19 pipe trailing
-            |
+            | // 19 pipe trailing
             // 20 fourth leading
             float // 21 fourth trailing
-            // 22 pipe trailing
-            |
+            | // 22 pipe trailing
             // 23 fifth leading
             null, // 24 fifth trailing
     > // 25 close angle trailing
@@ -203,24 +201,25 @@ class TriviaLongFieldType {
 // ===== Trivia on field with long wrapping type (block comments) =====
 class TriviaLongFieldTypeBlock {
     /* 1 field leading */
-    data /* 2 field name trailing */: /* 4 colon trailing */
+    data /* 2 field name trailing */
     /* 3 colon leading */
+    : /* 4 colon trailing */
     /* 5 type leading */
     map /* 6 map trailing */</* 7 open angle trailing */
         /* 8 key type leading */
-        string /* 9 key type trailing */ /* 10 comma trailing */,
+        string /* 9 key type trailing */, /* 10 comma trailing */
         /* 11 value type leading */
-        int /* 12 first trailing */ /* 13 pipe trailing */
-            |
+        int /* 12 first trailing */
+            | /* 13 pipe trailing */
             /* 14 second leading */
-            string /* 15 second trailing */ /* 16 pipe trailing */
-            |
+            string /* 15 second trailing */
+            | /* 16 pipe trailing */
             /* 17 third leading */
-            bool /* 18 third trailing */ /* 19 pipe trailing */
-            |
+            bool /* 18 third trailing */
+            | /* 19 pipe trailing */
             /* 20 fourth leading */
-            float /* 21 fourth trailing */ /* 22 pipe trailing */
-            |
+            float /* 21 fourth trailing */
+            | /* 22 pipe trailing */
             /* 23 fifth leading */
             null /* 24 fifth trailing */,
     > /* 25 close angle trailing */
@@ -234,9 +233,9 @@ class TriviaLongFieldTypeBlock {
 // ===== Trivia on field with multiple attributes (line comments) =====
 class TriviaMultiAttr {
     // 1 field leading
-    name: // 2 name trailing
+    name // 2 name trailing
     // 3 colon leading
-    // 4 colon trailing
+    : // 4 colon trailing
     // 5 type leading
     string // 6 type trailing
         // 7 first attr leading
@@ -258,8 +257,9 @@ class TriviaMultiAttr {
 // ===== Trivia on field with multiple attributes (block comments) =====
 class TriviaMultiAttrBlock {
     /* 1 field leading */
-    name /* 2 name trailing */: /* 4 colon trailing */
+    name /* 2 name trailing */
     /* 3 colon leading */
+    : /* 4 colon trailing */
     /* 5 type leading */
     string /* 6 type trailing */
         /* 7 first attr leading */

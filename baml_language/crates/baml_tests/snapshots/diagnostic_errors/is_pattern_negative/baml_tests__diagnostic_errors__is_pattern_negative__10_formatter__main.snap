@@ -17,7 +17,11 @@ function binding_leak_scope() -> int {
 // `then` branch the way Rust's `if let` would.
 function binding_leak_if() -> int {
     let v: int | string = 7;
-    if (v is let x: int) { x } else { 0 }
+    if (v is let x: int) {
+        x
+    } else {
+        0
+    }
 }
 
 // Or-pattern bindings on each side also do not escape the pattern test.

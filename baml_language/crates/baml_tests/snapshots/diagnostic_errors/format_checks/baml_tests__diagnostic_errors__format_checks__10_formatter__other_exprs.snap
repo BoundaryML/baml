@@ -142,8 +142,8 @@ function OtherExprs(a: int, b: int) -> int {
     // 1 open bracket leading
     [ // 2 open bracket trailing
         // 3 first element leading
-        1 // 4 first element trailing
-        , // 5 comma trailing
+        1, // 4 first element trailing
+        // 5 comma trailing
         // 6 second element leading
         2, // 7 second element trailing
         // 8 close bracket leading
@@ -153,7 +153,7 @@ function OtherExprs(a: int, b: int) -> int {
     /* 1 open bracket leading */
     [/* 2 open bracket trailing */
         /* 3 first element leading */
-        1 /* 4 first element trailing */ /* 5 comma trailing */,
+        1 /* 4 first element trailing */, /* 5 comma trailing */
         /* 6 second element leading */
         2 /* 7 second element trailing */,
         /* 8 close bracket leading */
@@ -162,14 +162,14 @@ function OtherExprs(a: int, b: int) -> int {
     // ===== Trivia in long wrapping array (line comments) =====
     [ // 1 trailing
         // 2 leading
-        "this is a long string" // 3 trailing
-        , // 4 trailing
+        "this is a long string", // 3 trailing
+        // 4 trailing
         // 5 leading
-        "another long string value" // 6 trailing
-        , // 7 trailing
+        "another long string value", // 6 trailing
+        // 7 trailing
         // 8 leading
-        "yet another that is quite long" // 9 trailing
-        , // 10 trailing
+        "yet another that is quite long", // 9 trailing
+        // 10 trailing
         // 11 leading
         "and one more string element", // 12 trailing
     ]; // 13 trailing
@@ -177,11 +177,11 @@ function OtherExprs(a: int, b: int) -> int {
     // ===== Trivia in long wrapping array (block comments) =====
     [/* 1 trailing */
         /* 2 leading */
-        "this is a long string" /* 3 trailing */ /* 4 trailing */,
+        "this is a long string" /* 3 trailing */, /* 4 trailing */
         /* 5 leading */
-        "another long string value" /* 6 trailing */ /* 7 trailing */,
+        "another long string value" /* 6 trailing */, /* 7 trailing */
         /* 8 leading */
-        "yet another that is quite long" /* 9 trailing */ /* 10 trailing */,
+        "yet another that is quite long" /* 9 trailing */, /* 10 trailing */
         /* 11 leading */
         "and one more string element" /* 12 trailing */,
     ]; /* 13 trailing */
@@ -210,8 +210,8 @@ function OtherExprs(a: int, b: int) -> int {
     // 1 open brace leading
     { // 2 open brace trailing
         // 3 key leading
-        "k": // 4 key trailing
-        // 5 colon trailing
+        "k" // 4 key trailing
+        : // 5 colon trailing
         // 6 value leading
         1, // 7 value trailing
         // 8 close brace leading
@@ -248,14 +248,14 @@ function OtherExprs(a: int, b: int) -> int {
         // 3 open brace leading
         { // 4 open brace trailing
             // 5 field name leading
-            x: // 6 field name trailing
-            // 7 colon trailing
+            x // 6 field name trailing
+            : // 7 colon trailing
             // 8 value leading
-            1 // 9 value trailing
-            , // 10 comma trailing
+            1, // 9 value trailing
+            // 10 comma trailing
             // 11 second field leading
-            y: // 12 second name trailing
-            // 13 second colon trailing
+            y // 12 second name trailing
+            : // 13 second colon trailing
             // 14 second value leading
             2, // 15 second value trailing
             // 16 close brace leading
@@ -271,7 +271,7 @@ function OtherExprs(a: int, b: int) -> int {
             /* 5 field name leading */
             x /* 6 field name trailing */: /* 7 colon trailing */
             /* 8 value leading */
-            1 /* 9 value trailing */ /* 10 comma trailing */,
+            1, /* 9 value trailing */ /* 10 comma trailing */
             /* 11 second field leading */
             y /* 12 second name trailing */: /* 13 second colon trailing */
             /* 14 second value leading */
@@ -286,39 +286,39 @@ function OtherExprs(a: int, b: int) -> int {
         OtherVec // 2 trailing
         { // 3 trailing
             // 4 leading
-            p: // 5 trailing
-            // 6 trailing
+            p // 5 trailing
+            : // 6 trailing
             // 7 leading
             OtherPoint // 8 trailing
             { // 9 trailing
                 // 10 leading
-                x: // 11 trailing
-                // 12 trailing
+                x // 11 trailing
+                : // 12 trailing
                 // 13 leading
-                100000 // 14 trailing
-                , // 15 trailing
+                100000, // 14 trailing
+                // 15 trailing
                 // 16 leading
-                y: // 17 trailing
-                // 18 trailing
+                y // 17 trailing
+                : // 18 trailing
                 // 19 leading
                 200000, // 20 trailing
-            } // 21 trailing
-            , // 22 trailing
+            }, // 21 trailing
+            // 22 trailing
             // 23 leading
-            q: // 24 trailing
-            // 25 trailing
+            q // 24 trailing
+            : // 25 trailing
             // 26 leading
             OtherPoint // 27 trailing
             { // 28 trailing
                 // 29 leading
-                x: // 30 trailing
-                // 31 trailing
+                x // 30 trailing
+                : // 31 trailing
                 // 32 leading
-                300000 // 33 trailing
-                , // 34 trailing
+                300000, // 33 trailing
+                // 34 trailing
                 // 35 leading
-                y: // 36 trailing
-                // 37 trailing
+                y // 36 trailing
+                : // 37 trailing
                 // 38 leading
                 400000, // 39 trailing
             }, // 40 trailing
@@ -357,7 +357,7 @@ function OtherExprs(a: int, b: int) -> int {
                     let inner = b * 2;
                     inner + 1
                 },
-                _ => a
+                _ => a,
             }
         } else {
             b

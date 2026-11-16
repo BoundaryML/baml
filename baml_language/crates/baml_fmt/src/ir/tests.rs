@@ -374,6 +374,131 @@ fn best_fitting_measures_a_variant_to_its_first_line() {
     );
 }
 
+/// `let x = rhs;` with the right-hand side on the same line when it fits
+/// there flat, else on a line of its own when it fits there whole, else on
+/// the same line broken: rustfmt's `choose_rhs`.
+fn assignment<'a>(d: Docs<'a>, args: &[&'a str]) -> Doc<'a> {
+    let rhs = call(d, "f", args);
+    d.concat([
+        d.text("let x ="),
+        d.best_fitting([
+            d.concat([Doc::SPACE, rhs]).into(),
+            d.indent(d.concat([Doc::HARD_LINE, rhs])).all_lines(),
+            d.concat([Doc::SPACE, rhs]).into(),
+        ]),
+        d.text(";"),
+    ])
+}
+
+#[test]
+fn a_variant_measured_on_all_lines_is_chosen_when_every_line_fits() {
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let root = assignment(d, &["aaaa", "bbbb"]);
+    assert_eq!(print(root, 80), "let x = f(aaaa, bbbb);");
+    // Not on the `=` line; whole on the next one.
+    assert_eq!(print(root, 20), "let x =\n    f(aaaa, bbbb);");
+    // Measured by its first line alone, the next-line variant would always
+    // be chosen: its first line is empty. Measured whole, it is not, and the
+    // right-hand side breaks on the `=` line instead.
+    assert_eq!(print(root, 16), "let x = f(\n    aaaa,\n    bbbb,\n);");
+}
+
+#[test]
+fn a_variant_measured_on_all_lines_counts_what_follows_its_last_line() {
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    // `f(aaaa, bbbb)` is 13 columns, at indent 4 that is 17, and the `;`
+    // after the variant makes 18: it fits in 18 and not in 17.
+    let root = assignment(d, &["aaaa", "bbbb"]);
+    assert_eq!(print(root, 18), "let x =\n    f(aaaa, bbbb);");
+    assert_eq!(print(root, 17), "let x = f(\n    aaaa,\n    bbbb,\n);");
+}
+
+#[test]
+fn a_variant_measured_on_all_lines_prints_flat_with_its_own_breaks() {
+    // A member chain broken one call per line, chosen only when each line
+    // fits: the groups inside print flat without being measured again
+    // before the first break, and are measured again after it.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let first = call(d, ".first", &["a"]);
+    let last = call(d, ".last", &["bbbb", "cccc"]);
+    let flat = d.concat([d.text("x"), first, last]);
+    let expanded = d.concat([
+        d.text("x"),
+        d.indent(d.concat([Doc::HARD_LINE, first, Doc::HARD_LINE, last])),
+    ]);
+    let tail_broken = d.concat([d.text("x"), first, d.expanded_group(last)]);
+    let root = d.best_fitting([
+        flat.into(),
+        expanded.all_lines(),
+        tail_broken.into(),
+        expanded.into(),
+    ]);
+    assert_eq!(print(root, 80), "x.first(a).last(bbbb, cccc)");
+    assert_eq!(print(root, 22), "x\n    .first(a)\n    .last(bbbb, cccc)");
+    // Neither line of the broken chain fits whole; the arguments break on
+    // the flat chain's line instead.
+    assert_eq!(print(root, 18), "x.first(a).last(\n    bbbb,\n    cccc,\n)");
+    let shape = d.best_fitting([
+        d.text("a").into(),
+        d.text("b").all_lines(),
+        d.text("c").into(),
+    ]);
+    assert_eq!(
+        shape.to_string(),
+        "(best_fitting \"a\" (all_lines \"b\") \"c\")"
+    );
+}
+
+#[test]
+fn a_space_at_the_start_of_a_line_prints_nothing() {
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let root = d.concat([
+        d.text("a"),
+        Doc::HARD_LINE,
+        Doc::SPACE,
+        d.text("b"),
+        d.group(d.concat([Doc::HARD_LINE, Doc::SOFT_LINE_OR_SPACE, d.text("c")])),
+    ]);
+    assert_eq!(print(root, 80), "a\nb\nc");
+}
+
+#[test]
+fn an_if_break_forces_its_group_only_through_the_flat_arm() {
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    // `{` on the same line, or on a line of its own once the signature broke:
+    // the hard line in the breaks arm does not force the signature's group,
+    // nor the enclosing one.
+    let params = d.concat([
+        d.text("f("),
+        d.indent(d.concat([
+            Doc::SOFT_LINE,
+            d.text("a,"),
+            Doc::SOFT_LINE_OR_SPACE,
+            d.text("b"),
+            d.if_break(d.text(","), Doc::NIL),
+        ])),
+        Doc::SOFT_LINE,
+        d.text(")"),
+    ]);
+    let (signature, id) = d.group_with_id(params);
+    let body = d.concat([
+        signature,
+        d.if_group_breaks(id, Doc::HARD_LINE, Doc::SPACE),
+        d.text("{}"),
+    ]);
+    assert!(!body.forced());
+    assert!(!body.will_break());
+    assert_eq!(print(d.group(body), 80), "f(a, b) {}");
+    assert_eq!(print(d.group(body), 8), "f(\n    a,\n    b,\n)\n{}");
+    assert!(!d.if_break(Doc::HARD_LINE, Doc::NIL).forced());
+    assert!(d.if_break(Doc::NIL, Doc::HARD_LINE).forced());
+}
+
 #[test]
 fn a_forced_most_flat_variant_is_left_out_and_the_choice_breaks_its_parent() {
     let bump = Bump::new();
@@ -396,22 +521,8 @@ fn a_forced_most_flat_variant_is_left_out_and_the_choice_breaks_its_parent() {
         Doc::SOFT_LINE,
         d.text("]"),
     ]));
-    assert!(around.forced());
+    assert!(around.will_break());
     assert_eq!(print(around, 80), "[\ny\n]");
-}
-
-#[test]
-fn a_space_at_the_start_of_a_line_prints_nothing() {
-    let bump = Bump::new();
-    let d = Docs::new(&bump);
-    let root = d.concat([
-        d.text("a"),
-        Doc::HARD_LINE,
-        Doc::SPACE,
-        d.text("b"),
-        d.group(d.concat([Doc::HARD_LINE, Doc::SOFT_LINE_OR_SPACE, d.text("c")])),
-    ]);
-    assert_eq!(print(root, 80), "a\nb\nc");
 }
 
 #[test]
