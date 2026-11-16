@@ -218,7 +218,7 @@ CREATE TABLE thread (
   usage TEXT,
   total_usage TEXT,
   -- The baml.errors.Context of the error it ended with, from its first
-  -- completion (format minor 14); NULL when none was recorded.
+  -- completion (format minor 15); NULL when none was recorded.
   error_cas BLOB,
   PRIMARY KEY (rec, thread_id)
 ) STRICT, WITHOUT ROWID;
