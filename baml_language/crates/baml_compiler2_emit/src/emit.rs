@@ -290,6 +290,10 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj, 'w> {
     /// The instruction performing the terminator being emitted (a call, a
     /// suspension, a raise, a return), for `Bytecode::block_pcs`.
     terminator_pc: Option<usize>,
+    /// The `block_pcs` statement slots set while emitting the current block,
+    /// as `(block, statement)`: the only ones that can point at instructions
+    /// a superinstruction fusion replaces (see `fuse_tail`).
+    current_block_statement_pcs: Vec<(usize, usize)>,
 
     /// MIR local types, for field-name resolution and instruction
     /// specialization. Kept at the compiler's head: layout facts are read by
@@ -394,6 +398,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             next_block: None,
             current_block_start: 0,
             terminator_pc: None,
+            current_block_statement_pcs: Vec::new(),
             local_types: HashMap::with_capacity(body.locals.len()),
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
@@ -782,6 +787,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             && end > start
         {
             self.bytecode.block_pcs[def.block.0].statements[index].get_or_insert(end - 1);
+            self.current_block_statement_pcs.push((def.block.0, index));
         }
     }
 
@@ -901,6 +907,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             let block_start = self.current_pc();
             self.block_addresses.insert(block_id, block_start);
             self.current_block_start = block_start;
+            self.current_block_statement_pcs.clear();
             let block = mir.block(block_id);
             self.emit_block(block);
             let block_end = self.current_pc();
@@ -1305,9 +1312,11 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         // superinstruction, which runs that instruction's operation.
         let end = self.bytecode.instructions.len();
         let replaced_pcs = first + 1..end;
-        for block in &mut self.bytecode.block_pcs {
-            for pc in block.statements.iter_mut().flatten() {
-                if replaced_pcs.contains(pc) {
+        if !replaced_pcs.is_empty() {
+            for &(block, statement) in &self.current_block_statement_pcs {
+                if let Some(pc) = &mut self.bytecode.block_pcs[block].statements[statement]
+                    && replaced_pcs.contains(pc)
+                {
                     *pc = first;
                 }
             }
@@ -1537,6 +1546,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             let end = self.current_pc();
             if end > start {
                 self.bytecode.block_pcs[block.id.0].statements[index] = Some(end - 1);
+                self.current_block_statement_pcs.push((block.id.0, index));
             }
         }
 

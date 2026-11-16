@@ -1038,39 +1038,6 @@ pub enum Instruction {
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
 
-    // ── Local-operand superinstructions ───────────────────────────────────
-    // Fused at emit time, within one basic block, from the shapes the
-    // speedtest workloads execute most. Each behaves exactly like the
-    // sequence it replaces, raising the same errors.
-    /// Fused `LoadVar(src); LoadIntSmall(value); AddInt; StoreVar(dst)`:
-    /// `local[dst] = local[src] + value`, with `AddInt`'s overflow check.
-    /// The shape of `i += 1`.
-    AddLocalSmall(usize, usize, i8),
-    /// Fused `LoadVar(slot); LoadField(field)`: push field `field` of the
-    /// instance in `local[slot]`.
-    LoadVarField(usize, usize),
-    /// Fused `LoadVar(slot); LoadFieldLocal(field)`.
-    LoadVarFieldLocal(usize, usize),
-    /// Fused `LoadVar2(a, b); CmpIntOp(cmp); PopJumpIfTrue(offset)`: jump by
-    /// `offset` when the int comparison `local[a] cmp local[b]` holds. A
-    /// fused `PopJumpIfFalse` stores the negated comparison, which for ints
-    /// is exact. Ticks the early-yield counter like the branch it replaces.
-    /// The shape of a loop or `if` test on two locals.
-    JumpIfLocalsCmp {
-        cmp: CmpOp,
-        a: usize,
-        b: usize,
-        offset: isize,
-    },
-    /// Fused `LoadVar(a); LoadConst(constant); CmpIntOp(cmp); PopJumpIf*`:
-    /// as [`Instruction::JumpIfLocalsCmp`], against an int constant.
-    JumpIfLocalConstCmp {
-        cmp: CmpOp,
-        a: usize,
-        constant: usize,
-        offset: isize,
-    },
-
     /// Reify the package lexically enclosing the call site. In a unit the
     /// operand is a placeholder — the package is the unit's own; the linker
     /// writes the package's ordinal in the executable, which the static VM
@@ -1195,6 +1162,40 @@ pub enum Instruction {
     ///
     /// Stack: `[a, b]` -> `[bool]`
     CallEquals(GlobalIndex),
+
+    // ── Local-operand superinstructions ───────────────────────────────────
+    // Fused at emit time, within one basic block, from the shapes the
+    // speedtest workloads execute most. Each behaves exactly like the
+    // sequence it replaces, raising the same errors. Declared last: this
+    // enum is Borsh-serialized by variant ordinal, so new variants append.
+    /// Fused `LoadVar(src); LoadIntSmall(value); AddInt; StoreVar(dst)`:
+    /// `local[dst] = local[src] + value`, with `AddInt`'s overflow check.
+    /// The shape of `i += 1`.
+    AddLocalSmall(usize, usize, i8),
+    /// Fused `LoadVar(slot); LoadField(field)`: push field `field` of the
+    /// instance in `local[slot]`.
+    LoadVarField(usize, usize),
+    /// Fused `LoadVar(slot); LoadFieldLocal(field)`.
+    LoadVarFieldLocal(usize, usize),
+    /// Fused `LoadVar2(a, b); CmpIntOp(cmp); PopJumpIfTrue(offset)`: jump by
+    /// `offset` when the int comparison `local[a] cmp local[b]` holds. A
+    /// fused `PopJumpIfFalse` stores the negated comparison, which for ints
+    /// is exact. Ticks the early-yield counter like the branch it replaces.
+    /// The shape of a loop or `if` test on two locals.
+    JumpIfLocalsCmp {
+        cmp: CmpOp,
+        a: usize,
+        b: usize,
+        offset: isize,
+    },
+    /// Fused `LoadVar(a); LoadConst(constant); CmpIntOp(cmp); PopJumpIf*`:
+    /// as [`Instruction::JumpIfLocalsCmp`], against an int constant.
+    JumpIfLocalConstCmp {
+        cmp: CmpOp,
+        a: usize,
+        constant: usize,
+        offset: isize,
+    },
 }
 
 /// Compact bytecode opcodes.
