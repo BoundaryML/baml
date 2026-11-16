@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Deployment launcher; keep beside its packed wrapper. Requires Python 3."""
+
+import errno
+import os
+from pathlib import Path
+import sys
+
+
+def main():
+    binary = str(Path(__file__).resolve().with_name(@BINARY@))
+    environment = dict(os.environ)
+    # Reserved marker lets the wrapper avoid applying a deployment default to
+    # delegated CLIs and detached helpers. Explicit choices never get a marker.
+    marker = "BAML_WRAPPER_LAUNCHER_DEFAULT"
+    environment.pop(marker, None)
+    if "BAML_TELEMETRY" not in environment:
+        default = @DEFAULT@
+        # Internal helpers do not need automatic function observation.
+        helper = sys.argv[1:] == ["__flush-wrapper-telemetry"] or sys.argv[1:2] == ["--replace"]
+        environment["BAML_TELEMETRY"] = "off" if helper else default
+        environment[marker] = environment["BAML_TELEMETRY"]
+    command = [binary, *sys.argv[1:]]
+    try:
+        if os.name == "nt":
+            import ctypes
+            import signal
+            import subprocess
+
+            # Both processes share the console: let the child receive Ctrl-C /
+            # Ctrl-Break directly and keep waiting for its actual exit status.
+            signal.signal(signal.SIGINT, lambda *_: None)
+            signal.signal(signal.SIGBREAK, lambda *_: None)
+            child = subprocess.Popen(command, env=environment)
+            status = child.wait()
+            # Preserve the entire Windows DWORD status, including NT exceptions.
+            ctypes.windll.kernel32.ExitProcess(ctypes.c_uint32(status))
+        else:
+            # Preserve PID, stdio, cwd, exit status and normal POSIX signals.
+            os.execve(binary, command, environment)
+    except OSError as error:
+        # Do not print arguments, environment, credentials, or arbitrary errors.
+        print("baml launcher: cannot start packed wrapper", file=sys.stderr)
+        return 127 if error.errno == errno.ENOENT else 126
+
+
+if __name__ == "__main__":
+    sys.exit(main())

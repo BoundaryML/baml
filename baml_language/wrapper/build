@@ -19,6 +19,11 @@ parser.add_argument("--target")
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--version")
 parser.add_argument("--no-self-update", action="store_true")
+parser.add_argument("--launcher", type=Path, help="write a Python deployment launcher beside --output")
+parser.add_argument(
+    "--launcher-telemetry-default", choices=("high", "low"),
+    help="default BAML_TELEMETRY only when unset; requires --launcher (not baked into the binary)",
+)
 parser.add_argument(
     "--embed-telemetry",
     action="store_true",
@@ -27,6 +32,13 @@ parser.add_argument(
 parser.add_argument("--telemetry-project", help="project handle written to boundary.project in the temporary manifest")
 parser.add_argument("--telemetry-environment", help="environment written to pack.build.embed_telemetry_env")
 args = parser.parse_args()
+if bool(args.launcher) != bool(args.launcher_telemetry_default):
+    parser.error("--launcher and --launcher-telemetry-default require each other")
+if args.launcher:
+    launcher = args.launcher.resolve()
+    output = args.output.resolve()
+    if launcher == output or launcher.parent != output.parent:
+        parser.error("--launcher must be a different file beside --output")
 if (args.telemetry_project or args.telemetry_environment) and not args.embed_telemetry:
     parser.error("telemetry project/environment require --embed-telemetry")
 release = tomllib.loads((repo / "baml_language/wrapper/release.toml").read_text())
@@ -90,3 +102,9 @@ with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
     subprocess.run(
         command, check=True, cwd=repo, env=dict(os.environ, BAML_CLI_ALLOW_DIRECT="1")
     )
+    if args.launcher:
+        source = (repo / "baml_language/wrapper/launcher.py.in").read_text()
+        values = {"BINARY": output.name, "DEFAULT": args.launcher_telemetry_default}
+        source = re.sub(r"@(BINARY|DEFAULT)@", lambda match: repr(values[match[1]]), source)
+        launcher.write_text(source, encoding="utf-8")
+        launcher.chmod(0o755)

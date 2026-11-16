@@ -192,7 +192,7 @@ function dispatch(telemetry: WrapperTelemetry?) -> string? {
 // Keep the child result before sys.exit unwinds dispatch as cancellation. Standard
 // streams still inherit; expose only status to the recording boundary.
 function run_toolchain(binary: string, args: string[]) -> baml.sys.ProcessExit {
-    let result = baml.sys.run(binary, args = args, env = { "BAML_CLI_ALLOW_DIRECT": "1" }) catch (error) {
+    let result = baml.sys.run(binary, args = args, env = wrapper_child_env()) catch (error) {
         _ => {
             record_wrapper_error(
                 "child_launch",

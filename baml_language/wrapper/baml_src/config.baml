@@ -204,10 +204,34 @@ function try_lock(path: string) -> baml.fs.Lock? {
     }
 }
 
+// A deployment launcher defaults only this wrapper's recording. Restore an
+// originally unset level for delegated CLIs, and disable automatic recording
+// in internal helpers. Caller-supplied values, including empty, pass unchanged.
+function wrapper_child_env(internal_helper: bool = false) -> map<string, string?> {
+    let result: map<string, string?> = {};
+    if (!internal_helper) {
+        result["BAML_CLI_ALLOW_DIRECT"] = "1";
+    }
+    let default = baml.env.get("BAML_WRAPPER_LAUNCHER_DEFAULT");
+    if (default != null) {
+        result["BAML_WRAPPER_LAUNCHER_DEFAULT"] = null;
+        if ((default == "high" || default == "low") && baml.env.get("BAML_TELEMETRY") == default) {
+            result["BAML_TELEMETRY"]
+                = if (internal_helper) {
+                    "off"
+                } else {
+                    null
+                };
+        }
+    }
+    result
+}
+
 function start_detached(program: string, args: string[]) -> null {
     let child = baml.sys.subprocess(
         program,
         args = args,
+        env = wrapper_child_env(internal_helper = true),
         detached = true,
         stdin = "ignore",
         stdout = "ignore",

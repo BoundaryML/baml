@@ -38,6 +38,26 @@ env:
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
+  launcher-contracts:
+    name: Launcher contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Check native launcher arguments, environment, exit and signals
+        shell: bash
+        run: python -m unittest scripts.tests.test_wrapper_launcher -v
+
   # One native Linux target exercises wrapper behavior without repeating it per OS/ABI.
   tests:
     runs-on: blacksmith-16vcpu-ubuntu-2404
@@ -93,6 +113,11 @@ jobs:
             options+=(--release-artifacts "$PWD/release-candidates" --wrapper-version "$WRAPPER_VERSION")
           fi
           python baml_language/wrapper_tests/run "${options[@]}" 2>&1 | tee wrapper-tests.log
+      - name: Verify launcher startup and child policy with local recordings
+        run: >-
+          python baml_language/wrapper_tests/verify_launcher.py
+          --cli baml_language/target/debug/baml-cli
+          --pack-host baml_language/target/debug/baml-pack-host -v
       - name: Show sccache stats
         if: always()
         run: sccache --show-stats
