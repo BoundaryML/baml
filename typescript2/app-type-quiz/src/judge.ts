@@ -44,12 +44,12 @@ export interface JudgeSettings {
 
 /** The models a judgement may be asked of, best first; the engine's table. */
 export function models(): Offer[] {
-  return engine.offered();
+  return engine.offered_sync();
 }
 
 /** The offer the settings name. */
 export function offerOf(model: string): Offer {
-  return engine.offer_of(model);
+  return engine.offer_of_sync(model);
 }
 
 /**
@@ -152,7 +152,7 @@ export async function judgeReasoning(
   said: string,
   reasoning: string,
 ): Promise<Judgement> {
-  const judged = await engine.judge_reasoning_async(
+  const judged = await engine.judge_reasoning(
     keyFor(settings, settings.model).trim(),
     settings.model,
     revealed,
@@ -174,5 +174,5 @@ export async function judgeReasoning(
  * argument does not survive this boundary.
  */
 function markOf(grade: Grade): string {
-  return engine.mark_of(grade);
+  return engine.mark_of_sync(grade);
 }

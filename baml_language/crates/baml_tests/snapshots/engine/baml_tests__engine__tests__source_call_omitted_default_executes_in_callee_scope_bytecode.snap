@@ -6,10 +6,7 @@ function add(base: int, amount: int) -> int {
     load_const <omitted>
     cmp_op ==
     pop_jump_if_false L0
-    load_var base
-    load_const 2
-    add_int
-    store_var amount
+    add_local_small 2 1 2
 
   L0:
     load_var2 1 2

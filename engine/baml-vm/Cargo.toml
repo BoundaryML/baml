@@ -26,7 +26,7 @@ baml-runtime = { path = "../baml-runtime" }
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 internal-baml-parser-database = { path = "../baml-lib/parser-database" }
-divan = { package = "codspeed-divan-compat", version = "*" }
+divan = "0.1.21"
 indexmap = { workspace = true }
 
 [[bench]]

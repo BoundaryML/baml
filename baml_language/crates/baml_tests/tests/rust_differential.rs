@@ -267,7 +267,7 @@ fn rust_differential() {
         workspace.display().to_string(),
         "--rust-build-dir".into(),
         build.display().to_string(),
-        "--from".into(),
+        "--project-dir".into(),
         manifest.join("rust_diff").display().to_string(),
         "-o".into(),
         executable.display().to_string(),

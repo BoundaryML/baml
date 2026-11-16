@@ -14,14 +14,15 @@ use baml_ide::{
     metrics::{FileMetrics, FunctionMetrics, ProjectMetrics, project_metrics},
 };
 use clap::{Args, ValueEnum};
-use console::{Alignment, Style};
+use console::Alignment;
 use num_bigint::BigUint;
 use serde::{Serialize, Serializer};
 
 use crate::{
+    output::{Command, CommandContext, Outcome, Report},
     paint::Painter,
     project_session::{CacheUse, ProjectSession},
-    reporter::{Reporter, accent_style, secondary_style},
+    reporter::Reporter,
 };
 
 /// Rows a list view shows without `--all`.
@@ -69,30 +70,6 @@ pub(crate) struct CodeQualityArgs {
     /// Show every row instead of the worst 10.
     #[arg(long, help_heading = "Output options")]
     pub(crate) all: bool,
-
-    #[arg(
-        long = "output-format",
-        value_enum,
-        value_name = "FORMAT",
-        default_value_t = OutputFormat::Table,
-        help = "Format the report; json holds every function and file with every metric, so it takes no other output option [default: table] [possible values: table, json]",
-        hide_default_value = true,
-        hide_possible_values = true,
-        help_heading = "Output options"
-    )]
-    pub(crate) output_format: OutputFormat,
-
-    /// Set from the global `--project`.
-    #[arg(skip)]
-    pub(crate) from: Option<PathBuf>,
-}
-
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum OutputFormat {
-    /// Tables for reading.
-    Table,
-    /// One JSON document with every function and file.
-    Json,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
@@ -199,18 +176,51 @@ const FILE_DEFAULT: [Metric; 8] = [
     Metric::TestLines,
 ];
 
-impl CodeQualityArgs {
-    pub(crate) fn run(&self) -> Result<crate::ExitCode> {
+/// Which text view to render. JSON always holds everything.
+#[derive(Debug, Clone, Copy)]
+enum Show {
+    Summary,
+    Files,
+    Functions,
+}
+
+/// The measured project plus the text view the caller asked for.
+pub(crate) struct CodeQualityReport {
+    view: View,
+    show: Show,
+    metrics: Vec<Metric>,
+    all: bool,
+}
+
+impl Serialize for CodeQualityReport {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.view.dump().serialize(serializer)
+    }
+}
+
+impl Report for CodeQualityReport {
+    fn text(&self, mut out: &mut dyn Write, style: &Painter) -> std::io::Result<()> {
+        match self.show {
+            Show::Functions => self
+                .view
+                .write_functions(&mut out, style, &self.metrics, self.all),
+            Show::Files => self
+                .view
+                .write_files(&mut out, style, &self.metrics, self.all),
+            Show::Summary => self.view.write_summary(&mut out, style, &self.metrics),
+        }
+    }
+}
+
+impl Command for CodeQualityArgs {
+    type Output = CodeQualityReport;
+
+    fn run(&self, cx: &CommandContext) -> Result<Outcome<CodeQualityReport>> {
         let metrics = self.selected()?;
         let reporter = Reporter::new();
-        let session = ProjectSession::open(self.from.as_deref(), CacheUse::Off)?;
+        let session = ProjectSession::open(cx.project_dir.as_deref(), CacheUse::Off)?;
         if session.is_empty() {
-            reporter.abandon();
-            crate::reporter::print_error(format_args!(
-                "no .baml files found in {}",
-                session.root().display()
-            ));
-            return Ok(crate::ExitCode::Other);
+            bail!("no .baml files found in {}", session.root().display());
         }
         let only = self
             .paths
@@ -223,8 +233,7 @@ impl CodeQualityArgs {
             })
             .collect::<Result<Vec<_>>>()?;
         reporter.spin("Measuring", format!("{} file(s)", session.file_count()));
-        let files = session.package.files(&session.db).clone();
-        let view = View::new(&session.db, &files, session.root(), &only);
+        let view = View::new(session, &only);
         reporter.finish(
             "Finished",
             format!(
@@ -233,32 +242,24 @@ impl CodeQualityArgs {
                 view.metrics.files.len()
             ),
         );
-
-        let mut out = std::io::stdout().lock();
-        if self.output_format == OutputFormat::Json {
-            serde_json::to_writer_pretty(&mut out, &view.dump())?;
-            writeln!(out)?;
-            return Ok(crate::ExitCode::Success);
-        }
-        let painter = Painter::stdout();
-        if self.functions {
-            view.write_functions(&mut out, &painter, &metrics, self.all)?;
+        let show = if self.functions {
+            Show::Functions
         } else if self.files {
-            view.write_files(&mut out, &painter, &metrics, self.all)?;
+            Show::Files
         } else {
-            view.write_summary(&mut out, &painter, &metrics)?;
-        }
-        Ok(crate::ExitCode::Success)
+            Show::Summary
+        };
+        Ok(Outcome::ok(CodeQualityReport {
+            view,
+            show,
+            metrics,
+            all: self.all,
+        }))
     }
+}
 
+impl CodeQualityArgs {
     fn selected(&self) -> Result<Vec<Metric>> {
-        if self.output_format == OutputFormat::Json
-            && (self.files || self.functions || self.all || !self.metrics.is_empty())
-        {
-            bail!(
-                "--output-format json always includes every function, file and metric; drop --files, --functions, --metrics and --all"
-            );
-        }
         if self.metrics.is_empty() {
             return Ok(if self.functions {
                 FUNCTION_DEFAULT.to_vec()
@@ -279,37 +280,41 @@ impl CodeQualityArgs {
 }
 
 /// The measured project, narrowed to the requested paths.
-pub(crate) struct View<'a> {
-    db: &'a ProjectDatabase,
-    root: &'a Path,
+pub(crate) struct View {
+    session: ProjectSession,
     metrics: ProjectMetrics,
 }
 
-impl<'a> View<'a> {
-    pub(crate) fn new(
-        db: &'a ProjectDatabase,
-        files: &[SourceFile],
-        root: &'a Path,
-        only: &[PathBuf],
-    ) -> Self {
-        let mut metrics = project_metrics(db, files);
+impl View {
+    pub(crate) fn new(session: ProjectSession, only: &[PathBuf]) -> Self {
+        let db = &session.db;
+        let files = session.package.files(db).clone();
+        let mut metrics = project_metrics(db, &files);
         let keep =
             |file: SourceFile| only.is_empty() || only.iter().any(|p| file.path(db).starts_with(p));
         metrics.functions.retain(|f| keep(f.file));
         metrics.files.retain(|f| keep(f.file));
-        Self { db, root, metrics }
+        Self { session, metrics }
+    }
+
+    fn db(&self) -> &ProjectDatabase {
+        &self.session.db
+    }
+
+    fn root(&self) -> &Path {
+        self.session.root()
     }
 
     fn path(&self, file: SourceFile) -> String {
-        let path = file.path(self.db);
-        path.strip_prefix(self.root)
+        let path = file.path(self.db());
+        path.strip_prefix(self.root())
             .unwrap_or(&path)
             .display()
             .to_string()
     }
 
     fn line(&self, f: &FunctionMetrics) -> u32 {
-        LineIndex::new(f.file.text(self.db)).line(f.span.start().into()) + 1
+        LineIndex::new(f.file.text(self.db())).line(f.span.start().into()) + 1
     }
 
     /// Every function and file with every metric, for `--output-format json`.
@@ -320,7 +325,7 @@ impl<'a> View<'a> {
                 .functions
                 .iter()
                 .map(|f| {
-                    let lines = LineIndex::new(f.file.text(self.db));
+                    let lines = LineIndex::new(f.file.text(self.db()));
                     FunctionRow {
                         name: f.name.to_string(),
                         file: self.path(f.file),
@@ -357,7 +362,7 @@ impl<'a> View<'a> {
     /// terminal supports one.
     fn location(&self, painter: &Painter, f: &FunctionMetrics) -> String {
         painter.location(
-            &f.file.path(self.db),
+            &f.file.path(self.db()),
             &self.path(f.file),
             &self.line(f).to_string(),
         )
@@ -389,7 +394,7 @@ impl<'a> View<'a> {
             let total: BigUint = self.metrics.files.iter().map(|f| m.of_file(f)).sum();
             vec![m.label(), count(&total)]
         }));
-        writeln!(w, "{}", styles.header.apply_to("Overview"))?;
+        writeln!(w, "{}", painter.accent("Overview"))?;
         styles.table(w, None, &overview, &[0])?;
         writeln!(w)?;
 
@@ -408,12 +413,12 @@ impl<'a> View<'a> {
                     average(functions, m),
                     maximum(functions, m),
                     name,
-                    styles.dim.apply_to(location).to_string(),
+                    painter.dim(location),
                 ]
             })
             .collect();
         if !spread.is_empty() {
-            writeln!(w, "{}", styles.header.apply_to("Complexity"))?;
+            writeln!(w, "{}", painter.accent("Complexity"))?;
             let header = ["", "total", "avg", "max", "worst", ""].map(String::from);
             styles.table(w, Some(&header[..]), &spread, &[0, 4, 5])?;
             writeln!(w)?;
@@ -486,9 +491,7 @@ impl<'a> View<'a> {
         writeln!(
             w,
             "{}",
-            styles
-                .header
-                .apply_to(format!("Files, worst {} first", first.label()))
+            painter.accent(format!("Files, worst {} first", first.label()))
         )?;
         let file_column = header.len() - 1;
         styles.table(w, Some(header.as_slice()), &cells, &[file_column])?;
@@ -528,7 +531,7 @@ impl<'a> View<'a> {
                 let mut row: Vec<String> =
                     metrics.iter().map(|m| count(&m.of_function(f))).collect();
                 row.push(Self::name(painter, f));
-                row.push(styles.dim.apply_to(self.location(painter, f)).to_string());
+                row.push(painter.dim(self.location(painter, f)));
                 row
             })
             .collect();
@@ -536,9 +539,7 @@ impl<'a> View<'a> {
         writeln!(
             w,
             "{}",
-            styles
-                .header
-                .apply_to(format!("Functions, worst {} first", first.label()))
+            painter.accent(format!("Functions, worst {} first", first.label()))
         )?;
         let name_column = header.len() - 2;
         styles.table(
@@ -597,19 +598,14 @@ struct FileRow {
     test_lines: u32,
 }
 
-/// The styles one render uses, colored only when its stream is.
-struct Styles {
-    header: Style,
-    dim: Style,
+/// The table layout one render uses, styled by its stream's painter.
+struct Styles<'a> {
+    painter: &'a Painter,
 }
 
-impl Styles {
-    fn new(painter: &Painter) -> Self {
-        let color = painter.enabled();
-        Self {
-            header: accent_style().force_styling(color),
-            dim: secondary_style().force_styling(color),
-        }
+impl<'a> Styles<'a> {
+    fn new(painter: &'a Painter) -> Self {
+        Self { painter }
     }
 
     /// An indented table: the dim header row if any, then each row, every
@@ -647,7 +643,7 @@ impl Styles {
             cells.join("  ").trim_end().to_owned()
         };
         if let Some(header) = header {
-            writeln!(w, "  {}", self.dim.apply_to(line(header)))?;
+            writeln!(w, "  {}", self.painter.dim(line(header)))?;
         }
         for row in rows {
             writeln!(w, "  {}", line(row))?;
@@ -673,7 +669,7 @@ impl Styles {
     }
 
     fn hint(&self, w: &mut impl Write, text: &str) -> std::io::Result<()> {
-        writeln!(w, "{}", self.dim.apply_to(text))
+        writeln!(w, "{}", self.painter.dim(text))
     }
 }
 
@@ -771,14 +767,13 @@ mod tests {
     fn render(
         dir: &Path,
         only: &[&str],
-        show: impl Fn(&View<'_>, &mut Vec<u8>, &Painter) -> std::io::Result<()>,
+        show: impl Fn(&View, &mut Vec<u8>, &Painter) -> std::io::Result<()>,
     ) -> String {
         let session = ProjectSession::open(Some(dir), CacheUse::Off).unwrap();
         let only: Vec<PathBuf> = only.iter().map(|p| session.root().join(p)).collect();
-        let files = session.package.files(&session.db).clone();
-        let view = View::new(&session.db, &files, session.root(), &only);
+        let view = View::new(session, &only);
         let mut out = Vec::new();
-        show(&view, &mut out, &Painter::stdout()).unwrap();
+        show(&view, &mut out, &Painter::new(false, false)).unwrap();
         // Paths print with the native separator; the snapshots use `/`.
         String::from_utf8(out)
             .unwrap()

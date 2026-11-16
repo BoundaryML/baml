@@ -205,6 +205,91 @@ impl<T> io::IoNamespaceJson for T {
     }
 }
 
+// ============================================================================
+// `baml.future` — reading a running task's stack
+// ============================================================================
+
+/// Blanket impl: the engine answers `baml.future._task_stack` and
+/// `_task_report` itself, since they need every task paused; a provider never
+/// sees them.
+impl<T> io::IoNamespaceFuture for T {
+    fn _task_report(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        _future_id: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "task report".to_string(),
+            message: "only the engine can read a task's stack".to_string(),
+        })
+    }
+
+    fn _task_stack(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        _future_id: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<BexExternalValue>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "task report".to_string(),
+            message: "only the engine can read a task's stack".to_string(),
+        })
+    }
+}
+
+// ============================================================================
+// `baml.sync` — waiting for a contended `atomic` key or `Semaphore` slot
+// ============================================================================
+
+/// Blanket impl: the wait is the same on every host. Dropping the future
+/// (the task was cancelled) withdraws the task from the lock's queue.
+impl<T> io::IoNamespaceSync for T {
+    fn _wait(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        ticket: std::sync::Arc<dyn bex_vm_types::BexRustData>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use bex_vm_types::RustDataArc as _;
+        let got = ticket.payload_type_id();
+        match ticket.downcast_payload::<bex_vm_types::Waiter>() {
+            Ok(waiter) => SysOpOutput::async_op(async move {
+                waiter.granted().await;
+                Ok(())
+            }),
+            Err(_) => SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: std::any::TypeId::of::<bex_vm_types::Waiter>(),
+                got,
+            }),
+        }
+    }
+
+    fn _wait_permit(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        held: std::sync::Arc<dyn bex_vm_types::BexRustData>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use bex_vm_types::RustDataArc as _;
+        let got = held.payload_type_id();
+        match held.downcast_payload::<bex_vm_types::PermitState>() {
+            Ok(held) => SysOpOutput::async_op(async move {
+                held.wait().await;
+                Ok(())
+            }),
+            Err(_) => SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: std::any::TypeId::of::<bex_vm_types::PermitState>(),
+                got,
+            }),
+        }
+    }
+}
+
 mod schema {
     use std::collections::HashSet;
 

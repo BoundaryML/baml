@@ -446,8 +446,8 @@ function check_snippet_in(
     baml.fs.write(`${directory}/baml_src/snippet.baml`, code);
     let result = baml.sys.run(
         box.baml_bin,
-        args = ["check", "--color", "never", "--project", directory],
-        // No `cwd`: `--project` already says what to compile, and setting
+        args = ["check", "--color", "never", "--project-dir", directory],
+        // No `cwd`: `--project-dir` already says what to compile, and setting
         // one would re-root the compiler's own path. `baml.sys.run`
         // resolves the program against the child's working directory, so a
         // relative `baml_bin` plus a `cwd` is a spawn failure.

@@ -32,7 +32,18 @@ fn cli(project: &Path, args: &[&str], envs: &[(&str, &str)]) -> std::process::Ou
 }
 
 fn query(project: &Path, sql: &str) -> (i32, Value) {
-    let output = cli(project, &["query", "--local", "--format", "json", sql], &[]);
+    let output = cli(
+        project,
+        &[
+            "local",
+            "recordings",
+            "query",
+            "--output-format",
+            "json",
+            sql,
+        ],
+        &[],
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json = serde_json::from_str(&stdout).unwrap_or_else(|e| {
         panic!(
@@ -112,6 +123,43 @@ fn launch_context_reaches_processes_roots_and_futures_without_nested_overrides()
     );
     assert_eq!(code, 0, "{future}");
     assert_eq!(future["rows"], serde_json::json!([[4]]));
+}
+
+/// A JSON Lines row is keyed by column name, so two columns with one name
+/// cannot both be shown.
+#[test]
+fn jsonl_rejects_duplicate_column_names() {
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("baml_src")).unwrap();
+    std::fs::write(project.path().join("baml_src/main.baml"), PROGRAM).unwrap();
+    let run = |format: &str| {
+        cli(
+            project.path(),
+            &[
+                "local",
+                "recordings",
+                "query",
+                "--output-format",
+                format,
+                "SELECT 1 AS x, 2 AS x",
+            ],
+            &[],
+        )
+    };
+
+    let jsonl = run("jsonl");
+    assert_eq!(jsonl.status.code(), Some(1), "{jsonl:?}");
+    assert!(jsonl.stdout.is_empty(), "{jsonl:?}");
+    assert!(
+        String::from_utf8_lossy(&jsonl.stderr).contains("column `x` appears more than once"),
+        "{jsonl:?}"
+    );
+
+    // The positional formats keep both values.
+    let json = run("json");
+    assert_eq!(json.status.code(), Some(0), "{json:?}");
+    let report: Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(report["rows"], serde_json::json!([[1, 2]]));
 }
 
 #[test]
@@ -209,7 +257,7 @@ fn schema_invalid_sql_and_stdin() {
     let project = tempfile::tempdir().unwrap();
     let schema = cli(
         project.path(),
-        &["query", "--schema", "--table", "spans"],
+        &["local", "recordings", "schema", "spans"],
         &[],
     );
     assert!(schema.status.success());
@@ -221,14 +269,21 @@ fn schema_invalid_sql_and_stdin() {
 
     let invalid = cli(
         project.path(),
-        &["query", "--local", "DELETE FROM spans"],
+        &["local", "recordings", "query", "DELETE FROM spans"],
         &[],
     );
-    assert_eq!(invalid.status.code(), Some(2));
+    assert_eq!(invalid.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("read-only"));
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_baml-cli"))
-        .args(["query", "--local", "--format", "jsonl", "-"])
+        .args([
+            "local",
+            "recordings",
+            "query",
+            "--output-format",
+            "jsonl",
+            "-",
+        ])
         .current_dir(project.path())
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .stdin(std::process::Stdio::piped())

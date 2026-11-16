@@ -42,8 +42,34 @@ impl ThreadStackBudget {
         }
     }
     /// Reserve additional live elements without exceeding the shared byte budget.
+    ///
+    /// The fit test is one subtraction and compare (`len <= capacity`, so
+    /// `capacity - len` cannot underflow). Everything that can fail, including
+    /// building a `VmPanic`, lives in the cold growth path: an eagerly built
+    /// error value would be dropped on every successful call.
     #[inline]
     pub(crate) fn try_reserve<T>(
+        &self,
+        storage: &mut Vec<T>,
+        additional: usize,
+        #[cfg(test)] refuse_next_growth: &mut bool,
+    ) -> Result<(), VmPanic> {
+        if additional <= storage.capacity() - storage.len() {
+            return Ok(());
+        }
+        self.grow(
+            storage,
+            additional,
+            #[cfg(test)]
+            refuse_next_growth,
+        )
+    }
+
+    /// Allocate a replacement safely, validate its actual capacity, then move
+    /// live elements. The old array stays intact on allocation/budget failure.
+    #[cold]
+    #[inline(never)]
+    fn grow<T>(
         &self,
         storage: &mut Vec<T>,
         additional: usize,
@@ -53,26 +79,6 @@ impl ThreadStackBudget {
             .len()
             .checked_add(additional)
             .ok_or(VmPanic::StackOverflow)?;
-        if needed <= storage.capacity() {
-            return Ok(());
-        }
-        self.grow(
-            storage,
-            needed,
-            #[cfg(test)]
-            refuse_next_growth,
-        )
-    }
-
-    /// Allocate a replacement safely, validate its actual capacity, then move
-    /// live elements. The old array stays intact on allocation/budget failure.
-    #[cold]
-    fn grow<T>(
-        &self,
-        storage: &mut Vec<T>,
-        needed: usize,
-        #[cfg(test)] refuse_next_growth: &mut bool,
-    ) -> Result<(), VmPanic> {
         let old_bytes = storage.capacity() * size_of::<T>();
         let used = self.0.load(Ordering::Relaxed);
         let maximum = (THREAD_STACK_BUDGET_BYTES - used + old_bytes) / size_of::<T>();

@@ -1522,7 +1522,9 @@ pub(crate) fn member_resolution_target<'db>(
             ..
         } => Some(SymbolTarget::Method { func: *func }),
         MemberResolution::Method {
-            callee: MethodCallee::Virtual { interface, method },
+            callee: MethodCallee::Virtual {
+                interface, method, ..
+            },
             ..
         } => {
             // Only the slot (interface + name) is known statically — and the

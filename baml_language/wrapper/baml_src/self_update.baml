@@ -5,7 +5,7 @@ class WrapperUpdater {
         if (!self_update_enabled()) {
             fail(
                 `
-                    self-update is disabled in this build.
+                    baml self update is disabled in this build.
                     Update BAML with your package manager.
                     Homebrew: brew upgrade baml
                     WinGet: winget upgrade --id BoundaryML.BAML
@@ -71,8 +71,8 @@ class WrapperUpdater {
         } else {
             baml.fs.rename(temp, self.executable);
         }
-        baml.io.println(`updated BAML wrapper to ${release.version}`);
-        baml.io.println("To check language toolchain updates, run: baml toolchain status");
+        baml.io.eprintln(`updated BAML wrapper to ${release.version}`);
+        baml.io.eprintln("To check language toolchain updates, run: baml toolchain status");
         helper
     }
 

@@ -1,10 +1,10 @@
 import lambWhite from '@boundaryml/brand/logo/svg/baml-logomark-white.svg';
 import Image from 'next/image';
 import { section } from './analytics';
-import { BOOK } from './links';
+import { SIGNUP } from './links';
 import { Button } from './ui';
 
-/** Section 7: the same booking link as the nav and the hero, over the clover field. */
+/** The homepage and blog's closing link to early access. */
 export default function Book() {
   return (
     <section
@@ -32,7 +32,7 @@ export default function Book() {
             data and the speed. Making great decisions is still your job.
           </p>
           <div className="mt-8">
-            <Button href={BOOK}>Get early access</Button>
+            <Button href={SIGNUP}>Get early access</Button>
           </div>
         </div>
         <Image

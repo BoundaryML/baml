@@ -261,6 +261,17 @@ pub enum TirTypeError {
     /// declare it independently (via distinct interfaces), but those are different
     /// members — the union has no single agreed-upon one.
     UnionMemberNoCommonInterface { union: Ty, member: Name },
+    /// A member reached through a union needs ONE type at a position where
+    /// its arms bind an associated type differently. A method parameter takes
+    /// one argument whichever arm the receiver holds, and a field is both
+    /// read and written, so neither can be typed per arm the way a return
+    /// type is. `types` are the arms' types for the offending position.
+    UnionMemberAssociatedTypeConflict {
+        union: Ty,
+        member: Name,
+        is_method: bool,
+        types: Vec<Ty>,
+    },
     /// A path that resolved to nothing started at an item of this namespace
     /// spelled like a package: the package is out of reach by that name.
     ItemShadowsPackage { name: Name },
@@ -1290,6 +1301,30 @@ impl TirTypeError {
                         f,
                         "type `{}` has no member `{member}`: its members implement no common \
                      interface that declares `{member}`",
+                        union.spell(vp)
+                    )
+                }
+                TirTypeError::UnionMemberAssociatedTypeConflict {
+                    union,
+                    member,
+                    is_method,
+                    types,
+                } => {
+                    let position = if *is_method {
+                        "a parameter's type"
+                    } else {
+                        "its type"
+                    };
+                    let types = types
+                        .iter()
+                        .map(|ty| format!("`{}`", ty.spell(vp)))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    write!(
+                        f,
+                        "member `{member}` cannot be used on `{}`: {position} depends on an \
+                     associated type its members bind differently ({types}); narrow the \
+                     union first",
                         union.spell(vp)
                     )
                 }

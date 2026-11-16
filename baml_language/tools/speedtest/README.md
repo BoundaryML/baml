@@ -42,12 +42,12 @@ Python, `String` in JS). A workload that needs state built once and kept, such
 as a large live graph, also defines `setup()` and `run(state)`: the harness
 then calls `setup()` once, untimed, and times `run(state)`. `main()` stays a
 complete job (`run(setup())`), so every `main.baml` is runnable on its own and
-compiles into the CodSpeed benches (`crates/baml_tests/build.rs` generates one
+compiles into the divan benches (`crates/baml_tests/build.rs` generates one
 `vm_speedtest_*` bench per workload).
 
 `jobs` is how many jobs one trial times, `warmup` how many untimed jobs run
 first; size `jobs` so a VM trial times roughly half a second. `category::name`
-is the workload's identity: CodSpeed bench names and saved baselines derive
+is the workload's identity: divan bench names and saved baselines derive
 from it.
 
 To add one: create the directory, write the three programs, run

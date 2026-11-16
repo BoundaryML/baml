@@ -6,10 +6,10 @@ import json
 import os
 import re
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from release_artifacts import candidates_from_archives
 from environment import test_environment
 
@@ -65,10 +65,9 @@ wrapper_target = (
     workspace / "target" / cross_target / "debug" if cross_target else target
 )
 environment = dict(test_environment(os.environ), BAML_CLI_ALLOW_DIRECT="1")
-# The wrapper package Cargo version, e.g. version = "0.2.5".
-wrapper_version = re.search(
-    r'^version = "([^"]+)"', (workspace / "crates/baml/Cargo.toml").read_text(), re.M
-)[1]
+wrapper_version = tomllib.loads((workspace / "wrapper/release.toml").read_text())[
+    "package"
+]["version"]
 
 
 def run(command, **kwargs):
@@ -89,15 +88,11 @@ if not args.no_build:
             "--manifest-path",
             workspace / "Cargo.toml",
             "-p",
-            "baml",
-            "--bin",
-            "baml",
-            "--example",
-            "wrapper-stub",
-            "-p",
             "baml_cli",
             "--bin",
             "baml-cli",
+            "--example",
+            "wrapper-stub",
             "-p",
             "baml_pack_host",
             "--bin",
@@ -109,10 +104,6 @@ if not args.no_build:
             [
                 "cargo",
                 "build",
-                "-p",
-                "baml",
-                "--bin",
-                "baml",
                 "-p",
                 "baml_pack_host",
                 "--bin",
@@ -137,87 +128,59 @@ with tempfile.TemporaryDirectory(prefix="wrapper-suite-") as directory:
             args.release_artifacts, directory, platform, args.wrapper_version
         )
     if not candidates:
-        rust = Path(directory) / ("rust" + target_suffix)
-        shutil.copyfile(wrapper_target / ("baml" + target_suffix), rust)
-        rust.chmod(0o755)
-        candidates.append(
-            {
-                "label": "rust",
-                "command": [str(rust)],
-                "self_update": True,
-                "version": wrapper_version,
-                "posthog": True,
-            }
-        )
-        if not args.no_build:
-            run(
-                [
-                    "cargo",
-                    "build",
-                    "-p",
-                    "baml",
-                    "--bin",
-                    "baml",
-                    "--features",
-                    "no-self-update",
-                ]
-                + (["--target", cross_target] if cross_target else [])
-            )
-            disabled = Path(directory) / ("rust-no-self-update" + target_suffix)
-            shutil.copyfile(wrapper_target / ("baml" + target_suffix), disabled)
-            disabled.chmod(0o755)
-            # Keep --no-build's default candidate self-update enabled.
-            run(
-                ["cargo", "build", "-p", "baml", "--bin", "baml"]
-                + (["--target", cross_target] if cross_target else [])
-            )
+        for enabled in [True, False]:
+            label = "baml" if enabled else "baml-no-self-update"
+            packed = Path(directory) / (label + target_suffix)
+            command = [
+                sys.executable,
+                repo / "baml_language/wrapper/build",
+                "--cli",
+                target / ("baml-cli" + suffix),
+                "--output",
+                packed,
+            ]
+            if args.target:
+                command.extend(
+                    [
+                        "--target",
+                        args.target,
+                        "--pack-host",
+                        wrapper_target / ("baml-pack-host" + target_suffix),
+                    ]
+                )
+            if not enabled:
+                command.append("--no-self-update")
+            run(command)
             candidates.append(
                 {
-                    "label": "rust-no-self-update",
-                    "command": [str(disabled)],
-                    "self_update": False,
+                    "label": label,
+                    "command": [str(packed)],
+                    "self_update": enabled,
                     "version": wrapper_version,
                     "posthog": True,
                 }
             )
-            for enabled in [True, False]:
-                label = "baml" if enabled else "baml-no-self-update"
-                packed = Path(directory) / (label + target_suffix)
-                command = [
-                    sys.executable,
-                    repo / "baml_language/wrapper/build",
-                    "--cli",
-                    target / ("baml-cli" + suffix),
-                    "--output",
-                    packed,
-                ]
-                if args.target:
-                    command.extend(
-                        [
-                            "--target",
-                            args.target,
-                            "--pack-host",
-                            wrapper_target / ("baml-pack-host" + target_suffix),
-                        ]
-                    )
-                if not enabled:
-                    command.append("--no-self-update")
-                run(command)
-                candidates.append(
-                    {
-                        "label": label,
-                        "command": [str(packed)],
-                        "self_update": enabled,
-                        "version": wrapper_version,
-                        "posthog": True,
-                    }
-                )
     environment.update(
         WRAPPER_E2E_PYTHON=sys.executable,
         WRAPPER_E2E_HELPER=str(repo / "baml_language/wrapper_tests/fixture.py"),
         WRAPPER_STUB=str(target / "examples" / ("wrapper-stub" + suffix)),
     )
     failed = False
+    if not args.release_artifacts and not args.filter:
+        # The wrapper's own unit tests, such as its command-line parser, run
+        # from source and need no candidate.
+        print("Running wrapper unit tests", flush=True)
+        result = subprocess.run(
+            [
+                str(target / ("baml-cli" + suffix)),
+                "test",
+                "--project-dir",
+                str(repo / "baml_language/wrapper"),
+            ],
+            cwd=repo,
+            env=environment,
+        )
+        failed = result.returncode != 0
     for candidate in candidates:
         print(f"Running wrapper tests: {candidate['label']}", flush=True)
         candidate_environment = dict(
@@ -226,7 +189,7 @@ with tempfile.TemporaryDirectory(prefix="wrapper-suite-") as directory:
         command = [
             str(target / ("baml-cli" + suffix)),
             "test",
-            "--project",
+            "--project-dir",
             str(repo / "baml_language/wrapper_tests"),
             "--max-concurrency",
             "1",

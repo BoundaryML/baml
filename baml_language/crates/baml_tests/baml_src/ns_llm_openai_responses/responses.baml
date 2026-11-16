@@ -1460,7 +1460,7 @@ test "oai_missing_key_invoke" {
 //
 //   cd /Users/aaron/projects/baml
 //   infisical run -- baml_language/target/debug/baml-cli test \
-//       --from baml_language/crates/baml_tests/baml_src --profile live \
+//       --project-dir baml_language/crates/baml_tests/baml_src --profile live \
 //       -i "::live::openai_responses"
 
 function _oai_live_client() -> openai.ResponsesClient {

@@ -1,45 +1,107 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { format } from "date-fns";
 import { api } from "../../../../convex/_generated/api";
 import { BepStatusBadge } from "@/components/bep/bep-status";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { buttonVariants } from "@/components/ui/button";
 import { currentViewer } from "@/lib/bcs-auth";
-import { BCS_STATUSES, bcsConvex, bcsId } from "@/lib/bcs-convex";
-import { saveVersion, updateProposal } from "../actions";
-import { HtmlField } from "../proposal-fields";
+import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
+import { flattenOutline, hasContents } from "@/lib/bcs-outline";
+import { renderBcsPage } from "@/lib/bcs-render";
+import {
+  addComment,
+  deleteComment,
+  editComment,
+  removePage,
+  replyToComment,
+  setCommentResolved,
+  setPeople,
+  setStance,
+  setStatus,
+  toggleReaction,
+  updateProposal,
+} from "../actions";
 import { TeamOnly } from "../team-only";
+import { BcsUnavailable } from "../unavailable";
+import { HeaderStatus, PeopleForm, RemovePageForm, UpdateProposalForm } from "../forms";
+import { BcsReader } from "./reader";
+import { PageContents } from "./contents";
+import { StancePanel } from "./stances";
 
 export const dynamic = "force-dynamic";
-
-/**
- * The frame a proposal's page renders in. Without allow-same-origin its scripts run in an opaque
- * origin: they can draw the page's diagrams but not read this site, its cookies or its storage.
- */
-const FRAME_SANDBOX = "allow-scripts allow-popups allow-popups-to-escape-sandbox";
 
 export default async function BcsProposal({
   params,
   searchParams,
 }: {
   params: Promise<{ number: string }>;
-  searchParams: Promise<{ v?: string }>;
+  searchParams: Promise<{ v?: string; page?: string; comment?: string }>;
 }) {
   const viewer = await currentViewer();
   if (!viewer) return <TeamOnly />;
   const number = Number((await params).number);
-  const asked = Number((await searchParams).v);
+  const query = await searchParams;
+  const asked = Number(query.v);
+  const askedVersion = Number.isInteger(asked) && asked > 0 ? asked : undefined;
   if (!Number.isInteger(number)) notFound();
-  const { convex, secret } = bcsConvex();
-  const proposal = await convex.query(api.bcs.get, {
-    secret,
-    number,
-    version: Number.isInteger(asked) && asked > 0 ? asked : undefined,
-  });
+  // A ?comment= link opens its thread's page, whatever page the link named (or none).
+  const linked = query.comment
+    ? await bcsCall((convex, secret) =>
+        convex.query(api.bcsComments.locate, { secret, number, commentId: query.comment! })
+      )
+    : undefined;
+  const thread = linked?.ok ? linked.value : null;
+  if (thread && thread.page !== (query.page ?? "")) {
+    redirect(bcsPagePath(number, thread.page, askedVersion, thread.id));
+  }
+  const found = await bcsCall((convex, secret) =>
+    convex.query(api.bcs.get, {
+      secret,
+      number,
+      version: Number.isInteger(asked) && asked > 0 ? asked : undefined,
+      page: query.page || undefined,
+    })
+  );
+  if (!found.ok) return <BcsUnavailable message={found.failure.message} />;
+  const proposal = found.value;
+  // A sub-page the chosen version does not have (added later, or removed since): a linked thread's
+  // own version has it; otherwise open the chosen version's main page.
+  if (!proposal && query.page) {
+    if (thread && thread.page === query.page && thread.version !== askedVersion) {
+      redirect(bcsPagePath(number, thread.page, thread.version, thread.id));
+    }
+    redirect(bcsPagePath(number, "", askedVersion));
+  }
   if (!proposal) notFound();
   const old = proposal.version !== proposal.currentVersion;
+  // Links keep the version being read; the current one needs no ?v.
+  const shownVersion = old ? proposal.version : undefined;
+  const page = proposal.page;
+  const outline = flattenOutline(proposal.outline);
+  const comments = await bcsCall((convex, secret) =>
+    convex.query(api.bcsComments.list, { secret, number, page: page.slug })
+  );
+  // Without its comments the proposal still reads; the panel says why they are missing.
+  const { threads, openByPage } = (comments.ok && comments.value) || { threads: [], openByPage: {} };
+  const tracked = await bcsCall((convex, secret) => convex.query(api.bcsTracking.list, { secret, number }));
+  const decisionCount = tracked.ok && tracked.value ? tracked.value.decisions.length : 0;
+  const openIssueCount = tracked.ok && tracked.value ? tracked.value.issues.filter((each) => !each.resolved).length : 0;
+  const stances = await bcsCall((convex, secret) =>
+    convex.query(api.bcsStances.list, { secret, number, version: proposal.version })
+  );
+  const { stances: stanceList, summary } = (stances.ok && stances.value) || {
+    stances: [],
+    summary: { support: 0, neutral: 0, oppose: 0 },
+  };
+  // GitHub logins seen across proposals, suggested when choosing shepherds.
+  const everyone = await bcsCall((convex, secret) => convex.query(api.bcs.list, { secret }));
+  const people = everyone.ok ? everyone.value.people : [];
+  const rendered = await renderBcsPage({
+    format: page.format,
+    content: page.content,
+    title: page.slug === "" ? proposal.title : `${page.title} · ${proposal.title}`,
+    pageHref: (slug) => bcsPagePath(proposal.number, slug, shownVersion),
+  });
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -49,22 +111,58 @@ export default async function BcsProposal({
         </Link>
         <span className="font-mono text-sm text-muted-foreground">{bcsId(proposal.number)}</span>
         <h1 className="text-lg font-semibold">{proposal.title}</h1>
-        <BepStatusBadge status={proposal.status} />
+        {old ? (
+          <BepStatusBadge status={proposal.status} />
+        ) : (
+          <HeaderStatus action={setStatus.bind(null, proposal.number)} status={proposal.status} />
+        )}
         <span className="text-sm text-muted-foreground">
           {proposal.authors.join(", ")} · updated {format(proposal.updatedAt, "PP")}
+          {proposal.shepherds.length > 0 && <> · Shepherds: {proposal.shepherds.join(", ")}</>}
+          {proposal.status === "implemented" && proposal.implementedBy.length > 0 && (
+            <> · Implemented by: {proposal.implementedBy.join(", ")}</>
+          )}
         </span>
         <div className="ml-auto flex items-center gap-2">
+          <StancePanel
+            // A new version starts a fresh panel, so a reason typed for another is never saved here.
+            key={proposal.version}
+            error={stances.ok ? undefined : stances.failure.message}
+            action={setStance.bind(null, proposal.number, proposal.version)}
+            version={proposal.version}
+            stances={stanceList}
+            summary={summary}
+            viewer={viewer.login}
+          />
+          <Link
+            href={`/bcs/${proposal.number}/comments`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            All comments
+          </Link>
+          <Link
+            href={`/bcs/${proposal.number}/decisions`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            Decisions{decisionCount > 0 ? ` · ${decisionCount}` : ""}
+          </Link>
+          <Link
+            href={`/bcs/${proposal.number}/issues`}
+            className={buttonVariants({ variant: openIssueCount > 0 ? "default" : "outline", size: "sm" })}
+          >
+            Issues{openIssueCount > 0 ? ` · ${openIssueCount} open` : ""}
+          </Link>
           <details className="relative">
             <summary className="cursor-pointer list-none text-sm rounded-md border px-3 py-1.5 hover:bg-muted">
               v{proposal.version}
               {old ? " (old)" : ""} · {proposal.versions.length} version
               {proposal.versions.length === 1 ? "" : "s"}
             </summary>
-            <ul className="absolute right-0 z-10 mt-1 w-80 rounded-md border bg-background p-1 shadow-lg">
+            <ul className="absolute right-0 z-10 mt-1 w-80 max-h-[70vh] overflow-y-auto rounded-md border bg-background p-1 shadow-lg">
               {proposal.versions.map((version) => (
                 <li key={version.version}>
                   <Link
-                    href={`/bcs/${proposal.number}?v=${version.version}`}
+                    href={bcsPagePath(proposal.number, page.slug, version.version)}
                     className="block rounded px-2 py-1.5 text-sm hover:bg-muted"
                   >
                     <span className="font-medium">v{version.version}</span>{" "}
@@ -74,70 +172,136 @@ export default async function BcsProposal({
                     {version.note && (
                       <span className="block text-muted-foreground">{version.note}</span>
                     )}
+                    {version.changed && version.changed.length > 0 && (
+                      <span className="block text-xs text-muted-foreground">
+                        Changed: {version.changed.join(", ")}
+                      </span>
+                    )}
                   </Link>
                 </li>
               ))}
             </ul>
           </details>
           <a
-            href={`/bcs/${proposal.number}/raw?v=${proposal.version}`}
+            href={`/bcs/${proposal.number}/raw?${new URLSearchParams({
+              v: String(proposal.version),
+              ...(page.slug ? { page: page.slug } : {}),
+            })}`}
             target="_blank"
             rel="noreferrer"
             className={buttonVariants({ variant: "outline", size: "sm" })}
           >
             Open full page
           </a>
-          <details className="relative">
-            <summary className="cursor-pointer list-none text-sm rounded-md border px-3 py-1.5 hover:bg-muted">
-              Edit
-            </summary>
-            <div className="absolute right-0 z-10 mt-1 w-[28rem] rounded-md border bg-background p-4 shadow-lg space-y-6">
-              <form action={saveVersion.bind(null, proposal.number)} className="space-y-3">
-                <h2 className="font-medium">Save a new version</h2>
-                <input type="hidden" name="baseVersion" value={proposal.currentVersion} />
-                <HtmlField />
-                <div className="space-y-2">
-                  <Label htmlFor="note">What changed</Label>
-                  <Input id="note" name="note" placeholder="Answered Paulo's questions" />
+          {old ? (
+            <Link
+              href={bcsPagePath(proposal.number, page.slug)}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              Go to the current version
+            </Link>
+          ) : (
+            <details className="relative">
+              <summary className="cursor-pointer list-none text-sm rounded-md border px-3 py-1.5 hover:bg-muted">
+                Edit
+              </summary>
+              <div className="absolute right-0 z-10 mt-1 w-80 rounded-md border bg-background p-4 shadow-lg space-y-4">
+                <div className="flex flex-col gap-2">
+                  <Link
+                    href={`/bcs/${proposal.number}/edit${page.slug ? `?page=${page.slug}` : ""}`}
+                    className={buttonVariants({ size: "sm" })}
+                  >
+                    Edit this page
+                  </Link>
+                  <Link
+                    href={`/bcs/${proposal.number}/add${page.slug ? `?parent=${page.slug}` : ""}`}
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                  >
+                    Add a sub-page{page.slug ? " here" : ""}
+                  </Link>
                 </div>
-                <Button type="submit" size="sm">
-                  Save v{proposal.currentVersion + 1}
-                </Button>
-              </form>
-              <form
-                action={updateProposal.bind(null, proposal.number)}
-                className="space-y-3 border-t pt-4"
-              >
-                <h2 className="font-medium">Title and status</h2>
-                <input type="hidden" name="originalTitle" value={proposal.title} />
-                <input type="hidden" name="originalStatus" value={proposal.status} />
-                <Input name="title" defaultValue={proposal.title} aria-label="Title" />
-                <select
-                  name="status"
-                  defaultValue={proposal.status}
-                  aria-label="Status"
-                  className="h-9 rounded-md border bg-background px-3 text-sm"
-                >
-                  {BCS_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-                <Button type="submit" size="sm" variant="outline">
-                  Update
-                </Button>
-              </form>
-            </div>
-          </details>
+                {page.slug !== "" && (
+                  <RemovePageForm
+                    action={removePage.bind(null, proposal.number, page.slug)}
+                    baseVersion={proposal.currentVersion}
+                    title={page.title}
+                  />
+                )}
+                <div className="border-t pt-4">
+                  <UpdateProposalForm
+                    action={updateProposal.bind(null, proposal.number)}
+                    title={proposal.title}
+                  />
+                </div>
+                <div className="border-t pt-4">
+                  <PeopleForm
+                    action={setPeople.bind(null, proposal.number)}
+                    shepherds={proposal.shepherds}
+                    implementedBy={proposal.implementedBy}
+                    showImplemented={proposal.status === "implemented" || proposal.implementedBy.length > 0}
+                    people={people}
+                  />
+                </div>
+              </div>
+            </details>
+          )}
         </div>
       </header>
-      <iframe
-        title={proposal.title}
-        sandbox={FRAME_SANDBOX}
-        srcDoc={proposal.html}
-        className="flex-1 w-full border-0 bg-white"
-      />
+      <div className="flex flex-1 min-h-0">
+        {(outline.length > 1 || hasContents(rendered.headings)) && (
+          <div className="w-64 shrink-0 overflow-y-auto border-r p-3 text-sm space-y-4">
+            {outline.length > 1 && (
+              <nav aria-label="Pages">
+                <ul className="space-y-0.5">
+                  {outline.map((entry) => (
+                    <li key={entry.slug}>
+                      <Link
+                        href={bcsPagePath(proposal.number, entry.slug, shownVersion)}
+                        aria-current={entry.slug === page.slug ? "page" : undefined}
+                        style={{ paddingLeft: `${0.5 + entry.depth * 0.75}rem` }}
+                        className={`block rounded py-1 pr-2 hover:bg-muted ${
+                          entry.slug === page.slug ? "bg-muted font-medium" : "text-muted-foreground"
+                        }`}
+                      >
+                        {entry.title}
+                        {openByPage[entry.slug] ? (
+                          <span
+                            className="ml-1.5 rounded-full bg-violet-600/15 px-1.5 text-xs text-violet-700 dark:text-violet-300"
+                            title={`${openByPage[entry.slug]} open comment${openByPage[entry.slug] === 1 ? "" : "s"}`}
+                          >
+                            {openByPage[entry.slug]}
+                          </span>
+                        ) : null}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            )}
+            <PageContents headings={rendered.headings} />
+          </div>
+        )}
+        <BcsReader
+          // A new ?comment= remounts it, so the newly linked thread and block are focused.
+          key={`${proposal.version}/${page.slug}/${query.comment ?? ""}`}
+          title={page.title}
+          document={rendered.document}
+          blocks={rendered.blocks}
+          number={proposal.number}
+          version={proposal.version}
+          threads={threads}
+          // The thread a link to one of its replies points into.
+          focusThread={thread?.id ?? query.comment}
+          commentsError={comments.ok ? undefined : comments.failure.message}
+          addComment={addComment.bind(null, proposal.number, page.slug, proposal.version)}
+          reply={replyToComment.bind(null, proposal.number, proposal.version)}
+          resolve={setCommentResolved.bind(null, proposal.number)}
+          edit={editComment.bind(null, proposal.number)}
+          remove={deleteComment.bind(null, proposal.number)}
+          react={toggleReaction.bind(null, proposal.number)}
+          viewer={viewer.login}
+        />
+      </div>
     </div>
   );
 }

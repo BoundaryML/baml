@@ -86,11 +86,10 @@ async function checkProject(
     'agent',
     '--color',
     'never',
-    '--no-progress',
     '--diagnostic-format',
     'agent',
     'check',
-    '--project',
+    '--project-dir',
     projectPath,
   ]);
   return { ...result, diagnostics: parseCompilerDiagnostics(result.output) };

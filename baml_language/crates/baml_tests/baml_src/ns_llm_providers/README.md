@@ -7,10 +7,10 @@ From the repository root, build the local CLI and run under Infisical's `dev-llm
 ```sh
 cd baml_language
 cargo build -p baml_cli
-infisical run --env=dev-llm-provider-tests -- target/debug/baml-cli test --from crates/baml_tests/baml_src --profile live -i root.llm_providers::live::
+infisical run --env=dev-llm-provider-tests -- target/debug/baml-cli test --project-dir crates/baml_tests/baml_src --profile live -i root.llm_providers::live::
 ```
 
-To run one provider, replace `-i root.llm_providers::live::` with `-i root.llm_providers::live::BedrockHaiku45` (or another test name below). To check compilation without credentials or network calls, run `target/debug/baml-cli check --from crates/baml_tests/baml_src`.
+To run one provider, replace `-i root.llm_providers::live::` with `-i root.llm_providers::live::BedrockHaiku45` (or another test name below). To check compilation without credentials or network calls, run `target/debug/baml-cli check --project-dir crates/baml_tests/baml_src`.
 
 | Test | Client | Model | Required environment variables |
 | --- | --- | --- | --- |

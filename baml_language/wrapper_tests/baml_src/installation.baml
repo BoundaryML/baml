@@ -603,6 +603,47 @@ testset "toolchain installation" {
     }
 
     if (candidate.supports([root.harness.Capability.PosixPermissions])) {
+        test "explicit and resolved installs verify downloaded executable" {
+            for (
+                let args in [
+                    ["toolchain", "install"],
+                    ["toolchain", "install", BASE_VERSION],
+                    ["toolchain", "install", "--force"],
+                    ["toolchain", "install", BASE_VERSION, "--force"],
+                ]
+            ) {
+                let fixture = root.harness.Fixture.start();
+                defer { fixture.close(); }
+                fixture.project(BASE_VERSION);
+                let forced = args.includes("--force");
+                if (!forced) {
+                    fixture.absent(BASE_VERSION);
+                }
+                let installed: string[] = if (forced) { fixture.tree(`baml/toolchains/${BASE_VERSION}`) } else { [] };
+                fixture.release(BASE_VERSION, "non-executable-cli");
+                let state = fixture.read(CHANNEL_STATE_FILE);
+                let project = fixture.read(PROJECT_MANIFEST_FILE);
+                let config = fixture.read(USER_CONFIG_FILE);
+                fixture.manage(candidate, args, success = false, diagnostic = "not executable");
+                root.harness.require(
+                    fixture.requests() == [`/version/${BASE_VERSION}.json`, `/${BASE_VERSION}.tar.gz`],
+                    "invalid executable was acquired more than once",
+                );
+                root.harness.require(
+                    fixture.read(CHANNEL_STATE_FILE) == state
+                        && fixture.read(PROJECT_MANIFEST_FILE) == project
+                        && fixture.read(USER_CONFIG_FILE) == config,
+                    "invalid executable changed configuration",
+                );
+                if (forced) {
+                    root.harness.require(fixture.tree(`baml/toolchains/${BASE_VERSION}`) == installed, "failed forced replacement changed the working installation");
+                    fixture.check(candidate, BASE_VERSION);
+                } else {
+                    root.harness.require(!baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}`), "invalid executable was published");
+                }
+            }
+        }
+
         test "unwritable install destination preserves existing selection" {
             let fixture = root.harness.Fixture.start();
             defer { fixture.close(); }
@@ -693,16 +734,66 @@ testset "toolchain installation" {
         );
     }
 
-    test "bare install uses project selection" {
+    test "install resolves omitted project target through normal installation" {
+        for (
+            let args in [
+                ["toolchain", "install"],
+                ["toolchain", "install", NEXT_VERSION],
+                ["toolchain", "install", "--force"],
+                ["toolchain", "install", NEXT_VERSION, "--force"],
+            ]
+        ) {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.project(NEXT_VERSION);
+            fixture.absent(BASE_VERSION);
+            fixture.absent(NEXT_VERSION);
+            let state = fixture.read(CHANNEL_STATE_FILE);
+            let config = fixture.read(USER_CONFIG_FILE);
+            let project = fixture.read(PROJECT_MANIFEST_FILE);
+            fixture.manage(candidate, args);
+            let extension = if (fixture.windows) { ".zip" } else { ".tar.gz" };
+            root.harness.require(
+                fixture.requests() == [`/version/${NEXT_VERSION}.json`, `/${NEXT_VERSION}${extension}`],
+                "resolved and explicit targets did not use the same acquisition path",
+            );
+            root.harness.require(!baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}`), "install acquired the user default instead of project target");
+            root.harness.require(
+                fixture.read(CHANNEL_STATE_FILE) == state
+                    && fixture.read(USER_CONFIG_FILE) == config
+                    && fixture.read(PROJECT_MANIFEST_FILE) == project,
+                "install changed selector or channel state",
+            );
+            fixture.check(candidate, NEXT_VERSION);
+        }
+    }
+
+    test "bare install records unrecorded selected channel once" {
+        for (let flags in [[], ["--force"]]) {
+            let fixture = root.harness.Fixture.start();
+            defer { fixture.close(); }
+            fixture.project("nightly", key = "channel");
+            fixture.remove(CHANNEL_STATE_FILE);
+            fixture.absent(BASE_VERSION);
+            fixture.absent(NEXT_VERSION);
+            fixture.manage(candidate, ["toolchain", "install"].concat(flags));
+            let extension = if (fixture.windows) { ".zip" } else { ".tar.gz" };
+            root.harness.require(
+                fixture.requests() == ["/nightly.json", `/${NEXT_VERSION}${extension}`],
+                "resolved channel target was acquired more than once",
+            );
+            root.harness.require(fixture.channel_version("nightly") == NEXT_VERSION, "resolved channel was not recorded");
+            root.harness.require(!baml.fs.exists(`${fixture.root}/baml/toolchains/${BASE_VERSION}`), "install acquired unrelated user default");
+            fixture.check(candidate, NEXT_VERSION);
+        }
+    }
+
+    test "bare install rejects local project target without acquisition" {
         let fixture = root.harness.Fixture.start();
         defer { fixture.close(); }
-        fixture.project(NEXT_VERSION);
-        let state = fixture.read(CHANNEL_STATE_FILE);
-        let args = ["toolchain", "install"];
-        fixture.absent(NEXT_VERSION);
-        fixture.manage(candidate, args);
-        root.harness.require(fixture.read(CHANNEL_STATE_FILE) == state, "bare install advanced an existing channel");
-        fixture.check(candidate, NEXT_VERSION);
+        fixture.project("./build/baml-cli", key = "path");
+        fixture.manage(candidate, ["toolchain", "install"], success = false, diagnostic = "nothing to install");
+        root.harness.require(!fixture.requests(), "local project target triggered acquisition");
     }
 
     test "bare install uses environment selection" {
@@ -712,9 +803,16 @@ testset "toolchain installation" {
         fixture.env["BAML_TOOLCHAIN"] = LATEST_VERSION;
         let state = fixture.read(CHANNEL_STATE_FILE);
         let args = ["toolchain", "install"];
+        fixture.absent(BASE_VERSION);
+        fixture.absent(NEXT_VERSION);
         fixture.absent(LATEST_VERSION);
         fixture.manage(candidate, args);
         root.harness.require(fixture.read(CHANNEL_STATE_FILE) == state, "bare install advanced an existing channel");
+        let extension = if (fixture.windows) { ".zip" } else { ".tar.gz" };
+        root.harness.require(
+            fixture.requests() == [`/version/${LATEST_VERSION}.json`, `/${LATEST_VERSION}${extension}`],
+            "environment override did not resolve the install target",
+        );
         fixture.check(candidate, LATEST_VERSION);
     }
 

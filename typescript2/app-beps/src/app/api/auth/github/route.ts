@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: "read:user user:email",
+    // read:org lets the callback ask GitHub whether the viewer is in BoundaryML, for BCS proposals.
+    scope: "read:user user:email read:org",
     state: Buffer.from(state).toString("base64"),
   });
 
