@@ -166,7 +166,7 @@ cargo test -p baml_tests --test rt_corpus -- --ignored --nocapture
 uv run --no-project crates/baml_tests/rust_diff/rt_corpus.py
 ```
 
-The reference is the existing `baml-cli test --from crates/baml_tests/baml_src`
+The reference is the existing `baml-cli --project-dir crates/baml_tests/baml_src test`
 registry, including the manifest's offline profile and testset runners.
 Profile exclusions are printed by canonical test/subtree name. Live subtrees
 remain unexpanded because constructing them can require provider credentials;
