@@ -1517,7 +1517,7 @@ function main() -> int {
     let plan = baml.spawn.Plan<int, never> {
         body: () -> int throws never { 1 },
         name: null,
-        limits: [],
+        semaphores: [],
         cancel_tokens: [],
         root: false,
     };

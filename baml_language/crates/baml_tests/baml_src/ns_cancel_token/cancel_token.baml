@@ -208,17 +208,17 @@ test "an_already_cancelled_task_never_starts" {
 // goes to the next task.
 function never_starts_admitted() -> string {
     let log = StartLog { steps: [] };
-    let limit = baml.spawn.Limit.new(1) catch (e) {
+    let semaphore = baml.sync.Semaphore.new(1) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic("positive")
     };
     let token = baml.spawn.CancelToken.new();
     let _ = token.cancel();
-    let f = spawn with limit, token {
+    let f = spawn with semaphore, token {
         log.steps.push("body");
         1
     };
     let outcome = (await f) catch (e) { baml.panics.Cancelled => 0 };
-    let next = spawn with limit { 2 };
+    let next = spawn with semaphore { 2 };
     `${outcome}:${log.steps.join(",")}:${await next}`
 }
 
