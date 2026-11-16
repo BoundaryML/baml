@@ -9673,7 +9673,15 @@ impl BexVm {
     fn resize_stack(&mut self, len: usize, value: Value) -> Result<(), VmError> {
         self.stack
             .try_resize(len, value)
-            .map_err(|panic| VmError::thrown_fresh(self.panic_to_exception_value(panic)))
+            .map_err(|panic| self.panic_error(panic))
+    }
+
+    /// The error a refused stack or frame reservation raises. Out of line:
+    /// reservations sit on every call's fast path.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn panic_error(&mut self, panic: VmPanic) -> VmError {
+        VmError::thrown_fresh(self.panic_to_exception_value(panic))
     }
 
     /// All frame growth is fallible and charged at the same storage boundary,
@@ -9682,7 +9690,7 @@ impl BexVm {
     fn reserve_call_frame(&mut self) -> Result<(), VmError> {
         self.frames
             .reserve_one()
-            .map_err(|panic| VmError::thrown_fresh(self.panic_to_exception_value(panic)))
+            .map_err(|panic| self.panic_error(panic))
     }
 
     /// Main VM execution loop.
