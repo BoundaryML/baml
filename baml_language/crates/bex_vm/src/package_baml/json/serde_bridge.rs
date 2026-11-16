@@ -176,6 +176,7 @@ fn object_to_serde_at(
 ) -> Result<serde_json::Value, ValueToSerdeError> {
     Ok(match vm.get_object(ptr) {
         Object::Float(f) => float_to_serde(*f),
+        Object::Int(i) => serde_json::Value::Number((*i).into()),
         Object::String(s) => serde_json::Value::String(s.to_string()),
         Object::Array(arr) => {
             let arr = arr.to_vec();

@@ -438,6 +438,7 @@ impl BexEngine {
 
         match obj {
             Object::Float(f) => Ok(BexExternalValue::Float(*f)),
+            Object::Int(i) => Ok(BexExternalValue::Int(*i)),
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
 
             Object::Array(arr) => {
@@ -772,18 +773,19 @@ impl BexEngine {
 // ============================================================================
 
 /// If `ptr` references a boxed `Object::Float` (NaN, ±inf, extreme
-/// magnitudes), return its `BexExternalValue::Float` projection so callers can
-/// surface a primitive instead of an opaque handle.
+/// magnitudes) or `Object::Int` (outside the inline range), return its
+/// primitive `BexExternalValue` projection so callers can surface a primitive
+/// instead of an opaque handle.
 ///
 /// # Safety
 ///
 /// Caller must hold a GC permit (the `HeapPtr` deref invariant). Mirrors the
 /// surrounding accessors that take `PermitProof` and dereference `HeapPtr`.
-unsafe fn unbox_float_object(ptr: HeapPtr) -> Option<BexExternalValue> {
-    if let Object::Float(f) = unsafe { ptr.get() } {
-        Some(BexExternalValue::Float(*f))
-    } else {
-        None
+unsafe fn unbox_numeric_object(ptr: HeapPtr) -> Option<BexExternalValue> {
+    match unsafe { ptr.get() } {
+        Object::Float(f) => Some(BexExternalValue::Float(*f)),
+        Object::Int(i) => Some(BexExternalValue::Int(*i)),
+        _ => None,
     }
 }
 
@@ -903,7 +905,7 @@ impl BexEngine {
             ValueKind::Float(f) => BexExternalValue::Float(f),
             ValueKind::Object(ptr) => {
                 // SAFETY: caller holds the engine permit (heap is borrowed).
-                if let Some(v) = unsafe { unbox_float_object(ptr) } {
+                if let Some(v) = unsafe { unbox_numeric_object(ptr) } {
                     return v;
                 }
                 let handle = self.heap.create_handle(ptr);
@@ -944,7 +946,7 @@ pub(crate) fn owned_external_value(
         ValueKind::Float(f) => BexExternalValue::Float(f),
         ValueKind::Object(ptr) => {
             // SAFETY: `permit` witnesses GC liveness for the deref.
-            if let Some(v) = unsafe { unbox_float_object(ptr) } {
+            if let Some(v) = unsafe { unbox_numeric_object(ptr) } {
                 return v;
             }
             BexValue::HeapPtr(&ptr)
@@ -1759,6 +1761,23 @@ fn find_float_union_member(
         })
 }
 
+/// The union member an int value selects: its literal, else `int`.
+fn find_int_union_member(
+    value: i64,
+    members: &[bex_vm_types::RealizedTy],
+) -> Option<&bex_vm_types::RealizedTy> {
+    members
+        .iter()
+        .find(|member| {
+            matches!(member, bex_vm_types::RealizedTy::Literal(Literal::Int(expected), _) if value == *expected)
+        })
+        .or_else(|| {
+            members
+                .iter()
+                .find(|member| matches!(member, bex_vm_types::RealizedTy::Int))
+        })
+}
+
 /// Find the union member that matches the runtime value's type.
 fn find_matching_union_member(
     value: Value,
@@ -1767,16 +1786,7 @@ fn find_matching_union_member(
     let direct = match value.kind() {
         ValueKind::OmittedArg => None,
         ValueKind::Null => members.iter().find(|m| matches!(m, bex_vm_types::RealizedTy::Null)),
-        ValueKind::Int(value) => members
-            .iter()
-            .find(|member| {
-                matches!(member, bex_vm_types::RealizedTy::Literal(Literal::Int(expected), _) if value == *expected)
-            })
-            .or_else(|| {
-                members
-                    .iter()
-                    .find(|member| matches!(member, bex_vm_types::RealizedTy::Int))
-            }),
+        ValueKind::Int(value) => find_int_union_member(value, members),
         ValueKind::Bool(value) => members
             .iter()
             .find(|member| {
@@ -1792,6 +1802,7 @@ fn find_matching_union_member(
             let obj = unsafe { ptr.get() };
             match obj {
                 Object::Float(value) => find_float_union_member(*value, members),
+                Object::Int(value) => find_int_union_member(*value, members),
                 Object::String(value) => members
                     .iter()
                     .find(|member| {

@@ -654,16 +654,20 @@ fn primitive_text(vm: &BexVm, value: Value) -> Option<String> {
         ValueKind::Float(f) => Some(bex_vm_types::format_float(f)),
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Float(f) => Some(bex_vm_types::format_float(*f)),
+            Object::Int(i) => Some(i.to_string()),
             _ => None,
         },
         ValueKind::OmittedArg => None,
     }
 }
 
-/// Whether `ptr` is a string or a float, which no package can give a
+/// Whether `ptr` is a string, a float or an int, which no package can give a
 /// `baml.ToString` override (E0139).
 fn is_primitive_object(vm: &BexVm, ptr: HeapPtr) -> bool {
-    matches!(vm.get_object(ptr), Object::String(_) | Object::Float(_))
+    matches!(
+        vm.get_object(ptr),
+        Object::String(_) | Object::Float(_) | Object::Int(_)
+    )
 }
 
 /// Human-readable rendering used by `string.from` / the `baml.ToString` default.
@@ -948,6 +952,7 @@ fn deep_copy_value_recursive(
 
             let new_ptr = match object {
                 Object::Float(f) => vm.tlab.alloc(Object::Float(f)),
+                Object::Int(i) => vm.tlab.alloc(Object::Int(i)),
                 Object::String(s) => vm.tlab.alloc(Object::String(s)),
                 Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 

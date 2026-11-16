@@ -202,13 +202,13 @@ const MAX_INDENT: usize = 10;
 /// holding anything other than JSON whitespace (which would make the text
 /// invalid JSON), is refused.
 fn indent_text(vm: &mut BexVm, indent: Value) -> Result<String, VmRustFnError> {
-    let refused = match indent.kind() {
-        ValueKind::Int(count) => match usize::try_from(count) {
+    let refused = match (indent.as_int(), indent.kind()) {
+        (Some(count), _) => match usize::try_from(count) {
             Ok(count) if count <= MAX_INDENT => return Ok(" ".repeat(count)),
             Ok(_) => format!("indent must be at most {MAX_INDENT} spaces, got {count}"),
             Err(_) => format!("indent must not be negative, got {count}"),
         },
-        ValueKind::Object(ptr) => match vm.get_object(ptr) {
+        (None, ValueKind::Object(ptr)) => match vm.get_object(ptr) {
             Object::String(text) => {
                 let width = text.as_str().chars().count();
                 if width > MAX_INDENT {
@@ -482,8 +482,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
 /// A heap leaf of a `json` value, copied by [`copy_json`]'s rules.
 fn copy_leaf(vm: &mut BexVm, value: Value, ptr: HeapPtr) -> Value {
     let name = match vm.get_object(ptr) {
-        Object::Float(_) => return value,
-        Object::String(_) => return value,
+        Object::Float(_) | Object::Int(_) | Object::String(_) => return value,
         Object::Bigint(b) => {
             return i64::try_from(&**b)
                 .ok()

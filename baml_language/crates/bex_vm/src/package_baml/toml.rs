@@ -229,6 +229,7 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
     let result = match vm.get_object(ptr) {
         Object::String(s) => Ok(Node::Scalar(s.as_str().into())),
         Object::Float(f) => Ok(Node::Scalar((*f).into())),
+        Object::Int(i) => Ok(Node::Scalar((*i).into())),
         Object::Array(values) => values
             .to_vec()
             .into_iter()

@@ -317,10 +317,7 @@ fn opt_bool(v: Value) -> Option<bool> {
 }
 
 fn opt_int(v: Value) -> Option<i64> {
-    match v.kind() {
-        ValueKind::Int(i) => Some(i),
-        _ => None,
-    }
+    v.as_int()
 }
 
 fn opt_string_list(vm: &BexVm, v: Value) -> Result<Option<Vec<String>>, VmRustFnError> {
@@ -1972,6 +1969,7 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::String(s) => s.as_str().to_string(),
             Object::Float(f) => float_cell_text(*f)?,
+            Object::Int(i) => i.to_string(),
             Object::Bigint(b) => b.to_string(),
             Object::Variant(var) => {
                 let name = match vm.get_object(var.enm) {

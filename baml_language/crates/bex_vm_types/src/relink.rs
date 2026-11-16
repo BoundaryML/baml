@@ -316,6 +316,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
         | Object::Array(..)
         | Object::Map(..)
         | Object::Float(..)
+        | Object::Int(..)
         | Object::Future(..)
         | Object::RustData(..)
         | Object::Tombstone => {}

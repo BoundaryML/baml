@@ -46,3 +46,7 @@ indexmap = { workspace = true }
 [features]
 default = [  ]
 heap_debug = [  ]
+# Test-only: shrink the inline int range of `Value` to about +-2^20 so that
+# ordinary programs exercise boxed ints, and make `Value::int` reject an
+# out-of-range value in every build.
+narrow_inline_int = [  ]

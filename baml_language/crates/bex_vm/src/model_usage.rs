@@ -40,10 +40,7 @@ impl BexVm {
                 let usage = self.field(call, "usage").filter(|usage| !usage.is_null())?;
                 let count = |name: &str| {
                     self.field(usage, name)
-                        .and_then(|value| match value.kind() {
-                            ValueKind::Int(n) => u64::try_from(n).ok(),
-                            _ => None,
-                        })
+                        .and_then(|value| u64::try_from(value.as_int()?).ok())
                 };
                 let key = self.field(call, "resolved_model")?;
                 let text = |name: &str| {

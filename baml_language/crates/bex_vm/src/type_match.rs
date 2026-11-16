@@ -168,6 +168,7 @@ pub fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
     }
     match vm.get_object(value.as_object_ptr()?) {
         Object::Float(_) => Some(Primitive::Float),
+        Object::Int(_) => Some(Primitive::Int),
         Object::Bigint(_) => Some(Primitive::Bigint),
         Object::String(_) => Some(Primitive::String),
         Object::Uint8Array(_) => Some(Primitive::Uint8Array),

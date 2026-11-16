@@ -769,7 +769,8 @@ impl BexHeap {
             // is a head, walked below.
             | Object::Type(_)
 
-            | Object::Float(_) => {}
+            | Object::Float(_)
+            | Object::Int(_) => {}
         }
 
         // Heads are ordinary references: a type naming a declaration keeps that
@@ -1016,7 +1017,8 @@ impl BexHeap {
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::RustData(_)
-            | Object::Float(_) => {}
+            | Object::Float(_)
+            | Object::Int(_) => {}
         }
 
         // Repoint every head whose declaration moved. Identity is untouched —

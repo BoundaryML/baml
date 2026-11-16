@@ -1954,12 +1954,12 @@ impl BexEngine {
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
-        // Box every reachable `ConstValue::Float` that has no inline `Value`
-        // encoding (NaN, ±inf, extreme magnitudes) into a compile-time
-        // `Object::Float`. `bytecode.globals` are rewritten further down,
-        // during the `ConstValue` → `Value` conversion, using the returned
-        // index map.
-        let float_indices = bex_vm_types::types::box_compile_time_floats(
+        // Box every reachable numeric constant that has no inline `Value`
+        // encoding (floats: NaN, ±inf, extreme magnitudes; ints outside the
+        // inline range) into a compile-time `Object::Float` / `Object::Int`.
+        // `bytecode.globals` are rewritten further down, during the
+        // `ConstValue` → `Value` conversion, using the returned index map.
+        let boxed_constants = bex_vm_types::types::box_compile_time_constants(
             &mut compile_time_objects,
             &bytecode.globals,
         );
@@ -2080,18 +2080,15 @@ impl BexEngine {
             pending_globals[slot] = true;
         }
 
-        // Float globals with no inline encoding were redirected to
-        // compile-time Object::Float entries by the boxing pre-pass above; the
-        // rest resolve inline in `to_value`.
+        // Numeric globals with no inline encoding were redirected to
+        // compile-time boxes by the boxing pre-pass above; the rest resolve
+        // inline in `to_value`.
         let globals_vec: Vec<Value> = bytecode
             .globals
             .into_iter()
-            .map(|cv| match cv {
-                bex_vm_types::ConstValue::Float(f) if float_indices.contains_key(&f.to_bits()) => {
-                    let idx = float_indices[&f.to_bits()];
-                    Value::object(heap.compile_time_ptr(idx))
-                }
-                other => other.to_value(|idx| heap.compile_time_ptr(idx.into_raw())),
+            .map(|cv| match boxed_constants.index_of(&cv) {
+                Some(idx) => Value::object(heap.compile_time_ptr(idx)),
+                None => cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())),
             })
             .collect();
         // Mutable during `$init` so `StoreGlobal` can populate top-level let
@@ -5467,6 +5464,7 @@ impl BexEngine {
                 Object::String(value) => value.to_string(),
                 Object::Bigint(value) => value.to_string(),
                 Object::Float(value) => value.to_string(),
+                Object::Int(value) => value.to_string(),
                 _ => return None,
             },
         };
@@ -6350,7 +6348,10 @@ impl BexEngine {
                         let return_value = match value.as_object_ptr() {
                             Some(ptr)
                                 if !copy_objects
-                                    && !matches!(unsafe { ptr.get() }, Object::Float(_)) =>
+                                    && !matches!(
+                                        unsafe { ptr.get() },
+                                        Object::Float(_) | Object::Int(_)
+                                    ) =>
                             {
                                 BexExternalValue::Handle(self.heap.create_handle(ptr))
                             }

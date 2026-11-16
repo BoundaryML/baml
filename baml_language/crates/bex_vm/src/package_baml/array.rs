@@ -46,6 +46,8 @@ fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
             // Boxed floats (NaN, ±inf, extreme magnitudes) are separate
             // allocations, so they compare by content rather than pointer.
             (Object::Float(lf), Object::Float(rf)) => bex_vm_types::float_order::eq(*lf, *rf),
+            // Boxed ints likewise compare by content.
+            (Object::Int(li), Object::Int(ri)) => li == ri,
             _ => la == rb,
         }
     } else {

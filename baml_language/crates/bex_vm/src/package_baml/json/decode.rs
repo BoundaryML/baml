@@ -1336,6 +1336,7 @@ fn node_of(vm: &BexVm, json: Value) -> Node {
         ValueKind::Float(f) => Node::Float(f),
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Float(f) => Node::Float(*f),
+            Object::Int(i) => Node::Int(*i),
             Object::String(_) => Node::String(json),
             Object::Bigint(b) => Node::Bigint(Arc::clone(b)),
             Object::Array(_) => Node::Array(ptr),
@@ -1823,7 +1824,7 @@ impl<'p> Structural<'p> {
                 }
             }
             baml_type::Literal::Int(expected) if node.is_number() => match node.as_i64() {
-                Some(actual) if actual == *expected => Ok(Value::int(actual)),
+                Some(actual) if actual == *expected => Ok(vm.int_value(actual)),
                 _ => Err(self.fail(vm, || "literal int mismatch".into())),
             },
             baml_type::Literal::Float(expected) if node.is_number() => {

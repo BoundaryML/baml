@@ -74,6 +74,7 @@ impl Scratch {
             // Boxes are an execution detail, not snapshot identity. No work item
             // or memo-table entry for floats, even when every source box differs.
             Object::Float(v) => return SnapshotValue::Float(*v),
+            Object::Int(v) => return SnapshotValue::Int(*v),
             Object::String(s) => leaves.string_value(&rewritten(&self.rewrites, s)),
             Object::Bigint(n) => leaves.bigint(n),
             Object::Type(value) => {
@@ -250,6 +251,7 @@ impl Scratch {
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => describe(Description::Sentinel),
                 Object::Float(_)
+                | Object::Int(_)
                 | Object::String(_)
                 | Object::Bigint(_)
                 | Object::Type(_)

@@ -2547,6 +2547,7 @@ fn value_type_tag(value: Value) -> i64 {
             let obj = unsafe { ptr.get() };
             match obj {
                 Object::Float(_) => type_tags::FLOAT,
+                Object::Int(_) => type_tags::INT,
                 Object::String(_) => type_tags::STRING,
                 Object::Bigint(_) => type_tags::BIGINT,
                 Object::Uint8Array(_) => type_tags::UINT8ARRAY,
@@ -4325,6 +4326,7 @@ impl BexVm {
             Object::Map(map) => !map.is_empty(),
             Object::Uint8Array(bytes) => !bytes.is_empty(),
             Object::Float(f) => *f != 0.0,
+            Object::Int(i) => *i != 0,
             Object::Bigint(n) => n.sign() != num_bigint::Sign::NoSign,
             _ => true,
         }
@@ -4767,6 +4769,7 @@ impl BexVm {
         }
         Some(match self.get_object(value.as_object_ptr()?) {
             Object::Float(_) => ConcreteRealizedTy::Float,
+            Object::Int(_) => ConcreteRealizedTy::Int,
             Object::Bigint(_) => ConcreteRealizedTy::Bigint,
             Object::String(_) => ConcreteRealizedTy::String,
             Object::Uint8Array(_) => ConcreteRealizedTy::Uint8Array,
@@ -5388,10 +5391,9 @@ impl BexVm {
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
-        // Box every reachable `ConstValue::Float` with no inline `Value`
-        // encoding (NaN, ±inf, extreme magnitudes) into a compile-time
-        // `Object::Float`.
-        let float_indices = bex_vm_types::types::box_compile_time_floats(
+        // Box every reachable numeric constant with no inline `Value`
+        // encoding into a compile-time `Object::Float` / `Object::Int`.
+        let boxed_constants = bex_vm_types::types::box_compile_time_constants(
             &mut compile_time_objects,
             &bytecode.globals,
         );
@@ -5412,12 +5414,9 @@ impl BexVm {
         let globals_vec: Vec<Value> = bytecode
             .globals
             .into_iter()
-            .map(|cv| match cv {
-                bex_vm_types::ConstValue::Float(f) if float_indices.contains_key(&f.to_bits()) => {
-                    let idx = float_indices[&f.to_bits()];
-                    Value::object(heap.compile_time_ptr(idx))
-                }
-                other => other.to_value(|idx| heap.compile_time_ptr(idx.into_raw())),
+            .map(|cv| match boxed_constants.index_of(&cv) {
+                Some(idx) => Value::object(heap.compile_time_ptr(idx)),
+                None => cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())),
             })
             .collect();
         let globals = VmGlobals::Owned(bex_vm_types::GlobalPool::from_vec(globals_vec));

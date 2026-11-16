@@ -348,6 +348,7 @@ impl TraceSnapshotBuilder {
             }
             Object::Bigint(value) => self.alloc(TraceValue::Bigint(value.to_string())),
             Object::Float(value) => self.alloc(TraceValue::Float(*value)),
+            Object::Int(value) => self.alloc(TraceValue::Int(*value)),
             Object::Uint8Array(bytes) => {
                 let bytes = bytes.lock();
                 let mut copied = Vec::new();
@@ -577,7 +578,8 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         | Object::Map(_)
         | Object::Instance(_)
         | Object::Variant(_)
-        | Object::Float(_) => "unsupported value",
+        | Object::Float(_)
+        | Object::Int(_) => "unsupported value",
     }
 }
 

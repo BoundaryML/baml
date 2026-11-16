@@ -112,6 +112,11 @@ pub enum Object {
     /// BAML programs are integer-and-object-heavy.
     Float(f64),
 
+    /// Boxed int: an `int` outside the inline range of `Value` (see
+    /// [`Value::INLINE_INT_MIN`]). Built only by the heap's `int_value`, so an
+    /// int with an inline encoding is never boxed.
+    Int(i64),
+
     Future(crate::Future),
 
     /// Opaque Rust-managed data, accessed via `Arc<dyn Any>` downcast.
@@ -162,6 +167,7 @@ impl Object {
             | Object::Array(_)
             | Object::Map(_)
             | Object::Float(_)
+            | Object::Int(_)
             | Object::Future(_)
             | Object::Type(_) => true,
             Object::Package(_)
@@ -228,6 +234,7 @@ impl Object {
             | Object::Array(_)
             | Object::Map(_)
             | Object::Float(_)
+            | Object::Int(_)
             | Object::Future(_)
             | Object::RustData(_)
             | Object::Tombstone => None,
@@ -261,6 +268,7 @@ impl Object {
             | Object::Array(_)
             | Object::Map(_)
             | Object::Float(_)
+            | Object::Int(_)
             | Object::Future(_)
             | Object::RustData(_)
             | Object::Tombstone => return false,
@@ -339,6 +347,7 @@ enum ObjectWire {
     /// (`ConstValue::Type` templates materialize through the VM's `LoadType`),
     /// so this round trip is exercised only by unit/link tooling.
     Type(Box<crate::RealizedTy>),
+    Int(i64),
 }
 
 impl BorshSerialize for Object {
@@ -373,6 +382,7 @@ impl BorshSerialize for Object {
                 ));
             }
             Self::Float(v) => ObjectWire::Float(*v),
+            Self::Int(v) => ObjectWire::Int(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
             Self::RustData(_) => {
@@ -435,6 +445,7 @@ impl BorshDeserialize for Object {
                 ));
             }
             ObjectWire::Float(v) => Self::Float(v),
+            ObjectWire::Int(v) => Self::Int(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::Type(v) => Self::Type(Box::new(crate::types::TypeValue::new(*v))),
         })
@@ -483,6 +494,7 @@ impl std::fmt::Display for Object {
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
             Object::Float(v) => write!(f, "{v}"),
+            Object::Int(v) => write!(f, "{v}"),
             Object::Tombstone => write!(f, "<tombstone>"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
@@ -516,6 +528,7 @@ pub enum ObjectType {
     Type,
     RustData,
     Float,
+    Int,
     /// Not a value: the slot's object is gone. See [`Object::Tombstone`].
     Tombstone,
 }
@@ -547,6 +560,7 @@ impl ObjectType {
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
             Object::Float(_) => Self::Float,
+            Object::Int(_) => Self::Int,
             Object::Tombstone => Self::Tombstone,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -591,6 +605,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),
             ObjectType::Float => write!(f, "float"),
+            ObjectType::Int => write!(f, "int"),
             ObjectType::Tombstone => write!(f, "tombstone"),
         }
     }

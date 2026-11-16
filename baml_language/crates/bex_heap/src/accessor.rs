@@ -778,6 +778,7 @@ fn convert_object(
         Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
             .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
         Object::Float(f) => Ok(BexExternalValue::Float(*f)),
+        Object::Int(i) => Ok(BexExternalValue::Int(*i)),
         Object::Closure(_) => unconvertible("closure"),
         Object::BoundMethod(_) => unconvertible("bound_method"),
         Object::GenericFunction(_) => unconvertible("generic_function"),

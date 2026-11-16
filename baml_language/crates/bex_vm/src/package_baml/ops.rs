@@ -476,6 +476,8 @@ impl EqualsDriver {
             // Distinct boxes: compare the values, reflexively (`NaN == NaN`).
             (Object::Float(x), Object::Float(y)) => step(bex_vm_types::float_order::eq(*x, *y)),
             (Object::Float(_), _) => Cmp::NotEqual,
+            (Object::Int(x), Object::Int(y)) => step(x == y),
+            (Object::Int(_), _) => Cmp::NotEqual,
             (Object::String(x), Object::String(y)) => step(x == y),
             (Object::String(_), _) => Cmp::NotEqual,
             // Different `Arc`s with the same numeric value compare equal.
@@ -874,6 +876,7 @@ fn equals_objects_without_driver(vm: &mut BexVm, pa: HeapPtr, pb: HeapPtr) -> Op
         (Object::Float(x), Object::Float(y)) => {
             return Some(bex_vm_types::float_order::eq(*x, *y));
         }
+        (Object::Int(x), Object::Int(y)) => return Some(x == y),
         _ => return None,
     };
     enum_equality_is_structural(vm, enm, pa).then_some(index_a == index_b)

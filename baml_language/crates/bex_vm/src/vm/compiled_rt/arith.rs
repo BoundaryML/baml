@@ -34,6 +34,14 @@ impl BexVm {
         self.tlab.float_value(f)
     }
 
+    /// The `Value` of an int: inline when it can be, boxed otherwise. See
+    /// [`bex_heap::Tlab::int_value`].
+    #[inline(always)]
+    #[allow(clippy::inline_always)]
+    pub fn int_value(&mut self, i: i64) -> Value {
+        self.tlab.int_value(i)
+    }
+
     pub fn neg(&mut self, val: Value) -> Result<Value, Box<VmError>> {
         if let Some(n) = val.as_int() {
             return self.neg_i64(n).map(Value::int);

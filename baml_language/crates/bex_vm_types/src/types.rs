@@ -823,67 +823,93 @@ pub enum SentinelKind {
     },
 }
 
-/// Box every unique `ConstValue::Float` with no inline `Value` encoding (NaN,
-/// `±inf`, extreme magnitudes — see [`Value::try_inline_float`]) reachable
-/// from `compile_time_objects` (in `Object::Function` constants) and `globals`
-/// into a fresh `Object::Float` entry appended to `compile_time_objects`, and
-/// rewrite those function `ConstValue::Float` entries to
-/// `ConstValue::Object(idx)`. Returns the bit-pattern → object-index map so
-/// callers can rewrite their globals.
+/// A numeric constant with no inline `Value` encoding, by content.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum BoxedConstant {
+    /// A float, by bit pattern.
+    Float(u64),
+    Int(i64),
+}
+
+impl BoxedConstant {
+    /// The constant's box key, or `None` when it resolves to an inline
+    /// `Value` (or is not numeric).
+    fn of(cv: &ConstValue) -> Option<Self> {
+        match cv {
+            ConstValue::Float(f) if Value::try_inline_float(*f).is_none() => {
+                Some(Self::Float(f.to_bits()))
+            }
+            ConstValue::Int(i) if !Value::fits_inline(*i) => Some(Self::Int(*i)),
+            _ => None,
+        }
+    }
+
+    fn object(self) -> Object {
+        match self {
+            Self::Float(bits) => Object::Float(f64::from_bits(bits)),
+            Self::Int(i) => Object::Int(i),
+        }
+    }
+}
+
+/// The compile-time objects [`box_compile_time_constants`] appended, by
+/// constant.
+pub struct BoxedConstants(HashMap<BoxedConstant, usize>);
+
+impl BoxedConstants {
+    /// The compile-time object index holding `cv`, when `cv` was boxed.
+    pub fn index_of(&self, cv: &ConstValue) -> Option<usize> {
+        self.0.get(&BoxedConstant::of(cv)?).copied()
+    }
+}
+
+/// Box every unique numeric constant with no inline `Value` encoding (floats:
+/// NaN, `±inf`, extreme magnitudes, see [`Value::try_inline_float`]; ints
+/// outside [`Value::fits_inline`]) reachable from `compile_time_objects` (in
+/// `Object::Function` constants) and `globals` into a fresh `Object::Float`
+/// or `Object::Int` entry appended to `compile_time_objects`, and rewrite
+/// those function constants to `ConstValue::Object(idx)`. Returns the
+/// constant → object-index map so callers can rewrite their globals.
 ///
-/// Every other float constant stays a `ConstValue::Float` and resolves to an
-/// inline `Value` in [`ConstValue::to_value`], so a representable float is
-/// never boxed.
+/// Every other numeric constant stays as it is and resolves to an inline
+/// `Value` in [`ConstValue::to_value`], so a representable value is never
+/// boxed.
 ///
 /// Globals are *not* rewritten in place — callers typically need to consume
 /// them by value (to convert `ConstValue` → `Value`) and rewrite during that
 /// pass.
-pub fn box_compile_time_floats(
+pub fn box_compile_time_constants(
     compile_time_objects: &mut Vec<Object>,
     globals: &[crate::ConstValue],
-) -> HashMap<u64, usize> {
-    let mut float_indices: HashMap<u64, usize> = HashMap::new();
-    // Pre-scan to discover unique floats.
-    for obj in &*compile_time_objects {
-        if let Object::Function(func) = obj {
-            for cv in &func.bytecode.constants {
-                if let ConstValue::Float(f) = cv
-                    && Value::try_inline_float(*f).is_none()
-                {
-                    let next_idx = compile_time_objects.len() + float_indices.len();
-                    float_indices.entry(f.to_bits()).or_insert(next_idx);
-                }
-            }
+) -> BoxedConstants {
+    let mut indices: HashMap<BoxedConstant, usize> = HashMap::new();
+    let mut order: Vec<BoxedConstant> = Vec::new();
+    let base = compile_time_objects.len();
+    let function_constants = compile_time_objects.iter().flat_map(|obj| match obj {
+        Object::Function(func) => func.bytecode.constants.as_slice(),
+        _ => &[],
+    });
+    // Pre-scan to discover unique constants, in first-seen order.
+    for cv in function_constants.chain(globals) {
+        if let Some(key) = BoxedConstant::of(cv) {
+            indices.entry(key).or_insert_with(|| {
+                order.push(key);
+                base + order.len() - 1
+            });
         }
     }
-    for cv in globals {
-        if let ConstValue::Float(f) = cv
-            && Value::try_inline_float(*f).is_none()
-        {
-            let next_idx = compile_time_objects.len() + float_indices.len();
-            float_indices.entry(f.to_bits()).or_insert(next_idx);
-        }
-    }
-    // Append boxes in index order.
-    let mut float_entries: Vec<(u64, usize)> =
-        float_indices.iter().map(|(k, v)| (*k, *v)).collect();
-    float_entries.sort_by_key(|(_, idx)| *idx);
-    for (bits, _) in float_entries {
-        compile_time_objects.push(Object::Float(f64::from_bits(bits)));
-    }
-    // Rewrite each function-constant ConstValue::Float -> ConstValue::Object(idx).
+    compile_time_objects.extend(order.into_iter().map(BoxedConstant::object));
+    // Rewrite each boxed function constant to ConstValue::Object(idx).
     for obj in compile_time_objects.iter_mut() {
         if let Object::Function(func) = obj {
             for cv in &mut func.bytecode.constants {
-                if let ConstValue::Float(f) = cv
-                    && let Some(&idx) = float_indices.get(&f.to_bits())
-                {
+                if let Some(&idx) = BoxedConstant::of(cv).and_then(|key| indices.get(&key)) {
                     *cv = ConstValue::Object(crate::indexable::ObjectIndex::from_raw(idx));
                 }
             }
         }
     }
-    float_indices
+    BoxedConstants(indices)
 }
 
 /// Format an f64 to string, following JS/TS conventions for special values
@@ -989,6 +1015,7 @@ impl Type {
             ValueKind::Float(_) => Type::Float,
             ValueKind::Object(ptr) => match when_object(ptr) {
                 ObjectType::Float => Type::Float,
+                ObjectType::Int => Type::Int,
                 other => Type::Object(other),
             },
             // TODO: Actually?
