@@ -10,13 +10,13 @@ use wiremock::{
     matchers::{method, path},
 };
 
-/// Frozen controls permit an off-only veto; renamed controls remain authoritative.
+/// Legacy unbound policies permit an off-only veto; renamed controls remain authoritative.
 #[tokio::test]
 async fn generated_bridge_honors_only_the_publishers_recording_variable() {
     const SCENARIO: &str = "BAML_TEST_ARTIFACT_SCENARIO";
     let Some(scenario) = baml_env::raw_var(SCENARIO) else {
         // Separate processes isolate both environment variables and the bridge singleton.
-        for scenario in ["fixed", "custom_off", "custom_on"] {
+        for scenario in ["legacy", "custom_off", "custom_on"] {
             let home = tempfile::tempdir().unwrap();
             let output = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
@@ -49,12 +49,11 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
         }
         return;
     };
-    run_generated_main(if scenario == "fixed" {
-        "[bridge.env_var_names]\nBAML_TELEMETRY = false"
+    if scenario == "legacy" {
+        run_generated_policy("", |policy| policy.recording_level_envvar = None).await;
     } else {
-        "[bridge.env_var_names]\nBAML_TELEMETRY = \"ACME_TELEMETRY\""
-    })
-    .await;
+        run_generated_main("[bridge.env_var_names]\nBAML_TELEMETRY = \"ACME_TELEMETRY\"").await;
+    }
 }
 
 /// Telemetry settings never stop a generated SDK from loading, and it prints nothing
@@ -497,8 +496,6 @@ async fn generated_policy_opt_out_matrix() {
         }
         let binding = if policy_name.contains("custom") {
             "[bridge.env_var_names]\nBAML_TELEMETRY = \"ACME_TELEMETRY\""
-        } else if policy_name.contains("frozen") {
-            "[bridge.env_var_names]\nBAML_TELEMETRY = false"
         } else if policy_name == "standard" {
             "[bridge.env_var_names]\nBAML_TELEMETRY = \"BAML_TELEMETRY\""
         } else {
@@ -507,7 +504,7 @@ async fn generated_policy_opt_out_matrix() {
         run_generated_policy(binding, |policy| {
             // Abort would stop execution if recording authorization were attempted.
             policy.initial_failure.action = InitialFailureAction::Abort;
-            if policy_name == "legacy" {
+            if policy_name.ends_with("legacy") {
                 policy.recording_level_envvar = None;
             }
             if policy_name.starts_with("embedded") {
@@ -522,11 +519,10 @@ async fn generated_policy_opt_out_matrix() {
     for policy_name in [
         "omitted",
         "standard",
-        "frozen",
         "legacy",
         "custom",
         "embedded_omitted",
-        "embedded_frozen",
+        "embedded_legacy",
         "embedded_custom",
     ] {
         for credential in ["key", "saved", "local", "none"] {

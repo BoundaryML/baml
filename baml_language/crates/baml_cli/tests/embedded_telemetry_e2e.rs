@@ -98,6 +98,42 @@ naming_convention = "preserve-case"
 }
 
 #[tokio::test]
+async fn recording_binding_false_is_rejected_before_pack_or_generate_output() {
+    let server = MockServer::start().await;
+    for (command, table) in [("pack", "pack"), ("generate", "bridge")] {
+        for embed in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            common::write_project(temp.path(), "function main() -> int { 7 }\n");
+            std::fs::write(
+                temp.path().join("baml.toml"),
+                manifest(&format!("[{table}.env_var_names]\nBAML_TELEMETRY = false")),
+            )
+            .unwrap();
+            let mut args = vec![command];
+            if command == "pack" {
+                args.extend(["main", "-o", "out"]);
+            }
+            if embed {
+                args.push("--embed-telemetry");
+            }
+            let output = cli(temp.path(), &server.uri(), &args);
+            assert!(!output.status.success(), "{command}/{embed}: {output:?}");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.contains(&format!(
+                    "{table}.env_var_names.BAML_TELEMETRY must be a valid environment-variable name"
+                )),
+                "{command}/{embed}: {stderr}"
+            );
+            assert!(stderr.contains("omit this setting to use BAML_TELEMETRY"));
+            assert!(!temp.path().join("out").exists());
+            assert!(!temp.path().join("generated").exists());
+            assert!(server.received_requests().await.unwrap().is_empty());
+        }
+    }
+}
+
+#[tokio::test]
 async fn embedding_rejects_cli_variable_names_before_contacting_bcs() {
     let temp = tempfile::tempdir().unwrap();
     common::write_project(temp.path(), "function main() -> int { 7 }\n");
@@ -1618,7 +1654,7 @@ async fn embedding_matches_project_names_with_internal_spaces_exactly() {
 }
 
 /// Execute matching packed artifacts with the actual effective control, including
-/// conflicting built-in/custom values, frozen policies and embedded credentials.
+/// conflicting built-in/custom values and embedded credentials.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn packed_recording_opt_out_matrix() {
     common::ensure_built();
@@ -1633,10 +1669,8 @@ async fn packed_recording_opt_out_matrix() {
     for policy_name in [
         "omitted",
         "standard",
-        "frozen",
         "custom",
         "embedded_omitted",
-        "embedded_frozen",
         "embedded_custom",
         "collision",
         "collision_custom",
@@ -1664,12 +1698,10 @@ function main() -> int {{
         let custom = policy_name.contains("custom");
         let collision = policy_name.starts_with("collision");
         let mut binding = String::new();
-        if custom || policy_name.contains("frozen") || policy_name == "standard" || collision {
+        if custom || policy_name == "standard" || collision {
             binding.push_str("[pack.env_var_names]\n");
             if custom {
                 binding.push_str("BAML_TELEMETRY = \"ACME_TELEMETRY\"\n");
-            } else if policy_name.contains("frozen") {
-                binding.push_str("BAML_TELEMETRY = false\n");
             } else if policy_name == "standard" {
                 binding.push_str("BAML_TELEMETRY = \"BAML_TELEMETRY\"\n");
             }

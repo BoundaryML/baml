@@ -2,7 +2,7 @@
 //!
 //! Each producer reads its own manifest table. The engine reads the explicitly
 //! permitted recording variable at startup. New artifacts bind the standard
-//! variable by default; frozen and legacy policies still permit an off-only veto.
+//! variable by default; legacy policies still permit an off-only veto.
 //!
 //! ```toml
 //! [pack]
@@ -104,8 +104,8 @@ pub struct InitialFailurePolicy {
 #[serde(deny_unknown_fields)]
 pub struct ArtifactTelemetry {
     pub recording_level: RecordingLevel,
-    /// Named controls can change detail. None preserves the baked level and
-    /// permits only the standard off veto; legacy omission also encodes None.
+    /// Named controls can change detail. None retains the stored level and permits
+    /// only the standard off veto unless a destination owns that name.
     pub recording_level_envvar: Option<String>,
     pub initial_failure: InitialFailurePolicy,
     #[serde(default)]
@@ -421,11 +421,10 @@ impl ArtifactTelemetry {
             };
             if let Some(value) = names.get("BAML_TELEMETRY") {
                 policy.recording_level_envvar = match value {
-                    toml::Value::Boolean(false) => None,
                     toml::Value::String(envvar) if valid_envvar(envvar) => Some(envvar.clone()),
                     _ => {
                         return Err(PolicyError(format!(
-                            "{name}.env_var_names.BAML_TELEMETRY must be false or a valid environment-variable name (for example, \"ACME_TELEMETRY\")."
+                            "{name}.env_var_names.BAML_TELEMETRY must be a valid environment-variable name (for example, \"ACME_TELEMETRY\"); omit this setting to use BAML_TELEMETRY."
                         )));
                     }
                 };
@@ -499,7 +498,7 @@ impl ArtifactTelemetry {
         self.resolve_level_with(baml_env::os_var)
     }
 
-    /// The effective end-user off control, including frozen/legacy opt-out.
+    /// The effective end-user off control, including legacy opt-out.
     /// A destination binding owns its name and cannot also control recording.
     pub fn recording_control_envvar(&self) -> Option<&str> {
         let name = self
@@ -527,16 +526,16 @@ impl ArtifactTelemetry {
 
     /// Inject the environment for tests and hosts; no process-wide mutation is needed.
     /// Never fails, so a control cannot stop the program. Bound variables treat
-    /// empty as unset and malformed values as off. Frozen/legacy policies accept
-    /// only a supported off alias; other values leave the baked detail unchanged.
+    /// empty as unset and malformed values as off. Legacy unbound policies accept
+    /// only a supported off alias; other values leave their stored level unchanged.
     pub fn resolve_level_with(
         &self,
         mut read: impl FnMut(&str) -> Option<OsString>,
     ) -> Option<AutoTelemetryLevel> {
         let Some(name) = &self.recording_level_envvar else {
-            // None is the existing wire representation of both explicit false
-            // and legacy omission. Keep its baked detail level without guessing
-            // provenance, but never let a frozen level defeat an explicit opt-out.
+            // None remains for older artifacts and destination-owned standard
+            // names. Keep the stored level, but allow explicit off when that name
+            // is free. New manifests reject false recording bindings.
             if let Some(name) = self.recording_control_envvar()
                 && baml_env::bool_from(name, read(name)).ok() == Some(Some(false))
             {
@@ -779,9 +778,9 @@ api_ur = "https://api.cloud.boundaryml.com""#,
         }
     }
 
-    /// False and legacy None share the existing wire format and an off-only veto.
+    /// Legacy unbound policies retain their wire format and an off-only veto.
     #[test]
-    fn frozen_and_legacy_policies_allow_opt_out_without_unfreezing_detail() {
+    fn legacy_policies_allow_opt_out_without_changing_stored_detail() {
         // v1 TOML and the original Borsh layout carry no binding provenance.
         let legacy: ArtifactTelemetry = toml::from_str(
             r#"
@@ -794,15 +793,7 @@ action = "warn"
         let original_borsh = [2, 0, 1, 0, 0, 0, 0, 0, 0];
         let legacy_borsh: ArtifactTelemetry = borsh::from_slice(&original_borsh).unwrap();
         assert_eq!(borsh::to_vec(&legacy).unwrap(), original_borsh);
-        for policy in [legacy, legacy_borsh].into_iter().chain(
-            [ArtifactKind::Pack, ArtifactKind::Bridge].map(|kind| {
-                let manifest: toml::Value =
-                    format!("[{}.env_var_names]\nBAML_TELEMETRY = false", kind.table())
-                        .parse()
-                        .unwrap();
-                ArtifactTelemetry::from_manifest(&manifest, kind).unwrap()
-            }),
-        ) {
+        for policy in [legacy, legacy_borsh] {
             assert_eq!(policy.recording_level_envvar, None);
             for value in ["off", "false", "0", "no", "OFF", " False ", " NO "] {
                 assert_eq!(
@@ -1055,15 +1046,23 @@ on_initial_telemetry_failure = "ignore"
 
     #[test]
     fn invalid_bindings_and_failure_actions_are_actionable() {
-        for value in ["true", "\"\"", "\"A=B\"", "\"1VAR\"", "42"] {
-            let manifest: toml::Value =
-                toml::from_str(&format!("[pack.env_var_names]\nBAML_TELEMETRY = {value}")).unwrap();
-            assert_eq!(
-                ArtifactTelemetry::from_manifest(&manifest, ArtifactKind::Pack)
-                    .unwrap_err()
-                    .to_string(),
-                r#"pack.env_var_names.BAML_TELEMETRY must be false or a valid environment-variable name (for example, "ACME_TELEMETRY")."#
-            );
+        for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
+            for value in ["false", "true", "\"\"", "\"A=B\"", "\"1VAR\"", "42"] {
+                let manifest: toml::Value = toml::from_str(&format!(
+                    "[{}.env_var_names]\nBAML_TELEMETRY = {value}",
+                    kind.table()
+                ))
+                .unwrap();
+                assert_eq!(
+                    ArtifactTelemetry::from_manifest(&manifest, kind)
+                        .unwrap_err()
+                        .to_string(),
+                    format!(
+                        r#"{}.env_var_names.BAML_TELEMETRY must be a valid environment-variable name (for example, "ACME_TELEMETRY"); omit this setting to use BAML_TELEMETRY."#,
+                        kind.table()
+                    )
+                );
+            }
         }
         let manifest: toml::Value = toml::from_str(
             r#"[bridge]

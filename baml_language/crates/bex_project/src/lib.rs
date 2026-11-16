@@ -343,7 +343,7 @@ mod bytecode_artifact_tests {
         ] {
             assert_eq!(engine.telemetry_recording_id(), None);
         }
-        // Legacy frozen policies also honor the standard off-only veto.
+        // Legacy unbound policies also honor the standard off-only veto.
         let artifact = prepare_from_bytecode(&bytecode, sys_ops::SysOps::native())
             .unwrap()
             .with_artifact_telemetry(btel_settings::artifact::ArtifactTelemetry::default())

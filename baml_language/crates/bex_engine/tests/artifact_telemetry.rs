@@ -319,7 +319,7 @@ function main() -> int {{
         ));
         let policy = match kind.as_str() {
             "bare" => None,
-            "frozen" => Some(ArtifactTelemetry::default()),
+            "legacy" => Some(ArtifactTelemetry::default()),
             "custom" => Some(ArtifactTelemetry {
                 recording_level_envvar: Some("ACME_TELEMETRY".into()),
                 ..Default::default()
@@ -372,7 +372,7 @@ function main() -> int {{
         assert_eq!(engine.telemetry_result(), None);
         return;
     }
-    for kind in ["bare", "frozen", "custom"] {
+    for kind in ["bare", "legacy", "custom"] {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/application"))
