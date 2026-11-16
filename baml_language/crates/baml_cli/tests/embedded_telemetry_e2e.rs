@@ -98,6 +98,62 @@ naming_convention = "preserve-case"
 }
 
 #[tokio::test]
+async fn boolean_env_var_mappings_are_rejected_before_pack_or_generate_output() {
+    let server = MockServer::start().await;
+    for (command, table) in [("pack", "pack"), ("generate", "bridge")] {
+        for embed in [false, true] {
+            for (bindings, field, message) in [
+                (
+                    "BAML_TELEMETRY = false",
+                    "BAML_TELEMETRY",
+                    "must be a valid environment-variable name",
+                ),
+                (
+                    "BOUNDARY_PROJECT = false\nBOUNDARY_API_KEY = false",
+                    "BOUNDARY_PROJECT and BOUNDARY_API_KEY",
+                    "must be distinct valid environment-variable names",
+                ),
+                (
+                    "BOUNDARY_PROJECT = false\nBOUNDARY_API_KEY = \"ACME_KEY\"",
+                    "BOUNDARY_PROJECT and BOUNDARY_API_KEY",
+                    "must be distinct valid environment-variable names",
+                ),
+                (
+                    "BOUNDARY_PROJECT = \"ACME_PROJECT\"\nBOUNDARY_API_KEY = false",
+                    "BOUNDARY_PROJECT and BOUNDARY_API_KEY",
+                    "must be distinct valid environment-variable names",
+                ),
+            ] {
+                let temp = tempfile::tempdir().unwrap();
+                common::write_project(temp.path(), "function main() -> int { 7 }\n");
+                std::fs::write(
+                    temp.path().join("baml.toml"),
+                    manifest(&format!("[{table}.env_var_names]\n{bindings}")),
+                )
+                .unwrap();
+                let mut args = vec![command];
+                if command == "pack" {
+                    args.extend(["main", "-o", "out"]);
+                }
+                if embed {
+                    args.push("--embed-telemetry");
+                }
+                let output = cli(temp.path(), &server.uri(), &args);
+                assert!(!output.status.success(), "{command}/{embed}: {output:?}");
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                assert!(
+                    stderr.contains(&format!("{table}.env_var_names.{field} {message}")),
+                    "{command}/{embed}: {stderr}"
+                );
+                assert!(!temp.path().join("out").exists());
+                assert!(!temp.path().join("generated").exists());
+                assert!(server.received_requests().await.unwrap().is_empty());
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn embedding_rejects_cli_variable_names_before_contacting_bcs() {
     let temp = tempfile::tempdir().unwrap();
     common::write_project(temp.path(), "function main() -> int { 7 }\n");
@@ -367,7 +423,7 @@ async fn packed_api_key_is_verified_and_fixed_with_endpoint_override() {
             .env_remove("BAML_WRAPPER_BOUNDARY_API_KEY")
             .env("BOUNDARY_API_KEY", "bdry_secret_customer_do_not_use")
             .env("BOUNDARY_PROJECT", "customer/other-project")
-            .env("BAML_TELEMETRY", "off")
+            .env("BAML_TELEMETRY", "medium")
             .env("BAML_HOME", common::shared_baml_home())
             .output()
             .unwrap()
@@ -1615,4 +1671,205 @@ async fn embedding_matches_project_names_with_internal_spaces_exactly() {
         &server.uri(),
         &["generate", "--embed-telemetry"],
     ));
+}
+
+/// Execute matching packed artifacts with the actual effective control, including
+/// conflicting built-in/custom values and embedded credentials.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn packed_recording_opt_out_matrix() {
+    common::ensure_built();
+    let server = MockServer::start().await;
+    embedding_api(&server).await;
+    ingest_api(&server).await;
+    Mock::given(method("GET"))
+        .and(path("/application"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("ok"))
+        .mount(&server)
+        .await;
+    for policy_name in [
+        "omitted",
+        "standard",
+        "custom",
+        "embedded_omitted",
+        "embedded_custom",
+        "collision",
+        "collision_custom",
+        "subcommand",
+    ] {
+        let project = tempfile::tempdir().unwrap();
+        common::write_project(
+            project.path(),
+            &format!(
+                r#"
+function main() -> int {{
+    let span = trace.start_span("explicit");
+    let value = span.run(() -> int {{
+        let response = baml.http.send(baml.http.Request {{ method: "GET", url: "{}/application", headers: {{}}, body: "" }});
+        assert.is_true(response.text() == "ok");
+        7
+    }});
+    span.finish(value);
+    value
+}}
+"#,
+                server.uri()
+            ),
+        );
+        let custom = policy_name.contains("custom");
+        let collision = policy_name.starts_with("collision");
+        let mut binding = String::new();
+        if custom || policy_name == "standard" || collision {
+            binding.push_str("[pack.env_var_names]\n");
+            if custom {
+                binding.push_str("BAML_TELEMETRY = \"ACME_TELEMETRY\"\n");
+            } else if policy_name == "standard" {
+                binding.push_str("BAML_TELEMETRY = \"BAML_TELEMETRY\"\n");
+            }
+            if collision {
+                binding.push_str(
+                    "BOUNDARY_PROJECT = \"ACME_PROJECT\"\nBOUNDARY_API_KEY = \"BAML_TELEMETRY\"\n",
+                );
+            }
+        }
+        std::fs::write(project.path().join("baml.toml"), manifest(&binding)).unwrap();
+        let mut args = vec!["pack", "main", "-o", "out"];
+        if policy_name == "subcommand" {
+            args = vec!["pack", "-f", "main", "-o", "out"];
+        }
+        if policy_name.starts_with("embedded") {
+            args.push("--embed-telemetry");
+        }
+        succeeded(&cli(project.path(), &server.uri(), &args));
+        for credential in ["key", "saved", "local", "none"] {
+            // With name ownership and no custom control there is intentionally
+            // no environment off control; its enabled behavior is checked below.
+            if policy_name == "collision" {
+                continue;
+            }
+            for level in ["off", "0", " FaLsE ", " NO "] {
+                let home = tempfile::tempdir().unwrap();
+                if credential == "saved" {
+                    let endpoint = bcs_api::Endpoint::parse(&server.uri()).unwrap();
+                    // Write only the isolated fake endpoint fixture; never change process env.
+                    common::write_saved_login(home.path(), &endpoint, "bdry_session_matrix");
+                }
+                let before = server.received_requests().await.unwrap().len();
+                let mut command = Command::new(project.path().join("out"));
+                command
+                    .current_dir(project.path())
+                    .env("HOME", home.path())
+                    .env("USERPROFILE", home.path())
+                    .env("BAML_HOME", home.path())
+                    .env("BOUNDARY_API_URL", server.uri())
+                    .env("BOUNDARY_PROJECT", "caller/app")
+                    .env("ACME_PROJECT", "caller/app")
+                    .env_remove("BOUNDARY_API_KEY")
+                    .envs(match credential {
+                        "key" => Some(("BOUNDARY_API_KEY", "bdry_secret_matrix")),
+                        "local" => Some(("BOUNDARY_API_KEY", "local")),
+                        _ => None,
+                    })
+                    .env(
+                        "BAML_TELEMETRY",
+                        if collision {
+                            "bdry_secret_collision"
+                        } else if custom {
+                            "high"
+                        } else {
+                            level
+                        },
+                    )
+                    .env("ACME_TELEMETRY", level);
+                if policy_name == "subcommand" {
+                    command.arg("main");
+                }
+                let output = command.output().unwrap();
+                succeeded(&output);
+                assert_eq!(
+                    String::from_utf8_lossy(&output.stdout),
+                    "7\n",
+                    "{policy_name}/{credential}/{level}"
+                );
+                assert!(
+                    output.stderr.is_empty(),
+                    "{policy_name}/{credential}/{level}: {output:?}"
+                );
+                assert!(
+                    !home.path().join("btel").exists(),
+                    "{policy_name}/{credential}/{level}"
+                );
+                let requests = server.received_requests().await.unwrap();
+                let new = &requests[before..];
+                assert_eq!(new.len(), 1, "{policy_name}/{credential}/{level}: {new:?}");
+                assert_eq!(new[0].url.path(), "/application");
+                assert_eq!(new[0].method, "GET");
+            }
+        }
+        // Enabled controls prove the publisher mapping, application request and
+        // successful cloud upload/local files still work. Renamed variables own
+        // the decision even when the built-in says off.
+        for local in [false, true] {
+            let home = tempfile::tempdir().unwrap();
+            let before = server.received_requests().await.unwrap().len();
+            let mut command = Command::new(project.path().join("out"));
+            command
+                .current_dir(project.path())
+                .env("HOME", home.path())
+                .env("USERPROFILE", home.path())
+                .env("BAML_HOME", home.path())
+                .env("BOUNDARY_API_URL", server.uri())
+                .env("BOUNDARY_PROJECT", "caller/app")
+                .env("ACME_PROJECT", "caller/app")
+                .env(
+                    "BOUNDARY_API_KEY",
+                    if local { "local" } else { "bdry_secret_matrix" },
+                )
+                .env(
+                    "BAML_TELEMETRY",
+                    if collision {
+                        if local {
+                            "local"
+                        } else {
+                            "bdry_secret_collision"
+                        }
+                    } else if custom {
+                        "off"
+                    } else {
+                        "high"
+                    },
+                )
+                .env("ACME_TELEMETRY", "medium");
+            if policy_name == "subcommand" {
+                command.arg("main");
+            }
+            let output = command.output().unwrap();
+            succeeded(&output);
+            assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+            let requests = server.received_requests().await.unwrap();
+            let new = &requests[before..];
+            let cloud = !local || policy_name.starts_with("embedded");
+            assert_eq!(
+                new.iter().any(|request| request.method == "PUT"),
+                cloud,
+                "{policy_name}/{local}: {new:?}"
+            );
+            assert_eq!(
+                home.path().join("btel/recordings").exists(),
+                !cloud,
+                "{policy_name}/{local}"
+            );
+            for request in new.iter().filter(|request| request.method == "POST") {
+                assert_eq!(
+                    request.headers["authorization"],
+                    if policy_name.starts_with("embedded") {
+                        "Bearer bdry_secret_embedded"
+                    } else if collision {
+                        "Bearer bdry_secret_collision"
+                    } else {
+                        "Bearer bdry_secret_matrix"
+                    }
+                );
+            }
+        }
+    }
 }
