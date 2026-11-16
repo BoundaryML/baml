@@ -42,7 +42,8 @@ impl<'db> Generator<'_, 'db> {
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
         let types = self.type_operands("call", type_args)?;
         if info.kind == FunctionKind::Bytecode && self.symbols.contains_key(&object) {
-            return self.compiled_call(block, object, &name, layout, args, &types);
+            let (call, repr) = self.compiled_entry(block, object, &name, layout, args, &types)?;
+            return Ok(Expr::new(self.call_code(block, object, &call)?, repr));
         }
         let values = self.laid_out_args(block, &name, info, layout, args)?;
         let args = format!("&[{}]", values.join(", "));
@@ -89,21 +90,6 @@ impl<'db> Generator<'_, 'db> {
                 "sys op `{name}` emitted inline"
             ))),
         }
-    }
-
-    /// [`Self::compiled_entry`] with its error routed.
-    fn compiled_call(
-        &mut self,
-        block: BlockId,
-        object: usize,
-        name: &str,
-        layout: Option<&baml_type::CallLayout>,
-        args: &[Operand<'db>],
-        types: &[String],
-    ) -> Gen<Expr> {
-        let (call, repr) = self.compiled_entry(block, object, name, layout, args, types)?;
-        let code = self.call_code(block, object, &call)?;
-        Ok(Expr::new(code, repr))
     }
 
     /// Use a typed direct entry when the callee has no VM-frame state and the

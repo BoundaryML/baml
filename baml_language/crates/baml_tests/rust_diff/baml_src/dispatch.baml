@@ -69,12 +69,9 @@ function DxTotal(shapes: DxShape[]) -> int {
 
 function DispatchKnown() -> void {
     let shapes: DxShape[] = [];
-    for (let i = 0; i < 50; i += 1) {
-        if (i % 2 == 0) {
-            shapes.push(DxSquare { side: i });
-        } else {
-            shapes.push(DxRect { w: i, h: 2 });
-        }
+    for (let i = 0; i < 50; i += 2) {
+        shapes.push(DxSquare { side: i });
+        shapes.push(DxRect { w: i + 1, h: 2 });
     }
     baml.io.println(`${DxTotal(shapes)}:${DxArea(DxRect { w: 7, h: 3 })}`);
     let thrown = DxArea(DxSquare { side: -2 }) catch (e) {
@@ -86,16 +83,14 @@ function DispatchKnown() -> void {
     baml.io.println(`${thrown}:${divided}`);
 }
 
-function DispatchSuspends() -> void {
-    let shapes: DxShape[] = [DxSlow { n: 20 }, DxSquare { side: 3 }, DxSlow { n: 7 }];
+// Arms that suspend, and receivers the site leaves to the VM (an optional
+// parameter, a generic class), at one site.
+function DispatchMixed() -> void {
+    let shapes: DxShape[] = [
+        DxSlow { n: 20 }, DxPadded { side: 4 }, DxSquare { side: 3 }, DxBox<int> { side: 2 },
+        DxRect { w: 5, h: 1 }, DxBox<string> { side: 3 }, DxPadded { side: 1 }, DxSlow { n: 7 },
+    ];
     baml.io.println(`${DxTotal(shapes)}`);
-}
-
-function DispatchOptional() -> void {
-    let shapes: DxShape[] = [DxPadded { side: 4 }, DxSquare { side: 4 }, DxPadded { side: 1 }];
-    baml.io.println(`${DxTotal(shapes)}`);
-    let generic: DxShape[] = [DxBox<int> { side: 2 }, DxRect { w: 5, h: 1 }, DxBox<string> { side: 3 }];
-    baml.io.println(`${DxTotal(generic)}`);
 }
 
 interface DxLabeled {
@@ -185,12 +180,8 @@ function DxRatio(c: DxCounter) -> int {
 
 function DispatchDefaultChain() -> void {
     let acc = 0;
-    for (let i = 0; i < 40; i += 1) {
-        if (i % 2 == 0) {
-            acc += DxRun(DxInc { base: i });
-        } else {
-            acc += DxRun(DxNone { base: i });
-        }
+    for (let i = 0; i < 40; i += 2) {
+        acc += DxRun(DxInc { base: i }) + DxRun(DxNone { base: i + 1 });
     }
     let thrown = DxRatio(DxInc { base: -3 }) catch (e) {
         let s: string => s,
