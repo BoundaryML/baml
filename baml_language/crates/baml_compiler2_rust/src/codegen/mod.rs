@@ -26,7 +26,7 @@ use crate::{
     },
     index::ProgramIndex,
     render::coerce,
-    stack::{BodyPlan, Group, StackClass, StackPlans},
+    stack::{BodyPlan, Group, StackClass, StackPlans, takes_param},
     structure::{Structured, structurize},
 };
 
@@ -216,7 +216,7 @@ impl<'a, 'db> Generator<'a, 'db> {
 
     /// The type a stack variant's parameter `i` takes, if it is a stack struct.
     fn stack_param(&self, i: usize) -> Option<&'a StackClass> {
-        if self.variant & (1 << i) == 0 {
+        if !takes_param(self.variant, i) {
             return None;
         }
         let group = self.stack_group(i + 1)?;
@@ -364,7 +364,7 @@ impl<'a, 'db> Generator<'a, 'db> {
                 Some(class) => {
                     let _ = write!(typed, ", arg{i}: &mut {}", class.name);
                 }
-                None if self.variant & (1 << i) != 0 => {
+                None if takes_param(self.variant, i) => {
                     return Err(Rejection::Invalid(format!(
                         "stack variant parameter {i} holds no stack object"
                     )));

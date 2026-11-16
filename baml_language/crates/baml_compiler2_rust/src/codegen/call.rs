@@ -8,9 +8,10 @@ use bex_vm_types::{FunctionKind, types::Function};
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     admit::Rejection,
-    analysis::{EQUALS_EQUALS, Repr, builtin_is_callable, call_shape, operand_ty},
+    analysis::{Repr, builtin_is_callable, call_shape, null_compared},
     index::DispatchArm,
     render::coerce,
+    stack::takes_param,
 };
 
 /// Beyond this many implementations a site is megamorphic: each arm inlines
@@ -290,9 +291,7 @@ impl<'db> Generator<'_, 'db> {
         layout_args(name, info, layout, exprs)
     }
 
-    /// `x == null` as a bit test. The `==` driver answers a pair with a
-    /// `null` side by kind alone: `null` equals only `null`, and no user
-    /// `Equals.eq` can run.
+    /// `x == null` as a bit test (`analysis::null_compared`).
     fn null_test(
         &mut self,
         block: BlockId,
@@ -300,19 +299,8 @@ impl<'db> Generator<'_, 'db> {
         ntypeargs: usize,
         args: &[Operand<'db>],
     ) -> Gen<Option<Expr>> {
-        if info.native_key.as_deref() != Some(EQUALS_EQUALS) || ntypeargs != 0 {
-            return Ok(None);
-        }
-        let [lhs, rhs] = args else {
-            return Ok(None);
-        };
-        let is_null =
-            |arg: &Operand<'db>| operand_ty(self.body, arg).is_some_and(|ty| ty.is_null());
-        let other = if is_null(rhs) {
-            lhs
-        } else if is_null(lhs) {
-            rhs
-        } else {
+        let Some(other) = null_compared(self.body, info.native_key.as_deref(), ntypeargs, args)
+        else {
             return Ok(None);
         };
         // A stack object is never null.
@@ -356,7 +344,7 @@ impl<'db> Generator<'_, 'db> {
         let mut boxed_values = Vec::with_capacity(args.len());
         let mut reloads = Vec::new();
         for (i, (arg, repr)) in args.iter().zip(&signature.params).enumerate() {
-            if params & (1 << i) != 0 {
+            if takes_param(params, i) {
                 let Some(group) = self.stack_operand(arg) else {
                     return Err(Rejection::Invalid(
                         "stack argument is not a stack object".into(),

@@ -1066,3 +1066,28 @@ function main() -> string {
     assert!(main.contains("s0.f0 = vm.slot(fr, "), "{main}");
     assert!(!main.contains("s0.f1 = vm.slot("), "{main}");
 }
+
+#[test]
+fn objects_past_the_64th_parameter_stay_on_the_heap() {
+    // Parameter masks are 64 bits wide: a parameter beyond them is never a
+    // stack parameter, and analysing it must not overflow a shift.
+    let ints: String = (1..64).map(|i| format!("a{i}: int, ")).collect();
+    let zeros = "0, ".repeat(63);
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function big(first: Vec, {ints}last: Vec) -> int {{ first.x + last.y }}
+function main() -> int {{
+  let a = Vec {{ x: 1, y: 2 }};
+  let b = Vec {{ x: 3, y: 4 }};
+  big(a, {zeros}b)
+}}"
+    ));
+    assert_sites(
+        &module,
+        "user.main",
+        &[
+            None,
+            Some("passed to user.big beyond its first 64 parameters"),
+        ],
+    );
+}
