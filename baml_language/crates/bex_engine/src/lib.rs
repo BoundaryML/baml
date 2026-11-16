@@ -1032,6 +1032,8 @@ pub struct EngineConfig {
     /// Recorded engines in one OS process must receive the same launch context:
     /// recordings share a process identity and queries expose one process row.
     /// The caller owns this invariant; engines do not coordinate global state.
+    /// Automatic application version metadata is overlaid on each program's
+    /// execution context, without changing this shared process context.
     pub launch_context: btel_types::context::Context,
     pub runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
     pub clock_mode: btel_clock::ClockMode,
@@ -1913,8 +1915,10 @@ impl BexEngine {
             compiled_bodies,
         } = config;
         // Application identity is execution context, independent of recording.
-        // Apply it before recording starts and before any package initializer
-        // executes, so pack and every bridge inherit the same root metadata.
+        // Apply it before any package initializer executes, so pack and every
+        // bridge inherit the same root metadata. The language version is shared
+        // with the recorded process context; app identity belongs to this program,
+        // since one OS process can host multiple differently versioned programs.
         let mut versions = btel_types::context::ContextPatch::default();
         versions.metadata.insert(
             "baml.ctx.baml_version".into(),
@@ -1922,6 +1926,8 @@ impl BexEngine {
                 baml_version::CANONICAL_VERSION.to_owned(),
             )),
         );
+        #[cfg(not(target_arch = "wasm32"))]
+        let process_context = launch_context.with_patch(&versions);
         if let Some(version) = &bytecode_program.app_version {
             versions.metadata.insert(
                 "baml.ctx.app_version".into(),
@@ -2136,7 +2142,7 @@ impl BexEngine {
                         source_snapshot_id.map(|id| id.0),
                         Some(program_id.0),
                         Arc::new(heap.static_function_metadata()),
-                        &launch_context,
+                        &process_context,
                     )?,
                     None => (
                         btel_processor::TelemetryRuntime::new().map_err(|error| {

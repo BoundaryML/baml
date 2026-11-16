@@ -22,13 +22,13 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     const child = instrument(trace.context_sync({ metadata: { drop: null, child: true } }), () => {
       const observed = contextBaml.current_context_sync();
       expect(observed.distinct_id).toBe('alice');
-      expect(observed.metadata).toEqual({ keep: 1, child: true });
+      expectMetadata(observed.metadata, { keep: 1, child: true });
       observed.metadata.keep = 99;
-      expect(trace.current_context_sync().metadata).toEqual({ keep: 1, child: true });
+      expectMetadata(trace.current_context_sync().metadata, { keep: 1, child: true });
     });
     const parent = instrument(trace.hidden_sync().context_sync({ distinct_id: 'alice', metadata: { keep: 1, drop: 2 } }), () => {
       child();
-      expect(trace.current_context_sync().metadata).toEqual({ keep: 1, drop: 2 });
+      expectMetadata(trace.current_context_sync().metadata, { keep: 1, drop: 2 });
     });
     parent();
     expect(trace.current_context_sync().metadata).toEqual({});
@@ -37,13 +37,13 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
   it('host_callback_reentry_context', async () => {
     const parent = instrument(trace.context_sync({ metadata: { phase: 'host' } }), async () => {
       const callback = async (value: number) => {
-        expect(trace.current_context_sync().metadata).toEqual({ phase: 'callback' });
-        expect((await contextBaml.current_context()).metadata).toEqual({ phase: 'callback' });
+        expectMetadata(trace.current_context_sync().metadata, { phase: 'callback' });
+        expectMetadata((await contextBaml.current_context()).metadata, { phase: 'callback' });
         return value;
       };
       expect(await baml.call_int_callback(callback as unknown as (value: number) => number, 7,
         { $baml: { trace: trace.context_sync({ metadata: { phase: 'callback' } }) } })).toBe(7);
-      expect(trace.current_context_sync().metadata).toEqual({ phase: 'host' });
+      expectMetadata(trace.current_context_sync().metadata, { phase: 'host' });
     });
     await parent();
     expect(trace.current_cancel_token()).toBe(null);
@@ -69,7 +69,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
           : active.signal.addEventListener('abort', () => resolve(), { once: true }));
         markCleaning();
         await release;
-        expect(trace.current_context_sync().metadata).toEqual({ request: 7 });
+        expectMetadata(trace.current_context_sync().metadata, { request: 7 });
         expect(active.run(() => trace.current_cancel_token()!).is_cancelled_sync()).toBe(true);
         return value;
       } catch (error) { failures.push(error); throw error; }
@@ -145,7 +145,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     const parent = instrument(trace.context_sync({ metadata: { phase: 'parent' } }), () => {
       try { child(); throw new Error('expected application failure'); }
       catch (error) { expect(error).toBe(failure); }
-      expect(trace.current_context_sync().metadata).toEqual({ phase: 'parent' });
+      expectMetadata(trace.current_context_sync().metadata, { phase: 'parent' });
     });
     parent();
     expect(trace.current_cancel_token()).toBe(null);
@@ -238,8 +238,8 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     const callback = instrument(trace.context_sync({ distinct_id: 'marker', metadata: { stage: 'marker', keep: 1, remove: 2 } }), async (value: number) => {
       const expected = { stage: 'call', keep: 1, caller: true };
       expect(trace.current_context_sync().distinct_id).toBe('call');
-      expect(trace.current_context_sync().metadata).toEqual(expected);
-      expect((await contextBaml.current_context()).metadata).toEqual(expected);
+      expectMetadata(trace.current_context_sync().metadata, expected);
+      expectMetadata((await contextBaml.current_context()).metadata, expected);
       return value;
     });
     expect(await baml.call_configured_callback(callback as unknown as (value: number) => number, 7,
@@ -250,7 +250,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
 
   it('callback_marker_adopts_sync_body', async () => {
     const callback = instrument(trace.context_sync({ metadata: { stage: 'marker' } }), (value: number) => {
-      expect(trace.current_context_sync().metadata).toEqual({ stage: 'call' });
+      expectMetadata(trace.current_context_sync().metadata, { stage: 'call' });
       return value;
     });
     expect(await baml.call_configured_callback(callback, 7, trace.context_sync({ metadata: { stage: 'call' } }))).toBe(7);
@@ -259,7 +259,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
 
   it('callback_marker_defaults_override_inherited_context', async () => {
     const callback = instrument(trace.context_sync({ metadata: { stage: 'marker' } }), async (value: number) => {
-      expect(trace.current_context_sync().metadata).toEqual({ stage: 'marker', keep: 1 });
+      expectMetadata(trace.current_context_sync().metadata, { stage: 'marker', keep: 1 });
       return value;
     });
     expect(await baml.call_int_callback(callback as unknown as (value: number) => number, 7,
@@ -286,7 +286,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
 
   it('callback_marker_only_outer_wrapper_adopts', async () => {
     const inner = instrument(trace.context_sync({ metadata: { stage: 'inner' } }), async (value: number) => {
-      expect(trace.current_context_sync().metadata).toEqual({ stage: 'inner', outer: true, call: true });
+      expectMetadata(trace.current_context_sync().metadata, { stage: 'inner', outer: true, call: true });
       return value;
     });
     const outer = instrument(trace.context_sync({ metadata: { stage: 'outer', outer: true } }), inner);
@@ -302,7 +302,7 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     let entered = 0;
     const callback = instrument(trace.context_sync({ metadata: { stage: 'marker' } }), async (value: number) => {
       if (value < 2) { if (++entered === 2) markReady(); await release; }
-      expect(trace.current_context_sync().metadata).toEqual({ stage: value === 2 ? 'marker' : value });
+      expectMetadata(trace.current_context_sync().metadata, { stage: value === 2 ? 'marker' : value });
       return value;
     });
     const pending = [0, 1].map(index => baml.call_configured_callback(callback as unknown as (value: number) => number,
@@ -315,11 +315,11 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
 
   it('callback_third_party_wrapper_is_not_adopted', async () => {
     const marked = instrument(trace.context_sync({ metadata: { stage: 'marker' } }), async (value: number) => {
-      expect(trace.current_context_sync().metadata).toEqual({ stage: 'marker' });
+      expectMetadata(trace.current_context_sync().metadata, { stage: 'marker' });
       return value;
     });
     const thirdParty = async (value: number) => {
-      expect(trace.current_context_sync().metadata).toEqual({ stage: 'call' });
+      expectMetadata(trace.current_context_sync().metadata, { stage: 'call' });
       return marked(value);
     };
     Object.assign(thirdParty, marked);
@@ -330,10 +330,10 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
 
   it('unmarked_callback_explicit_context_and_reentry', async () => {
     const callback = async (value: number) => {
-      expect(trace.current_context_sync().metadata).toEqual({ stage: 'call' });
+      expectMetadata(trace.current_context_sync().metadata, { stage: 'call' });
       const child = await contextBaml.current_context({ $baml: { trace: trace.context_sync({ metadata: { stage: 'child' } }) } });
-      expect(child.metadata).toEqual({ stage: 'child' });
-      expect(trace.current_context_sync().metadata).toEqual({ stage: 'call' });
+      expectMetadata(child.metadata, { stage: 'child' });
+      expectMetadata(trace.current_context_sync().metadata, { stage: 'call' });
       return value;
     };
     expect(await baml.call_configured_callback(callback as unknown as (value: number) => number, 7,
@@ -341,3 +341,10 @@ describe.runIf(isTestRuntime('node'))('host_instrumentation', () => {
     expect(trace.current_cancel_token()).toBe(null);
   });
 });
+
+function expectMetadata(actual: Record<string, unknown>, expected: Record<string, unknown>) {
+  const version = actual["baml.ctx.baml_version"];
+  expect(version).toEqual(expect.any(String));
+  expect(version).not.toBe("");
+  expect(actual).toEqual({ ...expected, "baml.ctx.baml_version": version });
+}

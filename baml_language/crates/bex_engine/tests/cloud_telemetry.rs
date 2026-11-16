@@ -155,9 +155,9 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
             metadata["baml.ctx.baml_version"],
             &btel_snapshot::DecodedValue::String(baml_version::CANONICAL_VERSION.into())
         );
-        assert_eq!(
-            metadata["baml.ctx.app_version"],
-            &btel_snapshot::DecodedValue::String("3.4.5+cloud".into())
+        assert!(
+            !metadata.contains_key("baml.ctx.app_version"),
+            "program version is not process-shared metadata"
         );
         assert_eq!(identity, Some("launch-user"));
         assert_eq!(

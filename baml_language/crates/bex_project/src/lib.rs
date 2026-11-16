@@ -215,9 +215,15 @@ pub fn prepare(
     sys_ops: SysOps,
     files: std::collections::HashMap<crate::fs::FsPath, String>,
 ) -> Result<PreparedRuntime, RuntimeError> {
-    let manifest_path = std::path::Path::new(root_path.as_str()).join("baml.toml");
+    let manifest_path =
+        root_path
+            .join("baml.toml")
+            .map_err(|error| RuntimeError::InvalidArgument {
+                name: format!("root path: {error}"),
+            })?;
     let is_manifest = |path: &crate::fs::FsPath| {
-        path.as_path() == std::path::Path::new("baml.toml") || path.as_path() == manifest_path
+        path.as_path() == std::path::Path::new("baml.toml")
+            || path.as_path() == std::path::Path::new(manifest_path.as_str())
     };
     let mut manifests = files.iter().filter(|(path, _)| is_manifest(path));
     let manifest = manifests.next();
@@ -363,6 +369,22 @@ mod bytecode_artifact_tests {
             prepare(root, sys_ops::SysOps::native(), files),
             Err(RuntimeError::InvalidArgument { .. })
         ));
+        let prepared = prepare(
+            vfs::VfsPath::new(vfs::MemoryFS::new()),
+            sys_ops::SysOps::native(),
+            HashMap::from([
+                (
+                    FsPath::from_str("/main.baml".to_owned()),
+                    "function main() -> int { 7 }".to_owned(),
+                ),
+                (
+                    FsPath::from_str("/baml.toml".to_owned()),
+                    "[package]\nversion = '4.5.6'".to_owned(),
+                ),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(prepared.program.app_version.as_deref(), Some("4.5.6"));
     }
 
     #[test]
