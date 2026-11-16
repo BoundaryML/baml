@@ -13,6 +13,9 @@ use crate::{
 };
 
 impl BexVm {
+    /// `site` is the calling body's own record and the call's pc, when the
+    /// site shares the interpreter's cache. The record may be pending
+    /// (unlinked), so the cache is keyed on it rather than the chain top.
     pub fn virtual_target(
         &mut self,
         receiver: Value,
@@ -20,7 +23,7 @@ impl BexVm {
         iface_args: &[RealizedTy],
         method: &str,
         method_type_args: &[RealizedTy],
-        site: Option<u32>,
+        site: Option<(&super::FrameRecord, u32)>,
     ) -> Result<HeapPtr, Box<VmError>> {
         let head = self.interface_head(iface)?;
         // The lane is moved out across the probe so a hit can extend it while
@@ -28,8 +31,8 @@ impl BexVm {
         let mut call_type_args = std::mem::take(&mut self.compiled.call_type_args);
         let probe = {
             let mut scratch = None;
-            match site.and_then(|site| {
-                self.virtual_call_query(receiver, head, iface_args, site, &mut scratch)
+            match site.and_then(|(caller, pc)| {
+                self.virtual_call_query(caller, receiver, head, iface_args, pc, &mut scratch)
             }) {
                 Some(query) => match self.static_virtual_call_cache.get(&query) {
                     Some(target) => {
@@ -77,17 +80,18 @@ impl BexVm {
 
     fn virtual_call_query<'a>(
         &'a self,
+        caller: &super::FrameRecord,
         receiver: Value,
         interface_head: TypeHead,
         iface_args: &'a [RealizedTy],
         site: u32,
         scratch: &'a mut Option<RealizedTy>,
     ) -> Option<VirtualSiteQuery<'a>> {
-        let top = self.top_frame()?;
+        let caller = super::FrameAt::Record(std::ptr::from_ref(caller));
         // SAFETY: a compiled frame's function lives in the compile-time heap;
         // see `load_function`.
         #[allow(unsafe_code)]
-        let function = unsafe { self.frame_function(top) }.ok()?;
+        let function = unsafe { self.frame_function(caller) }.ok()?;
         let call_pc = function
             .bytecode
             .compact
@@ -362,6 +366,7 @@ mod tests {
 
     fn dispatch(
         vm: &mut BexVm,
+        fr: &crate::compiled_rt::FrameRecord,
         args: &[Value],
         iface: &AtomicU32,
         iface_args: &[RealizedTy],
@@ -369,7 +374,7 @@ mod tests {
     ) -> Out {
         let receiver = args[0];
         let iface = vm.idx_to_ptr(object(iface));
-        let callee = vm.virtual_target(receiver, iface, iface_args, method, &[], Some(0))?;
+        let callee = vm.virtual_target(receiver, iface, iface_args, method, &[], Some((fr, 0)))?;
         let argc = vm.push_virtual_args(callee, None, &[receiver])?;
         vm.suspend(Step::Call { callee, argc })
     }
@@ -377,8 +382,8 @@ mod tests {
     #[test]
     fn explicit_implementations_dispatch_and_cache() {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
-        fn total(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
-            dispatch(vm, args, &SHAPE, &[], "area")
+        fn total(vm: &mut BexVm, fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
+            dispatch(vm, fr, args, &SHAPE, &[], "area")
         }
         const SOURCE: &str = r#"
             interface Shape { function area(self) -> int throws never }
@@ -429,7 +434,7 @@ mod tests {
         fn total(vm: &mut BexVm, fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
             let receiver = args[0];
             let iface = vm.idx_to_ptr(object(&SHAPE));
-            let callee = vm.virtual_target(receiver, iface, &[], "area", &[], Some(0))?;
+            let callee = vm.virtual_target(receiver, iface, &[], "area", &[], Some((fr, 0)))?;
             if let Some(value) = vm.call_inline(fr, callee, &[receiver], 0)? {
                 return Ok(value);
             }
@@ -471,14 +476,14 @@ mod tests {
     #[test]
     fn interface_resolution_and_fields() {
         static IFACE: AtomicU32 = AtomicU32::new(0);
-        fn greet(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
-            dispatch(vm, args, &IFACE, &[], "greet")
+        fn greet(vm: &mut BexVm, fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
+            dispatch(vm, fr, args, &IFACE, &[], "greet")
         }
-        fn show(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
-            dispatch(vm, args, &IFACE, &[], "to_string")
+        fn show(vm: &mut BexVm, fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
+            dispatch(vm, fr, args, &IFACE, &[], "to_string")
         }
-        fn describe(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
-            dispatch(vm, args, &IFACE, &[RealizedTy::Int], "describe")
+        fn describe(vm: &mut BexVm, fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
+            dispatch(vm, fr, args, &IFACE, &[RealizedTy::Int], "describe")
         }
         fn area_fn(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
             let iface = vm.idx_to_ptr(object(&IFACE));

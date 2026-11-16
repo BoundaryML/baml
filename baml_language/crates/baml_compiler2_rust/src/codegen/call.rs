@@ -429,7 +429,7 @@ impl<'db> Generator<'_, 'db> {
             .block_pcs
             .get(block.0)
             .and_then(|pcs| pcs.terminator)
-            .map_or_else(|| "None".to_string(), |pc| format!("Some({pc})"));
+            .map_or_else(|| "None".to_string(), |pc| format!("Some((fr, {pc}))"));
         let resolve = format!(
             "let callee = vm.virtual_target({receiver}, {iface_ptr}, {iface_args}, {method:?}, &[{}], {cache_site})?;",
             types.join(", ")
