@@ -353,10 +353,10 @@ mod bytecode_artifact_tests {
             ));
         }
         let files = HashMap::from([
-            (FsPath::from_str("baml.toml".to_owned()), "".to_owned()),
+            (FsPath::from_str("baml.toml".to_owned()), String::new()),
             (
                 FsPath::from_str("/project/baml.toml".to_owned()),
-                "".to_owned(),
+                String::new(),
             ),
         ]);
         assert!(matches!(
