@@ -68,3 +68,6 @@ sdks/csharp/DEVELOPMENT.md
 # Type-system quiz ledgers
 tools/type_quiz/SPEC_GAPS.md
 tools/type_quiz/COMPILER_DIVERGENCE.md
+
+# cargo-stow specification (the reference for its implementations)
+crates/tools_stow/SPEC.md
