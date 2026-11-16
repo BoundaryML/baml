@@ -34,8 +34,7 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     load_field_local .tags
     store_var tags
     load_var items
-    load_const null
-    cmp_op ==
+    is_null
     pop_jump_if_true L0
     load_var items
     container_len_local
@@ -58,8 +57,7 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
 
   L4:
     load_var tags
-    load_const null
-    cmp_op ==
+    is_null
     pop_jump_if_true L5
     load_var tags
     container_len_local

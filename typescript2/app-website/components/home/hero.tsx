@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { section } from './analytics';
 import { DIAGRAM_STYLES } from './hero-languages-styled';
-import { BOOK } from './links';
+import { SIGNUP } from './links';
 import Tracker from './tracker';
 import { Button } from './ui';
 
@@ -41,7 +41,7 @@ export default function Hero() {
             Incrementally adoptable.
           </p>
           <div className="flex flex-wrap gap-2.5">
-            <Button href={BOOK}>Get early access</Button>
+            <Button href={SIGNUP}>Get early access</Button>
           </div>
         </div>
 

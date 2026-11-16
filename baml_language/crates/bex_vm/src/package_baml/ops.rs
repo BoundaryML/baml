@@ -419,6 +419,14 @@ impl EqualsDriver {
             }
             (ValueKind::Int(x), ValueKind::Int(y)) => step(x == y),
             (ValueKind::Bool(x), ValueKind::Bool(y)) => step(x == y),
+            // Floats compare by value, reflexively (`NaN == NaN`, `-0.0 == 0.0`).
+            // An inline float against a boxed one is compared by value too,
+            // though the canonical encoding means such a pair is never equal.
+            (ValueKind::Float(_), ValueKind::Float(_) | ValueKind::Object(_))
+            | (ValueKind::Object(_), ValueKind::Float(_)) => match (a.as_float(), b.as_float()) {
+                (Some(x), Some(y)) => step(bex_vm_types::float_order::eq(x, y)),
+                _ => Cmp::NotEqual,
+            },
             (ValueKind::Object(pa), ValueKind::Object(pb)) => {
                 // `pa != pb` here: identical pointers were settled by the
                 // reflexivity short-circuit above.
@@ -444,6 +452,7 @@ impl EqualsDriver {
                 | ValueKind::OmittedArg
                 | ValueKind::Int(_)
                 | ValueKind::Bool(_)
+                | ValueKind::Float(_)
                 | ValueKind::Object(_),
                 _,
             ) => Cmp::NotEqual,
@@ -796,6 +805,151 @@ pub(super) fn equals_structural_default(vm: &mut BexVm, a: Value, b: Value) -> N
     EqualsDriver::new(a, b).drive(vm)
 }
 
+/// `a == b` for the pairs [`EqualsDriver`] decides without a worklist or
+/// user code: `Some(equal)`, or `None` when the driver has to run. Where it
+/// answers, it answers what the driver would; `OpCode::CallEquals` calls the
+/// driver for the rest.
+///
+/// It decides identical values (reflexivity, as in `compare_one`), every
+/// pair of non-object values, an object against a non-object, two strings,
+/// two floats, and two variants of one enum whose equality is the structural
+/// default (see [`enum_equality_is_structural`]).
+///
+/// Kept out of line: inlined into the dispatch loop it grows that function
+/// and costs unrelated opcodes more than the call saves here.
+#[inline(never)]
+pub(crate) fn equals_without_driver(vm: &mut BexVm, a: Value, b: Value) -> Option<bool> {
+    // `Value` equality is bit equality: the same primitive or the same object.
+    if a == b {
+        return Some(true);
+    }
+    match (a.kind(), b.kind()) {
+        (ValueKind::Object(pa), ValueKind::Object(pb)) => equals_objects_without_driver(vm, pa, pb),
+        // Floats compare by value, reflexively (`NaN == NaN`, `-0.0 == 0.0`),
+        // so two inline floats with different bits can still be equal.
+        (ValueKind::Float(x), ValueKind::Float(y)) => Some(bex_vm_types::float_order::eq(x, y)),
+        (ValueKind::Object(ptr), _) => object_against_non_object(vm, ptr, b),
+        (_, ValueKind::Object(ptr)) => object_against_non_object(vm, ptr, a),
+        // The remaining non-object encodings are canonical, so two of them
+        // with different bits are different values, of one kind or of two.
+        // Every kind is listed, as in `compare_one`, so a new `ValueKind`
+        // must be classified here.
+        (
+            ValueKind::Null
+            | ValueKind::OmittedArg
+            | ValueKind::Int(_)
+            | ValueKind::Bool(_)
+            | ValueKind::Float(_),
+            _,
+        ) => Some(false),
+    }
+}
+
+/// [`equals_without_driver`] for the object at `ptr` against the non-object
+/// `other`. The driver loads a cell before comparing, so a cell goes to it;
+/// a boxed float compares by value against an inline one, as in
+/// `compare_one`; any other object is a different kind, so unequal.
+fn object_against_non_object(vm: &BexVm, ptr: HeapPtr, other: Value) -> Option<bool> {
+    match vm.get_object(ptr) {
+        Object::Cell(_) => None,
+        Object::Float(boxed) => Some(match other.kind() {
+            ValueKind::Float(x) => bex_vm_types::float_order::eq(*boxed, x),
+            _ => false,
+        }),
+        _ => Some(false),
+    }
+}
+
+/// [`equals_without_driver`] for two distinct heap objects.
+fn equals_objects_without_driver(vm: &mut BexVm, pa: HeapPtr, pb: HeapPtr) -> Option<bool> {
+    let (enm, index_a, index_b) = match (vm.get_object(pa), vm.get_object(pb)) {
+        (Object::Variant(x), Object::Variant(y)) => {
+            // Different enums ⇒ never equal, with or without a custom `eq`.
+            if x.enm != y.enm {
+                return Some(false);
+            }
+            (x.enm, x.index, y.index)
+        }
+        (Object::String(x), Object::String(y)) => return Some(x == y),
+        (Object::Float(x), Object::Float(y)) => {
+            return Some(bex_vm_types::float_order::eq(*x, *y));
+        }
+        _ => return None,
+    };
+    enum_equality_is_structural(vm, enm, pa).then_some(index_a == index_b)
+}
+
+/// Whether `==` on the variants of `enm` (of which `variant` is one) is the
+/// structural default, compared by variant, rather than a custom
+/// `Equals.eq`: the question [`EqualsDriver`] asks [`resolve_equals_eq`] on
+/// every comparison, memoized per VM.
+///
+/// An `Equals` impl can arrive after the comparison was compiled (a
+/// registered witness, a published graft), so the memo is keyed on the
+/// engine's resolution generation, which every such change bumps. It is
+/// kept only for a compile-time enum compared from static code: there the
+/// resolver's world holds no runtime package, so the answer depends on the
+/// enum and the rule tables alone; and the enum never moves or dies, so the
+/// memo holds no pointer a collection must visit. Everything else answers
+/// `false`, which sends the pair to the driver.
+fn enum_equality_is_structural(vm: &mut BexVm, enm: HeapPtr, variant: HeapPtr) -> bool {
+    if !vm.heap.is_compile_time_ptr(enm) || !vm.current_runtime_package().is_null() {
+        return false;
+    }
+    let generation = vm.dynamic_dispatch.generation();
+    if let Some(structural) = vm.enum_equals_memo.get(generation, enm) {
+        return structural;
+    }
+    // `Ok(None)` is no custom `eq`. A custom one, or an error the driver
+    // reports, is not structural.
+    let structural = matches!(
+        value_concrete_ty(vm, variant).map(|ty| resolve_equals_eq(vm, Value::object(variant), &ty)),
+        Some(Ok(None))
+    );
+    // An answer computed across a generation bump is not stored.
+    if vm.dynamic_dispatch.generation() == generation {
+        vm.enum_equals_memo.insert(generation, enm, structural);
+    }
+    structural
+}
+
+/// Per-VM memo for [`enum_equality_is_structural`]: for each compile-time
+/// enum asked about since the resolution generation last moved, whether its
+/// equality is the structural default. A program compares few enums, so a
+/// short list is the whole table.
+#[derive(Debug, Default)]
+pub(crate) struct EnumEqualsMemo {
+    generation: u64,
+    entries: Vec<(HeapPtr, bool)>,
+}
+
+impl EnumEqualsMemo {
+    /// More distinct enums than this empty the memo before the next insert.
+    const CAPACITY: usize = 16;
+
+    fn get(&mut self, generation: u64, enm: HeapPtr) -> Option<bool> {
+        if self.generation != generation {
+            self.generation = generation;
+            self.entries.clear();
+            return None;
+        }
+        self.entries
+            .iter()
+            .find_map(|&(entry, structural)| (entry == enm).then_some(structural))
+    }
+
+    fn insert(&mut self, generation: u64, enm: HeapPtr, structural: bool) {
+        if self.generation != generation {
+            self.generation = generation;
+            self.entries.clear();
+        }
+        if self.entries.len() >= Self::CAPACITY {
+            self.entries.clear();
+        }
+        self.entries.push((enm, structural));
+    }
+}
+
 /// Read a `baml.ops.Ordering` value back as a Rust [`std::cmp::Ordering`].
 ///
 /// Matches on the variant's declared NAME rather than its index, so reordering
@@ -816,5 +970,118 @@ pub(super) fn ordering_from_value(vm: &BexVm, value: Value) -> Option<std::cmp::
         "Equal" => Some(std::cmp::Ordering::Equal),
         "Greater" => Some(std::cmp::Ordering::Greater),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_type::{Name, typetag::TypeTag};
+    use bex_vm_types::types::{Enum, EnumVariant, LocalName, Owner};
+
+    use super::*;
+    use crate::vm::tests::test_vm;
+
+    fn enum_object(name: &str, tag: i64) -> Object {
+        let variant = |name: &str| EnumVariant {
+            name: name.into(),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            skip: false,
+            json_rename: None,
+        };
+        Object::Enum(Box::new(Enum {
+            path: LocalName::new(Vec::new(), Name::new(name)),
+            type_tag: TypeTag::from_i64(baml_type::typetag::CLASS_BASE + tag),
+            variants: vec![variant("A"), variant("B")],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            owner: Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
+        }))
+    }
+
+    #[test]
+    fn the_heap_shares_one_object_per_compile_time_variant() {
+        let vm = test_vm(vec![enum_object("Left", 0), enum_object("Right", 1)]);
+        for index in 0..2 {
+            let enm = vm.heap.compile_time_ptr(index);
+            let Object::Enum(declaration) = vm.get_object(enm) else {
+                panic!("slot {index} holds an enum");
+            };
+            assert_eq!(declaration.shared_variants.len(), 2);
+            for (variant_index, &ptr) in declaration.shared_variants.iter().enumerate() {
+                assert!(vm.heap.is_compile_time_ptr(ptr));
+                let Object::Variant(variant) = vm.get_object(ptr) else {
+                    panic!("a shared variant is an `Object::Variant`");
+                };
+                assert_eq!((variant.enm, variant.index), (enm, variant_index));
+            }
+        }
+    }
+
+    #[test]
+    fn equals_without_driver_answers_only_what_the_driver_would() {
+        let mut vm = test_vm(vec![enum_object("Left", 0), enum_object("Right", 1)]);
+        let (left, right) = (vm.heap.compile_time_ptr(0), vm.heap.compile_time_ptr(1));
+        let mut eq = |a: Value, b: Value| equals_without_driver(&mut vm, a, b);
+
+        assert_eq!(eq(Value::int(3), Value::int(3)), Some(true));
+        assert_eq!(eq(Value::int(3), Value::int(4)), Some(false));
+        assert_eq!(eq(Value::NULL, Value::NULL), Some(true));
+        assert_eq!(eq(Value::NULL, Value::int(0)), Some(false));
+        assert_eq!(eq(Value::bool(true), Value::int(1)), Some(false));
+
+        let ab = Value::object(vm.tlab.alloc_string("ab".to_string()));
+        let ab_again = Value::object(vm.tlab.alloc_string("ab".to_string()));
+        let ac = Value::object(vm.tlab.alloc_string("ac".to_string()));
+        let left_a = Value::object(vm.tlab.alloc_variant(left, 0));
+        let left_a_again = Value::object(vm.tlab.alloc_variant(left, 0));
+        let right_a = Value::object(vm.tlab.alloc_variant(right, 0));
+
+        // Floats compare by value: different bits can be equal, and a
+        // boxed float (NaN) against itself boxed separately is equal too.
+        let zero = vm.tlab.float_value(0.0);
+        let negative_zero = vm.tlab.float_value(-0.0);
+        let one = vm.tlab.float_value(1.0);
+        let nan = vm.tlab.float_value(f64::NAN);
+        let nan_again = vm.tlab.float_value(f64::NAN);
+        let mut eq = |a: Value, b: Value| equals_without_driver(&mut vm, a, b);
+        assert_eq!(eq(negative_zero, zero), Some(true));
+        assert_eq!(eq(zero, one), Some(false));
+        assert_eq!(eq(nan, nan_again), Some(true));
+        assert_eq!(eq(nan, one), Some(false));
+        assert_eq!(eq(one, Value::int(1)), Some(false));
+
+        assert_eq!(eq(ab, ab_again), Some(true));
+        assert_eq!(eq(ab, ac), Some(false));
+        assert_eq!(eq(ab, Value::NULL), Some(false));
+        assert_eq!(eq(left_a, left_a), Some(true));
+        // Different enums are unequal whatever their `Equals`.
+        assert_eq!(eq(left_a, right_a), Some(false));
+        // Without the stdlib there is no `Equals` to resolve, so whether
+        // `Left` has a custom `eq` is unknown: the driver decides.
+        assert_eq!(eq(left_a, left_a_again), None);
+    }
+
+    #[test]
+    fn the_enum_memo_forgets_its_answers_when_the_generation_moves() {
+        let vm = test_vm(vec![enum_object("Left", 0), enum_object("Right", 1)]);
+        let (left, right) = (vm.heap.compile_time_ptr(0), vm.heap.compile_time_ptr(1));
+        let mut memo = EnumEqualsMemo::default();
+
+        assert_eq!(memo.get(0, left), None);
+        memo.insert(0, left, true);
+        assert_eq!(memo.get(0, left), Some(true));
+        assert_eq!(memo.get(0, right), None);
+
+        assert_eq!(memo.get(1, left), None);
+        memo.insert(1, right, false);
+        assert_eq!(memo.get(1, right), Some(false));
+        assert_eq!(memo.get(1, left), None);
     }
 }

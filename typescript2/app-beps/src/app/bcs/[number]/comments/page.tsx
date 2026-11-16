@@ -8,7 +8,8 @@ import { bcsCall, bcsId, bcsPagePath } from "@/lib/bcs-convex";
 import { TeamOnly } from "../../team-only";
 import { BcsUnavailable } from "../../unavailable";
 import { KindBadge } from "../reader";
-import { GitHubAvatar } from "../../avatar";
+import { CommentAuthor } from "../../avatar";
+import { agentName } from "../../../../../convex/bcsAgents";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "BCS proposal comments" };
@@ -99,10 +100,7 @@ export default async function BcsComments({
                 >
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                     <KindBadge type={thread.type} />
-                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                      <GitHubAvatar login={thread.author} />
-                      {thread.author}
-                    </span>
+                    <CommentAuthor login={thread.author} agent={thread.agent} />
                     <span>on {thread.pageTitle}</span>
                     <span>{formatDistanceToNow(thread.createdAt, { addSuffix: true })}</span>
                     {thread.resolved && <span>· resolved{thread.resolvedBy ? ` by ${thread.resolvedBy}` : ""}</span>}
@@ -119,7 +117,9 @@ export default async function BcsComments({
                     <p className="text-xs text-muted-foreground">
                       {thread.replyCount} repl{thread.replyCount === 1 ? "y" : "ies"}
                       {thread.lastReply &&
-                        ` · last by ${thread.lastReply.author} ${formatDistanceToNow(thread.lastReply.createdAt, {
+                        ` · last by ${thread.lastReply.author}${
+                          thread.lastReply.agent ? `'s agent ${agentName(thread.lastReply.agent)}` : ""
+                        } ${formatDistanceToNow(thread.lastReply.createdAt, {
                           addSuffix: true,
                         })}`}
                     </p>

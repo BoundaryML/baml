@@ -163,6 +163,9 @@ pub fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
     if value.is_null() {
         return Some(Primitive::Null);
     }
+    if value.is_inline_float() {
+        return Some(Primitive::Float);
+    }
     match vm.get_object(value.as_object_ptr()?) {
         Object::Float(_) => Some(Primitive::Float),
         Object::Bigint(_) => Some(Primitive::Bigint),
