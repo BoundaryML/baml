@@ -1197,7 +1197,6 @@ pub enum Instruction {
         offset: isize,
     },
 
-
     AllocTuple(usize),
 
     LoadTupleField(usize),
