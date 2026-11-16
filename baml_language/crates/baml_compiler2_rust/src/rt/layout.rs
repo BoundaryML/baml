@@ -252,7 +252,6 @@ impl Plan<'_> {
                     self.repr(value)?,
                     capture_codegen::declared_type(self, key)?,
                     capture_codegen::declared_type(self, value)?,
-                    scalar_json_value(value),
                     capture_codegen::type_identity(self,key)?,
                     capture_codegen::type_identity(self,value)?,
                 )
@@ -440,7 +439,6 @@ impl Plan<'_> {
                     self.field_repr(value)?,
                     capture_codegen::declared_field_type(self, key)?,
                     capture_codegen::declared_field_type(self, value)?,
-                    scalar_json_field_value(value),
                     capture_codegen::field_type_identity(self,key)?,
                     capture_codegen::field_type_identity(self,value)?,
                 )
@@ -519,11 +517,6 @@ impl Plan<'_> {
         if self.layouts.contains_key(&object) {
             return Ok(());
         }
-        let class = self.class(object);
-        registry::admit(registry::Admission::Class {
-            cleanup: class.cleanup.is_some(),
-            generic: false,
-        })?;
         let opaque_task = super::tasks::class_is(self, object, "spawn.Limit")
             || super::tasks::class_is(self, object, "spawn.CancelToken");
         let field_types = self.class_field_types(object);
@@ -934,40 +927,6 @@ fn recursive_container<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> bool {
 impl Plan<'_> {
     // Feature descriptors follow the ordinary typed layouts. Constructors take
     // their ids explicitly so other features can extend the runtime prefix.
-}
-
-fn scalar_key(ty: &RuntimeTy) -> bool {
-    matches!(
-        ty,
-        RuntimeTy::Int
-            | RuntimeTy::Bool
-            | RuntimeTy::Float
-            | RuntimeTy::Null
-            | RuntimeTy::String
-            | RuntimeTy::Literal(_, _)
-    )
-}
-fn scalar_field_key(ty: &bex_vm_types::RuntimeTy) -> bool {
-    use bex_vm_types::RuntimeTy as T;
-    matches!(
-        ty,
-        T::Int | T::Bool | T::Float | T::Null | T::String | T::Literal(_, _)
-    )
-}
-
-fn scalar_json_value(ty: &RuntimeTy) -> bool {
-    if let RuntimeTy::Union(members) = ty {
-        members.iter().all(scalar_json_value)
-    } else {
-        scalar_key(ty)
-    }
-}
-fn scalar_json_field_value(ty: &bex_vm_types::RuntimeTy) -> bool {
-    if let bex_vm_types::RuntimeTy::Union(members) = ty {
-        members.iter().all(scalar_json_field_value)
-    } else {
-        scalar_field_key(ty)
-    }
 }
 
 impl Plan<'_> {

@@ -45,10 +45,3 @@ impl registry::Feature for Feature {
         })())
     }
 }
-
-pub(super) fn allows_omission(e: &Emitter<'_, '_>) -> bool {
-    if e.plan.index.display(e.object) == "baml.regex.new" {
-        return true;
-    }
-    matches!(&e.body.blocks[e.block].terminator,Some(Terminator::Call{callee:Operand::Constant(Constant::Function(f)),..}) if e.plan.index.function(e.db,*f).is_some_and(|(c,_)|e.plan.index.display(c)=="baml.regex.new"))
-}

@@ -144,8 +144,7 @@ impl Emitter<'_, '_> {
                     _ => target,
                 };
                 if expected != target {
-                    let (value, repr) =
-                        self.containers_value(r, expected)?;
+                    let (value, repr) = self.containers_value(r, expected)?;
                     return Ok((self.coerce((value, repr), target)?, target));
                 }
                 let element = self.plan.element(expected)?;

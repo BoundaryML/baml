@@ -1,18 +1,9 @@
 //! Ordered extension points. First matching lowering wins; errors never fall through.
 use super::{
-    BTreeMap, Db, Emitter, Gen, MirFunction, Plan, Repr, Rvalue, SourceRoot, StatementKind,
-    Terminator, calls, closures, containers, dispatch, globals, lists, loop_ranges, maps, stack,
-    strings, tasks, telemetry,
+    BTreeMap, Db, Emitter, Gen, Plan, Repr, Rvalue, SourceRoot, StatementKind, Terminator, calls,
+    closures, containers, dispatch, globals, lists, loop_ranges, maps, stack, strings, tasks,
+    telemetry,
 };
-
-#[derive(Clone, Copy)]
-pub(super) enum Admission<'a, 'db> {
-    Function(&'a MirFunction<'db>),
-    CapturedLocal(bool),
-    ShieldedBlock(bool),
-    Statement(&'a StatementKind<'db>),
-    Class { generic: bool, cleanup: bool },
-}
 
 pub(super) trait Feature {
     // Register initializer/lambda/specialized MIR and any additional roots before
@@ -37,7 +28,8 @@ pub(super) trait Feature {
         None
     }
 
-    fn admit(&self, _event: &Admission<'_, '_>) -> Gen<()> {
+    // Reject a statement this feature cannot lower before any emission.
+    fn admit_statement(&self, _statement: &StatementKind<'_>) -> Gen<()> {
         Ok(())
     }
     fn value(
@@ -116,11 +108,10 @@ const FEATURES: &[&dyn Feature] = &[
     &calls::Feature,
 ];
 
-pub(super) fn admit(event: Admission<'_, '_>) -> Gen<()> {
-    for feature in FEATURES {
-        feature.admit(&event)?;
-    }
-    Ok(())
+pub(super) fn admit_statement(statement: &StatementKind<'_>) -> Gen<()> {
+    FEATURES
+        .iter()
+        .try_for_each(|feature| feature.admit_statement(statement))
 }
 pub(super) fn value(
     emitter: &Emitter<'_, '_>,

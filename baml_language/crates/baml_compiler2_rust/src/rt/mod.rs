@@ -107,14 +107,12 @@ struct Plan<'a> {
     json_list_types: Vec<baml_compiler2_mir::TyTemplate>,
     map_types: std::cell::RefCell<Vec<maps::MapType>>,
     /// Non-recursive alias definitions by alias tag (`None`: recursive).
-    alias_targets: std::cell::RefCell<
-        BTreeMap<baml_type::typetag::TypeTag, Option<bex_vm_types::RuntimeTy>>,
-    >,
+    alias_targets:
+        std::cell::RefCell<BTreeMap<baml_type::typetag::TypeTag, Option<bex_vm_types::RuntimeTy>>>,
     key_callbacks: BTreeMap<Repr, BTreeMap<String, usize>>,
     key_hasher: Option<usize>,
     key_edges: BTreeMap<usize, BTreeSet<usize>>,
     json_maps: BTreeMap<Repr, RuntimeTy>,
-    map_stringify: bool,
     globals: BTreeMap<usize, Repr>,
     /// Concrete layouts read from dynamically typed global storage.
     global_loads: BTreeMap<usize, Repr>,

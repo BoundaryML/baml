@@ -155,10 +155,11 @@ pub(super) fn emit(
                         + 3
                 }
                 r if r.pointer() => {
-                    *lists
-                        .get(&r)
-                        .ok_or_else(|| no(format!("global representation (layout {r:?}, global {slot})")))?
-                        + 3
+                    *lists.get(&r).ok_or_else(|| {
+                        no(format!(
+                            "global representation (layout {r:?}, global {slot})"
+                        ))
+                    })? + 3
                 }
                 Repr::Tagged | Repr::Dyn(_) => 0,
                 r @ (Repr::Enum(_) | Repr::Naming) => {

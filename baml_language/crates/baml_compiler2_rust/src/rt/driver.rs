@@ -101,7 +101,6 @@ fn compile_entry<'db>(
         key_hasher: None,
         key_edges: Default::default(),
         json_maps: BTreeMap::new(),
-        map_stringify: false,
         globals: BTreeMap::new(),
         global_loads: BTreeMap::new(),
         literal_ids: std::cell::RefCell::new(BTreeMap::new()),

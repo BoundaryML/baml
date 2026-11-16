@@ -354,7 +354,6 @@ impl Emitter<'_, '_> {
                 Ok(("rt::Dyn{tag:u64::MAX,payload:0}".into(), Repr::Tagged))
             }
             Operand::Constant(Constant::Null) => Ok(("0usize".into(), Repr::Null)),
-            Operand::Constant(_) => Err(no(format!("operand {o:?}"))),
         }
     }
     pub(super) fn assign(&self, p: &Place, value: (String, Repr)) -> Gen<String> {

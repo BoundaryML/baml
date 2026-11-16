@@ -81,10 +81,6 @@ pub(super) fn expand<'db>(
             };
             // These checks need no specialization. Reject a reachable body
             // before expanding its (possibly recursive) generic dependencies.
-            registry::admit(registry::Admission::Function(&mir))?;
-            for local in &body.locals {
-                registry::admit(registry::Admission::CapturedLocal(local.is_captured))?;
-            }
             super::exceptions::prepare_contexts(db, plan, body)?;
             // Materialized lambdas belong to this concrete parent instance.
             // Keep the source identity for positions/telemetry, but never share
@@ -366,7 +362,7 @@ pub(super) fn expand<'db>(
                                     let target =
                                         instance(db, plan, all, &mut instances, callee, frame)?;
                                     let _ = plan.register_class_type(&concrete);
-                            let repr = plan.repr(&concrete)?;
+                                    let repr = plan.repr(&concrete)?;
                                     if !targets.contains(&(repr, target)) {
                                         targets.push((repr, target));
                                     }
@@ -1190,7 +1186,9 @@ fn interface_receiver(receiver: Option<&RuntimeTy>) -> bool {
     match receiver {
         Some(RuntimeTy::Interface(..)) => true,
         Some(RuntimeTy::Union(members)) => {
-            members.iter().any(|m| matches!(m, RuntimeTy::Interface(..)))
+            members
+                .iter()
+                .any(|m| matches!(m, RuntimeTy::Interface(..)))
                 && members
                     .iter()
                     .all(|m| matches!(m, RuntimeTy::Interface(..) | RuntimeTy::Null))

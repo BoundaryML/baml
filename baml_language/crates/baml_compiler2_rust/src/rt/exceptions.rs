@@ -97,11 +97,6 @@ pub(super) fn record_test(
     Ok(())
 }
 
-/// Builtin exception classes the runtime allocates with its own descriptors.
-pub(super) fn reserved(plan: &Plan<'_>, object: usize) -> Option<usize> {
-    plan.list_error_descriptor(object)
-}
-
 pub(super) struct Feature;
 impl registry::Feature for Feature {
     fn reach(

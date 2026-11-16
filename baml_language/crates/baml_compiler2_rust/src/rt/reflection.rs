@@ -807,13 +807,12 @@ pub(super) fn emit(out: &mut String, db: &dyn Db, plan: &Plan<'_>) -> Gen<()> {
     // declarations, so displayed names cannot drift from `Type.to_string`.
     let displays =
         bex_vm::telemetry::frozen::type_displays(plan.program, &anchored_types).map_err(no)?;
-    let facts_vm =
-        bex_vm::telemetry::frozen::reflection_facts(
-            plan.program,
-            &anchored_types,
-            plan.reflect_to_baml,
-        )
-        .map_err(no)?;
+    let facts_vm = bex_vm::telemetry::frozen::reflection_facts(
+        plan.program,
+        &anchored_types,
+        plan.reflect_to_baml,
+    )
+    .map_err(no)?;
     out.push_str("static REFLECT_TYPES:&[rt::reflection::StaticType]=&[\n");
     for (i, (ty, display)) in plan.reflection_types.iter().zip(&displays).enumerate() {
         let comparable = baml_type::Ty::from(ty.clone());

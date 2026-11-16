@@ -58,7 +58,6 @@ impl Emitter<'_, '_> {
                     Terminator::Return | Terminator::Throw { .. } | Terminator::Rethrow { .. } => {
                         Ok(Flow::Exit)
                     }
-                    _ => Err(no("control flow")),
                 })
                 .collect::<Gen<_>>()?,
         };

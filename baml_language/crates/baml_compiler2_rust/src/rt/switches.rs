@@ -300,7 +300,10 @@ impl Emitter<'_, '_> {
                             Err(_) => continue,
                         },
                     };
-                    if answers.insert(tag, implements).is_some_and(|old| old != implements) {
+                    if answers
+                        .insert(tag, implements)
+                        .is_some_and(|old| old != implements)
+                    {
                         return Err(no("ambiguous interface membership"));
                     }
                 }

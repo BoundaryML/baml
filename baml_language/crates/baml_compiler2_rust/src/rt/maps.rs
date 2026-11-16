@@ -5,7 +5,6 @@ pub(super) struct MapType {
     pub value: Repr,
     pub key_type: String,
     pub value_type: String,
-    pub scalar_json_value: bool,
     key_identity: String,
     value_identity: String,
 }
@@ -44,7 +43,6 @@ impl Plan<'_> {
         value: Repr,
         key_ty: String,
         value_ty: String,
-        scalar_json_value: bool,
         key_identity: String,
         value_identity: String,
     ) -> Repr {
@@ -62,7 +60,6 @@ impl Plan<'_> {
             value_type: value_ty.clone(),
             key_identity,
             value_identity,
-            scalar_json_value,
         };
         let mut types = self.map_types.borrow_mut();
         let id = types.iter().position(|old| old == &ty).unwrap_or_else(|| {

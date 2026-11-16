@@ -488,9 +488,9 @@ fn flat_field(ty: &bex_vm_types::RuntimeTy) -> bool {
     use bex_vm_types::RuntimeTy as T;
     match ty {
         T::String | T::Int | T::Literal(baml_type::Literal::String(_), _) => true,
-        T::Union(m) if m.len() == 2 && m.iter().any(|t| matches!(t, T::Null)) => m
-            .iter()
-            .all(|t| matches!(t, T::Null | T::String | T::Int)),
+        T::Union(m) if m.len() == 2 && m.iter().any(|t| matches!(t, T::Null)) => {
+            m.iter().all(|t| matches!(t, T::Null | T::String | T::Int))
+        }
         T::Union(m) => m
             .iter()
             .all(|t| matches!(t, T::Literal(baml_type::Literal::String(_), _))),

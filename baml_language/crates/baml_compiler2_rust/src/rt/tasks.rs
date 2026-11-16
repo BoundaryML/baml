@@ -178,11 +178,6 @@ pub(super) fn duration_string_default(
 }
 pub(super) struct Feature;
 impl registry::Feature for Feature {
-    fn admit(&self, event: &registry::Admission<'_, '_>) -> Gen<()> {
-        match event {
-            _ => Ok(()),
-        }
-    }
     fn call(
         &self,
         e: &Emitter<'_, '_>,
@@ -473,7 +468,9 @@ impl registry::Feature for Feature {
                                             return Err(no("cancel token input list"));
                                         }
                                         let read = e.fallible("l.get(&rt::strings::Cx::current(),i).map(|p|p.as_raw())");
-                                        format!("&{{let l=rt::lists::List::<rt::lists::Ptr>::from_raw({list});let mut inputs=Vec::new();for i in 0..l.len(&rt::strings::Cx::current()){{inputs.push({read});}}inputs}}")
+                                        format!(
+                                            "&{{let l=rt::lists::List::<rt::lists::Ptr>::from_raw({list});let mut inputs=Vec::new();for i in 0..l.len(&rt::strings::Cx::current()){{inputs.push({read});}}inputs}}"
+                                        )
                                     } else {
                                         format!("rt::tasks::pointer_list({list})")
                                     }

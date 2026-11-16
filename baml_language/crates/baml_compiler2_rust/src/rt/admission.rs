@@ -110,7 +110,6 @@ pub(super) fn collect<'db>(
             }
             continue;
         };
-        registry::admit(registry::Admission::Function(mir))?;
         let facts = super::list_narrowing::analyze(db, plan, body);
         plan.list_narrowing_facts
             .insert(body as *const _ as usize, facts);
@@ -123,7 +122,7 @@ pub(super) fn collect<'db>(
             return Err(no("more than 1024 locals in one body"));
         }
         for statement in body.blocks.iter().flat_map(|b| &b.statements) {
-            registry::admit(registry::Admission::Statement(&statement.kind))?;
+            registry::admit_statement(&statement.kind)?;
             super::builtin_classes::record_test(db, plan, &statement.kind)?;
             if let StatementKind::Assign {
                 value: Rvalue::IsType { test, .. },
@@ -240,7 +239,6 @@ pub(super) fn collect<'db>(
         super::json::register_decoders(db, plan, body)?;
         let iters = crate::analysis::array_iterators(db, body, mir.arity);
         for (i, local) in body.locals.iter().enumerate() {
-            registry::admit(registry::Admission::CapturedLocal(local.is_captured))?;
             plan.environments |= local.is_captured;
             if iters.contains(&i) {
                 continue;
@@ -265,7 +263,6 @@ pub(super) fn collect<'db>(
             if let Some(Terminator::NarrowBind { test, .. }) = &block.terminator {
                 super::exceptions::record_test(db, plan, test)?;
             }
-            registry::admit(registry::Admission::ShieldedBlock(block.shielded))?;
             if let Some(targets) = plan.dispatches.get(&(object, block.id.0)).cloned() {
                 for (repr, target) in targets {
                     plan.record(repr)?;

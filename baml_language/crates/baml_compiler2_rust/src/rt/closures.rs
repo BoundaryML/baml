@@ -1,6 +1,6 @@
 use super::{
-    Gen, MirFunctionBody, Object, Operand, Place, Plan, Repr, RuntimeTy, Rvalue, StatementKind,
-    Terminator, no, registry,
+    Gen, MirFunctionBody, Operand, Place, Plan, Repr, RuntimeTy, Rvalue, StatementKind, Terminator,
+    no, registry,
 };
 
 impl Plan<'_> {
@@ -846,66 +846,4 @@ pub(super) fn capture_type(ty: &baml_type::RuntimeTy<usize>) -> Gen<String> {
         _ => return Err(no("closure capture signature")),
     };
     Ok(format!("rt::telemetry::capture::Type::{body}"))
-}
-
-impl Plan<'_> {
-    pub(super) fn implementors(
-        &self,
-        interface: usize,
-    ) -> Gen<Vec<(usize, &bex_vm_types::types::ProgramImplRule)>> {
-        let Object::Interface(def) =
-            &self.program.objects[bex_vm_types::ObjectIndex::from_raw(interface)]
-        else {
-            return Err(no("non-interface dispatch"));
-        };
-        if def.structural_default.is_some()
-            || !def.args.is_empty()
-            || !def.assoc.is_empty()
-            || !def.requires.is_empty()
-        {
-            return Err(no("generic or structural interface"));
-        }
-        let mut result = Vec::new();
-        for package in &self.program.packages {
-            if let Some(rules) = package
-                .impl_rules
-                .get(&bex_vm_types::ObjectIndex::from_raw(interface))
-            {
-                for rule in rules {
-                    if !rule.generic_param_bounds.is_empty()
-                        || !rule.interface_args.is_empty()
-                        || !rule.interface_assoc.is_empty()
-                    {
-                        return Err(no("generic interface implementation"));
-                    }
-                    let bex_vm_types::TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
-                        return Err(no("non-class implementation"));
-                    };
-                    if !args.is_empty() {
-                        return Err(no("generic implementor"));
-                    }
-                    result.push((self.class_tag(head.tag())?, rule));
-                }
-            }
-        }
-        if result.is_empty() {
-            return Err(no("interface without concrete implementations"));
-        }
-        Ok(result)
-    }
-    pub(super) fn targets(&self, interface: usize, method: &str) -> Gen<Vec<(usize, usize)>> {
-        self.implementors(interface)?
-            .into_iter()
-            .map(|(c, rule)| {
-                let body = rule
-                    .methods
-                    .get(method)
-                    .ok_or_else(|| no("adopted interface default"))?;
-                if !body.frame.is_empty() {
-                    return Err(no("generic dispatch frame"));
-                }
-                Ok((c, body.fqn.raw()))
-            })
-            .collect()
-    }
 }

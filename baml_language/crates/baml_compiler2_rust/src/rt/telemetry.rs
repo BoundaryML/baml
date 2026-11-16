@@ -343,23 +343,17 @@ impl registry::Feature for Feature {
         }
     }
 
-    fn admit(&self, event: &registry::Admission<'_, '_>) -> Gen<()> {
-        if let registry::Admission::Statement(statement) = event {
-            let unsupported_hook = match statement {
-                StatementKind::Intrinsic {
-                    op: baml_compiler2_mir::IntrinsicOp::ApplyTraceHook,
-                    ..
-                }
-                | StatementKind::Assign {
-                    value: Rvalue::TraceHookSettings { .. },
-                    ..
-                } => true,
-                _ => false,
-            };
-            if unsupported_hook {
-                return Err(no("declaration hooks"));
+    fn admit_statement(&self, statement: &StatementKind<'_>) -> Gen<()> {
+        match statement {
+            StatementKind::Intrinsic {
+                op: baml_compiler2_mir::IntrinsicOp::ApplyTraceHook,
+                ..
             }
+            | StatementKind::Assign {
+                value: Rvalue::TraceHookSettings { .. },
+                ..
+            } => Err(no("declaration hooks")),
+            _ => Ok(()),
         }
-        Ok(())
     }
 }
