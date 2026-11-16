@@ -259,7 +259,10 @@ class Message {
 
 /// Anthropic carries system content outside the alternating messages list.
 /// Keep that split provider-local while preserving the authored prompt roles.
-type Prompt = (AnthBlock[], Message[]);
+class Prompt {
+    system: AnthBlock[],
+    messages: Message[],
+}
 
 /// (internal) Anthropic places a cache breakpoint ON a content block, while a
 /// `${cache(args)}` in the prompt sits BETWEEN parts. The breakpoint goes on
@@ -470,7 +473,7 @@ function _lower_prompt(
             null
         };
     }
-    (system, messages)
+    Prompt { system: system, messages: messages }
 }
 
 // ---------------------------------------------------------------------------
@@ -706,7 +709,9 @@ function messages_request(
     preview: bool = false,
 ) -> MessagesRequest {
     let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
-    let (let system, let lowered) = _lower_prompt(prompt, params.default_cache_args, preview = preview);
+    let lowered_prompt = _lower_prompt(prompt, params.default_cache_args, preview = preview);
+    let system = lowered_prompt.system;
+    let lowered = lowered_prompt.messages;
     // Sanitize BEFORE lowering: foreign-client reasoning, empty turns and
     // orphaned tool calls are repaired once, in ai.wire, for every provider.
     for (

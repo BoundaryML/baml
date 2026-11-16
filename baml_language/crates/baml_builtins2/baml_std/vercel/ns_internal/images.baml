@@ -49,7 +49,10 @@ class GwImagesFile {
 }
 
 /// The text + files pair a rendered prompt lowers to.
-type GwImagesInput = (string, GwImagesFile[]);
+class GwImagesInput {
+    text: string,
+    files: GwImagesFile[],
+}
 
 /// `usage` — the gateway's token accounting for the call. Absent for providers
 /// that do not report it, and every field is optional so a partial object still
@@ -211,7 +214,7 @@ function _gw_images_input(
             raw_body: null,
         }
     }
-    (joined, files)
+    GwImagesInput { text: joined, files: files }
 }
 
 function _gw_images_trim_slash(url: string) -> string {
@@ -292,14 +295,14 @@ function gateway_images_render(
     }
     let journal = ai.wire.sanitize_for_client(input.journal, "ai-gateway-images", c.model);
     // No schema block: the only thing this endpoint can return is an image.
-    let (let text, let input_files) = _gw_images_input((input.prompt)(ai.internal.build_output_format(input.output_type)), journal, preview = preview);
-    let files: GwImagesFile[]? = if (input_files.length() == 0) {
+    let lowered = _gw_images_input((input.prompt)(ai.internal.build_output_format(input.output_type)), journal, preview = preview);
+    let files: GwImagesFile[]? = if (lowered.files.length() == 0) {
         null
     } else {
-        input_files
+        lowered.files
     };
     let request = GwImagesRequest {
-        prompt: text,
+        prompt: lowered.text,
         n: c.n ?? 1,
         size: c.size,
         aspectRatio: c.aspect_ratio,

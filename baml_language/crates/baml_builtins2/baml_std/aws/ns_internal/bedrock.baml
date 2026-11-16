@@ -573,7 +573,10 @@ function _audio_block(audio: baml.media.Audio, preview: bool = false) -> Content
 
 /// Converse splits system content off the alternating message list, the same
 /// shape the Anthropic client uses.
-type BedrockPrompt = (SystemContentBlock[], Message[]);
+class BedrockPrompt {
+    system: SystemContentBlock[],
+    messages: Message[],
+}
 
 /// (internal) One content block -> its Converse `ContentBlock`, or null when it lowers to
 /// nothing. Converse takes every media kind in a conversation message; a tool
@@ -761,7 +764,7 @@ function _lower_prompt(
             null
         };
     }
-    (system, messages)
+    BedrockPrompt { system: system, messages: messages }
 }
 
 // ---------------------------------------------------------------------------
@@ -1057,14 +1060,16 @@ function converse_request(
     input: ai.ModelTurnInput,
     preview: bool = false,
 ) -> ConverseRequest {
-    let (let system, let messages) = _lower_prompt(
+    let prompt = _lower_prompt(
         (input.prompt)(ai.internal.build_output_format(input.output_type)),
         client.default_cache_args(),
         preview = preview,
     );
+    let system = prompt.system;
     if (client.cache_system_prompt && system.length() > 0) {
         system.push(SystemContentBlock.of_cache_point());
     }
+    let messages = prompt.messages;
     let journal_messages = _lower_journal(
         ai.wire.degrade_tool_media(
             ai.wire.sanitize_for_client(input.journal, "aws-bedrock", client.model),

@@ -491,7 +491,10 @@ function _lower_blocks(
     parts
 }
 
-type Prompt = (GmPart[], GmContent[]);
+class Prompt {
+    system_parts: GmPart[],
+    contents: GmContent[],
+}
 
 /// Gemini spells assistant as `model` and carries system instructions outside
 /// `contents`. Role-less prompt content is an ordinary user turn.
@@ -519,7 +522,7 @@ function lower_prompt(prompt: ai.Prompt, fetch_url: bool = true, preview: bool =
             null
         };
     }
-    (system_parts, contents)
+    Prompt { system_parts: system_parts, contents: contents }
 }
 
 /// (internal) ---------------------------------------------------------------------------
@@ -709,7 +712,8 @@ function gemini_build_body(
     preview: bool = false,
 ) -> string {
     let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
-    let (let system_parts, let contents) = lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
+    let lowered = lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
+    let contents = lowered.contents;
     let journal = ai.wire.sanitize_for_client(input.journal, provider, requested_model);
     for (let item in lower_journal(journal, fetch_url, preview = preview)) {
         contents.push(item);
@@ -721,11 +725,11 @@ function gemini_build_body(
     // keep the authored system role in `systemInstruction`.
     let system: GmContent? = null;
     let first_role = contents.at(0)?.role ?? "";
-    if (first_role != "user" && system_parts.length() > 0) {
-        contents = [GmContent { role: "user", parts: system_parts }].concat(contents);
+    if (first_role != "user" && lowered.system_parts.length() > 0) {
+        contents = [GmContent { role: "user", parts: lowered.system_parts }].concat(contents);
         null
-    } else if (system_parts.length() > 0) {
-        system = GmContent { role: null, parts: system_parts };
+    } else if (lowered.system_parts.length() > 0) {
+        system = GmContent { role: null, parts: lowered.system_parts };
         null
     } else {
         null
