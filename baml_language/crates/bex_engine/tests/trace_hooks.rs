@@ -20,7 +20,7 @@ function release(box: Box<string>) -> void { box.release = true; }
 function select<T>(box: Box<T>, settings: trace.Settings) -> trace.Options? throws never {
     box.calls += 1;
     assert.equal(settings.context.metadata["entry"], "caller");
-    assert.equal(trace.current_context().metadata.length(), 0);
+    assert.equal(trace.current_context().metadata.length(), 1);
     while (!box.release) {
         baml.sys.sleep(baml.time.Duration.from_milliseconds(1)) catch (error) { baml.errors.Io => {} };
     }

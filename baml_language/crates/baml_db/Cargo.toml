@@ -38,6 +38,7 @@ ignore = { workspace = true }
 indexmap = { workspace = true }
 rayon = { workspace = true }
 salsa = { workspace = true }
+semver = { workspace = true }
 serde = { workspace = true }
 text-size = { workspace = true }
 thiserror = { workspace = true }

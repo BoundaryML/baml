@@ -67,6 +67,7 @@ pub(super) fn assert_leaf_contexts(
     files: &[proto::RecordingFile],
     snapshots: &BTreeMap<[u8; 16], DecodedSnapshot>,
     minimum: usize,
+    app_version: Option<&str>,
 ) {
     use proto::span_event::Event;
     let mut entries = BTreeMap::new();
@@ -84,6 +85,16 @@ pub(super) fn assert_leaf_contexts(
             continue;
         };
         assert_eq!(identity, Some("user-42"));
+        assert_eq!(
+            values["baml.ctx.baml_version"],
+            &DecodedValue::String(baml_version::CANONICAL_VERSION.into())
+        );
+        assert_eq!(
+            values.get("baml.ctx.app_version").copied(),
+            app_version
+                .map(|version| DecodedValue::String(version.into()))
+                .as_ref()
+        );
         assert_eq!(values["root"], &DecodedValue::String("kept".into()));
         assert_eq!(
             values["text"],
@@ -92,12 +103,12 @@ pub(super) fn assert_leaf_contexts(
         for event in &section.events {
             match &event.event {
                 Some(Event::FunctionAnnouncement(entry)) if phase.as_ref() == "entry" => {
-                    assert_eq!(values.len(), 4);
+                    assert_eq!(values.len(), 5 + usize::from(app_version.is_some()));
                     assert_eq!(values["remove"], &DecodedValue::String("yes".into()));
                     entries.insert(entry.id, id);
                 }
                 Some(Event::FunctionCompletion(done)) if phase.as_ref() == "entry" => {
-                    assert_eq!(values.len(), 4);
+                    assert_eq!(values.len(), 5 + usize::from(app_version.is_some()));
                     assert_eq!(values["remove"], &DecodedValue::String("yes".into()));
                     completions.insert(done.id, id);
                 }

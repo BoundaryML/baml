@@ -102,6 +102,12 @@ pub struct SourceRoot {
     #[returns(clone)]
     pub self_name: Option<Name>,
 
+    /// Optional `[package].version`, supplied by the project loader. This is
+    /// application metadata of the root program, not package identity.
+    #[default]
+    #[returns(clone)]
+    pub version: Option<String>,
+
     /// Files in this root, in insertion order.
     #[returns(ref)]
     pub files: Vec<SourceFile>,

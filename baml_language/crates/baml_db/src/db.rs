@@ -645,6 +645,7 @@ impl ProjectDatabase {
                 );
                 root.set_kind(self).to(kind);
                 root.set_self_name(self).to(self_name);
+                root.set_version(self).to(None);
                 root.set_exclude_tests(self).to(false);
                 root.set_claim(self).to(ClaimedIdentity::default());
                 root.set_interface(self).to(interface);

@@ -1912,6 +1912,23 @@ impl BexEngine {
             recording,
             compiled_bodies,
         } = config;
+        // Application identity is execution context, independent of recording.
+        // Apply it before recording starts and before any package initializer
+        // executes, so pack and every bridge inherit the same root metadata.
+        let mut versions = btel_types::context::ContextPatch::default();
+        versions.metadata.insert(
+            "baml.ctx.baml_version".into(),
+            Some(btel_types::context::ContextValue::String(
+                baml_version::CANONICAL_VERSION.to_owned(),
+            )),
+        );
+        if let Some(version) = &bytecode_program.app_version {
+            versions.metadata.insert(
+                "baml.ctx.app_version".into(),
+                Some(btel_types::context::ContextValue::String(version.clone())),
+            );
+        }
+        let launch_context = launch_context.with_patch(&versions);
         let auto_telemetry_level = match &artifact_telemetry {
             Some(policy) => policy.resolve_level(),
             None => btel_settings::mode::from_env()

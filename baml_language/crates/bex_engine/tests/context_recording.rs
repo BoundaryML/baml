@@ -19,7 +19,8 @@ fn context() -> bex_engine::FunctionCallContext {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn baml_context_reaches_local_files_and_cas_at_entry_and_completion() {
-    let program = baml_test_support::compile_source(trace_context::SOURCE);
+    let mut program = baml_test_support::compile_source(trace_context::SOURCE);
+    program.app_version = Some("5.6.7+local".into());
     let root = tempfile::tempdir().unwrap();
     let engine = Arc::new(
         BexEngine::new_with_telemetry_recording(
@@ -88,5 +89,24 @@ async fn baml_context_reaches_local_files_and_cas_at_entry_and_completion() {
             }
         }
     }
-    trace_context::assert_leaf_contexts(&files.files, &snapshots, 4099);
+    for file in &files.files {
+        let id: btel_snapshot::CasId = file
+            .header
+            .as_ref()
+            .unwrap()
+            .initial_context_cas_id
+            .unwrap()
+            .into();
+        let snapshot = cas.load(id).snapshot.unwrap();
+        let (_, metadata) = trace_context::metadata(&snapshot);
+        assert_eq!(
+            metadata["baml.ctx.baml_version"],
+            &btel_snapshot::DecodedValue::String(baml_version::CANONICAL_VERSION.into())
+        );
+        assert_eq!(
+            metadata["baml.ctx.app_version"],
+            &btel_snapshot::DecodedValue::String("5.6.7+local".into())
+        );
+    }
+    trace_context::assert_leaf_contexts(&files.files, &snapshots, 4099, Some("5.6.7+local"));
 }

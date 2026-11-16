@@ -1,3 +1,17 @@
+// Native identity is available before package initialization and inherited by
+// effective contexts; option inspection still describes only the authored patch.
+const native_baml_version = match (trace.current_context().metadata["baml.ctx.baml_version"]) {
+    let value: string => value,
+    _ => baml.sys.panic("missing native BAML version at package initialization"),
+};
+
+function expected_metadata(
+    values: map<string, string | int | float | bool>,
+) -> map<string, string | int | float | bool> {
+    values["baml.ctx.baml_version"] = native_baml_version;
+    values
+}
+
 function read() -> trace.Context {
     trace.current_context()
 }
@@ -7,9 +21,9 @@ function fail() -> void throws string {
     throw "failure";
 }
 
-test "context starts empty and IIFEs restore it on return" {
+test "context starts with the native language version and IIFEs restore it on return" {
     assert.equal(trace.context().inspect().context.metadata.length(), 0);
-    assert.equal(trace.current_context().metadata.length(), 0);
+    assert.equal(trace.current_context().metadata.length(), 1);
     (
         () -> {
             assert.equal(trace.current_context().distinct_id, "root");
@@ -23,12 +37,15 @@ test "nested scopes inherit without changing their parent" {
     (
         () -> {
             let child = read($trace = trace.context(metadata = { "child": true, "remove": null }));
-            assert.equal(child.metadata, { "parent": 1, "child": true });
+            assert.equal(child.metadata, expected_metadata({ "parent": 1, "child": true }));
             assert.equal(child.distinct_id, "parent");
-            assert.equal(trace.current_context().metadata, { "parent": 1, "remove": "yes" });
+            assert.equal(
+                trace.current_context().metadata,
+                expected_metadata({ "parent": 1, "remove": "yes" }),
+            );
         }
     )($trace = trace.context(metadata = { "parent": 1, "remove": "yes" }, distinct_id = "parent"));
-    assert.equal(trace.current_context().metadata.length(), 0);
+    assert.equal(trace.current_context().metadata.length(), 1);
 }
 
 test "builders own input maps and preserve context through mode and span changes" {
@@ -44,7 +61,7 @@ test "builders own input maps and preserve context through mode and span changes
         }
     )($trace = trace.context(metadata = { "remove": "inherited", "ratio": 1.5 }));
     assert.equal(result.distinct_id, "user");
-    assert.equal(result.metadata, { "count": 1, "flag": true, "ratio": 1.5 });
+    assert.equal(result.metadata, expected_metadata({ "count": 1, "flag": true, "ratio": 1.5 }));
     assert.equal(options.inspect().context.metadata["count"], 1);
     assert.equal(options.inspect().context.metadata["remove"], null);
 }
@@ -76,7 +93,7 @@ test "reservations freeze patches but resolve ambient context when invoked" {
             read($trace = reserved)
         }
     )($trace = trace.context(metadata = { "ambient": 2 }));
-    assert.equal(result.metadata, { "ambient": 2, "own": true });
+    assert.equal(result.metadata, expected_metadata({ "ambient": 2, "own": true }));
     assert.equal(reserved.inspect().context.metadata, { "own": true });
 }
 
@@ -86,7 +103,7 @@ test "unwind restores the caller context across IIFEs" {
             fail($trace = trace.context(metadata = { "failed_child": true })) catch (error) {
                 _ => null
             };
-            assert.equal(trace.current_context().metadata, { "parent": true });
+            assert.equal(trace.current_context().metadata, expected_metadata({ "parent": true }));
             (
                 () -> {
                     throw "nested";
@@ -94,10 +111,10 @@ test "unwind restores the caller context across IIFEs" {
             )($trace = trace.context(metadata = { "nested": true })) catch (error) {
                 _ => null
             };
-            assert.equal(trace.current_context().metadata, { "parent": true });
+            assert.equal(trace.current_context().metadata, expected_metadata({ "parent": true }));
         }
     )($trace = trace.context(metadata = { "parent": true }));
-    assert.equal(trace.current_context().metadata.length(), 0);
+    assert.equal(trace.current_context().metadata.length(), 1);
 }
 
 test "closures and optional calls inherit isolated contexts" {
@@ -108,14 +125,14 @@ test "closures and optional calls inherit isolated contexts" {
             };
             assert.equal(
                 closure($trace = trace.hidden().context(metadata = { "closure": true })).metadata,
-                { "parent": true, "closure": true },
+                expected_metadata({ "parent": true, "closure": true }),
             );
             let maybe: (() -> trace.Context throws never)? = read;
             assert.equal(
                 maybe?.($trace = trace.context(metadata = { "optional": true }))?.metadata,
-                { "parent": true, "optional": true },
+                expected_metadata({ "parent": true, "optional": true }),
             );
-            assert.equal(trace.current_context().metadata, { "parent": true });
+            assert.equal(trace.current_context().metadata, expected_metadata({ "parent": true }));
         }
     )($trace = trace.context(metadata = { "parent": true }));
 }
@@ -129,11 +146,11 @@ test "spawn retains launch context after its IIFE returns" {
     (
         () -> {
             let result = await child;
-            assert.equal(result.metadata, { "version": 1, "child": true });
-            assert.equal(trace.current_context().metadata, { "version": 2 });
+            assert.equal(result.metadata, expected_metadata({ "version": 1, "child": true }));
+            assert.equal(trace.current_context().metadata, expected_metadata({ "version": 2 }));
         }
     )($trace = trace.context(metadata = { "version": 2 }));
-    assert.equal(trace.current_context().metadata.length(), 0);
+    assert.equal(trace.current_context().metadata.length(), 1);
 }
 
 test "null identity inherits and repeated patches replace or remove metadata keys" {
@@ -142,7 +159,7 @@ test "null identity inherits and repeated patches replace or remove metadata key
             let options = trace.context(metadata = { "key": 2 }).context(
                 metadata = { "key": null, "missing": null },
             );
-            assert.equal(read($trace = options).metadata.length(), 0);
+            assert.equal(read($trace = options).metadata.length(), 1);
             assert.equal(read($trace = options).distinct_id, "parent");
         }
     )($trace = trace.context(metadata = { "key": 1 }, distinct_id = "parent"));

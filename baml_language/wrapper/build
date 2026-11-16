@@ -54,6 +54,7 @@ with tempfile.TemporaryDirectory(prefix="baml-wrapper-build-") as temporary:
         return content[:start] + section + content[end:]
 
     for table, name, value in (
+        ("package", "version", version),
         ("boundary", "project", args.telemetry_project),
         ("pack.build", "embed_telemetry_env", args.telemetry_environment),
     ):

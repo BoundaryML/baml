@@ -661,6 +661,7 @@ dependencies = [
  "indexmap",
  "rayon",
  "salsa",
+ "semver",
  "serde",
  "tempfile",
  "text-size",
