@@ -983,119 +983,6 @@ pub(super) fn ordering_from_value(vm: &BexVm, value: Value) -> Option<std::cmp::
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use baml_type::{Name, typetag::TypeTag};
-    use bex_vm_types::types::{Enum, EnumVariant, LocalName, Owner};
-
-    use super::*;
-    use crate::vm::tests::test_vm;
-
-    fn enum_object(name: &str, tag: i64) -> Object {
-        let variant = |name: &str| EnumVariant {
-            name: name.into(),
-            description: None,
-            alias: None,
-            docstring: None,
-            other: indexmap::IndexMap::default(),
-            skip: false,
-            json_rename: None,
-        };
-        Object::Enum(Box::new(Enum {
-            path: LocalName::new(Vec::new(), Name::new(name)),
-            type_tag: TypeTag::from_i64(baml_type::typetag::CLASS_BASE + tag),
-            variants: vec![variant("A"), variant("B")],
-            description: None,
-            alias: None,
-            docstring: None,
-            other: indexmap::IndexMap::default(),
-            owner: Owner::anonymous(),
-            telemetry_definition: bex_vm_types::DefinitionCell::default(),
-            shared_variants: Box::default(),
-        }))
-    }
-
-    #[test]
-    fn the_heap_shares_one_object_per_compile_time_variant() {
-        let vm = test_vm(vec![enum_object("Left", 0), enum_object("Right", 1)]);
-        for index in 0..2 {
-            let enm = vm.heap.compile_time_ptr(index);
-            let Object::Enum(declaration) = vm.get_object(enm) else {
-                panic!("slot {index} holds an enum");
-            };
-            assert_eq!(declaration.shared_variants.len(), 2);
-            for (variant_index, &ptr) in declaration.shared_variants.iter().enumerate() {
-                assert!(vm.heap.is_compile_time_ptr(ptr));
-                let Object::Variant(variant) = vm.get_object(ptr) else {
-                    panic!("a shared variant is an `Object::Variant`");
-                };
-                assert_eq!((variant.enm, variant.index), (enm, variant_index));
-            }
-        }
-    }
-
-    #[test]
-    fn equals_without_driver_answers_only_what_the_driver_would() {
-        let mut vm = test_vm(vec![enum_object("Left", 0), enum_object("Right", 1)]);
-        let (left, right) = (vm.heap.compile_time_ptr(0), vm.heap.compile_time_ptr(1));
-        let mut eq = |a: Value, b: Value| equals_without_driver(&mut vm, a, b);
-
-        assert_eq!(eq(Value::int(3), Value::int(3)), Some(true));
-        assert_eq!(eq(Value::int(3), Value::int(4)), Some(false));
-        assert_eq!(eq(Value::NULL, Value::NULL), Some(true));
-        assert_eq!(eq(Value::NULL, Value::int(0)), Some(false));
-        assert_eq!(eq(Value::bool(true), Value::int(1)), Some(false));
-
-        let ab = Value::object(vm.tlab.alloc_string("ab".to_string()));
-        let ab_again = Value::object(vm.tlab.alloc_string("ab".to_string()));
-        let ac = Value::object(vm.tlab.alloc_string("ac".to_string()));
-        let left_a = Value::object(vm.tlab.alloc_variant(left, 0));
-        let left_a_again = Value::object(vm.tlab.alloc_variant(left, 0));
-        let right_a = Value::object(vm.tlab.alloc_variant(right, 0));
-
-        // Floats compare by value: different bits can be equal, and a
-        // boxed float (NaN) against itself boxed separately is equal too.
-        let zero = vm.tlab.float_value(0.0);
-        let negative_zero = vm.tlab.float_value(-0.0);
-        let one = vm.tlab.float_value(1.0);
-        let nan = vm.tlab.float_value(f64::NAN);
-        let nan_again = vm.tlab.float_value(f64::NAN);
-        let mut eq = |a: Value, b: Value| equals_without_driver(&mut vm, a, b);
-        assert_eq!(eq(negative_zero, zero), Some(true));
-        assert_eq!(eq(zero, one), Some(false));
-        assert_eq!(eq(nan, nan_again), Some(true));
-        assert_eq!(eq(nan, one), Some(false));
-        assert_eq!(eq(one, Value::int(1)), Some(false));
-
-        assert_eq!(eq(ab, ab_again), Some(true));
-        assert_eq!(eq(ab, ac), Some(false));
-        assert_eq!(eq(ab, Value::NULL), Some(false));
-        assert_eq!(eq(left_a, left_a), Some(true));
-        // Different enums are unequal whatever their `Equals`.
-        assert_eq!(eq(left_a, right_a), Some(false));
-        // Without the stdlib there is no `Equals` to resolve, so whether
-        // `Left` has a custom `eq` is unknown: the driver decides.
-        assert_eq!(eq(left_a, left_a_again), None);
-    }
-
-    #[test]
-    fn the_enum_memo_forgets_its_answers_when_the_generation_moves() {
-        let vm = test_vm(vec![enum_object("Left", 0), enum_object("Right", 1)]);
-        let (left, right) = (vm.heap.compile_time_ptr(0), vm.heap.compile_time_ptr(1));
-        let mut memo = EnumEqualsMemo::default();
-
-        assert_eq!(memo.get(0, left), None);
-        memo.insert(0, left, true);
-        assert_eq!(memo.get(0, left), Some(true));
-        assert_eq!(memo.get(0, right), None);
-
-        assert_eq!(memo.get(1, left), None);
-        memo.insert(1, right, false);
-        assert_eq!(memo.get(1, right), Some(false));
-        assert_eq!(memo.get(1, left), None);
-    }
-}
-
 // ── Compare (structural tuple default) ─────────────────────────────────────
 
 /// One pending step of a [`CompareDriver`] walk.
@@ -1263,4 +1150,117 @@ pub(super) fn compare_structural_default(vm: &mut BexVm, a: Value, b: Value) -> 
         visited: HashSet::new(),
     })
     .drive(vm)
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_type::{Name, typetag::TypeTag};
+    use bex_vm_types::types::{Enum, EnumVariant, LocalName, Owner};
+
+    use super::*;
+    use crate::vm::tests::test_vm;
+
+    fn enum_object(name: &str, tag: i64) -> Object {
+        let variant = |name: &str| EnumVariant {
+            name: name.into(),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            skip: false,
+            json_rename: None,
+        };
+        Object::Enum(Box::new(Enum {
+            path: LocalName::new(Vec::new(), Name::new(name)),
+            type_tag: TypeTag::from_i64(baml_type::typetag::CLASS_BASE + tag),
+            variants: vec![variant("A"), variant("B")],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            owner: Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
+        }))
+    }
+
+    #[test]
+    fn the_heap_shares_one_object_per_compile_time_variant() {
+        let vm = test_vm(vec![enum_object("Left", 0), enum_object("Right", 1)]);
+        for index in 0..2 {
+            let enm = vm.heap.compile_time_ptr(index);
+            let Object::Enum(declaration) = vm.get_object(enm) else {
+                panic!("slot {index} holds an enum");
+            };
+            assert_eq!(declaration.shared_variants.len(), 2);
+            for (variant_index, &ptr) in declaration.shared_variants.iter().enumerate() {
+                assert!(vm.heap.is_compile_time_ptr(ptr));
+                let Object::Variant(variant) = vm.get_object(ptr) else {
+                    panic!("a shared variant is an `Object::Variant`");
+                };
+                assert_eq!((variant.enm, variant.index), (enm, variant_index));
+            }
+        }
+    }
+
+    #[test]
+    fn equals_without_driver_answers_only_what_the_driver_would() {
+        let mut vm = test_vm(vec![enum_object("Left", 0), enum_object("Right", 1)]);
+        let (left, right) = (vm.heap.compile_time_ptr(0), vm.heap.compile_time_ptr(1));
+        let mut eq = |a: Value, b: Value| equals_without_driver(&mut vm, a, b);
+
+        assert_eq!(eq(Value::int(3), Value::int(3)), Some(true));
+        assert_eq!(eq(Value::int(3), Value::int(4)), Some(false));
+        assert_eq!(eq(Value::NULL, Value::NULL), Some(true));
+        assert_eq!(eq(Value::NULL, Value::int(0)), Some(false));
+        assert_eq!(eq(Value::bool(true), Value::int(1)), Some(false));
+
+        let ab = Value::object(vm.tlab.alloc_string("ab".to_string()));
+        let ab_again = Value::object(vm.tlab.alloc_string("ab".to_string()));
+        let ac = Value::object(vm.tlab.alloc_string("ac".to_string()));
+        let left_a = Value::object(vm.tlab.alloc_variant(left, 0));
+        let left_a_again = Value::object(vm.tlab.alloc_variant(left, 0));
+        let right_a = Value::object(vm.tlab.alloc_variant(right, 0));
+
+        // Floats compare by value: different bits can be equal, and a
+        // boxed float (NaN) against itself boxed separately is equal too.
+        let zero = vm.tlab.float_value(0.0);
+        let negative_zero = vm.tlab.float_value(-0.0);
+        let one = vm.tlab.float_value(1.0);
+        let nan = vm.tlab.float_value(f64::NAN);
+        let nan_again = vm.tlab.float_value(f64::NAN);
+        let mut eq = |a: Value, b: Value| equals_without_driver(&mut vm, a, b);
+        assert_eq!(eq(negative_zero, zero), Some(true));
+        assert_eq!(eq(zero, one), Some(false));
+        assert_eq!(eq(nan, nan_again), Some(true));
+        assert_eq!(eq(nan, one), Some(false));
+        assert_eq!(eq(one, Value::int(1)), Some(false));
+
+        assert_eq!(eq(ab, ab_again), Some(true));
+        assert_eq!(eq(ab, ac), Some(false));
+        assert_eq!(eq(ab, Value::NULL), Some(false));
+        assert_eq!(eq(left_a, left_a), Some(true));
+        // Different enums are unequal whatever their `Equals`.
+        assert_eq!(eq(left_a, right_a), Some(false));
+        // Without the stdlib there is no `Equals` to resolve, so whether
+        // `Left` has a custom `eq` is unknown: the driver decides.
+        assert_eq!(eq(left_a, left_a_again), None);
+    }
+
+    #[test]
+    fn the_enum_memo_forgets_its_answers_when_the_generation_moves() {
+        let vm = test_vm(vec![enum_object("Left", 0), enum_object("Right", 1)]);
+        let (left, right) = (vm.heap.compile_time_ptr(0), vm.heap.compile_time_ptr(1));
+        let mut memo = EnumEqualsMemo::default();
+
+        assert_eq!(memo.get(0, left), None);
+        memo.insert(0, left, true);
+        assert_eq!(memo.get(0, left), Some(true));
+        assert_eq!(memo.get(0, right), None);
+
+        assert_eq!(memo.get(1, left), None);
+        memo.insert(1, right, false);
+        assert_eq!(memo.get(1, right), Some(false));
+        assert_eq!(memo.get(1, left), None);
+    }
 }
