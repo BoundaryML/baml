@@ -1962,7 +1962,7 @@ fn exec_collecting(vm: &mut BexVm) -> Value {
     loop {
         match vm.exec().unwrap() {
             VmExecState::EarlyYield => {
-                collect(vm);
+                collect(vm, &[]);
             }
             VmExecState::Complete(value) => break value,
             other => panic!("unexpected execution state: {other:?}"),
