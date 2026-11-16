@@ -162,10 +162,21 @@ pub(crate) fn display_instruction(
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
-        | Instruction::StoreVarLoadVar(index) => match function.local_names.get(*index) {
+        | Instruction::StoreVarLoadVar(index)
+        | Instruction::LoadVarField(index, _)
+        | Instruction::LoadVarFieldLocal(index, _) => match function.local_names.get(*index) {
             Some(name) => format!("({name})"),
             None => "(?)".to_string(),
         },
+        Instruction::AddLocalSmall(dst, src, value) => {
+            let name = |index: &usize| {
+                function
+                    .local_names
+                    .get(*index)
+                    .map_or_else(|| "?".to_string(), ToString::to_string)
+            };
+            format!("({} = {} + {value})", name(dst), name(src))
+        }
         Instruction::LoadField(_)
         | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
@@ -194,6 +205,43 @@ pub(crate) fn display_instruction(
         | Instruction::JumpIfNotNullOrPop(offset)
         | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
+        }
+        Instruction::JumpIfLocalsCmp { cmp, a, b, offset } => {
+            let name = |index: &usize| {
+                function
+                    .local_names
+                    .get(*index)
+                    .map_or_else(|| "?".to_string(), ToString::to_string)
+            };
+            format!(
+                "(if {} {cmp} {}, to {})",
+                name(a),
+                name(b),
+                instruction_ptr.wrapping_add_signed(*offset)
+            )
+        }
+        Instruction::JumpIfLocalConstCmp {
+            cmp,
+            a,
+            constant,
+            offset,
+        } => {
+            let name = function
+                .local_names
+                .get(*a)
+                .map_or_else(|| "?".to_string(), ToString::to_string);
+            let constant = function
+                .bytecode
+                .resolved_constants
+                .get(*constant)
+                .map_or_else(
+                    || format!("const {constant}"),
+                    |value| display_value(*value),
+                );
+            format!(
+                "(if {name} {cmp} {constant}, to {})",
+                instruction_ptr.wrapping_add_signed(*offset)
+            )
         }
         Instruction::AllocInstance {
             class_obj: index, ..
@@ -400,6 +448,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::ArrayIterNext { .. }
         | Instruction::ArrayIterNextLocal { .. }
         | Instruction::LoadVar2(..)
+        | Instruction::LoadVarField(..)
+        | Instruction::LoadVarFieldLocal(..)
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::LoadFieldLocal(_)
@@ -410,6 +460,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::StoreVar(_)
         | Instruction::StoreVarLoadVar(_)
         | Instruction::StoreVar2(..)
+        | Instruction::AddLocalSmall(..)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
         | Instruction::StoreFieldLocal(_)
@@ -451,6 +502,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpIfTrueOrPop(_)
         | Instruction::JumpIfNotNullOrPop(_)
         | Instruction::JumpIfFalse(_)
+        | Instruction::JumpIfLocalsCmp { .. }
+        | Instruction::JumpIfLocalConstCmp { .. }
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. }
@@ -706,7 +759,9 @@ fn display_bytecode_textual(function: &Function) -> String {
             | Instruction::JumpIfFalseOrPop(offset)
             | Instruction::JumpIfTrueOrPop(offset)
             | Instruction::JumpIfNotNullOrPop(offset)
-            | Instruction::JumpIfFalse(offset) => {
+            | Instruction::JumpIfFalse(offset)
+            | Instruction::JumpIfLocalsCmp { offset, .. }
+            | Instruction::JumpIfLocalConstCmp { offset, .. } => {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
             }
@@ -804,6 +859,15 @@ fn display_instruction_textual(
             format!("array_iter_next_local {iterator} {index}")
         }
         Instruction::StoreVar2(a, b) => format!("store_var2 {a} {b}"),
+        Instruction::AddLocalSmall(dst, src, value) => {
+            format!("add_local_small {dst} {src} {value}")
+        }
+        Instruction::LoadVarField(slot, field) => {
+            format!("load_var_field {slot} .{}", meta_str(field))
+        }
+        Instruction::LoadVarFieldLocal(slot, field) => {
+            format!("load_var_field_local {slot} .{}", meta_str(field))
+        }
 
         // --- Globals ---
         Instruction::LoadGlobal(idx) => format!("load_global {}", meta_str(&idx.raw())),
@@ -887,6 +951,31 @@ fn display_instruction_textual(
                 .cloned()
                 .unwrap_or_else(|| format!("?{target}"));
             format!("{name} {label}")
+        }
+        Instruction::JumpIfLocalsCmp { cmp, a, b, offset } => {
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            format!("jump_if_locals_cmp {a} {cmp} {b} {label}")
+        }
+        Instruction::JumpIfLocalConstCmp {
+            cmp,
+            a,
+            constant,
+            offset,
+        } => {
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            let constant = match function.bytecode.constants.get(*constant) {
+                Some(ConstValue::Int(value)) => value.to_string(),
+                _ => format!("const {constant}"),
+            };
+            format!("jump_if_local_const_cmp {a} {cmp} {constant} {label}")
         }
         Instruction::JumpTable(table_idx) => {
             let default_target =
@@ -1577,10 +1666,32 @@ pub fn display_compact_bytecode(
             | OpCode::StoreVar2
             | OpCode::NarrowBind
             | OpCode::ArrayIterNext
-            | OpCode::ArrayIterNextLocal => {
+            | OpCode::ArrayIterNextLocal
+            | OpCode::LoadVarField
+            | OpCode::LoadVarFieldLocal => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;
+            }
+
+            // u8 comparison + u32 local + u32 local/constant + i32 offset
+            OpCode::JumpIfLocalsCmp | OpCode::JumpIfLocalConstCmp => {
+                let cmp = OpCode::try_from(code[pc]).map_err(|_| std::fmt::Error)?;
+                pc += 1;
+                let a = read_u32(code, &mut pc);
+                let b = read_u32(code, &mut pc);
+                let offset_val = read_i32(code, &mut pc);
+                let target = (pc as i64 + offset_val as i64) as usize;
+                writeln!(f, "{cmp:?} {a} {b} {offset_val:+}  (-> {target:04})")?;
+            }
+
+            // u32 destination + u32 source + i8 addend
+            OpCode::AddLocalSmall => {
+                let dst = read_u32(code, &mut pc);
+                let src = read_u32(code, &mut pc);
+                let value = code[pc] as i8;
+                pc += 1;
+                writeln!(f, "{dst} {src} {value}")?;
             }
         }
     }

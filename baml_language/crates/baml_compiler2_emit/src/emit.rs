@@ -1208,8 +1208,13 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     /// Emit a store to a (non-captured) local slot, folding `StoreVar(a);
     /// StoreVar(slot)` into `StoreVar2(a, slot)` (`STORE_FAST_STORE_FAST`).
     /// In-place rewrite confined to the current basic block, like
-    /// [`Self::emit_load_var`].
+    /// [`Self::emit_load_var`]. `LoadVar(src); LoadConst(k); AddInt;
+    /// StoreVar(slot)` with a small int `k` becomes
+    /// `AddLocalSmall(slot, src, k)` instead.
     fn emit_store_var(&mut self, slot: usize) {
+        if self.try_fuse_add_local_small(slot) {
+            return;
+        }
         // See `emit_load_var`: don't fuse across a pending sequence point.
         let n = self.bytecode.instructions.len();
         if n > self.current_block_start && !self.pending_sequence_point {
@@ -1221,6 +1226,121 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         }
         let inst = self.emit(Instruction::StoreVar(slot));
         self.set_var_operand(inst, slot);
+    }
+
+    /// Fuse the `LoadVar(src); LoadConst(k); AddInt` just emitted, `k` an
+    /// int that fits `i8`, with the `StoreVar(dst)` being emitted into
+    /// `AddLocalSmall(dst, src, k)`: the shape of `i += 1`.
+    fn try_fuse_add_local_small(&mut self, dst: usize) -> bool {
+        let n = self.bytecode.instructions.len();
+        if self.pending_sequence_point || n < self.current_block_start + 3 {
+            return false;
+        }
+        let first = n - 3;
+        let [
+            Instruction::LoadVar(src),
+            Instruction::LoadConst(constant),
+            Instruction::AddInt,
+        ] = self.bytecode.instructions[first..]
+        else {
+            return false;
+        };
+        let Some(&ConstValue::Int(addend)) = self.bytecode.constants.get(constant) else {
+            return false;
+        };
+        let Ok(addend) = i8::try_from(addend) else {
+            return false;
+        };
+        // `AddInt` is the step that can raise.
+        let span = self.span_at(n - 1);
+        self.fuse_tail(first, Instruction::AddLocalSmall(dst, src, addend), span)
+    }
+
+    /// The span a fused instruction that cannot raise a user-visible error
+    /// takes when it starts at `first`: the span of a sequence point there,
+    /// which it must keep, else `span`.
+    fn span_keeping_sequence_point(&self, first: usize, span: Option<Span>) -> Option<Span> {
+        self.bytecode
+            .line_table
+            .iter()
+            .rev()
+            .take_while(|entry| entry.pc >= first)
+            .find(|entry| entry.pc == first && entry.sequence_point)
+            .map_or(span, |entry| Some(entry.span))
+    }
+
+    /// The source span in effect for the instruction at `index`.
+    fn span_at(&self, index: usize) -> Option<Span> {
+        self.bytecode
+            .line_table
+            .iter()
+            .rev()
+            .find(|entry| entry.pc <= index)
+            .map(|entry| entry.span)
+    }
+
+    /// Replace the instructions from `first` on, all in the current basic
+    /// block, with the superinstruction `fused`, which takes `span`: the
+    /// span of the one replaced step that can raise, so errors keep their
+    /// source location. Declines, changing nothing, when that would drop a
+    /// sequence point or move one to another span.
+    fn fuse_tail(&mut self, first: usize, fused: Instruction, span: Option<Span>) -> bool {
+        debug_assert!(first >= self.current_block_start);
+        let from = self
+            .bytecode
+            .line_table
+            .partition_point(|entry| entry.pc < first);
+        let replaced = &self.bytecode.line_table[from..];
+        if replaced
+            .iter()
+            .any(|entry| entry.sequence_point && (entry.pc != first || Some(entry.span) != span))
+        {
+            return false;
+        }
+        let sequence_point = replaced
+            .first()
+            .filter(|entry| entry.sequence_point)
+            .cloned();
+        // A statement whose final instruction was replaced now ends in the
+        // superinstruction, which runs that instruction's operation.
+        let end = self.bytecode.instructions.len();
+        let replaced_pcs = first + 1..end;
+        for block in &mut self.bytecode.block_pcs {
+            for pc in block.statements.iter_mut().flatten() {
+                if replaced_pcs.contains(pc) {
+                    *pc = first;
+                }
+            }
+        }
+        if let Some(pc) = &mut self.terminator_pc
+            && replaced_pcs.contains(pc)
+        {
+            *pc = first;
+        }
+        self.bytecode.line_table.truncate(from);
+        self.bytecode.instructions.truncate(first);
+        self.bytecode.meta.truncate(first);
+        self.bytecode.instructions.push(fused);
+        self.bytecode.meta.push(InstructionMeta { operand: None });
+        if let Some(entry) = sequence_point {
+            self.bytecode.line_table.push(entry);
+        } else if let Some(span) = span
+            && self
+                .bytecode
+                .line_table
+                .last()
+                .is_none_or(|entry| entry.span != span)
+        {
+            let line = self.span_to_line(span, false);
+            self.bytecode.line_table.push(LineTableEntry {
+                pc: first,
+                span,
+                line,
+                sequence_point: false,
+                discriminator: 0,
+            });
+        }
+        true
     }
 
     /// Set the resolved operand metadata for an already-emitted instruction.
@@ -1286,13 +1406,71 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         if matches!(resolved_else, PendingJumpTarget::Block(block) if Some(block) == self.next_block)
         {
             let target = self.resolve_pending_target(then_block);
-            let jump = self.emit(Instruction::PopJumpIfTrue(0));
+            let jump = self.emit_conditional_jump(true);
             self.pending_jumps.push((jump, target));
         } else {
-            let jump = self.emit(Instruction::PopJumpIfFalse(0));
+            let jump = self.emit_conditional_jump(false);
             self.pending_jumps.push((jump, resolved_else));
             self.emit_jump_unless_fallthrough(then_block);
         }
+    }
+
+    /// Emit `PopJumpIfTrue` (`jump_if`) or `PopJumpIfFalse`, to be patched,
+    /// and return its index. An int comparison just emitted on two locals
+    /// (`LoadVar2(a, b); CmpIntOp`) or on a local and a constant
+    /// (`LoadVar(a); LoadConst(c); CmpIntOp`) fuses with it into one
+    /// compare-and-branch; `PopJumpIfFalse` becomes the negated comparison.
+    fn emit_conditional_jump(&mut self, jump_if: bool) -> usize {
+        let n = self.bytecode.instructions.len();
+        if !self.pending_sequence_point {
+            let cmp_for = |cmp: CmpOp| if jump_if { cmp } else { cmp.negated_int() };
+            let tail = &self.bytecode.instructions[self.current_block_start..];
+            let fused = match tail {
+                [.., Instruction::LoadVar2(a, b), Instruction::CmpIntOp(cmp)] => Some((
+                    n - 2,
+                    Instruction::JumpIfLocalsCmp {
+                        cmp: cmp_for(*cmp),
+                        a: *a,
+                        b: *b,
+                        offset: 0,
+                    },
+                )),
+                [
+                    ..,
+                    Instruction::LoadVar(a),
+                    Instruction::LoadConst(constant),
+                    Instruction::CmpIntOp(cmp),
+                ] if matches!(
+                    self.bytecode.constants.get(*constant),
+                    Some(ConstValue::Int(_))
+                ) =>
+                {
+                    Some((
+                        n - 3,
+                        Instruction::JumpIfLocalConstCmp {
+                            cmp: cmp_for(*cmp),
+                            a: *a,
+                            constant: *constant,
+                            offset: 0,
+                        },
+                    ))
+                }
+                _ => None,
+            };
+            if let Some((first, branch)) = fused {
+                // Nothing in it can raise; it takes the comparison's span,
+                // or that of a sequence point it starts with.
+                let span = self.span_keeping_sequence_point(first, self.span_at(n - 1));
+                if self.fuse_tail(first, branch, span) {
+                    return first;
+                }
+            }
+        }
+        self.emit(if jump_if {
+            Instruction::PopJumpIfTrue(0)
+        } else {
+            Instruction::PopJumpIfFalse(0)
+        })
     }
 
     /// Emit an unconditional jump to a target, even when the target is the
@@ -2887,6 +3065,20 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 self.bytecode.instructions[instruction_idx] =
                     Instruction::JumpIfNotNullOrPop(offset);
             }
+            Instruction::JumpIfLocalsCmp { cmp, a, b, .. } => {
+                self.bytecode.instructions[instruction_idx] =
+                    Instruction::JumpIfLocalsCmp { cmp, a, b, offset };
+            }
+            Instruction::JumpIfLocalConstCmp {
+                cmp, a, constant, ..
+            } => {
+                self.bytecode.instructions[instruction_idx] = Instruction::JumpIfLocalConstCmp {
+                    cmp,
+                    a,
+                    constant,
+                    offset,
+                };
+            }
             _ => panic!("expected jump instruction at index {instruction_idx}"),
         }
     }
@@ -3448,7 +3640,28 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
     }
 
     fn load_field(&mut self, field: usize, name: &str, base: &Place) -> Result<(), Self::Error> {
-        let idx = self.emit(if self.thread_local(base) {
+        let thread_local = self.thread_local(base);
+        // `LoadVar(slot); LoadField(field)` becomes `LoadVarField(slot,
+        // field)`, which takes the field load's span. A field load raises
+        // only internal errors (a well-typed program cannot reach them), so
+        // a statement-start sequence point on the `LoadVar` keeps its span.
+        let n = self.bytecode.instructions.len();
+        if !self.pending_sequence_point
+            && n > self.current_block_start
+            && let Instruction::LoadVar(slot) = self.bytecode.instructions[n - 1]
+        {
+            let fused = if thread_local {
+                Instruction::LoadVarFieldLocal(slot, field)
+            } else {
+                Instruction::LoadVarField(slot, field)
+            };
+            let span = self.span_keeping_sequence_point(n - 1, self.current_debug_span);
+            if self.fuse_tail(n - 1, fused, span) {
+                self.set_operand(n - 1, OperandMeta::Field(name.to_string()));
+                return Ok(());
+            }
+        }
+        let idx = self.emit(if thread_local {
             Instruction::LoadFieldLocal(field)
         } else {
             Instruction::LoadField(field)

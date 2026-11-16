@@ -27,11 +27,9 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     load_var _4
     init_instance user.fixtures.short_circuit_locals.ShortCircuitBox .items, .tags
     store_var box
-    load_var box
-    load_field_local .items
+    load_var_field_local 1 .items
     store_var items
-    load_var box
-    load_field_local .tags
+    load_var_field_local 1 .tags
     store_var tags
     load_var items
     load_const null
@@ -126,10 +124,7 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
     load_var _7
     is_type baml.iter.Done
     pop_jump_if_true L3
-    load_var _7
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_false L2
+    jump_if_local_const_cmp 7 <= 0 L2
     load_var a
     jump_if_false_or_pop L1
     load_var b
@@ -140,10 +135,7 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
   L2:
     load_var x
     pop_jump_if_false L0
-    load_var hits
-    load_const 1
-    add_int
-    store_var hits
+    add_local_small 5 5 1
     jump L0
 
   L3:
@@ -165,10 +157,7 @@ function fixtures.short_circuit_locals.initialized_local_in_branch_loop(items: i
     load_var _4
     is_type baml.iter.Done
     pop_jump_if_true L3
-    load_var _4
-    load_const 0
-    cmp_int_op >
-    pop_jump_if_true L1
+    jump_if_local_const_cmp 4 > 0 L1
     load_const 2
     jump L2
 

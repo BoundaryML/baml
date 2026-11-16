@@ -1038,6 +1038,39 @@ pub enum Instruction {
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
 
+    // ── Local-operand superinstructions ───────────────────────────────────
+    // Fused at emit time, within one basic block, from the shapes the
+    // speedtest workloads execute most. Each behaves exactly like the
+    // sequence it replaces, raising the same errors.
+    /// Fused `LoadVar(src); LoadIntSmall(value); AddInt; StoreVar(dst)`:
+    /// `local[dst] = local[src] + value`, with `AddInt`'s overflow check.
+    /// The shape of `i += 1`.
+    AddLocalSmall(usize, usize, i8),
+    /// Fused `LoadVar(slot); LoadField(field)`: push field `field` of the
+    /// instance in `local[slot]`.
+    LoadVarField(usize, usize),
+    /// Fused `LoadVar(slot); LoadFieldLocal(field)`.
+    LoadVarFieldLocal(usize, usize),
+    /// Fused `LoadVar2(a, b); CmpIntOp(cmp); PopJumpIfTrue(offset)`: jump by
+    /// `offset` when the int comparison `local[a] cmp local[b]` holds. A
+    /// fused `PopJumpIfFalse` stores the negated comparison, which for ints
+    /// is exact. Ticks the early-yield counter like the branch it replaces.
+    /// The shape of a loop or `if` test on two locals.
+    JumpIfLocalsCmp {
+        cmp: CmpOp,
+        a: usize,
+        b: usize,
+        offset: isize,
+    },
+    /// Fused `LoadVar(a); LoadConst(constant); CmpIntOp(cmp); PopJumpIf*`:
+    /// as [`Instruction::JumpIfLocalsCmp`], against an int constant.
+    JumpIfLocalConstCmp {
+        cmp: CmpOp,
+        a: usize,
+        constant: usize,
+        offset: isize,
+    },
+
     /// Reify the package lexically enclosing the call site. In a unit the
     /// operand is a placeholder — the package is the unit's own; the linker
     /// writes the package's ordinal in the executable, which the static VM
@@ -1387,6 +1420,16 @@ pub enum OpCode {
     // u32 iterator slot + u32 index slot; appended to preserve discriminants.
     ArrayIterNext,
     ArrayIterNextLocal,
+    // Local-operand superinstructions, appended to preserve discriminants.
+    // u32 destination slot + u32 source slot + i8 addend.
+    AddLocalSmall,
+    // u32 local slot + u32 field index.
+    LoadVarField,
+    LoadVarFieldLocal,
+    // u8 `CmpInt*` opcode + u32 local slot + u32 local slot / constant index
+    // + i32 offset from the end of the instruction.
+    JumpIfLocalsCmp,
+    JumpIfLocalConstCmp,
 }
 
 impl OpCode {
@@ -1557,7 +1600,15 @@ impl OpCode {
             | Self::StoreVar2
             | Self::NarrowBind
             | Self::ArrayIterNext
-            | Self::ArrayIterNextLocal => 9,
+            | Self::ArrayIterNextLocal
+            | Self::LoadVarField
+            | Self::LoadVarFieldLocal => 9,
+
+            // 10-byte: opcode + u32 + u32 + i8
+            Self::AddLocalSmall => 10,
+
+            // 14-byte: opcode + u8 comparison + u32 + u32 + i32 offset
+            Self::JumpIfLocalsCmp | Self::JumpIfLocalConstCmp => 14,
         }
     }
 }
@@ -1717,6 +1768,11 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::LoadFieldLocal as u8 => Ok(Self::LoadFieldLocal),
             x if x == Self::ArrayIterNext as u8 => Ok(Self::ArrayIterNext),
             x if x == Self::ArrayIterNextLocal as u8 => Ok(Self::ArrayIterNextLocal),
+            x if x == Self::AddLocalSmall as u8 => Ok(Self::AddLocalSmall),
+            x if x == Self::LoadVarField as u8 => Ok(Self::LoadVarField),
+            x if x == Self::LoadVarFieldLocal as u8 => Ok(Self::LoadVarFieldLocal),
+            x if x == Self::JumpIfLocalsCmp as u8 => Ok(Self::JumpIfLocalsCmp),
+            x if x == Self::JumpIfLocalConstCmp as u8 => Ok(Self::JumpIfLocalConstCmp),
             x if x == Self::StoreFieldLocal as u8 => Ok(Self::StoreFieldLocal),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
@@ -1746,6 +1802,11 @@ impl std::fmt::Display for OpCode {
             Self::LoadFieldLocal => "LOAD_FIELD_LOCAL",
             Self::ArrayIterNext => "ARRAY_ITER_NEXT",
             Self::ArrayIterNextLocal => "ARRAY_ITER_NEXT_LOCAL",
+            Self::AddLocalSmall => "ADD_LOCAL_SMALL",
+            Self::LoadVarField => "LOAD_VAR_FIELD",
+            Self::LoadVarFieldLocal => "LOAD_VAR_FIELD_LOCAL",
+            Self::JumpIfLocalsCmp => "JUMP_IF_LOCALS_CMP",
+            Self::JumpIfLocalConstCmp => "JUMP_IF_LOCAL_CONST_CMP",
             Self::StoreFieldLocal => "STORE_FIELD_LOCAL",
 
             Self::Return => "RETURN",
@@ -1969,6 +2030,33 @@ impl std::fmt::Display for BinOp {
     }
 }
 
+impl CmpOp {
+    /// The comparison that holds exactly when this one does not, for ints.
+    #[must_use]
+    pub const fn negated_int(self) -> Self {
+        match self {
+            Self::Eq => Self::NotEq,
+            Self::NotEq => Self::Eq,
+            Self::Lt => Self::GtEq,
+            Self::LtEq => Self::Gt,
+            Self::Gt => Self::LtEq,
+            Self::GtEq => Self::Lt,
+        }
+    }
+
+    /// The `CmpInt*` opcode that applies this comparison to two ints.
+    pub const fn int_opcode(self) -> OpCode {
+        match self {
+            Self::Eq => OpCode::CmpIntEq,
+            Self::NotEq => OpCode::CmpIntNotEq,
+            Self::Lt => OpCode::CmpIntLt,
+            Self::LtEq => OpCode::CmpIntLtEq,
+            Self::Gt => OpCode::CmpIntGt,
+            Self::GtEq => OpCode::CmpIntGtEq,
+        }
+    }
+}
+
 impl std::fmt::Display for CmpOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
@@ -2176,6 +2264,25 @@ impl std::fmt::Display for Instruction {
                 write!(f, "ARRAY_ITER_NEXT_LOCAL {iterator} {index}")
             }
             Instruction::StoreVar2(a, b) => write!(f, "STORE_VAR2 {a} {b}"),
+            Instruction::AddLocalSmall(dst, src, value) => {
+                write!(f, "ADD_LOCAL_SMALL {dst} {src} {value}")
+            }
+            Instruction::LoadVarField(slot, field) => write!(f, "LOAD_VAR_FIELD {slot} {field}"),
+            Instruction::LoadVarFieldLocal(slot, field) => {
+                write!(f, "LOAD_VAR_FIELD_LOCAL {slot} {field}")
+            }
+            Instruction::JumpIfLocalsCmp { cmp, a, b, offset } => {
+                write!(f, "JUMP_IF_LOCALS_CMP {a} {cmp} {b} {offset:+}")
+            }
+            Instruction::JumpIfLocalConstCmp {
+                cmp,
+                a,
+                constant,
+                offset,
+            } => write!(
+                f,
+                "JUMP_IF_LOCAL_CONST_CMP {a} {cmp} const {constant} {offset:+}"
+            ),
         }
     }
 }
@@ -2882,6 +2989,34 @@ impl Bytecode {
                     code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
                 }
 
+                // ── Compare-and-branch superinstructions ────────────
+                Instruction::JumpIfLocalsCmp {
+                    cmp,
+                    a,
+                    b: rhs,
+                    offset,
+                }
+                | Instruction::JumpIfLocalConstCmp {
+                    cmp,
+                    a,
+                    constant: rhs,
+                    offset,
+                } => {
+                    code.push(cmp.int_opcode() as u8);
+                    code.extend_from_slice(
+                        &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*rhs).expect("operand fits u32").to_le_bytes(),
+                    );
+                    // As for the plain jumps: the instruction offset is from
+                    // this instruction, the byte offset from its end.
+                    let target_byte = index_to_offset[(i as isize + offset) as usize];
+                    let instr_end = index_to_offset[i] + op.encoded_size();
+                    let byte_delta = target_byte as i64 - instr_end as i64;
+                    code.extend_from_slice(&(byte_delta as i32).to_le_bytes());
+                }
+
                 // ── JumpTable: u32 table_idx + i32 default_offset ───
                 Instruction::JumpTable(table_idx) => {
                     code.extend_from_slice(
@@ -2924,6 +3059,8 @@ impl Bytecode {
                 // ── Operand-movement superinstructions: two u32 operands ──
                 Instruction::LoadVar2(a, b)
                 | Instruction::StoreVar2(a, b)
+                | Instruction::LoadVarField(a, b)
+                | Instruction::LoadVarFieldLocal(a, b)
                 | Instruction::ArrayIterNext {
                     iterator: a,
                     index: b,
@@ -2938,6 +3075,15 @@ impl Bytecode {
                     code.extend_from_slice(
                         &u32::try_from(*b).expect("operand fits u32").to_le_bytes(),
                     );
+                }
+                Instruction::AddLocalSmall(dst, src, value) => {
+                    code.extend_from_slice(
+                        &u32::try_from(*dst).expect("operand fits u32").to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*src).expect("operand fits u32").to_le_bytes(),
+                    );
+                    code.extend_from_slice(&value.to_le_bytes());
                 }
                 Instruction::NarrowBind { ty, destination } => {
                     code.extend_from_slice(
@@ -3128,6 +3274,11 @@ impl Bytecode {
             Instruction::LoadFieldLocal(_) => OpCode::LoadFieldLocal,
             Instruction::ArrayIterNext { .. } => OpCode::ArrayIterNext,
             Instruction::ArrayIterNextLocal { .. } => OpCode::ArrayIterNextLocal,
+            Instruction::AddLocalSmall(..) => OpCode::AddLocalSmall,
+            Instruction::LoadVarField(..) => OpCode::LoadVarField,
+            Instruction::LoadVarFieldLocal(..) => OpCode::LoadVarFieldLocal,
+            Instruction::JumpIfLocalsCmp { .. } => OpCode::JumpIfLocalsCmp,
+            Instruction::JumpIfLocalConstCmp { .. } => OpCode::JumpIfLocalConstCmp,
             Instruction::StoreFieldLocal(_) => OpCode::StoreFieldLocal,
             Instruction::LoadVar2(..) => OpCode::LoadVar2,
             Instruction::StoreVar2(..) => OpCode::StoreVar2,
@@ -3236,14 +3387,7 @@ impl Bytecode {
             Instruction::BitXorBigint => OpCode::BitXorBigint,
             Instruction::ShlBigint => OpCode::ShlBigint,
             Instruction::ShrBigint => OpCode::ShrBigint,
-            Instruction::CmpIntOp(op) => match op {
-                CmpOp::Eq => OpCode::CmpIntEq,
-                CmpOp::NotEq => OpCode::CmpIntNotEq,
-                CmpOp::Lt => OpCode::CmpIntLt,
-                CmpOp::LtEq => OpCode::CmpIntLtEq,
-                CmpOp::Gt => OpCode::CmpIntGt,
-                CmpOp::GtEq => OpCode::CmpIntGtEq,
-            },
+            Instruction::CmpIntOp(op) => op.int_opcode(),
             Instruction::CmpFloatOp(op) => match op {
                 CmpOp::Eq => OpCode::CmpFloatEq,
                 CmpOp::NotEq => OpCode::CmpFloatNotEq,
@@ -3697,6 +3841,30 @@ mod compact_tests {
                 OpCode::ArrayIterNextLocal,
             ),
             (Instruction::StoreFieldLocal(1), OpCode::StoreFieldLocal),
+            (Instruction::AddLocalSmall(1, 2, -3), OpCode::AddLocalSmall),
+            (Instruction::LoadVarField(1, 2), OpCode::LoadVarField),
+            (
+                Instruction::LoadVarFieldLocal(1, 2),
+                OpCode::LoadVarFieldLocal,
+            ),
+            (
+                Instruction::JumpIfLocalsCmp {
+                    cmp: CmpOp::Lt,
+                    a: 1,
+                    b: 2,
+                    offset: 0,
+                },
+                OpCode::JumpIfLocalsCmp,
+            ),
+            (
+                Instruction::JumpIfLocalConstCmp {
+                    cmp: CmpOp::GtEq,
+                    a: 1,
+                    constant: 0,
+                    offset: 1,
+                },
+                OpCode::JumpIfLocalConstCmp,
+            ),
             (
                 Instruction::LoadArrayElementLocal,
                 OpCode::LoadArrayElementLocal,

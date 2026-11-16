@@ -76,6 +76,8 @@ macro_rules! visit_bytecode_index_operands {
             I::LoadField(..)
             | I::StoreField(..)
             | I::LoadFieldLocal(..)
+            | I::LoadVarField(..)
+            | I::LoadVarFieldLocal(..)
             | I::ArrayIterNext { .. }
             | I::ArrayIterNextLocal { .. }
             | I::StoreFieldLocal(..)
@@ -172,7 +174,10 @@ macro_rules! visit_bytecode_index_operands {
             | I::CaptureRef(..)
             | I::SendEvent
             | I::LoadVar2(..)
-            | I::StoreVar2(..) => {}
+            | I::StoreVar2(..)
+            | I::AddLocalSmall(..)
+            | I::JumpIfLocalsCmp { .. }
+            | I::JumpIfLocalConstCmp { .. } => {}
             }
         }
         // Constant-pool object references. Exhaustive on `ConstValue` so a new
