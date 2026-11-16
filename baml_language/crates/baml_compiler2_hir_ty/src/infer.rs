@@ -907,6 +907,18 @@ enum Suppress {
     RestReject,
 }
 
+/// An `OptionalChain` while its links are typed.
+#[derive(Default)]
+struct ChainFrame {
+    /// Whether some `?.` link's base was nullable: the boundary unions
+    /// `null` back into the chain's result.
+    nullable: bool,
+    /// The state after the first `?.` link's base ran, which is where the
+    /// rest of the chain is skipped from when that base is null; set by the
+    /// link, rejoined at the boundary ([`InferenceContext::rejoin_skipped`]).
+    skip: Option<flow::SkipPoint>,
+}
+
 /// How many constructs of each [`Suppress`] kind enclose the current point.
 #[derive(Debug, Default)]
 struct Suppressions {
@@ -2318,11 +2330,9 @@ struct InferenceContext<'db> {
     /// recursion anchor their eventual diagnostic here.
     obligation_anchor: Option<ExprId>,
     /// One frame per enclosing `OptionalChain` (chains nest through
-    /// arguments): a `?.` link whose base was nullable sets the top
-    /// frame, and the chain BOUNDARY unions `null` back into its
-    /// result - TS short-circuit semantics, where intermediate links
-    /// see the non-null type.
-    chain_nullable: Vec<bool>,
+    /// arguments), owned by the chain BOUNDARY - TS short-circuit
+    /// semantics, where intermediate links see the non-null type.
+    chains: Vec<ChainFrame>,
     /// Shorthand value expressions and the exact property name they require.
     /// Populated from the structural AST before inference so the ordinary path
     /// resolver can select the specialized unresolved-name diagnostic.
@@ -2413,7 +2423,7 @@ impl<'db> InferenceContext<'db> {
             table: InferenceTable::new(),
             journals: Journals::default(),
             obligation_anchor: None,
-            chain_nullable: Vec::new(),
+            chains: Vec::new(),
             property_shorthand_values: FxHashMap::default(),
             block_defer_writes: Vec::new(),
             loop_verdicts: flow::LoopVerdicts::default(),
@@ -3494,11 +3504,20 @@ impl<'db> InferenceContext<'db> {
                 let base_ty = self.infer_expr(body, *base, &Expectation::None);
                 self.field_access(expr, &base_ty, member)
             }
-            // TS short-circuit chains: the boundary owns the `| null`.
+            // TS short-circuit chains: the boundary owns the `| null`, and
+            // is where the links skipped by a null base rejoin the flow.
             Expr::OptionalChain { expr: inner } => {
-                self.chain_nullable.push(false);
+                self.chains.push(ChainFrame::default());
                 let ty = self.infer_expr(body, *inner, &Expectation::None);
-                let nullable = self.chain_nullable.pop().expect("pushed above");
+                let ChainFrame { nullable, skip } = self
+                    .chains
+                    .pop()
+                    .unwrap_or_else(|| unreachable!("pushed above"));
+                let skip = skip.unwrap_or_else(|| {
+                    unreachable!("an `OptionalChain` wraps at least one `?.` link")
+                });
+                let reassigned = self.assigned_bindings(body, *inner);
+                self.rejoin_skipped(skip, &reassigned);
                 if nullable {
                     self.union_of(&[ty, Ty::null()])
                 } else {
@@ -4618,7 +4637,8 @@ impl<'db> InferenceContext<'db> {
                 // value, so it dispatches on the peeled type (the
                 // corpus pins the skip semantics).
                 let lhs = if matches!(body.exprs[target], Expr::OptionalChain { .. }) {
-                    self.peel_chain_null(&lhs)
+                    let resolved = self.structurally_resolve(&lhs);
+                    self.remove_null(&resolved)
                 } else {
                     lhs
                 };
@@ -5656,7 +5676,13 @@ impl<'db> InferenceContext<'db> {
                     }
                     _ => Expectation::has_type(inner.clone()),
                 };
+                // The fallback runs only when the lhs is null: it may be
+                // skipped, so neither its divergence nor its writes are the
+                // expression's outright.
+                let skip = self.skip_point();
                 let rhs_ty = self.infer_expr(body, rhs, &rhs_expectation);
+                let reassigned = self.assigned_bindings(body, rhs);
+                self.rejoin_skipped(skip, &reassigned);
                 self.null_coalesce(inner, &rhs_ty)
             }
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
@@ -5852,8 +5878,11 @@ impl<'db> InferenceContext<'db> {
             let index_nullable = index_ty
                 .map(|ty| self.remove_null(&ty) != ty)
                 .unwrap_or(false);
-            if index_nullable && let Some(top) = self.chain_nullable.last_mut() {
-                *top = true;
+            if index_nullable {
+                self.chains
+                    .last_mut()
+                    .unwrap_or_else(|| unreachable!("a `?.[]` link is inside an `OptionalChain`"))
+                    .nullable = true;
             }
         }
         element
@@ -6128,16 +6157,25 @@ impl<'db> InferenceContext<'db> {
 
     /// The non-null part of a type: `Null` drops from unions (an all-null
     /// type leaves `never`).
-    /// A `?.` link's base: null peels off (marking the enclosing chain
-    /// frame so the BOUNDARY re-unions it) and the link proceeds on the
-    /// non-null part - TS short-circuit semantics.
+    /// A `?.` link's base, just typed: null peels off (marking the enclosing
+    /// chain frame so the BOUNDARY re-unions it) and the link proceeds on
+    /// the non-null part - TS short-circuit semantics. The rest of the
+    /// chain is skipped when the base is null, so the chain's first `?.`
+    /// link sets the point the boundary rejoins from.
     fn peel_chain_null(&mut self, ty: &Ty) -> Ty {
         let resolved = self.structurally_resolve(ty);
         let nonnull = self.remove_null(&resolved);
-        if nonnull != resolved
-            && let Some(top) = self.chain_nullable.last_mut()
-        {
-            *top = true;
+        let chain = self
+            .chains
+            .len()
+            .checked_sub(1)
+            .unwrap_or_else(|| unreachable!("a `?.` link is inside an `OptionalChain`"));
+        if nonnull != resolved {
+            self.chains[chain].nullable = true;
+        }
+        if self.chains[chain].skip.is_none() {
+            let skip = self.skip_point();
+            self.chains[chain].skip = Some(skip);
         }
         nonnull
     }
@@ -11676,7 +11714,13 @@ impl<'db> InferenceContext<'db> {
         // both. Throws from this handler's own arms stay in the outer channel.
         // Caught values need not satisfy the enclosing callable's contract.
         self.throws_channels.push(ThrowsChannel::default());
+        // Execution proceeds past the catch when the base completes or when
+        // the arm that takes its throw does. Divergence cannot tell a base
+        // that returns from one that throws, so the catch diverges only
+        // when the base and every arm do.
+        let entry_diverges = self.diverges();
         let base_ty = self.infer_branch(body, base, &branch_expectation);
+        let base_diverges = self.diverges();
         let channel = self
             .throws_channels
             .pop()
@@ -11717,6 +11761,7 @@ impl<'db> InferenceContext<'db> {
 
         let had_facts = !facts.is_empty();
         let mut arm_tys = vec![base_ty];
+        let mut all_arms_diverge = Diverges::Always;
         let clause_facts = facts.clone();
         // The panics this clause's arms trap, for a clause that must
         // cover them all.
@@ -11867,12 +11912,14 @@ impl<'db> InferenceContext<'db> {
             }
             self.set_diverges(Diverges::Maybe);
             let arm_ty = self.infer_branch(body, arm.body, &branch_expectation);
+            all_arms_diverge = all_arms_diverge.and(self.diverges());
             self.flow = entry_flow;
             arm_tys.push(arm_ty);
             // Definitely-handled facts leave the set; the survivors
             // are the next arm's world and, at the end, the rethrow.
             facts.retain(|fact| !definite.contains(fact));
         }
+        self.set_diverges(entry_diverges.or(base_diverges.and(all_arms_diverge)));
         if clause.kind.requires_error_coverage() {
             self.judge_catch_coverage(
                 catch_expr,

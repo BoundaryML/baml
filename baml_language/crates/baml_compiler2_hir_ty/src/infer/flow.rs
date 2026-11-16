@@ -13,11 +13,15 @@
 //!   returns them ([`InferenceContext::infer_test`]): a test is judged
 //!   once, in the flow that holds where it is evaluated.
 //! - `&&` / `||` short-circuit, so their RIGHT operand is typed under the
-//!   left operand's facts (true facts for `&&`, false facts for `||`), and
-//!   the overlay from before the operand comes back after it. Only a bare
-//!   local that no closure captures carries a fact: BAML tasks interleave
-//!   between statements, so a field path or an index path, which is read a
-//!   second time, can change between the test and the read.
+//!   left operand's facts (true facts for `&&`, false facts for `||`). Only
+//!   a bare local that no closure captures carries a fact: BAML tasks
+//!   interleave between statements, so a field path or an index path, which
+//!   is read a second time, can change between the test and the read.
+//! - An operand that may be skipped - the right operand of `&&`/`||`, a
+//!   `??` fallback, the links of a `?.` chain after the first `?.` - is
+//!   typed from a [`SkipPoint`] and rejoined there: its divergence is not
+//!   the expression's, and a binding it assigns keeps a refinement only
+//!   where the taken and the skipped path agree.
 //! - Branch merges are divergence-aware: a diverged branch contributes
 //!   nothing, so guard-with-early-return narrowing is the ordinary merge
 //!   rule, not a special case.
@@ -100,6 +104,14 @@ pub(super) struct LoopVerdicts {
     /// flow, so the code after it is not reported unreachable on top of the
     /// rejection.
     pub rejected_jumps: FxHashSet<StmtId>,
+}
+
+/// The state where an operand that may be skipped begins - the right
+/// operand of `&&`/`||`, a `??` fallback, the links of a `?.` chain after
+/// the first `?.` - for [`InferenceContext::rejoin_skipped`] to resume.
+pub(super) struct SkipPoint {
+    flow: Flow,
+    diverges: Diverges,
 }
 
 /// A condition's narrowing consequences for each polarity.
@@ -211,10 +223,8 @@ impl InferenceContext<'_> {
     /// second time on the right, and another task or an alias can change it
     /// between the two reads, so it is never narrowed.
     ///
-    /// After the expression the overlay is the one from before the right
-    /// operand, because that operand may not have run; a binding it assigns
-    /// keeps a refinement only where both paths agree. A binding that the
-    /// right operand assigns no longer has the type that the left operand
+    /// The right operand may be skipped ([`Self::rejoin_skipped`]), and a
+    /// binding it assigns no longer has the type that the left operand
     /// found, so the left operand's facts about it are dropped:
     /// `x is A && { x = b; true }` proves nothing about `x`.
     pub(super) fn infer_short_circuit(
@@ -226,26 +236,14 @@ impl InferenceContext<'_> {
         position: TestPosition,
     ) -> (Ty, CondFacts) {
         let (lhs_ty, mut left) = self.check_truthy_operand(body, lhs, true, position);
-        let skipped_flow = self.flow.clone();
+        let skip = self.skip_point();
         self.apply_facts(match op {
             ShortCircuit::And => &left.when_true,
             ShortCircuit::Or => &left.when_false,
         });
         let (rhs_ty, right) = self.check_truthy_operand(body, rhs, true, position);
-        let taken_flow = std::mem::replace(&mut self.flow, skipped_flow);
         let reassigned = self.assigned_bindings(body, rhs);
-        for binding in &reassigned {
-            match (taken_flow.get(binding), self.flow.get(binding)) {
-                (Some(taken), Some(skipped)) if taken == skipped => {}
-                (Some(taken), Some(skipped)) => {
-                    let joined = self.join(&[taken.clone(), skipped.clone()]);
-                    self.flow.insert(*binding, joined);
-                }
-                _ => {
-                    self.flow.remove(binding);
-                }
-            }
-        }
+        self.rejoin_skipped(skip, &reassigned);
         left.when_true
             .retain(|binding, _| !reassigned.contains(binding));
         left.when_false
@@ -444,6 +442,45 @@ impl InferenceContext<'_> {
         }
     }
 
+    /// The state at the point from which an operand may be skipped; the
+    /// operand is typed from here and [`Self::rejoin_skipped`] resumes here.
+    pub(super) fn skip_point(&self) -> SkipPoint {
+        SkipPoint {
+            flow: self.flow.clone(),
+            diverges: self.diverges(),
+        }
+    }
+
+    /// Ends an operand that may not have run (`&&`/`||` right operands,
+    /// `??` fallbacks, the links of a `?.` chain after the first `?.`):
+    /// its divergence is not the expression's, since after `a || { return; }`
+    /// execution can proceed, and the overlay is the one from the skip
+    /// point. A binding the operand assigns - `reassigned`, its assigned
+    /// set - keeps a refinement only where the taken and the skipped path
+    /// agree, joined; an operand that diverged is not a path that reaches
+    /// here, and the facts a test in the operand established do not outlive
+    /// it.
+    pub(super) fn rejoin_skipped(&mut self, skip: SkipPoint, reassigned: &FxHashSet<BindingId>) {
+        let taken_diverged = self.diverges() == Diverges::Always;
+        self.set_diverges(skip.diverges);
+        let taken_flow = std::mem::replace(&mut self.flow, skip.flow);
+        if taken_diverged {
+            return;
+        }
+        for binding in reassigned {
+            match (taken_flow.get(binding), self.flow.get(binding)) {
+                (Some(taken), Some(skipped)) if taken == skipped => {}
+                (Some(taken), Some(skipped)) => {
+                    let joined = self.join(&[taken.clone(), skipped.clone()]);
+                    self.flow.insert(*binding, joined);
+                }
+                (_, None) | (None, Some(_)) => {
+                    self.flow.remove(binding);
+                }
+            }
+        }
+    }
+
     /// The divergence-aware merge of the live paths into one point. A path
     /// that diverged is not among them and contributes nothing, which is
     /// why early-return narrowing is the ordinary merge rule and not a
@@ -558,8 +595,10 @@ impl InferenceContext<'_> {
         }
     }
 
-    /// Every narrowable binding the subtree assigns - the havoc set of a
-    /// `catch`, a `defer`, an `&&`/`||` operand or a `for let` body.
+    /// Every narrowable binding the subtree assigns: the havoc set of a
+    /// construct that may not run, may run again or runs at another time -
+    /// a skipped operand, a match arm, a `catch`, a `defer`, a `for let`
+    /// body.
     pub(super) fn assigned_bindings(&self, body: &ExprBody, root: ExprId) -> FxHashSet<BindingId> {
         self.assigned_bindings_in(body, [BodyNode::Expr(root)])
     }
