@@ -795,8 +795,6 @@ impl NativeEntry {
         }
         path.push_str("::");
         path.push_str(&name);
-        let mut glue = String::new();
-        emit_glue_body(&mut glue, "Builtin", "builtin", b);
         Self {
             path,
             arity: entry_params(b).len(),
@@ -804,7 +802,7 @@ impl NativeEntry {
             may_yield: b.may_yield,
             reads_type_args: b.may_yield
                 || !matches!(b.vm_usage, VmUsage::None)
-                || glue.contains("current_call_type_args"),
+                || glue_work("Builtin", "builtin", b).contains("current_call_type_args"),
         }
     }
 }
@@ -1323,9 +1321,8 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
 /// `builtins::...`) gets the body inlined. `__glue_{name}` is the
 /// interpreter's adapter: it unpacks the argument slice into the entry.
 fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &NativeBuiltin) {
-    let mut body = String::new();
-    emit_glue_body(&mut body, trait_name, method_name, b);
-    out.push_str(&entry_from_glue_body(&body, trait_name, method_name, "", b));
+    let work = glue_work(trait_name, method_name, b);
+    out.push_str(&entry_from_work(&work, trait_name, method_name, "", b));
     emit_glue_adapter(out, trait_name, method_name, "", b);
 }
 
@@ -1352,8 +1349,6 @@ fn emit_thread_local_twin(
         emit_glue_adapter(out, trait_name, method_name, "__local", b);
         return;
     }
-    let mut body = String::new();
-    emit_glue_body(&mut body, trait_name, method_name, b);
     let mut replaced = 0;
     let body = [
         (
@@ -1374,7 +1369,7 @@ fn emit_thread_local_twin(
         ),
     ]
     .iter()
-    .fold(body, |body, (locked, local)| {
+    .fold(glue_work(trait_name, method_name, b), |body, (locked, local)| {
         replaced += body.matches(locked).count();
         body.replace(locked, local)
     });
@@ -1386,7 +1381,7 @@ fn emit_thread_local_twin(
     out.push_str(
         "    // SAFETY: selected only for a receiver escape analysis proved thread-local.\n    #[allow(unsafe_code)]\n",
     );
-    out.push_str(&entry_from_glue_body(
+    out.push_str(&entry_from_work(
         &body,
         trait_name,
         method_name,
@@ -1406,46 +1401,23 @@ fn entry_signature(b: &NativeBuiltin) -> String {
         })
 }
 
-/// Turn a body from [`emit_glue_body`] into a builtin's entry point. The
-/// glue body wraps its work in a closure so `?` works; here that work
-/// becomes `__body_{method_name}{suffix}`, an `#[inline(always)]` method
+/// Turn a builtin's [`glue_work`] into its entry point. The work becomes
+/// `__body_{method_name}{suffix}`, an `#[inline(always)]` method
 /// taking the arguments as an array the body reads unchanged, and the entry
 /// `__entry_{method_name}{suffix}` takes them as parameters and converts the
 /// body's result. A closure is not reliably inlined; a method so marked is.
-fn entry_from_glue_body(
-    body: &str,
+fn entry_from_work(
+    work: &str,
     trait_name: &str,
     method_name: &str,
     suffix: &str,
     b: &NativeBuiltin,
 ) -> String {
-    let header = format!(
-        "    fn __glue_{method_name}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n"
-    );
-    let rest = body.strip_prefix(&header).unwrap_or_else(|| {
-        panic!(
-            "baml codegen error: {} glue body has an unexpected header",
-            b.path
-        )
-    });
     let (result_ty, ok) = if b.may_yield {
         ("Result<NativeCallResult, VmRustFnError>", "r")
     } else {
         ("NativeFunctionResult", "NativeCallResult::Done(r)")
     };
-    let opening = format!("        let __result: {result_ty} = (|| {{\n");
-    let rest = rest.strip_prefix(&opening).unwrap_or_else(|| {
-        panic!(
-            "baml codegen error: {} glue body has no result closure",
-            b.path
-        )
-    });
-    let (work, _) = rest.split_once("        })();\n").unwrap_or_else(|| {
-        panic!(
-            "baml codegen error: {} glue body's closure does not close",
-            b.path
-        )
-    });
     let params = entry_params(b);
     let n = params.len();
     format!(
@@ -1485,8 +1457,12 @@ fn emit_glue_adapter(
     .unwrap();
 }
 
-fn emit_glue_body(out: &mut String, trait_name: &str, method_name: &str, b: &NativeBuiltin) {
-    let glue_name = format!("__glue_{method_name}");
+/// A builtin's generated work, as statements returning its `Result`: read
+/// each argument from `args`, call the Rust implementation, convert the
+/// result.
+fn glue_work(trait_name: &str, method_name: &str, b: &NativeBuiltin) -> String {
+    let mut work = String::new();
+    let out = &mut work;
     // When the receiver is `&mut self`, parameter extractions run BEFORE the
     // mutable receiver extraction. If any parameter borrows VM state shared-ly
     // (e.g. `vm.as_array(&args[i])?` for a `T[]` param), that borrow conflicts
@@ -1515,18 +1491,11 @@ fn emit_glue_body(out: &mut String, trait_name: &str, method_name: &str, b: &Nat
     let arraymap_needs_owned =
         needs_owned || return_type_needs_alloc(&b.return_type) || reads_multiple_containers(b);
 
-    writeln!(
-        out,
-        "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{"
-    )
-    .unwrap();
-
     if b.may_yield {
         // Yielding method — returns NativeCallResult directly.
         // Use a closure returning Result<NativeCallResult, VmRustFnError> so `?`
         // operators in arg extractions work (VmInternalError -> VmRustFnError via From),
         // then flatten the result.
-        out.push_str("        let __result: Result<NativeCallResult, VmRustFnError> = (|| {\n");
         emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
         let call_args = call_arg_list(b, needs_owned, arraymap_needs_owned);
         writeln!(
@@ -1534,19 +1503,11 @@ fn emit_glue_body(out: &mut String, trait_name: &str, method_name: &str, b: &Nat
             "            Ok(<Self as {trait_name}>::{method_name}(vm, {call_args}))"
         )
         .unwrap();
-        out.push_str("        })();\n");
-        out.push_str("        match __result {\n");
-        out.push_str("            Ok(r) => r,\n");
-        out.push_str("            Err(e) => NativeCallResult::Error(e),\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        return;
+        return work;
     }
 
     let fallible = is_fallible(b);
 
-    // Use a closure returning NativeFunctionResult so `?` operators work inside.
-    out.push_str("        let __result: NativeFunctionResult = (|| {\n");
 
     emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
 
@@ -1579,12 +1540,7 @@ fn emit_glue_body(out: &mut String, trait_name: &str, method_name: &str, b: &Nat
 
     emit_result_conversion_ok(out, b, "            ");
 
-    out.push_str("        })();\n");
-    out.push_str("        match __result {\n");
-    out.push_str("            Ok(v) => NativeCallResult::Done(v),\n");
-    out.push_str("            Err(e) => NativeCallResult::Error(e),\n");
-    out.push_str("        }\n");
-    out.push_str("    }\n");
+    work
 }
 
 // ============================================================================
