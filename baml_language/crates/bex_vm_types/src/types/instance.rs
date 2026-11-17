@@ -230,24 +230,6 @@ impl InstanceRef {
             .then(|| (unsafe { Self::from_cell(cell) }, header & !HEADER_FLAGS))
     }
 
-    /// Field `field` placed by `shape`.
-    ///
-    /// # Safety
-    ///
-    /// `shape` is the [`ClassShape`] of this instance's class.
-    #[must_use]
-    #[inline(always)]
-    pub unsafe fn field_in(self, shape: ClassShape, field: usize) -> Option<FieldRef> {
-        if field >= shape.field_count() {
-            return None;
-        }
-        Some(FieldRef {
-            field,
-            kind: shape.kind(field),
-            word: unsafe { self.word(1 + field) },
-        })
-    }
-
     /// The instance whose cell starts at `cell`.
     ///
     /// # Safety

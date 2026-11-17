@@ -7665,6 +7665,20 @@ impl BexVm {
         index: usize,
         thread_local: bool,
     ) -> Result<Value, VmError> {
+        match self.shaped_load(value, index, thread_local) {
+            Some(loaded) => Ok(loaded),
+            None => self.load_instance_field_slow(value, index, thread_local),
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn load_instance_field_slow(
+        &mut self,
+        value: Value,
+        index: usize,
+        thread_local: bool,
+    ) -> Result<Value, VmError> {
         let field = self
             .checked_field(value, index)?
             .load(load_order(thread_local));
@@ -7682,29 +7696,84 @@ impl BexVm {
         new_value: Value,
         thread_local: bool,
     ) -> Result<(), VmError> {
+        if self.shaped_store(value, index, new_value, thread_local) {
+            return Ok(());
+        }
+        self.store_instance_field_slow(value, index, new_value, thread_local)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn store_instance_field_slow(
+        &mut self,
+        value: Value,
+        index: usize,
+        new_value: Value,
+        thread_local: bool,
+    ) -> Result<(), VmError> {
         self.checked_field(value, index)?
             .store(new_value, store_order(thread_local))
             .map_err(|mismatch| self.slot_kind_error(mismatch).into())
     }
 
-    /// Field `index` of the instance `value` names.
-    #[allow(
-        clippy::inline_always,
-        reason = "every generic field access starts here"
-    )]
+    /// Field `index` of the instance `value` names, read through its class's
+    /// cached shape. `None` for anything the slow path must decide: an
+    /// operand that is not an instance, a class too wide to pack, a field
+    /// out of range, and a raw float only boxing makes a value.
+    #[allow(clippy::inline_always, reason = "every interpreted field read")]
     #[inline(always)]
-    fn checked_field(&mut self, value: Value, index: usize) -> Result<FieldRef, VmError> {
-        if let Some(ptr) = value.as_object_ptr()
-            && let Some(field) = unsafe { self.shapes.field(ptr, index) }
-        {
-            return Ok(field);
+    fn shaped_load(&self, value: Value, index: usize, thread_local: bool) -> Option<Value> {
+        let (instance, shape) = unsafe { self.shapes.shape(value.as_object_ptr()?) }?;
+        if index >= shape.field_count() {
+            return None;
         }
-        self.checked_field_slow(value, index)
+        let bits = unsafe { instance.word(1 + index) }.load(load_order(thread_local));
+        let kind = shape.kind(index);
+        if kind == SlotKind::Value {
+            Some(unsafe { Value::from_bits(bits) })
+        } else if kind == SlotKind::Int {
+            Some(Value::int(bits.cast_signed()))
+        } else if kind == SlotKind::Bool {
+            Some(Value::bool(bits != 0))
+        } else {
+            Value::try_inline_float(f64::from_bits(bits))
+        }
     }
 
-    #[cold]
-    #[inline(never)]
-    fn checked_field_slow(&mut self, value: Value, index: usize) -> Result<FieldRef, VmError> {
+    /// Store `new_value` into field `index` through the class's cached
+    /// shape. `false`, having stored nothing, for anything the slow path
+    /// must decide or report.
+    #[allow(clippy::inline_always, reason = "every interpreted field write")]
+    #[inline(always)]
+    fn shaped_store(&self, value: Value, index: usize, new_value: Value, thread_local: bool) -> bool {
+        let Some((instance, shape)) = value
+            .as_object_ptr()
+            .and_then(|ptr| unsafe { self.shapes.shape(ptr) })
+        else {
+            return false;
+        };
+        if index >= shape.field_count() {
+            return false;
+        }
+        let kind = shape.kind(index);
+        let bits = if kind == SlotKind::Value {
+            Some(new_value.bits())
+        } else if kind == SlotKind::Int {
+            new_value.as_int().map(i64::cast_unsigned)
+        } else if kind == SlotKind::Bool {
+            new_value.as_bool().map(u64::from)
+        } else {
+            new_value.as_float().map(f64::to_bits)
+        };
+        let Some(bits) = bits else {
+            return false;
+        };
+        unsafe { instance.word(1 + index) }.store(bits, store_order(thread_local));
+        true
+    }
+
+    /// Field `index` of the instance `value` names.
+    fn checked_field(&mut self, value: Value, index: usize) -> Result<FieldRef, VmError> {
         let Some(instance) = value.as_object_ptr().and_then(|ptr| self.get_instance(ptr)) else {
             return Err(self.not_an_instance(value));
         };
@@ -11417,11 +11486,7 @@ impl BexVm {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     fn instance_field(&self, value: Value, index: usize, relaxed: bool) -> Option<Value> {
-        let field = unsafe { self.shapes.field(value.as_object_ptr()?, index) }?;
-        match field.load(load_order(relaxed)) {
-            Field::Value(value) => Some(value),
-            Field::Float(float) => Value::try_inline_float(float),
-        }
+        self.shaped_load(value, index, relaxed)
     }
 
     /// The shared object for variant `variant` of the enum at `enum_idx`, for
