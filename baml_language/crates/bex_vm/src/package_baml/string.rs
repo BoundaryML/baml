@@ -7,6 +7,52 @@ use crate::{
     errors::{VmBamlError, VmRustFnError},
 };
 
+/// Whether `byte` is a whitespace character by `char::is_whitespace`. The
+/// ASCII whitespace that `u8::is_ascii_whitespace` leaves out is the vertical
+/// tab (`\x0B`), which Unicode counts.
+fn is_ascii_whitespace_char(byte: u8) -> bool {
+    matches!(byte, b'\t' | b'\n' | b'\x0B' | b'\x0C' | b'\r' | b' ')
+}
+
+/// Byte offset where `s.trim_start()` begins. Skips ASCII whitespace a byte
+/// at a time and hands the rest to `str` only at a non-ASCII byte, which may
+/// start Unicode whitespace.
+fn trim_start_offset(s: &str) -> usize {
+    let bytes = s.as_bytes();
+    let mut start = 0;
+    while start < bytes.len() && is_ascii_whitespace_char(bytes[start]) {
+        start += 1;
+    }
+    if start < bytes.len() && !bytes[start].is_ascii() {
+        let rest = &s[start..];
+        start += rest.len() - rest.trim_start().len();
+    }
+    start
+}
+
+/// Byte offset where `s[start..].trim_end()` ends, the mirror of
+/// [`trim_start_offset`].
+fn trim_end_offset(s: &str, start: usize) -> usize {
+    let bytes = s.as_bytes();
+    let mut end = bytes.len();
+    while end > start && is_ascii_whitespace_char(bytes[end - 1]) {
+        end -= 1;
+    }
+    if end > start && !bytes[end - 1].is_ascii() {
+        end = start + s[start..end].trim_end().len();
+    }
+    end
+}
+
+/// `string` without the bytes outside `start..end`: the string itself when
+/// nothing was trimmed, otherwise a zero-copy slice of it.
+fn trimmed(string: &BexStr, start: usize, end: usize) -> BexStr {
+    if start == 0 && end == string.byte_len() {
+        return string.clone();
+    }
+    string.byte_slice(start..end)
+}
+
 fn char_substrings(string: &BexStr) -> Vec<BexStr> {
     string
         .as_str()
@@ -16,6 +62,11 @@ fn char_substrings(string: &BexStr) -> Vec<BexStr> {
 }
 
 impl BamlClassString for PackageBamlImpl {
+    #[expect(clippy::cast_possible_wrap)]
+    fn length(string: &BexStr) -> i64 {
+        string.char_len() as i64
+    }
+
     #[expect(clippy::cast_possible_wrap)]
     fn char_count(string: &BexStr) -> i64 {
         string.char_len() as i64
@@ -37,31 +88,20 @@ impl BamlClassString for PackageBamlImpl {
     // Zero-copy: returns a Slice into the original string when whitespace is trimmed.
     fn trim(string: &BexStr) -> BexStr {
         let s = string.as_str();
-        let trimmed = s.trim();
-        if trimmed.len() == s.len() {
-            return string.clone();
-        }
-        let start = trimmed.as_ptr() as usize - s.as_ptr() as usize;
-        string.byte_slice(start..start + trimmed.len())
+        let start = trim_start_offset(s);
+        trimmed(string, start, trim_end_offset(s, start))
     }
 
     fn trim_start(string: &BexStr) -> BexStr {
-        let s = string.as_str();
-        let trimmed = s.trim_start();
-        if trimmed.len() == s.len() {
-            return string.clone();
-        }
-        let start = trimmed.as_ptr() as usize - s.as_ptr() as usize;
-        string.byte_slice(start..string.byte_len())
+        trimmed(
+            string,
+            trim_start_offset(string.as_str()),
+            string.byte_len(),
+        )
     }
 
     fn trim_end(string: &BexStr) -> BexStr {
-        let s = string.as_str();
-        let trimmed = s.trim_end();
-        if trimmed.len() == s.len() {
-            return string.clone();
-        }
-        string.byte_slice(0..trimmed.len())
+        trimmed(string, 0, trim_end_offset(string.as_str(), 0))
     }
 
     fn includes(string: &BexStr, search: &BexStr) -> bool {
@@ -79,17 +119,24 @@ impl BamlClassString for PackageBamlImpl {
     // Zero-copy: each segment is a zero-copy substring Slice into the original.
     fn split(string: &BexStr, delimiter: &BexStr) -> Vec<BexStr> {
         let s = string.as_str();
-        let d = delimiter.as_str();
-        if d.is_empty() {
-            return char_substrings(string);
-        }
         let base = s.as_ptr() as usize;
-        s.split(d)
-            .map(|part| {
-                let start = part.as_ptr() as usize - base;
-                string.byte_slice(start..start + part.len())
-            })
-            .collect()
+        let segment = |part: &str| {
+            let start = part.as_ptr() as usize - base;
+            string.byte_slice(start..start + part.len())
+        };
+        match *delimiter.as_bytes() {
+            [] => char_substrings(string),
+            // One ASCII byte, the usual delimiter (`" "`, `","`, `"\n"`): a
+            // byte search instead of the general substring searcher, with the
+            // result sized up front. An ASCII byte never occurs inside a
+            // multi-byte character, so the segments are the same.
+            [byte] if byte.is_ascii() => {
+                let mut parts = Vec::with_capacity(1 + s.bytes().filter(|&b| b == byte).count());
+                parts.extend(s.split(char::from(byte)).map(segment));
+                parts
+            }
+            _ => s.split(delimiter.as_str()).map(segment).collect(),
+        }
     }
 
     fn chars(string: &BexStr) -> Vec<BexStr> {
