@@ -293,6 +293,13 @@ export default function baml(hljs) {
     ],
   };
 
+  // Tuple slots (`t.0`, `t?.1`) are member names, left unscoped like fields.
+  // `t.0.1` is two slots; the lookbehind keeps a range's `..2` a number.
+  const TUPLE_SLOT = {
+    match: /(?<!\.)\.\d+\b/,
+    relevance: 0,
+  };
+
   // --- Attributes ----------------------------------------------------------------
 
   // Field attributes @alias(...) / @assert / @stream.done and block attributes
@@ -380,6 +387,7 @@ export default function baml(hljs) {
     BYTE_STRING,
     RAW_QUOTED_STRING,
     QUOTED_STRING,
+    TUPLE_SLOT,
     NUMBER,
     ENV_VAR,
     NESTED_BRACES,
@@ -407,6 +415,7 @@ export default function baml(hljs) {
       NAMED_BLOCK_DECL,
       ATTRIBUTE,
       ENV_VAR,
+      TUPLE_SLOT,
       NUMBER,
       ARROW,
     ],

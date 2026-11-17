@@ -247,8 +247,8 @@
 49:13-16     "log"              source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 49:16-17     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 49:18-21     "Log"              source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-49:21-22     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-49:23-27     "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
+49:21-22     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
+49:23-27     "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 49:27-28     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 49:29-35     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
 49:36-37     "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
@@ -743,7 +743,7 @@
 118:5-7      "by"               source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 118:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 118:9-12     "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-118:12-13    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+118:12-13    ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 120:5-13     "function"         source.baml meta.class.baml meta.class.body.baml meta.function.baml keyword.declaration.function.baml
 120:14-20    "around"           source.baml meta.class.baml meta.class.body.baml meta.function.baml entity.name.function.baml
 120:20-21    "("                source.baml meta.class.baml meta.class.body.baml meta.function.baml meta.parameters.baml punctuation.definition.parameters.begin.baml
@@ -2638,8 +2638,8 @@
 410:18-19    "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
 410:20-24    "body"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 410:24-25    ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
-410:26-27    "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-410:27-28    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+410:26-27    "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml punctuation.definition.type.begin.baml
+410:27-28    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml punctuation.definition.type.end.baml
 410:29-31    "->"               source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.arrow.baml
 410:32-33    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 410:34-40    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.expression.throws.baml
@@ -3207,8 +3207,8 @@
 483:26-31    "spawn"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.namespace.baml
 483:31-32    "."                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml punctuation.accessor.baml
 483:32-37    "Limit"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-483:37-38    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-483:39-44    "token"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
+483:37-38    ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
+483:39-44    "token"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 483:44-45    ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 483:46-50    "baml"             source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml support.other.namespace.baml
 483:50-51    "."                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml punctuation.accessor.baml

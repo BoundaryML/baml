@@ -458,6 +458,12 @@ const expression: IncludeRule = {
   patterns: [],
 };
 
+// `expression` minus `=>` lambdas, for match guards; filled in with it.
+const guardExpression: IncludeRule = {
+  key: 'guard-expression',
+  patterns: [],
+};
+
 const parenthesizedExpression: Rule = {
   key: 'parenthesized-expression',
   scope: 'meta.group.expression.baml',
@@ -839,6 +845,19 @@ const fieldAccessExpression: Rule = memberAccess(
   String.raw`([.$])`,
 );
 
+// `t.0`, `t?.1`. The lexer reads `t.0.1` as `.` + float `0.1`; each slot is
+// matched separately, so both digits are slots. `(?<!\.)` keeps a range
+// `1..2` from reading `.2` as a slot.
+const tupleFieldAccessExpression: Rule = {
+  key: 'tuple-field-access-expression',
+  scope: 'meta.field-access.tuple.baml',
+  match: String.raw`(?<!\.)(\?\.|\.)\s*([0-9]+)\b`,
+  captures: {
+    '1': { scope: 'punctuation.accessor.baml' },
+    '2': { scope: 'variable.other.property.baml' },
+  },
+};
+
 const dottedExpression: Rule = {
   key: 'dotted-expression',
   scope: tm.meta,
@@ -1073,6 +1092,18 @@ const associatedTypeProjection: Rule = {
   patterns: [comments, typeAsOperator, typeExpression],
 };
 
+// `(int, (string, bool))`, `(int,)`, `(A | B)`, `(int) -> int`: a group nests,
+// so a suffix after the inner `)` stays inside the enclosing type.
+const typeGroup: Rule = {
+  key: 'type-group',
+  scope: 'meta.group.type.baml',
+  begin: String.raw`\(`,
+  beginCaptures: caps0('punctuation.definition.type.begin.baml'),
+  end: String.raw`\)`,
+  endCaptures: caps0('punctuation.definition.type.end.baml'),
+  patterns: [comments, typeExpression],
+};
+
 // Brackets, angles, and commas are pure punctuation.
 const typePunctuation: Rule = {
   key: 'type-punctuation',
@@ -1179,6 +1210,7 @@ typeExpression.patterns = [
   assignmentOperator,
   optionalOperator,
   unionOperator,
+  typeGroup,
   typePunctuation,
   colonSeparator,
 ];
@@ -1291,12 +1323,28 @@ const arrayDestructurePattern: Rule = {
   ],
 };
 
+// `(let a, let b)`, `const (const a, _)`, `(0, let s)`, `(A | B)`. An
+// associated-type projection `(T as I).Assoc` stays a type.
+const tupleDestructurePattern: Rule = {
+  key: 'tuple-destructure-pattern',
+  scope: 'meta.pattern.destructure.tuple.baml',
+  begin: String.raw`(?:\b(${BINDING_INTRO})\b\s*)?(\()(?![^)\r\n]*\bas\b)`,
+  beginCaptures: {
+    '1': { scope: 'keyword.declaration.binding.baml' },
+    '2': { scope: 'punctuation.definition.group.begin.baml' },
+  },
+  end: String.raw`\)`,
+  endCaptures: caps0('punctuation.definition.group.end.baml'),
+  patterns: [comments, pattern, comma],
+};
+
 pattern.patterns = [
   comments,
   wildcardBindingPattern,
   typedBindingPattern,
   classDestructurePattern,
   arrayDestructurePattern,
+  tupleDestructurePattern,
   bareBindingPattern,
   wildcardPattern,
   typeExpression,
@@ -1418,7 +1466,19 @@ const matchScrutineeGroup: Rule = {
   beginCaptures: caps0('punctuation.definition.group.begin.baml'),
   end: String.raw`\)`,
   endCaptures: caps0('punctuation.definition.group.end.baml'),
-  patterns: [comments, expression, typeExpression],
+  patterns: [
+    comments,
+    {
+      key: 'match-scrutinee-ascription',
+      scope: 'meta.type.annotation.baml',
+      begin: String.raw`:`,
+      beginCaptures: caps0('punctuation.separator.colon.baml'),
+      end: String.raw`(?=\))`,
+      patterns: [comments, typeExpression],
+    },
+    expression,
+    typeExpression,
+  ],
 };
 
 const matchScrutinee: Rule = {
@@ -1462,7 +1522,7 @@ const matchArm: Rule = {
         '1': { scope: 'keyword.control.conditional.baml' },
       },
       end: String.raw`(?=\s*=>)`,
-      patterns: [comments, expression],
+      patterns: [comments, guardExpression],
     },
     {
       key: 'match-arm-arrow',
@@ -1766,20 +1826,26 @@ backtickInterpolation.patterns = [
 
 // --- Classes ---------------------------------------------------------------
 
+// A field's type arguments nest, so the commas in `map<map<K, V>, W>` stay
+// inside the type instead of ending the field. Tuple types already nest.
+const fieldTypeArguments: Rule = typeArgumentsRule('field-type-arguments', '');
+fieldTypeArguments.patterns = [comments, fieldTypeArguments, typeExpression];
+
 // `<name> <type>` inside a class body. The colon is optional: the parser accepts
 // both `name string` and `name: string` (parse_field eats an optional Colon), so
-// scope it only when present. Inline one-field classes (`class E { code int }`)
-// need the `{` branch in addition to the normal start-of-line branch.
+// scope it only when present. Inline classes (`class E { code int }`) need the
+// `{` branch in addition to the normal start-of-line branch, and fields that
+// share a line (`{ a: int, b: string }`) start after and end before a `,`.
 const field: Rule = {
   key: 'field',
   scope: 'meta.field.baml',
-  begin: String.raw`(?:^\s*|(?<=\{)\s*)(?!@)(${IDENT})\s*(:)?`,
+  begin: String.raw`(?:^\s*|(?<=[{,])\s*)(?!@)(${IDENT})\s*(:)?`,
   beginCaptures: {
     '1': { scope: 'variable.other.property.baml' },
     '2': { scope: 'punctuation.separator.colon.baml' },
   },
-  end: String.raw`(?=\})|$`,
-  patterns: [comments, typeExpression],
+  end: String.raw`(?=[,}])|$`,
+  patterns: [comments, fieldTypeArguments, typeExpression],
 };
 
 const functionParameters: Rule = {
@@ -1837,38 +1903,52 @@ const functionParameters: Rule = {
   ],
 };
 
+const LAMBDA_PARAMS_AHEAD = String.raw`\((?:[^()]|\([^()]*\))*\)\s*`;
+
+const lambdaPatterns: Rule['patterns'] = [
+  comments,
+  functionParameters,
+  {
+    key: 'lambda-arrow',
+    scope: 'keyword.operator.arrow.baml',
+    match: String.raw`->|=>`,
+  },
+  {
+    key: 'lambda-return-type',
+    scope: 'meta.return-type.lambda.baml',
+    begin: String.raw`(?<=->|=>)\s*(?!throws\b)(?=[^\s\{])`,
+    end: String.raw`(?=\s*(?:throws\b|\{))`,
+    patterns: [comments, typeExpression],
+  },
+  {
+    key: 'lambda-throws-clause',
+    scope: 'meta.throws.lambda.baml',
+    begin: String.raw`\b(throws)\b`,
+    beginCaptures: {
+      '1': { scope: 'keyword.operator.expression.throws.baml' },
+    },
+    end: String.raw`(?=\{)`,
+    patterns: [comments, typeExpression],
+  },
+  codeBlock,
+];
+
 const lambdaExpression: Rule = {
   key: 'lambda-expression',
   scope: 'meta.expression.lambda.baml',
-  begin: String.raw`(?=\((?:[^()]|\([^()]*\))*\)\s*(?:->|=>))`,
+  begin: String.raw`(?=${LAMBDA_PARAMS_AHEAD}(?:->|=>))`,
   end: String.raw`(?<=\})`,
-  patterns: [
-    comments,
-    functionParameters,
-    {
-      key: 'lambda-arrow',
-      scope: 'keyword.operator.arrow.baml',
-      match: String.raw`->|=>`,
-    },
-    {
-      key: 'lambda-return-type',
-      scope: 'meta.return-type.lambda.baml',
-      begin: String.raw`(?<=->|=>)\s*(?!throws\b)(?=[^\s\{])`,
-      end: String.raw`(?=\s*(?:throws\b|\{))`,
-      patterns: [comments, typeExpression],
-    },
-    {
-      key: 'lambda-throws-clause',
-      scope: 'meta.throws.lambda.baml',
-      begin: String.raw`\b(throws)\b`,
-      beginCaptures: {
-        '1': { scope: 'keyword.operator.expression.throws.baml' },
-      },
-      end: String.raw`(?=\{)`,
-      patterns: [comments, typeExpression],
-    },
-    codeBlock,
-  ],
+  patterns: lambdaPatterns,
+};
+
+// In a match guard `(cond) =>` is the arm's arrow, so only `->` opens a lambda
+// (the parser's MATCH_GUARD restriction).
+const guardLambdaExpression: Rule = {
+  key: 'guard-lambda-expression',
+  scope: 'meta.expression.lambda.baml',
+  begin: String.raw`(?=${LAMBDA_PARAMS_AHEAD}->)`,
+  end: String.raw`(?<=\})`,
+  patterns: lambdaPatterns,
 };
 
 expression.patterns = [
@@ -1893,10 +1973,15 @@ expression.patterns = [
   upcastExpression,
   postfixMethodCallExpression,
   fieldAccessExpression,
+  tupleFieldAccessExpression,
   expressionOperator,
   functionCallExpression,
   dottedExpression,
 ];
+
+guardExpression.patterns = expression.patterns.map((rule) =>
+  rule === lambdaExpression ? guardLambdaExpression : rule,
+);
 
 conditionExpression.patterns = expression.patterns
   .filter((rule) => rule !== constructorExpression)
@@ -2561,6 +2646,7 @@ const classBody: Rule = braceBlock('class-body', 'meta.class.body.baml', [
   functionItem,
   field,
   semicolon,
+  comma,
 ]);
 
 const classItem: Rule = {

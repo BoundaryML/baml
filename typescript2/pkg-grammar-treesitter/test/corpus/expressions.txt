@@ -793,3 +793,68 @@ let c = Extract @spec("raw");
         (property_identifier))
       (arguments
         (string)))))
+
+==================
+tuple literals and numeric slot access
+==================
+
+function F(t: (int, (string, bool))?) -> (int,) {
+  let p = (1, "a",);
+  let one = (p.0,);
+  let deep = t?.1.0;
+  (t.0)(p)
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (optional_type
+          (tuple_type
+            (type_path
+              (identifier))
+            (tuple_type
+              (type_path
+                (identifier))
+              (type_path
+                (identifier)))))))
+    (tuple_type
+      (type_path
+        (identifier)))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (tuple_expression
+          (number)
+          (string)))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (tuple_expression
+          (tuple_field_expression
+            (identifier)
+            (tuple_index))))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (tuple_field_expression
+          (tuple_field_expression
+            (identifier)
+            (tuple_index))
+          (tuple_index)))
+      (expression_statement
+        (call_expression
+          (parenthesized_expression
+            (tuple_field_expression
+              (identifier)
+              (tuple_index)))
+          (arguments
+            (identifier)))))))

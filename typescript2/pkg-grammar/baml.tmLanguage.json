@@ -1252,6 +1252,9 @@
         },
         {
           "include": "#semicolon"
+        },
+        {
+          "include": "#comma"
         }
       ]
     },
@@ -1508,6 +1511,9 @@
           "include": "#field-access-expression"
         },
         {
+          "include": "#tuple-field-access-expression"
+        },
+        {
           "include": "#expression-operator"
         },
         {
@@ -1549,6 +1555,9 @@
         },
         {
           "include": "#array-destructure-pattern"
+        },
+        {
+          "include": "#tuple-destructure-pattern"
         },
         {
           "include": "#bare-binding-pattern"
@@ -2071,6 +2080,9 @@
           "include": "#field-access-expression"
         },
         {
+          "include": "#tuple-field-access-expression"
+        },
+        {
           "include": "#expression-operator"
         },
         {
@@ -2171,7 +2183,7 @@
     },
     "field": {
       "name": "meta.field.baml",
-      "begin": "(?:^\\s*|(?<=\\{)\\s*)(?!@)(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\s*(:)?",
+      "begin": "(?:^\\s*|(?<=[{,])\\s*)(?!@)(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\s*(:)?",
       "beginCaptures": {
         "1": {
           "name": "variable.other.property.baml"
@@ -2180,10 +2192,13 @@
           "name": "punctuation.separator.colon.baml"
         }
       },
-      "end": "(?=\\})|$",
+      "end": "(?=[,}])|$",
       "patterns": [
         {
           "include": "#comments"
+        },
+        {
+          "include": "#field-type-arguments"
         },
         {
           "include": "#type-expression"
@@ -2201,6 +2216,32 @@
           "name": "variable.other.readwrite.baml"
         }
       }
+    },
+    "field-type-arguments": {
+      "name": "meta.type-arguments.baml",
+      "begin": "<",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.type-arguments.begin.baml"
+        }
+      },
+      "end": ">",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.type-arguments.end.baml"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#field-type-arguments"
+        },
+        {
+          "include": "#type-expression"
+        }
+      ]
     },
     "float-literal": {
       "name": "constant.numeric.float.baml",
@@ -2540,6 +2581,110 @@
         },
         {
           "include": "#config-block"
+        }
+      ]
+    },
+    "guard-expression": {
+      "patterns": [
+        {
+          "include": "#literal"
+        },
+        {
+          "include": "#array-expression"
+        },
+        {
+          "include": "#guard-lambda-expression"
+        },
+        {
+          "include": "#parenthesized-expression"
+        },
+        {
+          "include": "#if-expression"
+        },
+        {
+          "include": "#match-expression"
+        },
+        {
+          "include": "#spawn-expression"
+        },
+        {
+          "include": "#map-expression"
+        },
+        {
+          "include": "#constructor-expression"
+        },
+        {
+          "include": "#braced-expression"
+        },
+        {
+          "include": "#await-expression"
+        },
+        {
+          "include": "#throw-expression"
+        },
+        {
+          "include": "#catch-expression"
+        },
+        {
+          "include": "#is-pattern-expression"
+        },
+        {
+          "include": "#optional-call-expression"
+        },
+        {
+          "include": "#optional-index-expression"
+        },
+        {
+          "include": "#optional-method-call-expression"
+        },
+        {
+          "include": "#optional-field-access-expression"
+        },
+        {
+          "include": "#upcast-expression"
+        },
+        {
+          "include": "#postfix-method-call-expression"
+        },
+        {
+          "include": "#field-access-expression"
+        },
+        {
+          "include": "#tuple-field-access-expression"
+        },
+        {
+          "include": "#expression-operator"
+        },
+        {
+          "include": "#function-call-expression"
+        },
+        {
+          "include": "#dotted-expression"
+        }
+      ]
+    },
+    "guard-lambda-expression": {
+      "name": "meta.expression.lambda.baml",
+      "begin": "(?=\\((?:[^()]|\\([^()]*\\))*\\)\\s*->)",
+      "end": "(?<=\\})",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#function-parameters"
+        },
+        {
+          "include": "#lambda-arrow"
+        },
+        {
+          "include": "#lambda-return-type"
+        },
+        {
+          "include": "#lambda-throws-clause"
+        },
+        {
+          "include": "#code-block"
         }
       ]
     },
@@ -3226,7 +3371,7 @@
           "include": "#comments"
         },
         {
-          "include": "#expression"
+          "include": "#guard-expression"
         }
       ]
     },
@@ -3330,6 +3475,24 @@
         }
       ]
     },
+    "match-scrutinee-ascription": {
+      "name": "meta.type.annotation.baml",
+      "begin": ":",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.separator.colon.baml"
+        }
+      },
+      "end": "(?=\\))",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#type-expression"
+        }
+      ]
+    },
     "match-scrutinee-group": {
       "name": "meta.match.scrutinee.group.baml",
       "begin": "\\(",
@@ -3347,6 +3510,9 @@
       "patterns": [
         {
           "include": "#comments"
+        },
+        {
+          "include": "#match-scrutinee-ascription"
         },
         {
           "include": "#expression"
@@ -3660,6 +3826,9 @@
         },
         {
           "include": "#array-destructure-pattern"
+        },
+        {
+          "include": "#tuple-destructure-pattern"
         },
         {
           "include": "#bare-binding-pattern"
@@ -4596,6 +4765,47 @@
       "name": "keyword.control.flow.throw.baml",
       "match": "\\bthrow\\b"
     },
+    "tuple-destructure-pattern": {
+      "name": "meta.pattern.destructure.tuple.baml",
+      "begin": "(?:\\b((?:let|const))\\b\\s*)?(\\()(?![^)\\r\\n]*\\bas\\b)",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.declaration.binding.baml"
+        },
+        "2": {
+          "name": "punctuation.definition.group.begin.baml"
+        }
+      },
+      "end": "\\)",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.group.end.baml"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#pattern"
+        },
+        {
+          "include": "#comma"
+        }
+      ]
+    },
+    "tuple-field-access-expression": {
+      "name": "meta.field-access.tuple.baml",
+      "match": "(?<!\\.)(\\?\\.|\\.)\\s*([0-9]+)\\b",
+      "captures": {
+        "1": {
+          "name": "punctuation.accessor.baml"
+        },
+        "2": {
+          "name": "variable.other.property.baml"
+        }
+      }
+    },
     "type-alias": {
       "name": "meta.type-alias.baml",
       "begin": "^\\s*(type)\\s+(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\s*(=)",
@@ -4673,6 +4883,9 @@
           "include": "#union-operator"
         },
         {
+          "include": "#type-group"
+        },
+        {
           "include": "#type-punctuation"
         },
         {
@@ -4684,6 +4897,29 @@
       "name": "meta.type-fragment.baml",
       "begin": "^\\s*(?=\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)(?=[^:=;{}()#\"'\\r\\n]*$)(?=[^<.\\[?|\\r\\n]*[<.\\[?|]|(?:(?:int|float|bigint|string|bool|image|audio|map|json|unknown|never|Self))\\s*$)",
       "end": "$",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#type-expression"
+        }
+      ]
+    },
+    "type-group": {
+      "name": "meta.group.type.baml",
+      "begin": "\\(",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.type.begin.baml"
+        }
+      },
+      "end": "\\)",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.type.end.baml"
+        }
+      },
       "patterns": [
         {
           "include": "#comments"

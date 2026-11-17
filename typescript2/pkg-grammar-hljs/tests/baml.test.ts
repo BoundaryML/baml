@@ -106,6 +106,22 @@ describe('BAML highlight.js language', () => {
     expect(keywordSpans).toEqual(['function', 'let', 'let']);
   });
 
+  it('treats tuple slots as member names, not numbers', () => {
+    const numbers = (code: string) =>
+      [
+        ...hljs
+          .highlight(code, { language: 'baml' })
+          .value.matchAll(/<span class="hljs-number">([^<]*)<\/span>/g),
+      ].map((m) => m[1]);
+
+    expect(numbers('t.0')).toEqual([]);
+    // The lexer reads `0.1` as one float; it is still two slots.
+    expect(numbers('t?.0.1')).toEqual([]);
+    expect(numbers('`${t.1}`')).toEqual([]);
+    expect(numbers('xs[0].1 + 1.5')).toEqual(['0', '1.5']);
+    expect(numbers('[1..2]')).toEqual(['1', '2']);
+  });
+
   it('highlights only the escapes the compiler accepts', () => {
     const escapes = (code: string) =>
       [

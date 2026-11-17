@@ -106,6 +106,128 @@ describe('BAML TextMate grammar', () => {
     );
   });
 
+  it('highlights tuple types, patterns, and slot access', () => {
+    const leafScopes = (source: string) => {
+      const { tokens } = highlighter.codeToTokens(source, {
+        includeExplanation: 'scopeName',
+        lang: 'baml',
+        theme: THEME,
+      });
+      return tokens
+        .flat()
+        .flatMap(explanationParts)
+        .filter((part) => part.content.trim() !== '')
+        .map((part) => [
+          part.content.trim(),
+          part.scopes?.at(-1)?.scopeName.replace(/\.baml$/, ''),
+        ]);
+    };
+    const inFunction = (body: string) =>
+      leafScopes(`function F() -> int {\n${body}\n}`).slice(7, -1);
+
+    const PROPERTY = 'variable.other.property';
+    const ACCESSOR = 'punctuation.accessor';
+    expect(inFunction('t.0')).toEqual([
+      ['t', 'variable.other.readwrite'],
+      ['.', ACCESSOR],
+      ['0', PROPERTY],
+    ]);
+    // The lexer reads `0.1` as one float; it is still two slots.
+    expect(inFunction('t?.0.1')).toEqual([
+      ['t', 'variable.other.readwrite'],
+      ['?.', ACCESSOR],
+      ['0', PROPERTY],
+      ['.', ACCESSOR],
+      ['1', PROPERTY],
+    ]);
+    expect(inFunction('xs[0].1 + 1.5')).toContainEqual(['1', PROPERTY]);
+    expect(inFunction('xs[0].1 + 1.5')).toContainEqual([
+      '1.5',
+      'constant.numeric.float',
+    ]);
+    expect(inFunction('[1..2]')).not.toContainEqual(['2', PROPERTY]);
+
+    for (const intro of ['let', 'const']) {
+      expect(inFunction(`${intro} (${intro} a, (let b, _)) = p;`)).toEqual(
+        expect.arrayContaining([
+          [intro, 'keyword.declaration.binding'],
+          ['a', 'variable.other.binding'],
+          ['b', 'variable.other.binding'],
+          ['_', 'variable.language.wildcard'],
+        ]),
+      );
+    }
+    expect(inFunction('if let (0, let s) = p { s }')).toEqual(
+      expect.arrayContaining([
+        ['let', 'keyword.declaration.binding'],
+        ['0', 'constant.numeric.integer'],
+        ['s', 'variable.other.binding'],
+      ]),
+    );
+
+    // A nested tuple type keeps the optional suffix inside the parameter.
+    expect(
+      leafScopes('function F(t: (int, (string, bool))?) -> (int,) { t }'),
+    ).toEqual(
+      expect.arrayContaining([
+        ['?', 'keyword.operator.optional'],
+        [')', 'punctuation.definition.parameters.end'],
+      ]),
+    );
+
+    // `(cond) =>` in a guard is the arm arrow, not a lambda (parser's
+    // MATCH_GUARD restriction), so the rest of the file stays in sync.
+    const guarded = leafScopes(
+      'function F() -> int {\n  match (b) {\n    Box { v: let n } if (ok(b)) => n,\n    _ => 1,\n  }\n}\nfunction G() -> int { 1 }',
+    );
+    expect(guarded).toContainEqual(['ok', 'entity.name.function']);
+    expect(guarded).toContainEqual(['=>', 'keyword.operator.arrow']);
+    expect(guarded).toContainEqual(['G', 'entity.name.function']);
+    expect(guarded).not.toContainEqual(['ok', 'variable.parameter']);
+
+    const scrutinee = inFunction('match ((a, b): (int, string)) { _ => 1 }');
+    expect(scrutinee).toContainEqual(['int', 'support.type.primitive']);
+    expect(scrutinee).toContainEqual(['string', 'support.type.primitive']);
+  });
+
+  it('separates comma-separated fields on one line', () => {
+    const scopes = (source: string) => {
+      const { tokens } = highlighter.codeToTokens(source, {
+        includeExplanation: 'scopeName',
+        lang: 'baml',
+        theme: THEME,
+      });
+      return tokens
+        .flat()
+        .flatMap(explanationParts)
+        .filter((part) => part.content.trim() !== '')
+        .map((part) => [
+          part.content.trim(),
+          part.scopes?.at(-1)?.scopeName.replace(/\.baml$/, ''),
+        ]);
+    };
+    const PROPERTY = 'variable.other.property';
+
+    const inline = scopes(
+      'class X { first: map<map<string, int>, (int, bool)>, second: string @alias("a, b"), third int }',
+    );
+    for (const name of ['first', 'second', 'third']) {
+      expect(inline).toContainEqual([name, PROPERTY]);
+    }
+    // Commas inside type arguments, tuple types, and attribute arguments do
+    // not end the field.
+    for (const name of ['map', 'int', 'bool', 'string']) {
+      expect(inline).not.toContainEqual([name, PROPERTY]);
+    }
+    expect(inline).toContainEqual([',', 'punctuation.separator.comma']);
+
+    const multiline = scopes(
+      'class Y {\n  a map<map<string, int>, int>\n  b string\n}',
+    );
+    expect(multiline).toContainEqual(['a', PROPERTY]);
+    expect(multiline).toContainEqual(['b', PROPERTY]);
+  });
+
   it('uses one recursive brace context for map and block expressions', () => {
     const openingScopes = (body: string) => {
       const { tokens } = highlighter.codeToTokens(`let value = ${body};`, {
