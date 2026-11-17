@@ -244,16 +244,13 @@ async fn fresh_and_incremental_indexes_are_identical() {
         24 * 4,
         "type_args_cas"
     );
-    // Logs from every execution, with and without a context snapshot.
+    // Logs from every execution. Each runs under a context snapshot, since
+    // every execution's context carries `baml.ctx.baml_version`.
     let logs = &fresh.iter().find(|(table, _)| table == "log").unwrap().1;
     assert!(logs.len() >= 24 * 3, "{} logs", logs.len());
     assert!(
-        logs.iter().any(|row| row[11] == Value::Null),
-        "a log without a context snapshot"
-    );
-    assert!(
-        logs.iter().any(|row| row[11] != Value::Null),
-        "a log under a context snapshot"
+        logs.iter().all(|row| row[11] != Value::Null),
+        "every log under a context snapshot"
     );
     // Futures that failed carry the error they ended with: `crash` (a root
     // future) in both recordings, and the future each `main` of the second
