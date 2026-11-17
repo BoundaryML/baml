@@ -928,7 +928,8 @@ mod tests {
                     json_omit_null: false,
                     redact: false,
                 },
-            ],
+            ]
+            .into(),
             description: None,
             alias: None,
             docstring: None,
@@ -1070,7 +1071,7 @@ mod tests {
     /// A class whose fields are each a string, redacted as `fields` says,
     /// and the class as `redact` says.
     fn class(vm: &mut crate::BexVm, name: &str, fields: &[(&str, bool)], redact: bool) -> HeapPtr {
-        let fields = fields
+        let fields: Vec<_> = fields
             .iter()
             .map(|&(name, redact)| bex_vm_types::ClassField {
                 name: name.to_string(),
@@ -1094,7 +1095,7 @@ mod tests {
         vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
-            fields,
+            fields: fields.into(),
             description: None,
             alias: None,
             docstring: None,

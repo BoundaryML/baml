@@ -389,7 +389,7 @@ fn mint_class(
     let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
     let class_ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
         path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(class_name)),
-        fields: class_fields,
+        fields: class_fields.into(),
         description: None,
         alias: None,
         docstring: None,

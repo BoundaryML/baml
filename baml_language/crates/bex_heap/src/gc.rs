@@ -1080,7 +1080,8 @@ mod tests {
                 json_fallback: false,
                 json_omit_null: false,
                 redact: false,
-            }],
+            }]
+            .into(),
             description: None,
             alias: None,
             docstring: None,
@@ -1729,7 +1730,8 @@ mod tests {
             fields: vec![
                 class_field("name", bex_vm_types::RuntimeTy::String),
                 class_field("count", bex_vm_types::RuntimeTy::Int),
-            ],
+            ]
+            .into(),
             description: None,
             alias: None,
             docstring: None,
@@ -1976,7 +1978,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("MyClass")),
-            fields: vec![],
+            fields: vec![].into(),
             description: None,
             alias: None,
             docstring: None,
@@ -2129,7 +2131,8 @@ mod tests {
                 json_rename: None,
                 json_omit_null: false,
                 redact: false,
-            }],
+            }]
+            .into(),
             description: None,
             alias: None,
             docstring: None,
@@ -2531,7 +2534,7 @@ mod tests {
         // Instance requires a class pointer.
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("T")),
-            fields: vec![class_field("leaf", bex_vm_types::RuntimeTy::String)],
+            fields: vec![class_field("leaf", bex_vm_types::RuntimeTy::String)].into(),
             description: None,
             alias: None,
             docstring: None,
@@ -2785,7 +2788,7 @@ mod tests {
         Object::Class(Box::new(Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Resource")),
-            fields: vec![],
+            fields: vec![].into(),
             description: None,
             alias: None,
             docstring: None,

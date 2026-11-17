@@ -1439,7 +1439,7 @@ mod renderability_tests {
         let ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
-            fields: Vec::new(),
+            fields: Vec::new().into(),
             description: description.map(str::to_string),
             alias: None,
             docstring: None,

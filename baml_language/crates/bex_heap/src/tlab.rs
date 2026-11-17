@@ -866,7 +866,8 @@ mod tests {
                     json_omit_null: false,
                     redact: false,
                 },
-            ],
+            ]
+            .into(),
             description: None,
             alias: None,
             docstring: None,

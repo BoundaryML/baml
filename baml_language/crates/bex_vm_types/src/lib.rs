@@ -169,16 +169,17 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
 }
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod,
-    CLEANED, Class, ClassField, ClassLayout, ClassMethodDef, ConstValue, DeclPath, DeclarationName,
-    EntryId, Enum, EnumVariant, FORWARDED, Field, FieldRef, FnPath, Function, FunctionKind,
-    FunctionMeta, FunctionOrigin, Future, FutureRead, GenericFunction, HEADER_FLAGS, HostClosure,
-    ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, InstanceRef, InterfaceBound, InterfaceKey,
-    ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer, MapData, MapEntry,
-    MapEpochChanged, MapKeyUndecided, MapReadGuard, MapWriteGuard, OBJECT_BODY, OBJECT_CELL_WORDS,
-    Object, ObjectType, PanicClass, Program, RenderedCallable, SlotKind, SlotKindMismatch,
-    SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory, Tuple, TupleShapeMismatch,
-    Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value, ValueKind, Variant,
-    WORD_BYTES, format_float, map_int_hash, map_string_hash, sys_op_for_path, type_tags,
+    CLEANED, Class, ClassField, ClassFields, ClassLayout, ClassMethodDef, ConstValue, DeclPath,
+    DeclarationName, EntryId, Enum, EnumVariant, FORWARDED, Field, FieldRef, FnPath, Function,
+    FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead, GenericFunction, HEADER_FLAGS,
+    HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, InstanceRef, InterfaceBound,
+    InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer,
+    MapData, MapEntry, MapEpochChanged, MapKeyUndecided, MapReadGuard, MapWriteGuard, OBJECT_BODY,
+    OBJECT_CELL_WORDS, Object, ObjectType, PanicClass, Program, RenderedCallable, SlotKind,
+    SlotKindMismatch, SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory, Tuple,
+    TupleShapeMismatch, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value,
+    ValueKind, Variant, WORD_BYTES, format_float, map_int_hash, map_string_hash, sys_op_for_path,
+    type_tags,
 };
 
 /// Used to check if the VM should yield early.

@@ -992,7 +992,7 @@ fn build_group(
                 Vec::new(),
                 baml_type::Name::new(node.name.as_str()),
             ),
-            fields: Vec::new(),
+            fields: Vec::new().into(),
             description: None,
             alias: None,
             docstring: None,
@@ -1096,7 +1096,7 @@ fn build_group(
         let Object::Class(class) = &mut *metered else {
             unreachable!("builder class placeholder changed variant")
         };
-        class.fields = class_fields;
+        class.fields = class_fields.into();
     }
     vm.dynamic_dispatch.bump_generation();
 

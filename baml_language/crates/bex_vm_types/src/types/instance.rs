@@ -24,9 +24,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use crate::{
-    CLEANED, Class, ClassField, HEADER_FLAGS, HeapPtr, Object, RealizedTy, RuntimeTy, Value,
-};
+use crate::{CLEANED, Class, HEADER_FLAGS, HeapPtr, Object, RealizedTy, RuntimeTy, Value};
 
 /// How an instance stores one field, fixed for a class by the field's
 /// declared type.
@@ -65,7 +63,7 @@ impl SlotKind {
 /// the instantiated class.
 #[derive(Clone, Copy)]
 pub struct ClassLayout<'a> {
-    fields: &'a [ClassField],
+    kinds: &'a [SlotKind],
     first_field: usize,
 }
 
@@ -74,7 +72,7 @@ impl<'a> ClassLayout<'a> {
     #[inline(always)]
     pub fn of(class: &'a Class) -> Self {
         Self {
-            fields: &class.fields,
+            kinds: class.fields.kinds(),
             first_field: 1 + usize::from(class.generic_param_count > 0),
         }
     }
@@ -83,19 +81,19 @@ impl<'a> ClassLayout<'a> {
     #[must_use]
     #[inline(always)]
     pub fn words(self) -> usize {
-        self.first_field + self.fields.len()
+        self.first_field + self.kinds.len()
     }
 
     #[must_use]
     #[inline(always)]
     pub fn field_count(self) -> usize {
-        self.fields.len()
+        self.kinds.len()
     }
 
     #[must_use]
     #[inline(always)]
     pub fn kind(self, field: usize) -> SlotKind {
-        SlotKind::of(&self.fields[field].field_type)
+        self.kinds[field]
     }
 
     /// The word holding `field`.
@@ -113,7 +111,7 @@ impl<'a> ClassLayout<'a> {
 
     /// Every word holding a [`Value`]: what the collector traces.
     pub fn value_slots(self) -> impl Iterator<Item = usize> + 'a {
-        let fields = (0..self.fields.len())
+        let fields = (0..self.kinds.len())
             .filter(move |&field| self.kind(field) == SlotKind::Value)
             .map(move |field| self.slot(field));
         self.type_args_slot().into_iter().chain(fields)
@@ -337,12 +335,10 @@ impl InstanceRef {
     #[inline(always)]
     pub fn field(self, field: usize) -> Option<FieldRef> {
         let layout = self.layout();
-        if field >= layout.field_count() {
-            return None;
-        }
+        let kind = *layout.kinds.get(field)?;
         Some(FieldRef {
             field,
-            kind: layout.kind(field),
+            kind,
             // SAFETY: the instance's own layout places `field` within its
             // cell.
             word: unsafe { self.word(layout.slot(field)) },

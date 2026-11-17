@@ -706,7 +706,7 @@ pub(crate) mod tests {
         Object::Class(Box::new(Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Resource")),
-            fields: vec![],
+            fields: vec![].into(),
             description: None,
             alias: None,
             docstring: None,
@@ -1491,7 +1491,7 @@ pub(crate) mod tests {
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("LiveArg")),
-            fields: Vec::new(),
+            fields: Vec::new().into(),
             description: None,
             alias: None,
             docstring: None,
@@ -1549,7 +1549,7 @@ pub(crate) mod tests {
                 Vec::new(),
                 baml_type::Name::new("PendingNativeArg"),
             ),
-            fields: Vec::new(),
+            fields: Vec::new().into(),
             description: None,
             alias: None,
             docstring: None,

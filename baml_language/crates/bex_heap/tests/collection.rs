@@ -57,7 +57,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: class_name.clone(),
-            fields: Vec::new(),
+            fields: Vec::new().into(),
             description: None,
             alias: None,
             docstring: None,
@@ -593,7 +593,8 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
             json_flatten: false,
             json_rename: None,
             json_omit_null: false,
-        }],
+        }]
+        .into(),
         description: None,
         alias: None,
         docstring: None,
@@ -811,7 +812,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
     );
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         path: class_name.clone(),
-        fields: Vec::new(),
+        fields: Vec::new().into(),
         description: None,
         alias: None,
         docstring: None,
@@ -900,7 +901,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
     let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         path: class_name,
-        fields: Vec::new(),
+        fields: Vec::new().into(),
         description: None,
         alias: None,
         docstring: None,
@@ -1095,7 +1096,7 @@ fn class_with_cleanup(name: &str, cleanup: bex_vm_types::HeapPtr) -> Class {
     );
     Class {
         path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
-        fields: Vec::new(),
+        fields: Vec::new().into(),
         description: None,
         alias: None,
         docstring: None,

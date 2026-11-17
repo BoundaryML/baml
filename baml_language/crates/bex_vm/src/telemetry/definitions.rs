@@ -399,7 +399,7 @@ mod tests {
         Object::Class(Box::new(Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
-            fields: Vec::new(),
+            fields: Vec::new().into(),
             description: None,
             alias: None,
             docstring: None,
@@ -422,7 +422,8 @@ mod tests {
         let Object::Class(class) = (unsafe { ptr.get_mut() }) else {
             unreachable!()
         };
-        class.fields.push(ClassField {
+        let mut fields = class.fields.to_vec();
+        fields.push(ClassField {
             name: name.into(),
             field_type: RuntimeTy::Null,
             field_template: Template::Union(Box::new([
@@ -443,6 +444,7 @@ mod tests {
             json_omit_null: false,
             redact: false,
         });
+        class.fields = fields.into();
     }
 
     /// `Left { right: Right? }` and `Right { left: Left? }`, with tags from

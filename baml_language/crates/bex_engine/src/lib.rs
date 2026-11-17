@@ -8413,7 +8413,7 @@ mod type_identity_tests {
             .alloc(Object::Class(Box::new(bex_vm_types::types::Class {
                 declared_crossing: baml_type::ClassCrossing::Fields,
                 path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Foo")),
-                fields: Vec::new(),
+                fields: Vec::new().into(),
                 description: None,
                 alias: None,
                 docstring: None,
@@ -8599,7 +8599,7 @@ mod type_identity_tests {
                         Vec::new(),
                         baml_type::Name::new("Foo"),
                     ),
-                    fields: Vec::new(),
+                    fields: Vec::new().into(),
                     description: None,
                     alias: None,
                     docstring: None,

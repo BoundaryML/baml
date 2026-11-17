@@ -1,7 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use indexmap::IndexMap;
 
-use crate::{HeapPtr, ObjectIndex, RuntimeTy, types::TypeValue};
+use crate::{HeapPtr, ObjectIndex, RuntimeTy, SlotKind, types::TypeValue};
 
 /// A field within a runtime class, carrying type and schema metadata.
 // Each bool is one flag attribute of the declaration.
@@ -56,6 +56,89 @@ pub struct ClassField {
     pub runtime_type: Option<TypeValue>,
 }
 
+/// A class's fields, with the slot each gets in an instance. The kinds are
+/// derived once, with the fields, so a field access reads one byte instead
+/// of matching the field's type.
+#[derive(Clone, Debug, Default)]
+pub struct ClassFields {
+    fields: Vec<ClassField>,
+    kinds: Box<[SlotKind]>,
+}
+
+impl ClassFields {
+    /// How an instance stores each field, in field order.
+    #[must_use]
+    #[inline]
+    pub fn kinds(&self) -> &[SlotKind] {
+        &self.kinds
+    }
+}
+
+impl From<Vec<ClassField>> for ClassFields {
+    fn from(fields: Vec<ClassField>) -> Self {
+        let kinds = fields
+            .iter()
+            .map(|field| SlotKind::of(&field.field_type))
+            .collect();
+        Self { fields, kinds }
+    }
+}
+
+impl std::ops::Deref for ClassFields {
+    type Target = [ClassField];
+
+    fn deref(&self) -> &[ClassField] {
+        &self.fields
+    }
+}
+
+impl IntoIterator for ClassFields {
+    type Item = ClassField;
+    type IntoIter = std::vec::IntoIter<ClassField>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.fields.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a ClassFields {
+    type Item = &'a ClassField;
+    type IntoIter = std::slice::Iter<'a, ClassField>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.fields.iter()
+    }
+}
+
+/// For repointing what each field's type names, which never changes how
+/// the field is stored.
+impl<'a> IntoIterator for &'a mut ClassFields {
+    type Item = &'a mut ClassField;
+    type IntoIter = std::slice::IterMut<'a, ClassField>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.fields.iter_mut()
+    }
+}
+
+impl super::Footprint for ClassFields {
+    fn footprint(&self) -> usize {
+        self.fields.footprint() + self.kinds.len() * size_of::<SlotKind>()
+    }
+}
+
+impl BorshSerialize for ClassFields {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.fields.serialize(writer)
+    }
+}
+
+impl BorshDeserialize for ClassFields {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        Vec::<ClassField>::deserialize_reader(reader).map(Self::from)
+    }
+}
+
 /// Runtime class representation.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Class {
@@ -67,7 +150,7 @@ pub struct Class {
     pub path: super::LocalName,
 
     /// Class fields with type and schema metadata.
-    pub fields: Vec<ClassField>,
+    pub fields: ClassFields,
 
     /// Class-level description for LLM prompt schema rendering.
     pub description: Option<String>,

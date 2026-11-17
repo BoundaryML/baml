@@ -122,7 +122,7 @@ pub(crate) fn build_class_object<'db>(
     // field's declaration index is its position there.
     let resolved_fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
     debug_assert_eq!(resolved_fields.len(), class.fields.len());
-    let fields = runtime_fields
+    let fields: Vec<ClassField> = runtime_fields
         .iter()
         .map(|&(index, field)| {
             let (_, tir_ty, _) = &resolved_fields[index];
@@ -154,7 +154,7 @@ pub(crate) fn build_class_object<'db>(
         .collect();
     Class {
         path: crate::refs::item_path(&head),
-        fields,
+        fields: fields.into(),
         description: class.attrs.schema.description.clone(),
         alias: class.attrs.schema.alias.clone(),
         docstring: class.docstring.clone(),

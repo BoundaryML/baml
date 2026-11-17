@@ -193,7 +193,8 @@ mod tests {
             fields: vec![
                 field("name", RuntimeTy::String, TyTemplate::String, false),
                 field("age", RuntimeTy::Int, TyTemplate::Int, true),
-            ],
+            ]
+            .into(),
             description: None,
             alias: None,
             docstring: None,

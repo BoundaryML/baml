@@ -2230,7 +2230,7 @@ mod outbound_selection_tests {
             tlab.alloc(Object::Class(Box::new(Class {
                 declared_crossing: baml_type::ClassCrossing::Fields,
                 path,
-                fields: Vec::new(),
+                fields: Vec::new().into(),
                 description: None,
                 alias: None,
                 docstring: None,
