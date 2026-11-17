@@ -10116,7 +10116,7 @@ impl BexVm {
         &self,
         parts: &[Value],
     ) -> Result<bex_vm_types::BexStr, VmInternalError> {
-        let mut strings: smallvec::SmallVec<[&bex_vm_types::BexStr; 16]> =
+        let mut strings: smallvec::SmallVec<[&bex_vm_types::BexStr; 32]> =
             smallvec::SmallVec::with_capacity(parts.len());
         for part in parts {
             strings.push(self.as_string(part)?);

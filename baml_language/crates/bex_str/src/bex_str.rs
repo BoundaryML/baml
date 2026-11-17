@@ -603,21 +603,14 @@ fn copy_parts(parts: &[&BexStr]) -> BexStr {
         };
     }
     let mut bytes = Vec::with_capacity(byte_len);
-    let mut char_len = 0;
-    let mut ascii_prefix_len = 0;
     for part in parts {
-        let (prefix, chars) = part.ascii_prefix_and_char_len();
-        if ascii_prefix_len == bytes.len() {
-            ascii_prefix_len += prefix;
-        }
-        char_len += chars;
         bytes.extend_from_slice(part.as_bytes());
     }
-    BexStr::Flat(Arc::new(FlatStr::from_parts(
-        bytes.into_boxed_slice(),
-        char_len as u64,
-        ascii_prefix_len as u64,
-    )))
+    // One vectorized scan of the result for its codepoint count and ASCII
+    // prefix: cheaper than asking each part, since an inline part (the usual
+    // template hole or separator) has no cached count and would be scanned
+    // on its own. The scan costs no more than the copy it follows.
+    BexStr::Flat(Arc::new(FlatStr::new(bytes.into_boxed_slice())))
 }
 
 // ── FlatStr ────────────────────────────────────────────────────────
