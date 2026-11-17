@@ -384,6 +384,19 @@ impl<T, S> Shared<T, S> {
             }
         }
     }
+    /// Wake a parked consumer if any chunk is queued.
+    fn wake_for_ready(&self) {
+        let mut state = self.lock();
+        let notify = state.consumer != ConsumerSleep::Awake && !state.ready.is_empty();
+        if notify {
+            state.consumer = ConsumerSleep::Awake;
+            state.wakeups += 1;
+        }
+        drop(state);
+        if notify {
+            self.wake.notify_one();
+        }
+    }
     /// Queue a sealed chunk. A chunk sealed because it is `full` leaves a
     /// consumer sleeping until a deadline asleep until `wake_batch` chunks
     /// are ready; any other seal wakes it.
@@ -784,11 +797,14 @@ impl<T, S> Producer<T, S> {
         }
     }
     /// Make both partial streams visible. Does not reacquire empty chunks, so an
-    /// idle producer holds no payload allocation after this call.
+    /// idle producer holds no payload allocation after this call. A parked
+    /// consumer wakes for every queued chunk, also full ones left for its
+    /// deadline.
     pub fn seal(&mut self) {
         self.shared.check();
         self.seal_timing(false);
         self.seal_span(false);
+        self.shared.wake_for_ready();
     }
 }
 impl<T, S> Drop for Producer<T, S> {

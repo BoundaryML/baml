@@ -699,8 +699,10 @@ impl TelemetryRuntime {
             // binding is alive on this thread, so it is listed (its runtime is
             // alive) with a producer, and nothing else borrows it now.
             let binding = unsafe { binding.as_mut() };
-            debug_assert_eq!(binding.runtime, self.id);
-            return f(Some(binding));
+            // Another runtime's cache takes the lookup for this one.
+            if binding.runtime == self.id {
+                return f(Some(binding));
+            }
         }
         BINDINGS.with_borrow_mut(|bindings| {
             f(bindings
