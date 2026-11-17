@@ -644,12 +644,6 @@ impl FrameTypeArgs {
     }
 }
 
-impl PartialEq<Vec<bex_vm_types::RealizedTy>> for FrameTypeArgs {
-    fn eq(&self, other: &Vec<bex_vm_types::RealizedTy>) -> bool {
-        self.as_slice() == other.as_slice()
-    }
-}
-
 /// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
 pub struct BytecodeFrame {
