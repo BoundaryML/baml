@@ -43,7 +43,7 @@ jobs:
   # with the snapshot suites instead of after them.
   rust-differential:
     name: "Rust backend differential test"
-    if: inputs.run-compiler-tests
+    if: inputs.run-compiler-tests && github.event_name != 'merge_group'
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 30
     steps:
