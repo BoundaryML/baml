@@ -285,10 +285,12 @@ function roundtrip(value: int) -> bool {
     );
     assert_no_diagnostic_errors(&db);
     let output = render_mir(&db, file);
+    // An `int` renders through the primitive formatter rather than the
+    // structural renderer (no package can override how it renders).
     for native in [
         "_to_json_default",
         "_from_json_structural_default",
-        "_to_string_default",
+        "_to_string_primitive",
     ] {
         assert!(output.contains(native), "missing {native}:\n{output}");
     }
