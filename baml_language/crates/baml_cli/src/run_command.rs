@@ -329,6 +329,13 @@ pub struct RunArgs {
 
 pub use baml_exec::OutputFormat;
 
+/// How a running program is swapped: from saves (`--hot`), or from Boundary
+/// Cloud.
+struct Swapping {
+    watch: Option<crate::hot_reload::HotWatch>,
+    cloud: Option<bex_hotswap::Prepared>,
+}
+
 fn parse_startup_wait(text: &str) -> std::result::Result<std::time::Duration, String> {
     baml_db::manifest::parse_duration(text)
 }
@@ -831,8 +838,10 @@ impl RunArgs {
         )?;
         self.dispatch_and_finish(
             engine,
-            hot_watch,
-            hotswap,
+            Swapping {
+                watch: hot_watch,
+                cloud: hotswap,
+            },
             &invocation.function_name,
             invocation.args,
             json_args,
@@ -845,8 +854,7 @@ impl RunArgs {
     fn dispatch_and_finish(
         &self,
         engine: BexEngine,
-        hot_watch: Option<crate::hot_reload::HotWatch>,
-        hotswap: Option<bex_hotswap::Prepared>,
+        swapping: Swapping,
         function_name: &str,
         args: baml_exec::ParsedTargetArgs,
         json_args: Option<serde_json::Value>,
@@ -860,6 +868,10 @@ impl RunArgs {
         let interrupts = install_interrupts(&rt, &engine)?;
         let log_output = self.log_output(output_format);
         let (call_context, logs) = Self::call_context(log_output, &interrupts);
+        let Swapping {
+            watch: hot_watch,
+            cloud: hotswap,
+        } = swapping;
         let hot_watcher =
             hot_watch.map(|watch| crate::hot_reload::spawn(&rt, Arc::clone(&engine), watch));
         // Registers with BCS, and waits up to `startup_wait` for its swaps.

@@ -73,7 +73,7 @@ impl Rule {
             if let Some(bad) = names.iter().find(|name| {
                 !name
                     .split('.')
-                    .all(|segment| crate::lexer::is_identifier(segment))
+                    .all(crate::lexer::is_identifier)
             }) {
                 return Err(format!("`{text}`: `{bad}` is not a function name"));
             }

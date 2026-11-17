@@ -105,7 +105,7 @@ fn take_hotswap_flags(tokens: Vec<String>) -> (Vec<String>, HotswapFlags) {
     let mut flags = HotswapFlags::default();
     let mut kept = Vec::with_capacity(tokens.len());
     let mut tokens = tokens.into_iter();
-    let mut wait = |value: Option<String>, flags: &mut HotswapFlags| match value
+    let wait = |value: Option<String>, flags: &mut HotswapFlags| match value
         .as_deref()
         .map(baml_db::manifest::parse_duration)
     {

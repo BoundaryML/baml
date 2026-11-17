@@ -52,7 +52,6 @@ struct FakeSwap {
 
 #[derive(Default)]
 struct State {
-    base: String,
     swaps: Vec<FakeSwap>,
     processes: BTreeSet<String>,
     uploaded: BTreeSet<String>,
@@ -162,7 +161,7 @@ impl Respond for Fake {
                 let id = format!("hs_{}", state.swaps.len() + 1);
                 let matched: Vec<String> = state.processes.iter().cloned().collect();
                 let mut swap = FakeSwap {
-                    id: id.clone(),
+                    id,
                     baseline: body["baseline"].as_str().unwrap().into(),
                     require_approval: body["requireApproval"].as_bool().unwrap(),
                     replaces: body["replaces"].as_str().map(str::to_string),
@@ -198,19 +197,19 @@ impl Respond for Fake {
                     .find(|(k, _)| k == "after")
                     .and_then(|(_, v)| v.parse().ok())
                     .unwrap_or(0);
-                let lines: String = state
-                    .swap(id)
-                    .events
-                    .iter()
-                    .skip(after)
-                    .map(|event| format!("{event}\n"))
-                    .collect();
+                let lines: String = state.swap(id).events.iter().skip(after).fold(
+                    String::new(),
+                    |mut lines, event| {
+                        lines.push_str(&event.to_string());
+                        lines.push('\n');
+                        lines
+                    },
+                );
                 ResponseTemplate::new(200)
                     .insert_header("content-type", "application/x-ndjson")
                     .set_body_string(lines)
             }
             ("POST", ["v1", "hotswaps", id, "uploads:prepare"]) => {
-                let base = state.base.clone();
                 let files: Vec<Value> = body["files"]
                     .as_array()
                     .unwrap()
@@ -233,7 +232,8 @@ impl Respond for Fake {
             }
             ("POST", ["v1", "hotswaps", id, "payload"]) => {
                 let swap = state.swap(id);
-                swap.functions = body["functions"].as_array().unwrap().clone();
+                swap.functions
+                    .clone_from(body["functions"].as_array().unwrap());
                 swap.payload = true;
                 swap.revision += 1;
                 if swap.require_approval {
@@ -443,10 +443,7 @@ fn process(url: &str, commit: &str) -> (Arc<BexEngine>, bex_hotswap::agent::Agen
 #[tokio::test(flavor = "multi_thread")]
 async fn create_then_approve_installs_on_the_registered_process() {
     let server = wiremock::MockServer::start().await;
-    let state = Arc::new(Mutex::new(State {
-        base: server.uri(),
-        ..State::default()
-    }));
+    let state = Arc::new(Mutex::new(State { ..State::default() }));
     wiremock::Mock::given(wiremock::matchers::any())
         .respond_with(Fake(Arc::clone(&state)))
         .mount(&server)
@@ -640,10 +637,7 @@ async fn create_then_approve_installs_on_the_registered_process() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_rule_rejection_reaches_the_publisher() {
     let server = wiremock::MockServer::start().await;
-    let state = Arc::new(Mutex::new(State {
-        base: server.uri(),
-        ..State::default()
-    }));
+    let state = Arc::new(Mutex::new(State { ..State::default() }));
     wiremock::Mock::given(wiremock::matchers::any())
         .respond_with(Fake(Arc::clone(&state)))
         .mount(&server)
@@ -690,22 +684,22 @@ async fn a_rule_rejection_reaches_the_publisher() {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    let state = state.lock().unwrap();
-    let swap = &state.swaps[0];
-    assert_eq!(swap.outcomes["p_91"], "rejected");
-    let reason = swap
-        .events
-        .iter()
-        .find(|event| event["process"] == "p_91")
-        .unwrap()["reason"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let reason = {
+        let state = state.lock().unwrap();
+        let swap = &state.swaps[0];
+        assert_eq!(swap.outcomes["p_91"], "rejected");
+        swap.events
+            .iter()
+            .find(|event| event["process"] == "p_91")
+            .unwrap()["reason"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
     assert_eq!(
         reason,
         "step: hotswap.no_new_calls: the replacement calls `main`, which the original does not"
     );
-    drop(state);
     assert_eq!(step(&engine).await, 2);
     agent.stop();
 }
@@ -715,10 +709,7 @@ async fn a_rule_rejection_reaches_the_publisher() {
 #[tokio::test(flavor = "multi_thread")]
 async fn no_hotswap_keeps_a_process_from_registering() {
     let server = wiremock::MockServer::start().await;
-    let state = Arc::new(Mutex::new(State {
-        base: server.uri(),
-        ..State::default()
-    }));
+    let state = Arc::new(Mutex::new(State { ..State::default() }));
     wiremock::Mock::given(wiremock::matchers::any())
         .respond_with(Fake(Arc::clone(&state)))
         .mount(&server)
@@ -777,10 +768,7 @@ async fn no_hotswap_keeps_a_process_from_registering() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_forgotten_process_registers_again() {
     let server = wiremock::MockServer::start().await;
-    let state = Arc::new(Mutex::new(State {
-        base: server.uri(),
-        ..State::default()
-    }));
+    let state = Arc::new(Mutex::new(State { ..State::default() }));
     wiremock::Mock::given(wiremock::matchers::any())
         .respond_with(Fake(Arc::clone(&state)))
         .mount(&server)

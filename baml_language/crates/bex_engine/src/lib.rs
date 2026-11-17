@@ -8906,9 +8906,12 @@ mod completion_tests;
 /// This OS process's ID as recordings and `processes.process_id` spell it:
 /// lowercase hex.
 pub fn process_id_hex() -> String {
+    use std::fmt::Write as _;
     bex_events::ids::ProcessEuid::current()
         .0
         .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+        .fold(String::with_capacity(32), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        })
 }

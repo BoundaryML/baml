@@ -806,7 +806,7 @@ fn create(
             continue;
         };
         if let (Some(url), "upload") = (&target.upload_url, target.disposition.as_str()) {
-            client.upload_hotswap_source(authorization, url, content.clone())?;
+            client.upload_hotswap_source(authorization, url, content)?;
             uploaded += 1;
             bytes += file.size;
         }

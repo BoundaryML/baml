@@ -67,13 +67,13 @@ impl Agent {
     /// install, as `startup_wait` asks. Returns whether they did.
     pub fn wait_ready(&self, wait: Duration) -> bool {
         if wait.is_zero() {
-            return *self.ready.0.lock().unwrap_or_else(|e| e.into_inner());
+            return *self.ready.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         }
         let (lock, ready) = &*self.ready;
-        let guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let (guard, _) = ready
             .wait_timeout_while(guard, wait, |ready| !*ready)
-            .unwrap_or_else(|e| e.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         *guard
     }
 
@@ -170,7 +170,7 @@ pub fn start(
 }
 
 fn signal(ready: &(Mutex<bool>, Condvar)) {
-    *ready.0.lock().unwrap_or_else(|e| e.into_inner()) = true;
+    *ready.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = true;
     ready.1.notify_all();
 }
 

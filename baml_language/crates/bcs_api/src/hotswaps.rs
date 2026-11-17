@@ -1,7 +1,7 @@
 //! Function hot swapping in Boundary Cloud (BEP-087, stage 2): the publisher's
 //! routes under `/v1/hotswaps`, and a process's under `/v1/processes`.
 //!
-//! BCS owns this contract (its `shared/api` crate generates the OpenAPI
+//! BCS owns this contract (its `shared/api` crate generates the `OpenAPI`
 //! document); these types mirror it for BAML's clients.
 use std::{
     io::{BufRead, BufReader, Read},
@@ -385,7 +385,7 @@ impl Client {
             let request = self.http.get(self.url_with(&path, &query));
             // A followed stream stays open while the swap rolls out.
             if follow {
-                request.timeout(Duration::from_secs(24 * 3600))
+                request.timeout(Duration::from_hours(24))
             } else {
                 request
             }
@@ -426,7 +426,7 @@ impl Client {
         &self,
         authorization: &RequestAuthorization,
         url: &str,
-        bytes: Vec<u8>,
+        bytes: &[u8],
     ) -> Result<()> {
         // A path is under the endpoint; a full URL must be.
         let url = if url.starts_with('/') {
@@ -442,7 +442,7 @@ impl Client {
             self.http
                 .put(&url)
                 .header(reqwest::header::CONTENT_TYPE, "text/plain; charset=utf-8")
-                .body(bytes.clone())
+                .body(bytes.to_vec())
         })?;
         Ok(())
     }
