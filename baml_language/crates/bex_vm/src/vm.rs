@@ -590,15 +590,19 @@ const FAST_PATH_OPS: [bool; 256] = {
 /// count instead of allocating and cloning the impl's type arguments, and
 /// leaving it drops one. A shared slice names compile-time declarations
 /// only, which never move or die, so a collection has nothing in it to
-/// visit. Writing to the arguments (`BindType`, a call's extra lane) makes
-/// them owned first.
+/// visit. Only the VM builds one, after checking exactly that; arguments
+/// from anywhere else are owned. Writing to the arguments (`BindType`, a
+/// call's extra lane) makes them owned first.
+#[derive(Clone, Debug, Default)]
+pub struct FrameTypeArgs(FrameTypeArgsRepr);
+
 #[derive(Clone, Debug)]
-pub enum FrameTypeArgs {
+enum FrameTypeArgsRepr {
     Owned(Vec<bex_vm_types::RealizedTy>),
     Shared(Arc<[bex_vm_types::RealizedTy]>),
 }
 
-impl Default for FrameTypeArgs {
+impl Default for FrameTypeArgsRepr {
     fn default() -> Self {
         Self::Owned(Vec::new())
     }
@@ -606,7 +610,7 @@ impl Default for FrameTypeArgs {
 
 impl From<Vec<bex_vm_types::RealizedTy>> for FrameTypeArgs {
     fn from(args: Vec<bex_vm_types::RealizedTy>) -> Self {
-        Self::Owned(args)
+        Self(FrameTypeArgsRepr::Owned(args))
     }
 }
 
@@ -619,28 +623,43 @@ impl std::ops::Deref for FrameTypeArgs {
 }
 
 impl FrameTypeArgs {
+    /// Arguments shared with a virtual-call cache entry. `args` must come
+    /// from [`BexVm::shareable_frame_type_args`], which admits compile-time
+    /// declarations only: a collection does not visit a shared slice.
+    fn shared(args: Arc<[bex_vm_types::RealizedTy]>) -> Self {
+        Self(FrameTypeArgsRepr::Shared(args))
+    }
+
     pub fn as_slice(&self) -> &[bex_vm_types::RealizedTy] {
-        match self {
-            Self::Owned(args) => args,
-            Self::Shared(args) => args,
+        match &self.0 {
+            FrameTypeArgsRepr::Owned(args) => args,
+            FrameTypeArgsRepr::Shared(args) => args,
         }
     }
 
     /// The arguments as an owned vector, copying a shared slice first.
     pub fn to_mut(&mut self) -> &mut Vec<bex_vm_types::RealizedTy> {
-        if let Self::Shared(args) = self {
-            *self = Self::Owned(args.to_vec());
+        if let FrameTypeArgsRepr::Shared(args) = &self.0 {
+            self.0 = FrameTypeArgsRepr::Owned(args.to_vec());
         }
-        match self {
-            Self::Owned(args) => args,
-            Self::Shared(_) => unreachable!("made owned just above"),
+        match &mut self.0 {
+            FrameTypeArgsRepr::Owned(args) => args,
+            FrameTypeArgsRepr::Shared(_) => unreachable!("made owned just above"),
         }
     }
 
     /// Whether dropping these arguments frees nothing: an owned vector that
     /// never allocated.
     fn owns_nothing(&self) -> bool {
-        matches!(self, Self::Owned(args) if args.capacity() == 0)
+        matches!(&self.0, FrameTypeArgsRepr::Owned(args) if args.capacity() == 0)
+    }
+
+    /// The arguments a collection must visit: none for a shared slice.
+    fn roots_mut(&mut self) -> &mut [bex_vm_types::RealizedTy] {
+        match &mut self.0 {
+            FrameTypeArgsRepr::Owned(args) => args,
+            FrameTypeArgsRepr::Shared(_) => &mut [],
+        }
     }
 }
 
@@ -738,10 +757,7 @@ impl RootHaver for BytecodeFrame {
         // realized argument is the type `LoadType` reads, so its heads must
         // survive and move with the frame. A shared slice names compile-time
         // declarations only: nothing to visit.
-        match type_args {
-            FrameTypeArgs::Owned(args) => args.visit_roots(visitor),
-            FrameTypeArgs::Shared(_) => {}
-        }
+        type_args.roots_mut().visit_roots(visitor);
     }
 }
 
@@ -1738,7 +1754,7 @@ pub(crate) mod tests {
     fn shared_frame_type_args_copy_before_a_write() {
         let shared: Arc<[bex_vm_types::RealizedTy]> =
             Arc::from(vec![bex_vm_types::RealizedTy::int()]);
-        let mut args = super::FrameTypeArgs::Shared(Arc::clone(&shared));
+        let mut args = super::FrameTypeArgs::shared(Arc::clone(&shared));
         assert!(!args.owns_nothing());
         args.to_mut().push(bex_vm_types::RealizedTy::string());
         assert_eq!(&shared[..], &[bex_vm_types::RealizedTy::int()]);
@@ -1749,7 +1765,7 @@ pub(crate) mod tests {
                 bex_vm_types::RealizedTy::string()
             ]
         );
-        assert!(matches!(args, super::FrameTypeArgs::Owned(_)));
+        assert!(matches!(args.0, super::FrameTypeArgsRepr::Owned(_)));
         assert!(super::FrameTypeArgs::default().owns_nothing());
     }
 
@@ -1781,10 +1797,11 @@ pub(crate) mod tests {
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
             panic!("expected trampoline bytecode frame");
         };
-        frame.type_args = super::FrameTypeArgs::Owned(vec![bex_vm_types::RealizedTy::Class(
+        frame.type_args = vec![bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
             Box::new([]),
-        )]);
+        )]
+        .into();
 
         let mut roots = Vec::new();
         vm.collect_roots(&mut roots);
@@ -8480,7 +8497,7 @@ impl BexVm {
             }
             found
         };
-        let type_args = shared.map_or_else(FrameTypeArgs::default, FrameTypeArgs::Shared);
+        let type_args = shared.map_or_else(FrameTypeArgs::default, FrameTypeArgs::shared);
         // SAFETY: the callee is live: collection drops cache entries whose
         // callee died and clears the memo. The active heap permit prevents
         // collection during frame/stack growth, as at `CallExactArgs`.
@@ -8536,7 +8553,7 @@ impl BexVm {
     }
 
     /// `args` as a slice the callee frames of virtual-call cache hits can
-    /// share ([`FrameTypeArgs::Shared`]): when there are any, and every
+    /// share ([`FrameTypeArgs::shared`]): when there are any, and every
     /// declaration they name is compile-time, so a frame holding them has
     /// nothing for a collection to visit.
     fn shareable_frame_type_args(
@@ -9233,8 +9250,7 @@ impl BexVm {
                 // function, not a closure or bound method) takes the lane
                 // as its frame. The lane is restored just below, so nothing
                 // reads it again.
-                frame.type_args =
-                    FrameTypeArgs::Owned(std::mem::take(&mut self.pending_call_type_args));
+                frame.type_args = std::mem::take(&mut self.pending_call_type_args).into();
             } else {
                 frame
                     .type_args
