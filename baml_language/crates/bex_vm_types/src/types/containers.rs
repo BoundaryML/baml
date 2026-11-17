@@ -1,6 +1,9 @@
 use std::{
     cell::UnsafeCell,
-    collections::HashMap,
+    collections::{
+        HashMap,
+        hash_map::{DefaultHasher, RandomState},
+    },
     hash::{BuildHasher, BuildHasherDefault, Hasher},
     sync::LazyLock,
 };
@@ -539,32 +542,16 @@ pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<MapData>>;
 
 pub type EntryId = u64;
 
-/// The process-wide secret that keys every map key hash. Keys can come from
-/// untrusted input (JSON), so where they land must be unpredictable. The
-/// seed comes from std's `RandomState`, which draws from the OS; foldhash's
-/// own global seed mixes only addresses and the clock.
-struct MapKeySeed {
-    per_hasher: u64,
-    shared: foldhash::SharedSeed,
-}
+/// The keys of every map key hash: std's `RandomState`, whose SipHash-1-3
+/// keys come from the OS once per process. Keys can come from untrusted
+/// input (JSON), so where they land must be unpredictable.
+static MAP_KEY_STATE: LazyLock<RandomState> = LazyLock::new(RandomState::new);
 
-static MAP_KEY_SEED: LazyLock<MapKeySeed> = LazyLock::new(|| {
-    let random = std::collections::hash_map::RandomState::new();
-    MapKeySeed {
-        per_hasher: random.hash_one(0_u64),
-        shared: foldhash::SharedSeed::from_u64(random.hash_one(1_u64)),
-    }
-});
-
-/// The hash a map files a key under: keyed foldhash of everything the key's
-/// `Hash` wrote, as one stream, so it does not depend on how the writes were
-/// chunked (`baml.hash.Hasher` promises that). Not `baml.hash.DefaultHasher`,
-/// whose results are the same in every process.
-pub fn map_key_hash(stream: &[u8]) -> u64 {
-    let seed = &*MAP_KEY_SEED;
-    let mut hasher = foldhash::quality::FoldHasher::with_seed(seed.per_hasher, &seed.shared);
-    hasher.write(stream);
-    hasher.finish()
+/// A hasher for the hash a map files a key under: SipHash-1-3 keyed per
+/// process, so unlike `baml.hash.DefaultHasher` its results differ between
+/// processes. A key whose `Hash` runs BAML code writes into one of these.
+pub fn map_key_hasher() -> DefaultHasher {
+    MAP_KEY_STATE.build_hasher()
 }
 
 /// Hash a native string key as the VM's `Hash` driver frames it, so a map
@@ -578,28 +565,30 @@ pub fn map_int_hash(key: i64) -> u64 {
     framed_hash(1, &key.to_le_bytes())
 }
 
-/// [`map_key_hash`] of the `Hash` driver's framing of a primitive: `tag`,
-/// the byte length, the bytes. A short key is framed on the stack.
+/// The map key hash of the `Hash` driver's framing of a primitive: `tag`,
+/// the byte length, the bytes. A short key is framed on the stack and
+/// written once, which SipHash digests faster than three small writes.
 fn framed_hash(tag: u8, bytes: &[u8]) -> u64 {
     const HEADER: usize = 1 + size_of::<u64>();
     const INLINE: usize = 128;
-    let len = HEADER + bytes.len();
-    let mut inline = [0_u8; INLINE];
-    let mut heap = Vec::new();
-    let stream = if len <= INLINE {
-        &mut inline[..len]
+    let len = (bytes.len() as u64).to_le_bytes();
+    let mut hasher = map_key_hasher();
+    if HEADER + bytes.len() <= INLINE {
+        let mut stream = [0_u8; INLINE];
+        stream[0] = tag;
+        stream[1..HEADER].copy_from_slice(&len);
+        stream[HEADER..HEADER + bytes.len()].copy_from_slice(bytes);
+        hasher.write(&stream[..HEADER + bytes.len()]);
     } else {
-        heap.resize(len, 0);
-        heap.as_mut_slice()
-    };
-    stream[0] = tag;
-    stream[1..HEADER].copy_from_slice(&(bytes.len() as u64).to_le_bytes());
-    stream[HEADER..].copy_from_slice(bytes);
-    map_key_hash(stream)
+        hasher.write(&[tag]);
+        hasher.write(&len);
+        hasher.write(bytes);
+    }
+    hasher.finish()
 }
 
-/// The bucket table's hasher. Its keys are [`map_key_hash`] results, already
-/// keyed and well mixed, so they index the table as they are.
+/// The bucket table's hasher. Its keys are map key hashes, already keyed
+/// SipHash, so they index the table as they are.
 #[derive(Default)]
 struct KeyHashHasher(u64);
 
@@ -651,8 +640,8 @@ fn spilled_capacity(bucket: &MapBucket) -> usize {
 pub struct MapData {
     /// Fx-hashed: entry ids are this map's own counter, never program input.
     entries: IndexMap<EntryId, MapEntry, FxBuildHasher>,
-    /// Indexed by the keys' [`map_key_hash`]es, which are randomly keyed:
-    /// keys may come from untrusted input.
+    /// Indexed by the keys' hashes, which are keyed per process
+    /// ([`map_key_hasher`]): keys may come from untrusted input.
     buckets: HashMap<u64, MapBucket, BuildHasherDefault<KeyHashHasher>>,
     /// Id slots allocated by buckets that outgrew their inline room, for the
     /// footprint. A bucket keeps its allocation until it is dropped.

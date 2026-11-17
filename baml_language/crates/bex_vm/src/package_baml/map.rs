@@ -288,7 +288,6 @@ impl Continuation for MapDriver {
             self.hashing = false;
             self.hash = super::hasher::finish_state(
                 self.hasher.as_ref().expect("hash callback has a state"),
-                vm,
             );
             self.snapshot(vm);
             None

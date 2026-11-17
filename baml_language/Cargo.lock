@@ -1419,7 +1419,6 @@ dependencies = [
  "bex_str",
  "borsh",
  "btel_types",
- "foldhash 0.2.0",
  "hex",
  "indexmap",
  "num-bigint",

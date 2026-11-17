@@ -67,7 +67,7 @@ impl HashDriver {
                     self.map_hashes
                         .last_mut()
                         .expect("map entry belongs to an active map")
-                        .push(super::hasher::finish_state(&handle, vm));
+                        .push(super::hasher::finish_state(&handle));
                     continue;
                 }
                 Work::FinishMap => {
@@ -276,16 +276,18 @@ pub(super) fn hash_value(vm: &mut BexVm, value: Value, state: Value) -> NativeCa
 
 #[cfg(test)]
 mod tests {
-    use super::{super::hasher::Algorithm, framed};
+    use std::hash::Hasher as _;
+
+    use super::framed;
 
     /// What a map computes for a key whose `Hash` runs BAML code and writes
-    /// `chunks`: its map-key state fed those writes, then finished.
+    /// `chunks`: a map-key hasher fed those writes, then finished.
     fn driver_hash(chunks: &[&[u8]]) -> u64 {
-        let mut state = Algorithm::MapKey(Vec::new());
+        let mut hasher = bex_vm_types::map_key_hasher();
         for chunk in chunks {
-            state.write(chunk);
+            hasher.write(chunk);
         }
-        state.finish()
+        hasher.finish()
     }
 
     /// Maps hash string and int keys natively. A key whose `Hash` writes the

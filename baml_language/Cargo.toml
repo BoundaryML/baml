@@ -199,7 +199,6 @@ divan = "0.1.21"
 # crate rustc and rust-analyzer build their inference tables on.
 ena = "0.14"
 flate2 = { version = "1" }
-foldhash = { version = "0.2", default-features = false }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
