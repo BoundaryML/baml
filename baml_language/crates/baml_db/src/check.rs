@@ -1777,11 +1777,16 @@ fn tir_rendered_to_diagnostic_with_message(
             range: related.range,
         };
         let message = related.message;
+        // The reachability family labels the code it talks about in the
+        // same frame: the unreachable branch, body or arm of a constant
+        // condition, and the never-ending loop that leaves the code after
+        // it dead.
         if matches!(
             rendered.error,
             TirTypeError::UncalledFunctionInCondition { .. }
                 | TirTypeError::ConditionAlwaysConstant { .. }
                 | TirTypeError::ComparisonAlwaysDisjoint { .. }
+                | TirTypeError::DeadCode { .. }
         ) {
             return diag.with_secondary(span, message);
         }
@@ -2275,7 +2280,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::DeferControlFlowEscape { .. } => DiagnosticId::DeferControlFlowEscape,
         TirTypeError::LoopControlOutsideLoop { .. } => DiagnosticId::LoopControlOutsideLoop,
-        TirTypeError::ContinueInLoopUpdate => DiagnosticId::ContinueInLoopUpdate,
+        TirTypeError::LoopControlInLoopHeader { .. } => DiagnosticId::LoopControlInLoopHeader,
         TirTypeError::ThrowsContractViolation { .. }
         | TirTypeError::CallbackThrowsContractViolation { .. } => {
             DiagnosticId::ThrowsContractViolation
@@ -2366,7 +2371,7 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::JsonFallbackOverlap { .. } => DiagnosticId::InvalidJsonAttribute,
         // Global variables.
         TirTypeError::AssignmentToGlobal { .. } => DiagnosticId::AssignmentToGlobal,
-        TirTypeError::ReturnInGlobalInitializer { .. } => DiagnosticId::ReturnInGlobalInitializer,
+        TirTypeError::ReturnOutsideFunctionBody { .. } => DiagnosticId::ReturnOutsideFunctionBody,
         TirTypeError::GlobalInitializationCycle { .. } => DiagnosticId::GlobalInitializationCycle,
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.

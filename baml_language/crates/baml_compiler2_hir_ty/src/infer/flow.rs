@@ -49,15 +49,15 @@ use baml_type::interned::{InferTy, Ty};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{Diverges, Expectation, InferenceContext};
+use crate::diagnostics::LoopHeaderSlot;
 
 /// The narrowing overlay: a binding's flow type where a fact about it is in
 /// force. A binding with no entry has its declared type.
 pub(super) type Flow = FxHashMap<BindingId, Ty>;
 
 /// One enclosing loop while its header, body and update slot are typed: the
-/// flows at the `break`s and `continue`s that bind to it. MIR lowers all
-/// three under the loop's own break and continue targets, so a `break` in a
-/// condition block or in a C-style step leaves THIS loop.
+/// flows at the `break`s and `continue`s that bind to it, all written in
+/// its body.
 pub(super) struct LoopFrame {
     /// The flow at each `break`: an exit edge of the loop.
     pub breaks: Vec<Flow>,
@@ -66,9 +66,15 @@ pub(super) struct LoopFrame {
     /// loop. A `while` and a `while let` re-test their header in the
     /// havoced flow, which covers these edges, so theirs go unread.
     pub continues: Vec<Flow>,
-    /// Whether the loop's C-style update expression is being typed. A
-    /// `continue` there would re-enter the update itself and is rejected.
-    pub in_update_slot: bool,
+    /// The header slot being typed, if any: a `break`/`continue` written
+    /// there is rejected (rustc's E0590 rule for `while` conditions), since
+    /// a loop is left from its body only.
+    pub header: Option<LoopHeaderSlot>,
+    /// Whether a `break`/`continue` that would have bound to this loop was
+    /// rejected (in its header, or behind a lambda or template inside it).
+    /// The author meant an exit: a loop left with no edge then completes
+    /// rather than reporting the code after it unreachable as well.
+    pub has_rejected_jump: bool,
     /// `block_defer_writes.len()` at loop entry. The defers armed in the
     /// blocks opened inside the loop run on every `break`/`continue` edge.
     defer_floor: usize,
@@ -99,10 +105,9 @@ pub(super) struct LoopVerdicts {
     /// returns or `continue`s) and no live `break` that binds to the loop.
     /// The code after one is unreachable.
     pub diverging_loops: FxHashSet<StmtId>,
-    /// The `break`/`continue` statements that bind to no loop and were
-    /// rejected (E0141, E0187, E0188). A rejected jump does not end the
-    /// flow, so the code after it is not reported unreachable on top of the
-    /// rejection.
+    /// The `break`/`continue` statements that were rejected (E0141, E0187,
+    /// E0188). A rejected jump still ends the flow as written, but the code
+    /// after it is not reported unreachable on top of the rejection.
     pub rejected_jumps: FxHashSet<StmtId>,
 }
 
@@ -524,9 +529,23 @@ impl InferenceContext<'_> {
         self.control_frame_mut().loops.push(LoopFrame {
             breaks: Vec::new(),
             continues: Vec::new(),
-            in_update_slot: false,
+            header: None,
+            has_rejected_jump: false,
             defer_floor,
         });
+    }
+
+    /// Records a rejected `break`/`continue` against the loop it would have
+    /// bound to: the innermost loop open in any frame, if there is one.
+    pub(super) fn mark_rejected_jump(&mut self) {
+        if let Some(frame) = self
+            .frames
+            .iter_mut()
+            .rev()
+            .find_map(|frame| frame.loops.last_mut())
+        {
+            frame.has_rejected_jump = true;
+        }
     }
 
     /// The innermost loop of the frame, between `enter_loop` and
@@ -538,18 +557,19 @@ impl InferenceContext<'_> {
             .unwrap_or_else(|| unreachable!("called between `enter_loop` and `leave_loop`"))
     }
 
-    /// Marks whether the innermost loop's update slot is being typed.
-    pub(super) fn set_in_update_slot(&mut self, in_update_slot: bool) {
-        self.innermost_loop_mut().in_update_slot = in_update_slot;
+    /// Marks which header slot of the innermost loop is being typed, or
+    /// that its body is.
+    pub(super) fn set_loop_header(&mut self, slot: Option<LoopHeaderSlot>) {
+        self.innermost_loop_mut().header = slot;
     }
 
-    /// Whether the innermost loop's update slot is being typed, so a
-    /// `continue` here would re-enter the update itself.
-    pub(super) fn in_update_slot(&self) -> bool {
+    /// The header slot of the innermost loop being typed, where a
+    /// `break`/`continue` has no place.
+    pub(super) fn loop_header(&self) -> Option<LoopHeaderSlot> {
         self.control_frame()
             .loops
             .last()
-            .is_some_and(|frame| frame.in_update_slot)
+            .and_then(|frame| frame.header)
     }
 
     /// Closes the innermost loop's frame and hands back its edges.

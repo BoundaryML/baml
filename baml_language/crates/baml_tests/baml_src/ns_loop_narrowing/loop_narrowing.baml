@@ -93,19 +93,6 @@ function ln_for_in_continue_edge(xs: int[]) -> string {
     }
 }
 
-// A `break` in a loop's header leaves the loop, and the code after it runs.
-function ln_header_break(a: int) -> string {
-    let x: int | LnTag = a;
-    if (a > 0) {
-        x = LnTag { name: "tag" };
-        while ({ break; }) {}
-    }
-    match (x) {
-        int => "int",
-        let t: LnTag => t.name,
-    }
-}
-
 test "the break edge's value is seen after the loop" {
     assert.equal(ln_break_edge_value(1), "tag");
     assert.equal(ln_break_edge_value(0), "int");
@@ -135,11 +122,6 @@ test "a for-in continue on the last iteration is an exit edge" {
     assert.equal(ln_for_in_continue_edge([]), "int");
 }
 
-test "a break in a loop header leaves the loop alive" {
-    assert.equal(ln_header_break(1), "tag");
-    assert.equal(ln_header_break(0), "int");
-}
-
 // A header that always returns leaves the loop with no exit edge: the body's
 // `break` is dead, and the function needs no tail.
 function ln_header_always_returns() -> int {
@@ -155,7 +137,42 @@ function ln_nested_loop_in_the_update_slot() -> int {
     i
 }
 
+// A collection that never produces a value: only the collection runs.
+function ln_for_over_a_diverging_collection() -> int {
+    for let v in ({ return 2; }) {}
+}
+
+// An always-truthy condition with a `break` in the body: the break is the exit.
+function ln_unconditional_loop_exits_through_break(a: int) -> int {
+    let n = 0;
+    while (true) {
+        n += 1;
+        if (n > a) {
+            break;
+        }
+    }
+    n
+}
+
+// A destructuring pattern over such a collection binds nothing that exists.
+class LnPair {
+    left: int,
+    right: int,
+}
+
+function ln_for_class_pattern_over_a_diverging_collection() -> int {
+    for let LnPair { left: let l, right: let r } in ({ return 3; }) {}
+}
+
+function ln_for_tuple_pattern_over_a_diverging_collection() -> int {
+    for let (let a, let b) in ({ return 4; }) {}
+}
+
 test "a loop with no exit edge ends the body; the update slot may hold a loop" {
     assert.equal(ln_header_always_returns(), 1);
     assert.equal(ln_nested_loop_in_the_update_slot(), 3);
+    assert.equal(ln_for_over_a_diverging_collection(), 2);
+    assert.equal(ln_for_class_pattern_over_a_diverging_collection(), 3);
+    assert.equal(ln_for_tuple_pattern_over_a_diverging_collection(), 4);
+    assert.equal(ln_unconditional_loop_exits_through_break(2), 3);
 }

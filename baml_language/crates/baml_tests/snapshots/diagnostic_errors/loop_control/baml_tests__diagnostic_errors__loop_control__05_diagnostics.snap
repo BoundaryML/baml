@@ -5,105 +5,181 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[loop_control.baml:26:18]
- 26 │     let u: int = x;
-    ·                  ┬
-    ·                  ╰── expected `int`, found `int | Tag`
-    ╰────
-
-  [type] E0001
-
-  × mismatched types
-    ╭─[loop_control.baml:38:18]
- 38 │     let u: int = x;
+    ╭─[loop_control.baml:27:18]
+ 27 │     let u: int = x;
     ·                  ┬
     ·                  ╰── expected `int`, found `int | Tag`
     ╰────
 
   [type] E0188
 
-  × `continue` cannot appear in a `for` loop's update expression; the update already runs before the condition is tested again
-    ╭─[loop_control.baml:47:13]
- 47 │             continue;
+  × `break` cannot appear in a `while` condition; a loop is left from its body - move the `break` there
+    ╭─[loop_control.baml:35:35]
+ 35 │     while ({ n += 1; if (n > a) { break; } true }) {}
+    ·                                   ──────
+    ╰────
+
+  [type] E0188
+
+  × `break` cannot appear in a `while let` scrutinee; a loop is left from its body - move the `break` there
+    ╭─[loop_control.baml:41:39]
+ 41 │     while let v: int = { if (n > a) { break; } n } {
+    ·                                       ──────
+    ╰────
+
+  [type] E0188
+
+  × `break` cannot appear in a `for` loop's update expression; a loop is left from its body - move the `break` there
+    ╭─[loop_control.baml:49:47]
+ 49 │     for (let j = 0; i < 3; i = { if (a > 0) { break; } i + 1 }) {}
+    ·                                               ──────
+    ╰────
+
+  [type] E0188
+
+  × `continue` cannot appear in a `for` loop's update expression; a loop is left from its body - move the `continue` there
+    ╭─[loop_control.baml:57:13]
+ 57 │             continue;
     ·             ─────────
     ╰────
 
   [type] E0187
 
   × `break` outside of a loop
-    ╭─[loop_control.baml:56:9]
- 56 │         break;
+    ╭─[loop_control.baml:66:9]
+ 66 │         break;
     ·         ──────
     ╰────
 
   [type] E0187
 
   × `break` cannot leave a loop from inside a lambda body
-    ╭─[loop_control.baml:67:17]
- 67 │                 break;
+    ╭─[loop_control.baml:77:17]
+ 77 │                 break;
     ·                 ──────
     ╰────
 
   [type] E0187
 
   × `break` cannot leave a loop from inside a template interpolation
-    ╭─[loop_control.baml:79:42]
- 79 │         let s = sql`hi ${ { if (a > 0) { break; } 1 } }`;
+    ╭─[loop_control.baml:89:42]
+ 89 │         let s = sql`hi ${ { if (a > 0) { break; } 1 } }`;
     ·                                          ──────
     ╰────
 
   [type] E0187
 
   × `break` cannot leave a loop from inside a template interpolation
-    ╭─[loop_control.baml:90:46]
- 90 │             let s = sql`hi ${ { if (a > 0) { break; } 1 } }`;
-    ·                                              ──────
-    ╰────
+     ╭─[loop_control.baml:100:46]
+ 100 │             let s = sql`hi ${ { if (a > 0) { break; } 1 } }`;
+     ·                                              ──────
+     ╰────
 
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[loop_control.baml:101:9]
- 101 │         break;
+     ╭─[loop_control.baml:111:9]
+ 111 │         break;
      ·         ──────
      ╰────
 
   [type] E0187
 
   × `continue` outside of a loop
-     ╭─[loop_control.baml:108:9]
- 108 │         continue;
+     ╭─[loop_control.baml:118:9]
+ 118 │         continue;
      ·         ─────────
      ╰────
 
   [type] E0187
 
   × `break` outside of a loop
-     ╭─[loop_control.baml:117:9]
- 117 │         break;
+     ╭─[loop_control.baml:127:9]
+ 127 │         break;
      ·         ──────
      ╰────
 
   [type] E0187
 
   × `break` outside of a loop
-     ╭─[loop_control.baml:125:9]
- 125 │         break;
+     ╭─[loop_control.baml:135:9]
+ 135 │         break;
      ·         ──────
      ╰────
 
   [type] E0187
 
   × `break` outside of a loop
-     ╭─[loop_control.baml:130:50]
- 130 │ function break_in_a_parameter_default(a: int = { break; 1 }) -> int {
+     ╭─[loop_control.baml:140:50]
+ 140 │ function break_in_a_parameter_default(a: int = { break; 1 }) -> int {
      ·                                                  ──────
      ╰────
 
   [type] E0187
 
   × `break` outside of a loop
-     ╭─[loop_control.baml:134:46]
- 134 │ const break_in_a_global_initializer: int = { break; 1 };
+     ╭─[loop_control.baml:144:46]
+ 144 │ const break_in_a_global_initializer: int = { break; 1 };
      ·                                              ──────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[loop_control.baml:150:5]
+ 150 │     5
+     ·     ─
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[loop_control.baml:159:12]
+ 159 │     while (true) {
+     ·            ──┬─
+     ·              ╰── this loop never ends: its condition is always truthy and its body never breaks
+     ╰────
+     ╭─[loop_control.baml:162:5]
+ 162 │     n
+     ·     ─
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `Tag` can never be falsy
+     ╭─[loop_control.baml:167:12]
+ 167 │     while (t) {
+     ·            ─
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[loop_control.baml:167:12]
+ 167 │     while (t) {
+     ·            ┬
+     ·            ╰── this loop never ends: its condition is always truthy and its body never breaks
+     ╰────
+     ╭─[loop_control.baml:170:5]
+ 170 │     n
+     ·     ─
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `Tag` can never be falsy
+     ╭─[loop_control.baml:176:12]
+ 176 │     while (t) {
+     ·            ─
+     ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+     ╭─[loop_control.baml:188:12]
+ 188 │ ╭─▶     while (false) {
+     · │              ─────
+ 189 │ │           n += a;
+ 190 │ ├─▶     }
+     · ╰──── this loop body is unreachable
      ╰────

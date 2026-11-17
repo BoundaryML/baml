@@ -8,11 +8,12 @@
 
 use std::num::NonZeroUsize;
 
+use baml_compiler2_hir::body::BodyOwnerId;
 use baml_type::interned::Ty;
 use rustc_hash::FxHashMap;
 
 use super::{Diverges, FileScopeId, InferenceContext, UnitSite, flow::LoopFrame};
-use crate::diagnostics::LoopControlBarrier;
+use crate::diagnostics::{LoopControlBarrier, ReturnContext};
 
 /// One frame of control state; see the module doc.
 pub(super) struct ControlFrame {
@@ -73,10 +74,9 @@ pub(super) enum FrameKind {
     /// during the index walk would cycle), so path resolution consults the
     /// frame instead. The block is a deferred closure, so its divergence and
     /// loops are its own (a `break` inside it binds to a loop inside it
-    /// only), but it keys its expressions under the enclosing scope. A
-    /// `return` inside it is still checked against the enclosing callable's
-    /// return context, which does not match what the closure does at run
-    /// time; that rule is open.
+    /// only, and a `return` is rejected: it would leave the closure when
+    /// the template is rendered, not the enclosing function), but it keys
+    /// its expressions under the enclosing scope.
     Template {
         params: FxHashMap<baml_type::Name, Ty>,
     },
@@ -102,6 +102,15 @@ pub(super) enum LoopControlEscape {
     /// No loop at all, or a loop that cannot be left from inside the frame's
     /// construct (a lambda body, a template interpolation).
     OutsideLoop(LoopControlBarrier),
+}
+
+/// Why a `return` written at some point is rejected: it would leave a
+/// construct that is not a function body.
+pub(super) enum ReturnEscape {
+    /// A `defer` body (BEP-042).
+    Defer,
+    /// An expression context ([`ReturnContext`]).
+    Outside(ReturnContext),
 }
 
 /// A value a frame returns, with the implicit units it carries when the
@@ -184,23 +193,30 @@ impl InferenceContext<'_> {
             .unwrap_or_else(|| unreachable!("the owner frame is a callable"))
     }
 
-    /// Whether a `return` written here leaves the body owner itself rather
-    /// than a lambda inside it.
-    pub(super) fn returns_from_owner(&self) -> bool {
+    /// What a `return` written here would leave other than a function body.
+    /// The innermost frame decides: a `defer` body or template interpolation
+    /// is left before any callable around it, a lambda's `return` is its
+    /// own, and with no frame nested in the owner's the owner itself may be
+    /// an expression (a global's initializer, a parameter default), whose
+    /// value is its last expression.
+    pub(super) fn return_escape(&self) -> Option<ReturnEscape> {
         let (_, nested) = self.frames.split_first();
-        !nested
-            .iter()
-            .any(|frame| matches!(frame.kind, FrameKind::Callable { .. }))
-    }
-
-    /// Whether a `return` written here would escape a `defer` body: one
-    /// lies between the current point and the innermost callable.
-    pub(super) fn inside_defer(&self) -> bool {
-        self.frames
-            .iter()
-            .rev()
-            .take_while(|frame| !matches!(frame.kind, FrameKind::Callable { .. }))
-            .any(|frame| matches!(frame.kind, FrameKind::Defer))
+        match nested.last().map(|frame| &frame.kind) {
+            Some(FrameKind::Callable { .. }) => None,
+            Some(FrameKind::Defer) => Some(ReturnEscape::Defer),
+            Some(FrameKind::Template { .. }) => {
+                Some(ReturnEscape::Outside(ReturnContext::TemplateInterpolation))
+            }
+            None => match self.owner {
+                BodyOwnerId::Function(_) => None,
+                BodyOwnerId::ParameterDefaults(_) => {
+                    Some(ReturnEscape::Outside(ReturnContext::ParameterDefault))
+                }
+                BodyOwnerId::Let(_) => self
+                    .global_initializer()
+                    .map(|name| ReturnEscape::Outside(ReturnContext::GlobalInitializer { name })),
+            },
+        }
     }
 
     /// What a `break`/`continue` written here would escape, when no loop

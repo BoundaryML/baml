@@ -84,10 +84,10 @@ function optional_call_argument_write_may_be_skipped(a: int, b: Box?) -> int {
 
 // The header completes when the argument is skipped: that false edge keeps the
 // earlier write.
-function optional_call_argument_break_keeps_the_false_edge(a: int, b: Box?) -> int {
+function optional_call_argument_return_keeps_the_false_edge(a: int, b: Box?) -> int {
     let x: int | Tag = a;
     x = Tag {};
-    while (b?.m({ x = a; break; }) == 1) {}
+    while (b?.m({ x = a; return 0; }) == 1) {}
     let u: int = x;
     u
 }

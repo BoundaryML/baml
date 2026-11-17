@@ -439,10 +439,11 @@ pub enum DiagnosticId {
     /// immutable; what it holds can still be changed through its fields or
     /// elements.
     AssignmentToGlobal,
-    /// A `return` at the top level of a global variable's initializer. The
-    /// initializer is an expression, not a function body: its value is its
-    /// last expression.
-    ReturnInGlobalInitializer,
+    /// A `return` in an expression that is not a function body - a global
+    /// variable's initializer, a parameter default, a template
+    /// interpolation. Each is an expression whose value is its last
+    /// expression; there is nothing for a `return` to leave.
+    ReturnOutsideFunctionBody,
     /// Global variables whose initializers depend on each other, directly or
     /// through the functions they call, so no initialization order exists.
     GlobalInitializationCycle,
@@ -469,10 +470,10 @@ pub enum DiagnosticId {
     /// or inside a lambda body or template interpolation, which cannot leave
     /// a loop enclosing it.
     LoopControlOutsideLoop,
-    /// `continue` inside a C-style `for` loop's update expression. The update
-    /// is where a `continue` lands, so one written there would loop on the
-    /// update itself.
-    ContinueInLoopUpdate,
+    /// `break`/`continue` inside a loop's header - a `while` condition, a
+    /// `while let` scrutinee or a C-style `for` update expression - which
+    /// the loop evaluates itself; a loop is left from its body.
+    LoopControlInLoopHeader,
 }
 
 impl DiagnosticId {
@@ -688,7 +689,7 @@ impl DiagnosticId {
             DiagnosticId::ServedInterfaceExportsFunctionsOnly => "E0178",
             DiagnosticId::CallSiteBuiltinValue => "E0177",
             DiagnosticId::AssignmentToGlobal => "E0179",
-            DiagnosticId::ReturnInGlobalInitializer => "E0180",
+            DiagnosticId::ReturnOutsideFunctionBody => "E0180",
             DiagnosticId::GlobalInitializationCycle => "E0181",
             DiagnosticId::InitSuspendNotAllowed => "E0182",
             DiagnosticId::InitThrowNotHandled => "E0183",
@@ -696,7 +697,7 @@ impl DiagnosticId {
             DiagnosticId::LlmOutputFieldAlwaysNull => "E0185",
             DiagnosticId::InvalidJsonAttribute => "E0186",
             DiagnosticId::LoopControlOutsideLoop => "E0187",
-            DiagnosticId::ContinueInLoopUpdate => "E0188",
+            DiagnosticId::LoopControlInLoopHeader => "E0188",
         }
     }
 }

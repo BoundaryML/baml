@@ -64,21 +64,3 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                  ┬
      ·                  ╰── expected `int`, found `int | Tag`
      ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[loop_narrowing.baml:122:18]
- 122 │     let u: int = x;
-     ·                  ┬
-     ·                  ╰── expected `int`, found `int | Tag`
-     ╰────
-
-  [type] E0001
-
-  × mismatched types
-     ╭─[loop_narrowing.baml:135:18]
- 135 │     let u: int = x;
-     ·                  ┬
-     ·                  ╰── expected `int`, found `int | Tag`
-     ╰────

@@ -148,6 +148,31 @@ impl UnitContext {
     }
 }
 
+/// An expression context a `return` was written in: not a function body,
+/// so there is nothing for it to return from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReturnContext {
+    /// The initializer of the named source global.
+    GlobalInitializer { name: Name },
+    /// A parameter default, evaluated when the argument is omitted.
+    ParameterDefault,
+    /// A tagged template's interpolation, which runs when the template is
+    /// rendered.
+    TemplateInterpolation,
+}
+
+/// A slot of a loop's header: evaluated by the loop itself, so a
+/// `break`/`continue` written there has no place (the body is where a loop
+/// is left from).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoopHeaderSlot {
+    WhileCondition,
+    WhileLetScrutinee,
+    /// A C-style `for` loop's update expression, which also runs where a
+    /// `continue` lands.
+    ForUpdate,
+}
+
 /// Why a `break`/`continue` has no loop to take it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopControlBarrier {
@@ -687,8 +712,11 @@ pub enum TirTypeError {
         keyword: &'static str,
         barrier: LoopControlBarrier,
     },
-    /// `continue` inside a C-style `for` loop's update expression.
-    ContinueInLoopUpdate,
+    /// A `break`/`continue` written in a loop's header rather than its body.
+    LoopControlInLoopHeader {
+        keyword: &'static str,
+        slot: LoopHeaderSlot,
+    },
     /// Catch binding cannot be typed as `any` or `unknown`.
     InvalidCatchBindingType {
         type_name: String,
@@ -1413,9 +1441,9 @@ pub enum TirTypeError {
         /// `client Foo = …` (true) versus a global variable (false).
         is_client: bool,
     },
-    /// A `return` at the top level of a global variable's initializer.
-    ReturnInGlobalInitializer {
-        name: Name,
+    /// A `return` written in an expression that is not a function body.
+    ReturnOutsideFunctionBody {
+        context: ReturnContext,
     },
     /// Global variables whose initializers need each other's values: no
     /// order exists in which `$init` could evaluate them. `chain` is the
@@ -2177,10 +2205,17 @@ impl TirTypeError {
                         "`{keyword}` cannot leave a loop from inside a template interpolation"
                     ),
                 },
-                TirTypeError::ContinueInLoopUpdate => write!(
-                    f,
-                    "`continue` cannot appear in a `for` loop's update expression; the update already runs before the condition is tested again"
-                ),
+                TirTypeError::LoopControlInLoopHeader { keyword, slot } => {
+                    let slot = match slot {
+                        LoopHeaderSlot::WhileCondition => "a `while` condition",
+                        LoopHeaderSlot::WhileLetScrutinee => "a `while let` scrutinee",
+                        LoopHeaderSlot::ForUpdate => "a `for` loop's update expression",
+                    };
+                    write!(
+                        f,
+                        "`{keyword}` cannot appear in {slot}; a loop is left from its body - move the `{keyword}` there"
+                    )
+                }
                 TirTypeError::InvalidCatchBindingType { type_name } => write!(
                     f,
                     "invalid catch binding type `{type_name}`; use a concrete type instead"
@@ -3163,12 +3198,26 @@ impl TirTypeError {
                      or change what it holds through its fields or elements"
                     )
                 }
-                TirTypeError::ReturnInGlobalInitializer { name } => write!(
-                    f,
-                    "`return` is not allowed in the initializer of global `{name}` — an \
-                 initializer is an expression, not a function body; its value is its last \
-                 expression (move early exits into a helper function)"
-                ),
+                TirTypeError::ReturnOutsideFunctionBody { context } => match context {
+                    ReturnContext::GlobalInitializer { name } => write!(
+                        f,
+                        "`return` is not allowed in the initializer of global `{name}` — an \
+                         initializer is an expression, not a function body; its value is its \
+                         last expression (move early exits into a helper function)"
+                    ),
+                    ReturnContext::ParameterDefault => write!(
+                        f,
+                        "`return` is not allowed in a parameter default — a default is an \
+                         expression evaluated when the argument is omitted, not part of the \
+                         function body; its value is its last expression"
+                    ),
+                    ReturnContext::TemplateInterpolation => write!(
+                        f,
+                        "`return` is not allowed in a template interpolation — the \
+                         interpolation runs when the template is rendered, not as part of the \
+                         enclosing function; its value is its last expression"
+                    ),
+                },
                 TirTypeError::GlobalInitializationCycle { chain } => {
                     let first = chain.first().map(Name::as_str).unwrap_or_default();
                     let path = chain

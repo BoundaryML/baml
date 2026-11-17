@@ -107,31 +107,3 @@ function defer_write_on_the_break_edge(a: int) -> int {
     u
 }
 
-// A `break` in a condition block or in a step slot leaves the loop whose
-// header it is in.
-function break_in_the_condition_block(a: int) -> int {
-    let x: int | Tag = a;
-    while ({
-        if (a > 0) {
-            x = Tag {};
-            break;
-        }
-        x = a;
-        a > 0
-    }) {}
-    let u: int = x;
-    u
-}
-
-function break_in_the_step_slot(a: int) -> int {
-    let x: int | Tag = a;
-    for (let i = 0; i < a; x = {
-        x = Tag {};
-        break;
-    }) {
-        x = a;
-        i += 1;
-    }
-    let u: int = x;
-    u
-}

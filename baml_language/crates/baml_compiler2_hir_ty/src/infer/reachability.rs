@@ -92,7 +92,10 @@ pub(super) fn add_diagnostics<'db>(
                             },
                             severity: DiagnosticSeverity::Warning,
                             primary,
-                            related: Vec::new(),
+                            related: reachability
+                                .never_ending_loop_note(stmts[index])
+                                .into_iter()
+                                .collect(),
                         });
                     }
                 }
@@ -100,31 +103,26 @@ pub(super) fn add_diagnostics<'db>(
             _ => {}
         }
     }
+    // A `while` condition that is always falsy leaves the body dead. One
+    // that is always truthy makes nothing dead by itself: the loop is left
+    // through its body's `break`s, or not at all, and then the code after
+    // it is reported above with the condition as the reason.
     for (_, stmt) in body.stmts.iter() {
         if let Stmt::While {
             condition,
             body: loop_body,
             ..
         } = stmt
-            && let Some(value) = reachability.condition(*condition)
+            && reachability.condition(*condition) == Some(false)
         {
-            // Keep the conventional spelling of an unconditional loop quiet.
-            if matches!(
-                body.exprs[*condition],
-                Expr::Literal(baml_type::Literal::Bool(true))
-            ) {
-                continue;
-            }
             reachability.warn(
                 diagnostics,
                 *condition,
-                value,
-                (!value).then(|| {
-                    RelatedNote::new(
-                        RelatedLocation::Expr(*loop_body),
-                        "this loop body is unreachable",
-                    )
-                }),
+                false,
+                Some(RelatedNote::new(
+                    RelatedLocation::Expr(*loop_body),
+                    "this loop body is unreachable",
+                )),
             );
         }
     }
@@ -152,36 +150,29 @@ struct Reachability<'a, 'db> {
 }
 
 impl<'db> Reachability<'_, 'db> {
+    /// Why the code after `stmt` is dead, when `stmt` is a loop that never
+    /// ends because its condition is always truthy and its body never
+    /// `break`s: the condition is the note.
+    fn never_ending_loop_note(&self, stmt: StmtId) -> Option<RelatedNote<'db>> {
+        let Stmt::While { condition, .. } = &self.body.stmts[stmt] else {
+            return None;
+        };
+        (self.loop_verdicts.diverging_loops.contains(&stmt)
+            && self.condition(*condition) == Some(true))
+        .then(|| {
+            RelatedNote::new(
+                RelatedLocation::Expr(*condition),
+                "this loop never ends: its condition is always truthy and its body never breaks",
+            )
+        })
+    }
+
     fn condition(&self, expr: ExprId) -> Option<bool> {
-        match &self.body.exprs[expr] {
-            Expr::Unary {
-                op: UnaryOp::Not,
-                expr,
-            } => self.condition(*expr).map(|v| !v),
-            Expr::Binary {
-                op: BinaryOp::And,
-                lhs,
-                rhs,
-            } => match (self.condition(*lhs), self.condition(*rhs)) {
-                (Some(false), _) | (_, Some(false)) => Some(false),
-                (Some(true), Some(true)) => Some(true),
-                _ => None,
-            },
-            Expr::Binary {
-                op: BinaryOp::Or,
-                lhs,
-                rhs,
-            } => match (self.condition(*lhs), self.condition(*rhs)) {
-                (Some(true), _) | (_, Some(true)) => Some(true),
-                (Some(false), Some(false)) => Some(false),
-                _ => None,
-            },
-            _ => self
-                .result
-                .type_of_expr
-                .get(&expr)
-                .and_then(static_truthiness),
-        }
+        static_condition(
+            self.body,
+            &mut |expr| self.result.type_of_expr.get(&expr).cloned(),
+            expr,
+        )
     }
 
     fn warn(
@@ -304,11 +295,9 @@ impl<'db> Reachability<'_, 'db> {
             Stmt::Assign { value, .. } | Stmt::AssignOp { value, .. } => self.expr_exits(*value),
             // A loop with no exit edge never completes: a header that never
             // misses (a statically true condition, a header that always
-            // returns) and no live `break` that binds to the loop. Inference
-            // records that verdict from its walk of the loop, where every
-            // `break` registers with the loop it leaves - a `break` in the
-            // header leaves THIS loop, so the header's own exits say nothing
-            // about the code after it.
+            // returns) and no live `break` in the body. Inference records
+            // that verdict from its walk of the loop, where every `break`
+            // registers with the loop it leaves.
             Stmt::While { .. } | Stmt::WhileLet { .. } => {
                 self.loop_verdicts.diverging_loops.contains(&stmt)
             }
@@ -317,6 +306,50 @@ impl<'db> Reachability<'_, 'db> {
             Stmt::For { collection, .. } => self.expr_exits(*collection),
             _ => false,
         }
+    }
+}
+
+/// A condition's static value, when the types decide it: walk-time De
+/// Morgan through `!`, `&&` and `||`, down to the static truthiness of each
+/// operand's type as `type_of` reports it (`None` for an operand not typed
+/// yet). Inference and reachability judge the SAME walk - inference on the
+/// types it has while typing a loop, to decide whether a `while` condition
+/// has a false edge; reachability on the final types.
+pub(super) fn static_condition(
+    body: &ExprBody,
+    type_of: &mut dyn FnMut(ExprId) -> Option<Ty>,
+    expr: ExprId,
+) -> Option<bool> {
+    match &body.exprs[expr] {
+        Expr::Unary {
+            op: UnaryOp::Not,
+            expr,
+        } => static_condition(body, type_of, *expr).map(|v| !v),
+        Expr::Binary {
+            op: BinaryOp::And,
+            lhs,
+            rhs,
+        } => match (
+            static_condition(body, type_of, *lhs),
+            static_condition(body, type_of, *rhs),
+        ) {
+            (Some(false), _) | (_, Some(false)) => Some(false),
+            (Some(true), Some(true)) => Some(true),
+            _ => None,
+        },
+        Expr::Binary {
+            op: BinaryOp::Or,
+            lhs,
+            rhs,
+        } => match (
+            static_condition(body, type_of, *lhs),
+            static_condition(body, type_of, *rhs),
+        ) {
+            (Some(true), _) | (_, Some(true)) => Some(true),
+            (Some(false), Some(false)) => Some(false),
+            _ => None,
+        },
+        _ => type_of(expr).as_ref().and_then(static_truthiness),
     }
 }
 

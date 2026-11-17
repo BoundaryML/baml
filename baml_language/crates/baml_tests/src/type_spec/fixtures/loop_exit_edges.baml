@@ -4,8 +4,8 @@
 // is entered from the end of the body and from every `continue`.
 //
 // `loop_narrowing_does_not_escape` pins the zero-iteration half (B-735);
-// these pin the break, continue and step edges, a `for let`'s `continue`
-// exits and a `break` in a loop header.
+// these pin the break, continue and step edges and a `for let`'s `continue`
+// exits.
 
 class Bag {
     items: int[],
@@ -159,27 +159,7 @@ function for_in_continue_is_an_exit_edge(a: int, s: string, xs: int[]) -> int | 
 //  ^ int | string
 }
 
-function header_break_leaves_the_loop_alive(a: int, s: string) -> int | string {
-    let x: int | string = a;
-    x = a;
-    if (a > 0) {
-        x = s;
-        while ({ break; }) {}
-    }
-    x
-//  ^ int | string
-}
 
-function while_let_header_break_leaves_the_loop_alive(a: int, s: string) -> int | string {
-    let x: int | string = a;
-    x = a;
-    if (a > 0) {
-        x = s;
-        while let v: int = { break; } {}
-    }
-    x
-//  ^ int | string
-}
 
 // The defers armed inside the loop run on a `continue` edge too.
 function defer_runs_on_the_continue_edge(a: int, s: string, xs: int[]) -> int | string {

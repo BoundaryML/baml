@@ -63,7 +63,7 @@ use crate::{
         callable_signature, callable_takes_self, callable_throws_of, callable_user_generic_params,
         instantiate_callable_signature,
     },
-    diagnostics::{ImplicitUnitForm, ScopedTypeEscapeKind, UnitContext},
+    diagnostics::{ImplicitUnitForm, LoopHeaderSlot, ScopedTypeEscapeKind, UnitContext},
     extern_loc::{
         ClassRef, EnumRef, FunctionRef, ImplRef, InterfaceRef, extern_class_method,
         extern_class_row, extern_function_row, extern_interface_method, mounted_class_loc,
@@ -995,10 +995,11 @@ enum PendingDiag<'db> {
         name: baml_type::Name,
         suggestions: Box<[baml_type::Name]>,
     },
-    /// A `return` directly in a source global's initializer.
-    ReturnInGlobalInitializer {
+    /// A `return` in an expression that is not a function body
+    /// ([`frames::ReturnEscape::Outside`]).
+    ReturnOutsideFunctionBody {
         at: crate::diagnostics::DiagnosticLocation,
-        name: baml_type::Name,
+        context: crate::diagnostics::ReturnContext,
     },
     /// An assignment whose target is a top-level binding.
     AssignmentToGlobal {
@@ -1370,8 +1371,7 @@ enum PendingDiag<'db> {
     /// Control flow that would escape a `defer` body (BEP-042): `return`
     /// always; `break`/`continue` unless a loop opened INSIDE the defer.
     DeferEscape {
-        stmt: Option<StmtId>,
-        expr: Option<ExprId>,
+        at: crate::diagnostics::DiagnosticLocation,
         keyword: &'static str,
     },
     /// A `break`/`continue` with no loop open in its frame; `barrier` is
@@ -1381,11 +1381,12 @@ enum PendingDiag<'db> {
         keyword: &'static str,
         barrier: crate::diagnostics::LoopControlBarrier,
     },
-    /// A `continue` in the update expression of the `for` loop it binds to.
-    /// The update is where a `continue` lands, so one written there would
-    /// loop on the update itself; it is refused.
-    ContinueInLoopUpdate {
+    /// A `break`/`continue` written in a header slot of the loop it binds
+    /// to; a loop is left from its body.
+    LoopControlInLoopHeader {
         stmt: StmtId,
+        keyword: &'static str,
+        slot: crate::diagnostics::LoopHeaderSlot,
     },
     /// An implicit unit met a context that is not (or not yet known to be)
     /// the unit type; judged at finish on the finalized context. See
@@ -2602,22 +2603,30 @@ impl<'db> InferenceContext<'db> {
         self.record_throw(value, &thrown);
     }
 
-    /// `at` is the `return` itself, for a bare `return;` to report at.
+    /// `at` is the `return` itself, for a bare `return;` to report at. A
+    /// `return` that leaves a `defer` body or an expression context
+    /// ([`Self::return_escape`]) is rejected and still typed against the
+    /// innermost callable, so its value gets no second report.
     fn infer_return(
         &mut self,
         body: &ExprBody,
         value: Option<ExprId>,
         at: crate::diagnostics::DiagnosticLocation,
     ) {
-        // A `return` in the initializer itself leaves the global; one inside
-        // a lambda the initializer builds is ordinary.
-        if self.returns_from_owner()
-            && let Some(name) = self.global_initializer()
-        {
-            self.report(PendingDiag::ReturnInGlobalInitializer {
-                at: at.clone(),
-                name,
-            });
+        match self.return_escape() {
+            Some(frames::ReturnEscape::Defer) => {
+                self.report(PendingDiag::DeferEscape {
+                    at: at.clone(),
+                    keyword: "return",
+                });
+            }
+            Some(frames::ReturnEscape::Outside(context)) => {
+                self.report(PendingDiag::ReturnOutsideFunctionBody {
+                    at: at.clone(),
+                    context,
+                });
+            }
+            None => {}
         }
         let frame = self.return_frame();
         let (expected, floor) = (frame.expected.clone(), frame.scoped_bindings_floor);
@@ -3469,13 +3478,6 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             Expr::Return { value } => {
-                if self.inside_defer() {
-                    self.report(PendingDiag::DeferEscape {
-                        stmt: None,
-                        expr: Some(expr),
-                        keyword: "return",
-                    });
-                }
                 self.infer_return(
                     body,
                     *value,
@@ -3604,13 +3606,6 @@ impl<'db> InferenceContext<'db> {
                 self.infer_let(body, *pattern, *initializer, *else_branch);
             }
             Stmt::Return(value) => {
-                if self.inside_defer() {
-                    self.report(PendingDiag::DeferEscape {
-                        stmt: Some(stmt),
-                        expr: None,
-                        keyword: "return",
-                    });
-                }
                 self.infer_return(
                     body,
                     *value,
@@ -3633,12 +3628,12 @@ impl<'db> InferenceContext<'db> {
                 } else {
                     flow::LoopEdge::Continue
                 };
-                // A rejected jump is not a jump: the flow goes on past it,
-                // so the rejection is the only report it gets.
+                // A rejected jump still ends the flow as written, but records
+                // no edge, and the reachability pass does not report the
+                // code after it: the rejection is the only report it gets.
                 let rejected = match self.loop_control_escape() {
                     Some(frames::LoopControlEscape::Defer) => Some(PendingDiag::DeferEscape {
-                        stmt: Some(stmt),
-                        expr: None,
+                        at: crate::diagnostics::DiagnosticLocation::Stmt(stmt),
                         keyword: edge.keyword(),
                     }),
                     Some(frames::LoopControlEscape::OutsideLoop(barrier)) => {
@@ -3648,24 +3643,25 @@ impl<'db> InferenceContext<'db> {
                             barrier,
                         })
                     }
-                    // MIR's `continue` target in a C-style loop is the update
-                    // slot itself, so a `continue` written there would loop
-                    // on the update; no flow models that, and it is refused.
-                    None if matches!(edge, flow::LoopEdge::Continue) && self.in_update_slot() => {
-                        Some(PendingDiag::ContinueInLoopUpdate { stmt })
-                    }
-                    None => None,
+                    // A loop is left from its body: a jump in a header slot
+                    // (rustc's E0590 rule) is refused.
+                    None => self
+                        .loop_header()
+                        .map(|slot| PendingDiag::LoopControlInLoopHeader {
+                            stmt,
+                            keyword: edge.keyword(),
+                            slot,
+                        }),
                 };
                 match rejected {
                     Some(diag) => {
                         self.report(diag);
                         self.loop_verdicts.rejected_jumps.insert(stmt);
+                        self.mark_rejected_jump();
                     }
-                    None => {
-                        self.record_loop_edge(edge);
-                        self.set_diverges(Diverges::Always);
-                    }
+                    None => self.record_loop_edge(edge),
                 }
+                self.set_diverges(Diverges::Always);
             }
             Stmt::Defer { body: defer_body } => {
                 // BEP-042: the defer body runs at scope exit; escaping
@@ -3698,11 +3694,12 @@ impl<'db> InferenceContext<'db> {
                 // condition is typed in that flow, the body under the
                 // condition's true facts, and the update slot where the body
                 // completes and where every `continue` lands. The loop's
-                // exits are the condition's false edge and every `break`;
-                // the post-loop flow is their merge, and the code after the
-                // loop is reachable exactly when some exit is. The false
-                // edge leaves the havoced flow, so a zero-iteration loop
-                // keeps no body narrowing (B-735).
+                // exits are the condition's false edge and the body's
+                // `break`s (a header holds no jump: E0188); the post-loop
+                // flow is their merge, and the code after the loop is
+                // reachable exactly when some exit is. The false edge leaves
+                // the havoced flow, so a zero-iteration loop keeps no body
+                // narrowing (B-735).
                 let writes = self.assigned_bindings_in(
                     body,
                     [BodyNode::Expr(*condition), BodyNode::Expr(*loop_body)]
@@ -3712,17 +3709,12 @@ impl<'db> InferenceContext<'db> {
                 for binding in writes {
                     self.flow.remove(&binding);
                 }
-                // Divergence before the loop: the loop's own is decided by
-                // its exit edges, not by a `break` in its header, which
-                // diverges from the header's point of view but leaves the
-                // loop alive.
-                let saved = self.diverges();
-                self.set_diverges(Diverges::Maybe);
                 self.enter_loop();
-                let (condition_ty, facts) = self.check_condition(body, *condition);
-                // The false edge exists only where the condition can
-                // complete: a header that always `break`s has recorded that
-                // edge instead, and one that always returns leaves none.
+                self.set_loop_header(Some(LoopHeaderSlot::WhileCondition));
+                let (_, facts) = self.check_condition(body, *condition);
+                self.set_loop_header(None);
+                // The false edge exists only where the condition completes:
+                // a header that always returns leaves none.
                 let header_completes = self.diverges() == Diverges::Maybe;
                 let header_flow = self.flow.clone();
                 // The body is entered where the header completes, so under
@@ -3743,27 +3735,34 @@ impl<'db> InferenceContext<'db> {
                         }
                         None => self.set_diverges(Diverges::Always),
                     }
-                    self.set_in_update_slot(true);
+                    self.set_loop_header(Some(LoopHeaderSlot::ForUpdate));
                     self.infer_stmt(body, *after);
-                    self.set_in_update_slot(false);
+                    self.set_loop_header(None);
                 }
                 let frame = self.leave_loop();
                 // A statically true condition has no false edge.
                 let mut exits = frame.breaks;
-                if header_completes
-                    && !self.condition_is_statically_true(body, *condition, &condition_ty)
-                {
+                if header_completes && !self.condition_is_statically_true(body, *condition) {
                     let mut false_edge = header_flow.clone();
                     false_edge.extend(facts.when_false);
                     exits.push(false_edge);
                 }
+                // An exit is reached exactly when the loop is entered (the
+                // header is typed under the entry divergence, and a dead
+                // body records no edge), so some exit means the entry point
+                // was live.
                 match self.merge_reaching(exits) {
                     Some(flow) => {
                         self.flow = flow;
-                        self.set_diverges(saved);
+                        self.set_diverges(Diverges::Maybe);
                     }
                     // No exit edge at all: the loop never completes, and
-                    // everything after it is unreachable.
+                    // everything after it is unreachable - unless the exit
+                    // the author wrote was rejected, which is report enough.
+                    None if frame.has_rejected_jump => {
+                        self.flow = header_flow;
+                        self.set_diverges(Diverges::Maybe);
+                    }
                     None => {
                         self.loop_verdicts.diverging_loops.insert(stmt);
                         self.flow = header_flow;
@@ -3783,11 +3782,10 @@ impl<'db> InferenceContext<'db> {
                 for binding in writes {
                     self.flow.remove(&binding);
                 }
-                // As for `while`: the loop's divergence is its exit edges'.
-                let saved = self.diverges();
-                self.set_diverges(Diverges::Maybe);
                 self.enter_loop();
+                self.set_loop_header(Some(LoopHeaderSlot::WhileLetScrutinee));
                 let scrut_ty = self.infer_expr(body, *scrutinee, &Expectation::None);
+                self.set_loop_header(None);
                 let scrut = self.scrutinee_demand(&scrut_ty);
                 let outcome = self.lower_pattern(body, *pattern, &scrut);
                 let header_completes = self.diverges() == Diverges::Maybe;
@@ -3812,7 +3810,11 @@ impl<'db> InferenceContext<'db> {
                 match self.merge_reaching(exits) {
                     Some(flow) => {
                         self.flow = flow;
-                        self.set_diverges(saved);
+                        self.set_diverges(Diverges::Maybe);
+                    }
+                    None if frame.has_rejected_jump => {
+                        self.flow = header_flow;
+                        self.set_diverges(Diverges::Maybe);
                     }
                     None => {
                         self.loop_verdicts.diverging_loops.insert(stmt);
@@ -3831,10 +3833,13 @@ impl<'db> InferenceContext<'db> {
                 let collection_ty = self.infer_expr(body, *collection, &Expectation::None);
                 let resolved = self.table.resolve_completely(&collection_ty);
                 let collection_ty = self.matrix_scrut(&resolved);
-                // List elements directly; everything else through the
-                // Iterator protocol (the `iter.Iterable` Item projection).
+                // List elements directly; a collection that never produces
+                // a value yields no element (the bottom type is iterable, as
+                // it is everything); everything else through the Iterator
+                // protocol (the `iter.Iterable` Item projection).
                 let element = match collection_ty.kind() {
                     InferTy::List(element) => element.clone(),
+                    InferTy::Never => Ty::never(),
                     _ => self.iteration_item(&collection_ty, *collection),
                 };
                 let outcome = self.lower_pattern(body, *binding, &element);
@@ -3916,25 +3921,21 @@ impl<'db> InferenceContext<'db> {
     /// that merely happens to be true at runtime is not, and must not be,
     /// recognized. `for (;;)` is out of scope: its empty condition lowers to
     /// `Expr::Missing`, not to a literal.
-    fn condition_is_statically_true(
-        &mut self,
-        body: &ExprBody,
-        condition: ExprId,
-        condition_ty: &Ty,
-    ) -> bool {
-        if matches!(
-            &body.exprs[condition],
-            Expr::Literal(baml_type::Literal::Bool(true))
-        ) {
-            return true;
-        }
+    fn condition_is_statically_true(&mut self, body: &ExprBody, condition: ExprId) -> bool {
         // Truthiness (B-1563) widens "statically true" beyond the literal
-        // `true` type: any always-truthy condition (`while ("x")`, an
-        // instance, a closure) has no exit edge either.
-        matches!(
-            crate::infer::truthy::truthiness(&self.table.resolve_completely(condition_ty)),
-            crate::infer::truthy::Truthiness::AlwaysTruthy
-        )
+        // `true`: any always-truthy condition (`while ("x")`, an instance,
+        // a closure, `flag || true`) has no exit edge. The walk is
+        // reachability's, on the types resolved so far.
+        reachability::static_condition(
+            body,
+            &mut |expr| {
+                self.result
+                    .type_of_expr
+                    .get(&expr)
+                    .map(|ty| self.table.resolve_completely(ty))
+            },
+            condition,
+        ) == Some(true)
     }
 
     /// `let type T extends … = operand else { … };`: mint the block-scoped
@@ -14107,9 +14108,9 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
-                    PendingDiag::ReturnInGlobalInitializer { at, name } => {
+                    PendingDiag::ReturnOutsideFunctionBody { at, context } => {
                         diags.push(TirDiagnostic {
-                            error: TirTypeError::ReturnInGlobalInitializer { name },
+                            error: TirTypeError::ReturnOutsideFunctionBody { context },
                             severity: DiagnosticSeverity::Error,
                             primary: at,
                             related: Vec::new(),
@@ -14138,20 +14139,11 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
-                    PendingDiag::DeferEscape {
-                        stmt,
-                        expr,
-                        keyword,
-                    } => {
-                        let primary = match (stmt, expr) {
-                            (Some(stmt), _) => DiagnosticLocation::Stmt(stmt),
-                            (None, Some(expr)) => DiagnosticLocation::Expr(expr),
-                            (None, None) => unreachable!("one anchor is always set"),
-                        };
+                    PendingDiag::DeferEscape { at, keyword } => {
                         diags.push(TirDiagnostic {
                             error: TirTypeError::DeferControlFlowEscape { keyword },
                             severity: DiagnosticSeverity::Error,
-                            primary,
+                            primary: at,
                             related: Vec::new(),
                         });
                         continue;
@@ -14169,9 +14161,13 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
-                    PendingDiag::ContinueInLoopUpdate { stmt } => {
+                    PendingDiag::LoopControlInLoopHeader {
+                        stmt,
+                        keyword,
+                        slot,
+                    } => {
                         diags.push(TirDiagnostic {
-                            error: TirTypeError::ContinueInLoopUpdate,
+                            error: TirTypeError::LoopControlInLoopHeader { keyword, slot },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Stmt(stmt),
                             related: Vec::new(),

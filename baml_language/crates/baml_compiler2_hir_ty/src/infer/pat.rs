@@ -1565,6 +1565,9 @@ impl<'db> InferenceContext<'db> {
         let structure = self.structurally_resolve(scrut);
         let tuple_slots = |ty: &Ty| match ty.kind() {
             InferTy::Tuple(slots) if slots.len() == arity => Some(slots.to_vec()),
+            // The bottom type is every tuple: the pattern covers it and
+            // binds nothing that exists.
+            InferTy::Never => Some(vec![Ty::never(); arity]),
             _ if tuple_pattern_is_open(ty) => Some(vec![Ty::intern(InferTy::Unknown); arity]),
             _ => None,
         };
