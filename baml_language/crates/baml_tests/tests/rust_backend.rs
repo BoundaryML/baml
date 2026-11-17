@@ -971,7 +971,7 @@ function main() -> int { make(3).x }",
                 Some("passed to baml.ops.equals_equals"),
                 Some("passed to baml.ops.equals_equals"),
                 Some("stored into a container"),
-                Some("passed to baml.Array.includes"),
+                Some("passed to generic baml.Array.includes"),
             ],
         ),
         (
