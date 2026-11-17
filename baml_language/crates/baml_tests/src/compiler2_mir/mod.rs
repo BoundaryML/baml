@@ -179,6 +179,44 @@ function mixed(v: int | string) -> string { `${v}` }
 }
 
 #[test]
+fn primitive_to_string_calls_skip_the_generic_renderer() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Point { x int }
+class Holder { k int }
+function methods(k: int, f: float, b: bool, a: string, h: Holder) -> string {
+  k.to_string() + f.to_string() + b.to_string() + a.to_string() + h.k.to_string()
+}
+function literal() -> string { (5).to_string() }
+function generic<T>(value: T) -> string { value.to_string() }
+function structural(p: Point) -> string { p.to_string() }
+function mixed(v: int | string) -> string { v.to_string() }
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    for name in ["methods", "literal"] {
+        let mir = function_mir(&output, name);
+        assert!(!mir.contains("_to_string_default"), "{mir}");
+        assert!(!mir.contains("as baml.ToString"), "{mir}");
+    }
+    assert_eq!(
+        function_mir(&output, "methods")
+            .matches("_to_string_primitive")
+            .count(),
+        4,
+        "{output}"
+    );
+    for name in ["generic", "structural", "mixed"] {
+        let mir = function_mir(&output, name);
+        assert!(!mir.contains("_to_string_primitive"), "{mir}");
+        assert!(mir.contains("to_string as baml.ToString"), "{mir}");
+    }
+}
+
+#[test]
 fn string_plus_chains_join_in_one_step() {
     let mut db = make_db();
     let file = db.file(
@@ -247,10 +285,12 @@ function roundtrip(value: int) -> bool {
     );
     assert_no_diagnostic_errors(&db);
     let output = render_mir(&db, file);
+    // An `int` renders through the primitive formatter rather than the
+    // structural renderer (no package can override how it renders).
     for native in [
         "_to_json_default",
         "_from_json_structural_default",
-        "_to_string_default",
+        "_to_string_primitive",
     ] {
         assert!(output.contains(native), "missing {native}:\n{output}");
     }

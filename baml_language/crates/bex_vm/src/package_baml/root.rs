@@ -112,7 +112,7 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// for those types; any other value still renders, structurally.
     fn _to_string_primitive(vm: &BexVm, value: &Value) -> bex_str::BexStr {
         if let Some(text) = primitive_text(vm, *value) {
-            return text.into();
+            return text;
         }
         let mut state = StringRenderState::with_overrides(&[], &[]);
         let mut sink = StringRenderSink::default();
@@ -657,14 +657,17 @@ impl StructuralRenderSink for StringRenderSink {
 /// The text of an `int`, `float`, `bool` or `null`, top-level or nested; `None`
 /// for any other value. The leaf rendering of [`render_to_sink`], and all of
 /// `string.from` for these types.
-fn primitive_text(vm: &BexVm, value: Value) -> Option<String> {
+///
+/// An `int`, `bool` or `null` is formatted on the stack: its text always fits
+/// in an inline string, so rendering one allocates nothing.
+fn primitive_text(vm: &BexVm, value: Value) -> Option<bex_str::BexStr> {
     match value.kind() {
-        ValueKind::Null => Some("null".to_string()),
-        ValueKind::Int(i) => Some(i.to_string()),
-        ValueKind::Bool(b) => Some(b.to_string()),
-        ValueKind::Float(f) => Some(bex_vm_types::format_float(f)),
+        ValueKind::Null => Some(bex_str::BexStr::from("null")),
+        ValueKind::Int(i) => Some(bex_str::BexStr::from(itoa::Buffer::new().format(i))),
+        ValueKind::Bool(b) => Some(bex_str::BexStr::from(if b { "true" } else { "false" })),
+        ValueKind::Float(f) => Some(bex_vm_types::format_float(f).into()),
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::Float(f) => Some(bex_vm_types::format_float(*f)),
+            Object::Float(f) => Some(bex_vm_types::format_float(*f).into()),
             _ => None,
         },
         ValueKind::OmittedArg => None,

@@ -3,6 +3,7 @@ use std::{borrow::Cow, cmp::Ordering};
 use bex_heap::TlabHolder;
 use bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, RootVisitor, types::Value};
 use num_bigint::BigInt;
+use smallvec::SmallVec;
 
 use super::{ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
 use crate::{
@@ -979,6 +980,9 @@ impl BamlClassArray for PackageBamlImpl {
     }
 
     fn join(vm: &mut BexVm, array: ArrayView<'_>, separator: &bex_str::BexStr) -> NativeCallResult {
+        if let Some(joined) = join_string_elements(vm, &array, separator) {
+            return NativeCallResult::Done(Value::object(vm.alloc_string(joined)));
+        }
         super::root::join_honoring_overrides(vm, array.to_vec(), separator.as_str().to_owned())
     }
 
@@ -1235,4 +1239,27 @@ impl BamlClassArray for PackageBamlImpl {
             }),
         }
     }
+}
+
+/// `elements` joined by `separator` when every element is a string, the usual
+/// case: a string renders as itself, so there is no `to_string` to dispatch,
+/// and the parts are copied once into a buffer of the final size. `None` when
+/// some element is not a string.
+fn join_string_elements(
+    vm: &BexVm,
+    elements: &[Value],
+    separator: &bex_str::BexStr,
+) -> Option<bex_str::BexStr> {
+    let mut parts: SmallVec<[&bex_str::BexStr; 32]> =
+        SmallVec::with_capacity(elements.len().saturating_mul(2));
+    for (index, element) in elements.iter().enumerate() {
+        let Object::String(text) = vm.get_object(element.as_object_ptr()?) else {
+            return None;
+        };
+        if index > 0 && !separator.is_empty() {
+            parts.push(separator);
+        }
+        parts.push(text);
+    }
+    Some(bex_str::BexStr::concat_many(&parts))
 }
