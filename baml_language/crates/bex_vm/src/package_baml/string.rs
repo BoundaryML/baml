@@ -370,7 +370,7 @@ mod tests {
 
     /// Every whitespace character `char::is_whitespace` knows, ASCII first.
     fn whitespace() -> Vec<char> {
-        (0..=0x10FFFF_u32)
+        (0..=u32::from(char::MAX))
             .filter_map(char::from_u32)
             .filter(|c| c.is_whitespace())
             .collect()
