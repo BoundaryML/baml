@@ -410,15 +410,16 @@ struct StaticVirtualCallTarget {
 
 /// One `VirtualCall` that [`BexVm::enter_cached_virtual_call`] entered: at
 /// this site, this receiver object with this interface operand object
-/// dispatched to `callee`, whose frame takes `type_args` (`None` for none).
+/// dispatched through static cache entry `entry`.
 ///
 /// Between two collections an object neither moves nor changes its class or
-/// type arguments, and the static cache never changes an entry, so a call
-/// from the same site on the same two objects dispatches the same way: the
-/// memo answers it with four word compares instead of building, hashing and
+/// type arguments, and the static cache only appends entries, so a call from
+/// the same site on the same two objects dispatches the same way: the memo
+/// answers it with four word compares instead of building, hashing and
 /// comparing a cache key. An iterator adapter's `next` calls its source this
-/// way on every element. Collections clear every memo.
-#[derive(Clone)]
+/// way on every element. A collection rebuilds the cache and clears every
+/// memo. Plain words, so remembering a call costs a few stores.
+#[derive(Clone, Copy)]
 struct VirtualCallMemo {
     /// The caller's cache identity; zero for an empty slot (no identity is
     /// zero: a static function's payload address, or a tagged pointer).
@@ -426,21 +427,18 @@ struct VirtualCallMemo {
     pc: usize,
     receiver: usize,
     iface: usize,
-    callee: HeapPtr,
-    type_args: Option<Arc<[bex_vm_types::RealizedTy]>>,
+    /// The entry's index in `static_virtual_call_cache`.
+    entry: usize,
 }
 
 impl VirtualCallMemo {
-    fn empty() -> Self {
-        Self {
-            caller: 0,
-            pc: 0,
-            receiver: 0,
-            iface: 0,
-            callee: HeapPtr::null(),
-            type_args: None,
-        }
-    }
+    const EMPTY: Self = Self {
+        caller: 0,
+        pc: 0,
+        receiver: 0,
+        iface: 0,
+        entry: 0,
+    };
 }
 
 /// How many sites the `VirtualCall` memo remembers at once, direct-mapped
@@ -962,11 +960,8 @@ pub(crate) mod tests {
             pending_call_passes_type_args: false,
             static_load_type_cache: FxHashMap::default(),
             static_virtual_call_cache: super::VirtualSiteCache::default(),
-            virtual_call_memo: vec![
-                super::VirtualCallMemo::empty();
-                super::VIRTUAL_CALL_MEMO_SLOTS
-            ]
-            .into_boxed_slice(),
+            virtual_call_memo: vec![super::VirtualCallMemo::EMPTY; super::VIRTUAL_CALL_MEMO_SLOTS]
+                .into_boxed_slice(),
             static_virtual_field_cache: super::VirtualSiteCache::default(),
             impl_cache: std::cell::RefCell::default(),
             json_decode_cache: crate::package_baml::json::DecodeCache::default(),
@@ -1702,10 +1697,18 @@ pub(crate) mod tests {
             .iter()
             .filter(|memo| memo.caller != 0)
             .collect();
-        assert_eq!(remembered.len(), 1, "the loop's one call site is remembered");
+        assert_eq!(
+            remembered.len(),
+            1,
+            "the loop's one call site is remembered"
+        );
+        let (_, target) = vm
+            .static_virtual_call_cache
+            .get_index(remembered[0].entry)
+            .expect("the memo names a cache entry");
         assert!(
-            remembered[0]
-                .type_args
+            target
+                .shared_frame_type_args
                 .as_deref()
                 .is_some_and(|args| args == [bex_vm_types::RealizedTy::string()]),
             "`Counter<string>`'s frames share its type argument",
@@ -2952,7 +2955,7 @@ impl BexVm {
             pending_call_passes_type_args: false,
             static_load_type_cache: FxHashMap::default(),
             static_virtual_call_cache: VirtualSiteCache::default(),
-            virtual_call_memo: vec![VirtualCallMemo::empty(); VIRTUAL_CALL_MEMO_SLOTS]
+            virtual_call_memo: vec![VirtualCallMemo::EMPTY; VIRTUAL_CALL_MEMO_SLOTS]
                 .into_boxed_slice(),
             static_virtual_field_cache: VirtualSiteCache::default(),
             impl_cache: std::cell::RefCell::default(),
@@ -8414,20 +8417,14 @@ impl BexVm {
             .map_or(0, |ptr| ptr.as_ptr() as usize);
         let iface_addr = iface_ptr.as_ptr() as usize;
         let slot = ((identity >> 4) ^ pc) & (VIRTUAL_CALL_MEMO_SLOTS - 1);
-        let memo = &self.virtual_call_memo[slot];
-        let (callee_ptr, type_args) = if memo.caller == identity
+        let memo = self.virtual_call_memo[slot];
+        let remembered = memo.caller == identity
             && memo.pc == pc
             && memo.receiver == receiver_addr
-            && memo.iface == iface_addr
-        {
-            // Checked when the memo was made, against the same callee.
-            let type_args = memo
-                .type_args
-                .as_ref()
-                .map_or_else(FrameTypeArgs::default, |shared| {
-                    FrameTypeArgs::Shared(Arc::clone(shared))
-                });
-            (memo.callee, type_args)
+            && memo.iface == iface_addr;
+        let entry = if remembered {
+            // Checked when the memo was made, against the same entry.
+            memo.entry
         } else {
             let mut scratch = None;
             let Some(query) =
@@ -8439,21 +8436,13 @@ impl BexVm {
             // cache keyed for as long as it lives; a container's type is
             // read off it each time.
             let memoizable = matches!(query.receiver, VirtualReceiverQuery::Class { .. });
-            let Some(target) = self.static_virtual_call_cache.get(&query) else {
+            let Some((entry, _, target)) = self.static_virtual_call_cache.get_full(&query) else {
                 return Ok(None);
             };
-            if target.arg_count != Some(nargs) {
-                return Ok(None);
-            }
-            let shared = if target.frame_type_args.is_empty() {
-                None
-            } else if let Some(shared) = &target.shared_frame_type_args {
-                Some(Arc::clone(shared))
-            } else {
-                return Ok(None);
-            };
-            let callee_ptr = target.callee.ptr();
-            if !Self::enters_as_plain_bytecode(callee_ptr, nargs) {
+            if target.arg_count != Some(nargs)
+                || (!target.frame_type_args.is_empty() && target.shared_frame_type_args.is_none())
+                || !Self::enters_as_plain_bytecode(target.callee.ptr(), nargs)
+            {
                 return Ok(None);
             }
             if memoizable {
@@ -8462,12 +8451,18 @@ impl BexVm {
                     pc,
                     receiver: receiver_addr,
                     iface: iface_addr,
-                    callee: callee_ptr,
-                    type_args: shared.clone(),
+                    entry,
                 };
             }
-            let type_args = shared.map_or_else(FrameTypeArgs::default, FrameTypeArgs::Shared);
-            (callee_ptr, type_args)
+            entry
+        };
+        let Some((_, target)) = self.static_virtual_call_cache.get_index(entry) else {
+            verifier_unreachable!()
+        };
+        let callee_ptr = target.callee.ptr();
+        let type_args = match &target.shared_frame_type_args {
+            Some(shared) => FrameTypeArgs::Shared(Arc::clone(shared)),
+            None => FrameTypeArgs::default(),
         };
         // SAFETY: the callee is live: collection drops cache entries whose
         // callee died and clears the memo. The active heap permit prevents
@@ -14370,7 +14365,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // function, and a dead entry must go, so the tables are rebuilt.
         // The memo names objects by address, which a collection may move or
         // free.
-        virtual_call_memo.fill(VirtualCallMemo::empty());
+        virtual_call_memo.fill(VirtualCallMemo::EMPTY);
         let old_virtual_call_cache = std::mem::take(static_virtual_call_cache);
         for (mut key, mut target) in old_virtual_call_cache {
             if key.forward(visitor)
