@@ -5,7 +5,7 @@
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArrayReadGuard, MapReadGuard,
-    types::{Instance, Value},
+    types::{InstanceRef, Value},
 };
 
 use crate::{

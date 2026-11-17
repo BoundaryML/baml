@@ -6,7 +6,7 @@
 //! what makes an occupied redirect a GC root and what repoints it after a
 //! collection moves the replacement.
 
-use std::{collections::HashMap, sync::Mutex};
+use std::sync::Mutex;
 
 use bex_vm_types::{HeapPtr, Object};
 
@@ -162,8 +162,8 @@ impl BexHeap {
 
     /// Follow a collection: repoint every entry, then rewrite each target's
     /// redirect, since the replacement, the target, or both may have moved.
-    pub fn hotswap_forward(&self, _parked: &HeapGuard<'_>, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        let forward = |ptr: HeapPtr| forwarding.get(&ptr).copied().unwrap_or(ptr);
+    pub fn hotswap_forward(&self, _parked: &HeapGuard<'_>, forwarding: &crate::Forwarding<'_>) {
+        let forward = |ptr: HeapPtr| forwarding.get(ptr).unwrap_or(ptr);
         let mut entries = self.hotswap.entries();
         let entries = &mut *entries;
         entries.clients = entries.clients.map(forward);
