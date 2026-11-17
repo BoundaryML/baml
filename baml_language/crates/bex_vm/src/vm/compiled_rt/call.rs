@@ -227,7 +227,6 @@ impl BexVm {
         event_name: Value,
         pc: u32,
     ) -> Result<(), Box<VmError>> {
-        // A pending body's log names its frame, so its chain is linked first.
         self.materialize(frame);
         let name = if event_name.is_null() || event_name.is_omitted() {
             None

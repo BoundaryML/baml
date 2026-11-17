@@ -136,8 +136,6 @@ impl BexVm {
             self.stack.truncate(base);
             drop(unlink);
         } else {
-            // The record path's zombie: linked where it stands, with its
-            // pending callers, then boxed in place.
             std::mem::forget(unlink);
             self.materialize(&record);
             let linked: *const FrameRecord = &raw const record;
@@ -217,8 +215,6 @@ impl BexVm {
     fn frameless_unwound(&mut self, caller: &FrameRecord, callee: ObjectIndex) {
         self.materialize(caller);
         let function = self.record_object(caller, callee);
-        // The callee's base is the stack height at the call: the callee pushes
-        // nothing of its own, and what its callees left starts above it.
         let mut base = self.stack.len();
         let at: *const FrameRecord = caller;
         for record in self.chain().iter() {

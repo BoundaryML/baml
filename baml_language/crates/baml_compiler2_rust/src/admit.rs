@@ -314,11 +314,6 @@ fn admission_fixpoint(
             })
             .map(|(&object, _)| object)
             .collect();
-        // Bodies a compiled caller runs without linking a record for them
-        // (`frameless` in bex_vm): no VM-frame state, no handler, no trace
-        // builtin. One that cannot pause runs on its caller's record; one that
-        // can runs on a pending record, which anything that suspends or
-        // extends the chain links first.
         let frameless: BTreeSet<usize> = units
             .iter()
             .filter(|&(&object, unit)| {

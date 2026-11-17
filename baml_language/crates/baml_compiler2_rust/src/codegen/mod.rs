@@ -287,9 +287,6 @@ impl<'db> Generator<'_, 'db> {
         // Every closure exit records the current PC before returning an error.
         // `mask` has bit `i` set when the caller proved argument `i`, and all
         // it reaches, thread-local (`escape::EscapeFacts::needs`).
-        // A recursive entry stays a function of its own, so its body closure
-        // inlines into it and the recursion passes arguments in registers
-        // rather than through the closure's captures.
         let inline = if self.recursive {
             "#[inline(never)]"
         } else {
