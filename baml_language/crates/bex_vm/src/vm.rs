@@ -267,7 +267,7 @@ enum VirtualReceiverKey {
 /// The borrowed form of a [`VirtualSiteKey`]: the receiver's and the
 /// interface's type arguments are read where they live (the instance and the
 /// interface operand's type object).
-#[derive(Debug, PartialEq, Hash)]
+#[derive(Debug, PartialEq)]
 struct VirtualSiteQuery<'a> {
     caller_function_addr: usize,
     call_pc: usize,
@@ -283,6 +283,26 @@ enum VirtualReceiverQuery<'a> {
         type_args: &'a [bex_vm_types::RealizedTy],
     },
     Other(&'a bex_vm_types::RealizedTy),
+}
+
+/// Type arguments are compared, not hashed. Hashing them walked every
+/// argument's type on every dispatch, and a site rarely sees two
+/// instantiations of one receiver class, so they would seldom separate two
+/// entries anyway: entries that differ only there share a hash and are told
+/// apart by equality.
+impl std::hash::Hash for VirtualSiteQuery<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.caller_function_addr.hash(state);
+        self.call_pc.hash(state);
+        match self.receiver {
+            VirtualReceiverQuery::Class {
+                type_tag,
+                type_args: _,
+            } => type_tag.hash(state),
+            VirtualReceiverQuery::Other(ty) => ty.hash(state),
+        }
+        self.interface_head.hash(state);
+    }
 }
 
 impl VirtualSiteQuery<'_> {
@@ -375,6 +395,11 @@ struct StaticVirtualCallTarget {
     /// Weak, like the key: the cache must not keep a runtime callee alive.
     callee: Weak,
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
+    /// `frame_type_args` as a slice the callee frames of cache hits share,
+    /// when it is non-empty and names compile-time declarations only (so a
+    /// collection has nothing in it to visit or forward). `None` otherwise,
+    /// and for entries a compiled body made.
+    shared_frame_type_args: Option<Arc<[bex_vm_types::RealizedTy]>>,
     /// The callee's value count when the site's pushed arguments are already
     /// the callee's own slots (the site recorded no layout, or the layout it
     /// recorded is the callee's), so a hit skips the layout lookup. `None`
@@ -382,6 +407,58 @@ struct StaticVirtualCallTarget {
     /// compiled body, which lays out its arguments itself.
     arg_count: Option<usize>,
 }
+
+/// One `VirtualCall` that [`BexVm::enter_cached_virtual_call`] entered: at
+/// this site, this receiver object with this interface operand object
+/// dispatched through static cache entry `entry`.
+///
+/// Between two collections an object neither moves nor changes its class or
+/// type arguments, and the static cache only appends entries, so a call from
+/// the same site on the same two objects dispatches the same way: the memo
+/// answers it with four word compares instead of building, hashing and
+/// comparing a cache key. An iterator adapter's `next` calls its source this
+/// way on every element. A collection rebuilds the cache and clears every
+/// memo.
+///
+/// A site that sees a new receiver on every call (`shapes[i].area()`) would
+/// only pay to remember each one, so a memo that was never answered is not
+/// replaced by the same site's next call, except every
+/// [`VIRTUAL_CALL_MEMO_RETRY`]th time, in case the site settles down.
+#[derive(Clone, Copy)]
+struct VirtualCallMemo {
+    /// The caller's cache identity; zero for an empty slot (no identity is
+    /// zero: a static function's payload address, or a tagged pointer).
+    caller: usize,
+    pc: usize,
+    receiver: usize,
+    iface: usize,
+    /// The entry's index in `static_virtual_call_cache`.
+    entry: usize,
+    /// Whether the memo has answered a call.
+    answered: bool,
+    /// The site's calls since the memo was made that it did not answer and
+    /// did not replace it.
+    passed_over: u32,
+}
+
+impl VirtualCallMemo {
+    const EMPTY: Self = Self {
+        caller: 0,
+        pc: 0,
+        receiver: 0,
+        iface: 0,
+        entry: 0,
+        answered: false,
+        passed_over: 0,
+    };
+}
+
+/// See [`VirtualCallMemo`].
+const VIRTUAL_CALL_MEMO_RETRY: u32 = 32;
+
+/// How many sites the `VirtualCall` memo remembers at once, direct-mapped
+/// by site. A power of two.
+const VIRTUAL_CALL_MEMO_SLOTS: usize = 64;
 
 /// What the `LoadType` cache holds for one type constant of one function.
 enum LoadTypeSite {
@@ -493,6 +570,7 @@ const FAST_PATH_OPS: [bool; 256] = {
         Op::LoadVarFieldLocal,
         Op::JumpIfLocalsCmp,
         Op::JumpIfLocalConstCmp,
+        Op::LoadVariant,
         Op::CallExactArgs,
         Op::Return,
     ];
@@ -504,6 +582,87 @@ const FAST_PATH_OPS: [bool; 256] = {
     }
     table
 };
+
+/// A bytecode frame's type arguments: owned, or shared with the
+/// virtual-call cache entry that dispatched to the frame's function.
+///
+/// Sharing is what makes a cached interface call into a generic impl (an
+/// iterator adapter's `next`) cheap: entering the callee bumps a reference
+/// count instead of allocating and cloning the impl's type arguments, and
+/// leaving it drops one. A shared slice names compile-time declarations
+/// only, which never move or die, so a collection has nothing in it to
+/// visit. Only the VM builds one, after checking exactly that; arguments
+/// from anywhere else are owned. Writing to the arguments (`BindType`, a
+/// call's extra lane) makes them owned first.
+#[derive(Clone, Debug, Default)]
+pub struct FrameTypeArgs(FrameTypeArgsRepr);
+
+#[derive(Clone, Debug)]
+enum FrameTypeArgsRepr {
+    Owned(Vec<bex_vm_types::RealizedTy>),
+    Shared(Arc<[bex_vm_types::RealizedTy]>),
+}
+
+impl Default for FrameTypeArgsRepr {
+    fn default() -> Self {
+        Self::Owned(Vec::new())
+    }
+}
+
+impl From<Vec<bex_vm_types::RealizedTy>> for FrameTypeArgs {
+    fn from(args: Vec<bex_vm_types::RealizedTy>) -> Self {
+        Self(FrameTypeArgsRepr::Owned(args))
+    }
+}
+
+impl std::ops::Deref for FrameTypeArgs {
+    type Target = [bex_vm_types::RealizedTy];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl FrameTypeArgs {
+    /// Arguments shared with a virtual-call cache entry. `args` must come
+    /// from [`BexVm::shareable_frame_type_args`], which admits compile-time
+    /// declarations only: a collection does not visit a shared slice.
+    fn shared(args: Arc<[bex_vm_types::RealizedTy]>) -> Self {
+        Self(FrameTypeArgsRepr::Shared(args))
+    }
+
+    pub fn as_slice(&self) -> &[bex_vm_types::RealizedTy] {
+        match &self.0 {
+            FrameTypeArgsRepr::Owned(args) => args,
+            FrameTypeArgsRepr::Shared(args) => args,
+        }
+    }
+
+    /// The arguments as an owned vector, copying a shared slice first.
+    pub fn to_mut(&mut self) -> &mut Vec<bex_vm_types::RealizedTy> {
+        if let FrameTypeArgsRepr::Shared(args) = &self.0 {
+            self.0 = FrameTypeArgsRepr::Owned(args.to_vec());
+        }
+        match &mut self.0 {
+            FrameTypeArgsRepr::Owned(args) => args,
+            FrameTypeArgsRepr::Shared(_) => unreachable!("made owned just above"),
+        }
+    }
+
+    /// Whether dropping these arguments frees nothing: an owned vector that
+    /// never allocated.
+    fn owns_nothing(&self) -> bool {
+        matches!(&self.0, FrameTypeArgsRepr::Owned(args) if args.capacity() == 0)
+    }
+
+    /// The arguments a collection must visit: none for a shared slice.
+    fn roots_mut(&mut self) -> &mut [bex_vm_types::RealizedTy] {
+        match &mut self.0 {
+            FrameTypeArgsRepr::Owned(args) => args,
+            FrameTypeArgsRepr::Shared(_) => &mut [],
+        }
+    }
+}
 
 /// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
@@ -524,7 +683,7 @@ pub struct BytecodeFrame {
     /// concrete type, seeded from the callee's realized `Object` type args
     /// (`GenericFunction`/`BoundMethod`/`Closure`/`Instance`), so a `LoadType`
     /// substitutes them into a fully realized type.
-    pub type_args: Vec<bex_vm_types::RealizedTy>,
+    pub type_args: FrameTypeArgs,
     /// Byte offset of the most recently dispatched opcode (compact path).
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
@@ -597,8 +756,9 @@ impl RootHaver for BytecodeFrame {
         // A frame's type arguments may name runtime declarations (a slot
         // bound from a runtime class, a receiver's live binding). The
         // realized argument is the type `LoadType` reads, so its heads must
-        // survive and move with the frame.
-        type_args.visit_roots(visitor);
+        // survive and move with the frame. A shared slice names compile-time
+        // declarations only: nothing to visit.
+        type_args.roots_mut().visit_roots(visitor);
     }
 }
 
@@ -826,6 +986,8 @@ pub(crate) mod tests {
             pending_call_passes_type_args: false,
             static_load_type_cache: FxHashMap::default(),
             static_virtual_call_cache: super::VirtualSiteCache::default(),
+            virtual_call_memo: vec![super::VirtualCallMemo::EMPTY; super::VIRTUAL_CALL_MEMO_SLOTS]
+                .into_boxed_slice(),
             static_virtual_field_cache: super::VirtualSiteCache::default(),
             impl_cache: std::cell::RefCell::default(),
             json_decode_cache: crate::package_baml::json::DecodeCache::default(),
@@ -1511,6 +1673,103 @@ pub(crate) mod tests {
         );
     }
 
+    /// A `VirtualCall` the static cache answers is entered directly, its frame
+    /// sharing the impl's type arguments, and the site remembers the
+    /// receiver. A collection forgets it: the memo names objects by address.
+    #[test]
+    fn cached_virtual_calls_are_remembered_until_a_collection() {
+        let program = baml_test_support::compile_source(
+            r#"
+            interface Step {
+                function step(self) -> int throws never
+            }
+            class Counter<T> {
+                n: int
+                tag: T
+                implements Step {
+                    function step(self) -> int {
+                        self.n += 1;
+                        self.n
+                    }
+                }
+            }
+            function make() -> Step {
+                Counter<string> { n: 0, tag: "x" }
+            }
+            function main() -> int {
+                let c = make();
+                let s = 0;
+                for (let i = 0; i < 5; i += 1) {
+                    s += c.step();
+                }
+                s
+            }
+            "#,
+        );
+        let entry = program.rendered_callables()["user.main"].object.raw();
+        let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        vm.disable_telemetry();
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+        let result = loop {
+            match vm.exec().expect("execution succeeds") {
+                super::VmExecState::Complete(value) => break value.as_int().unwrap(),
+                super::VmExecState::EarlyYield => {}
+                other => panic!("unexpected state: {other:?}"),
+            }
+        };
+        assert_eq!(result, 1 + 2 + 3 + 4 + 5);
+        let remembered: Vec<_> = vm
+            .virtual_call_memo
+            .iter()
+            .filter(|memo| memo.caller != 0)
+            .collect();
+        assert_eq!(
+            remembered.len(),
+            1,
+            "the loop's one call site is remembered"
+        );
+        let (_, target) = vm
+            .static_virtual_call_cache
+            .get_index(remembered[0].entry)
+            .expect("the memo names a cache entry");
+        assert!(
+            target
+                .shared_frame_type_args
+                .as_deref()
+                .is_some_and(|args| args == [bex_vm_types::RealizedTy::string()]),
+            "`Counter<string>`'s frames share its type argument",
+        );
+
+        let mut roots = Vec::new();
+        vm.collect_roots(&mut roots);
+        let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        let heap = Arc::clone(&vm.heap);
+        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
+        assert!(vm.virtual_call_memo.iter().all(|memo| memo.caller == 0));
+    }
+
+    /// A frame that shares a dispatch cache entry's type arguments copies
+    /// them before writing (`BindType`), so the entry and the next frames
+    /// that share it keep the original arguments.
+    #[test]
+    fn shared_frame_type_args_copy_before_a_write() {
+        let shared: Arc<[bex_vm_types::RealizedTy]> =
+            Arc::from(vec![bex_vm_types::RealizedTy::int()]);
+        let mut args = super::FrameTypeArgs::shared(Arc::clone(&shared));
+        assert!(!args.owns_nothing());
+        args.to_mut().push(bex_vm_types::RealizedTy::string());
+        assert_eq!(&shared[..], &[bex_vm_types::RealizedTy::int()]);
+        assert_eq!(
+            args.as_slice(),
+            &[
+                bex_vm_types::RealizedTy::int(),
+                bex_vm_types::RealizedTy::string()
+            ]
+        );
+        assert!(matches!(args.0, super::FrameTypeArgsRepr::Owned(_)));
+        assert!(super::FrameTypeArgs::default().owns_nothing());
+    }
+
     /// A declaration is reachable from a frame's bound types through the type's
     /// own head, so it is rooted and repointed with no table to keep in step.
     #[test]
@@ -1542,7 +1801,8 @@ pub(crate) mod tests {
         frame.type_args = vec![bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
             Box::new([]),
-        )];
+        )]
+        .into();
 
         let mut roots = Vec::new();
         vm.collect_roots(&mut roots);
@@ -1976,6 +2236,10 @@ pub struct BexVm {
     /// Fx-hashed: the keys are call sites and program types, never program
     /// input.
     static_virtual_call_cache: VirtualSiteCache<StaticVirtualCallTarget>,
+    /// The last call each of a few sites entered through
+    /// `static_virtual_call_cache`, by object identity; see
+    /// [`VirtualCallMemo`]. Weak, and cleared by every collection.
+    virtual_call_memo: Box<[VirtualCallMemo]>,
     /// The field analogue of `static_virtual_call_cache`: the physical slot a
     /// `VirtualLoadField`/`VirtualStoreField` site resolved for a receiver
     /// type, under the same rule (only immutable program-image impls enter).
@@ -2718,6 +2982,8 @@ impl BexVm {
             pending_call_passes_type_args: false,
             static_load_type_cache: FxHashMap::default(),
             static_virtual_call_cache: VirtualSiteCache::default(),
+            virtual_call_memo: vec![VirtualCallMemo::EMPTY; VIRTUAL_CALL_MEMO_SLOTS]
+                .into_boxed_slice(),
             static_virtual_field_cache: VirtualSiteCache::default(),
             impl_cache: std::cell::RefCell::default(),
             json_decode_cache: crate::package_baml::json::DecodeCache::default(),
@@ -4069,6 +4335,12 @@ impl BexVm {
     /// and end of a run, and after an operation that allocates in bulk.
     #[inline]
     fn settle(&mut self) {
+        // Text a rope materialized when it was read, which its allocation
+        // was not charged for (see `BexStr::unshared_heap_bytes`).
+        let materialized = bex_str::take_materialized_bytes();
+        if materialized != 0 {
+            self.tlab.alloc_debt().grow(materialized);
+        }
         if self.tlab.alloc_debt().balance().unsigned_abs()
             >= bex_heap::SETTLE_QUANTUM.unsigned_abs()
         {
@@ -4091,6 +4363,9 @@ impl BexVm {
     #[cold]
     #[inline(never)]
     fn poll_for_yield(&mut self) -> bool {
+        self.tlab
+            .alloc_debt()
+            .grow(bex_str::take_materialized_bytes());
         self.tlab.flush_alloc_debt();
         // The poll reads the pressure flag the settlement may have raised.
         self.tlab.take_budget_crossed();
@@ -4190,6 +4465,55 @@ impl BexVm {
         } else {
             self.package_object(package, idx)
         }
+    }
+
+    /// Variant `variant` (an int) of the enum at `enum_idx` in `package`, for
+    /// `LoadVariant`, built as `AllocVariant` builds it. A compile-time enum's
+    /// variants are permanent shared objects (see `Enum::shared_variants`); an
+    /// enum created at runtime has none, so its variant is allocated here.
+    ///
+    /// Out of line: `run_compact` is sensitive to what its arms hold.
+    #[inline(never)]
+    fn variant_value(
+        &mut self,
+        package: HeapPtr,
+        enum_idx: ObjectIndex,
+        variant: Value,
+    ) -> Result<Value, VmError> {
+        let enum_ptr = self.object_in(package, enum_idx);
+        let Object::Enum(enm) = self.get_object(enum_ptr) else {
+            return Err(VmInternalError::TypeError {
+                expected: ObjectType::Enum.into(),
+                got: ObjectType::of(self.get_object(enum_ptr)).into(),
+            }
+            .into());
+        };
+        let Some(variant_index) = variant.as_int() else {
+            return Err(VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Int,
+                got: self.type_of(&variant),
+            }
+            .into());
+        };
+        let variant_count = enm.variants.len();
+        let Some(variant_usize) = usize::try_from(variant_index)
+            .ok()
+            .filter(|&index| index < variant_count)
+        else {
+            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                VmPanic::IndexOutOfBounds {
+                    index: variant_index,
+                    length: variant_count,
+                },
+            )));
+        };
+        if let Some(&shared) = enm.shared_variants.get(variant_usize) {
+            return Ok(Value::object(shared));
+        }
+        Ok(Value::object(self.tlab.alloc(Object::Variant(Variant {
+            enm: enum_ptr,
+            index: variant_usize,
+        }))))
     }
 
     /// The object at `idx` in the runtime package `package_ptr`.
@@ -5778,7 +6102,7 @@ impl BexVm {
                     function: dispatch_ptr,
                     instruction_ptr: 0,
                     locals_offset: StackIndex::from_raw(0),
-                    type_args: effective_type_args,
+                    type_args: effective_type_args.into(),
                     faulting_pc: 0,
                     telemetry: frame_telemetry,
                     context: self.root_context.clone(),
@@ -5981,7 +6305,7 @@ impl BexVm {
             function: entry_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
-            type_args: Vec::new(),
+            type_args: FrameTypeArgs::default(),
             faulting_pc: 0,
             telemetry: frame_telemetry,
             context: self.root_context.clone(),
@@ -6092,7 +6416,7 @@ impl BexVm {
             function: entry_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
-            type_args: Vec::new(),
+            type_args: FrameTypeArgs::default(),
             faulting_pc: 0,
             telemetry: frame_telemetry,
             context: self.root_context.clone(),
@@ -8118,7 +8442,7 @@ impl BexVm {
                 locals_offset,
                 // A closure made in a generic context reads the type
                 // arguments it captured.
-                type_args: captured_type_args.to_vec(),
+                type_args: captured_type_args.to_vec().into(),
                 faulting_pc: 0,
                 telemetry: frame_telemetry,
                 context,
@@ -8129,6 +8453,182 @@ impl BexVm {
             self.resize_stack(new_len, Value::NULL)?;
         }
         Ok(Some(callee))
+    }
+
+    /// `VirtualCall [nargs, ntypeargs, self_arg]` when its site cache already
+    /// holds the callee, entered like a plain bytecode callee of
+    /// [`Self::enter_indirect_bytecode_call`]: the frame is pushed here and
+    /// dispatch continues in it, without the general call path or a
+    /// type-argument lane. A generic impl's frame shares the cache entry's
+    /// type arguments. Returns `None` with nothing changed when the call
+    /// needs the general path: a miss, method type arguments, telemetry, a
+    /// pending trace or lane, arguments the site remaps, type arguments that
+    /// name runtime declarations, or a callee that is not a plain bytecode
+    /// function.
+    #[inline(never)]
+    fn enter_cached_virtual_call(
+        &mut self,
+        [nargs, ntypeargs, self_arg]: [usize; 3],
+        frame_idx: usize,
+        caller: &'static Function,
+        runtime_package: HeapPtr,
+        return_pc: usize,
+    ) -> Result<Option<&'static Function>, VmError> {
+        if ntypeargs != 0
+            || self.telemetry.is_some()
+            || self.pending_call_trace.is_some()
+            || !self.pending_call_type_args.is_empty()
+        {
+            return Ok(None);
+        }
+        // `[args..., iface_type, method_name]`, top last.
+        let len = self.stack.len();
+        let Some(args_offset) = len.checked_sub(nargs + 2) else {
+            return Ok(None);
+        };
+        let receiver = self.stack[StackIndex::from_raw(args_offset + self_arg)];
+        let Some(iface_ptr) = self.stack[StackIndex::from_raw(len - 2)].as_object_ptr() else {
+            return Ok(None);
+        };
+        if !matches!(self.get_object(iface_ptr), Object::Type(_)) {
+            return Ok(None);
+        }
+        let Some(identity) = self.static_cache_identity(caller, runtime_package, frame_idx) else {
+            return Ok(None);
+        };
+        let pc = self.cur_pc;
+        let receiver_addr = receiver
+            .as_object_ptr()
+            .map_or(0, |ptr| ptr.as_ptr() as usize);
+        let iface_addr = iface_ptr.as_ptr() as usize;
+        let slot = ((identity >> 4) ^ pc) & (VIRTUAL_CALL_MEMO_SLOTS - 1);
+        let memo = &mut self.virtual_call_memo[slot];
+        let same_site = memo.caller == identity && memo.pc == pc;
+        let (callee_ptr, shared) = if same_site
+            && memo.receiver == receiver_addr
+            && memo.iface == iface_addr
+        {
+            memo.answered = true;
+            let entry = memo.entry;
+            // Checked when the memo was made, against the same entry.
+            let Some((_, target)) = self.static_virtual_call_cache.get_index(entry) else {
+                verifier_unreachable!()
+            };
+            (target.callee.ptr(), target.shared_frame_type_args.clone())
+        } else {
+            // A site that never used its memo keeps it, and counts the call.
+            let remember = if same_site && !memo.answered {
+                memo.passed_over += 1;
+                memo.passed_over >= VIRTUAL_CALL_MEMO_RETRY
+            } else {
+                true
+            };
+            let mut scratch = None;
+            let Some(query) =
+                self.virtual_site_query(Some(identity), receiver, iface_ptr, &mut scratch)
+            else {
+                return Ok(None);
+            };
+            // Only an instance of a compile-time class keeps the type the
+            // cache keyed for as long as it lives; a container's type is
+            // read off it each time.
+            let remember = remember && matches!(query.receiver, VirtualReceiverQuery::Class { .. });
+            let Some((entry, _, target)) = self.static_virtual_call_cache.get_full(&query) else {
+                return Ok(None);
+            };
+            if target.arg_count != Some(nargs)
+                || (!target.frame_type_args.is_empty() && target.shared_frame_type_args.is_none())
+                || !Self::enters_as_plain_bytecode(target.callee.ptr(), nargs)
+            {
+                return Ok(None);
+            }
+            let found = (target.callee.ptr(), target.shared_frame_type_args.clone());
+            if remember {
+                self.virtual_call_memo[slot] = VirtualCallMemo {
+                    caller: identity,
+                    pc,
+                    receiver: receiver_addr,
+                    iface: iface_addr,
+                    entry,
+                    answered: false,
+                    passed_over: 0,
+                };
+            }
+            found
+        };
+        let type_args = shared.map_or_else(FrameTypeArgs::default, FrameTypeArgs::shared);
+        // SAFETY: the callee is live: collection drops cache entries whose
+        // callee died and clears the memo. The active heap permit prevents
+        // collection during frame/stack growth, as at `CallExactArgs`.
+        let Object::Function(callee) = (unsafe { callee_ptr.get() }) else {
+            verifier_unreachable!()
+        };
+
+        self.stack.truncate(len - 2);
+        let Frame::Bytecode(caller_frame) = &mut self.frames[frame_idx] else {
+            verifier_unreachable!()
+        };
+        caller_frame.instruction_ptr = return_pc;
+        caller_frame.faulting_pc = self.cur_pc;
+        self.reserve_call_frame()?;
+        self.reserve_stack(callee.real_local_count)?;
+        let context = self.dispatch_frame_context(frame_idx).clone();
+        self.frames.push_reserved_with(|| {
+            Frame::Bytecode(BytecodeFrame {
+                function: callee_ptr,
+                instruction_ptr: 0,
+                locals_offset: StackIndex::from_raw(args_offset),
+                type_args,
+                faulting_pc: 0,
+                telemetry: None,
+                context,
+            })
+        });
+        if callee.real_local_count != 0 {
+            let new_len = self.stack.len() + callee.real_local_count;
+            self.resize_stack(new_len, Value::NULL)?;
+        }
+        Ok(Some(callee))
+    }
+
+    /// Whether `callee_ptr`, called with `nargs` arguments, is a plain
+    /// bytecode function [`Self::enter_cached_virtual_call`] can enter
+    /// itself: not native, compiled, hooked or pass-through.
+    fn enters_as_plain_bytecode(callee_ptr: HeapPtr, nargs: usize) -> bool {
+        // SAFETY: a cache hit's callee is live (collection drops entries
+        // whose callee died).
+        let Object::Function(callee) = (unsafe { callee_ptr.get() }) else {
+            return false;
+        };
+        matches!(callee.kind, FunctionKind::Bytecode)
+            && callee.compiled_body.is_none()
+            && !callee.trace_passthrough
+            && callee.arity == nargs
+            && callee
+                .bytecode
+                .compact
+                .as_ref()
+                .is_some_and(|code| code.trace_hook_finish_pc.is_none())
+    }
+
+    /// `args` as a slice the callee frames of virtual-call cache hits can
+    /// share ([`FrameTypeArgs::shared`]): when there are any, and every
+    /// declaration they name is compile-time, so a frame holding them has
+    /// nothing for a collection to visit.
+    fn shareable_frame_type_args(
+        &self,
+        args: &[bex_vm_types::RealizedTy],
+    ) -> Option<Arc<[bex_vm_types::RealizedTy]>> {
+        if args.is_empty() {
+            return None;
+        }
+        let mut runtime = false;
+        for ty in args {
+            ty.visit_heads(&mut |head| {
+                runtime |= head.is_resolved() && !self.heap.is_compile_time_ptr(head.ptr());
+            });
+        }
+        (!runtime).then(|| Arc::from(args))
     }
 
     /// Telemetry entry for a bytecode callee `CallIndirect` enters directly:
@@ -8444,7 +8944,7 @@ impl BexVm {
                         function: callee_ptr,
                         instruction_ptr: 0,
                         locals_offset,
-                        type_args: carried_type_args.to_vec(),
+                        type_args: carried_type_args.to_vec().into(),
                         faulting_pc: 0,
                         telemetry: frame_telemetry,
                         context,
@@ -8809,10 +9309,11 @@ impl BexVm {
                 // function, not a closure or bound method) takes the lane
                 // as its frame. The lane is restored just below, so nothing
                 // reads it again.
-                std::mem::swap(&mut frame.type_args, &mut self.pending_call_type_args);
+                frame.type_args = std::mem::take(&mut self.pending_call_type_args).into();
             } else {
                 frame
                     .type_args
+                    .to_mut()
                     .extend_from_slice(&self.pending_call_type_args);
             }
         }
@@ -10116,7 +10617,7 @@ impl BexVm {
         &self,
         parts: &[Value],
     ) -> Result<bex_vm_types::BexStr, VmInternalError> {
-        let mut strings: smallvec::SmallVec<[&bex_vm_types::BexStr; 16]> =
+        let mut strings: smallvec::SmallVec<[&bex_vm_types::BexStr; 32]> =
             smallvec::SmallVec::with_capacity(parts.len());
         for part in parts {
             strings.push(self.as_string(part)?);
@@ -10400,6 +10901,23 @@ impl BexVm {
         }
     }
 
+    /// The shared object for variant `variant` of the enum at `enum_idx`, for
+    /// `LoadVariant` in a static function (null `package`) naming a
+    /// compile-time enum: those variants are permanent shared objects (see
+    /// `Enum::shared_variants`). `None` sends the instruction to
+    /// [`Self::variant_value`], which handles every other case.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn shared_variant(&self, package: HeapPtr, enum_idx: usize, variant: usize) -> Option<Value> {
+        if !package.is_null() || enum_idx >= self.heap.compile_time_len() {
+            return None;
+        }
+        let Object::Enum(enm) = self.get_object(self.heap.compile_time_ptr(enum_idx)) else {
+            return None;
+        };
+        enm.shared_variants.get(variant).copied().map(Value::object)
+    }
+
     /// The error `LoadField` raises when [`Self::instance_field`] declines.
     #[cold]
     #[inline(never)]
@@ -10456,7 +10974,7 @@ impl BexVm {
                 function: callee_ptr,
                 instruction_ptr: 0,
                 locals_offset,
-                type_args: Vec::new(),
+                type_args: FrameTypeArgs::default(),
                 faulting_pc: 0,
                 telemetry,
                 context: Context::default(),
@@ -10523,9 +11041,10 @@ impl BexVm {
     /// frame and instruction the full dispatch continues with.
     ///
     /// The fast path covers what tight scalar loops and plain calls execute:
-    /// local and constant loads and stores, instance field loads, int
-    /// arithmetic and comparisons, truthiness, branches, and, when `CALLS`,
-    /// exact calls into and returns out of plain bytecode functions. It is
+    /// local and constant loads and stores, instance field loads, enum variant
+    /// constants (without `CALLS`), int arithmetic and comparisons,
+    /// truthiness, branches, and, when `CALLS`, exact calls into and returns
+    /// out of plain bytecode functions. It is
     /// small and out of line so the program counter, stack top, and locals
     /// base stay in registers; inside [`Self::run_compact`] they were
     /// reloaded from spill slots on every instruction. It never allocates on
@@ -10726,6 +11245,24 @@ impl BexVm {
                         sp += 1;
                         pc += 9;
                     }
+                    // Only in the leaf variant: in the one that switches
+                    // frames this arm slowed call-heavy code. There it stops,
+                    // and the full dispatch re-enters the leaf variant here.
+                    OpCode::LoadVariant if !CALLS => {
+                        let Some(value) = self.shared_variant(
+                            runtime_package,
+                            operand_u32(code, pc + 1),
+                            operand_u32(code, pc + 5),
+                        ) else {
+                            break;
+                        };
+                        if sp == cap {
+                            break;
+                        }
+                        at!(sp) = value;
+                        sp += 1;
+                        pc += 9;
+                    }
                     OpCode::AddInt | OpCode::SubInt => {
                         let (l, r) = (at!(sp - 2), at!(sp - 1));
                         let result = if op == OpCode::AddInt {
@@ -10907,7 +11444,7 @@ impl BexVm {
                         // Only a frame that owns nothing is popped here; see
                         // the `mem::forget` below.
                         if returning.telemetry.is_some()
-                            || returning.type_args.capacity() != 0
+                            || !returning.type_args.owns_nothing()
                             || !returning.context.is_empty()
                         {
                             break;
@@ -11650,6 +12187,18 @@ impl BexVm {
                         self.push_stack(Value::object(variant_ptr))?;
                     }
 
+                    // `Status.X` in one step: `LoadConst` + `AllocVariant`.
+                    OpCode::LoadVariant => {
+                        let raw = { read_u32_unchecked(code, pc) };
+                        let variant = { read_u32_unchecked(code, pc) };
+                        let value = self.variant_value(
+                            runtime_package,
+                            ObjectIndex::from_raw(raw as usize),
+                            Value::int(i64::from(variant)),
+                        )?;
+                        self.push_stack(value)?;
+                    }
+
                     // ── SysOp (BEP-034 phase D′) ──────────────────────────────────
                     OpCode::SysOp => {
                         if self.pending_call_trace.take().is_some() {
@@ -11915,7 +12464,7 @@ impl BexVm {
                                 if !type_args.is_empty()
                                     && let Some(Frame::Bytecode(frame)) = self.frames.last_mut()
                                 {
-                                    frame.type_args = type_args;
+                                    frame.type_args = type_args.into();
                                 }
                                 *frame_idx = self.frames.len() - 1;
                                 *function = callee;
@@ -12009,6 +12558,28 @@ impl BexVm {
                         let nargs = read_u16_unchecked(code, pc) as usize;
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
                         let self_arg = usize::from(read_u16_unchecked(code, pc));
+
+                        // A site whose cache knows the callee enters it as
+                        // `CallIndirect` enters a plain bytecode function.
+                        if let Some(callee) = self.enter_cached_virtual_call(
+                            [nargs, ntypeargs, self_arg],
+                            *frame_idx,
+                            function,
+                            runtime_package,
+                            *pc,
+                        )? {
+                            *frame_idx = self.frames.len() - 1;
+                            *function = callee;
+                            runtime_package = self.runtime_package_of(function);
+                            if self.should_early_yield() {
+                                return Ok(Some(VmExecState::EarlyYield));
+                            }
+                            *pc = 0;
+                            *code = &callee.bytecode.compact.as_ref().unwrap().code;
+                            *dispatch_frame_idx = *frame_idx;
+                            locals_base = self.frame_locals_base(*frame_idx);
+                            continue;
+                        }
 
                         // Pop the method name (top) then the interface type. Keep
                         // both as values until after the static-cache probe: their
@@ -12119,11 +12690,14 @@ impl BexVm {
                                                 .layout_is(layout)
                                                 .then(|| layout.len()),
                                         };
+                                    let shared_frame_type_args =
+                                        self.shareable_frame_type_args(&frame);
                                     self.static_virtual_call_cache.insert(
                                         cache_key,
                                         StaticVirtualCallTarget {
                                             callee: Weak::new(callee),
                                             frame_type_args: frame,
+                                            shared_frame_type_args,
                                             arg_count,
                                         },
                                     );
@@ -12815,10 +13389,9 @@ impl BexVm {
                         let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] else {
                             unreachable!("compact bytecode runs in a bytecode frame")
                         };
-                        frame
-                            .type_args
-                            .resize(slot + 1, bex_vm_types::RealizedTy::unknown());
-                        frame.type_args[slot] = type_value.ty;
+                        let type_args = frame.type_args.to_mut();
+                        type_args.resize(slot + 1, bex_vm_types::RealizedTy::unknown());
+                        type_args[slot] = type_value.ty;
                     }
                     // ── Package.current() ───────────────────────────────────────
                     OpCode::LoadCurrentPackage => {
@@ -13867,6 +14440,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             pending_call_passes_type_args: _,
             static_load_type_cache,
             static_virtual_call_cache,
+            virtual_call_memo,
             static_virtual_field_cache,
             enum_equals_memo: _,
         } = self;
@@ -13929,6 +14503,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // and the call's type arguments, and must keep none of them alive.
         // A key hashes its caller's address, which moves with a runtime
         // function, and a dead entry must go, so the tables are rebuilt.
+        // The memo names objects by address, which a collection may move or
+        // free.
+        virtual_call_memo.fill(VirtualCallMemo::EMPTY);
         let old_virtual_call_cache = std::mem::take(static_virtual_call_cache);
         for (mut key, mut target) in old_virtual_call_cache {
             if key.forward(visitor)

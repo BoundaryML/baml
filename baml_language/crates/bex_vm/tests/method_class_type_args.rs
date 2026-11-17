@@ -245,7 +245,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RealizedTy::int()]; // receiver.class_type_args = [int]
+            bf.type_args = vec![RealizedTy::int()].into(); // receiver.class_type_args = [int]
         } else {
             panic!("entry frame should be Bytecode");
         }
@@ -296,7 +296,7 @@ fn method_frame_type_args_seeded_string() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RealizedTy::string()];
+            bf.type_args = vec![RealizedTy::string()].into();
         }
     }
 

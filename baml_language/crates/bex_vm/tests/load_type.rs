@@ -220,7 +220,7 @@ fn load_type_type_arg_ref_substitutes_from_frame() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame must exist");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RealizedTy::string()];
+            bf.type_args = vec![RealizedTy::string()].into();
         } else {
             panic!("entry frame should be Bytecode");
         }
@@ -279,7 +279,7 @@ fn load_type_array_of_type_arg_ref() {
         use bex_vm::Frame;
         let frame = vm.frames.last_mut().expect("entry frame must exist");
         if let Frame::Bytecode(bf) = frame {
-            bf.type_args = vec![RealizedTy::int()];
+            bf.type_args = vec![RealizedTy::int()].into();
         } else {
             panic!("entry frame should be Bytecode");
         }
@@ -400,7 +400,7 @@ fn run_with_frame_type_args(
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
             panic!("entry frame should be Bytecode");
         };
-        frame.type_args = type_args;
+        frame.type_args = type_args.into();
     }
     let result = loop {
         match vm.exec().expect("exec") {

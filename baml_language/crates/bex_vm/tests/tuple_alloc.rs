@@ -86,7 +86,7 @@ fn run(
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &[]);
     if let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() {
-        frame.type_args = type_args;
+        frame.type_args = type_args.into();
     } else {
         panic!("entry frame should be Bytecode");
     }

@@ -11276,6 +11276,37 @@ impl<'db> LoweringContext<'db> {
                 && method.as_str() == kind.primary_method()
             {
                 let layout = self.call_argument_layout(expr_id, value_ops.len())?;
+                // `x.to_string()` on a primitive, like `string.from(x)` (see
+                // `PrimitiveRendering`): no package can override how a
+                // primitive renders (E0139), so it skips the structural
+                // renderer. A string is itself; anything else is formatted.
+                if kind == baml_type::StructuralInterface::ToString
+                    && value_ops.len() == 1
+                    && let Some(rendering) = primitive_rendering(&self_ty)
+                {
+                    match rendering {
+                        PrimitiveRendering::Itself => {
+                            let [value] = <[_; 1]>::try_from(value_ops).expect("one receiver");
+                            self.builder.assign(dest.clone(), Rvalue::Use(value));
+                        }
+                        PrimitiveRendering::Formatted => {
+                            let func = self.lang_function(
+                                baml_base::LangPackage::Baml,
+                                &[],
+                                "_to_string_primitive",
+                            );
+                            self.emit_direct_structural_call(
+                                func,
+                                value_ops,
+                                0,
+                                layout,
+                                RuntimeTy::String,
+                                dest.clone(),
+                            );
+                        }
+                    }
+                    return Ok(true);
+                }
                 let mut args = Vec::new();
                 if kind.native_type_arg_count() != 0 {
                     let ty = self.ty_to_template(&self_ty, &self.enclosing_generic_params());

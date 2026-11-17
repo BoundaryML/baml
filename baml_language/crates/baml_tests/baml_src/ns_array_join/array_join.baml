@@ -51,6 +51,16 @@ test "join_counts_separators" {
     assert.equal(["", "", ""].join("|"), "||")
 }
 
+test "join_long_strings" {
+    let long = "x".repeat(2000);
+    let joined = [long, "mid", long].join("|");
+    assert.equal(joined.length(), 4005);
+    assert.equal(joined.slice(1998, 2007), "xx|mid|xx");
+    assert.equal([long].join(","), long);
+    let declared: (string | int)[] = ["a", "b"];
+    assert.equal(declared.join("-"), "a-b")
+}
+
 test "join_strings_are_bare" {
     assert.equal(["héllo", "😀", "", "say \"hi\""].join("—"), "héllo—😀——say \"hi\"");
     assert.equal(join_generic(["x", "y"], "+"), "x+y")

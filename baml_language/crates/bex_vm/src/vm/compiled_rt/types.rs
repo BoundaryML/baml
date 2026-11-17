@@ -112,8 +112,9 @@ impl BexVm {
             ));
         };
         let slot = slot as usize;
-        frame.type_args.resize(slot + 1, RealizedTy::unknown());
-        frame.type_args[slot] = type_value.ty;
+        let type_args = frame.type_args.to_mut();
+        type_args.resize(slot + 1, RealizedTy::unknown());
+        type_args[slot] = type_value.ty;
         Ok(())
     }
 

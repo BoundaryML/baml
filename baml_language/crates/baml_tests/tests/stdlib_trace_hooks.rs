@@ -29,8 +29,9 @@ fn primitive_stdlib_helpers_select_hidden_tracing() {
             })
             .collect();
 
+        // `baml.String.length` is a native: it runs no bytecode, so it
+        // records no span to hide.
         for name in [
-            "baml.String.length",
             "baml.String.is_empty",
             "baml.iter.ArrayIterator.new",
             "baml.iter.Range.new",

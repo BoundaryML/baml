@@ -64,6 +64,7 @@ impl BexVm {
                 StaticVirtualCallTarget {
                     callee: Weak::new(callee),
                     frame_type_args: frame.clone(),
+                    shared_frame_type_args: None,
                     arg_count: None,
                 },
             );

@@ -2375,23 +2375,24 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 // never a `Null` where a variant belongs.
                 let enum_obj_idx = self.refs.enum_(*enum_ref);
 
-                // The discriminant travels in the constant; the name is
+                // The discriminant travels in the instruction; the name is
                 // rendered from the declaration only for operand metadata.
+                let variant = usize::try_from(*index).expect("u32 fits usize");
                 let variant_str = layout::enum_variants(self.db, *enum_ref)
-                    .get(usize::try_from(*index).expect("u32 fits usize"))
+                    .get(variant)
                     .map(ToString::to_string)
                     .unwrap_or_else(|| {
                         panic!("internal error: `{enum_name_str}` declares no variant #{index}")
                     });
 
-                let idx = self.add_constant(ConstValue::Int(i64::from(*index)));
-                let lc_inst = self.emit(Instruction::LoadConst(idx));
+                let inst = self.emit(Instruction::LoadVariant {
+                    enum_obj: enum_obj_idx,
+                    variant,
+                });
                 self.set_operand(
-                    lc_inst,
+                    inst,
                     OperandMeta::Const(format!("{enum_name_str}.{variant_str}")),
                 );
-                let inst = self.emit(Instruction::AllocVariant(enum_obj_idx));
-                self.set_operand(inst, OperandMeta::Object(enum_name_str));
             }
         }
     }
@@ -2839,12 +2840,24 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 // reads value arg `self_arg` to resolve the impl at runtime.
                 let value_args = &args[..args.len() - usize::from(*has_trace)];
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, value_args));
-                let iface_template = self.refs.anchor_template(&iface.to_template());
+                // The VM picks the impl from the interface and its input
+                // arguments; associated-type bindings are outputs and select
+                // nothing, so the operand leaves them out. Without them it is
+                // a constant type wherever the input arguments are: an
+                // iterator adapter's `self.source.next()` names
+                // `Iterator<Item = T>`, which otherwise rebuilds from the
+                // frame's type arguments on every call.
+                let dispatch_iface = TyTemplate::interface(
+                    iface.name.clone(),
+                    iface.generics.clone(),
+                    Box::default(),
+                );
+                let iface_template = self.refs.anchor_template(&dispatch_iface);
                 let iface_const = self.add_constant(ConstValue::Type(iface_template));
                 let inst = self.emit(Instruction::LoadType(iface_const));
                 self.set_operand(
                     inst,
-                    OperandMeta::Const(self.spelled_template(&iface.to_template())),
+                    OperandMeta::Const(self.spelled_template(&dispatch_iface)),
                 );
                 self.emit_constant(&Constant::String(method.clone()));
                 if *has_trace {
