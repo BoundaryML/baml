@@ -1,3 +1,5 @@
+import ground from '@boundaryml/brand/imagery/baml/violet-dusk.jpg';
+import Image from 'next/image';
 import { section } from './analytics';
 
 // Adoption, right after the language section: three ways into Boundary, each with the same codebase
@@ -166,9 +168,24 @@ export default function Adopt() {
     <section
       {...section('adopt')}
       aria-labelledby="adopt"
-      className="border-t border-rule"
+      className="on-paint relative overflow-hidden border-t border-rule"
     >
-      <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
+      {/* The one painted band between the hero and the closing section, so the place to start
+          stands apart from the black sections around it: the brand's violet dusk, dimmed toward
+          the cards so their text keeps its contrast. On a phone the cards stack several screens
+          tall, so the painting sits behind the heading only and fades into the ground; stretched
+          over the whole section it would be enlarged until it blurred. */}
+      <div className="absolute inset-x-0 top-0 h-[34rem] md:inset-0 md:h-auto">
+        <Image
+          alt=""
+          className="object-cover object-[50%_35%]"
+          fill
+          sizes="(max-width: 767px) 250vw, 100vw"
+          src={ground}
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(10_10_10/0.35)_0%,rgb(10_10_10/1)_100%)] md:bg-[linear-gradient(180deg,rgb(10_10_10/0.35)_0%,rgb(10_10_10/0.6)_100%)]" />
+      </div>
+      <div className="relative v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         <h2 className="v4-h2 max-w-[22em]" id="adopt">
           Use Boundary where feedback loops matter most.
         </h2>
