@@ -44,9 +44,10 @@ class DecisionsClient {
 
         /// Preview the request without resolving credentials or performing IO.
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            root.internal.decisions.request(self, input, root.internal.decisions.plan(input), true) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
-            }
+            root.internal.decisions
+                .request(self, input, root.internal.decisions.plan(input), true) catch_all (e) {
+                    _ => throw ai.errors.normalize(e),
+                }
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {

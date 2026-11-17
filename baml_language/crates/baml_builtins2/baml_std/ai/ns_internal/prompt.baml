@@ -6,9 +6,9 @@
 
 /// Reject output types that cannot be represented faithfully at the shared
 /// LLM render boundary. Both prompt preview and execution call this guard.
-function validate_output_type(
-    return_type: reflect.Type,
-) -> void throws reflect.errors.CompilationError {
+function validate_output_type(return_type: reflect.Type) -> void
+    throws reflect.errors.CompilationError
+{
     return_type._validate_renderable();
     match (return_type.as_enum()) {
         let enum_type: reflect.Enum => {
@@ -18,19 +18,21 @@ function validate_output_type(
                     + "` cannot be rendered as an LLM output schema";
                 throw reflect.errors.CompilationError {
                     message: message,
-                    diagnostics: [reflect.Diagnostic {
-                        code: "E0159",
-                        span: null,
-                        message: message,
-                        severity: "error",
-                        phase: null,
-                        headline: message,
-                        primary_label: null,
-                        message_highlights: [],
-                        annotations: [],
-                        related_info: [],
-                    }],
-                }
+                    diagnostics: [
+                        reflect.Diagnostic {
+                            code: "E0159",
+                            span: null,
+                            message: message,
+                            severity: "error",
+                            phase: null,
+                            headline: message,
+                            primary_label: null,
+                            message_highlights: [],
+                            annotations: [],
+                            related_info: [],
+                        },
+                    ],
+                };
             }
         },
         null => null,
@@ -73,11 +75,13 @@ enum OutputFormatDefault {
 ///
 /// `metadata` is free-form per-message data, which reaches the client as
 /// `ai.PromptMessage.metadata`. The built-in clients do not read it.
-function make_role(
-    name: string,
-    metadata: map<string, baml.json.json> = {},
-) -> root.Role throws never {
-    root.Role { name: name, metadata: metadata }
+function make_role(name: string, metadata: map<string, baml.json.json> = {}) -> root.Role
+    throws never
+{
+    root.Role {
+        name: name,
+        metadata: metadata,
+    }
 }
 
 /// Construct a cache delimiter for structural prompt assembly.

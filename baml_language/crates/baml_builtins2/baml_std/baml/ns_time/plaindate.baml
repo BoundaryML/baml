@@ -33,11 +33,9 @@ class PlainDate {
     /// - `baml.errors.InvalidArgument` if a component is out of range
     ///   (e.g. month 13, Feb 30) or the year is outside ±9999.
     //baml:mut_vm
-    function from_components(
-        year: int,
-        month: int,
-        day: int,
-    ) -> PlainDate throws root.errors.InvalidArgument {
+    function from_components(year: int, month: int, day: int) -> PlainDate
+        throws root.errors.InvalidArgument
+    {
         $rust_function
     }
     /// Parses an extended-format ISO 8601 calendar date: `1979-05-27`.
@@ -153,12 +151,18 @@ class PlainDate {
                 string => {
                     PlainDate.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw root.json.DecodeError { message: message, path: "" }
+                            throw root.json.DecodeError {
+                                message: message,
+                                path: "",
+                            };
                         },
                     }
                 },
                 _ => {
-                    throw root.json.DecodeError { message: "Expected ISO 8601 date string", path: "" }
+                    throw root.json.DecodeError {
+                        message: "Expected ISO 8601 date string",
+                        path: "",
+                    };
                 },
             }
         }
@@ -175,7 +179,10 @@ class PlainDate {
         function from_llm_output(shape: string) -> Self throws root.json.DecodeError {
             PlainDate.parse(shape) catch (_) {
                 root.errors.ParseError { message } => {
-                    throw root.json.DecodeError { message: message, path: "" }
+                    throw root.json.DecodeError {
+                        message: message,
+                        path: "",
+                    };
                 },
             }
         }
@@ -197,7 +204,7 @@ class PlainDate {
                         message: message,
                         path: "",
                         reason: "unserializable",
-                    }
+                    };
                 },
             }
         }

@@ -20,31 +20,34 @@ function feature(name: string, value: float) -> map<string, float> throws never 
 }
 
 function plain_weight_is_linear() -> bool throws never {
-    let w = weights_for("x", root.engine.Weight { weight: 2.0, hinge: null });
+    let w = weights_for("x", root.engine.Weight {
+        weight: 2.0,
+        hinge: null,
+    });
     root.engine.score(feature("x", 3.0), w) == 6.0 && root.engine.score(feature("y", 3.0), w) == 0.0
 }
 
 function hinge_is_free_then_quadratic() -> bool throws never {
-    let w = weights_for(
-        "x",
-        root.engine.Weight {
-            weight: -1.0,
-            hinge: root.engine.Hinge { allowance: 2.0, hard_cap: 10.0 },
+    let w = weights_for("x", root.engine.Weight {
+        weight: -1.0,
+        hinge: root.engine.Hinge {
+            allowance: 2.0,
+            hard_cap: 10.0,
         },
-    );
+    });
     root.engine.score(feature("x", 1.0), w) == 0.0
         && root.engine.score(feature("x", 2.0), w) == 0.0
         && root.engine.score(feature("x", 5.0), w) == -9.0
 }
 
 function hard_cap_rejects() -> bool throws never {
-    let w = weights_for(
-        "x",
-        root.engine.Weight {
-            weight: 0.0,
-            hinge: root.engine.Hinge { allowance: 0.0, hard_cap: 0.5 },
+    let w = weights_for("x", root.engine.Weight {
+        weight: 0.0,
+        hinge: root.engine.Hinge {
+            allowance: 0.0,
+            hard_cap: 0.5,
         },
-    );
+    });
     root.engine.score(feature("x", 1.0), w) == null
         && root.engine.score(feature("x", 0.0), w) == 0.0
 }
@@ -58,21 +61,27 @@ test "score: a hinge is free up to its allowance and quadratic past it" {
 }
 
 function value_at_cap_is_kept() -> bool throws never {
-    let w = weights_for(
-        "x",
-        root.engine.Weight {
-            weight: -1.0,
-            hinge: root.engine.Hinge { allowance: 0.0, hard_cap: 1.0 },
+    let w = weights_for("x", root.engine.Weight {
+        weight: -1.0,
+        hinge: root.engine.Hinge {
+            allowance: 0.0,
+            hard_cap: 1.0,
         },
-    );
+    });
     root.engine.score(feature("x", 1.0), w) == -1.0
 }
 
 function entries_add_up() -> bool throws never {
     let w = root.engine.Weights {
         entries: {
-            "x": root.engine.Weight { weight: 2.0, hinge: null },
-            "y": root.engine.Weight { weight: 3.0, hinge: null },
+            "x": root.engine.Weight {
+                weight: 2.0,
+                hinge: null,
+            },
+            "y": root.engine.Weight {
+                weight: 3.0,
+                hinge: null,
+            },
         },
     };
     let features: map<string, float> = { "x": 1.0, "y": 1.0 };
@@ -94,28 +103,28 @@ test "score: entries add up" {
 // ─── the sampler's primitives ────────────────────────────────────────────────
 
 function unit_stays_in_range() -> bool throws never {
-    root.engine.streams(root.engine.seed_from(11), 500).every((s) -> {
-        let u = root.engine.unit(s);
-        u >= 0.0 && u < 1.0
-    })
+    root.engine
+        .streams(root.engine.seed_from(11), 500)
+        .every((s) -> {
+            let u = root.engine.unit(s);
+            u >= 0.0 && u < 1.0
+        })
 }
 
 function streams_are_distinct() -> bool throws never {
-    let states = root.engine.streams(root.engine.seed_from(12), 50).map((s) -> {
-        s.state
-    });
-    distinct(
-        states.map((state) -> {
-            state.to_string()
-        }),
-    )
-        .length()
-        == states.length()
+    let states = root.engine
+        .streams(root.engine.seed_from(12), 50)
+        .map((s) -> { s.state });
+    distinct(states.map((state) -> { state.to_string() })).length() == states.length()
 }
 
 /// A casting with nothing in it.
 function nothing() -> root.engine.Casting throws never {
-    root.engine.Casting { rules: [], traps: [], features: {} }
+    root.engine.Casting {
+        rules: [],
+        traps: [],
+        features: {},
+    }
 }
 
 /// A candidate with nothing but a score, for the picker.
@@ -147,9 +156,7 @@ function picks_of_the_heavier() -> Share throws never {
     let seeds = root.engine.streams(root.engine.seed_from(5), 400);
     Share {
         hits: seeds
-            .filter((s) -> {
-                (root.engine.pick(pair, s)?.score ?? -1.0) > 0.5
-            })
+            .filter((s) -> { (root.engine.pick(pair, s)?.score ?? -1.0) > 0.5 })
             .length(),
         total: seeds.length(),
     }
@@ -158,18 +165,21 @@ function picks_of_the_heavier() -> Share throws never {
 function draw_respects_count_and_caps() -> bool throws never {
     let item = root.bank.items()[0];
     let seed = root.engine.seed_from(8);
-    let capped = weights_for(
-        "size",
-        root.engine.Weight {
-            weight: 0.0,
-            hinge: root.engine.Hinge { allowance: 0.0, hard_cap: 0.0 },
+    let capped = weights_for("size", root.engine.Weight {
+        weight: 0.0,
+        hinge: root.engine.Hinge {
+            allowance: 0.0,
+            hard_cap: 0.0,
         },
-    );
+    });
     let some = root.engine.draw(item, seed, root.bank.default_weights(), 5);
     some.length() > 0
         && some.length() <= 5
         && root.engine.draw(item, seed, capped, 5).length() == 0
-        && root.engine.draw(item, seed, root.bank.default_weights(), 0).length() == 0
+        && root.engine
+            .draw(item, seed, root.bank.default_weights(), 0)
+            .length()
+            == 0
 }
 
 /// The answers a sitting is planned around are an even draw and nothing
@@ -182,14 +192,10 @@ function draw_respects_count_and_caps() -> bool throws never {
 function schedule_is_even_and_seeded() -> bool throws never {
     let long = root.engine.schedule(root.engine.seed_from(9), 4000).value;
     let compiling = long
-        .filter((k) -> {
-            k == root.engine.VerdictKind.Compiles
-        })
+        .filter((k) -> { k == root.engine.VerdictKind.Compiles })
         .length();
     let repeated = baml.iter.Range.new(1, long.length())
-        .filter((i) -> {
-            long[i] == long[i - 1]
-        })
+        .filter((i) -> { long[i] == long[i - 1] })
         .count();
     let other = root.engine.schedule(root.engine.seed_from(10), 4000).value;
     long.length() == 4000
@@ -198,7 +204,10 @@ function schedule_is_even_and_seeded() -> bool throws never {
         && long != other
         && root.engine.schedule(root.engine.seed_from(9), 7).value
             == root.engine.schedule(root.engine.seed_from(9), 7).value
-        && root.engine.schedule(root.engine.seed_from(0), 0).value.length() == 0
+        && root.engine
+            .schedule(root.engine.seed_from(0), 0)
+            .value.length()
+            == 0
 }
 
 /// Within two points of a half, which four thousand draws pin to well under
@@ -220,7 +229,15 @@ test "pick: nothing from nothing" {
 }
 
 test "pick: proportional to exp(score)" {
-    assert.equal(check("heavier candidate picked", picks_of_the_heavier(), 0.65, 0.85), null)
+    assert.equal(
+        check(
+            "heavier candidate picked",
+            picks_of_the_heavier(),
+            0.65,
+            0.85,
+        ),
+        null,
+    )
 }
 
 test "draw: respects the count and drops capped candidates" {
@@ -267,9 +284,7 @@ function override_keys(model: root.algebra.Model) -> string[] throws never {
 }
 
 function overrides_naming_no_rule() -> string[] throws never {
-    let names = root.bank.rules().map((r) -> {
-        r.name
-    });
+    let names = root.bank.rules().map((r) -> { r.name });
     root.bank.models().flat_map((model) -> {
         override_keys(model).filter_map((key) -> {
             if (names.includes(key)) {
@@ -298,22 +313,18 @@ function step_kinds(per_fact: int) -> StepKinds throws never {
             .collect()
     });
     StepKinds {
-        asserted: distinct(
-            steps.filter_map((step) -> {
-                match (step) {
-                    let a: root.algebra.Asserted => a.rule.name,
-                    root.algebra.Transferred => null,
-                }
-            }),
-        ),
-        transferred: distinct(
-            steps.filter_map((step) -> {
-                match (step) {
-                    root.algebra.Asserted => null,
-                    let t: root.algebra.Transferred => t.rule.name,
-                }
-            }),
-        ),
+        asserted: distinct(steps.filter_map((step) -> {
+            match (step) {
+                let a: root.algebra.Asserted => a.rule.name,
+                root.algebra.Transferred => null,
+            }
+        })),
+        transferred: distinct(steps.filter_map((step) -> {
+            match (step) {
+                root.algebra.Asserted => null,
+                let t: root.algebra.Transferred => t.rule.name,
+            }
+        })),
     }
 }
 
@@ -323,7 +334,8 @@ function step_kinds(per_fact: int) -> StepKinds throws never {
 function overrides_of_wrong_kind() -> string[] throws never {
     let kinds = step_kinds(4);
     root.bank.models().flat_map((model) -> {
-        model.believes.keys()
+        model.believes
+            .keys()
             .filter_map((key) -> {
                 if (kinds.asserted.includes(key)) {
                     null
@@ -346,9 +358,7 @@ function overrides_of_wrong_kind() -> string[] throws never {
 /// A rule used both ways would make an override on it half-apply.
 function rules_used_both_ways() -> string[] throws never {
     let kinds = step_kinds(4);
-    kinds.asserted.filter((name) -> {
-        kinds.transferred.includes(name)
-    })
+    kinds.asserted.filter((name) -> { kinds.transferred.includes(name) })
 }
 
 /// An override that never turns a case into a trap is dead.
@@ -358,9 +368,7 @@ function dead_overrides() -> string[] throws never {
         override_keys(model).filter_map((key) -> {
             let live = candidates.some((c) -> {
                 c.served.traps.includes(model.id)
-                    && c.case.trace.some((claim) -> {
-                        claim.rule.name == key
-                    })
+                    && c.case.trace.some((claim) -> { claim.rule.name == key })
             });
             if (live) {
                 null
@@ -396,9 +404,7 @@ function two_sided_models() -> string[] throws never {
     let candidates = sweep(8);
     root.bank.models().filter_map((model) -> {
         let share = compiling_share(
-            candidates.filter((c) -> {
-                c.served.traps.includes(model.id)
-            }),
+            candidates.filter((c) -> { c.served.traps.includes(model.id) }),
         );
         if (share.hits > 0 && share.hits < share.total) {
             model.id
@@ -471,32 +477,28 @@ function size_of(c: root.engine.Candidate) -> float throws never {
 
 function balance_report(turns: root.engine.Turn[]) -> string[] throws never {
     let cases = served_candidates(turns);
-    let traps = cases.filter((c) -> {
-        c.served.traps.length() > 0
-    });
-    let sizes = cases
-        .map((c) -> {
-            size_of(c)
-        })
-        .sort_by_key((s) -> {
-            s
-        });
+    let traps = cases.filter((c) -> { c.served.traps.length() > 0 });
+    let sizes = cases.map((c) -> { size_of(c) }).sort_by_key((s) -> { s });
     let median = sizes.at(sizes.length() / 2) ?? 0.0;
-    let small = cases.filter((c) -> {
-        size_of(c) < median
-    });
-    let large = cases.filter((c) -> {
-        size_of(c) >= median
-    });
+    let small = cases.filter((c) -> { size_of(c) < median });
+    let large = cases.filter((c) -> { size_of(c) >= median });
     [
         check("compiling overall", compiling_share(cases), 0.4, 0.6),
         check("compiling among traps", compiling_share(traps), 0.3, 0.7),
-        check("compiling among small cases", compiling_share(small), 0.3, 0.7),
-        check("compiling among large cases", compiling_share(large), 0.3, 0.7),
+        check(
+            "compiling among small cases",
+            compiling_share(small),
+            0.3,
+            0.7,
+        ),
+        check(
+            "compiling among large cases",
+            compiling_share(large),
+            0.3,
+            0.7,
+        ),
     ]
-        .filter_map((line) -> {
-            line
-        })
+    .filter_map((line) -> { line })
 }
 
 function served_kinds(turns: root.engine.Turn[]) -> root.engine.VerdictKind[] throws never {
@@ -520,17 +522,29 @@ function serial_report(turns: root.engine.Turn[]) -> string[] throws never {
         })
         .count();
     let repeats = baml.iter.Range.new(1, n)
-        .filter((i) -> {
-            kinds[i] == kinds[i - 1]
-        })
+        .filter((i) -> { kinds[i] == kinds[i - 1] })
         .count();
     [
-        check("parity guesses right", Share { hits: parity, total: n }, 0.35, 0.65),
-        check("same verdict as the step before", Share { hits: repeats, total: n - 1 }, 0.35, 0.65),
+        check(
+            "parity guesses right",
+            Share {
+                hits: parity,
+                total: n,
+            },
+            0.35,
+            0.65,
+        ),
+        check(
+            "same verdict as the step before",
+            Share {
+                hits: repeats,
+                total: n - 1,
+            },
+            0.35,
+            0.65,
+        ),
     ]
-        .filter_map((line) -> {
-            line
-        })
+    .filter_map((line) -> { line })
 }
 
 /// Every turn of the fixed session has a case, and the schedule is honoured
@@ -538,17 +552,29 @@ function serial_report(turns: root.engine.Turn[]) -> string[] throws never {
 function session_health(turns: root.engine.Turn[]) -> string[] throws never {
     let served = root.engine.served(turns);
     let fallbacks = served
-        .filter((turn) -> {
-            root.engine.fell_back(turn)
-        })
+        .filter((turn) -> { root.engine.fell_back(turn) })
         .length();
     [
-        check("turns served", Share { hits: served.length(), total: turns.length() }, 1.0, 1.0),
-        check("turns that fell back", Share { hits: fallbacks, total: served.length() }, 0.0, 0.0),
+        check(
+            "turns served",
+            Share {
+                hits: served.length(),
+                total: turns.length(),
+            },
+            1.0,
+            1.0,
+        ),
+        check(
+            "turns that fell back",
+            Share {
+                hits: fallbacks,
+                total: served.length(),
+            },
+            0.0,
+            0.0,
+        ),
     ]
-        .filter_map((line) -> {
-            line
-        })
+    .filter_map((line) -> { line })
 }
 
 function unverified_items_served(turns: root.engine.Turn[]) -> string[] throws never {
@@ -588,9 +614,7 @@ function boring_share(turns: root.engine.Turn[]) -> float throws never {
         return 1.0;
     }
     let boring = cases
-        .filter((c) -> {
-            (c.served.features.get("boring") ?? 0.0) > 0.5
-        })
+        .filter((c) -> { (c.served.features.get("boring") ?? 0.0) > 0.5 })
         .length();
     boring * 1.0 / (cases.length() * 1.0)
 }
@@ -609,16 +633,28 @@ function check_selected_session() -> void throws never {
         `same seed serves same turns: ${turns == selected()}`,
         "same seed serves same turns: true",
     );
-    assert_session_report("verdict balanced overall, among traps, and across size", balance_report(turns));
-    assert_session_report("verdict not predictable from step index or previous step", serial_report(turns));
-    assert_session_report("every turn served and fallbacks rare", session_health(turns));
+    assert_session_report(
+        "verdict balanced overall, among traps, and across size",
+        balance_report(turns),
+    );
+    assert_session_report(
+        "verdict not predictable from step index or previous step",
+        serial_report(turns),
+    );
+    assert_session_report(
+        "every turn served and fallbacks rare",
+        session_health(turns),
+    );
     assert_session_report("only verified items served", unverified_items_served(turns));
-    assert_session_report("every served case agrees with the compiler", served_disagreements(turns));
+    assert_session_report(
+        "every served case agrees with the compiler",
+        served_disagreements(turns),
+    );
     let boring = boring_share(turns);
     if (!(boring < 0.25)) {
         throw baml.panics.AssertionFailed {
             message: `single-rule cases every model agrees with: share ${boring}, expected < 0.25`,
-        }
+        };
     }
 }
 

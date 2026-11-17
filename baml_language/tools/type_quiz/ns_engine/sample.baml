@@ -25,8 +25,7 @@ class Weights {
 /// `value` shaped by `hinge`, or `null` when it exceeds the hard cap. Without
 /// a hinge the value is its own shape.
 function shape(hinge: Hinge?, value: float) -> float? throws never {
-    let h = hinge
-        ?? return value;
+    let h = hinge ?? return value;
     if let cap: float = h.hard_cap {
         if (value > cap) {
             return null;
@@ -46,11 +45,9 @@ function score(features: map<string, float>, weights: Weights) -> float? throws 
     let start: float? = 0.0;
     weights.entries.keys().reduce(
         (total, name) -> {
-            let acc = total
-                ?? return null;
+            let acc = total ?? return null;
             let entry = weights.entries[name];
-            let shaped = shape(entry.hinge, features.get(name) ?? 0.0)
-                ?? return null;
+            let shaped = shape(entry.hinge, features.get(name) ?? 0.0) ?? return null;
             acc + entry.weight * shaped
         },
         start,
@@ -70,15 +67,19 @@ class Scored {
 /// split.
 function streams(seed: Seed, count: int) -> Seed[] throws never {
     let none: Seed[] = [];
-    baml.iter.Range.new(0, count)
-        .reduce(
-            (acc, i) -> {
-                let pair = split(acc.next);
-                Rolled<Seed[]> { value: acc.value.concat([pair.right]), next: pair.left }
-            },
-            Rolled<Seed[]> { value: none, next: seed },
-        )
-        .value
+    baml.iter.Range.new(0, count).reduce(
+        (acc, i) -> {
+            let pair = split(acc.next);
+            Rolled<Seed[]> {
+                value: acc.value.concat([pair.right]),
+                next: pair.left,
+            }
+        },
+        Rolled<Seed[]> {
+            value: none,
+            next: seed,
+        },
+    ).value
 }
 
 /// `item.generate(seed)` as a free function, which is how everything outside
@@ -98,11 +99,14 @@ function generate(item: Item, seed: Seed) -> Candidate? throws never {
 function draw(item: Item, seed: Seed, weights: Weights, count: int) -> Scored[] throws never {
     let id = item.id();
     streams(seed, count).filter_map((s) -> {
-        let candidate = generate(item, s)
-            ?? return null;
-        let value = score_of(candidate, weights)
-            ?? return null;
-        Scored { item: id, seed: s, candidate, score: value }
+        let candidate = generate(item, s) ?? return null;
+        let value = score_of(candidate, weights) ?? return null;
+        Scored {
+            item: id,
+            seed: s,
+            candidate,
+            score: value,
+        }
     })
 }
 
@@ -118,11 +122,11 @@ function draw(item: Item, seed: Seed, weights: Weights, count: int) -> Scored[] 
 function score_of(candidate: Candidate, weights: Weights) -> float? throws never {
     let castings = candidate.castings;
     if (castings.length() == 0) {
-        throw baml.panics.Unreachable { message: "a candidate with no way to be served" };
+        throw baml.panics.Unreachable {
+            message: "a candidate with no way to be served",
+        };
     }
-    let scores = castings.filter_map((casting) -> {
-        score(casting.features, weights)
-    });
+    let scores = castings.filter_map((casting) -> { score(casting.features, weights) });
     if (scores.length() != castings.length()) {
         return null;
     }
@@ -131,13 +135,7 @@ function score_of(candidate: Candidate, weights: Weights) -> float? throws never
 
 /// The mean of `values`, which must not be empty.
 function mean(values: float[]) -> float throws never {
-    values.reduce(
-        (acc, value) -> {
-            acc + value
-        },
-        0.0,
-    )
-        / (values.length() * 1.0)
+    values.reduce((acc, value) -> { acc + value }, 0.0) / (values.length() * 1.0)
 }
 
 /// A cumulative walk over the candidates' weights: the running total and the
@@ -151,20 +149,9 @@ class Walk {
 /// `null` when there is nothing to draw from. Scores are shifted by their
 /// maximum first so every weight is finite.
 function pick(scored: Scored[], seed: Seed) -> Scored? throws never {
-    let first = scored.at(0)
-        ?? return null;
-    let top = scored.reduce(
-        (acc, s) -> {
-            acc.max(s.score)
-        },
-        first.score,
-    );
-    let total = scored.reduce(
-        (acc, s) -> {
-            acc + baml.Float.exp(s.score - top)
-        },
-        0.0,
-    );
+    let first = scored.at(0) ?? return null;
+    let top = scored.reduce((acc, s) -> { acc.max(s.score) }, first.score);
+    let total = scored.reduce((acc, s) -> { acc + baml.Float.exp(s.score - top) }, 0.0);
     let u = unit(seed) * total;
     let walk = scored.reduce(
         (acc, s) -> {
@@ -174,16 +161,15 @@ function pick(scored: Scored[], seed: Seed) -> Scored? throws never {
                     let cumulative = acc.cumulative + baml.Float.exp(s.score - top);
                     Walk {
                         cumulative,
-                        chosen: if (u < cumulative) {
-                            s
-                        } else {
-                            null
-                        },
+                        chosen: if (u < cumulative) { s } else { null },
                     }
                 },
             }
         },
-        Walk { cumulative: 0.0, chosen: null },
+        Walk {
+            cumulative: 0.0,
+            chosen: null,
+        },
     );
     // Rounding can leave `u` at or above the final total; the last candidate
     // is then the draw.
@@ -215,9 +201,15 @@ function schedule(seed: Seed, length: int) -> Rolled<VerdictKind[]> throws never
             } else {
                 VerdictKind.Rejected
             };
-            Rolled<VerdictKind[]> { value: acc.value.concat([kind]), next: drawn.next }
+            Rolled<VerdictKind[]> {
+                value: acc.value.concat([kind]),
+                next: drawn.next,
+            }
         },
-        Rolled<VerdictKind[]> { value: none, next: seed },
+        Rolled<VerdictKind[]> {
+            value: none,
+            next: seed,
+        },
     )
 }
 
@@ -275,26 +267,21 @@ class Planned {
 /// Only `Verified` items are served: the quiz presents the compiler's answer
 /// as the truth, so an item the compiler is known to disagree with has no
 /// place in a session.
-function session(
-    items: Item[],
-    seed: Seed,
-    weights: Weights,
-    length: int,
-    budget: Budget,
-) -> Turn[] throws never {
-    let verified = items.filter((item) -> {
-        item.status() is Verified
-    });
+function session(items: Item[], seed: Seed, weights: Weights, length: int, budget: Budget) -> Turn[]
+    throws never
+{
+    let verified = items.filter((item) -> { item.status() is Verified });
     let plan = schedule(seed, length);
     let step_seeds = streams(plan.next, length);
     let planned: Planned[] = baml.iter.Range.new(0, length)
         .map((i) -> {
-            Planned { wanted: plan.value[i], seed: step_seeds[i] }
+            Planned {
+                wanted: plan.value[i],
+                seed: step_seeds[i],
+            }
         })
         .collect();
-    planned.map((p) -> {
-        turn(verified, p, weights, budget)
-    })
+    planned.map((p) -> { turn(verified, p, weights, budget) })
 }
 
 /// The candidates a turn has drawn so far, and those among them with the
@@ -304,12 +291,9 @@ class Drawn {
     wanted: Scored[],
 }
 
-function turn(
-    items: Item[],
-    planned: Planned,
-    weights: Weights,
-    budget: Budget,
-) -> Turn throws never {
+function turn(items: Item[], planned: Planned, weights: Weights, budget: Budget) -> Turn
+    throws never
+{
     let seeds = split(planned.seed);
     let none: Scored[] = [];
     let drawn = streams(seeds.left, budget.redraws + 1).reduce(
@@ -325,7 +309,10 @@ function turn(
                 }),
             }
         },
-        Drawn { pool: none, wanted: none },
+        Drawn {
+            pool: none,
+            wanted: none,
+        },
     );
     let candidates = if (drawn.wanted.length() > 0) {
         drawn.wanted
@@ -333,8 +320,13 @@ function turn(
         drawn.pool
     };
     match (pick(candidates, seeds.right)) {
-        let chosen: Scored => Served { wanted: planned.wanted, chosen },
-        null => Starved { wanted: planned.wanted },
+        let chosen: Scored => Served {
+            wanted: planned.wanted,
+            chosen,
+        },
+        null => Starved {
+            wanted: planned.wanted,
+        },
     }
 }
 
@@ -346,12 +338,9 @@ function foil_of(item: Item, seed: Seed) -> Foil? throws never {
 
 /// `budget.draws` candidates from each of `budget.per_step` items drawn
 /// from `seed` with replacement; nothing when there are no items.
-function batch(
-    items: Item[],
-    seed: Seed,
-    weights: Weights,
-    budget: Budget,
-) -> Scored[] throws never {
+function batch(items: Item[], seed: Seed, weights: Weights, budget: Budget) -> Scored[]
+    throws never
+{
     let count = items.length();
     if (count == 0) {
         return [];

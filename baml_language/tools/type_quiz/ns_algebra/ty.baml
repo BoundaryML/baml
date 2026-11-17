@@ -33,37 +33,47 @@ class Prim {
     }
 
     function float() -> Prim throws never {
-        Prim { kind: PrimKind.Float }
+        Prim {
+            kind: PrimKind.Float,
+        }
     }
 
     function bool() -> Prim throws never {
-        Prim { kind: PrimKind.Bool }
+        Prim {
+            kind: PrimKind.Bool,
+        }
     }
 
     function string() -> Prim throws never {
-        Prim { kind: PrimKind.String }
+        Prim {
+            kind: PrimKind.String,
+        }
     }
 
     function bigint() -> Prim throws never {
-        Prim { kind: PrimKind.Bigint }
+        Prim {
+            kind: PrimKind.Bigint,
+        }
     }
 
     function null_ty() -> Prim throws never {
-        Prim { kind: PrimKind.Null }
+        Prim {
+            kind: PrimKind.Null,
+        }
     }
 
     function uint8array() -> Prim throws never {
-        Prim { kind: PrimKind.Uint8Array }
+        Prim {
+            kind: PrimKind.Uint8Array,
+        }
     }
 }
 
 /// The bottom type, spelled `never`.
-class Never {
-}
+class Never {}
 
 /// The top type, spelled `unknown`.
-class Top {
-}
+class Top {}
 
 /// A literal type of a builtin: `1`, `"sheep"`, `true`.
 class Lit {
@@ -86,7 +96,9 @@ class EnumLit {
     /// - `baml.panics.Unreachable` if `variant` is not declared by `decl`.
     function new(decl: EnumDecl, variant: string) -> EnumLit throws never {
         if (!decl.variants.includes(variant)) {
-            throw baml.panics.Unreachable { message: `enum ${decl.name} has no variant ${variant}` }
+            throw baml.panics.Unreachable {
+                message: `enum ${decl.name} has no variant ${variant}`,
+            };
         }
         EnumLit { decl, variant }
     }
@@ -107,18 +119,30 @@ class Union {
     function new(members: Ty[]) -> Union throws never {
         match (members.at(0)) {
             let first: Ty => match (members.at(1)) {
-                let second: Ty => Union { first, second, rest: members.slice(2, members.length()) },
+                let second: Ty => Union {
+                    first,
+                    second,
+                    rest: members.slice(2, members.length()),
+                },
                 null => {
-                    throw baml.panics.Unreachable { message: "a union needs at least two members" }
+                    throw baml.panics.Unreachable {
+                        message: "a union needs at least two members",
+                    };
                 },
             },
-            null => throw baml.panics.Unreachable { message: "a union needs at least two members" },
+            null => throw baml.panics.Unreachable {
+                message: "a union needs at least two members",
+            },
         }
     }
 
     /// `T?`, in its canonical form `T | null`.
     function optional(ty: Ty) -> Union throws never {
-        Union { first: ty, second: Prim.null_ty(), rest: [] }
+        Union {
+            first: ty,
+            second: Prim.null_ty(),
+            rest: [],
+        }
     }
 
     /// The members, in order.
@@ -166,7 +190,12 @@ class Fn {
     error: Ty,
 
     function new(positional: Ty[], named: Named[], ret: Ty, error: Ty) -> Fn throws never {
-        Fn { positional, named, ret, error }
+        Fn {
+            positional,
+            named,
+            ret,
+            error,
+        }
     }
 }
 
@@ -185,7 +214,7 @@ class Class {
         if (args.length() != decl.params.length()) {
             throw baml.panics.Unreachable {
                 message: `class ${decl.name} takes ${decl.params.length()} type arguments, got ${args.length()}`,
-            }
+            };
         }
         Class { decl, args }
     }
@@ -240,14 +269,14 @@ function applies(decl: IfaceDecl, args: Ty[], pins: Pin[]) -> void throws never 
     if (args.length() != decl.params.length()) {
         throw baml.panics.Unreachable {
             message: `interface ${decl.name} takes ${decl.params.length()} type arguments, got ${args.length()}`,
-        }
+        };
     }
-    let assoc = decl.assoc.map((a) -> {
-        a.name
-    });
+    let assoc = decl.assoc.map((a) -> { a.name });
     for (let pin in pins) {
         if (!assoc.includes(pin.name)) {
-            throw baml.panics.Unreachable { message: `interface ${decl.name} has no associated type ${pin.name}` }
+            throw baml.panics.Unreachable {
+                message: `interface ${decl.name} has no associated type ${pin.name}`,
+            };
         }
     }
 }
@@ -271,7 +300,11 @@ class Impl {
     ///   declaration's parameter count, or a pin names no associated type.
     function new(decl: IfaceDecl, args: Ty[], pins: Pin[]) -> Impl throws never {
         applies(decl, args, pins);
-        Impl { iface: decl, args, pins }
+        Impl {
+            iface: decl,
+            args,
+            pins,
+        }
     }
 
     /// An `implements` block for an interface that takes nothing.
@@ -333,22 +366,13 @@ function children(ty: Ty) -> Ty[] throws never {
         let a: Array => [a.element],
         let m: Map => [m.value],
         let f: Fn => {
-            f.positional
-                .concat(
-                    f.named.map((n) -> {
-                        n.ty
-                    }),
-                )
-                .concat([f.ret, f.error])
+            f.positional.concat(f.named.map((n) -> { n.ty })).concat([
+                f.ret,
+                f.error,
+            ])
         },
         let c: Class => c.args,
-        let i: Iface => {
-            i.args.concat(
-                i.pins.map((p) -> {
-                    p.ty
-                }),
-            )
-        },
+        let i: Iface => { i.args.concat(i.pins.map((p) -> { p.ty })) },
     }
 }
 
@@ -381,7 +405,7 @@ function gather_vars(ty: Ty, out: Var[], seen: map<string, Var>) -> void throws 
                     if (prior != v) {
                         throw baml.panics.Unreachable {
                             message: `two different type variables named ${v.name} in one case`,
-                        }
+                        };
                     }
                 },
                 null => {
@@ -394,7 +418,19 @@ function gather_vars(ty: Ty, out: Var[], seen: map<string, Var>) -> void throws 
                 },
             }
         },
-        Prim | Never | Top | Lit | EnumLit | Union | Array | Map | Fn | Class | Enum | Iface | Alias => {},
+        Prim
+        | Never
+        | Top
+        | Lit
+        | EnumLit
+        | Union
+        | Array
+        | Map
+        | Fn
+        | Class
+        | Enum
+        | Iface
+        | Alias => {},
     }
     for (let child in children(ty)) {
         gather_vars(child, out, seen);
@@ -484,7 +520,10 @@ class AliasDecl {
     /// can refer back to it:
     /// `AliasDecl.recursive("Rec", (self) -> { Union.new([Prim.int(), Array.new(self)]) })`.
     function recursive(name: string, body: (Ty) -> Ty throws never) -> AliasDecl throws never {
-        let decl = AliasDecl { name, body: Never {} };
+        let decl = AliasDecl {
+            name,
+            body: Never {},
+        };
         decl.body = body(Alias { decl });
         decl
     }

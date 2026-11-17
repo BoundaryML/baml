@@ -75,21 +75,18 @@ function gather_kinds(ty: root.algebra.Ty, seen: string[], out: string[]) -> voi
                 match (m) {
                     let p: root.algebra.Prim => p.kind == root.algebra.PrimKind.Null,
                     root.algebra.Never
-                        | root.algebra.Top
-                        | root.algebra.Lit
-                        | root.algebra.EnumLit
-                        | root.algebra.Union
-                        | root.algebra.Array
-                        | root.algebra.Map
-                        | root.algebra.Fn
-                        | root.algebra.Class
-                        | root.algebra.Enum
-                        | root.algebra.Iface
-                        | root.algebra.Alias
-                        | root.algebra.Var =>
-                    {
-                        false
-                    },
+                    | root.algebra.Top
+                    | root.algebra.Lit
+                    | root.algebra.EnumLit
+                    | root.algebra.Union
+                    | root.algebra.Array
+                    | root.algebra.Map
+                    | root.algebra.Fn
+                    | root.algebra.Class
+                    | root.algebra.Enum
+                    | root.algebra.Iface
+                    | root.algebra.Alias
+                    | root.algebra.Var => { false },
                 }
             });
             if (has_null) {
@@ -100,11 +97,7 @@ function gather_kinds(ty: root.algebra.Ty, seen: string[], out: string[]) -> voi
         root.algebra.Map => note(out, "kind:map"),
         let f: root.algebra.Fn => {
             note(out, "kind:function");
-            if (
-                f.named.some((n) -> {
-                    n.optional
-                })
-            ) {
+            if (f.named.some((n) -> { n.optional })) {
                 note(out, "kind:named-optional");
             }
         },
@@ -180,12 +173,8 @@ function text_features(source: string) -> string[] throws never {
         "throws",
         "<",
     ]
-        .filter((word) -> {
-            source.includes(word)
-        })
-        .map((word) -> {
-            `text:${word}`
-        })
+    .filter((word) -> { source.includes(word) })
+    .map((word) -> { `text:${word}` })
 }
 
 /// How the two types on screen stand to each other as spellings, which is
@@ -223,7 +212,10 @@ function surface_of(cast: root.bank.Cast, source: string) -> string[] throws nev
     note(out, `site:${root.algebra.site_phrase(cast.site)}`);
     gather_kinds(cast.flow.source, seen, out);
     gather_kinds(cast.flow.target, seen, out);
-    let spelled = pair_features(root.algebra.render(cast.flow.source), root.algebra.render(cast.flow.target));
+    let spelled = pair_features(
+        root.algebra.render(cast.flow.source),
+        root.algebra.render(cast.flow.target),
+    );
     for (let feature in spelled) {
         note(out, feature);
     }
@@ -239,8 +231,8 @@ function surfaced(seeds: int) -> Surfaced[] throws never {
         baml.iter.Range.new(0, seeds)
             .filter_map((i) -> {
                 let seed = root.engine.seed_for(`flow/${fact.name}`, i);
-                let drawn = root.bank.draw_flow(fact, root.algebra.all_sites(), seed)
-                    ?? return null;
+                let drawn =
+                    root.bank.draw_flow(fact, root.algebra.all_sites(), seed) ?? return null;
                 let one = root.bank.flowed(drawn, drawn.reversed);
                 Surfaced {
                     fact: fact.name,
@@ -271,34 +263,22 @@ function lean(tell: Tell, total: int, compiling: int) -> int throws never {
 /// Which facts carry `feature`, and how each answers: what a lean is made of,
 /// and so where to add the missing half.
 function carriers(cases: Surfaced[], feature: string) -> string throws never {
-    let with_f = cases.filter((c) -> {
-        c.features.includes(feature)
-    });
+    let with_f = cases.filter((c) -> { c.features.includes(feature) });
     let none: string[] = [];
-    let names = with_f
-        .map((c) -> {
-            c.fact
-        })
-        .reduce(
-            (acc, name) -> {
-                if (acc.includes(name)) {
-                    acc
-                } else {
-                    acc.concat([name])
-                }
-            },
-            none,
-        );
+    let names = with_f.map((c) -> { c.fact }).reduce(
+        (acc, name) -> {
+            if (acc.includes(name)) {
+                acc
+            } else {
+                acc.concat([name])
+            }
+        },
+        none,
+    );
     names
         .map((name) -> {
-            let of = with_f.filter((c) -> {
-                c.fact == name
-            });
-            let compiled = of
-                .filter((c) -> {
-                    c.compiles
-                })
-                .length();
+            let of = with_f.filter((c) -> { c.fact == name });
+            let compiled = of.filter((c) -> { c.compiles }).length();
             `${name} ${percent_of(compiled, of.length())}% of ${of.length()}`
         })
         .join(", ")
@@ -313,12 +293,9 @@ function carriers(cases: Surfaced[], feature: string) -> string throws never {
 /// It is off where a lean is pinned: the carriers are a dozen counts that
 /// move whenever any of them is redrawn, and a pin that churns on every
 /// unrelated change stops being read.
-function leaning_features(
-    seeds: int,
-    support: int,
-    bar: int,
-    carried: bool,
-) -> string throws never {
+function leaning_features(seeds: int, support: int, bar: int, carried: bool) -> string
+    throws never
+{
     leaning_of(surfaced(seeds), support, bar, carried)
 }
 
@@ -326,41 +303,30 @@ function leaning_features(
 /// sitting actually served. `carried` adds, to each leaning feature, the
 /// facts that carry it and how each answers — the diagnosis, which is worth
 /// having in a failure and too long to pin where a lean is being recorded.
-function leaning_of(
-    cases: Surfaced[],
-    support: int,
-    bar: int,
-    carried: bool,
-) -> string throws never {
+function leaning_of(cases: Surfaced[], support: int, bar: int, carried: bool) -> string
+    throws never
+{
     let total = cases.length();
-    let compiling = cases
-        .filter((c) -> {
-            c.compiles
-        })
-        .length();
+    let compiling = cases.filter((c) -> { c.compiles }).length();
     let counts: map<string, Tell> = {};
     for (let c in cases) {
         for (let feature in c.features) {
-            let prior = counts.get(feature) ?? Tell { feature, n: 0, compiling: 0 };
-            counts.set(
-                feature,
-                Tell {
+            let prior = counts.get(feature)
+                ?? Tell {
                     feature,
-                    n: prior.n + 1,
-                    compiling: prior.compiling
-                        + if (c.compiles) {
-                            1
-                        } else {
-                            0
-                        },
-                },
-            );
+                    n: 0,
+                    compiling: 0,
+                };
+            counts.set(feature, Tell {
+                feature,
+                n: prior.n + 1,
+                compiling: prior.compiling + if (c.compiles) { 1 } else { 0 },
+            });
         }
     }
-    let leaning = counts.values()
-        .filter((t) -> {
-            t.n >= support && lean(t, total, compiling) > bar
-        })
+    let leaning = counts
+        .values()
+        .filter((t) -> { t.n >= support && lean(t, total, compiling) > bar })
         .sort_by_key((t) -> {
             // Furthest lean first, then the better supported.
             (100 - lean(t, total, compiling)) * 100000 + (total - t.n)
@@ -433,7 +399,11 @@ test "tells: the surface leans in the two places recorded here and nowhere else"
 /// suspected. A fresh profile holds every rule alike and would let a
 /// selection that read the served casting look blind by accident.
 function telling_profile() -> root.engine.Profile throws never {
-    let knobs = root.engine.Knobs { ...root.engine.default_knobs(), practice: true, budget: 12 };
+    let knobs = root.engine.Knobs {
+        ...root.engine.default_knobs(),
+        practice: true,
+        budget: 12,
+    };
     sit(typescripter, knobs, 5).profile
 }
 
@@ -445,9 +415,13 @@ function selection_view(
     candidate: root.engine.Candidate,
     profile: root.engine.Profile,
 ) -> string throws never {
-    let score = root.engine.score_of(candidate, root.bank.default_weights())
-        ?? return "capped";
-    let scored = root.engine.Scored { item, seed, candidate, score };
+    let score = root.engine.score_of(candidate, root.bank.default_weights()) ?? return "capped";
+    let scored = root.engine.Scored {
+        item,
+        seed,
+        candidate,
+        score,
+    };
     `score=${score} fit=${root.engine.fit(profile, root.engine.default_knobs(), scored)}`
 }
 
@@ -463,25 +437,23 @@ function outcomes_told_apart(seeds: int) -> string throws never {
         baml.iter.Range.new(0, seeds)
             .filter_map((i) -> {
                 let seed = root.engine.seed_for(item, i);
-                let dealt = root.bank.deal(shape, root.algebra.all_sites(), seed)
-                    ?? return null;
-                let outcomes = baml.iter.Range.new(0, dealt.all.length()).collect().flat_map((chosen) -> {
-                    [false, true].map((reversed) -> {
-                        root.bank.candidate_of(dealt.all, chosen, reversed)
-                    })
-                });
+                let dealt = root.bank.deal(shape, root.algebra.all_sites(), seed) ?? return null;
+                let outcomes = baml.iter.Range.new(0, dealt.all.length())
+                    .collect()
+                    .flat_map((chosen) -> {
+                        [false, true].map((reversed) -> {
+                            root.bank.candidate_of(dealt.all, chosen, reversed)
+                        })
+                    });
                 let views = outcomes.map((candidate) -> {
                     selection_view(item, seed, candidate, profile)
                 });
-                let blind = views.every((view) -> {
-                    view == views[0]
-                })
+                let blind = views.every((view) -> { view == views[0] })
                     && outcomes.every((candidate) -> {
                         candidate.castings == outcomes[0].castings
                     });
-                let differ = outcomes.some((candidate) -> {
-                    candidate.served != outcomes[0].served
-                });
+                let differ =
+                    outcomes.some((candidate) -> { candidate.served != outcomes[0].served });
                 if (blind) {
                     if (differ) {
                         "differs"
@@ -494,16 +466,17 @@ function outcomes_told_apart(seeds: int) -> string throws never {
             })
             .collect()
     });
-    let seen_apart = found.filter((f) -> {
-        f != "differs" && f != "same"
-    });
+    let seen_apart = found.filter((f) -> { f != "differs" && f != "same" });
     `told_apart=${seen_apart} outcomes_that_differ=${found.filter((f) -> {
         f == "differs"
     }).length()} of ${found.length()}`
 }
 
 test "selection: whichever way a draw's coins fall, it makes the same of it" {
-    assert.equal(outcomes_told_apart(8), "told_apart=[] outcomes_that_differ=194 of 320")
+    assert.equal(
+        outcomes_told_apart(8),
+        "told_apart=[] outcomes_that_differ=194 of 320",
+    )
 }
 
 /// Every draw of every item whose served casting is not what the tracer
@@ -515,8 +488,8 @@ function served_misread(seeds: int) -> string[] throws never {
         let id = item.id();
         baml.iter.Range.new(0, seeds)
             .filter_map((i) -> {
-                let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
-                    ?? return null;
+                let candidate =
+                    root.engine.generate(item, root.engine.seed_for(id, i)) ?? return null;
                 if (candidate.served.rules == root.tracer_rules(candidate.case)) {
                     null
                 } else {

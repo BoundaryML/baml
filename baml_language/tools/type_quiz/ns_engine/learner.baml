@@ -292,7 +292,11 @@ function fresh(rules: RuleOrder[], models: string[]) -> Profile throws never {
             }
         }),
         suspicions: models.map((model) -> {
-            Suspicion { model, score: 0.0, variance: 0.0 }
+            Suspicion {
+                model,
+                score: 0.0,
+                variance: 0.0,
+            }
         }),
         served: {},
         quiet: 0,
@@ -313,9 +317,7 @@ function ratio(numerator: float, denominator: float) -> float throws never {
 }
 
 function skill_of(profile: Profile, rule: string) -> Skill? throws never {
-    profile.skills.find((skill) -> {
-        skill.rule == rule
-    })
+    profile.skills.find((skill) -> { skill.rule == rule })
 }
 
 /// How strongly the learner holds `rule`, in log-odds.
@@ -328,16 +330,11 @@ function strength(profile: Profile, rule: string) -> float throws never {
 ///
 /// A rule the case reaches twice must be applied twice, which the product
 /// counts for nothing extra in code and everything in meaning.
-function knowing(
-    profile: Profile,
-    knobs: Knobs,
-    rules: string[],
-    traps: int,
-) -> float throws never {
+function knowing(profile: Profile, knobs: Knobs, rules: string[], traps: int) -> float
+    throws never
+{
     let held = rules.reduce(
-        (acc, rule) -> {
-            acc * logistic(strength(profile, rule))
-        },
+        (acc, rule) -> { acc * logistic(strength(profile, rule)) },
         1.0,
     );
     held * baml.Float.pow(1.0 - knobs.trap_slip, traps * 1.0)
@@ -353,7 +350,10 @@ function knowing(
 /// certify them on a fraction of the evidence they have given.
 function commits(profile: Profile, knobs: Knobs) -> float throws never {
     let prior = 4.0;
-    let holds = ratio(profile.held_back * 1.0 + prior * knobs.bar, profile.unknown_mass + prior);
+    let holds = ratio(
+        profile.held_back * 1.0 + prior * knobs.bar,
+        profile.unknown_mass + prior,
+    );
     (1.0 - holds).max(0.02).min(0.98)
 }
 
@@ -407,12 +407,9 @@ function taken(of: Chances, verdict: bool?) -> float throws never {
 /// single-rule case is worth anything and only depth is — which makes
 /// escalation a consequence of asking worthwhile questions rather than a
 /// policy laid on top.
-function information(
-    profile: Profile,
-    knobs: Knobs,
-    rules: string[],
-    traps: int,
-) -> float throws never {
+function information(profile: Profile, knobs: Knobs, rules: string[], traps: int) -> float
+    throws never
+{
     let q = knowing(profile, knobs, rules, traps);
     let commit_rate = commits(profile, knobs);
     let chance = chances(q, knobs, commit_rate);
@@ -424,15 +421,8 @@ function information(
     // How `q` moves with the ability and with each rule's own offset: the
     // same gradients the update uses, so what selection values is exactly
     // what the answer will move.
-    let doubts = rules.map((rule) -> {
-        1.0 - logistic(strength(profile, rule))
-    });
-    let total_doubt = doubts.reduce(
-        (acc, doubt) -> {
-            acc + doubt
-        },
-        0.0,
-    );
+    let doubts = rules.map((rule) -> { 1.0 - logistic(strength(profile, rule)) });
+    let total_doubt = doubts.reduce((acc, doubt) -> { acc + doubt }, 0.0);
     let by_ability = q * total_doubt * q * total_doubt;
     // Per rule rather than per occurrence, over the same skills the update
     // walks. A rule the case reaches twice moves its one offset with twice
@@ -441,7 +431,8 @@ function information(
     // which are the ones worth reaching for.
     let by_rules = profile.skills.reduce(
         (acc, skill) -> {
-            let gradient = q * times_in(rules, skill.rule) * (1.0 - logistic(strength(profile, skill.rule)));
+            let gradient =
+                q * times_in(rules, skill.rule) * (1.0 - logistic(strength(profile, skill.rule)));
             acc + gradient * gradient
         },
         0.0,
@@ -451,13 +442,14 @@ function information(
 
 /// The chance of a right answer: what selection aims at, and what a
 /// suspicion's residual is measured against.
-function predict(
-    profile: Profile,
-    knobs: Knobs,
-    rules: string[],
-    traps: int,
-) -> float throws never {
-    chances(knowing(profile, knobs, rules, traps), knobs, commits(profile, knobs)).right
+function predict(profile: Profile, knobs: Knobs, rules: string[], traps: int) -> float
+    throws never
+{
+    chances(
+        knowing(profile, knobs, rules, traps),
+        knobs,
+        commits(profile, knobs),
+    ).right
 }
 
 // ─── how sure we are ─────────────────────────────────────────────────────────
@@ -471,7 +463,9 @@ function predict(
 ///   one, where no such number exists.
 function z_for(tail: float) -> float throws never {
     if (tail <= 0.0 || tail >= 1.0) {
-        throw baml.panics.Unreachable { message: `no bound leaves ${tail} of a normal above it` }
+        throw baml.panics.Unreachable {
+            message: `no bound leaves ${tail} of a normal above it`,
+        };
     }
     0.0 - inverse_normal(tail)
 }
@@ -491,21 +485,17 @@ function inverse_normal(p: float) -> float throws never {
         (
             (((0.0 - 39.69683028665376) * r + 220.9460984245205) * r - 275.9285104469687) * r
                 + 138.357751867269
-        )
-            * r
+        ) * r
             - 30.66479806614716
-    )
-        * r
+    ) * r
         + 2.506628277459239;
     let denominator = (
         (
             (((0.0 - 54.47609879822406) * r + 161.5858368580409) * r - 155.6989798598866) * r
                 + 66.80131188771972
-        )
-            * r
+        ) * r
             - 13.28068155288572
-    )
-        * r
+    ) * r
         + 1.0;
     numerator * q / denominator
 }
@@ -517,17 +507,14 @@ function lower_tail(p: float) -> float throws never {
         (
             (((0.0 - 0.007784894002430293) * q - 0.3223964580411365) * q - 2.400758277161838) * q
                 - 2.549732539343734
-        )
-            * q
+        ) * q
             + 4.374664141464968
-    )
-        * q
+    ) * q
         + 2.938163982698783;
     let denominator = (
         ((0.007784695709041462 * q + 0.3224671290700398) * q + 2.445134137142996) * q
             + 3.754408661907416
-    )
-        * q
+    ) * q
         + 1.0;
     numerator / denominator
 }
@@ -643,10 +630,7 @@ function knob_domains(knobs: Knobs) -> KnobDomain[] throws never {
 /// something it can show a learner. Asking here rather than restating the
 /// bounds is what keeps the two from drifting apart.
 function knobs_fault(knobs: Knobs) -> string? throws never {
-    let broken = knob_domains(knobs).find((domain) -> {
-        !domain.holds
-    })
-        ?? return null;
+    let broken = knob_domains(knobs).find((domain) -> { !domain.holds }) ?? return null;
     `${broken.name} is ${broken.value}, and it has to be ${broken.domain}`
 }
 
@@ -751,12 +735,7 @@ function updated(
 /// How many of `rules` are `rule`: a rule a case reaches twice must be
 /// applied twice, and its gradient counts twice over.
 function times_in(rules: string[], rule: string) -> float throws never {
-    rules
-        .filter((held) -> {
-            held == rule
-        })
-        .length()
-        * 1.0
+    rules.filter((held) -> { held == rule }).length() * 1.0
 }
 
 /// The profile after `seen`. A pure function: the old profile is untouched.
@@ -775,16 +754,15 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
     // Every estimate widens a little before the answer narrows it, and no
     // wider than it was before anything was known.
     let widened = (profile.variance + knobs.drift).min(prior_variance());
-    let doubts = seen.rules.map((rule) -> {
-        1.0 - logistic(strength(profile, rule))
-    });
-    let total_doubt = doubts.reduce(
-        (acc, doubt) -> {
-            acc + doubt
-        },
-        0.0,
+    let doubts = seen.rules.map((rule) -> { 1.0 - logistic(strength(profile, rule)) });
+    let total_doubt = doubts.reduce((acc, doubt) -> { acc + doubt }, 0.0);
+    let global = updated(
+        profile.ability,
+        widened,
+        q * total_doubt,
+        score,
+        information,
     );
-    let global = updated(profile.ability, widened, q * total_doubt, score, information);
     let right = seen.verdict == true;
     let step = profile.step + 1;
     let skills = profile.skills.map((skill) -> {
@@ -798,7 +776,10 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
             information,
         );
         if (!seen.rules.includes(skill.rule)) {
-            return Skill { ...skill, variance: own.variance };
+            return Skill {
+                ...skill,
+                variance: own.variance,
+            };
         }
         Skill {
             ...skill,
@@ -809,11 +790,7 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
             } else {
                 skill.highest_right
             },
-            wrong_streak: if (right) {
-                0
-            } else {
-                skill.wrong_streak + 1
-            },
+            wrong_streak: if (right) { 0 } else { skill.wrong_streak + 1 },
             seen: skill.seen + 1,
             last_step: step,
         }
@@ -828,11 +805,7 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
         match (seen.verdict) {
             bool => {
                 if (seen.traps.includes(suspicion.model)) {
-                    let outcome = if (right) {
-                        1.0
-                    } else {
-                        0.0
-                    };
+                    let outcome = if (right) { 1.0 } else { 0.0 };
                     Suspicion {
                         model: suspicion.model,
                         score: suspicion.score + (chance.right - outcome),
@@ -849,39 +822,16 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
         ability: global.mean,
         variance: global.variance,
         step,
-        committed: profile.committed
-            + (
-                if (seen.verdict != null) {
-                    1
-                } else {
-                    0
-                }
-            ),
-        right: profile.right
-            + (
-                if (right) {
-                    1
-                } else {
-                    0
-                }
-            ),
-        held_back: profile.held_back
-            + (
-                if (seen.verdict == null) {
-                    1
-                } else {
-                    0
-                }
-            ),
+        committed: profile.committed + (if (seen.verdict != null) { 1 } else { 0 }),
+        right: profile.right + (if (right) { 1 } else { 0 }),
+        held_back: profile.held_back + (if (seen.verdict == null) { 1 } else { 0 }),
         unknown_mass: profile.unknown_mass + (1.0 - q),
         skills,
         suspicions,
         served: served_once_more(profile.served, seen.item),
         quiet: 0,
     };
-    let after = next.skills.map((skill) -> {
-        floor_of(next, knobs, skill)
-    });
+    let after = next.skills.map((skill) -> { floor_of(next, knobs, skill) });
     let committed = seen.verdict != null;
     // Progress is whatever certifying a rule turns on: its FLOOR, and the
     // deepest order it has been applied right at. Two things this is not.
@@ -905,13 +855,19 @@ function observe(profile: Profile, knobs: Knobs, seen: Observed) -> Profile thro
             ...next,
             skills: baml.iter.Range.new(0, after.length())
                 .map((i) -> {
-                    Skill { ...next.skills[i], marked: after[i] }
+                    Skill {
+                        ...next.skills[i],
+                        marked: after[i],
+                    }
                 })
                 .collect(),
             quiet: 0,
         }
     } else {
-        Profile { ...next, quiet: profile.quiet + 1 }
+        Profile {
+            ...next,
+            quiet: profile.quiet + 1,
+        }
     }
 }
 
@@ -978,16 +934,15 @@ class Standing {
 /// Whether the learner has shown enough, under the coverage the knobs ask for.
 function enough(profile: Profile, knobs: Knobs) -> bool throws never {
     if (knobs.strict) {
-        return profile.skills.every((skill) -> {
-            mastered(profile, knobs, skill)
-        });
+        return profile.skills.every((skill) -> { mastered(profile, knobs, skill) });
     }
     // The level and the lag are two claims and are bounded separately. The
     // level is one test, so it takes the whole of `confidence`; a rule
     // lagging is twenty-five tests, so each takes its share. Comparing a
     // per-rule floor against a global one would compare bounds taken at
     // different confidences and always find the rule wanting.
-    let global_floor = profile.ability - z_for(knobs.confidence) * baml.Float.sqrt(profile.variance);
+    let global_floor =
+        profile.ability - z_for(knobs.confidence) * baml.Float.sqrt(profile.variance);
     let lag = rule_z(profile, knobs);
     logistic(global_floor) >= knobs.target
         && profile.skills.every((skill) -> {
@@ -1013,9 +968,9 @@ function standing(profile: Profile, knobs: Knobs) -> Standing throws never {
         Why.Continue
     };
     // `sort_by_key` sorts in place, so it is given a copy.
-    let by_z = profile.suspicions.slice(0, profile.suspicions.length()).sort_by_key((s) -> {
-        0.0 - suspicion_z(s)
-    });
+    let by_z = profile.suspicions
+        .slice(0, profile.suspicions.length())
+        .sort_by_key((s) -> { 0.0 - suspicion_z(s) });
     let runner_up = match (by_z.at(1)) {
         let s: Suspicion => suspicion_z(s),
         null => 0.0,
@@ -1032,15 +987,9 @@ function standing(profile: Profile, knobs: Knobs) -> Standing throws never {
         null => null,
     };
     let shaky = profile.skills
-        .filter((skill) -> {
-            !mastered(profile, knobs, skill)
-        })
-        .sort_by_key((skill) -> {
-            floor_of(profile, knobs, skill)
-        })
-        .map((skill) -> {
-            skill.rule
-        });
+        .filter((skill) -> { !mastered(profile, knobs, skill) })
+        .sort_by_key((skill) -> { floor_of(profile, knobs, skill) })
+        .map((skill) -> { skill.rule });
     Standing {
         why,
         mastered: mastered_rules(profile, knobs),
@@ -1064,12 +1013,8 @@ function standing(profile: Profile, knobs: Knobs) -> Standing throws never {
 /// twice running.
 function to_teach(profile: Profile) -> string? throws never {
     profile.skills
-        .filter((skill) -> {
-            skill.wrong_streak >= 2
-        })
-        .sort_by_key((skill) -> {
-            0 - skill.wrong_streak
-        })
+        .filter((skill) -> { skill.wrong_streak >= 2 })
+        .sort_by_key((skill) -> { 0 - skill.wrong_streak })
         .at(0)
         ?.rule
 }
@@ -1095,10 +1040,16 @@ function points(knobs: Knobs) -> Points throws never {
     let right = 4.0;
     let wrong = (knobs.bar * right / (1.0 - knobs.bar)).iround() catch (e) {
         baml.errors.InvalidArgument => {
-            throw baml.panics.Unreachable { message: `no finite penalty puts the bar at ${knobs.bar}` }
+            throw baml.panics.Unreachable {
+                message: `no finite penalty puts the bar at ${knobs.bar}`,
+            };
         },
     };
-    Points { right: 4, wrong: 0 - wrong, unsure: 0 }
+    Points {
+        right: 4,
+        wrong: 0 - wrong,
+        unsure: 0,
+    }
 }
 
 /// What one judged answer was worth: `verdict_correct` is absent when the
@@ -1143,35 +1094,17 @@ function fit(profile: Profile, knobs: Knobs, scored: Scored) -> float throws nev
 
 /// `fit`, reading each casting's worth from `table` rather than working it
 /// out again.
-function fit_from(
-    table: Worth[],
-    knobs: Knobs,
-    profile: Profile,
-    scored: Scored,
-) -> float throws never {
-    let each = scored.candidate.castings.map((casting) -> {
-        worth_of(table, casting)
-    });
+function fit_from(table: Worth[], knobs: Knobs, profile: Profile, scored: Scored) -> float
+    throws never
+{
+    let each = scored.candidate.castings.map((casting) -> { worth_of(table, casting) });
     let exposure = 0.0 - knobs.exposure * ((profile.served.get(scored.item) ?? 0) * 1.0);
     aim_of(
         knobs,
-        mean(
-            each.map((a) -> {
-                a.information
-            }),
-        ),
-        mean(
-            each.map((a) -> {
-                a.success
-            }),
-        ),
-    )
-        + exposure
-        + mean(
-            each.map((a) -> {
-                a.terms
-            }),
-        )
+        mean(each.map((a) -> { a.information })),
+        mean(each.map((a) -> { a.success })),
+    ) + exposure
+        + mean(each.map((a) -> { a.terms }))
 }
 
 /// Either the aim or the information, never both: they are two answers to
@@ -1195,11 +1128,7 @@ function assessed(profile: Profile, knobs: Knobs, casting: Casting) -> Assessed 
     // A case on top of a rule the learner has not got yet says nothing about
     // the rule on top.
     let inner_unready = rules.length() >= 2 && logistic(strength(profile, rules[0])) < 0.55;
-    let readiness = if (inner_unready) {
-        0.0 - 2.0
-    } else {
-        0.0
-    };
+    let readiness = if (inner_unready) { 0.0 - 2.0 } else { 0.0 };
     let all_mastered = rules.length() > 0
         && rules.every((rule) -> {
             match (skill_of(profile, rule)) {
@@ -1222,25 +1151,15 @@ function assessed(profile: Profile, knobs: Knobs, casting: Casting) -> Assessed 
     };
     let fresh_enough = rules.every((rule) -> {
         match (skill_of(profile, rule)) {
-            let skill: Skill => skill.last_step == 0 || profile.step - skill.last_step >= knobs.rest,
+            let skill: Skill =>
+                skill.last_step == 0 || profile.step - skill.last_step >= knobs.rest,
             null => true,
         }
     });
-    let recency = if (fresh_enough) {
-        0.0
-    } else {
-        0.0 - 1.5
-    };
+    let recency = if (fresh_enough) { 0.0 } else { 0.0 - 1.5 };
     let suspicion = profile.suspicions
-        .filter((s) -> {
-            traps.includes(s.model)
-        })
-        .reduce(
-            (acc, s) -> {
-                acc.max(suspicion_z(s))
-            },
-            0.0,
-        );
+        .filter((s) -> { traps.includes(s.model) })
+        .reduce((acc, s) -> { acc.max(suspicion_z(s)) }, 0.0);
     let teaching = match (to_teach(profile)) {
         let rule: string => {
             if (rules.includes(rule)) {
@@ -1287,9 +1206,7 @@ function assessed(profile: Profile, knobs: Knobs, casting: Casting) -> Assessed 
     // called out by name, since certification asks for every rule to have
     // been met and a sitting would otherwise stall with one untouched.
     let unknown = rules.reduce(
-        (acc, rule) -> {
-            acc.max(baml.Float.sqrt(skill_of(profile, rule)?.variance ?? 0.0))
-        },
+        (acc, rule) -> { acc.max(baml.Float.sqrt(skill_of(profile, rule)?.variance ?? 0.0)) },
         0.0,
     );
     let unmet = rules.some((rule) -> {
@@ -1298,11 +1215,7 @@ function assessed(profile: Profile, knobs: Knobs, casting: Casting) -> Assessed 
             null => false,
         }
     });
-    let reaching = if (unmet) {
-        3.0
-    } else {
-        0.0
-    };
+    let reaching = if (unmet) { 3.0 } else { 0.0 };
     // Finish what was started: a rule already met but not yet mastered is
     // worth more than one never met, or a sitting spreads itself over every
     // rule at once and brings none of them home.
@@ -1312,11 +1225,7 @@ function assessed(profile: Profile, knobs: Knobs, casting: Casting) -> Assessed 
             null => false,
         }
     });
-    let finishing = if (underway) {
-        1.5
-    } else {
-        0.0
-    };
+    let finishing = if (underway) { 1.5 } else { 0.0 };
     Assessed {
         information: information(profile, knobs, rules, traps.length()),
         success: predict(profile, knobs, rules, traps.length()),
@@ -1354,13 +1263,11 @@ function worths(profile: Profile, knobs: Knobs, scored: Scored[]) -> Worth[] thr
                 worth.rules == casting.rules && worth.traps == casting.traps
             });
             if (!known) {
-                table.push(
-                    Worth {
-                        rules: casting.rules,
-                        traps: casting.traps,
-                        assessed: assessed(profile, knobs, casting),
-                    },
-                );
+                table.push(Worth {
+                    rules: casting.rules,
+                    traps: casting.traps,
+                    assessed: assessed(profile, knobs, casting),
+                });
             }
         }
     }
@@ -1376,22 +1283,23 @@ function worths(profile: Profile, knobs: Knobs, scored: Scored[]) -> Worth[] thr
 function worth_of(table: Worth[], casting: Casting) -> Assessed throws never {
     let found = table.find((worth) -> {
         worth.rules == casting.rules && worth.traps == casting.traps
-    })
-        ?? throw baml.panics.Unreachable { message: "a casting its table was not built from" };
+    }) ?? throw baml.panics.Unreachable {
+        message: "a casting its table was not built from",
+    };
     found.assessed
 }
 
 /// One of `scored`, drawn proportional to `exp(bank score + fit)`.
-function choose(
-    profile: Profile,
-    knobs: Knobs,
-    scored: Scored[],
-    seed: Seed,
-) -> Scored? throws never {
+function choose(profile: Profile, knobs: Knobs, scored: Scored[], seed: Seed) -> Scored?
+    throws never
+{
     let table = worths(profile, knobs, scored);
     pick(
         scored.map((s) -> {
-            Scored { ...s, score: s.score + fit_from(table, knobs, profile, s) }
+            Scored {
+                ...s,
+                score: s.score + fit_from(table, knobs, profile, s),
+            }
         }),
         seed,
     )

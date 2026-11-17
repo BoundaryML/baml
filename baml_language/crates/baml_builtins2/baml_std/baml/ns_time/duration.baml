@@ -25,7 +25,9 @@ class Duration {
 
     /// The magnitude of `self`, with the sign discarded.
     function abs(self) -> Duration throws never {
-        Duration { _nanoseconds: self._nanoseconds.abs() }
+        Duration {
+            _nanoseconds: self._nanoseconds.abs(),
+        }
     }
 
     /// A timespan of `ns` nanoseconds.
@@ -43,8 +45,7 @@ class Duration {
             _nanoseconds: match (us) {
                 let value: bigint => value,
                 let value: int => 0n + value,
-            }
-                * 1000n,
+            } * 1000n,
         }
     }
     /// A timespan of `ms` milliseconds, i.e. `ms * 1000000` nanoseconds.
@@ -53,8 +54,7 @@ class Duration {
             _nanoseconds: match (ms) {
                 let value: bigint => value,
                 let value: int => 0n + value,
-            }
-                * 1000000n,
+            } * 1000000n,
         }
     }
     /// A timespan of `s` seconds, i.e. `s * 1000000000` nanoseconds.
@@ -63,8 +63,7 @@ class Duration {
             _nanoseconds: match (s) {
                 let value: bigint => value,
                 let value: int => 0n + value,
-            }
-                * 1000000000n,
+            } * 1000000000n,
         }
     }
     /// A timespan of `m` minutes, i.e. `m * 60` seconds.
@@ -73,8 +72,7 @@ class Duration {
             _nanoseconds: match (m) {
                 let value: bigint => value,
                 let value: int => 0n + value,
-            }
-                * 60000000000n,
+            } * 60000000000n,
         }
     }
     /// A timespan of `h` hours, i.e. `h * 3600` seconds.
@@ -86,8 +84,7 @@ class Duration {
             _nanoseconds: match (h) {
                 let value: bigint => value,
                 let value: int => 0n + value,
-            }
-                * 3600000000000n,
+            } * 3600000000000n,
         }
     }
 
@@ -118,7 +115,7 @@ class Duration {
 }
 
 implement root.ops.Add<Duration> for Duration {
-    type Output = Duration
+    type Output = Duration;
     /// The sum of two timespans. Exact, and cannot overflow.
     function add(self, other: Duration) -> Duration throws never {
         Duration {
@@ -128,7 +125,7 @@ implement root.ops.Add<Duration> for Duration {
 }
 
 implement root.ops.Subtract<Duration> for Duration {
-    type Output = Duration
+    type Output = Duration;
     /// The difference between two timespans. Negative when `other` is the
     /// longer of the two.
     function sub(self, other: Duration) -> Duration throws never {
@@ -139,7 +136,7 @@ implement root.ops.Subtract<Duration> for Duration {
 }
 
 implement root.ops.Multiply<int> for Duration {
-    type Output = Duration
+    type Output = Duration;
     /// Scales `self` by an integer factor. A negative factor also flips the
     /// sign of the timespan.
     function mul(self, other: int) -> Duration throws never {
@@ -150,7 +147,7 @@ implement root.ops.Multiply<int> for Duration {
 }
 
 implement root.ops.Multiply<bigint> for Duration {
-    type Output = Duration
+    type Output = Duration;
     /// Scales `self` by an arbitrarily large integer factor. A negative factor
     /// also flips the sign of the timespan.
     function mul(self, other: bigint) -> Duration throws never {
@@ -161,7 +158,7 @@ implement root.ops.Multiply<bigint> for Duration {
 }
 
 implement root.ops.Divide<int> for Duration {
-    type Output = Duration
+    type Output = Duration;
     /// Splits `self` into `other` equal parts, returning one of them.
     ///
     /// The nanosecond count truncates toward zero, so the parts may not sum
@@ -178,7 +175,7 @@ implement root.ops.Divide<int> for Duration {
 }
 
 implement root.ops.Divide<bigint> for Duration {
-    type Output = Duration
+    type Output = Duration;
     /// Splits `self` into `other` equal parts, returning one of them.
     ///
     /// The nanosecond count truncates toward zero, so the parts may not sum
@@ -195,7 +192,7 @@ implement root.ops.Divide<bigint> for Duration {
 }
 
 implement root.ops.Remainder<Duration> for Duration {
-    type Output = Duration
+    type Output = Duration;
     /// What is left of `self` after removing every whole multiple of `other`.
     /// The sub-minute part of a timespan is `d % Duration.from_minutes(1)`.
     ///
@@ -213,11 +210,11 @@ implement root.ops.Remainder<Duration> for Duration {
 }
 
 implement root.ops.Negate for Duration {
-    type Output = Duration
+    type Output = Duration;
     /// The same timespan in the opposite direction.
     function neg(self) -> Duration throws never {
         Duration {
-            _nanoseconds: -self._nanoseconds
+            _nanoseconds: -self._nanoseconds,
         }
     }
 }

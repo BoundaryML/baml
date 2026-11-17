@@ -174,13 +174,17 @@ class Candidate {
     function new(case: Case, served: Casting, castings: Casting[]) -> Candidate throws never {
         // `==`, not `includes`: `includes` compares class instances by
         // reference, and `served` is worked out apart from the list.
-        let among = castings.some((casting) -> {
-            casting == served
-        });
+        let among = castings.some((casting) -> { casting == served });
         if (!among) {
-            throw baml.panics.Unreachable { message: "a candidate served as something its draw could not be" }
+            throw baml.panics.Unreachable {
+                message: "a candidate served as something its draw could not be",
+            };
         }
-        Candidate { case, served, castings }
+        Candidate {
+            case,
+            served,
+            castings,
+        }
     }
 }
 
@@ -274,42 +278,28 @@ function cases_of(posed: Posed) -> Case[] throws never {
 /// reasoning they never had to do. This is what keeps a case from looking
 /// deeper than it is.
 function rules_of(posed: Posed) -> string[] throws never {
-    bearing_rules(
-        shared_claims(
-            cases_of(posed).map((case) -> {
-                case.trace
-            }),
-        ),
-    )
+    bearing_rules(shared_claims(cases_of(posed).map((case) -> { case.trace })))
 }
 
 /// The rules of `trace` that its answer turns on, in order. What `rules_of`
 /// reads a question by, for a trace that has not been made into a program.
 function bearing_rules(trace: Claim[]) -> string[] throws never {
-    trace
-        .filter((claim) -> {
-            claim.bearing
-        })
-        .map((claim) -> {
-            claim.rule.name
-        })
+    trace.filter((claim) -> { claim.bearing }).map((claim) -> {
+        claim.rule.name
+    })
 }
 
 /// The longest run of claims every trace begins with.
 function shared_claims(traces: Claim[][]) -> Claim[] throws never {
-    let first = traces.at(0)
-        ?? return [];
+    let first = traces.at(0) ?? return [];
     let differs = baml.iter.Range.new(0, first.length()).find((i) -> {
-        !traces.every((trace) -> {
-            trace.length() > i && trace[i] == first[i]
-        })
+        !traces.every((trace) -> { trace.length() > i && trace[i] == first[i] })
     });
     first.slice(0, differs ?? first.length())
 }
 
 /// The compiler agrees with the spec on this item.
-class Verified {
-}
+class Verified {}
 
 /// The way the compiler contradicts the spec on a diverging item.
 enum Contradiction {

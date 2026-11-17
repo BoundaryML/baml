@@ -326,12 +326,17 @@ function _media_block(
     let source = if let url: string = resolved.url {
         // A URL source carries no media_type: Anthropic fetches and sniffs the
         // bytes itself, so the guessed mime never reaches the wire.
-        AnthSource { type: "url", media_type: null, data: null, url: url }
+        AnthSource {
+            type: "url",
+            media_type: null,
+            data: null,
+            url: url,
+        }
     } else {
         if (block_type == "image" && !_anth_supported_image_mime(resolved.mime_type)) {
             throw _reject(
                 `Anthropic does not accept ${resolved.mime_type} images: the Messages API supports image/jpeg, image/png, image/gif and image/webp`,
-            )
+            );
         }
         AnthSource {
             type: "base64",
@@ -340,7 +345,11 @@ function _media_block(
             url: null,
         }
     };
-    AnthMediaBlock { type: block_type, source: source, cache_control: null }
+    AnthMediaBlock {
+        type: block_type,
+        source: source,
+        cache_control: null,
+    }
 }
 
 /// One content block at `position` -> its wire block, or null when it lowers
@@ -368,7 +377,11 @@ function _lower_block(
             if (text.text.trim() == "") {
                 null
             } else {
-                AnthTextBlock { type: "text", text: text.text, cache_control: null }
+                AnthTextBlock {
+                    type: "text",
+                    text: text.text,
+                    cache_control: null,
+                }
             }
         },
         let media: ai.content.Media => {
@@ -378,16 +391,16 @@ function _lower_block(
                 let audio: baml.media.Audio => {
                     throw _reject(
                         "Anthropic does not support audio prompt input: the Messages API has no audio content block",
-                    )
+                    );
                 },
                 let video: baml.media.Video => {
-                    throw _reject("Anthropic does not support video prompt input")
+                    throw _reject("Anthropic does not support video prompt input");
                 },
             };
             if (position != "user" && position != "tool_result") {
                 throw _reject(
                     `Anthropic only supports ${media.kind()} input in user messages, found ${position}`,
-                )
+                );
             }
             _media_block(media.media, block_type, preview = preview)
         },
@@ -434,7 +447,11 @@ function _prompt_blocks(
                 null
             },
             let media: ai.MediaPart => {
-                let block = ai.content.Media { media: media, provider_id: null, revised_prompt: null };
+                let block = ai.content.Media {
+                    media: media,
+                    provider_id: null,
+                    revised_prompt: null,
+                };
                 if let lowered: AnthBlock = _lower_block(block, position, preview = preview) {
                     blocks.push(lowered);
                 }
@@ -469,12 +486,19 @@ function _lower_prompt(
             // A message that lowered to nothing (all-whitespace text) is
             // dropped: `content: []` is a 400.
             if (blocks.length() > 0) {
-                messages.push(Message { role: role, tool_results: false, blocks: blocks });
+                messages.push(Message {
+                    role: role,
+                    tool_results: false,
+                    blocks: blocks,
+                });
             }
             null
         };
     }
-    Prompt { system: system, messages: messages }
+    Prompt {
+        system: system,
+        messages: messages,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -515,10 +539,18 @@ function _push_tool_result(
         if (m.tool_results) {
             m.blocks.push(block);
         } else {
-            msgs.push(Message { role: "user", tool_results: true, blocks: [block] });
+            msgs.push(Message {
+                role: "user",
+                tool_results: true,
+                blocks: [block],
+            });
         }
     } else {
-        msgs.push(Message { role: "user", tool_results: true, blocks: [block] });
+        msgs.push(Message {
+            role: "user",
+            tool_results: true,
+            blocks: [block],
+        });
     }
 }
 
@@ -531,7 +563,11 @@ function _lower_journal(j: ai.Journal, preview: bool = false) -> Message[] {
             let m: ai.events.UserMessage => {
                 let blocks = _lower_blocks(m.content, "user", preview = preview);
                 if (blocks.length() > 0) {
-                    msgs.push(Message { role: "user", tool_results: false, blocks: blocks });
+                    msgs.push(Message {
+                        role: "user",
+                        tool_results: false,
+                        blocks: blocks,
+                    });
                 }
                 null
             },
@@ -540,21 +576,23 @@ function _lower_journal(j: ai.Journal, preview: bool = false) -> Message[] {
                 for (let b in m.content) {
                     match (b) {
                         let content: ai.content.Block => {
-                            if let lowered: AnthBlock = _lower_block(content, "assistant", preview = preview) {
+                            if let lowered: AnthBlock = _lower_block(
+                                content,
+                                "assistant",
+                                preview = preview,
+                            ) {
                                 blocks.push(lowered);
                             }
                             null
                         },
                         let u: ai.content.ToolUse => {
-                            blocks.push(
-                                AnthToolUseBlock {
-                                    type: "tool_use",
-                                    id: u.id,
-                                    name: u.name,
-                                    input: baml.json.from(u.args),
-                                    cache_control: null,
-                                },
-                            );
+                            blocks.push(AnthToolUseBlock {
+                                type: "tool_use",
+                                id: u.id,
+                                name: u.name,
+                                input: baml.json.from(u.args),
+                                cache_control: null,
+                            });
                             null
                         },
                         // Dropped: replaying thinking without its signature is
@@ -569,7 +607,11 @@ function _lower_journal(j: ai.Journal, preview: bool = false) -> Message[] {
                 // the API 400). ai.wire.sanitize_for_client removes most of
                 // these upstream; this is the belt to its braces.
                 if (blocks.length() > 0) {
-                    msgs.push(Message { role: "assistant", tool_results: false, blocks: blocks });
+                    msgs.push(Message {
+                        role: "assistant",
+                        tool_results: false,
+                        blocks: blocks,
+                    });
                 }
                 null
             },
@@ -577,7 +619,9 @@ function _lower_journal(j: ai.Journal, preview: bool = false) -> Message[] {
                 _push_tool_result(
                     msgs,
                     c.id,
-                    _tool_result_content(_lower_blocks(c.content, "tool_result", preview = preview)),
+                    _tool_result_content(
+                        _lower_blocks(c.content, "tool_result", preview = preview),
+                    ),
                     false,
                 );
             },
@@ -612,7 +656,10 @@ function _render_messages(msgs: Message[]) -> AnthMessageParam[] {
                 continue;
             }
         }
-        out.push(AnthMessageParam { role: m.role, content: m.blocks.concat([]) });
+        out.push(AnthMessageParam {
+            role: m.role,
+            content: m.blocks.concat([]),
+        });
     }
     out
 }
@@ -666,14 +713,12 @@ function _body_params(c: root.Client) -> BodyParams {
 function _tool_params(toolbox: ai.tools.Toolbox) -> AnthToolParam[] {
     let out: AnthToolParam[] = [];
     for (let t in toolbox.list()) {
-        out.push(
-            AnthToolParam {
-                name: t.name,
-                description: t.description,
-                input_schema: baml.json.from(t.input_schema),
-                cache_control: null,
-            },
-        );
+        out.push(AnthToolParam {
+            name: t.name,
+            description: t.description,
+            input_schema: baml.json.from(t.input_schema),
+            cache_control: null,
+        });
     }
     out
 }
@@ -681,7 +726,11 @@ function _tool_params(toolbox: ai.tools.Toolbox) -> AnthToolParam[] {
 function _tool_choice_param(choice: root.ToolChoice?) -> AnthToolChoiceParam {
     match (choice) {
         // The API's own default, sent explicitly so the wire shape is stable.
-        null => AnthToolChoiceParam { type: "auto", name: null, disable_parallel_tool_use: null },
+        null => AnthToolChoiceParam {
+            type: "auto",
+            name: null,
+            disable_parallel_tool_use: null,
+        },
         let c: root.ToolChoice => {
             AnthToolChoiceParam {
                 type: c.type,
@@ -696,7 +745,10 @@ function _thinking_param(thinking: root.ThinkingConfig?) -> AnthThinkingParam? {
     match (thinking) {
         null => null,
         let t: root.ThinkingConfig => {
-            AnthThinkingParam { type: t.type, budget_tokens: t.budget_tokens }
+            AnthThinkingParam {
+                type: t.type,
+                budget_tokens: t.budget_tokens,
+            }
         },
     }
 }
@@ -737,16 +789,29 @@ function messages_request(
     // request is a guaranteed 400.
     let synthesize_user = lowered.length() > 0 && first_role != "user" && system.length() == 0;
     let ordered: Message[] = if (promote_system) {
-        [Message { role: "user", tool_results: false, blocks: system }].concat(lowered)
+        [
+            Message {
+                role: "user",
+                tool_results: false,
+                blocks: system,
+            },
+        ]
+        .concat(lowered)
     } else if (synthesize_user) {
         [
             Message {
                 role: "user",
                 tool_results: false,
-                blocks: [AnthTextBlock { type: "text", text: "(continue)", cache_control: null }],
+                blocks: [
+                    AnthTextBlock {
+                        type: "text",
+                        text: "(continue)",
+                        cache_control: null,
+                    },
+                ],
             },
         ]
-            .concat(lowered)
+        .concat(lowered)
     } else {
         lowered
     };
@@ -757,7 +822,7 @@ function messages_request(
             status_code: null,
             detail: "the rendered prompt and journal produced no message content",
             raw_body: null,
-        }
+        };
     }
 
     // Promoted system blocks are already the first user message; sending them
@@ -778,11 +843,7 @@ function messages_request(
     } else {
         null
     };
-    let stream_flag: bool? = if (stream) {
-        true
-    } else {
-        null
-    };
+    let stream_flag: bool? = if (stream) { true } else { null };
     MessagesRequest {
         model: params.model,
         max_tokens: params.max_tokens,
@@ -839,7 +900,10 @@ function _query_suffix(query_params: map<string, string>?) -> string {
 /// WASM playground needs) are reachable and `anthropic-version` is overridable;
 /// `x-api-key` is applied last so a stray header cannot break authentication.
 function _headers(c: root.Client, preview: bool = false) -> map<string, string> {
-    let headers: map<string, string> = { "anthropic-version": "2023-06-01", "content-type": "application/json" };
+    let headers: map<string, string> = {
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    };
     if let extra: map<string, string> = c.headers {
         for (let key in extra.keys()) {
             let _ = headers.set(key.to_lower_case(), extra.get(key) ?? "");
@@ -905,18 +969,18 @@ function parse(resp: Response) -> ai.ModelTurn {
                 null
             },
             "thinking" => {
-                content.push(ai.content.Reasoning { summary: b.thinking ?? "" });
+                content.push(ai.content.Reasoning {
+                    summary: b.thinking ?? "",
+                });
                 null
             },
             "tool_use" => {
                 let empty_args: map<string, unknown> = {};
-                content.push(
-                    ai.content.ToolUse {
-                        id: b.id ?? "",
-                        name: b.name ?? "",
-                        args: b.input ?? empty_args,
-                    },
-                );
+                content.push(ai.content.ToolUse {
+                    id: b.id ?? "",
+                    name: b.name ?? "",
+                    args: b.input ?? empty_args,
+                });
                 null
             },
             // redacted_thinking and server-tool blocks: nothing canonical to
@@ -930,7 +994,12 @@ function parse(resp: Response) -> ai.ModelTurn {
         let s: string => _stop_reason(s),
     };
 
-    ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop }
+    ai.ModelTurn {
+        calls: [],
+        child_turns: [],
+        content: content,
+        stop_reason: stop,
+    }
 }
 
 /// One decoded response's usage, null when it reported none.
@@ -975,10 +1044,14 @@ function _events_usage(
 
 /// The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(_request(c, input, false, preview = false));
+    let req =
+        ai.LlmTimeoutOptions._resolve(c.timeout)._apply(_request(c, input, false, preview = false));
     let sent = ai.wire.send_as_with_wire<Response>(
         req,
-        ai.events.ModelKey { provider: c.provider(), model: c.model },
+        ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         capture_wire = c.capture_wire,
     );
     ai.internal.with_own_call(
@@ -1122,7 +1195,11 @@ class AnthStreamState {
                     _ => empty,
                 }
             };
-            out.push(ai.content.ToolUse { id: call.id, name: call.name, args: args });
+            out.push(ai.content.ToolUse {
+                id: call.id,
+                name: call.name,
+                args: args,
+            });
         }
         out
     }
@@ -1171,26 +1248,28 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
             let ev = baml.json.decode<AnthStreamEvent>(data) catch_all (e) {
                 let parse => {
                     throw ai.errors.InvalidResponse {
-                    provider: "anthropic",
-                    message: parse.to_string(),
-                    raw_body: data,
-                    status_code: null,
-                }
+                        provider: "anthropic",
+                        message: parse.to_string(),
+                        raw_body: data,
+                        status_code: null,
+                    };
                 },
             };
             if let event: AnthStreamEvent = ev {
                 let t = event.type ?? raw.event ?? "";
                 match (t) {
                     "error" => {
-                        throw _anth_stream_failure(event.error, data)
+                        throw _anth_stream_failure(event.error, data);
                     },
                     "message_start" => {
                         if let message: AnthStreamMessage = event.message {
                             state.model = message.model;
                         }
-                        out.push(
-                            _anth_stream_meta(null, event.message?.usage, resolved_model = event.message?.model),
-                        );
+                        out.push(_anth_stream_meta(
+                            null,
+                            event.message?.usage,
+                            resolved_model = event.message?.model,
+                        ));
                         null
                     },
                     "content_block_start" => {
@@ -1198,14 +1277,12 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                             let kind = block.type ?? "";
                             match (kind) {
                                 "tool_use" => {
-                                    state.tool_calls.push(
-                                        AnthStreamToolCall {
-                                            index: event.index ?? state.tool_calls.length(),
-                                            id: block.id ?? "",
-                                            name: block.name ?? "",
-                                            args_json: "",
-                                        },
-                                    );
+                                    state.tool_calls.push(AnthStreamToolCall {
+                                        index: event.index ?? state.tool_calls.length(),
+                                        id: block.id ?? "",
+                                        name: block.name ?? "",
+                                        args_json: "",
+                                    });
                                     null
                                 },
                                 "thinking" => {
@@ -1242,7 +1319,10 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                                     null
                                 },
                                 "input_json_delta" => {
-                                    if let call: AnthStreamToolCall = _anth_stream_call_at(state, event.index) {
+                                    if let call: AnthStreamToolCall = _anth_stream_call_at(
+                                        state,
+                                        event.index,
+                                    ) {
                                         call.args_json = `${call.args_json}${d.partial_json ?? ""}`;
                                     }
                                     // Tool input is content with no TextDelta.
@@ -1337,9 +1417,16 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
         dispatched = started,
     );
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
+        resolved_model: ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         usage: null,
-        timing: ai.events.Timing { start_time: started, duration: null, ttft: null },
+        timing: ai.events.Timing {
+            start_time: started,
+            duration: null,
+            ttft: null,
+        },
         http_request: if (c.capture_wire) {
             baml.http.Request {
                 method: req.method,
@@ -1350,12 +1437,12 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
         } else {
             null
         },
-        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        sse_responses: if (c.capture_wire) {
-            []
-        } else {
-            null
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
         },
+        sse_responses: if (c.capture_wire) { [] } else { null },
     };
     stream._wire_call = call;
     stream._requested_model = c.model;

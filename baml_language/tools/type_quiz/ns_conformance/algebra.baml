@@ -9,7 +9,12 @@ function box_decl() -> root.algebra.ClassDecl throws never {
     root.algebra.ClassDecl {
         name: "Box",
         params: ["T"],
-        fields: [root.algebra.FieldDecl { name: "value", ty: root.algebra.Var.new("T") }],
+        fields: [
+            root.algebra.FieldDecl {
+                name: "value",
+                ty: root.algebra.Var.new("T"),
+            },
+        ],
         impls: [],
     }
 }
@@ -19,22 +24,36 @@ function pair_decl() -> root.algebra.ClassDecl throws never {
         name: "Pair",
         params: [],
         fields: [
-            root.algebra.FieldDecl { name: "left", ty: root.algebra.Prim.int() },
-            root.algebra.FieldDecl { name: "right", ty: root.algebra.Prim.string() },
+            root.algebra.FieldDecl {
+                name: "left",
+                ty: root.algebra.Prim.int(),
+            },
+            root.algebra.FieldDecl {
+                name: "right",
+                ty: root.algebra.Prim.string(),
+            },
         ],
         impls: [],
     }
 }
 
 function side_decl() -> root.algebra.EnumDecl throws never {
-    root.algebra.EnumDecl { name: "Side", variants: ["Left", "Right"] }
+    root.algebra.EnumDecl {
+        name: "Side",
+        variants: ["Left", "Right"],
+    }
 }
 
 function iter_decl() -> root.algebra.IfaceDecl throws never {
     root.algebra.IfaceDecl {
         name: "Iter",
         params: [],
-        assoc: [root.algebra.AssocDecl { name: "Item", default: root.algebra.Prim.int() }],
+        assoc: [
+            root.algebra.AssocDecl {
+                name: "Item",
+                default: root.algebra.Prim.int(),
+            },
+        ],
         bounds: [],
     }
 }
@@ -43,7 +62,12 @@ function lorem_decl() -> root.algebra.IfaceDecl throws never {
     root.algebra.IfaceDecl {
         name: "Lorem",
         params: ["T"],
-        assoc: [root.algebra.AssocDecl { name: "Out", default: null }],
+        assoc: [
+            root.algebra.AssocDecl {
+                name: "Out",
+                default: null,
+            },
+        ],
         bounds: [],
     }
 }
@@ -56,7 +80,12 @@ function rec_decl() -> root.algebra.AliasDecl throws never {
 
 /// An interface that asks for nothing, as the bank's do.
 function marker_decl() -> root.algebra.IfaceDecl throws never {
-    root.algebra.IfaceDecl { name: "Marker", params: [], assoc: [], bounds: [] }
+    root.algebra.IfaceDecl {
+        name: "Marker",
+        params: [],
+        assoc: [],
+        bounds: [],
+    }
 }
 
 /// An interface that requires `Marker`, so its existential sits below it.
@@ -74,13 +103,21 @@ function implementor_decl() -> root.algebra.ClassDecl throws never {
     root.algebra.ClassDecl {
         name: "Implementor",
         params: [],
-        fields: [root.algebra.FieldDecl { name: "value", ty: root.algebra.Prim.int() }],
+        fields: [
+            root.algebra.FieldDecl {
+                name: "value",
+                ty: root.algebra.Prim.int(),
+            },
+        ],
         impls: [root.algebra.Impl.of(marker_decl())],
     }
 }
 
 function id_decl() -> root.algebra.AliasDecl throws never {
-    root.algebra.AliasDecl { name: "Id", body: root.algebra.Prim.int() }
+    root.algebra.AliasDecl {
+        name: "Id",
+        body: root.algebra.Prim.int(),
+    }
 }
 
 class Corpus {
@@ -96,11 +133,19 @@ class Corpus {
 }
 
 function entry(name: string, ty: root.algebra.Ty) -> Corpus throws never {
-    Corpus { name: name, ty: ty, printed: null }
+    Corpus {
+        name: name,
+        ty: ty,
+        printed: null,
+    }
 }
 
 function printed_as(name: string, ty: root.algebra.Ty, printed: string) -> Corpus throws never {
-    Corpus { name: name, ty: ty, printed: printed }
+    Corpus {
+        name: name,
+        ty: ty,
+        printed: printed,
+    }
 }
 
 function fn1() -> root.algebra.Ty throws never {
@@ -139,31 +184,43 @@ function corpus() -> Corpus[] throws never {
         entry("lit newline", root.algebra.Lit.new("a\nb")),
         entry("lit bool", root.algebra.Lit.new(true)),
         entry("union", int_or_string()),
-        entry("optional", root.algebra.Union.optional(root.algebra.Prim.string())),
+        entry(
+            "optional",
+            root.algebra.Union.optional(root.algebra.Prim.string()),
+        ),
         entry(
             "union of literals",
-            root.algebra.Union.new(
-                [root.algebra.Lit.new(1), root.algebra.Lit.new(2), root.algebra.Prim.int()],
-            ),
+            root.algebra.Union.new([
+                root.algebra.Lit.new(1),
+                root.algebra.Lit.new(2),
+                root.algebra.Prim.int(),
+            ]),
         ),
         printed_as(
             "nested union",
-            root.algebra.Union.new(
-                [
-                    root.algebra.Prim.int(),
-                    root.algebra.Union.new([root.algebra.Prim.string(), root.algebra.Prim.bool()]),
-                ],
-            ),
+            root.algebra.Union.new([
+                root.algebra.Prim.int(),
+                root.algebra.Union.new([root.algebra.Prim.string(), root.algebra.Prim.bool()]),
+            ]),
             "int | string | bool",
         ),
         entry("array", root.algebra.Array.new(root.algebra.Prim.int())),
         entry("array of union", root.algebra.Array.new(int_or_string())),
-        entry("array of array", root.algebra.Array.new(root.algebra.Array.new(root.algebra.Prim.int()))),
+        entry(
+            "array of array",
+            root.algebra.Array.new(root.algebra.Array.new(root.algebra.Prim.int())),
+        ),
         entry("map", root.algebra.Map.new(root.algebra.Prim.int())),
-        entry("map of union", root.algebra.Map.new(root.algebra.Union.optional(root.algebra.Prim.int()))),
+        entry(
+            "map of union",
+            root.algebra.Map.new(root.algebra.Union.optional(root.algebra.Prim.int())),
+        ),
         entry("map of fn", root.algebra.Map.new(fn1())),
         entry("fn", fn1()),
-        entry("fn in union", root.algebra.Union.new([root.algebra.Prim.string(), fn1()])),
+        entry(
+            "fn in union",
+            root.algebra.Union.new([root.algebra.Prim.string(), fn1()]),
+        ),
         entry("array of fn", root.algebra.Array.new(fn1())),
         printed_as(
             "fn returning union",
@@ -180,8 +237,14 @@ function corpus() -> Corpus[] throws never {
             root.algebra.Fn.new([], [], fn1(), root.algebra.Never {}),
             "() -> ((int) -> string throws never) throws never",
         ),
-        entry("fn throwing union", root.algebra.Fn.new([], [], root.algebra.Prim.int(), int_or_string())),
-        entry("fn throwing fn", root.algebra.Fn.new([], [], root.algebra.Prim.int(), fn1())),
+        entry(
+            "fn throwing union",
+            root.algebra.Fn.new([], [], root.algebra.Prim.int(), int_or_string()),
+        ),
+        entry(
+            "fn throwing fn",
+            root.algebra.Fn.new([], [], root.algebra.Prim.int(), fn1()),
+        ),
         entry(
             "fn taking union",
             root.algebra.Fn.new(
@@ -213,36 +276,64 @@ function corpus() -> Corpus[] throws never {
             "(int, string) -> int throws never",
         ),
         entry("class", root.algebra.Class.new(pair_decl(), [])),
-        entry("generic class", root.algebra.Class.new(box_decl(), [root.algebra.Prim.int()])),
-        entry("generic class of union", root.algebra.Class.new(box_decl(), [int_or_string()])),
-        entry("generic class of fn", root.algebra.Class.new(box_decl(), [fn1()])),
+        entry(
+            "generic class",
+            root.algebra.Class.new(box_decl(), [root.algebra.Prim.int()]),
+        ),
+        entry(
+            "generic class of union",
+            root.algebra.Class.new(box_decl(), [int_or_string()]),
+        ),
+        entry(
+            "generic class of fn",
+            root.algebra.Class.new(box_decl(), [fn1()]),
+        ),
         entry("enum", root.algebra.Enum.new(side_decl())),
-        entry("enum literal", root.algebra.EnumLit.new(side_decl(), "Left")),
-        entry("interface requiring another", root.algebra.Iface.of(narrower_decl())),
-        entry("class implementing an interface", root.algebra.Class.new(implementor_decl(), [])),
-        printed_as("interface", root.algebra.Iface.new(iter_decl(), [], []), "Iter<Item = int>"),
+        entry(
+            "enum literal",
+            root.algebra.EnumLit.new(side_decl(), "Left"),
+        ),
+        entry(
+            "interface requiring another",
+            root.algebra.Iface.of(narrower_decl()),
+        ),
+        entry(
+            "class implementing an interface",
+            root.algebra.Class.new(implementor_decl(), []),
+        ),
+        printed_as(
+            "interface",
+            root.algebra.Iface.new(iter_decl(), [], []),
+            "Iter<Item = int>",
+        ),
         entry(
             "interface pinned",
-            root.algebra.Iface.new(
-                iter_decl(),
-                [],
-                [root.algebra.Pin { name: "Item", ty: root.algebra.Prim.string() }],
-            ),
+            root.algebra.Iface.new(iter_decl(), [], [
+                root.algebra.Pin {
+                    name: "Item",
+                    ty: root.algebra.Prim.string(),
+                },
+            ]),
         ),
         entry(
             "generic interface pinned",
-            root.algebra.Iface.new(
-                lorem_decl(),
-                [root.algebra.Prim.int()],
-                [root.algebra.Pin { name: "Out", ty: fn1() }],
-            ),
+            root.algebra.Iface.new(lorem_decl(), [root.algebra.Prim.int()], [
+                root.algebra.Pin {
+                    name: "Out",
+                    ty: fn1(),
+                },
+            ]),
         ),
         entry("recursive alias", root.algebra.Alias { decl: rec_decl() }),
         entry(
             "array of recursive alias",
             root.algebra.Array.new(root.algebra.Alias { decl: rec_decl() }),
         ),
-        printed_as("transparent alias", root.algebra.Alias { decl: id_decl() }, "int"),
+        printed_as(
+            "transparent alias",
+            root.algebra.Alias { decl: id_decl() },
+            "int",
+        ),
     ]
 }
 
@@ -278,7 +369,8 @@ function fixed_point_failures() -> string[] throws never {
                     `${c.name}: rendered ${rendered}, expected print ${expected}, compiler printed ${t.to_string()}`
                 }
             },
-            root.engine.CompileFailed | root.engine.InitThrew => failure_text(c.name, spelled(c.ty)),
+            root.engine.CompileFailed | root.engine.InitThrew =>
+                failure_text(c.name, spelled(c.ty)),
         }
     })
 }
@@ -300,13 +392,11 @@ function let_grammar_failures() -> string[] throws never {
                 let target: ${spelling} = value;
             }
         `;
-        let outcome = root.engine.verify(
-            root.engine.Case {
-                files: { "case.baml": source },
-                key: root.engine.Compiles { tests: [] },
-                trace: [],
-            },
-        );
+        let outcome = root.engine.verify(root.engine.Case {
+            files: { "case.baml": source },
+            key: root.engine.Compiles { tests: [] },
+            trace: [],
+        });
         if (root.engine.agrees(outcome)) {
             null
         } else {
@@ -353,15 +443,12 @@ function unreachable_structural_entries() -> string[] throws never {
                 })
             },
             root.algebra.EnumLit
-                | root.algebra.Fn
-                | root.algebra.Class
-                | root.algebra.Enum
-                | root.algebra.Iface
-                | root.algebra.Alias
-                | root.algebra.Var =>
-            {
-                false
-            },
+            | root.algebra.Fn
+            | root.algebra.Class
+            | root.algebra.Enum
+            | root.algebra.Iface
+            | root.algebra.Alias
+            | root.algebra.Var => { false },
         };
         if (structural && root.algebra.to_reflect(c.ty) == null) {
             c.name
@@ -404,9 +491,7 @@ function kind_failures() -> string[] throws never {
 /// Every `Kind` must be produced by some corpus entry, so a mis-mapped arm in
 /// `kind_of` cannot hide behind an unexercised kind.
 function kinds_never_seen() -> string[] throws never {
-    let seen = corpus().filter_map((c) -> {
-        root.algebra.expected_kind(c.ty)
-    });
+    let seen = corpus().filter_map((c) -> { root.algebra.expected_kind(c.ty) });
     [
         root.algebra.Kind.Class,
         root.algebra.Kind.Enum,
@@ -418,13 +503,13 @@ function kinds_never_seen() -> string[] throws never {
         root.algebra.Kind.Primitive,
         root.algebra.Kind.Function,
     ]
-        .filter_map((k) -> {
-            if (seen.includes(k)) {
-                null
-            } else {
-                `${k}`
-            }
-        })
+    .filter_map((k) -> {
+        if (seen.includes(k)) {
+            null
+        } else {
+            `${k}`
+        }
+    })
 }
 
 test "kinds: the compiler classifies every corpus type as expected" {
@@ -458,18 +543,21 @@ function equivalences() -> Equivalence[] throws never {
         },
         Equivalence {
             left: root.algebra.Union.optional(root.algebra.Prim.string()),
-            right: root.algebra.Union.new([root.algebra.Prim.string(), root.algebra.Prim.null_ty()]),
+            right: root.algebra.Union.new([
+                root.algebra.Prim.string(),
+                root.algebra.Prim.null_ty(),
+            ]),
         },
         Equivalence {
-            left: root.algebra.Union.new(
-                [
-                    root.algebra.Prim.int(),
-                    root.algebra.Union.new([root.algebra.Prim.string(), root.algebra.Prim.bool()]),
-                ],
-            ),
-            right: root.algebra.Union.new(
-                [root.algebra.Prim.int(), root.algebra.Prim.string(), root.algebra.Prim.bool()],
-            ),
+            left: root.algebra.Union.new([
+                root.algebra.Prim.int(),
+                root.algebra.Union.new([root.algebra.Prim.string(), root.algebra.Prim.bool()]),
+            ]),
+            right: root.algebra.Union.new([
+                root.algebra.Prim.int(),
+                root.algebra.Prim.string(),
+                root.algebra.Prim.bool(),
+            ]),
         },
         Equivalence {
             left: root.algebra.Union.new([root.algebra.Prim.int(), root.algebra.Never {}]),
@@ -543,18 +631,26 @@ function union_context_declines_absorbers() -> bool throws never {
         root.algebra.Relation.Sub,
         root.bank.never_bottom_rule(),
     );
-    let disjoint = root.algebra.knowledge(root.algebra.in_union_with(base, root.algebra.Prim.string(), rule));
-    let absorbing_member = root.algebra.knowledge(root.algebra.in_union_with(base, root.algebra.Prim.int(), rule));
-    let non_leaf = root.algebra.knowledge(
-        root.algebra.in_union_with(base, root.algebra.Array.new(root.algebra.Prim.string()), rule),
+    let disjoint = root.algebra.knowledge(
+        root.algebra.in_union_with(base, root.algebra.Prim.string(), rule),
     );
+    let absorbing_member = root.algebra.knowledge(
+        root.algebra.in_union_with(base, root.algebra.Prim.int(), rule),
+    );
+    let non_leaf = root.algebra.knowledge(root.algebra.in_union_with(
+        base,
+        root.algebra.Array.new(root.algebra.Prim.string()),
+        rule,
+    ));
     let wide = root.algebra.pair(
         root.algebra.Lit.new(1),
         int_or_string(),
         root.algebra.Relation.Sub,
         root.bank.union_member_rule(),
     );
-    let member_of_side = root.algebra.knowledge(root.algebra.in_union_with(wide, root.algebra.Prim.string(), rule));
+    let member_of_side = root.algebra.knowledge(
+        root.algebra.in_union_with(wide, root.algebra.Prim.string(), rule),
+    );
     // Overlapping a side without occurring in it. `true | bool` is `bool` and
     // `true | false | bool` is `bool`, so adding `bool` to both sides of
     // `true <: true | false` collapses them to one type; a guard that asks
@@ -566,7 +662,9 @@ function union_context_declines_absorbers() -> bool throws never {
         root.algebra.Relation.Sub,
         root.bank.union_member_rule(),
     );
-    let covers_literals = root.algebra.knowledge(root.algebra.in_union_with(literals, root.algebra.Prim.bool(), rule));
+    let covers_literals = root.algebra.knowledge(
+        root.algebra.in_union_with(literals, root.algebra.Prim.bool(), rule),
+    );
     // The same the other way round: the extra is the concrete type of a
     // literal one side holds.
     let one_side_holds_a_literal = root.algebra.pair(
@@ -586,7 +684,9 @@ function union_context_declines_absorbers() -> bool throws never {
         root.algebra.Relation.Sub,
         root.bank.never_bottom_rule(),
     );
-    let beside_top = root.algebra.knowledge(root.algebra.in_union_with(top, root.algebra.Prim.int(), rule));
+    let beside_top = root.algebra.knowledge(
+        root.algebra.in_union_with(top, root.algebra.Prim.int(), rule),
+    );
     disjoint == root.algebra.Relation.Sub
         && absorbing_member == root.algebra.Undecided {}
         && non_leaf == root.algebra.Undecided {}
@@ -731,10 +831,9 @@ function flows() -> Flow[] throws never {
             // where being the same type is what the compiler objects to.
             name: "generic of equivalent arguments",
             source: root.algebra.Class.new(box_decl(), [int_or_string()]),
-            target: root.algebra.Class.new(
-                box_decl(),
-                [root.algebra.Union.new([root.algebra.Prim.string(), root.algebra.Prim.int()])],
-            ),
+            target: root.algebra.Class.new(box_decl(), [
+                root.algebra.Union.new([root.algebra.Prim.string(), root.algebra.Prim.int()]),
+            ]),
             relation: root.algebra.Relation.Equiv,
         },
         Flow {
@@ -803,10 +902,18 @@ function site_case(site: root.algebra.SiteKind, flow: Flow) -> root.engine.Case 
         root.engine.Rejected {
             code: root.bank.rejection_code(site),
             more: [],
-            at: root.engine.Region { file, start: p.start, end: p.end },
+            at: root.engine.Region {
+                file,
+                start: p.start,
+                end: p.end,
+            },
         }
     };
-    root.engine.Case { files: root.engine.one_file(file, p.source), key, trace: [] }
+    root.engine.Case {
+        files: root.engine.one_file(file, p.source),
+        key,
+        trace: [],
+    }
 }
 
 /// What a probe's region must cover at `site`: the flowing expression, the
@@ -823,12 +930,9 @@ function expected_excerpt(
             `implement ${names.contract} for ${root.algebra.render(flow.target)} {}`
         },
         root.algebra.SiteKind.Let
-            | root.algebra.SiteKind.CallArgument
-            | root.algebra.SiteKind.Field
-            | root.algebra.SiteKind.ArrayElement =>
-        {
-            names.value
-        },
+        | root.algebra.SiteKind.CallArgument
+        | root.algebra.SiteKind.Field
+        | root.algebra.SiteKind.ArrayElement => { names.value },
     }
 }
 
@@ -880,9 +984,7 @@ function site_disagreements() -> string[] throws never {
 /// would be declared elsewhere and be a second, unrelated variable.
 function sites_asked() -> string throws never {
     flows()
-        .map((flow) -> {
-            `${flow.name}=${sites_of(flow).length()}`
-        })
+        .map((flow) -> { `${flow.name}=${sites_of(flow).length()}` })
         .join(" ")
 }
 

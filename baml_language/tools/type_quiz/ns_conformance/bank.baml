@@ -26,9 +26,7 @@ function exists(path: string) -> bool throws never {
 function repository() -> string? throws never {
     let ascents = ["", "../", "../../", "../../../", "../../../../"];
     ascents
-        .flat_map((up) -> {
-            [up, `${up}baml_language/`]
-        })
+        .flat_map((up) -> { [up, `${up}baml_language/`] })
         .find((prefix) -> {
             exists(`${prefix}TYPE_SYSTEM.md`) && exists(`${prefix}tools/type_quiz/SPEC_GAPS.md`)
         })
@@ -50,15 +48,15 @@ class Sources {
 }
 
 function sources() -> Sources? throws never {
-    let tree = repository()
-        ?? return null;
-    let spec = read_in(tree, "TYPE_SYSTEM.md")
-        ?? return null;
-    let gaps = read_in(tree, "tools/type_quiz/SPEC_GAPS.md")
-        ?? return null;
-    let divergences = read_in(tree, "tools/type_quiz/COMPILER_DIVERGENCE.md")
-        ?? return null;
-    Sources { spec, gaps, divergences }
+    let tree = repository() ?? return null;
+    let spec = read_in(tree, "TYPE_SYSTEM.md") ?? return null;
+    let gaps = read_in(tree, "tools/type_quiz/SPEC_GAPS.md") ?? return null;
+    let divergences = read_in(tree, "tools/type_quiz/COMPILER_DIVERGENCE.md") ?? return null;
+    Sources {
+        spec,
+        gaps,
+        divergences,
+    }
 }
 
 /// One line of explanation for every test that needs the tree, so a suite run
@@ -90,22 +88,19 @@ function heading_text(line: string) -> string? throws never {
 
 /// The lines under the first heading `matches` accepts, up to the next
 /// heading of any level.
-function section_body(
-    markdown: string,
-    matches: (string) -> bool throws never,
-) -> string? throws never {
+function section_body(markdown: string, matches: (string) -> bool throws never) -> string?
+    throws never
+{
     let lines = markdown.lines();
     let start = baml.iter.Range.new(0, lines.length()).find((i) -> {
         match (heading_text(lines[i])) {
             let h: string => matches(h),
             null => false,
         }
-    })
-        ?? return null;
+    }) ?? return null;
     let end = baml.iter.Range.new(start + 1, lines.length()).find((i) -> {
         lines[i].starts_with("#")
-    })
-        ?? lines.length();
+    }) ?? lines.length();
     lines.slice(start + 1, end).join("\n")
 }
 
@@ -115,21 +110,18 @@ function section_body(
 /// quote is compared against the words of a section, not its line breaks, and
 /// rewrapping a paragraph does not falsify a citation.
 function words_of(text: string) -> string throws never {
-    text.replace_all("\n", " ")
+    text
+        .replace_all("\n", " ")
         .replace_all("\r", " ")
         .replace_all("\t", " ")
         .split(" ")
-        .filter((word) -> {
-            word.length() > 0
-        })
+        .filter((word) -> { word.length() > 0 })
         .join(" ")
 }
 
 /// A ledger entry's body: its heading is the id, alone or before a colon.
 function entry_body(markdown: string, id: string) -> string? throws never {
-    section_body(markdown, (h) -> {
-        h == id || h.starts_with(`${id}:`)
-    })
+    section_body(markdown, (h) -> { h == id || h.starts_with(`${id}:`) })
 }
 
 // ─── every rule quotes what it cites ─────────────────────────────────────────
@@ -145,11 +137,7 @@ function cited(rule: root.engine.Rule) -> string throws never {
 /// The text a rule's quotes must be found in.
 function citation(rule: root.engine.Rule, sources: Sources) -> string? throws never {
     match (rule.spec) {
-        let s: root.engine.Section => {
-            section_body(sources.spec, (h) -> {
-                h == s.heading
-            })
-        },
+        let s: root.engine.Section => { section_body(sources.spec, (h) -> { h == s.heading }) },
         let g: root.engine.Gap => entry_body(sources.gaps, g.id),
     }
 }
@@ -158,8 +146,7 @@ function citation(rule: root.engine.Rule, sources: Sources) -> string? throws ne
 /// rule cites. This is what makes "quoted from the spec" a fact rather than a
 /// promise: a rule that paraphrases, or whose source is reworded, fails here.
 function misquoted_rules() -> string[] throws never {
-    let found = sources()
-        ?? return missing_tree();
+    let found = sources() ?? return missing_tree();
     root.bank.rules().flat_map((rule) -> {
         match (citation(rule, found)) {
             let body: string => {
@@ -178,8 +165,7 @@ function misquoted_rules() -> string[] throws never {
 }
 
 function unresolved_statuses() -> string[] throws never {
-    let found = sources()
-        ?? return missing_tree();
+    let found = sources() ?? return missing_tree();
     root.bank.items().filter_map((item) -> {
         match (item.status()) {
             root.engine.Verified => null,
@@ -206,12 +192,13 @@ function unresolved_statuses() -> string[] throws never {
 /// real quote and a paraphrase of the same principle and must tell them
 /// apart.
 function citation_check_tells_a_paraphrase_apart() -> bool throws never {
-    let found = sources()
-        ?? return false;
+    let found = sources() ?? return false;
     let real = root.bank.never_bottom_rule();
-    let paraphrase = root.engine.Rule { ...real, quote: "never is the bottom type of BAML" };
-    let body = citation(real, found)
-        ?? return false;
+    let paraphrase = root.engine.Rule {
+        ...real,
+        quote: "never is the bottom type of BAML",
+    };
+    let body = citation(real, found) ?? return false;
     let words = words_of(body);
     words.includes(words_of(real.quote)) && !words.includes(words_of(paraphrase.quote))
 }
@@ -268,20 +255,14 @@ function local_name(qualified: string) -> string throws never {
 }
 
 function unregistered_facts() -> string[] throws never {
-    let registered = root.bank.facts()
-        .map((f) -> {
-            f.name
-        })
-        .concat(root.bank.fact_helpers());
-    fact_shaped_functions().filter((name) -> {
-        !registered.includes(local_name(name))
-    })
+    let registered = root.bank.facts().map((f) -> { f.name }).concat(
+        root.bank.fact_helpers(),
+    );
+    fact_shaped_functions().filter((name) -> { !registered.includes(local_name(name)) })
 }
 
 function misnamed_facts() -> string[] throws never {
-    let shaped = fact_shaped_functions().map((name) -> {
-        local_name(name)
-    });
+    let shaped = fact_shaped_functions().map((name) -> { local_name(name) });
     root.bank.facts().filter_map((f) -> {
         if (shaped.includes(f.name)) {
             null
@@ -328,9 +309,7 @@ function rule_shaped_functions() -> string[] throws never {
     let functions = reflect.Package.current().functions();
     functions.keys().filter((name) -> {
         match (functions.get(name)) {
-            let f: reflect.Function => {
-                f.return_type() == produces && f.params().length() == 0
-            },
+            let f: reflect.Function => { f.return_type() == produces && f.params().length() == 0 },
             null => false,
         }
     })
@@ -349,12 +328,10 @@ function rule_generator(package: reflect.Package, name: string) -> RuleFn? throw
 /// function's name is only how BAML spells it.
 function unregistered_rules() -> string[] throws never {
     let package = reflect.Package.current();
-    let registered = root.bank.rules().map((r) -> {
-        r.name
-    });
+    let registered = root.bank.rules().map((r) -> { r.name });
     rule_shaped_functions().filter_map((name) -> {
-        let produce: RuleFn = rule_generator(package, name)
-            ?? return `${name}: produces a rule but cannot be called`;
+        let produce: RuleFn =
+            rule_generator(package, name) ?? return `${name}: produces a rule but cannot be called`;
         let produced = produce().name;
         if (registered.includes(produced)) {
             null
@@ -390,8 +367,7 @@ function own_traces() -> string[][] throws never {
                     fact,
                     root.algebra.all_sites(),
                     root.engine.seed_for(`flow/${fact.name}`, i),
-                )
-                    ?? return null;
+                ) ?? return null;
                 own_rules(root.bank.flowed(drawn, drawn.reversed).case)
             })
             .collect()
@@ -400,8 +376,8 @@ function own_traces() -> string[][] throws never {
         let id = item.id();
         baml.iter.Range.new(0, 4)
             .filter_map((i) -> {
-                let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
-                    ?? return null;
+                let candidate =
+                    root.engine.generate(item, root.engine.seed_for(id, i)) ?? return null;
                 own_rules(candidate.case)
             })
             .collect()
@@ -412,12 +388,8 @@ function own_traces() -> string[][] throws never {
 /// Every rule of `case`'s trace but the one its site contributed.
 function own_rules(case: root.engine.Case) -> string[] throws never {
     case.trace
-        .map((claim) -> {
-            claim.rule.name
-        })
-        .filter((name) -> {
-            !root.bank.is_site_rule(name)
-        })
+        .map((claim) -> { claim.rule.name })
+        .filter((name) -> { !root.bank.is_site_rule(name) })
 }
 
 /// The fewest rules in any trace `rule` concludes, or `null` when it
@@ -434,9 +406,7 @@ function shortest_conclusion(rule: string, traces: string[][]) -> int? throws ne
                 null
             }
         })
-        .sort_by_key((n) -> {
-            n
-        })
+        .sort_by_key((n) -> { n })
         .at(0)
 }
 
@@ -512,15 +482,11 @@ test "rules: a rule needs something to wrap exactly when it is about variance" {
 // ─── name pools compile as identifiers ───────────────────────────────────────
 
 function compiles(source: string) -> bool throws never {
-    root.engine.agrees(
-        root.engine.verify(
-            root.engine.Case {
-                files: { "case.baml": source },
-                key: root.engine.Compiles { tests: [] },
-                trace: [],
-            },
-        ),
-    )
+    root.engine.agrees(root.engine.verify(root.engine.Case {
+        files: { "case.baml": source },
+        key: root.engine.Compiles { tests: [] },
+        trace: [],
+    }))
 }
 
 function illegal_names() -> string[] throws never {
@@ -564,7 +530,9 @@ test "names: every pool entry is a legal identifier of its kind" {
 
 function source_of(case: root.engine.Case) -> string throws never {
     case.files.get("case.baml")
-        ?? throw baml.panics.Unreachable { message: "every flow case is one file named case.baml" }
+        ?? throw baml.panics.Unreachable {
+            message: "every flow case is one file named case.baml",
+        }
 }
 
 /// The characters of `source`, in order and without brackets, so two
@@ -575,24 +543,22 @@ function source_of(case: root.engine.Case) -> string throws never {
 /// parentheses as well as the two types: measured, that is the whole of the
 /// difference, and every name, keyword and type is the same in both.
 function letters(source: string) -> int[] throws never {
-    source.to_utf8()
+    source
+        .to_utf8()
         .to_array()
-        .filter((byte) -> {
-            byte != 40 && byte != 41
-        })
-        .sort_by_key((byte) -> {
-            byte
-        })
+        .filter((byte) -> { byte != 40 && byte != 41 })
+        .sort_by_key((byte) -> { byte })
 }
 
 /// The ways in which a candidate and its foil are not two programs a step
 /// apart. Empty when they are.
-function pairing_faults(
-    candidate: root.engine.Candidate,
-    foil: root.engine.Foil,
-) -> string[] throws never {
+function pairing_faults(candidate: root.engine.Candidate, foil: root.engine.Foil) -> string[]
+    throws never
+{
     let case = candidate.case;
-    let same_answer: string[] = if (root.engine.verdict_kind(case.key) == root.engine.verdict_kind(foil.case.key)) {
+    let same_answer: string[] = if (
+        root.engine.verdict_kind(case.key) == root.engine.verdict_kind(foil.case.key)
+    ) {
         ["both programs answer the same way"]
     } else {
         []
@@ -606,7 +572,9 @@ function pairing_faults(
     };
     let shared = root.engine.shared_claims([case.trace, foil.case.trace]);
     let parting: string[] = if (shared.length() != case.trace.length() - 1) {
-        [`their explanations part at claim ${shared.length()} of ${case.trace.length()}`]
+        [
+            `their explanations part at claim ${shared.length()} of ${case.trace.length()}`,
+        ]
     } else {
         []
     };
@@ -627,13 +595,20 @@ function pairings(seeds: int) -> Pairing[] throws never {
         baml.iter.Range.new(0, seeds)
             .filter_map((i) -> {
                 let seed = root.engine.seed_for(id, i);
-                let candidate = root.engine.generate(item, seed)
-                    ?? return null;
+                let candidate = root.engine.generate(item, seed) ?? return null;
                 match (root.engine.foil_of(item, seed)) {
                     let foil: root.engine.Foil => {
-                        Pairing { item: id, paired: true, faults: pairing_faults(candidate, foil) }
+                        Pairing {
+                            item: id,
+                            paired: true,
+                            faults: pairing_faults(candidate, foil),
+                        }
                     },
-                    null => Pairing { item: id, paired: false, faults: [] },
+                    null => Pairing {
+                        item: id,
+                        paired: false,
+                        faults: [],
+                    },
                 }
             })
             .collect()
@@ -651,29 +626,13 @@ function pairings(seeds: int) -> Pairing[] throws never {
 /// and one that pairs at some has a conclusion that moves with its draw.
 function pairing_report() -> string throws never {
     let found = pairings(4);
-    let paired = found
-        .filter((p) -> {
-            p.paired
-        })
-        .length();
+    let paired = found.filter((p) -> { p.paired }).length();
     let faults = found.flat_map((p) -> {
-        p.faults.map((fault) -> {
-            `${p.item}: ${fault}`
-        })
+        p.faults.map((fault) -> { `${p.item}: ${fault}` })
     });
-    let ids = root.bank.items().map((item) -> {
-        item.id()
-    });
-    let pairing = ids.filter((id) -> {
-        found.some((p) -> {
-            p.item == id && p.paired
-        })
-    });
-    let mixed = pairing.filter((id) -> {
-        found.some((p) -> {
-            p.item == id && !p.paired
-        })
-    });
+    let ids = root.bank.items().map((item) -> { item.id() });
+    let pairing = ids.filter((id) -> { found.some((p) -> { p.item == id && p.paired }) });
+    let mixed = pairing.filter((id) -> { found.some((p) -> { p.item == id && !p.paired }) });
     `cases=${found.length()} paired=${paired} items=${pairing.length()} of ${ids.length()} mixed=${mixed} faults=${faults.join(", ")}`
 }
 
@@ -700,19 +659,17 @@ function trap_faults(seeds: int) -> string[] throws never {
             .flat_map((i) -> {
                 let seed = root.engine.seed_for(`flow/${fact.name}`, i);
                 let none: string[] = [];
-                let drawn = root.bank.draw_flow(fact, root.algebra.all_sites(), seed)
-                    ?? return none;
+                let drawn =
+                    root.bank.draw_flow(fact, root.algebra.all_sites(), seed) ?? return none;
                 let one = root.bank.flowed(drawn, drawn.reversed);
                 let traps = root.bank.flow_traps(drawn.d, one.cast);
                 // What the case itself says, not the cast it was made from:
                 // the key is what a learner is marked against.
-                let compiles = root.engine.verdict_kind(one.case.key) == root.engine.VerdictKind.Compiles;
+                let compiles =
+                    root.engine.verdict_kind(one.case.key) == root.engine.VerdictKind.Compiles;
                 root.bank.beliefs(drawn.d).filter_map((belief) -> {
-                    let says = root.bank.predicted(belief, one.cast)
-                        ?? return null;
-                    let listed = traps.some((id) -> {
-                        id == belief.model
-                    });
+                    let says = root.bank.predicted(belief, one.cast) ?? return null;
+                    let listed = traps.some((id) -> { id == belief.model });
                     if (listed == (says != compiles)) {
                         null
                     } else if (listed) {
@@ -741,8 +698,8 @@ function trap_witness() -> string throws never {
         baml.iter.Range.new(0, 16)
             .filter_map((i) -> {
                 let seed = root.engine.seed_for(`flow/${fact.name}`, i);
-                let drawn = root.bank.draw_flow(fact, root.algebra.all_sites(), seed)
-                    ?? return null;
+                let drawn =
+                    root.bank.draw_flow(fact, root.algebra.all_sites(), seed) ?? return null;
                 if (drawn.site != root.algebra.SiteKind.Coherence) {
                     return null;
                 }
@@ -760,7 +717,10 @@ test "traps: nobody is fooled by a conflict every model predicts" {
 }
 
 test "pairs: every foil is the same program a step away, answering the other way" {
-    assert.equal(pairing_report(), "cases=168 paired=88 items=22 of 42 mixed=[] faults=")
+    assert.equal(
+        pairing_report(),
+        "cases=168 paired=88 items=22 of 42 mixed=[] faults=",
+    )
 }
 
 // ─── how many ways an item can answer ────────────────────────────────────────
@@ -775,10 +735,9 @@ test "pairs: every foil is the same program a step away, answering the other way
 /// each is one of a shape, beside a fact of its shape that answers the other
 /// way. None of the items answers one way.
 function items_answering_report() -> string throws never {
-    let counted = root.bank.items()
-        .filter((item) -> {
-            item.status() is root.engine.Verified
-        })
+    let counted = root.bank
+        .items()
+        .filter((item) -> { item.status() is root.engine.Verified })
         .map((item) -> {
             let id = item.id();
             let produced = baml.iter.Range.new(0, 8)
@@ -821,16 +780,15 @@ function items_answering_report() -> string throws never {
 /// two. The site's own rule is not counted: every case has exactly one and it
 /// is the frame rather than the question.
 function depth_report() -> string throws never {
-    let depths = root.bank.items()
-        .filter((item) -> {
-            item.status() is root.engine.Verified
-        })
+    let depths = root.bank
+        .items()
+        .filter((item) -> { item.status() is root.engine.Verified })
         .flat_map((item) -> {
             let id = item.id();
             baml.iter.Range.new(0, 8)
                 .filter_map((i) -> {
-                    let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
-                        ?? return null;
+                    let candidate =
+                        root.engine.generate(item, root.engine.seed_for(id, i)) ?? return null;
                     root.tracer_rules(candidate.case).length()
                 })
                 .collect()
@@ -838,12 +796,7 @@ function depth_report() -> string throws never {
     // Every depth drawn, not a fixed window: a bucket list that stops short
     // hides the deepest cases from the report whose whole subject is how deep
     // the bank goes.
-    let deepest = depths.reduce(
-        (acc, got) -> {
-            acc.max(got)
-        },
-        0,
-    );
+    let deepest = depths.reduce((acc, got) -> { acc.max(got) }, 0);
     let spread = baml.iter.Range.new(0, deepest + 1)
         .map((d) -> {
             `${d}:${depths.filter((got) -> {
@@ -855,7 +808,10 @@ function depth_report() -> string throws never {
 }
 
 test "bank: nearly every case it can draw turns on a single rule" {
-    assert.equal(depth_report(), `cases=328 rules=["0:0", "1:264", "2:32", "3:16", "4:8", "5:8"]`)
+    assert.equal(
+        depth_report(),
+        `cases=328 rules=["0:0", "1:264", "2:32", "3:16", "4:8", "5:8"]`,
+    )
 }
 
 // ─── which sites the bank reaches ────────────────────────────────────────────
@@ -869,31 +825,25 @@ test "bank: nearly every case it can draw turns on a single rule" {
 /// site is reachable only for a pair of types an `implements` block may name,
 /// which rules out a union, a literal, an interface, `never`, `unknown` and a
 function sites_reached_report() -> string throws never {
-    let concluded = root.bank.items()
-        .filter((item) -> {
-            item.status() is root.engine.Verified
-        })
+    let concluded = root.bank
+        .items()
+        .filter((item) -> { item.status() is root.engine.Verified })
         .flat_map((item) -> {
             let id = item.id();
             baml.iter.Range.new(0, 8)
                 .filter_map((i) -> {
-                    let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
-                        ?? return null;
-                    let last = candidate.case.trace.at(-1)
-                        ?? return null;
+                    let candidate =
+                        root.engine.generate(item, root.engine.seed_for(id, i)) ?? return null;
+                    let last = candidate.case.trace.at(-1) ?? return null;
                     last.rule.name
                 })
                 .collect()
         });
     let coherence = concluded
-        .filter((name) -> {
-            name == root.bank.coherence_at_most_one().name
-        })
+        .filter((name) -> { name == root.bank.coherence_at_most_one().name })
         .length();
     let flow = concluded
-        .filter((name) -> {
-            name == root.bank.flow_requires_subtype().name
-        })
+        .filter((name) -> { name == root.bank.flow_requires_subtype().name })
         .length();
     `coherence=${coherence} flow=${flow} other=${concluded.length() - coherence - flow}`
 }
@@ -934,19 +884,22 @@ function unverified_facts(seeds: int) -> string[] throws never {
         baml.iter.Range.new(0, seeds)
             .flat_map((i) -> {
                 let none: string[] = [];
-                let dealt = root.bank.deal(shape, root.algebra.all_sites(), root.engine.seed_for(id, i))
+                let dealt = root.bank
+                    .deal(shape, root.algebra.all_sites(), root.engine.seed_for(id, i))
                     ?? return none;
-                baml.iter.Range.new(0, dealt.all.length()).collect().flat_map((m) -> {
-                    [false, true].filter_map((reversed) -> {
-                        let case = root.bank.flowed(dealt.all[m], reversed).case;
-                        let outcome = root.engine.verify(case);
-                        if (root.engine.agrees(outcome)) {
-                            null
-                        } else {
-                            `${members[m].name}#${i} reversed=${reversed}: ${outcome}`
-                        }
+                baml.iter.Range.new(0, dealt.all.length())
+                    .collect()
+                    .flat_map((m) -> {
+                        [false, true].filter_map((reversed) -> {
+                            let case = root.bank.flowed(dealt.all[m], reversed).case;
+                            let outcome = root.engine.verify(case);
+                            if (root.engine.agrees(outcome)) {
+                                null
+                            } else {
+                                `${members[m].name}#${i} reversed=${reversed}: ${outcome}`
+                            }
+                        })
                     })
-                })
             })
             .collect()
     })
@@ -955,4 +908,3 @@ function unverified_facts(seeds: int) -> string[] throws never {
 test "bank: every fact the bank can serve agrees with the compiler" {
     assert.equal(unverified_facts(3).join("\n"), "")
 }
-

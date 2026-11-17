@@ -646,11 +646,13 @@ function _chat_media_part(
                 throw ai.errors.PreviewUnsupported {
                     provider: compat.provider,
                     detail: "this chat endpoint requires downloaded image bytes during request preview",
-                }
+                };
             }
             ChatImagePart {
                 type: "image_url",
-                image_url: ChatImageUrl { url: _chat_media_url(resolved) },
+                image_url: ChatImageUrl {
+                    url: _chat_media_url(resolved),
+                },
             }
         },
         let audio: baml.media.Audio => {
@@ -665,7 +667,7 @@ function _chat_media_part(
                 throw ai.errors.PreviewUnsupported {
                     provider: compat.provider,
                     detail: "chat audio input requires downloaded bytes during request preview",
-                }
+                };
             }
             ChatAudioPart {
                 type: "input_audio",
@@ -692,7 +694,7 @@ function _chat_media_part(
                 throw ai.errors.PreviewUnsupported {
                     provider: compat.provider,
                     detail: "chat PDF input requires downloaded bytes during request preview",
-                }
+                };
             }
             // `resolve_media` hands back a bare URL for a scheme it will not
             // fetch (`gs://`). There is nowhere to put it, and an empty
@@ -701,9 +703,9 @@ function _chat_media_part(
                 let inline: string => inline,
                 null => {
                     throw _reject(
-                    compat.provider,
-                    `OpenAI Chat Completions has no document-by-URL content part, so a PDF must be inlined, and ${resolved.url ?? "this document"} is not a URL this client can fetch (gs:// and other non-HTTP schemes are not supported here). Pass the PDF as base64 or a local file.`,
-                )
+                        compat.provider,
+                        `OpenAI Chat Completions has no document-by-URL content part, so a PDF must be inlined, and ${resolved.url ?? "this document"} is not a URL this client can fetch (gs:// and other non-HTTP schemes are not supported here). Pass the PDF as base64 or a local file.`,
+                    );
                 },
             };
             ChatFilePart {
@@ -722,7 +724,7 @@ function _chat_media_part(
             throw _reject(
                 compat.provider,
                 "OpenAI Chat Completions has no video input part; extract frames as images, or use the Realtime API",
-            )
+            );
         },
     }
 }
@@ -744,7 +746,10 @@ function _chat_lower_block(
     preview: bool = false,
 ) -> ChatContentPart {
     match (block) {
-        let text: ai.content.Text => ChatTextPart { type: "text", text: text.text },
+        let text: ai.content.Text => ChatTextPart {
+            type: "text",
+            text: text.text,
+        },
         let media: ai.content.Media => _chat_media_part(media.media, compat, preview = preview),
     }
 }
@@ -780,7 +785,10 @@ function _chat_apply_cache_delimiter(
             let marked: ChatExtraPart => marked.part,
             _ => last,
         };
-        parts.push(ChatExtraPart { part: inner, extra: extra });
+        parts.push(ChatExtraPart {
+            part: inner,
+            extra: extra,
+        });
     }
 }
 
@@ -800,10 +808,15 @@ function _chat_prompt_parts(
         return _chat_lower_blocks(ai.wire.prompt_blocks(message), compat, preview = preview);
     }
     let parts: ChatContentPart[] = [];
-    for (let part in ai.wire.prompt_parts(message, default_cache_args = compat.default_cache_args)) {
+    for (
+        let part in ai.wire.prompt_parts(message, default_cache_args = compat.default_cache_args)
+    ) {
         match (part) {
             let text: string => {
-                parts.push(ChatTextPart { type: "text", text: text });
+                parts.push(ChatTextPart {
+                    type: "text",
+                    text: text,
+                });
                 null
             },
             let delimiter: ai.CacheDelimiter => {
@@ -887,19 +900,20 @@ function chat_lower_prompt(
             }
         }
         if (!merged) {
-            lowered.push(ChatPromptMessage { role: role, parts: parts });
+            lowered.push(ChatPromptMessage {
+                role: role,
+                parts: parts,
+            });
         }
     }
     let out: ChatMessage[] = [];
     for (let message in lowered) {
-        out.push(
-            ChatMessage {
-                role: message.role,
-                content: _chat_content(message.parts, compat.collapse_text_content),
-                tool_calls: null,
-                tool_call_id: null,
-            },
-        );
+        out.push(ChatMessage {
+            role: message.role,
+            content: _chat_content(message.parts, compat.collapse_text_content),
+            tool_calls: null,
+            tool_call_id: null,
+        });
     }
     out
 }
@@ -930,14 +944,12 @@ function chat_lower_journal(
         match (event) {
             let user: ai.events.UserMessage => {
                 let parts = _chat_lower_blocks(user.content, compat, preview = preview);
-                out.push(
-                    ChatMessage {
-                        role: "user",
-                        content: _chat_content(parts, true),
-                        tool_calls: null,
-                        tool_call_id: null,
-                    },
-                );
+                out.push(ChatMessage {
+                    role: "user",
+                    content: _chat_content(parts, true),
+                    tool_calls: null,
+                    tool_call_id: null,
+                });
                 null
             },
             let assistant: ai.events.AssistantMessage => {
@@ -950,16 +962,14 @@ function chat_lower_journal(
                             null
                         },
                         let use: ai.content.ToolUse => {
-                            calls.push(
-                                ChatToolCall {
-                                    id: use.id,
-                                    type: "function",
-                                    fn: ChatToolCallFunction {
-                                        name: use.name,
-                                        arguments: baml.json.stringify(use.args),
-                                    },
+                            calls.push(ChatToolCall {
+                                id: use.id,
+                                type: "function",
+                                fn: ChatToolCallFunction {
+                                    name: use.name,
+                                    arguments: baml.json.stringify(use.args),
                                 },
-                            );
+                            });
                             null
                         },
                         // Reasoning has no replayable wire form here.
@@ -971,46 +981,39 @@ function chat_lower_journal(
                 } else {
                     _chat_content(parts, true)
                 };
-                let tool_calls: ChatToolCall[]? = if (calls.length() == 0) {
-                    null
-                } else {
-                    calls
-                };
+                let tool_calls: ChatToolCall[]? = if (calls.length() == 0) { null } else { calls };
                 if (content != null || tool_calls != null) {
-                    out.push(
-                        ChatMessage {
-                            role: "assistant",
-                            content: content,
-                            tool_calls: tool_calls,
-                            tool_call_id: null,
-                        },
-                    );
+                    out.push(ChatMessage {
+                        role: "assistant",
+                        content: content,
+                        tool_calls: tool_calls,
+                        tool_call_id: null,
+                    });
                 }
                 null
             },
             let completed: ai.events.ToolCompleted => {
                 // A `tool` message is text only: `ai.wire.degrade_tool_media`
                 // has already moved every media block out of the result.
-                out.push(
-                    ChatMessage {
-                        role: "tool",
-                        content: _chat_content(_chat_lower_blocks(completed.content, compat, preview = preview), true),
-                        tool_calls: null,
-                        tool_call_id: completed.id,
-                    },
-                );
+                out.push(ChatMessage {
+                    role: "tool",
+                    content: _chat_content(
+                        _chat_lower_blocks(completed.content, compat, preview = preview),
+                        true,
+                    ),
+                    tool_calls: null,
+                    tool_call_id: completed.id,
+                });
                 null
             },
             let failed: ai.events.ToolFailed => {
                 let err: map<string, string> = { "error": failed.message };
-                out.push(
-                    ChatMessage {
-                        role: "tool",
-                        content: baml.json.stringify(err),
-                        tool_calls: null,
-                        tool_call_id: failed.id,
-                    },
-                );
+                out.push(ChatMessage {
+                    role: "tool",
+                    content: baml.json.stringify(err),
+                    tool_calls: null,
+                    tool_call_id: failed.id,
+                });
                 null
             },
             _ => null,
@@ -1063,11 +1066,7 @@ function _chat_apply_directives(j: baml.json.json) -> baml.json.json {
             };
             out
         },
-        let items: baml.json.json[] => {
-            items.map((item) -> {
-                _chat_apply_directives(item)
-            })
-        },
+        let items: baml.json.json[] => { items.map((item) -> { _chat_apply_directives(item) }) },
         _ => j,
     }
 }
@@ -1098,11 +1097,7 @@ function _chat_prune_nulls(j: baml.json.json) -> baml.json.json {
             }
             out
         },
-        let items: baml.json.json[] => {
-            items.map((item) -> {
-                _chat_prune_nulls(item)
-            })
-        },
+        let items: baml.json.json[] => { items.map((item) -> { _chat_prune_nulls(item) }) },
         _ => j,
     }
 }
@@ -1156,7 +1151,9 @@ function _chat_url(compat: ChatCompat, params: ChatParams) -> string {
     }
     let pairs: string[] = [];
     for (let key in query.keys()) {
-        pairs.push(`${_chat_percent_encode(key)}=${_chat_percent_encode(query.get(key) ?? "")}`);
+        pairs.push(
+            `${_chat_percent_encode(key)}=${_chat_percent_encode(query.get(key) ?? "")}`,
+        );
     }
     `${url}?${pairs.join("&")}`
 }
@@ -1180,7 +1177,7 @@ function _chat_headers(
             throw _reject(
                 compat.provider,
                 `${compat.provider} needs an API key: pass api_key, or set ${compat.api_key_env ?? "the provider's environment variable"}`,
-            )
+            );
         }
         if let credential: string = key {
             match (compat.auth) {
@@ -1206,16 +1203,14 @@ function _chat_tools(toolbox: ai.tools.Toolbox) -> ChatTool[]? {
     }
     let tools: ChatTool[] = [];
     for (let tool in toolbox.list()) {
-        tools.push(
-            ChatTool {
-                type: "function",
-                fn: ChatToolFunction {
-                    name: tool.name,
-                    description: tool.description,
-                    parameters: baml.json.from(tool.input_schema),
-                },
+        tools.push(ChatTool {
+            type: "function",
+            fn: ChatToolFunction {
+                name: tool.name,
+                description: tool.description,
+                parameters: baml.json.from(tool.input_schema),
             },
-        );
+        });
     }
     tools
 }
@@ -1273,18 +1268,12 @@ function chat_build_request(
     }
 
     let tools = _chat_tools(input.toolbox);
-    let tool_choice: string? = if (tools == null) {
-        null
-    } else {
-        "auto"
-    };
-    let stream_flag: bool? = if (stream) {
-        true
-    } else {
-        null
-    };
+    let tool_choice: string? = if (tools == null) { null } else { "auto" };
+    let stream_flag: bool? = if (stream) { true } else { null };
     let stream_options: ChatStreamOptions? = if (stream && compat.send_stream_options) {
-        ChatStreamOptions { include_usage: true }
+        ChatStreamOptions {
+            include_usage: true,
+        }
     } else {
         null
     };
@@ -1306,7 +1295,11 @@ function chat_build_request(
             let plan: StructuredOutput => {
                 ChatResponseFormat {
                     type: "json_schema",
-                    json_schema: ChatJsonSchema { name: plan.name(), strict: true, schema: plan.schema },
+                    json_schema: ChatJsonSchema {
+                        name: plan.name(),
+                        strict: true,
+                        schema: plan.schema,
+                    },
                 }
             },
             null => null,
@@ -1359,7 +1352,14 @@ function chat_preview(
     params: ChatParams,
     input: ai.ModelTurnInput,
 ) -> baml.http.Request {
-    let request = chat_build_request(compat, params, input, chat_structured_output(compat, params, input), false, preview = true);
+    let request = chat_build_request(
+        compat,
+        params,
+        input,
+        chat_structured_output(compat, params, input),
+        false,
+        preview = true,
+    );
     baml.http.Request {
         method: "POST",
         url: _chat_url(compat, params),
@@ -1386,12 +1386,10 @@ function chat_stop_reason(reason: string) -> ai.content.StopReason {
 function _chat_media_block(url: string) -> ai.content.Media {
     if (url.starts_with("data:")) {
         if let separator: int = url.index_of(";base64,") {
-            return ai.content.Media.new(
-                value = baml.media.Image.from_base64(
-                    url.slice(separator + 8, url.length()),
-                    url.slice(5, separator),
-                ),
-            );
+            return ai.content.Media.new(value = baml.media.Image.from_base64(
+                url.slice(separator + 8, url.length()),
+                url.slice(5, separator),
+            ));
         }
     }
     ai.content.Media.new(value = baml.media.Image.from_url(url, null))
@@ -1404,7 +1402,10 @@ function _chat_media_block(url: string) -> ai.content.Media {
 /// `ParseFailed` carrying the raw string.
 function _chat_tool_args(raw: string, provider: string) -> map<string, unknown> {
     baml.json.decode<map<string, unknown>>(raw) catch_all (e) {
-        _ => throw ai.errors.ParseFailed { provider: provider, raw_output: raw },
+        _ => throw ai.errors.ParseFailed {
+            provider: provider,
+            raw_output: raw,
+        },
     }
 }
 
@@ -1425,9 +1426,11 @@ function _chat_push_tool_uses(
             },
             null => empty,
         };
-        content.push(
-            ai.content.ToolUse { id: call.id ?? "", name: call.fn?.name ?? "", args: args },
-        );
+        content.push(ai.content.ToolUse {
+            id: call.id ?? "",
+            name: call.fn?.name ?? "",
+            args: args,
+        });
     }
 }
 
@@ -1447,7 +1450,7 @@ function chat_parse(
     audio_mime: string = "audio/wav",
 ) -> ai.ModelTurn {
     if let reported: CcError = response.error {
-        throw _chat_provider_error(reported, provider, raw)
+        throw _chat_provider_error(reported, provider, raw);
     }
     let choices: CcChoice[] = response.choices ?? [];
     let choice: CcChoice = match (choices.at(0)) {
@@ -1458,7 +1461,7 @@ function chat_parse(
                 message: "the chat response is missing a choice or its message",
                 raw_body: raw,
                 status_code: null,
-            }
+            };
         },
     };
     let message: CcMessage = match (choice.message) {
@@ -1469,7 +1472,7 @@ function chat_parse(
                 message: "the chat response is missing a choice or its message",
                 raw_body: raw,
                 status_code: null,
-            }
+            };
         },
     };
 
@@ -1520,12 +1523,10 @@ function chat_parse(
         }
         if let data: string = audio.data {
             if (data != "") {
-                content.push(
-                    ai.content.Media.new(
-                        value = baml.media.Audio.from_base64(data, audio_mime),
-                        provider_id = audio.id,
-                    ),
-                );
+                content.push(ai.content.Media.new(
+                    value = baml.media.Audio.from_base64(data, audio_mime),
+                    provider_id = audio.id,
+                ));
             }
         }
     }
@@ -1546,7 +1547,12 @@ function chat_parse(
         }
     };
 
-    ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop }
+    ai.ModelTurn {
+        calls: [],
+        child_turns: [],
+        content: content,
+        stop_reason: stop,
+    }
 }
 
 /// A chat response's or stream chunk's usage, null when it reported none.
@@ -1592,11 +1598,12 @@ function _chat_send(
     let text = response.text() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw ai.errors.NetworkFailure { status_code: null,
+            throw ai.errors.NetworkFailure {
+                status_code: null,
                 provider: provider,
                 detail: "the response body could not be read completely",
                 raw_body: null,
-            }
+            };
         },
     };
     if (!response.ok()) {
@@ -1608,7 +1615,7 @@ function _chat_send(
             response.status_code,
             text,
             headers = response.headers,
-        )
+        );
     }
     let decoded = baml.json.to<CcResponse>(baml.json.parse(text)) catch_all (e) {
         let parse => {
@@ -1617,14 +1624,21 @@ function _chat_send(
                 message: parse.to_string(),
                 raw_body: text,
                 status_code: response.status_code,
-            }
+            };
         },
     };
     let turn = chat_parse(decoded, provider, text, audio_mime = audio_mime);
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: provider, model: requested_model },
+        resolved_model: ai.events.ModelKey {
+            provider: provider,
+            model: requested_model,
+        },
         usage: null,
-        timing: ai.events.Timing { start_time: started, duration: started.elapsed(), ttft: null },
+        timing: ai.events.Timing {
+            start_time: started,
+            duration: started.elapsed(),
+            ttft: null,
+        },
         http_request: if (capture_wire) {
             baml.http.Request {
                 method: request.method,
@@ -1638,15 +1652,17 @@ function _chat_send(
         http_response: ai.events.HttpResponse {
             status: response.status_code,
             headers: response.headers,
-            body: if (capture_wire) {
-                text
-            } else {
-                null
-            },
+            body: if (capture_wire) { text } else { null },
         },
         sse_responses: null,
     };
-    ai.internal.with_own_call(turn, call, chat_usage(decoded.usage), requested_model, decoded.model)
+    ai.internal.with_own_call(
+        turn,
+        call,
+        chat_usage(decoded.usage),
+        requested_model,
+        decoded.model,
+    )
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
@@ -1729,19 +1745,25 @@ class ChatStreamDecoder {
     calls: ChatToolCallBuffer[],
 
     function new(provider: string) -> ChatStreamDecoder {
-        ChatStreamDecoder { provider: provider, calls: [] }
+        ChatStreamDecoder {
+            provider: provider,
+            calls: [],
+        }
     }
 
     /// (internal) Extend (or open) the buffer for one tool-call delta.
     function _absorb_call(self, delta: CcToolCall, position: int) -> void {
         let index = delta.index ?? position;
-        let existing: ChatToolCallBuffer? = self.calls.find((call) -> {
-            call.index == index
-        });
+        let existing: ChatToolCallBuffer? = self.calls.find((call) -> { call.index == index });
         let buffer = match (existing) {
             let found: ChatToolCallBuffer => found,
             null => {
-                let fresh = ChatToolCallBuffer { index: index, id: "", name: "", arguments: "" };
+                let fresh = ChatToolCallBuffer {
+                    index: index,
+                    id: "",
+                    name: "",
+                    arguments: "",
+                };
                 self.calls.push(fresh);
                 fresh
             },
@@ -1765,7 +1787,9 @@ class ChatStreamDecoder {
                 if (data.trim() == "[DONE]") {
                     out.push(ai.stream.TurnDone {});
                 } else {
-                    let parsed: CcStreamChunk? = baml.json.to<CcStreamChunk>(baml.json.parse(data)) catch_all (e) {
+                    let parsed: CcStreamChunk? = baml.json.to<CcStreamChunk>(
+                        baml.json.parse(data),
+                    ) catch_all (e) {
                         _ => null,
                     };
                     // A payload that claims to be a chunk (`{…}`) but does not
@@ -1779,11 +1803,11 @@ class ChatStreamDecoder {
                             message: "the chat stream event could not be decoded",
                             raw_body: data,
                             status_code: null,
-                        }
+                        };
                     }
                     if let chunk: CcStreamChunk = parsed {
                         if let reported: CcError = chunk.error {
-                            throw _chat_provider_error(reported, self.provider, data)
+                            throw _chat_provider_error(reported, self.provider, data);
                         }
                         let choices: CcStreamChoice[] = chunk.choices ?? [];
                         if let choice: CcStreamChoice = choices.at(0) {
@@ -1813,23 +1837,19 @@ class ChatStreamDecoder {
                                 out.push(ai.stream.ContentSeen {});
                             }
                             if let reason: string = choice.finish_reason {
-                                out.push(
-                                    ai.stream.TurnMeta {
-                                        stop_reason: chat_stop_reason(reason),
-                                        usage: null,
-                                        resolved_model: chunk.model,
-                                    },
-                                );
+                                out.push(ai.stream.TurnMeta {
+                                    stop_reason: chat_stop_reason(reason),
+                                    usage: null,
+                                    resolved_model: chunk.model,
+                                });
                             }
                         }
                         if let usage: CcUsage = chunk.usage {
-                            out.push(
-                                ai.stream.TurnMeta {
-                                    stop_reason: null,
-                                    usage: chat_usage(usage),
-                                    resolved_model: chunk.model,
-                                },
-                            );
+                            out.push(ai.stream.TurnMeta {
+                                stop_reason: null,
+                                usage: chat_usage(usage),
+                                resolved_model: chunk.model,
+                            });
                         }
                     }
                 }
@@ -1848,7 +1868,11 @@ class ChatStreamDecoder {
             } else {
                 _chat_tool_args(buffer.arguments, self.provider)
             };
-            out.push(ai.content.ToolUse { id: buffer.id, name: buffer.name, args: args });
+            out.push(ai.content.ToolUse {
+                id: buffer.id,
+                name: buffer.name,
+                args: args,
+            });
         }
         out
     }
@@ -1882,7 +1906,10 @@ function chat_invoke_stream(
     timeout_options: ai.LlmTimeoutOptions? = null,
 ) -> ai.stream.TurnStream {
     if (params.structured_output) {
-        throw _reject(compat.provider, "structured outputs do not stream yet; call the function without streaming, or use a client without structured_output")
+        throw _reject(
+            compat.provider,
+            "structured outputs do not stream yet; call the function without streaming, or use a client without structured_output",
+        );
     }
     let limits = timeout_options ?? ai.LlmTimeoutOptions._resolve(null);
     let request = limits._apply(chat_render(compat, params, input, null, true));
@@ -1908,9 +1935,16 @@ function chat_invoke_stream(
         dispatched = started,
     );
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: compat.provider, model: params.model },
+        resolved_model: ai.events.ModelKey {
+            provider: compat.provider,
+            model: params.model,
+        },
         usage: null,
-        timing: ai.events.Timing { start_time: started, duration: null, ttft: null },
+        timing: ai.events.Timing {
+            start_time: started,
+            duration: null,
+            ttft: null,
+        },
         http_request: if (capture_wire) {
             baml.http.Request {
                 method: request.method,
@@ -1921,12 +1955,12 @@ function chat_invoke_stream(
         } else {
             null
         },
-        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        sse_responses: if (capture_wire) {
-            []
-        } else {
-            null
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
         },
+        sse_responses: if (capture_wire) { [] } else { null },
     };
     stream._wire_call = call;
     stream._requested_model = params.model;

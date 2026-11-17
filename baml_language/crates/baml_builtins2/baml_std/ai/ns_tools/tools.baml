@@ -33,12 +33,16 @@ class Tool {
         if let h: reflect.AnyFunction = self.handler {
             let value = reflect.call_any(h, _typed_arguments(self.name, h, args)) catch (e) {
                 let bad: reflect.InvalidArgumentError => {
-                    throw baml.errors.InvalidArgument { message: `invalid arguments for ${self.name}: ${bad.to_string()}` }
+                    throw baml.errors.InvalidArgument {
+                        message: `invalid arguments for ${self.name}: ${bad.to_string()}`,
+                    };
                 },
             };
             baml.json.stringify(value)
         } else {
-            throw baml.errors.InvalidArgument { message: `tool ${self.name} has no handler` }
+            throw baml.errors.InvalidArgument {
+                message: `tool ${self.name} has no handler`,
+            };
         }
     }
 }
@@ -86,7 +90,9 @@ function _typed_arguments(
     }
     let parameters = reflect.Class.new("Arguments", fields) catch (e) {
         reflect.errors.CompilationError => {
-            throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message}` }
+            throw baml.errors.InvalidArgument {
+                message: `invalid arguments for ${tool}: ${e.message}`,
+            };
         },
     };
     let type Arguments = parameters;
@@ -94,7 +100,9 @@ function _typed_arguments(
         baml.errors.ParseError => {
             // The text goes back to the model, and it quotes the value that
             // did not align, whatever its size.
-            throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message.slice(0, 1000)}` }
+            throw baml.errors.InvalidArgument {
+                message: `invalid arguments for ${tool}: ${e.message.slice(0, 1000)}`,
+            };
         },
     };
     let typed: map<string, unknown> = {};
@@ -123,7 +131,9 @@ function tool(
     let resolved_name = name ?? sig.name;
     if let n: string = resolved_name {
         if (n == "__baml_return_output") {
-            throw baml.errors.InvalidArgument { message: "the tool name __baml_return_output is reserved" }
+            throw baml.errors.InvalidArgument {
+                message: "the tool name __baml_return_output is reserved",
+            };
         }
         Tool {
             name: n,
@@ -134,7 +144,9 @@ function tool(
             on_error: on_error,
         }
     } else {
-        throw baml.errors.InvalidArgument { message: "anonymous tool needs a name" }
+        throw baml.errors.InvalidArgument {
+            message: "anonymous tool needs a name",
+        };
     }
 }
 
@@ -150,7 +162,9 @@ function raw_tool(
     on_error: ErrorMode? = null,
 ) -> Tool {
     if (name == "__baml_return_output") {
-        throw baml.errors.InvalidArgument { message: "the tool name __baml_return_output is reserved" }
+        throw baml.errors.InvalidArgument {
+            message: "the tool name __baml_return_output is reserved",
+        };
     }
     Tool {
         name: name,
@@ -170,7 +184,9 @@ class Toolbox {
         let names: string[] = [];
         for (let t in tools) {
             if (names.includes(t.name)) {
-                throw baml.errors.InvalidArgument { message: `duplicate tool name: ${t.name}` }
+                throw baml.errors.InvalidArgument {
+                    message: `duplicate tool name: ${t.name}`,
+                };
             }
             names.push(t.name);
         }
@@ -182,13 +198,10 @@ class Toolbox {
     }
 
     function get(self, name: string) -> Tool? {
-        self.entries.find((t) -> {
-            t.name == name
-        })
+        self.entries.find((t) -> { t.name == name })
     }
 
     function is_empty(self) -> bool {
         self.entries.length() == 0
     }
 }
-

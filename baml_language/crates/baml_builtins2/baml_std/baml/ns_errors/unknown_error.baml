@@ -20,7 +20,10 @@ class UnknownError {
                 error
             },
             _ => {
-                let error = UnknownError { data: data, message: [] };
+                let error = UnknownError {
+                    data: data,
+                    message: [],
+                };
                 UnknownError._preserve_context(data, error);
                 error
             },
@@ -45,7 +48,10 @@ class UnknownError {
                 error
             },
             _ => {
-                let error = UnknownError { data: data, message: [message] };
+                let error = UnknownError {
+                    data: data,
+                    message: [message],
+                };
                 UnknownError._preserve_context(data, error);
                 error
             },

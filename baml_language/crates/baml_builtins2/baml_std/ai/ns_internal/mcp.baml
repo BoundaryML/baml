@@ -9,7 +9,5 @@ function _proxy(
     conn: root.mcp.Connection,
     name: string,
 ) -> (map<string, unknown>) -> string throws unknown {
-    (args: map<string, unknown>) -> {
-        conn.call_tool(name, args)
-    }
+    (args: map<string, unknown>) -> { conn.call_tool(name, args) }
 }

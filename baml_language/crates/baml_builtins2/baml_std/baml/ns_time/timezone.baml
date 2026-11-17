@@ -78,13 +78,19 @@ class TimeZoneOffset {
     ///   after that conversion, so it never sees these.
     function new(hours: int, minutes: int) -> TimeZoneOffset throws root.errors.InvalidArgument {
         if ((hours > 0 && minutes < 0) || (hours < 0 && minutes > 0)) {
-            throw root.errors.InvalidArgument { message: "TimeZoneOffset.new: hours and minutes must carry the same sign" };
+            throw root.errors.InvalidArgument {
+                message: "TimeZoneOffset.new: hours and minutes must carry the same sign",
+            };
         }
         let nanoseconds = (hours * 60 + minutes) * 60 * 1000000000;
         if (nanoseconds > 86400000000000 || nanoseconds < -86400000000000) {
-            throw root.errors.InvalidArgument { message: "TimeZoneOffset out of range: must be within ±24 hours" };
+            throw root.errors.InvalidArgument {
+                message: "TimeZoneOffset out of range: must be within ±24 hours",
+            };
         }
-        TimeZoneOffset { _nanoseconds: nanoseconds }
+        TimeZoneOffset {
+            _nanoseconds: nanoseconds,
+        }
     }
     /// Resolves an IANA timezone identifier (e.g. `"America/Los_Angeles"`) to
     /// its concrete offset at the absolute time `at`, daylight saving included.
@@ -106,14 +112,15 @@ class TimeZoneOffset {
     /// # Panics
     ///
     /// - `baml.panics.HostUnavailable` if timezone data is unavailable.
-    function from_timezone(
-        timezone: string,
-        at: Instant,
-    ) -> TimeZoneOffset throws UnknownTimezoneError {
+    function from_timezone(timezone: string, at: Instant) -> TimeZoneOffset
+        throws UnknownTimezoneError
+    {
         match (_tz_offset_at(timezone, at._nanoseconds)) {
             null => throw UnknownTimezoneError { timezone: timezone },
             // `?? 0` is unreachable: the null arm above already matched.
-            let offset => TimeZoneOffset { _nanoseconds: offset ?? 0 },
+            let offset => TimeZoneOffset {
+                _nanoseconds: offset ?? 0,
+            },
         }
     }
 
@@ -151,16 +158,18 @@ class TimeZoneOffset {
     ///
     /// - `baml.errors.InvalidArgument` if the duration exceeds ±24 hours.
     //baml:mut_vm
-    function from_duration(
-        duration: Duration,
-    ) -> TimeZoneOffset throws root.errors.InvalidArgument {
+    function from_duration(duration: Duration) -> TimeZoneOffset
+        throws root.errors.InvalidArgument
+    {
         $rust_function
     }
 
     /// The offset as a `Duration` east of UTC; negative west of it. Exact, and
     /// the inverse of `from_duration`.
     function to_duration(self) -> Duration throws never {
-        Duration { _nanoseconds: 0n + self._nanoseconds }
+        Duration {
+            _nanoseconds: 0n + self._nanoseconds,
+        }
     }
 
     /// The hour component of the offset, truncated toward zero. Negative for an
@@ -255,10 +264,8 @@ function _tz_offset_at(timezone: string, at_ns: bigint) -> int? throws never {
 /// # Panics
 ///
 /// - `baml.panics.HostUnavailable` if timezone data is unavailable.
-function _tz_to_instant(
-    timezone: string,
-    civil_ns: bigint,
-    disambiguation: string,
-) -> bigint? throws root.errors.Io {
+function _tz_to_instant(timezone: string, civil_ns: bigint, disambiguation: string) -> bigint?
+    throws root.errors.Io
+{
     $rust_io_function
 }

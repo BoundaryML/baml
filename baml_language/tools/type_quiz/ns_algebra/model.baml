@@ -17,8 +17,7 @@ class Model {
 }
 
 function believed(model: Model?, step: Asserted) -> Relation? throws never {
-    let m = model
-        ?? return null;
+    let m = model ?? return null;
     let opinion = m.believes.get(step.rule.name);
     if (opinion != null) {
         opinion(step.left, step.right)
@@ -27,13 +26,10 @@ function believed(model: Model?, step: Asserted) -> Relation? throws never {
     }
 }
 
-function transferred(
-    model: Model?,
-    step: Transferred,
-    current: Knowledge,
-) -> Knowledge? throws never {
-    let m = model
-        ?? return null;
+function transferred(model: Model?, step: Transferred, current: Knowledge) -> Knowledge?
+    throws never
+{
+    let m = model ?? return null;
     let opinion = m.transfers.get(step.rule.name);
     if (opinion != null) {
         opinion(current)

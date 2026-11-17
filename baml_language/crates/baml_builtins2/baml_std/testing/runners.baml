@@ -30,17 +30,16 @@ function Quorum(n: int, m: int) -> TestRunner {
                     runs.push(run)
                 }
                 if (report.outcome == "pass") {
-                    passes += 1
+                    passes += 1;
                 } else {
                     null
                 }
             }
-            let outcome: Outcome = if (passes >= m) {
-                "pass"
-            } else {
-                "fail"
-            };
-            TestReport { outcome: outcome, runs: runs }
+            let outcome: Outcome = if (passes >= m) { "pass" } else { "fail" };
+            TestReport {
+                outcome: outcome,
+                runs: runs,
+            }
         }
     };
 }
@@ -66,17 +65,16 @@ function Retry(max_attempts: int) -> TestRunner {
                     runs.push(run)
                 }
                 if (report.outcome == "pass") {
-                    passed = true
+                    passed = true;
                 } else {
                     null
                 }
             }
-            let outcome: Outcome = if (passed) {
-                "pass"
-            } else {
-                "fail"
-            };
-            TestReport { outcome: outcome, runs: runs }
+            let outcome: Outcome = if (passed) { "pass" } else { "fail" };
+            TestReport {
+                outcome: outcome,
+                runs: runs,
+            }
         }
     };
 }
@@ -116,9 +114,7 @@ function PassRate(threshold: float) -> TestSetRunner {
 /// Creates a testset runner that runs children one at a time, in
 /// registration order, instead of in parallel.
 function Sequential() -> TestSetRunner {
-    return (children) -> TestSetReport {
-        root._run_children_sequential(children, false)
-    };
+    return (children) -> TestSetReport { root._run_children_sequential(children, false) };
 }
 
 /// Creates a testset runner that runs children in registration order and
@@ -126,9 +122,7 @@ function Sequential() -> TestSetRunner {
 ///
 /// The children after it are never run, so they appear in no report.
 function FailFast() -> TestSetRunner {
-    return (children) -> TestSetReport {
-        root._run_children_sequential(children, true)
-    };
+    return (children) -> TestSetReport { root._run_children_sequential(children, true) };
 }
 
 /// (internal)
@@ -136,7 +130,10 @@ function _run_children_sequential(children: TestSetChild[], fail_fast: bool) -> 
     let named_results: _NamedChildReport[] = [];
     for (let child in children) {
         let report = (child.run)();
-        named_results.push(_NamedChildReport { name: child.name, report: report });
+        named_results.push(_NamedChildReport {
+            name: child.name,
+            report: report,
+        });
         let outcome = match (report) {
             let r: TestReport => r.outcome,
             let r: TestSetReport => r.outcome,

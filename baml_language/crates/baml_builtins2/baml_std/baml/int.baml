@@ -271,7 +271,7 @@ class Int {
     ) -> int throws root.errors.InvalidArgument {
         if (lower >= upper) {
             throw root.errors.InvalidArgument {
-                message: `int.random: lower (${lower}) must be less than upper (${upper})`
+                message: `int.random: lower (${lower}) must be less than upper (${upper})`,
             };
         }
         // Rust maps each draw; BAML owns retries because it can call `rng` again.

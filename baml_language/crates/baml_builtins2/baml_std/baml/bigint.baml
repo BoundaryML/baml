@@ -208,7 +208,11 @@ class Bigint {
     ) -> bigint throws root.errors.InvalidArgument {
         if (lower >= upper) {
             throw root.errors.InvalidArgument {
-                message: "bigint.random: lower (" + string.from(lower) + ") must be less than upper (" + string.from(upper) + ")"
+                message: "bigint.random: lower ("
+                    + string.from(lower)
+                    + ") must be less than upper ("
+                    + string.from(upper)
+                    + ")",
             };
         }
         let width = bigint._random_byte_count(lower, upper);
@@ -226,11 +230,9 @@ class Bigint {
 
     /// (internal) Maps one draw onto `[lower, upper)`, returning `upper` when
     /// the draw must be rejected.
-    function _random_in_range(
-        draw: uint8array,
-        lower: bigint,
-        upper: bigint,
-    ) -> bigint throws never {
+    function _random_in_range(draw: uint8array, lower: bigint, upper: bigint) -> bigint
+        throws never
+    {
         $rust_function
     }
 }

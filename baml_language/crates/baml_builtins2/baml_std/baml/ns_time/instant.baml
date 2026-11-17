@@ -62,7 +62,9 @@ class Instant {
     /// let duration = start.elapsed();
     /// ```
     function elapsed(self) -> Duration throws never {
-        Duration { _nanoseconds: Instant.now()._nanoseconds - self._nanoseconds }
+        Duration {
+            _nanoseconds: Instant.now()._nanoseconds - self._nanoseconds,
+        }
     }
 
     /// Parses a timestamp string into an `Instant`.
@@ -150,12 +152,18 @@ class Instant {
                 string => {
                     Instant.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw root.json.DecodeError { message: message, path: "" }
+                            throw root.json.DecodeError {
+                                message: message,
+                                path: "",
+                            };
                         },
                     }
                 },
                 _ => {
-                    throw root.json.DecodeError { message: "Expected timestamp string", path: "" }
+                    throw root.json.DecodeError {
+                        message: "Expected timestamp string",
+                        path: "",
+                    };
                 },
             }
         }
@@ -172,7 +180,10 @@ class Instant {
         function from_llm_output(shape: string) -> Self throws root.json.DecodeError {
             Instant.parse(shape) catch (_) {
                 root.errors.ParseError { message } => {
-                    throw root.json.DecodeError { message: message, path: "" }
+                    throw root.json.DecodeError {
+                        message: message,
+                        path: "",
+                    };
                 },
             }
         }
@@ -193,7 +204,7 @@ class Instant {
                         message: message,
                         path: "",
                         reason: "unserializable",
-                    }
+                    };
                 },
             }
         }
@@ -221,7 +232,9 @@ class Instant {
     /// change the result. Use `self - other` instead when the sign — i.e. the
     /// direction — matters.
     function abs_diff(self, other: Instant) -> Duration throws never {
-        Duration { _nanoseconds: (self._nanoseconds - other._nanoseconds).abs() }
+        Duration {
+            _nanoseconds: (self._nanoseconds - other._nanoseconds).abs(),
+        }
     }
 
     /// The `Instant` `ns` nanoseconds after the UNIX epoch.
@@ -230,17 +243,23 @@ class Instant {
     }
     /// The `Instant` `us` microseconds after the UNIX epoch.
     function from_timestamp_microseconds(us: bigint) -> Instant throws never {
-        Instant { _nanoseconds: us * 1000 }
+        Instant {
+            _nanoseconds: us * 1000,
+        }
     }
     /// The `Instant` `ms` milliseconds after the UNIX epoch. This is the unit
     /// most JSON and JavaScript timestamps arrive in.
     function from_timestamp_milliseconds(ms: bigint) -> Instant throws never {
-        Instant { _nanoseconds: ms * 1000000 }
+        Instant {
+            _nanoseconds: ms * 1000000,
+        }
     }
     /// The `Instant` `s` seconds after the UNIX epoch. This is the unit a POSIX
     /// `time_t` arrives in.
     function from_timestamp_seconds(s: bigint) -> Instant throws never {
-        Instant { _nanoseconds: s * 1000000000 }
+        Instant {
+            _nanoseconds: s * 1000000000,
+        }
     }
 
     /// The number of nanoseconds since the UNIX epoch. Exact: this is the
@@ -271,7 +290,7 @@ class Instant {
 }
 
 implement root.ops.Add<Duration> for Instant {
-    type Output = Instant
+    type Output = Instant;
     /// The point in time `other` after `self`.
     ///
     /// Pure absolute-time arithmetic: no timezone or calendar is consulted, so
@@ -279,30 +298,30 @@ implement root.ops.Add<Duration> for Instant {
     /// exact.
     function add(self, other: Duration) -> Instant {
         Instant {
-            _nanoseconds: self._nanoseconds + other._nanoseconds
+            _nanoseconds: self._nanoseconds + other._nanoseconds,
         }
     }
 }
 
 implement root.ops.Subtract<Duration> for Instant {
-    type Output = Instant
+    type Output = Instant;
     /// The point in time `other` before `self`. The inverse of
     /// `Instant + Duration`.
     function sub(self, other: Duration) -> Instant {
         Instant {
-            _nanoseconds: self._nanoseconds - other._nanoseconds
+            _nanoseconds: self._nanoseconds - other._nanoseconds,
         }
     }
 }
 
 implement root.ops.Subtract<Instant> for Instant {
-    type Output = Duration
+    type Output = Duration;
     /// The signed gap from `other` to `self`: positive when `self` is the later
     /// of the two, negative when it is the earlier. Use `abs_diff` when only
     /// the magnitude matters.
     function sub(self, other: Instant) -> Duration {
         Duration {
-            _nanoseconds: self._nanoseconds - other._nanoseconds
+            _nanoseconds: self._nanoseconds - other._nanoseconds,
         }
     }
 }
