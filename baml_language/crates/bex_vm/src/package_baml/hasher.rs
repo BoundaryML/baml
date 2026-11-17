@@ -53,8 +53,20 @@ impl BamlClassHashDefaultHasher for PackageBamlImpl {
     }
 }
 
+/// A fresh `baml.hash.DefaultHasher`: the same results in every process.
 pub(super) fn new_state(vm: &mut BexVm) -> (Value, Arc<HasherState>) {
-    let state = Arc::new(HasherState(Mutex::new(DefaultHasher::new())));
+    with_hasher(vm, DefaultHasher::new())
+}
+
+/// A `baml.hash.DefaultHasher` that computes a map's key hash, for a key
+/// whose `Hash` runs BAML code: keyed per process like a native key's hash
+/// ([`bex_vm_types::map_key_hasher`]), so both land in the same bucket.
+pub(super) fn new_map_key_state(vm: &mut BexVm) -> (Value, Arc<HasherState>) {
+    with_hasher(vm, bex_vm_types::map_key_hasher())
+}
+
+fn with_hasher(vm: &mut BexVm, hasher: DefaultHasher) -> (Value, Arc<HasherState>) {
+    let state = Arc::new(HasherState(Mutex::new(hasher)));
     let opaque: Arc<dyn bex_vm_types::BexRustData> = state.clone();
     let value = copy::hash::DefaultHasher { _state: opaque }.to_value(vm);
     (value, state)
