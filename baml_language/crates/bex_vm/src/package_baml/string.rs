@@ -53,6 +53,22 @@ fn trimmed(string: &BexStr, start: usize, end: usize) -> BexStr {
     string.byte_slice(start..end)
 }
 
+/// Push the segments of `string` between the non-overlapping delimiter
+/// matches starting at `matches`, each `delimiter_len` bytes long.
+fn split_at_matches(
+    string: &BexStr,
+    matches: impl Iterator<Item = usize>,
+    delimiter_len: usize,
+    parts: &mut Vec<BexStr>,
+) {
+    let mut start = 0;
+    for end in matches {
+        parts.push(string.byte_slice(start..end));
+        start = end + delimiter_len;
+    }
+    parts.push(string.byte_slice(start..string.byte_len()));
+}
+
 fn char_substrings(string: &BexStr) -> Vec<BexStr> {
     string
         .as_str()
@@ -118,24 +134,23 @@ impl BamlClassString for PackageBamlImpl {
 
     // Zero-copy: each segment is a zero-copy substring Slice into the original.
     fn split(string: &BexStr, delimiter: &BexStr) -> Vec<BexStr> {
-        let s = string.as_str();
-        let base = s.as_ptr() as usize;
-        let segment = |part: &str| {
-            let start = part.as_ptr() as usize - base;
-            string.byte_slice(start..start + part.len())
-        };
+        let bytes = string.as_bytes();
+        // A valid UTF-8 delimiter only matches at char boundaries, so the
+        // byte searches below split exactly where `str::split` would.
         match *delimiter.as_bytes() {
             [] => char_substrings(string),
-            // One ASCII byte, the usual delimiter (`" "`, `","`, `"\n"`): a
-            // byte search instead of the general substring searcher, with the
-            // result sized up front. An ASCII byte never occurs inside a
-            // multi-byte character, so the segments are the same.
-            [byte] if byte.is_ascii() => {
-                let mut parts = Vec::with_capacity(1 + s.bytes().filter(|&b| b == byte).count());
-                parts.extend(s.split(char::from(byte)).map(segment));
+            // One byte (ASCII, so `" "`, `","`, `"\n"`): sized up front.
+            [byte] => {
+                let mut parts = Vec::with_capacity(1 + memchr::memchr_iter(byte, bytes).count());
+                split_at_matches(string, memchr::memchr_iter(byte, bytes), 1, &mut parts);
                 parts
             }
-            _ => s.split(delimiter.as_str()).map(segment).collect(),
+            ref needle => {
+                let mut parts = Vec::new();
+                let matches = memchr::memmem::find_iter(bytes, needle);
+                split_at_matches(string, matches, needle.len(), &mut parts);
+                parts
+            }
         }
     }
 
@@ -417,10 +432,12 @@ mod tests {
             ",leading",
             "héllo,wörld,😀,",
             "no delimiter here",
+            "aaaa",
+            "aaa",
             long.as_str(),
         ];
         for text in texts {
-            for delimiter in [",", " ", "o", "é", "😀", ", ", "the"] {
+            for delimiter in [",", " ", "o", "a", "aa", "é", "😀", ", ", "the"] {
                 let string = BexStr::from(text);
                 let parts = PackageBamlImpl::split(&string, &BexStr::from(delimiter));
                 let parts: Vec<&str> = parts.iter().map(BexStr::as_str).collect();
