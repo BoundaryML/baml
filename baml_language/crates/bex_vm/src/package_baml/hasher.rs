@@ -1,10 +1,6 @@
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::Hasher as _,
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
-};
+use std::{collections::hash_map::DefaultHasher, hash::Hasher as _, sync::Arc};
 
-use bex_vm_types::Value;
+use bex_vm_types::{MeteredGuard, MeteredMutex, RetainedFootprint, Value};
 
 use super::{
     BamlClassHashDefaultHasher, BamlClassHashHasher_for_DefaultHasher, BamlNamespaceHash,
@@ -12,8 +8,9 @@ use super::{
 };
 use crate::BexVm;
 
-/// A hasher in progress as `$rust_type` data: fixed size.
-pub(super) struct HasherState(Mutex<Algorithm>);
+/// A hasher in progress as `$rust_type` data. A map-key hasher grows with
+/// what it is written, so its buffer is charged and measured.
+pub(super) struct HasherState(MeteredMutex<Algorithm>);
 
 /// What a `baml.hash.DefaultHasher` computes.
 pub(super) enum Algorithm {
@@ -42,33 +39,36 @@ impl Algorithm {
     }
 }
 
-impl bex_vm_types::BexRustData for HasherState {
-    fn measure(&self, _: &mut bex_vm_types::Meter) {}
+impl RetainedFootprint for Algorithm {
+    fn retained_bytes(&self) -> usize {
+        match self {
+            Self::Default(_) => 0,
+            Self::MapKey(stream) => stream.capacity(),
+        }
+    }
 }
 
-impl std::ops::Deref for HasherState {
-    type Target = Mutex<Algorithm>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl bex_vm_types::BexRustData for HasherState {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        meter.bytes(self.0.retained_bytes());
     }
 }
 
 pub(super) fn finish_state(state: &Arc<HasherState>) -> u64 {
-    state
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .finish()
+    // Finishing never grows the state.
+    state.0.lock_uncharged().finish()
 }
 
 #[expect(
     clippy::used_underscore_items,
     reason = "the `_state` view accessor is generated from the private BAML field"
 )]
-fn state<'v>(hasher: &view::hash::DefaultHasher<'_>, vm: &'v BexVm) -> MutexGuard<'v, Algorithm> {
+fn state<'v>(hasher: &view::hash::DefaultHasher<'_>, vm: &'v BexVm) -> MeteredGuard<'v, Algorithm> {
+    // Charges the VM's allocation account what the state grew since the last lock.
     hasher
         ._state::<HasherState>(vm)
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+        .0
+        .lock(vm.tlab.alloc_debt())
 }
 
 impl BamlClassHashDefaultHasher for PackageBamlImpl {
@@ -89,7 +89,7 @@ pub(super) fn new_map_key_state(vm: &mut BexVm) -> (Value, Arc<HasherState>) {
 }
 
 fn with_algorithm(vm: &mut BexVm, algorithm: Algorithm) -> (Value, Arc<HasherState>) {
-    let state = Arc::new(HasherState(Mutex::new(algorithm)));
+    let state = Arc::new(HasherState(MeteredMutex::new(algorithm)));
     let opaque: Arc<dyn bex_vm_types::BexRustData> = state.clone();
     let value = copy::hash::DefaultHasher { _state: opaque }.to_value(vm);
     (value, state)
@@ -107,3 +107,38 @@ impl BamlClassHashHasher_for_DefaultHasher for PackageBamlImpl {
 }
 
 impl BamlNamespaceHash for PackageBamlImpl {}
+
+#[cfg(test)]
+mod tests {
+    use bex_vm_types::{AllocDebt, BexRustData, Meter, MeteredMutex};
+
+    use super::{Algorithm, HasherState};
+
+    /// A map-key hasher keeps what it is written until it finishes, so its
+    /// buffer is reported to a census and charged to the writer's account.
+    #[test]
+    fn a_map_key_hasher_reports_and_charges_its_buffer() {
+        let state = HasherState(MeteredMutex::new(Algorithm::MapKey(Vec::new())));
+        let debt = AllocDebt::new();
+        state.0.lock(&debt).write(&[7; 4096]);
+
+        let mut meter = Meter::census();
+        state.measure(&mut meter);
+        assert!(meter.total() >= 4096, "measured {}", meter.total());
+
+        drop(state.0.lock(&debt));
+        assert!(debt.balance() >= 4096, "charged {}", debt.balance());
+    }
+
+    /// `baml.hash.DefaultHasher.new()` streams, so it keeps nothing.
+    #[test]
+    fn a_default_hasher_keeps_nothing() {
+        let state = HasherState(MeteredMutex::new(Algorithm::Default(
+            std::collections::hash_map::DefaultHasher::new(),
+        )));
+        state.0.lock(&AllocDebt::new()).write(&[7; 4096]);
+        let mut meter = Meter::census();
+        state.measure(&mut meter);
+        assert_eq!(meter.total(), 0);
+    }
+}
