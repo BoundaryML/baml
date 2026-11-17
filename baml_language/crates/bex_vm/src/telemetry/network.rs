@@ -98,7 +98,7 @@ pub(super) fn event_name(kind: &NetworkEventKind) -> NetworkEventName {
         NetworkEventKind::Await => NetworkEventName::Await,
         NetworkEventKind::Close => NetworkEventName::Close,
         NetworkEventKind::Drop => NetworkEventName::Drop,
-        NetworkEventKind::Complete { .. } => {
+        NetworkEventKind::Complete { .. } | NetworkEventKind::Cancelled => {
             unreachable!("internal completion is not a wire event")
         }
     }

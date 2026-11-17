@@ -146,6 +146,10 @@ impl BexEngine {
                     vm.complete_network_io(span, at, error.as_ref());
                     continue;
                 }
+                if event.kind == NetworkEventKind::Cancelled {
+                    vm.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[]);
+                    continue;
+                }
                 vm.network_event(span, at, &event.kind);
                 if event.kind == NetworkEventKind::Drop {
                     vm.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[]);
@@ -178,6 +182,13 @@ impl BexEngine {
                 let at = ClockInstant::from_ticks(event.at_ticks);
                 if let NetworkEventKind::Complete { error } = &event.kind {
                     state.complete_network_io(span, at, error.as_ref());
+                    continue;
+                }
+                if event.kind == NetworkEventKind::Cancelled {
+                    // SAFETY: owned cancellation contains no VM values.
+                    unsafe {
+                        state.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[]);
+                    }
                     continue;
                 }
                 state.network_event(span, at, &event.kind);
@@ -321,4 +332,72 @@ fn instance_field(vm: &BexVm, value: Value, name: &str) -> Option<Value> {
     };
     let index = class.fields.iter().position(|field| field.name == name)?;
     instance.try_load_field(index)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::Duration,
+    };
+
+    use sys_native::SysOpsExt;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn native_reader_join_survives_cancelling_the_shutdown_caller() {
+        let directory = tempfile::tempdir().unwrap();
+        let engine = Arc::new(
+            BexEngine::new_with_telemetry_recording(
+                baml_test_support::compile_source("function main() -> int { 1 }"),
+                Arc::new(sys_native::SysOps::native()),
+                vec![],
+                None,
+                btel_clock::ClockMode::Monotonic,
+                crate::TelemetryRecording::local_files_in(
+                    directory.path(),
+                    btel_recorder::RecordingConfig::default(),
+                ),
+            )
+            .unwrap(),
+        );
+        let release = sys_types::CancellationToken::new();
+        let observed = release.clone();
+        let joined = Arc::new(AtomicBool::new(false));
+        let finished = Arc::clone(&joined);
+        assert!(engine.sys_op_ctx.http_readers.spawn(release, async move {
+            observed.cancelled().await;
+            tokio::time::sleep(Duration::from_millis(40)).await;
+            finished.store(true, Ordering::Release);
+        }));
+        let started = engine.sys_op_ctx.http_readers.clone();
+        // A second controlled reader exposes the exact join phase without
+        // timing a GC or assuming a particular executor scheduling order.
+        let entered = sys_types::CancellationToken::new();
+        let signal = entered.clone();
+        assert!(started.spawn(signal.clone(), async move {
+            signal.cancelled().await;
+        }));
+        let closing = Arc::clone(&engine);
+        let caller = tokio::spawn(async move {
+            closing.shutdown().await;
+        });
+        tokio::time::timeout(Duration::from_secs(2), entered.cancelled())
+            .await
+            .unwrap();
+        caller.abort();
+        let _ = caller.await;
+        tokio::time::timeout(Duration::from_secs(2), engine.shutdown())
+            .await
+            .unwrap();
+        assert!(
+            joined.load(Ordering::Acquire),
+            "recorder cannot close before readers join"
+        );
+        assert_eq!(engine.telemetry_result(), Some(Ok(())));
+    }
 }

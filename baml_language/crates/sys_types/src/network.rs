@@ -51,6 +51,8 @@ pub enum NetworkEventKind {
     Drop,
     /// Internal terminal notification; never encoded as a network event.
     Complete { error: Option<NetworkError> },
+    /// Internal application-read cancellation, without a lifecycle drop event.
+    Cancelled,
 }
 
 /// Owned transport failure, safe to record without a VM heap.
@@ -312,6 +314,27 @@ impl NetworkContext {
             },
             open: None,
         });
+    }
+
+    /// Stop an explicitly cancelled body read without conflating it with
+    /// ownership abandonment. A known EOF/error wins and keeps its timestamp.
+    pub fn cancel_read(&self) {
+        let at_ticks = (self.now)();
+        if self
+            .open
+            .state
+            .compare_exchange(OPEN, COMPLETED, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            self.sink.queue().emit(Queued {
+                event: NetworkEvent {
+                    span: self.span,
+                    at_ticks,
+                    kind: NetworkEventKind::Cancelled,
+                },
+                open: None,
+            });
+        }
     }
 
     /// An application read remains observable even when eager EOF already

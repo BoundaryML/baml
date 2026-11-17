@@ -156,6 +156,18 @@ impl EngineTelemetry {
                     NetworkEventKind::Complete { error } => {
                         state.complete_network_io(span, at, error.as_ref());
                     }
+                    NetworkEventKind::Cancelled => {
+                        // SAFETY: owned cancellation contains no VM values.
+                        unsafe {
+                            state.close_network_span(
+                                span,
+                                at,
+                                InvocationOutcome::Cancelled,
+                                None,
+                                &[],
+                            );
+                        }
+                    }
                     kind => {
                         state.network_event(span, at, kind);
                         if *kind == NetworkEventKind::Drop {

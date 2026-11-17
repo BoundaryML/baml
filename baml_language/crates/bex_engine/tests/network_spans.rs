@@ -710,3 +710,66 @@ async fn a_request_task_starts_running_before_its_handler_calls() {
         "{handler:?}"
     );
 }
+
+// The native read-cancellation guard has its own alias-retention regression;
+// this verifies its owned terminal notification's actual recording contract.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn application_read_cancellation_stays_cancelled_without_drop_on_the_wire() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let directory = tempfile::tempdir().unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/cancelled", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut request = [0; 4096];
+        assert!(socket.read(&mut request).await.unwrap() > 0);
+        socket
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000000000\r\n\r\n")
+            .await
+            .unwrap();
+        let _ = socket.read(&mut request).await;
+    });
+    let engine = Arc::new(
+        BexEngine::new_with_telemetry_recording(
+            baml_test_support::compile_source(
+                "function get(url: string) -> baml.http.Response { baml.http.fetch(url) }",
+            ),
+            Arc::new(sys_native::SysOps::native()),
+            vec![],
+            None,
+            btel_clock::ClockMode::Monotonic,
+            TelemetryRecording::local_files_in(directory.path(), RecordingConfig::default()),
+        )
+        .unwrap(),
+    );
+    let response = engine
+        .call_function(
+            "get",
+            vec![BexExternalValue::String(url.into())],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    let BexExternalValue::Instance { fields, .. } = &response else {
+        panic!("response");
+    };
+    let BexExternalValue::RustData(body) = &fields["_body"] else {
+        panic!("native body");
+    };
+    sys_types::network::NetworkTraced::of(body.as_ref())
+        .unwrap()
+        .network()
+        .cancel_read();
+    engine.shutdown().await;
+    tokio::time::timeout(Duration::from_secs(2), server)
+        .await
+        .unwrap()
+        .unwrap();
+    let (spans, _) = read(directory.path(), &engine);
+    let span = &spans["cancelled"];
+    assert_eq!(span.names(), ["connection"]);
+    let done = span.completion.as_ref().unwrap();
+    assert_eq!(done.outcome, proto::InvocationOutcome::Cancelled as i32);
+    assert!(!done.panicked);
+}

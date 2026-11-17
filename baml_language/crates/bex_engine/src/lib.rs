@@ -3090,6 +3090,21 @@ impl BexEngine {
 
         self.collect_garbage_with_reason("shutdown").await;
         #[cfg(not(target_arch = "wasm32"))]
+        if let Err(error) = tokio::spawn(Arc::clone(self).finish_shutdown_native(shutdown)).await {
+            tracing::error!(%error, "native shutdown task failed");
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.finish_network_spans();
+            shutdown.complete();
+        }
+    }
+
+    /// Once native cleanup starts, its guard and reader joins survive dropping
+    /// the host's shutdown future, just like the final telemetry join does.
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn finish_shutdown_native(self: Arc<Self>, shutdown: ShutdownGuard) {
+        #[cfg(not(target_arch = "wasm32"))]
         self.sys_op_ctx
             .http_readers
             .shutdown(std::time::Duration::from_millis(100))
@@ -3137,8 +3152,6 @@ impl BexEngine {
             }
             self.bex_work.join_worker().await;
         }
-        #[cfg(target_arch = "wasm32")]
-        shutdown.complete();
     }
 
     fn enqueue_unhandled_spawn_errors(

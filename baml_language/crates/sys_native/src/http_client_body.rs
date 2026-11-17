@@ -23,6 +23,7 @@ const BOUNDARY_LOOKAHEAD_BUDGET: Duration = Duration::from_millis(10);
 
 pub(crate) struct ClientBody {
     state: Arc<State>,
+    network: Option<NetworkContext>,
 }
 struct State {
     consumed: AtomicBool,
@@ -61,7 +62,10 @@ impl ClientBody {
         let reader = Arc::clone(&state);
         let release = state.released.clone();
         let on_refused = network.clone();
-        let finished = ReaderFinished(Arc::clone(&reader));
+        let finished = ReaderFinished {
+            state: Arc::clone(&reader),
+            network: network.clone(),
+        };
         if !readers.spawn(release, async move {
             // Abort/panic must wake an application already waiting for this
             // reader, rather than leaving its body sys-op pending forever.
@@ -73,7 +77,10 @@ impl ClientBody {
                 network.abandon();
             }
         }
-        Self { state }
+        Self {
+            state,
+            network: on_refused,
+        }
     }
     pub(crate) fn retained(&self) -> usize {
         self.state.retained.load(Ordering::Relaxed)
@@ -84,6 +91,11 @@ impl ClientBody {
                 message: "Response body has already been consumed".into(),
             });
         }
+        let mut reading = ApplicationRead {
+            released: &self.state.released,
+            network: self.network.as_ref(),
+            completed: false,
+        };
         self.state.requested.notify_one();
         loop {
             let ready = self.state.done.notified();
@@ -97,16 +109,41 @@ impl ClientBody {
                 .take()
             {
                 self.state.retained.store(0, Ordering::Relaxed);
+                reading.completed = true;
                 return result;
             }
             ready.await;
         }
     }
 }
-struct ReaderFinished(Arc<State>);
+struct ApplicationRead<'a> {
+    released: &'a CancellationToken,
+    network: Option<&'a NetworkContext>,
+    completed: bool,
+}
+impl Drop for ApplicationRead<'_> {
+    fn drop(&mut self) {
+        if !self.completed {
+            if let Some(network) = self.network {
+                network.cancel_read();
+            }
+            self.released.cancel();
+        }
+    }
+}
+struct ReaderFinished {
+    state: Arc<State>,
+    network: Option<NetworkContext>,
+}
 impl Drop for ReaderFinished {
     fn drop(&mut self) {
-        self.0.stopped();
+        // An abort can drop the last lifecycle reference after GC released its
+        // carrier. Preserve the terminal drop before the weak registry loses it.
+        // A known/queued EOF or transport error wins the lifecycle CAS.
+        if let Some(network) = &self.network {
+            network.abandon();
+        }
+        self.state.stopped();
     }
 }
 impl State {
@@ -630,6 +667,76 @@ mod tests {
                 .unwrap()
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn shutdown_records_abandonment_after_gc_loses_the_last_carrier() {
+        let readers = HttpReaders::default();
+        let (queue, network) = context();
+        let body = ClientBody::new(
+            response(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\n".to_vec(),
+                Duration::from_secs(2),
+                None,
+            )
+            .await,
+            options(None),
+            Some(network),
+            &readers,
+        );
+        drop(body);
+        // Expire the overall budget before the per-reader drain budget. No
+        // application carrier survives for the weak shutdown sweep to find.
+        readers.shutdown(Duration::from_millis(10)).await;
+        queue.abandon_open();
+        let events = queue.drain();
+        assert_eq!(
+            events.iter().map(|event| &event.kind).collect::<Vec<_>>(),
+            [&NetworkEventKind::Drop]
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_application_read_stops_with_an_alias_still_alive() {
+        let readers = HttpReaders::default();
+        let (queue, network) = context();
+        let body = ClientBody::new(
+            response(
+                b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n".to_vec(),
+                Duration::from_secs(2),
+                None,
+            )
+            .await,
+            options(None),
+            Some(network),
+            &readers,
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), body.read())
+                .await
+                .is_err()
+        );
+        // The carrier remains reachable, so ownership-loss cleanup cannot help.
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while !body.state.finished.load(Ordering::Acquire) {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(body.retained(), 0);
+        assert_eq!(
+            queue
+                .drain()
+                .iter()
+                .map(|event| &event.kind)
+                .collect::<Vec<_>>(),
+            [&NetworkEventKind::Cancelled]
+        );
+        assert!(body.read().await.is_err());
+        readers.shutdown(Duration::from_millis(100)).await;
+        queue.abandon_open();
+        assert!(queue.drain().is_empty());
     }
 
     #[tokio::test]
