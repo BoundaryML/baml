@@ -377,9 +377,15 @@ mod tests {
         let entry = program.rendered_callables()["user.main"].object.raw();
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
         vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+        // Entering `main` reserved its locals and operand bound; fill that
+        // so the host result's push has to grow the stack.
+        while vm.stack.len() < vm.stack.capacity() {
+            vm.stack.push(Value::NULL);
+        }
+        let filled = vm.stack.len();
         vm.stack.refuse_next_growth = true;
         vm.stack.push(Value::NULL);
-        assert!(vm.stack.is_empty());
+        assert_eq!(vm.stack.len(), filled);
         let Err(VmError::ThrownUnhandled { value, .. }) = vm.exec() else {
             panic!("host-result allocation refusal must propagate as a BAML panic")
         };

@@ -1973,8 +1973,10 @@ impl BexEngine {
         // The init order, before the executable is consumed.
         let init_order = bytecode_program.init_order.clone();
 
-        // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode = bex_vm::vm::convert_program_with_compiled_bodies(
+        // Convert the pure bytecode to a VM-ready program with native functions
+        // attached. It is lowered below, once float boxing has settled the
+        // constants.
+        let bytecode = bex_vm::vm::convert_program_for_load(
             bytecode_program,
             auto_telemetry_level.is_some(),
             compiled_bodies,
@@ -1996,7 +1998,8 @@ impl BexEngine {
 
         // Boxing changes constant kinds, so rebuild compact code and select
         // exact calls together. Plain lowering here would erase specialization.
-        bex_vm::prepare_compact_code(&mut compile_time_objects, &bytecode.globals);
+        bex_vm::prepare_compact_code(&mut compile_time_objects, &bytecode.globals)
+            .map_err(EngineError::VmInternalError)?;
 
         // The class and enum indices sys-op results are allocated through, by
         // name: each package's own tables under the package's display name.

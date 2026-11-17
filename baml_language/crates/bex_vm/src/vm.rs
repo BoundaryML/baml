@@ -1011,6 +1011,20 @@ pub(crate) mod tests {
         NativeCallResult::Done(Value::int(42))
     }
 
+    /// Hand-built test code, lowered through the load-time stack check
+    /// the way every function the VM runs is.
+    pub(crate) fn verified_compact(function: &Function) -> bex_vm_types::bytecode::CompactCode {
+        let no_globals = |_: bex_vm_types::GlobalIndex| None;
+        function
+            .bytecode
+            .lower_verified(
+                &bex_vm_types::stack_effect::StackContext::new(&no_globals),
+                function.real_local_count,
+                false,
+            )
+            .expect("hand-built test code passes the stack check")
+    }
+
     pub(crate) fn native_function_object() -> Object {
         let native: NativeFunction = native_done;
         Object::Function(Box::new(Function {
@@ -1073,7 +1087,7 @@ pub(crate) mod tests {
             constants: vec![ConstValue::Int(42)],
             ..Bytecode::default()
         };
-        function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+        function.bytecode.compact = Some(verified_compact(&function));
         let mut vm = test_vm(vec![Object::Function(function)]);
         let entry = vm.idx_to_ptr(ObjectIndex::from_raw(0));
         let Object::Function(function) = vm.get_object(entry) else {
@@ -1207,10 +1221,16 @@ pub(crate) mod tests {
         };
         function.kind = FunctionKind::Bytecode;
         function.bytecode = Bytecode {
-            instructions: vec![Instruction::SetCallTrace, Instruction::Return],
+            instructions: vec![
+                Instruction::LoadConst(0),
+                Instruction::SetCallTrace,
+                Instruction::LoadConst(0),
+                Instruction::Return,
+            ],
+            constants: vec![bex_vm_types::ConstValue::Null],
             ..Bytecode::default()
         };
-        function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+        function.bytecode.compact = Some(verified_compact(&function));
         let mut vm = test_vm(vec![Object::Function(function)]);
         let entry = vm.idx_to_ptr(ObjectIndex::from_raw(0));
         vm.set_entry_point(entry, &[]);
@@ -1676,7 +1696,9 @@ pub(crate) mod tests {
                 Instruction::LoadConst(0),
                 Instruction::LoadConst(1),
                 Instruction::SendEvent,
-                Instruction::Jump(-3),
+                // The engine resumes an event with a null pushed.
+                Instruction::Pop(1),
+                Instruction::Jump(-4),
             ],
             constants: vec![
                 ConstValue::Object(ObjectIndex::from_raw(1)),
@@ -1684,7 +1706,7 @@ pub(crate) mod tests {
             ],
             ..Bytecode::default()
         };
-        function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+        function.bytecode.compact = Some(verified_compact(&function));
         let mut vm = test_vm(vec![
             Object::Function(function),
             Object::String("tick".into()),
@@ -1695,6 +1717,8 @@ pub(crate) mod tests {
 
         for _ in 0..3 {
             assert!(matches!(vm.exec().unwrap(), VmExecState::Event { .. }));
+            // As the engine does.
+            vm.stack.push(Value::NULL);
         }
         assert!(matches!(vm.exec().unwrap(), VmExecState::EarlyYield));
     }
@@ -2665,6 +2689,20 @@ pub fn convert_program_with_compiled_bodies(
     enabled: bool,
     compiled_bodies: Option<CompiledBodies>,
 ) -> Result<BytecodeProgram, VmInternalError> {
+    let mut bytecode = convert_program_for_load(program, enabled, compiled_bodies)?;
+    prepare_compact_code(&mut bytecode.objects.0, &bytecode.globals)?;
+    Ok(bytecode)
+}
+
+/// [`convert_program_with_compiled_bodies`] without lowering to compact code,
+/// for a loader that changes constants (float boxing) and then calls
+/// [`prepare_compact_code`] itself: lowering, and the stack check that comes
+/// with it, run once.
+pub fn convert_program_for_load(
+    program: bex_vm_types::Program,
+    enabled: bool,
+    compiled_bodies: Option<CompiledBodies>,
+) -> Result<BytecodeProgram, VmInternalError> {
     // The one road from an executable into a VM: a decoded program is
     // checked against the format's laws here, and everything after — the
     // rendered views, the loader — indexes into a program that keeps them.
@@ -2686,7 +2724,6 @@ pub fn convert_program_with_compiled_bodies(
     if !enabled {
         disable_declared_trace_hooks(&mut objects);
     }
-    prepare_compact_code(&mut objects, &program.globals);
 
     // The by-name view of the executable's callables, from the package
     // tables: declared functions and class methods only. Lambdas, helpers,
@@ -2755,22 +2792,56 @@ fn disable_declared_trace_hooks(objects: &mut [Object]) {
 /// then specialize calls against that final image. The serializable instruction
 /// streams remain unchanged. Always rebuild before selecting fast paths so a
 /// previous specialization cannot outlive a change to constants or globals.
-pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::ConstValue]) {
+///
+/// Every function's operand stack is verified on the way
+/// ([`bex_vm_types::Bytecode::lower_verified`]); one that fails rejects the
+/// program, since the dispatch loop pushes within the bound the check proves.
+///
+/// # Errors
+///
+/// A function whose operand stack the check cannot prove consistent and
+/// bounded.
+pub fn prepare_compact_code(
+    objects: &mut [Object],
+    globals: &[bex_vm_types::ConstValue],
+) -> Result<(), VmInternalError> {
+    // A call without a recorded layout passes its callee's arity; every
+    // static callee is a global naming a function.
+    let arities: Vec<Option<usize>> = globals
+        .iter()
+        .map(|global| match global {
+            bex_vm_types::ConstValue::Object(index) => match objects.get(index.raw()) {
+                Some(Object::Function(function)) => Some(function.arity),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    let global_arity =
+        |global: bex_vm_types::GlobalIndex| arities.get(global.raw()).copied().flatten();
+    let ctx = bex_vm_types::stack_effect::StackContext::new(&global_arity);
     for object in objects.iter_mut() {
         if let Object::Function(function) = object {
-            let compact = if function.compiled_body.is_some() {
-                let mut compact = function.bytecode.lower_to_compact_with_offsets();
+            let compiled = function.compiled_body.is_some();
+            let mut compact = function
+                .bytecode
+                .lower_verified(&ctx, function.real_local_count, compiled)
+                .map_err(|error| {
+                    VmInternalError::InvalidProgram(bex_vm_types::types::InvalidProgram(format!(
+                        "function `{}` fails the operand-stack check: {error}",
+                        function.name()
+                    )))
+                })?;
+            if compiled {
                 compact
                     .code
                     .extend(crate::compiled_rt::stub::CODE.map(|op| op as u8));
-                compact
-            } else {
-                function.bytecode.lower_to_compact()
-            };
+            }
             function.bytecode.compact = Some(compact);
         }
     }
     crate::call_specialize::specialize_calls(objects, globals);
+    Ok(())
 }
 
 /// Resolve the heap pointers for the builtin `baml.errors.*` classes, indexed by
@@ -5946,7 +6017,8 @@ impl BexVm {
         program: bex_vm_types::Program,
         #[cfg(not(target_arch = "wasm32"))] park_requested: Arc<AtomicBool>,
     ) -> Result<Self, VmInternalError> {
-        let bytecode = convert_program(program)?;
+        // Lowered below, once float boxing has settled the constants.
+        let bytecode = convert_program_for_load(program, true, None)?;
 
         // Extract compile-time objects for the heap
         let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
@@ -5958,7 +6030,7 @@ impl BexVm {
             &mut compile_time_objects,
             &bytecode.globals,
         );
-        prepare_compact_code(&mut compile_time_objects, &bytecode.globals);
+        prepare_compact_code(&mut compile_time_objects, &bytecode.globals)?;
 
         // Create heap with compile-time objects, additionally allocating the
         // per-package `Object::Package` / `Object::ImplRule` objects.
@@ -6245,12 +6317,12 @@ impl BexVm {
         }
         match callable_kind {
             FunctionKind::Bytecode => {
-                let locals = self
-                    .real_local_count_for_frame(dispatch_ptr)
+                let (locals, frame_reserve) = self
+                    .frame_slots_for(dispatch_ptr)
                     .expect("entry point must be a valid function frame");
                 let reserve = args
                     .len()
-                    .checked_add(locals)
+                    .checked_add(frame_reserve)
                     .ok_or(VmPanic::StackOverflow)
                     .and_then(|additional| self.stack.try_reserve(additional));
                 if let Err(panic) = reserve {
@@ -6452,7 +6524,26 @@ impl BexVm {
             instructions,
             ..bytecode::Bytecode::default()
         };
-        bytecode.compact = Some(bytecode.lower_to_compact());
+        // The arguments (and a native's type arguments) are on the stack
+        // before the first instruction, and the call takes all of them.
+        let pushed_type_args = if matches!(callable_kind, FunctionKind::Native(..)) {
+            usize::from(ntypeargs)
+        } else {
+            0
+        };
+        let arity = |_: GlobalIndex| Some(args.len());
+        let ctx = bex_vm_types::stack_effect::StackContext {
+            entry_depth: args.len() + pushed_type_args,
+            global_arity: &arity,
+            indirect_args: None,
+        };
+        let compact = bytecode
+            .lower_verified(&ctx, 0, false)
+            .expect("a trampoline's call takes the values it is entered with");
+        // The frame starts at the bottom of the stack, over its entry values.
+        self.stack
+            .try_reserve(compact.max_stack.saturating_sub(ctx.entry_depth))?;
+        bytecode.compact = Some(compact);
 
         let display_return_type = return_type.to_string();
         let entry_function = Function {
@@ -6566,7 +6657,21 @@ impl BexVm {
             instructions: vec![Instruction::CallIndirect, Instruction::Return],
             ..bytecode::Bytecode::default()
         };
-        bytecode.compact = Some(bytecode.lower_to_compact());
+        // The arguments and the callable are on the stack before the first
+        // instruction.
+        let no_globals = |_: GlobalIndex| None;
+        let ctx = bex_vm_types::stack_effect::StackContext {
+            entry_depth: args.len() + 1,
+            global_arity: &no_globals,
+            indirect_args: Some(args.len()),
+        };
+        let compact = bytecode
+            .lower_verified(&ctx, 0, false)
+            .expect("a trampoline's call takes the values it is entered with");
+        // The frame starts at the bottom of the stack, over its entry values.
+        self.stack
+            .try_reserve(compact.max_stack.saturating_sub(ctx.entry_depth))?;
+        bytecode.compact = Some(compact);
 
         let display_return_type = return_type.to_string();
         let entry_function = Function {
@@ -7070,19 +7175,23 @@ impl BexVm {
         }
     }
 
-    fn real_local_count_for_frame(
+    /// The locals and the whole frame reservation
+    /// ([`Function::frame_reserve`]) of the function a frame for
+    /// `function_ptr` runs.
+    fn frame_slots_for(
         &mut self,
         function_ptr: HeapPtr,
-    ) -> Result<usize, VmInternalError> {
+    ) -> Result<(usize, usize), VmInternalError> {
+        let slots = |f: &Function| (f.real_local_count, f.frame_reserve());
         let obj = self.get_object(function_ptr);
-        let real_local_count = match obj {
-            Object::Function(function) => function.real_local_count,
+        let frame_slots = match obj {
+            Object::Function(function) => slots(function),
             Object::Closure(closure) => {
                 // SAFETY: closure.function points to a Function object with
                 // appropriate lifetime guarantees.
                 let func_obj = unsafe { closure.function.get() };
                 match func_obj {
-                    Object::Function(f) => f.real_local_count,
+                    Object::Function(f) => slots(f),
                     _ => {
                         return Err(VmInternalError::TypeError {
                             expected: Type::Object(ObjectType::Function(FunctionType::Any)),
@@ -7096,7 +7205,7 @@ impl BexVm {
                 // lifetime guarantees.
                 let func_obj = unsafe { bm.function.get() };
                 match func_obj {
-                    Object::Function(f) => f.real_local_count,
+                    Object::Function(f) => slots(f),
                     _ => {
                         return Err(VmInternalError::TypeError {
                             expected: Type::Object(ObjectType::Function(FunctionType::Any)),
@@ -7110,7 +7219,7 @@ impl BexVm {
                 // SAFETY: function globals hold compile-time Function objects.
                 let func_obj = unsafe { func_ptr.get() };
                 match func_obj {
-                    Object::Function(f) => f.real_local_count,
+                    Object::Function(f) => slots(f),
                     _ => {
                         return Err(VmInternalError::TypeError {
                             expected: Type::Object(ObjectType::Function(FunctionType::Any)),
@@ -7127,7 +7236,7 @@ impl BexVm {
             }
         };
 
-        Ok(real_local_count)
+        Ok(frame_slots)
     }
 
     /// Context of the frame `run_compact` is dispatching, which is the top
@@ -8650,7 +8759,7 @@ impl BexVm {
         };
         caller_frame.faulting_pc = self.cur_pc;
         self.reserve_call_frame()?;
-        self.reserve_stack(callee.real_local_count)?;
+        self.reserve_stack(callee.frame_reserve())?;
         let context = self.dispatch_frame_context(frame_idx).clone();
         if let Some(telemetry) = &mut self.telemetry {
             telemetry.set_context(context.clone());
@@ -8803,7 +8912,7 @@ impl BexVm {
         caller_frame.instruction_ptr = return_pc;
         caller_frame.faulting_pc = self.cur_pc;
         self.reserve_call_frame()?;
-        self.reserve_stack(callee.real_local_count)?;
+        self.reserve_stack(callee.frame_reserve())?;
         let context = self.dispatch_frame_context(frame_idx).clone();
         self.frames.push_reserved_with(|| {
             Frame::Bytecode(BytecodeFrame {
@@ -9097,7 +9206,7 @@ impl BexVm {
 
             FunctionKind::Bytecode => {
                 self.reserve_call_frame()?;
-                self.reserve_stack(callee.real_local_count)?;
+                self.reserve_stack(callee.frame_reserve())?;
                 // Push the new frame.
                 let hooked = callee
                     .bytecode
@@ -10405,6 +10514,69 @@ impl BexVm {
             .map_err(|panic| VmError::thrown_fresh(self.panic_to_exception_value(panic)))
     }
 
+    /// Debug builds, before the dispatch loop runs the instruction at `pc`
+    /// of `function` in frame `frame_idx`: record its opcode for the coverage
+    /// test, and assert the live operand depth is the one
+    /// [`bex_vm_types::Bytecode::verify_stack`] proved for it. A handler
+    /// whose real stack effect differs from
+    /// [`bex_vm_types::Bytecode::stack_effect`] fails at the next instruction
+    /// its frame runs, however the instruction finished: in place, after a
+    /// call returned, or after the engine resumed it.
+    #[cfg(debug_assertions)]
+    fn debug_check_dispatch(&self, frame_idx: usize, function: &Function, pc: usize, op: u8) {
+        crate::opcode_coverage::record(op);
+        let Some(Frame::Bytecode(frame)) = self.frames.get(frame_idx) else {
+            return;
+        };
+        Self::debug_check_operand_depth(
+            function,
+            frame.locals_offset.raw(),
+            self.stack.len(),
+            self.stack.capacity(),
+            pc,
+        );
+    }
+
+    /// The depth half of [`Self::debug_check_dispatch`], for a frame whose
+    /// locals start at `locals_offset` and a stack `len` values long with
+    /// room for `capacity`. Also asserts that entering the frame reserved its
+    /// whole operand bound, which the unchecked pushes rely on.
+    #[cfg(debug_assertions)]
+    fn debug_check_operand_depth(
+        function: &Function,
+        locals_offset: usize,
+        len: usize,
+        capacity: usize,
+        pc: usize,
+    ) {
+        let Some(code) = function.bytecode.compact.as_ref() else {
+            return;
+        };
+        // Past the instructions: a compiled body's resume stub, which keeps
+        // its own stack.
+        let Some(&depth) = code.operand_depths.get(pc) else {
+            return;
+        };
+        let base = locals_offset + function.arity + function.real_local_count;
+        assert!(
+            locals_offset + function.arity + code.frame_slots <= capacity
+                && code.frame_slots == function.real_local_count + code.max_stack,
+            "a frame of `{}` runs without its operand bound reserved",
+            function.name(),
+        );
+        assert!(
+            depth != bex_vm_types::stack_effect::NO_DEPTH,
+            "`{}` runs the instruction at {pc}, which its stack check found unreachable",
+            function.name(),
+        );
+        assert_eq!(
+            len.checked_sub(base),
+            Some(depth as usize),
+            "`{}` reaches the instruction at {pc} with an operand depth its stack check did not prove",
+            function.name(),
+        );
+    }
+
     /// Push an operand with fallible backing growth.
     ///
     /// The common case writes into spare capacity behind one compare; only a
@@ -11175,7 +11347,7 @@ impl BexVm {
     /// return PC and call-site PC, push the callee frame with the caller's
     /// context, and initialize the callee's locals to null.
     ///
-    /// The caller is the top frame. A frame slot and `callee.real_local_count`
+    /// The caller is the top frame. A frame slot and `callee.frame_reserve()`
     /// stack slots must already be reserved, and the arguments must be the
     /// top `callee.arity` stack values, starting at `locals_offset`.
     ///
@@ -11216,7 +11388,7 @@ impl BexVm {
             verifier_unreachable!()
         };
         let (base, len, capacity) = self.stack.raw_parts();
-        debug_assert!(capacity - len >= callee.real_local_count);
+        debug_assert!(capacity - len >= callee.frame_reserve());
         // SAFETY: the slot holds `Context::default()`, which owns nothing,
         // so overwriting it without a drop leaks nothing. The locals fit in
         // the reserved capacity, and `Value` is `Copy`.
@@ -11491,8 +11663,9 @@ impl BexVm {
         let (mut base, mut sp, mut cap) = self.stack.raw_parts();
         // SAFETY (every arm): the encoder validates each instruction's stack
         // effect and local slots, so operand reads stay within `0..sp` and
-        // local slots within the frame. Pushes check `sp < cap` first, and
-        // nothing below grows the stack, so `base` stays valid.
+        // local slots within the frame. Pushes stay within the capacity the
+        // frame reserved on entry (`Function::frame_reserve`), and nothing
+        // below grows the stack, so `base` stays valid.
         unsafe {
             macro_rules! at {
                 ($index:expr) => {
@@ -11506,11 +11679,19 @@ impl BexVm {
             }
             loop {
                 let op: OpCode = std::mem::transmute(*code.get_unchecked(pc));
+                #[cfg(debug_assertions)]
+                {
+                    crate::opcode_coverage::record(op as u8);
+                    Self::debug_check_operand_depth(
+                        function,
+                        locals_base.wrapping_add(1),
+                        sp,
+                        cap,
+                        pc,
+                    );
+                }
                 match op {
                     OpCode::LoadNull | OpCode::LoadTrue | OpCode::LoadFalse => {
-                        if sp == cap {
-                            break;
-                        }
                         at!(sp) = match op {
                             OpCode::LoadNull => Value::NULL,
                             OpCode::LoadTrue => Value::bool(true),
@@ -11520,9 +11701,6 @@ impl BexVm {
                         pc += 1;
                     }
                     OpCode::LoadIntSmall => {
-                        if sp == cap {
-                            break;
-                        }
                         let value = *code.get_unchecked(pc + 1) as i8;
                         at!(sp) = Value::int(i64::from(value));
                         sp += 1;
@@ -11532,25 +11710,16 @@ impl BexVm {
                         let Some(&value) = constants.get(operand_u32(code, pc + 1)) else {
                             break;
                         };
-                        if sp == cap {
-                            break;
-                        }
                         at!(sp) = value;
                         sp += 1;
                         pc += 5;
                     }
                     OpCode::LoadVar => {
-                        if sp == cap {
-                            break;
-                        }
                         at!(sp) = local!(operand_u32(code, pc + 1));
                         sp += 1;
                         pc += 5;
                     }
                     OpCode::LoadVar2 => {
-                        if cap - sp < 2 {
-                            break;
-                        }
                         at!(sp) = local!(operand_u32(code, pc + 1));
                         at!(sp + 1) = local!(operand_u32(code, pc + 5));
                         sp += 2;
@@ -11576,9 +11745,6 @@ impl BexVm {
                         pc += 5;
                     }
                     OpCode::Copy => {
-                        if sp == cap {
-                            break;
-                        }
                         at!(sp) = at!(sp - 1 - operand_u32(code, pc + 1));
                         sp += 1;
                         pc += 5;
@@ -11606,9 +11772,6 @@ impl BexVm {
                         pc += 10;
                     }
                     OpCode::LoadVarField | OpCode::LoadVarFieldLocal => {
-                        if sp == cap {
-                            break;
-                        }
                         let Some(value) = self.instance_field(
                             local!(operand_u32(code, pc + 1)),
                             operand_u32(code, pc + 5),
@@ -11631,9 +11794,6 @@ impl BexVm {
                         ) else {
                             break;
                         };
-                        if sp == cap {
-                            break;
-                        }
                         at!(sp) = value;
                         sp += 1;
                         pc += 9;
@@ -11768,7 +11928,7 @@ impl BexVm {
                         if !matches!(callee.kind, FunctionKind::Bytecode)
                             || callee.compiled_body.is_some()
                             || sp < callee.arity
-                            || cap - sp < callee.real_local_count
+                            || cap - sp < callee_code.frame_slots
                             || self.frames.len() == self.frames.capacity()
                             // Last check, so a handed-back call has not ticked.
                             || !self.early_yield.tick_unless_due()
@@ -11975,6 +12135,17 @@ impl BexVm {
             }
         }
 
+        // An operand push of the running instruction, into the capacity its
+        // frame reserved on entry (`Function::frame_reserve`): no capacity
+        // check. The load-time stack check proves the bound.
+        macro_rules! push_operand {
+            ($value:expr) => {{
+                let value = $value;
+                // SAFETY: see `EvalStack::push_reserved`.
+                unsafe { self.stack.push_reserved(value) };
+            }};
+        }
+
         // The current function's runtime package, derived once per function
         // switch rather than on every instruction that addresses an operand.
         let mut runtime_package = self.runtime_package_of(function);
@@ -12045,6 +12216,8 @@ impl BexVm {
             // frames record their call-site PC at call time; read sites resolve the
             // innermost frame from `cur_pc`.
             self.cur_pc = *pc - 1;
+            #[cfg(debug_assertions)]
+            self.debug_check_dispatch(*frame_idx, function, *pc - 1, op_byte);
 
             // SAFETY: OpCode is #[repr(u8)] and the compact bytecode is produced by our
             // own encoder which only emits valid opcode bytes.
@@ -12089,31 +12262,31 @@ impl BexVm {
                 match op {
                     // ── Common constants ──────────────────────────────────────────
                     OpCode::LoadNull => {
-                        self.push_stack(Value::NULL)?;
+                        push_operand!(Value::NULL);
                     }
                     OpCode::LoadTrue => {
-                        self.push_stack(Value::bool(true))?;
+                        push_operand!(Value::bool(true));
                     }
                     OpCode::LoadFalse => {
-                        self.push_stack(Value::bool(false))?;
+                        push_operand!(Value::bool(false));
                     }
                     OpCode::LoadIntSmall => {
                         let val = { read_i8_unchecked(code, pc) };
-                        self.push_stack(Value::int(i64::from(val)))?;
+                        push_operand!(Value::int(i64::from(val)));
                     }
 
                     // ── LoadConst ─────────────────────────────────────────────────
                     OpCode::LoadConst => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let val = function.bytecode.resolved_constants[idx];
-                        self.push_stack(val)?;
+                        push_operand!(val);
                     }
 
                     // ── LoadVar / StoreVar ────────────────────────────────────────
                     OpCode::LoadVar => {
                         let slot = { read_u32_unchecked(code, pc) as usize };
                         let value = self.stack.get_at(Self::local_at(locals_base, slot));
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     OpCode::StoreVar => {
@@ -12164,7 +12337,7 @@ impl BexVm {
                                 Value::object(self.alloc_instance(done, Vec::new()))
                             }
                         };
-                        self.push_stack(item)?;
+                        push_operand!(item);
                     }
 
                     // ── Operand-movement superinstructions (CPython-style) ────────
@@ -12174,8 +12347,8 @@ impl BexVm {
                         let b = { read_u32_unchecked(code, pc) as usize };
                         let va = self.stack.get_at(Self::local_at(locals_base, a));
                         let vb = self.stack.get_at(Self::local_at(locals_base, b));
-                        self.push_stack(va)?;
-                        self.push_stack(vb)?;
+                        push_operand!(va);
+                        push_operand!(vb);
                     }
                     // StoreVar2(a, b) == `StoreVar(a); StoreVar(b)`: pop TOS into
                     // local[a], then pop into local[b].
@@ -12222,7 +12395,7 @@ impl BexVm {
                         else {
                             return Err(self.load_field_error(instance, idx));
                         };
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     // ── LoadGlobal / StoreGlobal ──────────────────────────────────
@@ -12238,7 +12411,7 @@ impl BexVm {
                             );
                         }
                         let value = self.load_global_in(runtime_package, global_idx);
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     OpCode::StoreGlobal => {
@@ -12267,7 +12440,7 @@ impl BexVm {
                         else {
                             return Err(self.load_field_error(top, idx));
                         };
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     OpCode::StoreField | OpCode::StoreFieldLocal => {
@@ -12319,7 +12492,7 @@ impl BexVm {
                                 return Err(self.invalid_field_access_error(idx, length));
                             }
                         };
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     // ── VirtualLoadField / VirtualStoreField ──────────────────────
@@ -12355,7 +12528,7 @@ impl BexVm {
                                 return Err(self.invalid_field_access_error(slot, length));
                             }
                         };
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     OpCode::VirtualStoreField => {
@@ -12409,7 +12582,7 @@ impl BexVm {
                             unreachable!("already type-checked above");
                         };
                         instance.store_field(idx, new_value);
-                        self.push_stack(instance_value)?;
+                        push_operand!(instance_value);
                     }
 
                     OpCode::InitSpread => {
@@ -12435,7 +12608,7 @@ impl BexVm {
                         let offset = { read_u32_unchecked(code, pc) as usize };
                         let index = self.stack.ensure_slot_from_top(offset);
                         let value = self.stack[index];
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     // ── Allocation opcodes ────────────────────────────────────────
@@ -12448,7 +12621,7 @@ impl BexVm {
                         let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
                         let array: Vec<Value> = self.stack.drain(drain_range).collect();
                         let array_index = self.tlab.alloc_array(element_ty, array);
-                        self.push_stack(Value::object(array_index))?;
+                        push_operand!(Value::object(array_index));
                     }
 
                     OpCode::AllocTuple => {
@@ -12490,7 +12663,7 @@ impl BexVm {
                             IndexMap::new()
                         };
                         let obj_index = self.tlab.alloc_map(key_ty, value_ty, map);
-                        self.push_stack(Value::object(obj_index))?;
+                        push_operand!(Value::object(obj_index));
                     }
 
                     OpCode::ConcatStrings => {
@@ -12500,7 +12673,7 @@ impl BexVm {
                         // SAFETY: the encoder validates the instruction's stack effect.
                         self.stack.truncate_suffix(n);
                         let value = self.alloc_joined_string(result);
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     OpCode::AllocInstance => {
@@ -12530,7 +12703,7 @@ impl BexVm {
                                     class_type_args,
                                     fields,
                                 )));
-                        self.push_stack(Value::object(instance_ptr))?;
+                        push_operand!(Value::object(instance_ptr));
                     }
 
                     OpCode::InitInstance => {
@@ -12538,7 +12711,7 @@ impl BexVm {
                         let instance = self.alloc_initialized_instance(
                             &function.bytecode.class_init_plans[plan_idx],
                         )?;
-                        self.push_stack(instance)?;
+                        push_operand!(instance);
                     }
 
                     OpCode::AllocVariant => {
@@ -12564,7 +12737,7 @@ impl BexVm {
                         // A compile-time enum's variants are permanent shared
                         // objects (see `Enum::shared_variants`).
                         if let Some(variant_ptr) = shared {
-                            self.push_stack(Value::object(variant_ptr))?;
+                            push_operand!(Value::object(variant_ptr));
                             continue;
                         }
                         let Some(variant_index) = variant.as_int() else {
@@ -12589,7 +12762,7 @@ impl BexVm {
                             enm: enum_ptr,
                             index: variant_usize,
                         }));
-                        self.push_stack(Value::object(variant_ptr))?;
+                        push_operand!(Value::object(variant_ptr));
                     }
 
                     // `Status.X` in one step: `LoadConst` + `AllocVariant`.
@@ -12601,7 +12774,7 @@ impl BexVm {
                             ObjectIndex::from_raw(raw as usize),
                             Value::int(i64::from(variant)),
                         )?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     // ── SysOp (BEP-034 phase D′) ──────────────────────────────────
@@ -12671,7 +12844,7 @@ impl BexVm {
                     OpCode::BeginTraceHook => {
                         let with_settings = read_i8_unchecked(code, pc) != 0;
                         let value = self.begin_trace_hook(*frame_idx, with_settings)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
                     OpCode::TraceHookHidden
                     | OpCode::TraceHookTiming
@@ -12811,7 +12984,7 @@ impl BexVm {
                                     )?,
                                 );
                                 self.reserve_call_frame()?;
-                                self.reserve_stack(callee.real_local_count)?;
+                                self.reserve_stack(callee.frame_reserve())?;
                                 let frame_telemetry = if self.telemetry.is_some() {
                                     self.observe_exact_call(
                                         *frame_idx,
@@ -13633,7 +13806,8 @@ impl BexVm {
                             variant.index
                         };
                         #[allow(clippy::cast_possible_wrap)]
-                        self.push_stack(Value::int(variant_index as i64))?;
+                        let discriminant = variant_index as i64;
+                        push_operand!(Value::int(discriminant));
                     }
 
                     // ── TypeTag ───────────────────────────────────────────────────
@@ -13656,7 +13830,7 @@ impl BexVm {
                             raw_const,
                             resolved_const,
                         )?;
-                        self.push_stack(Value::bool(result))?;
+                        push_operand!(Value::bool(result));
                     }
 
                     OpCode::NarrowBind => {
@@ -13679,7 +13853,7 @@ impl BexVm {
                                 Self::local_slot_stack_index(bf.locals_offset, destination);
                             self.stack[destination] = value;
                         }
-                        self.push_stack(Value::bool(matched))?;
+                        push_operand!(Value::bool(matched));
                     }
 
                     // ── DenseTag ──────────────────────────────────────────────────
@@ -13694,7 +13868,7 @@ impl BexVm {
                             .into());
                         };
                         let arm = function.bytecode.switch_tables[table_idx].arm_of(value);
-                        self.push_stack(Value::int(arm.map_or(-1, i64::from)))?;
+                        push_operand!(Value::int(arm.map_or(-1, i64::from)));
                     }
 
                     // ── Unreachable ───────────────────────────────────────────────
@@ -13709,7 +13883,7 @@ impl BexVm {
                         let value = self.stack.ensure_pop();
                         let cell = Object::Cell(bex_vm_types::types::Cell::new(value));
                         let ptr = self.tlab.alloc(cell);
-                        self.push_stack(Value::object(ptr))?;
+                        push_operand!(Value::object(ptr));
                     }
 
                     // ── MakeClosure ───────────────────────────────────────────────
@@ -13732,7 +13906,7 @@ impl BexVm {
                             captured_type_args: captured_type_args.tys.into_boxed_slice(),
                         });
                         let ptr = self.tlab.alloc(closure);
-                        self.push_stack(Value::object(ptr))?;
+                        push_operand!(Value::object(ptr));
                     }
 
                     // ── LoadType ──────────────────────────────────────────────────
@@ -13746,7 +13920,7 @@ impl BexVm {
                             Some(ty) => Value::object(ty),
                             None => self.load_type_uncached(function, identity, idx, *frame_idx)?,
                         };
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     // ── `let type T extends I = …` bound check ──────────────────
@@ -13754,7 +13928,7 @@ impl BexVm {
                         let bound = self.stack.ensure_pop();
                         let value = self.stack.ensure_pop();
                         let satisfied = self.satisfies_bound(value, bound)?;
-                        self.push_stack(Value::bool(satisfied))?;
+                        push_operand!(Value::bool(satisfied));
                     }
 
                     // ── Lexical runtime type binding ────────────────────────────
@@ -13774,7 +13948,7 @@ impl BexVm {
                         let ordinal = read_u32_unchecked(code, pc) as usize;
                         let value =
                             crate::package_reflect::reflect::current_package_value(self, ordinal);
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     // ── MakeBoundMethod ───────────────────────────────────────────
@@ -13797,7 +13971,7 @@ impl BexVm {
                             type_args,
                         });
                         let ptr = self.tlab.alloc(bound);
-                        self.push_stack(Value::object(ptr))?;
+                        push_operand!(Value::object(ptr));
                     }
 
                     // ── MakeGenericBoundMethod ────────────────────────────────────
@@ -13821,7 +13995,7 @@ impl BexVm {
                             type_args: type_args.tys.into_boxed_slice(),
                         });
                         let ptr = self.tlab.alloc(bound);
-                        self.push_stack(Value::object(ptr))?;
+                        push_operand!(Value::object(ptr));
                     }
 
                     // ── MakeVirtualBoundMethod ────────────────────────────────────
@@ -13864,7 +14038,7 @@ impl BexVm {
                             type_args: type_args.into_boxed_slice(),
                         });
                         let ptr = self.tlab.alloc(bound);
-                        self.push_stack(Value::object(ptr))?;
+                        push_operand!(Value::object(ptr));
                     }
 
                     // ── MakeVirtualFunction ───────────────────────────────────────
@@ -13906,7 +14080,7 @@ impl BexVm {
                             captured_type_args: type_args.into_boxed_slice(),
                         });
                         let ptr = self.tlab.alloc(closure);
-                        self.push_stack(Value::object(ptr))?;
+                        push_operand!(Value::object(ptr));
                     }
 
                     // ── MakeGenericFunction ───────────────────────────────────────
@@ -13921,7 +14095,7 @@ impl BexVm {
                             runtime_package,
                         });
                         let ptr = self.tlab.alloc(gf);
-                        self.push_stack(Value::object(ptr))?;
+                        push_operand!(Value::object(ptr));
                     }
 
                     // ── MakeGenericFunctionFromValue ──────────────────────────────
@@ -13955,7 +14129,7 @@ impl BexVm {
                             carried.extend(type_args.tys);
                             method.type_args = carried.into_boxed_slice();
                             let ptr = self.tlab.alloc(Object::BoundMethod(method));
-                            self.push_stack(Value::object(ptr))?;
+                            push_operand!(Value::object(ptr));
                             continue;
                         }
                         // `GenericFunction` does not reach here: TIR rejects
@@ -13979,9 +14153,9 @@ impl BexVm {
                                     captured_type_args: captured_type_args.into_boxed_slice(),
                                 });
                                 let ptr = self.tlab.alloc(closure);
-                                self.push_stack(Value::object(ptr))?;
+                                push_operand!(Value::object(ptr));
                             }
-                            None => self.push_stack(callable)?,
+                            None => push_operand!(callable),
                         }
                     }
 
@@ -14008,7 +14182,7 @@ impl BexVm {
                             }
                             .into());
                         };
-                        self.push_stack(cell.load())?;
+                        push_operand!(cell.load());
                     }
 
                     OpCode::StoreDeref => {
@@ -14068,7 +14242,7 @@ impl BexVm {
                             }
                             .into());
                         };
-                        self.push_stack(cell.load())?;
+                        push_operand!(cell.load());
                     }
 
                     OpCode::StoreCapture => {
@@ -14119,7 +14293,7 @@ impl BexVm {
                             }
                             .into());
                         };
-                        self.push_stack(closure.captures[idx])?;
+                        push_operand!(closure.captures[idx]);
                     }
 
                     // ── Array / Map element ops ───────────────────────────────────
@@ -14160,7 +14334,7 @@ impl BexVm {
                                 .into());
                             }
                         };
-                        self.push_stack(Value::int(len))?;
+                        push_operand!(Value::int(len));
                     }
 
                     OpCode::LoadArrayElement | OpCode::LoadArrayElementLocal => {
@@ -14228,7 +14402,7 @@ impl BexVm {
                                 )));
                             }
                         };
-                        self.push_stack(element)?;
+                        push_operand!(element);
                     }
 
                     OpCode::LoadMapElement => {
@@ -14388,7 +14562,7 @@ impl BexVm {
                         let Some(v) = Self::int_mul(l, r) else {
                             return Err(self.integer_overflow(format!("{l} * {r} overflows int")));
                         };
-                        self.push_stack(v)?;
+                        push_operand!(v);
                     }
                     OpCode::DivInt => {
                         let Some(r) = self.stack.ensure_pop().as_int() else {
@@ -14409,7 +14583,7 @@ impl BexVm {
                         // (INT_MIN is -2^62, not i64::MIN) but not i63, so the
                         // range-check in finish_int catches it.
                         let v = self.finish_int(l / r, l, '/', r)?;
-                        self.push_stack(v)?;
+                        push_operand!(v);
                     }
                     OpCode::ModInt => {
                         let Some(r) = self.stack.ensure_pop().as_int() else {
@@ -14428,7 +14602,7 @@ impl BexVm {
                         }
                         // |l % r| < |r| <= 2^62, always within i63 range.
                         let v = self.finish_int(l % r, l, '%', r)?;
-                        self.push_stack(v)?;
+                        push_operand!(v);
                     }
 
                     // ── Specialized float arithmetic (skip type dispatch) ─────────
@@ -14440,7 +14614,7 @@ impl BexVm {
                             std::hint::unreachable_unchecked()
                         };
                         let v = self.float_value(l + r);
-                        self.push_stack(v)?;
+                        push_operand!(v);
                     }
                     OpCode::SubFloat => {
                         let Some(r) = self.stack.ensure_pop().as_float() else {
@@ -14450,7 +14624,7 @@ impl BexVm {
                             std::hint::unreachable_unchecked()
                         };
                         let v = self.float_value(l - r);
-                        self.push_stack(v)?;
+                        push_operand!(v);
                     }
                     OpCode::MulFloat => {
                         let Some(r) = self.stack.ensure_pop().as_float() else {
@@ -14460,7 +14634,7 @@ impl BexVm {
                             std::hint::unreachable_unchecked()
                         };
                         let v = self.float_value(l * r);
-                        self.push_stack(v)?;
+                        push_operand!(v);
                     }
                     OpCode::DivFloat => {
                         // IEEE-754: a zero divisor yields `±inf`, and `0.0 / 0.0`
@@ -14476,7 +14650,7 @@ impl BexVm {
                             std::hint::unreachable_unchecked()
                         };
                         let v = self.float_value(l / r);
-                        self.push_stack(v)?;
+                        push_operand!(v);
                     }
 
                     // ── Specialized int comparison (skip type dispatch) ───────────
@@ -14506,37 +14680,37 @@ impl BexVm {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let result = self.bigint_cmp(CmpOp::Eq, l, r);
-                        self.push_stack(Value::bool(result))?;
+                        push_operand!(Value::bool(result));
                     }
                     OpCode::CmpBigintNotEq => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let result = self.bigint_cmp(CmpOp::NotEq, l, r);
-                        self.push_stack(Value::bool(result))?;
+                        push_operand!(Value::bool(result));
                     }
                     OpCode::CmpBigintLt => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let result = self.bigint_cmp(CmpOp::Lt, l, r);
-                        self.push_stack(Value::bool(result))?;
+                        push_operand!(Value::bool(result));
                     }
                     OpCode::CmpBigintLtEq => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let result = self.bigint_cmp(CmpOp::LtEq, l, r);
-                        self.push_stack(Value::bool(result))?;
+                        push_operand!(Value::bool(result));
                     }
                     OpCode::CmpBigintGt => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let result = self.bigint_cmp(CmpOp::Gt, l, r);
-                        self.push_stack(Value::bool(result))?;
+                        push_operand!(Value::bool(result));
                     }
                     OpCode::CmpBigintGtEq => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let result = self.bigint_cmp(CmpOp::GtEq, l, r);
-                        self.push_stack(Value::bool(result))?;
+                        push_operand!(Value::bool(result));
                     }
 
                     // ── Specialized bigint arithmetic (skip type dispatch) ────────
@@ -14544,61 +14718,61 @@ impl BexVm {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let value = self.bigint_binop(BinOp::Add, l, r)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
                     OpCode::SubBigint => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let value = self.bigint_binop(BinOp::Sub, l, r)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
                     OpCode::MulBigint => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let value = self.bigint_binop(BinOp::Mul, l, r)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
                     OpCode::DivBigint => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let value = self.bigint_binop(BinOp::Div, l, r)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
                     OpCode::ModBigint => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let value = self.bigint_binop(BinOp::Mod, l, r)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
                     OpCode::BitAndBigint => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let value = self.bigint_binop(BinOp::BitAnd, l, r)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
                     OpCode::BitOrBigint => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let value = self.bigint_binop(BinOp::BitOr, l, r)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
                     OpCode::BitXorBigint => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let value = self.bigint_binop(BinOp::BitXor, l, r)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
                     OpCode::ShlBigint => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let value = self.bigint_binop(BinOp::Shl, l, r)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
                     OpCode::ShrBigint => {
                         let r = self.pop_bigint_operand();
                         let l = self.pop_bigint_operand();
                         let value = self.bigint_binop(BinOp::Shr, l, r)?;
-                        self.push_stack(value)?;
+                        push_operand!(value);
                     }
 
                     // ── Expanded unary ────────────────────────────────────────────
@@ -14674,7 +14848,7 @@ impl BexVm {
                             // (INT_MIN != i64::MIN) but not i63, so the range-check
                             // in try_int catches it.
                             match Value::try_int(n.wrapping_neg()) {
-                                Some(v) => self.push_stack(v)?,
+                                Some(v) => push_operand!(v),
                                 None => {
                                     return Err(
                                         self.integer_overflow(format!("-({n}) overflows int"))
@@ -14683,7 +14857,7 @@ impl BexVm {
                             }
                         } else if let Some(n) = val.as_float() {
                             let v = self.float_value(-n);
-                            self.push_stack(v)?;
+                            push_operand!(v);
                         } else if let Some(ptr) = val.as_object_ptr() {
                             // Bigint negation. Compute the negated value into an
                             // owned `Arc` first so the immutable `get_object` borrow
@@ -14697,7 +14871,7 @@ impl BexVm {
                             match negated {
                                 Some(arc) => {
                                     let result = self.alloc_bigint(arc)?;
-                                    self.push_stack(result)?;
+                                    push_operand!(result);
                                 }
                                 None => {
                                     return Err(VmInternalError::CannotApplyUnaryOp {
