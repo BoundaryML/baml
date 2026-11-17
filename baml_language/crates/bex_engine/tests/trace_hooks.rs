@@ -355,6 +355,12 @@ async fn internal_vm_failure_in_a_hook_is_not_treated_as_a_null_decision() {
                         bex_vm_types::Instruction::Return,
                     ],
                     constants: vec![bex_vm_types::ConstValue::Int(1)],
+                    // A zero-argument call, so the code passes the load-time
+                    // stack check and fails only when it runs.
+                    call_layouts: std::collections::BTreeMap::from([(
+                        1,
+                        baml_type::CallLayout(Vec::new()),
+                    )]),
                     ..Default::default()
                 };
                 function.bytecode.compact = Some(function.bytecode.lower_to_compact());

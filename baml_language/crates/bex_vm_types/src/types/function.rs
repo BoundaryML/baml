@@ -587,6 +587,22 @@ pub struct Function {
 }
 
 impl Function {
+    /// The stack slots entering a bytecode frame of this function reserves
+    /// past its arguments: its locals, then its operand bound
+    /// ([`crate::bytecode::CompactCode::max_stack`]), so the dispatch loop's
+    /// pushes inside the frame need no capacity check. Code whose operand
+    /// stack was never verified, or never lowered, carries a bound no stack
+    /// can hold, so entering it fails with a stack overflow.
+    #[must_use]
+    pub fn frame_reserve(&self) -> usize {
+        self.bytecode
+            .compact
+            .as_ref()
+            .map_or(crate::stack_effect::UNVERIFIED_MAX_STACK, |code| {
+                code.frame_slots
+            })
+    }
+
     /// The function's rendered name: [`FunctionIdentity::render`] under its
     /// owner package's display label (lossy display, as a class's
     /// [`name`](super::Class::name) is), or the identity alone when it has no
