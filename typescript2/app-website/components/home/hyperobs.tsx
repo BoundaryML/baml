@@ -268,7 +268,12 @@ function TsCode({ level }: { level: number }) {
     // rather than cutting them off; the inner block is as wide as the longest line, so every
     // row's tint runs the whole way across.
     <div className="code-pane py-3 font-mono text-[12.5px] text-[#BDBDC4]">
-      <div className="w-max min-w-full">
+      {/* Where the two sides stack, the listing holds its finished height from the start, so the
+          lines it gains while playing don't push the rest of the page down. */}
+      <div
+        className="w-max min-w-full max-md:min-h-[calc(var(--r)_*_var(--rows))]"
+        style={{ '--rows': TS.length } as CSSProperties}
+      >
         {TS.map((l, i) => {
           const shown = l.at === 0 ? 1 : ramp(level, l.at - 1, l.at);
           const indent = level > 0.5 ? l.d : (l.d0 ?? l.d);
@@ -524,7 +529,14 @@ function SideBySide() {
                 <TsCode level={steps} />
               </FilePanel>
               <Panel className="mt-3" title="what you get">
-                <Waterfall rows={BUILT} steps={steps} />
+                {/* Holds its finished height where the sides stack, like the listing above: the
+                    rows plus the waterfall's own padding. */}
+                <div
+                  className="max-md:min-h-[calc(var(--r)_*_var(--rows)_+_1.5rem)]"
+                  style={{ '--rows': BUILT.length } as CSSProperties}
+                >
+                  <Waterfall rows={BUILT} steps={steps} />
+                </div>
               </Panel>
             </div>
             <HyperSide />
