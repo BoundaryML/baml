@@ -87,8 +87,14 @@ pub struct ConcatNode {
 }
 
 pub(crate) enum ConcatState {
-    Deferred { left: BexStr, right: BexStr },
+    Deferred {
+        left: BexStr,
+        right: BexStr,
+    },
     Flattened(Arc<FlatStr>),
+    /// The children were moved out by `flatten` (under the lock) or by
+    /// `drop` (with exclusive access); never observed by anyone else.
+    Released,
 }
 
 /// Bytes of an `Arc<FlatStr>` allocation beyond the text itself: the two
@@ -576,7 +582,7 @@ impl BexStr {
                 let guard = c.state.lock().unwrap();
                 match &*guard {
                     ConcatState::Flattened(f) => read_hash(&f.hash),
-                    ConcatState::Deferred { .. } => None,
+                    ConcatState::Deferred { .. } | ConcatState::Released => None,
                 }
             }
         }
@@ -642,11 +648,6 @@ impl FlatStr {
             data,
         }
     }
-
-    /// The empty string, left behind in a `ConcatNode` whose children were taken.
-    fn placeholder() -> FlatStr {
-        FlatStr::from_parts(Box::new([]), 0, 0)
-    }
 }
 
 // ── ConcatNode ─────────────────────────────────────────────────────
@@ -659,16 +660,14 @@ impl ConcatNode {
         match &*guard {
             ConcatState::Flattened(f) => return f.clone(),
             ConcatState::Deferred { .. } => {}
+            ConcatState::Released => unreachable!("a released ConcatNode is never shared"),
         }
 
         // Take ownership of the deferred state
-        let old = std::mem::replace(
-            &mut *guard,
-            ConcatState::Flattened(Arc::new(FlatStr::placeholder())),
-        );
-        let (left, right) = match old {
-            ConcatState::Deferred { left, right } => (left, right),
-            ConcatState::Flattened(_) => unreachable!(),
+        let ConcatState::Deferred { left, right } =
+            std::mem::replace(&mut *guard, ConcatState::Released)
+        else {
+            unreachable!("checked above")
         };
 
         // Iterative tree walk — heap-allocated work-stack
@@ -702,6 +701,9 @@ impl ConcatNode {
                         ConcatState::Flattened(f) => {
                             buf.extend_from_slice(&f.data);
                         }
+                        ConcatState::Released => {
+                            unreachable!("a released ConcatNode is never shared")
+                        }
                         ConcatState::Deferred { left, right } => {
                             // Clone the child handles (O(1): Arc bump or inline
                             // memcpy) and leave this node's `Deferred` state
@@ -734,12 +736,11 @@ impl ConcatNode {
 impl Drop for ConcatNode {
     fn drop(&mut self) {
         let state = match self.state.get_mut() {
-            Ok(s) => std::mem::replace(s, ConcatState::Flattened(Arc::new(FlatStr::placeholder()))),
+            Ok(s) => std::mem::replace(s, ConcatState::Released),
             Err(_) => return, // Mutex poisoned — leak rather than risk UB
         };
-        let (left, right) = match state {
-            ConcatState::Deferred { left, right } => (left, right),
-            ConcatState::Flattened(_) => return,
+        let ConcatState::Deferred { left, right } = state else {
+            return;
         };
 
         let mut stack: Vec<BexStr> = Vec::new();
@@ -751,10 +752,7 @@ impl Drop for ConcatNode {
                 && let Ok(mut owned) = Arc::try_unwrap(arc)
             {
                 let inner = match owned.state.get_mut() {
-                    Ok(s) => std::mem::replace(
-                        s,
-                        ConcatState::Flattened(Arc::new(FlatStr::placeholder())),
-                    ),
+                    Ok(s) => std::mem::replace(s, ConcatState::Released),
                     Err(_) => continue,
                 };
                 if let ConcatState::Deferred { left, right } = inner {
