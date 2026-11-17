@@ -302,6 +302,7 @@ impl BexVm {
 
     /// Errors retain the record for unwinding. `args` runs only when telemetry records the call.
     #[allow(clippy::inline_always, reason = "measured: the call fast path")]
+    #[allow(unsafe_code)]
     #[inline(always)]
     pub fn call_record<T: RecordResult, A: AsRef<[Value]>>(
         &mut self,
@@ -311,22 +312,24 @@ impl BexVm {
         args: impl FnOnce(&mut BexVm) -> A,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
-        self.call_record_typed(caller, callee, &[], pc, args, body)
+        unsafe { self.call_record_typed(caller, callee, &[], pc, args, body) }
     }
 
     /// [`Self::call_record`] for a generic callee, whose frame starts with
     /// the call's type arguments.
     ///
-    /// `type_args` must name only statically declared types: the record
-    /// borrows them and a collection does not visit them, so a type a
-    /// collection could move would go stale. Callers check
-    /// `direct_calls_typed` first.
+    /// # Safety
+    ///
+    /// `type_args` names only statically declared types: the record borrows
+    /// them and a collection does not visit them, so a type a collection
+    /// could move would go stale. `direct_calls_typed` checks this.
     #[allow(
         clippy::inline_always,
         reason = "also specializes the untyped call fast path"
     )]
+    #[allow(unsafe_code)]
     #[inline(always)]
-    pub fn call_record_typed<T: RecordResult, A: AsRef<[Value]>>(
+    pub unsafe fn call_record_typed<T: RecordResult, A: AsRef<[Value]>>(
         &mut self,
         caller: &FrameRecord,
         callee: HeapPtr,

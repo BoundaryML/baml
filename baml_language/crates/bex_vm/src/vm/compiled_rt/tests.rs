@@ -1983,14 +1983,16 @@ fn a_generic_record_reads_its_type_arguments_after_a_collection() {
         }
         let next = [x, Value::int(n - 1)];
         let callee = object(vm, &COUNT);
-        vm.call_record_typed(
-            fr,
-            callee,
-            &[ty],
-            0,
-            |_| next,
-            |vm, fr| count(vm, fr, &next),
-        )
+        unsafe {
+            vm.call_record_typed(
+                fr,
+                callee,
+                &[ty],
+                0,
+                |_| next,
+                |vm, fr| count(vm, fr, &next),
+            )
+        }
     }
     const SOURCE: &str = r#"
         function Count<T>(x: T, n: int) -> bool { if (n == 0) { x is T } else { Count<T>(x, n - 1) } }
@@ -2050,14 +2052,16 @@ fn an_error_through_a_generic_record_traces_as_bytecode_does() {
         let ty = vm.frame_type_arg(fr, 0)?;
         let callee = object(vm, &FAIL);
         let passed = [args[0], args[1]];
-        vm.call_record_typed(
-            fr,
-            callee,
-            &[ty],
-            0,
-            |_| passed,
-            |vm, fr| fail(vm, fr, &passed),
-        )
+        unsafe {
+            vm.call_record_typed(
+                fr,
+                callee,
+                &[ty],
+                0,
+                |_| passed,
+                |vm, fr| fail(vm, fr, &passed),
+            )
+        }
     }
     const SOURCE: &str = r#"
         function Fail<T>(x: T, n: int) -> int { n / 0 }
