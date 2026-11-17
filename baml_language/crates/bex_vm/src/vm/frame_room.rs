@@ -53,7 +53,10 @@ impl BexVm {
     /// Reserve the room a frame of `callee` needs past the values already on
     /// the stack (its arguments): its locals and its operand bound. Fails with
     /// a stack overflow past the thread's stack budget, and for code no
-    /// load-time check verified, whose bound no stack can hold.
+    /// load-time check verified, whose bound no stack can hold. Inlined, so
+    /// a call site compiles exactly as the bare reservation did.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn reserve_frame_room(&mut self, callee: &Function) -> Result<FrameRoom, VmError> {
         self.reserve_stack(callee.frame_reserve())?;
         Ok(FrameRoom { _reserved: () })

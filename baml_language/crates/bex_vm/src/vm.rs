@@ -666,7 +666,7 @@ impl FrameTypeArgs {
 }
 
 /// Bytecode call frame — pushed when entering a bytecode function. Not
-/// `Clone`: a frame's [`frame_room::FrameRoom`] proves one reservation.
+/// `Clone`: each frame holds the proof of one stack reservation.
 #[derive(Debug)]
 pub struct BytecodeFrame {
     /// Pointer to the running function (or closure) object.
@@ -697,7 +697,7 @@ pub struct BytecodeFrame {
     pub(crate) telemetry: Option<FrameTelemetry>,
     context: Context,
     /// The frame's stack room, reserved before it could run: what lets the
-    /// dispatch loop push without a capacity check. See [`frame_room`].
+    /// dispatch loop push without a capacity check. See `vm::frame_room`.
     #[expect(dead_code, reason = "a proof: required to build a frame, never read")]
     room: frame_room::FrameRoom,
 }
@@ -6574,10 +6574,15 @@ impl BexVm {
         let compact = bytecode
             .lower_verified(&ctx, 0, false)
             .expect("a trampoline's call takes the values it is entered with");
-        // The frame starts over its entry values.
-        self.stack.try_reserve(compact.frame_slots)?;
-        let room = Self::frame_room_within(self.stack.capacity(), self.stack.len(), &compact)
-            .ok_or(VmPanic::StackOverflow)?;
+        // The frame starts under its entry values, which `max_stack` counts.
+        self.stack
+            .try_reserve(compact.frame_slots.saturating_sub(ctx.entry_depth))?;
+        let room = Self::frame_room_within(
+            self.stack.capacity(),
+            self.stack.len() - ctx.entry_depth,
+            &compact,
+        )
+        .ok_or(VmPanic::StackOverflow)?;
         bytecode.compact = Some(compact);
 
         let display_return_type = return_type.to_string();
@@ -6704,10 +6709,15 @@ impl BexVm {
         let compact = bytecode
             .lower_verified(&ctx, 0, false)
             .expect("a trampoline's call takes the values it is entered with");
-        // The frame starts over its entry values.
-        self.stack.try_reserve(compact.frame_slots)?;
-        let room = Self::frame_room_within(self.stack.capacity(), self.stack.len(), &compact)
-            .ok_or(VmPanic::StackOverflow)?;
+        // The frame starts under its entry values, which `max_stack` counts.
+        self.stack
+            .try_reserve(compact.frame_slots.saturating_sub(ctx.entry_depth))?;
+        let room = Self::frame_room_within(
+            self.stack.capacity(),
+            self.stack.len() - ctx.entry_depth,
+            &compact,
+        )
+        .ok_or(VmPanic::StackOverflow)?;
         bytecode.compact = Some(compact);
 
         let display_return_type = return_type.to_string();
