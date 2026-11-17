@@ -1,6 +1,0 @@
----
-source: crates/baml_fmt/tests/cases.rs
----
-function f() -> int {
-    foo<int>(5)
-}

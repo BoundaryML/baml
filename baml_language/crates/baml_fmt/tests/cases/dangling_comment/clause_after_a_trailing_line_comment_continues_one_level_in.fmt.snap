@@ -2,22 +2,27 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 interface I // name
-    requires A, B {}
+    requires A, B
+{}
 
 interface J requires // c
-    A, B {}
+    A, B
+{}
 
 function l2() -> // ret
-    int {
+    int
+{
     1
 }
 
 function l3(a: int) // params
-    -> int {
+    -> int
+{
     1
 }
 
 test "t" // name
-    with A, B {
+    with A, B
+{
     1
 }

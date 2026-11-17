@@ -7,9 +7,10 @@ type V = int
     // own2
     | bool;
 
-type Values = int[] /* first */
+type Values = int[]
     /*C2
 X*/
+    /* first */
     | /* arm */ string?
     | /* last */ bool;
 

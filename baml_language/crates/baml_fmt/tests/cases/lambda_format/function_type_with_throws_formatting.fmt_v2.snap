@@ -1,4 +1,0 @@
----
-source: crates/baml_fmt/tests/cases.rs
----
-type Callback = (x: int) -> string throws never;

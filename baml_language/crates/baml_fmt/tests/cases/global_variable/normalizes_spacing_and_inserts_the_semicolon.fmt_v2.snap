@@ -1,5 +1,0 @@
----
-source: crates/baml_fmt/tests/cases.rs
----
-const MAX: int = 3;
-const NAME = "x";

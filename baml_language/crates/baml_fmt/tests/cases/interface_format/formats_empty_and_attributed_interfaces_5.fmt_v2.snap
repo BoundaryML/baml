@@ -1,6 +1,0 @@
----
-source: crates/baml_fmt/tests/cases.rs
----
-interface Marker {
-    // kept
-}

@@ -1,7 +1,9 @@
 ---
 source: crates/baml_fmt/tests/cases.rs
 ---
-function h() -> VeryLongTypeNameNumberOne | VeryLongTypeNameNumberTwo | VeryLongTypeNameNumberThree
+function h() -> VeryLongTypeNameNumberOne
+    | VeryLongTypeNameNumberTwo
+    | VeryLongTypeNameNumberThree
 {
     1
 }

@@ -1,7 +1,0 @@
----
-source: crates/baml_fmt/tests/cases.rs
----
-class Agent {
-    client: string?,
-    name: string,
-}

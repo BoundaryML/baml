@@ -4,20 +4,25 @@ source: crates/baml_fmt/tests/cases.rs
 function f(a: int, b: int) -> int {
     let x =
         /* c */
-        -a; // 2
-    // 3
-    // 4
+        -// 2
+            // 3
+            a; // 4
     let y = foo(
-        -a, // c
-        // d
+        -
+            // c
+            // d
+            a,
         b,
     );
     let z = foo(
-        -a, // c
-        // d
+        -
+            // c
+            // d
+            a,
         bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
     );
     x + y + z;
-    -b // 5
-    /* comment */
+    -
+        // 5
+        /* comment */ b
 }

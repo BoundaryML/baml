@@ -2,14 +2,25 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function f(sections: string[], pet_name: string) -> bool {
-    let a = !sections.map((item) -> { item.to_string() })
-        .join(` `)
-        .includes(`WarningSignsContact`) /* c */;
+    let a = !
+        /* c */
+        sections
+            .map((item) -> { item.to_string() })
+            .join(` `)
+            .includes(`WarningSignsContact`);
     let b = !(
-        sections.map((item) -> { item.to_string() }).join(` `).includes(`WarningSignsContact`)
+        sections
+            .map((item) -> { item.to_string() })
+            .join(` `)
+            .includes(`WarningSignsContact`)
         /* kept */
     );
-    let c = !sections.map((item) -> { item.to_string() }).join(` `).includes(`WarningSignsContact`); // carried
+    let c = !
+        // carried
+        sections
+            .map((item) -> { item.to_string() })
+            .join(` `)
+            .includes(`WarningSignsContact`);
     let d = -/* c */ 1;
     let e = -/* c */ x;
     let g = -x /* c */;

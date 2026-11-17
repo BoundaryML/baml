@@ -2,7 +2,8 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function f() -> int {
-    let v = foo.bar(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+    let v = foo
+        .bar(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
         .baz(bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
         .qux()
         .0 catch (e) {

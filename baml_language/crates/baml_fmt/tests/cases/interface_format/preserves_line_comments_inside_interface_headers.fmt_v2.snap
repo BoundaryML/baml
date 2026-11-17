@@ -1,9 +1,0 @@
----
-source: crates/baml_fmt/tests/cases.rs
----
-interface I // name
-    requires
-        A, // target
-        B,
-{ // body
-}
