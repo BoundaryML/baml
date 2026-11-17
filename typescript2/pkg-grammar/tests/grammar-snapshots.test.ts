@@ -232,6 +232,13 @@ describe('BAML TextMate grammar', () => {
     expect(
       tupleScope('function F() -> int {\n  let (let a, let b) = p;\n}'),
     ).toBe(true);
+    // `as` inside a literal is not a `(T as I).Assoc` projection.
+    const literalAs = inFunction('match v { ("as", let item) => item }');
+    expect(literalAs).toContainEqual(['item', 'variable.other.binding']);
+    expect(inFunction('match v { (T as I).Assoc => 1 }')).toContainEqual([
+      'Assoc',
+      'entity.name.type.associated',
+    ]);
   });
 
   it('separates comma-separated fields on one line', () => {

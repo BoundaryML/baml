@@ -1329,7 +1329,7 @@ const arrayDestructurePattern: Rule = {
 const tupleDestructurePattern: Rule = {
   key: 'tuple-destructure-pattern',
   scope: 'meta.pattern.destructure.tuple.baml',
-  begin: String.raw`(?:\b(${BINDING_INTRO})\b\s*)?(\()(?![^)\r\n]*\bas\b)(?!(?:[^()]|\([^()]*\))*\)\s*(?:->|[\[?]))`,
+  begin: String.raw`(?:\b(${BINDING_INTRO})\b\s*)?(\()(?![^)"'\x60\r\n]*\bas\b[^)\r\n]*\)\s*\.)(?!(?:[^()]|\([^()]*\))*\)\s*(?:->|[\[?]))`,
   beginCaptures: {
     '1': { scope: 'keyword.declaration.binding.baml' },
     '2': { scope: 'punctuation.definition.group.begin.baml' },

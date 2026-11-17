@@ -4770,7 +4770,7 @@
     },
     "tuple-destructure-pattern": {
       "name": "meta.pattern.destructure.tuple.baml",
-      "begin": "(?:\\b((?:let|const))\\b\\s*)?(\\()(?![^)\\r\\n]*\\bas\\b)(?!(?:[^()]|\\([^()]*\\))*\\)\\s*(?:->|[\\[?]))",
+      "begin": "(?:\\b((?:let|const))\\b\\s*)?(\\()(?![^)\"'\\x60\\r\\n]*\\bas\\b[^)\\r\\n]*\\)\\s*\\.)(?!(?:[^()]|\\([^()]*\\))*\\)\\s*(?:->|[\\[?]))",
       "beginCaptures": {
         "1": {
           "name": "keyword.declaration.binding.baml"

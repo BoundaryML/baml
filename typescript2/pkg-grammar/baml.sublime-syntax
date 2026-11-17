@@ -2423,7 +2423,7 @@ contexts:
     - include: pattern
     - include: comma
   tuple-destructure-pattern:
-    - match: '(?:\b((?:let|const))\b\s*)?(\()(?![^)\r\n]*\bas\b)(?!(?:[^()]|\([^()]*\))*\)\s*(?:->|[\[?]))'
+    - match: '(?:\b((?:let|const))\b\s*)?(\()(?![^)"''\x60\r\n]*\bas\b[^)\r\n]*\)\s*\.)(?!(?:[^()]|\([^()]*\))*\)\s*(?:->|[\[?]))'
       captures:
         1: keyword.declaration.binding.baml
         2: punctuation.definition.group.begin.baml
