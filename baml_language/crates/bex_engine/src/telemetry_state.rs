@@ -199,6 +199,7 @@ impl EngineTelemetry {
             .set_recorder(Arc::new(move |event| writer.record(&event)));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
         let processing = self.runtime.result();
         let Some(delivery) = &self.delivery else {

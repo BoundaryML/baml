@@ -65,6 +65,7 @@ impl Drop for HttpReaders {
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
         {
+            reader.release.cancel();
             reader.handle.abort();
         }
     }
