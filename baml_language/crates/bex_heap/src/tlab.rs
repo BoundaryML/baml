@@ -174,7 +174,7 @@ impl Tlab {
     /// If the current block is exhausted, refill from the heap.
     #[inline]
     pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
-        debug_assert!(
+        assert!(
             !matches!(obj, Object::Instance),
             "an instance is allocated as a cell"
         );

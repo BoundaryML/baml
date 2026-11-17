@@ -117,7 +117,11 @@ impl<'db> Generator<'_, 'db> {
                     ));
                 }
                 let class = class_ptr(object);
-                if type_arg_templates.is_empty() {
+                let generic = self
+                    .index
+                    .class_layout(object)
+                    .is_some_and(|layout| layout.type_args_slot().is_some());
+                if !generic {
                     let words = self.slot_words(block, object, fields)?.join(", ");
                     let new = if self.index.plain_class(object) {
                         "new_plain_instance"

@@ -354,7 +354,7 @@ impl BexHeap {
                 if let CellBody::Instance(instance) = unsafe { CellBody::at(cell) }
                     && Self::needs_finalizer(instance)
                 {
-                    finalizable.instances.push(instance.ptr());
+                    finalizable.instances.push(self.ptr_to(cell));
                 }
                 // SAFETY: as above.
                 unsafe { self.cell_words(cell) }

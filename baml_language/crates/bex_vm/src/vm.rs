@@ -1978,8 +1978,8 @@ pub(crate) mod tests {
 
         let mut roots = Vec::new();
         vm.collect_roots(&mut roots);
-        let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
         let heap = Arc::clone(&vm.heap);
+        let (_stats, _remapped_roots, forwarding) = unsafe { heap.collect_garbage(&roots) };
         vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         assert!(vm.virtual_call_memo.iter().all(|memo| memo.caller == 0));
     }

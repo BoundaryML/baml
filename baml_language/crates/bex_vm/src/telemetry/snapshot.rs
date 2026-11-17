@@ -52,8 +52,6 @@ impl Scratch {
     pub(super) fn shaper(&mut self) -> &mut Shaper {
         &mut self.shaper
     }
-    /// The value as the capture holds it. An object gets its identity here
-    /// and its content later, so that what it holds can name it.
     /// [`Self::add`] for an instance field, which may be a raw float.
     fn add_field(&mut self, leaves: &mut Leaves<'_>, field: Field, depth: usize) -> SnapshotValue {
         match field {
@@ -63,6 +61,8 @@ impl Scratch {
         }
     }
 
+    /// The value as the capture holds it. An object gets its identity here
+    /// and its content later, so that what it holds can name it.
     fn add(&mut self, leaves: &mut Leaves<'_>, value: Value, depth: usize) -> SnapshotValue {
         if let Some(ptr) = value.as_object_ptr() {
             if let Some(value) = self.seen.get(&ptr) {
@@ -524,14 +524,14 @@ fn media(
 fn describe(kind: Description) -> SnapshotObject {
     SnapshotObject::Descriptive { kind, name: None }
 }
-/// A network or type-argument snapshot as JSON, to compare shapes in tests:
-/// bytes become an array of numbers, a truncated value names its limit, a
-/// type is `"type: <type>"`.
 /// Whether a value at `depth` lies past the capture's depth limit.
 fn past_depth(leaves: &Leaves<'_>, depth: usize) -> bool {
     leaves.limits().max_depth.is_some_and(|max| depth > max)
 }
 
+/// A network or type-argument snapshot as JSON, to compare shapes in tests:
+/// bytes become an array of numbers, a truncated value names its limit, a
+/// type is `"type: <type>"`.
 #[cfg(test)]
 pub(super) fn json(snapshot: &Snapshot, value: SnapshotValue) -> serde_json::Value {
     match value {
