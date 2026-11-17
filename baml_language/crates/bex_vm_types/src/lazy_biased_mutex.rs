@@ -115,10 +115,13 @@ impl LazyBiasedMutex {
 
     /// Take the lock if nobody holds it, without waiting.
     pub fn try_enter(&self) -> Option<AccessGuard<'_>> {
+        // `then`, not `then_some`: the guard must only exist once the CAS
+        // succeeded. Building it eagerly and dropping it on failure would
+        // release the lock out from under its actual holder.
         self.state
             .compare_exchange(UNLOCKED, LOCKED, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
-            .then_some(AccessGuard { lbm: self })
+            .then(|| AccessGuard { lbm: self })
     }
 
     /// Slow path, separated so the fast path inlines cleanly: wait, look,
@@ -214,15 +217,21 @@ mod tests {
         assert_eq!(m.state.load(Ordering::Acquire), UNLOCKED);
     }
 
+    /// A failed `try_enter` must leave the holder's lock taken.
     #[test]
     fn try_enter_fails_while_held() {
         let m = LazyBiasedMutex::new();
         let g = m.enter();
         assert!(m.try_enter().is_none());
+        assert_eq!(m.state.load(Ordering::Relaxed), LOCKED);
+        assert!(m.try_enter().is_none(), "the holder still has it");
         drop(g);
+        assert_eq!(m.state.load(Ordering::Relaxed), UNLOCKED);
         let g = m.try_enter().expect("a released lock can be taken");
         assert!(m.try_enter().is_none());
+        assert_eq!(m.state.load(Ordering::Relaxed), LOCKED);
         drop(g);
+        assert_eq!(m.state.load(Ordering::Relaxed), UNLOCKED);
     }
 
     #[test]
