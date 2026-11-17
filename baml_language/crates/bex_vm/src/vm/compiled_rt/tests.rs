@@ -118,6 +118,155 @@ fn vm_with_main(body: CompiledFn, slots: u32, telemetry: bool) -> BexVm {
     vm
 }
 
+/// The opcodes no corpus program runs (`baml_cli`'s corpus test lists them)
+/// run here, so their handlers pass the dispatch loop's debug-build
+/// operand-depth check too.
+#[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
+#[test]
+fn opcodes_the_corpus_never_runs_pass_the_operand_depth_check() {
+    use bex_vm_types::{
+        ConstValue,
+        bytecode::{Bytecode, CmpOp, Instruction, InstructionMeta, OpCode},
+    };
+
+    /// Compile `source`, give function `name` the hand-built `instructions`,
+    /// and run `user.Main`.
+    fn run(
+        source: &str,
+        name: &str,
+        instructions: Vec<Instruction>,
+        constants: Vec<ConstValue>,
+    ) -> Result<VmExecState, VmError> {
+        let mut program = baml_test_support::compile_source(source);
+        let target = program.rendered_callables()[name].object;
+        let Object::Function(function) = &mut program.objects[target] else {
+            unreachable!()
+        };
+        function.bytecode = Bytecode {
+            meta: vec![InstructionMeta { operand: None }; instructions.len()],
+            instructions,
+            constants,
+            ..Bytecode::default()
+        };
+        function.real_local_count = 0;
+        let entry = program.rendered_callables()["user.Main"].object;
+        let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        vm.telemetry = None;
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
+        vm.exec()
+    }
+
+    // A compiled body starts through its resume stub.
+    #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
+    fn body(_vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> BodyResult {
+        Ok(Value::NULL)
+    }
+    let mut vm = vm_with_main(body, 0, false);
+    assert!(matches!(vm.exec(), Ok(VmExecState::Complete(_))));
+
+    // `Unreachable` raises the moment it runs.
+    let main = "function Main() -> int { 1 }";
+    assert!(run(main, "user.Main", vec![Instruction::Unreachable], vec![]).is_err());
+
+    // `AllocVariant` from a variant index, which the compiler now emits as
+    // one `LoadVariant`.
+    let with_enum = "enum Color { Red Green } function Main() -> int { 1 }";
+    let color = baml_test_support::compile_source(with_enum)
+        .objects
+        .iter()
+        .position(|object| matches!(object, Object::Enum(_)))
+        .expect("the program declares an enum");
+    let ran = run(
+        with_enum,
+        "user.Main",
+        vec![
+            Instruction::LoadConst(0),
+            Instruction::AllocVariant(ObjectIndex::from_raw(color)),
+            Instruction::Pop(1),
+            Instruction::LoadConst(0),
+            Instruction::Return,
+        ],
+        vec![ConstValue::Int(1)],
+    );
+    assert!(matches!(ran, Ok(VmExecState::Complete(value)) if value == Value::int(1)));
+
+    // The legacy rich-span hook, as the prologue of a hooked function.
+    let ran = run(
+        main,
+        "user.Main",
+        vec![
+            Instruction::TraceHookRich,
+            Instruction::LoadConst(0),
+            Instruction::Return,
+        ],
+        vec![ConstValue::Int(1)],
+    );
+    assert!(matches!(ran, Ok(VmExecState::Complete(value)) if value == Value::int(1)));
+
+    // Generic and bigint comparisons and the peeking branch.
+    let probe = r#"
+        function Probe(m: map<string, int>, k: string) -> int { 0 }
+        function Main() -> int { Probe({"a": 1}, "a") }
+    "#;
+    let compare = |cmp: Instruction| {
+        [
+            Instruction::LoadConst(1),
+            Instruction::LoadConst(2),
+            cmp,
+            Instruction::JumpIfFalse(1),
+            Instruction::Pop(1),
+        ]
+    };
+    let mut instructions = Vec::new();
+    instructions.extend(compare(Instruction::CmpOp(CmpOp::LtEq)));
+    instructions.extend(compare(Instruction::CmpOp(CmpOp::GtEq)));
+    instructions.extend(compare(Instruction::CmpBigintOp(CmpOp::NotEq)));
+    instructions.extend([Instruction::LoadConst(0), Instruction::Return]);
+    let constants = vec![ConstValue::Int(5), ConstValue::Int(1), ConstValue::Int(2)];
+    let ran = run(probe, "user.Probe", instructions, constants.clone());
+    assert!(matches!(ran, Ok(VmExecState::Complete(value)) if value == Value::int(5)));
+
+    // The map element opcodes: the compiler lowers map access to `baml.Map`
+    // calls, so their handlers refuse to run. They still pass the check on
+    // the way in.
+    for (op, value) in [
+        (Instruction::LoadMapElement, None),
+        (
+            Instruction::StoreMapElement,
+            Some(Instruction::LoadConst(0)),
+        ),
+    ] {
+        let stored = value.is_some();
+        let mut instructions = vec![Instruction::LoadVar(1), Instruction::LoadVar(2)];
+        instructions.extend(value);
+        instructions.push(op);
+        if stored {
+            instructions.push(Instruction::LoadConst(0));
+        }
+        instructions.push(Instruction::Return);
+        let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run(probe, "user.Probe", instructions, constants.clone())
+        }));
+        assert!(refused.is_err(), "{op:?} ran");
+    }
+
+    let executed = crate::opcode_coverage::executed();
+    for op in [
+        OpCode::ResumeCompiled,
+        OpCode::Unreachable,
+        OpCode::AllocVariant,
+        OpCode::TraceHookRich,
+        OpCode::StoreMapElement,
+        OpCode::LoadMapElement,
+        OpCode::LtEq,
+        OpCode::GtEq,
+        OpCode::CmpBigintNotEq,
+        OpCode::JumpIfFalse,
+    ] {
+        assert!(executed.contains(&op), "{op:?} did not run");
+    }
+}
+
 /// Run `user.Main` with compiled bodies installed and publish named object indices.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn run_with_compiled_bodies(

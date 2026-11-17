@@ -27,6 +27,8 @@ pub mod llm_shape;
 mod model_usage;
 #[cfg(feature = "kperf")]
 pub mod op_mix;
+#[cfg(debug_assertions)]
+pub mod opcode_coverage;
 pub mod package_ai;
 pub mod package_baml;
 pub mod package_load;

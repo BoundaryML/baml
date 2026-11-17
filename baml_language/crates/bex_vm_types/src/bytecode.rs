@@ -2584,6 +2584,21 @@ pub struct CompactCode {
     pub jump_tables: Vec<CompactJumpTable>,
     /// Instruction byte offsets retained by [`Bytecode::lower_to_compact_with_offsets`].
     pub instruction_offsets: Vec<usize>,
+    /// The most operand values a frame running this code holds above its
+    /// locals, proven by [`Bytecode::verify_stack`]; a frame reserves that
+    /// many slots on entry. Code not lowered by [`Bytecode::lower_verified`]
+    /// carries [`crate::stack_effect::UNVERIFIED_MAX_STACK`], which fails
+    /// that reservation.
+    pub max_stack: usize,
+    /// The slots a frame running this code reserves past its arguments: its
+    /// locals plus [`Self::max_stack`], kept as one field for the call path.
+    /// Unverified code carries [`crate::stack_effect::UNVERIFIED_MAX_STACK`].
+    pub frame_slots: usize,
+    /// Debug builds: the verified operand depth before the instruction at
+    /// each byte offset ([`crate::stack_effect::NO_DEPTH`] elsewhere), which
+    /// the dispatch loop asserts against the live stack.
+    #[cfg(debug_assertions)]
+    pub operand_depths: Vec<u32>,
 }
 
 impl CompactCode {
@@ -2800,12 +2815,12 @@ impl Bytecode {
     ///
     /// Also translates `line_table` and `exception_table` PCs to byte offsets.
     pub fn lower_to_compact(&self) -> CompactCode {
-        self.lower(false)
+        self.lower_with_layout(false).0
     }
 
     /// Lower to compact bytecode and retain [`CompactCode::instruction_offsets`].
     pub fn lower_to_compact_with_offsets(&self) -> CompactCode {
-        self.lower(true)
+        self.lower_with_layout(true).0
     }
 
     #[allow(
@@ -2814,7 +2829,10 @@ impl Bytecode {
         clippy::cast_possible_truncation,
         clippy::cast_lossless
     )]
-    fn lower(&self, keep_offsets: bool) -> CompactCode {
+    /// Lower to compact code, also returning each instruction's byte offset
+    /// (with the end of the code as a last entry). The code's `max_stack` is
+    /// unverified; see [`Self::lower_verified`].
+    pub(crate) fn lower_with_layout(&self, keep_offsets: bool) -> (CompactCode, Vec<usize>) {
         let n = self.instructions.len();
         // index_to_offset[i] = byte offset of instruction i
         // index_to_offset[n] = total byte count (sentinel for end-of-code)
@@ -3299,7 +3317,7 @@ impl Bytecode {
             })
             .collect();
 
-        CompactCode {
+        let compact = CompactCode {
             trace_hook_finish_pc: self
                 .instructions
                 .iter()
@@ -3327,11 +3345,16 @@ impl Bytecode {
             shield_table,
             jump_tables,
             instruction_offsets: if keep_offsets {
-                index_to_offset
+                index_to_offset.clone()
             } else {
                 Vec::new()
             },
-        }
+            max_stack: crate::stack_effect::UNVERIFIED_MAX_STACK,
+            frame_slots: crate::stack_effect::UNVERIFIED_MAX_STACK,
+            #[cfg(debug_assertions)]
+            operand_depths: Vec::new(),
+        };
+        (compact, index_to_offset)
     }
 
     /// Determine the compact opcode for an instruction.
