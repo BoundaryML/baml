@@ -676,6 +676,15 @@ pub(crate) fn frameless_body<'db>(
     body.blocks.iter().all(|block| {
         block.handling.is_none()
             && block.landing.is_none()
+            && !block.statements.iter().any(|statement| {
+                matches!(
+                    &statement.kind,
+                    StatementKind::Intrinsic {
+                        op: IntrinsicOp::Log(_),
+                        ..
+                    }
+                )
+            })
             && !matches!(
                 &block.terminator,
                 Some(Terminator::Call {
