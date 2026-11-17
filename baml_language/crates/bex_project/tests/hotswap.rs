@@ -111,6 +111,11 @@ fn engine(source: &str) -> Arc<BexEngine> {
 
 /// An engine running `files`, with their source recorded.
 fn engine_files(files: &[(&str, &str)]) -> Arc<BexEngine> {
+    engine_with(files, EngineConfig::default())
+}
+
+/// An engine running `files` with `config`, swappable from their source.
+fn engine_with(files: &[(&str, &str)], config: EngineConfig) -> Arc<BexEngine> {
     // As `baml run --hot` does before it compiles.
     baml_env::set_hotswap_enabled();
     let program = baml_test_support::compile_multi_file(files);
@@ -124,7 +129,7 @@ fn engine_files(files: &[(&str, &str)]) -> Arc<BexEngine> {
             EngineConfig {
                 runtime_compiler: Some(bex_project::runtime_compiler()),
                 hotswap_baseline: Some(baseline),
-                ..EngineConfig::default()
+                ..config
             },
         )
         .expect("engine"),
@@ -583,6 +588,65 @@ async fn a_file_named_like_a_namespace_is_not_one() {
         .unwrap();
     assert_eq!(names, ["helper"]);
     assert_eq!(int(&engine, "helper", Some(1)).await, 6);
+}
+
+/// With telemetry off, the VM enters plain callees directly: exact calls,
+/// calls through a function value and cached interface calls. Each hands a
+/// swapped callee to the general path, which selects its replacement.
+#[tokio::test(flavor = "multi_thread")]
+async fn calls_reach_a_swap_with_telemetry_off() {
+    let source = r#"
+interface Describe {
+    function describe(self) -> string throws never;
+}
+
+class Counter {
+    n: int,
+}
+
+implement Describe for Counter {
+    function describe(self) -> string throws never { "old" }
+}
+
+function describe_any(d: Describe) -> string { d.describe() }
+
+function helper(x: int) -> int { x + 1 }
+
+function direct(x: int) -> int { helper(x) * 10 }
+
+function through_value(x: int) -> int {
+    let f = helper;
+    f(x) * 10
+}
+
+function through_interface() -> string {
+    let c = Counter { n: 1 };
+    describe_any(c) + describe_any(c)
+}
+"#;
+    let engine = engine_with(
+        &[("main.baml", source)],
+        EngineConfig {
+            artifact_telemetry: Some(btel_settings::artifact::ArtifactTelemetry {
+                recording_level: btel_settings::artifact::RecordingLevel::Off,
+                ..Default::default()
+            }),
+            ..EngineConfig::default()
+        },
+    );
+    // Warm the call sites first, so cached entries are in place.
+    assert_eq!(int(&engine, "direct", Some(1)).await, 20);
+    assert_eq!(int(&engine, "through_value", Some(1)).await, 20);
+    assert_eq!(text(&engine, "through_interface").await, "oldold");
+
+    let patched = edit(source, "{ x + 1 }", "{ x + 5 }");
+    let patched = edit(&patched, "{ \"old\" }", "{ \"new\" }");
+    let mut names = patch(&engine, &patched).await.unwrap();
+    names.sort();
+    assert_eq!(names, ["Describe for Counter.describe", "helper"]);
+    assert_eq!(int(&engine, "direct", Some(1)).await, 60);
+    assert_eq!(int(&engine, "through_value", Some(1)).await, 60);
+    assert_eq!(text(&engine, "through_interface").await, "newnew");
 }
 
 /// A function value from before a swap equals the same function named in a
