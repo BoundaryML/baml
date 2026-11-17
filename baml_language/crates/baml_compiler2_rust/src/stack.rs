@@ -710,7 +710,6 @@ impl Facts {
         match place {
             Place::Local(local) => self.escape(local.0, reason),
             Place::Field { base, field } => {
-                // A boxed result may be an int where the field says float.
                 if let Place::Local(local) = base.as_ref()
                     && self.field_repr(local.0, *field) == Some(Repr::Float)
                 {
@@ -737,7 +736,6 @@ impl Facts {
         terminator: &Terminator<'db>,
     ) {
         match terminator {
-            // `classify_locals` keeps the return local on the heap.
             Terminator::Goto { .. } | Terminator::Unreachable | Terminator::Return => {}
             Terminator::NarrowBind {
                 source,
@@ -790,7 +788,6 @@ impl Facts {
             _ => (None, "a function value".into()),
         };
         if null_compared(body, native_key.as_deref(), *ntypeargs, args).is_some() {
-            // `x == null` folds: a stack object is never null.
             for arg in args.iter().filter(|arg| bare_local(arg).is_none()) {
                 self.use_operand(arg, "compared");
             }
@@ -984,7 +981,6 @@ impl Facts {
         value: &Rvalue<'db>,
     ) {
         match (destination, value) {
-            // Copies joined the groups.
             (Place::Local(_), Rvalue::Use(operand)) if bare_local(operand).is_some() => return,
             (Place::Local(local), _) => self.escape(local.0, "holds a value computed here"),
             (Place::Field { base, field }, _) => self.field_store(body, base, *field, value),
@@ -1099,8 +1095,6 @@ fn fits(body: &MirFunctionBody<'_>, operand: &Operand<'_>, repr: Repr) -> bool {
     };
     match repr {
         Repr::Value => true,
-        // A float field may hold a value the VM keeps as an int; only a
-        // float converts without a check.
         Repr::Float => from == Repr::Float,
         Repr::Int | Repr::Bool => from == repr || from == Repr::Value,
     }
@@ -1190,7 +1184,6 @@ impl State {
                     .or_else(|| param_reason(facts, params, root).map(str::to_owned))
             })
             .collect();
-        // A stack parameter must not be a parameter beyond the arity.
         let dead = (facts.arity.min(MASKED_PARAMS)..MASKED_PARAMS)
             .any(|i| takes_param(params, i))
             .then(|| "no such parameter".to_owned());

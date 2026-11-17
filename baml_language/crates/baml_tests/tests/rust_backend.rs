@@ -903,7 +903,6 @@ function main() -> int {{
     );
     assert!(main.contains("let mut s0: user_Vec_stack_"), "{main}");
     assert!(main.contains("s0.f0"), "{main}");
-    // A method on a stack object calls its stack variant.
     let norm2 = symbol_of(&module, "user.Vec.norm2");
     let variant = format!(
         "pub fn {norm2}_stack1(vm: &mut BexVm, fr: &FrameRecord, arg0: &mut user_Vec_stack_"
@@ -916,12 +915,10 @@ function main() -> int {{
         main.contains(&format!("{norm2}_stack1(vm, fr, &mut s0, ")),
         "{main}"
     );
-    // The VM-frame fallback materializes the object and reads it back.
     assert!(
         main.contains("s0.heap(vm, fr)") && main.contains("s0.reload(vm, "),
         "{main}"
     );
-    // A pure callee takes both objects as stack parameters.
     let dot = symbol_of(&module, "user.dot");
     assert!(module.source.contains(&format!("pub fn {dot}_stack3(")));
     assert!(
@@ -932,7 +929,6 @@ function main() -> int {{
 
 #[test]
 fn objects_that_escape_stay_on_the_heap() {
-    // Per case: the program after `STACK_VEC`, the function, and its sites.
     let cases: &[(&str, &str, &[Option<&str>])] = &[
         (
             "function main() -> int {
@@ -955,9 +951,6 @@ function main() -> int { make(3).x }",
             "user.make",
             &[Some("returned")],
         ),
-        // BAML has no `===`: `==` compares deeply through the `==` driver,
-        // and identity shows only through by-reference builtins such as
-        // `includes`.
         (
             "function main() -> bool {
   let a = Vec { x: 1, y: 2 };
@@ -1014,8 +1007,6 @@ function main() -> string {
     );
     assert_sites(&module, "user.main", &[None]);
     let main = body_of(&module, "user.main");
-    // The `string` field is a heap value: it goes to a frame slot before the
-    // suspension and comes back after; the `int` field stays in the struct.
     assert!(
         main.contains("vm.set_slot(fr, ") && main.contains(", s0.f0); "),
         "{main}"
@@ -1075,8 +1066,6 @@ function main() -> int {{
 
 #[test]
 fn objects_past_the_64th_parameter_stay_on_the_heap() {
-    // Parameter masks are 64 bits wide: a parameter beyond them is never a
-    // stack parameter, and analysing it must not overflow a shift.
     let ints: String = (1..64).map(|i| format!("a{i}: int, ")).collect();
     let zeros = "0, ".repeat(63);
     let module = stack_module(&format!(

@@ -303,7 +303,6 @@ impl<'db> Generator<'_, 'db> {
         else {
             return Ok(None);
         };
-        // A stack object is never null.
         if self.stack_operand(other).is_some() {
             return Ok(Some(Expr::new("false", Repr::Bool)));
         }
@@ -337,7 +336,6 @@ impl<'db> Generator<'_, 'db> {
         }
         let site = self.site_pc(block);
         let callee = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
-        // Per argument: (direct argument, boxed argument, struct to reload).
         let mut direct = String::new();
         let mut observed = Vec::with_capacity(args.len());
         let mut boxed = String::from("{ ");
@@ -351,7 +349,6 @@ impl<'db> Generator<'_, 'db> {
                     ));
                 };
                 let storage = group.storage.clone();
-                // Telemetry reads a snapshot: the call borrows the struct.
                 let snapshot = format!("o{}", self.temps);
                 self.temps += 1;
                 self.pending.push(format!("let {snapshot} = {storage};"));
@@ -389,7 +386,6 @@ impl<'db> Generator<'_, 'db> {
             Repr::Float => "bex_vm::compiled_rt::expect_f64(v)",
             Repr::Value => "Ok(v)",
         };
-        // The callee may have written the fields before it returned or threw.
         let reload = reloads.iter().fold(String::new(), |mut out, reload| {
             let _ = write!(out, "{reload}?; ");
             out
@@ -400,8 +396,6 @@ impl<'db> Generator<'_, 'db> {
              (|| -> R<()> {{ {reload}Ok(()) }})().and(match r {{ Ok(v) => {unbox}, Err(e) => Err(e) }}) }}",
             boxed_values.join(", ")
         );
-        // Without a record of its own when the callee is frameless, so LLVM
-        // can inline the variant and keep the struct's fields in registers.
         let body = format!("{symbol}_stack{params:x}(vm, fr{direct_args}, {callee_mask})");
         let recorded = format!("if vm.direct_calls() {{ {direct} }} else {{ {boxed} }}");
         let call = self.frameless_or(object, &site, &body, None, "vm.direct_calls()", &recorded);

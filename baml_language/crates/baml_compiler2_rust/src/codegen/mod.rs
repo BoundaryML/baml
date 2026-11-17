@@ -434,7 +434,6 @@ impl<'a, 'db> Generator<'a, 'db> {
         let analysis = self.analysis;
         let arity = self.body.locals.len().min(self.analysis.arity);
         for (i, &repr) in analysis.reprs.iter().enumerate() {
-            // A stack object's locals are its struct.
             if analysis.is_type_local(i) || self.stack_group(i).is_some() {
                 continue;
             }

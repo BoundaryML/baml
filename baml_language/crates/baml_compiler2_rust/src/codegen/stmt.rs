@@ -288,7 +288,6 @@ impl<'db> Generator<'_, 'db> {
                 self.emit_statement(&format!("c{} = {code};", id.0));
             }
             Terminator::NarrowBind { source, test, .. } if self.stack_operand(source).is_some() => {
-                // The destination joins the source's stack object.
                 let group = self.stack_operand(source).expect("checked");
                 let matches = self.stack_test(group, test)?;
                 self.emit_statement(&format!("c{} = {matches};", id.0));
