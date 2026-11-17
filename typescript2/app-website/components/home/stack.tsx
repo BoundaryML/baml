@@ -331,18 +331,19 @@ function Layers({ p }: { p: number }) {
   const climbs = LAYERS.length - FIRST_LIT;
   // It starts dark. First the runtime and the language pop in, with the first line of the heading
   // and the lamb landing on top of them.
-  const base = ramp(s, 0.06, 0.28) * FIRST_LIT;
+  const base = ramp(s, 0.04, 0.2) * FIRST_LIT;
   // Then the rest of the stack, one layer at a time, as the lamb climbs.
-  const rest = ramp(s, 0.34, 0.82) * climbs;
+  const rest = ramp(s, 0.24, 0.62) * climbs;
   // Once the lamb is on top, the Boundary mark rises out of the top layer and the lamb leaps to its
-  // place beside it.
-  const leap = ramp(s, 0.83, 0.93);
-  const gate = ramp(leap, 0.1, 0.55);
+  // place beside it. The leap takes about a second of the run, so the mark and the lamb have time to
+  // arrive.
+  const leap = ramp(s, 0.66, 0.88);
+  const gate = ramp(leap, 0.05, 0.5);
   // Mid-air the climbing lamb becomes the larger one that stands beside the mark.
-  const swap = ramp(leap, 0.3, 0.55);
+  const swap = ramp(leap, 0.3, 0.7);
   const arrive = ramp(leap, 0.3, 1);
   // Then the finale.
-  const done = ramp(s, 0.88, 0.98);
+  const done = ramp(s, 0.84, 0.98);
   // How far along lighting each layer is, from 0 to 1.
   const lit = (row: number) =>
     row < FIRST_LIT ? clamp01(base - row) : clamp01(rest - (row - FIRST_LIT));
@@ -1549,7 +1550,7 @@ export default function Stack() {
           language.
         </h2>
         <div className="mt-12 md:mt-16">
-          <Played line={0.5} linear ms={4500}>
+          <Played line={0.5} linear ms={6000}>
             {(p) => <Layers p={p} />}
           </Played>
         </div>
