@@ -94,7 +94,7 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 // repainting anything, so it stays smooth.
 // The space starts left of the stack, where the tools each layer replaces wait to be kicked off.
 const VB_X = -100;
-// Room above the stack for the lamb's last leap, to its place beside the Boundary mark.
+// Room above the stack for the logos that stand on its top layer.
 const VB_TOP = -90;
 const VB_W = 600;
 const VB_H = TOP + LAYERS.length * STEP + 150;
@@ -284,8 +284,8 @@ function LambArt({ glow }: { glow?: boolean }) {
 }
 
 // The finale: the two logos stand side by side on the top layer, the Boundary mark on the left and
-// the BAML lamb on the right. The mark rises out of the layer; the lamb lands beside it. Both are
-// LOGO_H tall.
+// the BAML lamb on the right. The lamb slides right to make room, growing to LOGO_H, and the mark
+// rises out of the layer where it stood.
 const LOGO_H = 80;
 const MARK_W = LOGO_H * (86 / 144);
 const BIG_LAMB_W = LOGO_H * (356 / 422);
@@ -294,6 +294,11 @@ const LOGO_GAP = 18;
 const LOGO_BASE = TOP + 50;
 const MARK_X = 180 - (MARK_W + LOGO_GAP + BIG_LAMB_W) / 2;
 const BIG_LAMB_X = MARK_X + MARK_W + LOGO_GAP;
+// How far the climbing lamb slides right, and how much it grows, to stand where the logo lamb goes.
+const SLIDE_X = BIG_LAMB_X + BIG_LAMB_W / 2 - 180;
+const GROW = LOGO_H / LAMB_H;
+// The lamb grows from its feet, so it stays standing on the top layer.
+const LAMB_FEET = `${((180 - VB_X) / VB_W) * 100}% ${((LAMB_Y + LAMB_H - VB_TOP) / VB_H) * 100}%`;
 
 function LogoArt({
   glow,
@@ -334,14 +339,10 @@ function Layers({ p }: { p: number }) {
   const base = ramp(s, 0.04, 0.2) * FIRST_LIT;
   // Then the rest of the stack, one layer at a time, as the lamb climbs.
   const rest = ramp(s, 0.24, 0.62) * climbs;
-  // Once the lamb is on top, the Boundary mark rises out of the top layer and the lamb leaps to its
-  // place beside it. The leap takes about a second of the run, so the mark and the lamb have time to
-  // arrive.
-  const leap = ramp(s, 0.66, 0.88);
-  const gate = ramp(leap, 0.05, 0.5);
-  // Mid-air the climbing lamb becomes the larger one that stands beside the mark.
-  const swap = ramp(leap, 0.3, 0.7);
-  const arrive = ramp(leap, 0.3, 1);
+  // Once the lamb is on top, it slides right and the Boundary mark rises out of the top layer where
+  // it stood.
+  const slide = ramp(s, 0.66, 0.84);
+  const gate = ramp(s, 0.7, 0.88);
   // Then the finale.
   const done = ramp(s, 0.84, 0.98);
   // How far along lighting each layer is, from 0 to 1.
@@ -461,11 +462,15 @@ function Layers({ p }: { p: number }) {
         <div
           className={MOVING}
           style={{
-            opacity: landed * (1 - swap),
-            transform: `translate3d(${across(leap * 30)}, -${down(rest * STEP + hop + (1 - landed) * 50 + Math.sin((Math.PI / 2) * Math.min(1, leap * 2)) * 50)}, 0)`,
+            opacity: landed,
+            transform: `translate3d(${across(slide * SLIDE_X)}, -${down(rest * STEP + hop + (1 - landed) * 50)}, 0) scale(${1 + slide * (GROW - 1)})`,
+            transformOrigin: LAMB_FEET,
           }}
         >
           <LambArt />
+          <div className={MOVING} style={{ opacity: done * 0.8 }}>
+            <LambArt glow />
+          </div>
         </div>
         {/* The Boundary mark, rising out of the top layer. */}
         <div
@@ -476,19 +481,6 @@ function Layers({ p }: { p: number }) {
           }}
         >
           <LogoArt part="boundary" />
-        </div>
-        {/* The BAML lamb, landing beside the mark. */}
-        <div
-          className={MOVING}
-          style={{
-            opacity: swap,
-            transform: `translate3d(${across(-(1 - arrive) * 34)}, ${down((1 - arrive) * 26)}, 0)`,
-          }}
-        >
-          <LogoArt part="lamb" />
-          <div className={MOVING} style={{ opacity: done * 0.8 }}>
-            <LogoArt glow part="lamb" />
-          </div>
         </div>
       </div>
     </div>
