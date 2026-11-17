@@ -29,15 +29,12 @@ import { ramp } from '@/components/home/scroll';
 // steps from baml-action, and the comment follows the action's render.baml. The metrics are
 // `baml codequality` on three versions of one example function.
 
-// The titles inside this section are set in the pixel font, like the BAML lamb.
-const PIXEL = { fontFamily: 'var(--font-geist-pixel)' };
-
+// A box's title is set like the stack section's ("We made observability fast."), in the display
+// face. The pixel font is kept for captions and the word "hyperobservability".
 function Box({ children, title }: { children: ReactNode; title: string }) {
   return (
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
-      <p className="v4-h3 text-head" style={PIXEL}>
-        {title}
-      </p>
+      <p className="v4-h3 text-head">{title}</p>
       {children}
     </div>
   );
@@ -1025,9 +1022,7 @@ function Comment({
   return (
     // A box like the others in this section, so the story reads as one of them.
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
-      <p className="v4-h3 text-head" style={PIXEL}>
-        Code quality, on every pull request.
-      </p>
+      <p className="v4-h3 text-head">Code quality, on every pull request.</p>
       {/* CI/CD by default: the action that posts the comment, in one line. */}
       <p className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[14px]">
         <span className="rounded-md bg-black/50 px-2.5 py-1 text-white">
