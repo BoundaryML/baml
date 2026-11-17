@@ -567,7 +567,7 @@ pub fn map_int_hash(key: i64) -> u64 {
 
 /// The map key hash of the `Hash` driver's framing of a primitive: `tag`,
 /// the byte length, the bytes. A short key is framed on the stack and
-/// written once, which SipHash digests faster than three small writes.
+/// written once, which hashes faster than three small writes.
 fn framed_hash(tag: u8, bytes: &[u8]) -> u64 {
     const HEADER: usize = 1 + size_of::<u64>();
     const INLINE: usize = 128;
@@ -588,7 +588,7 @@ fn framed_hash(tag: u8, bytes: &[u8]) -> u64 {
 }
 
 /// The bucket table's hasher. Its keys are map key hashes, already keyed
-/// SipHash, so they index the table as they are.
+/// and well mixed, so they index the table as they are.
 #[derive(Default)]
 struct KeyHashHasher(u64);
 
