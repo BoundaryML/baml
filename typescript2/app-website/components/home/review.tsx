@@ -874,38 +874,11 @@ function Swatch({ color, label }: { color: string; label: string }) {
 
 // The PR story's stages, as points along `Comment`'s progress. It steps through them on its own once
 // in view; clicking a stage goes straight to it and stops the stepping.
-// Each step sets the comment animation, the time it stays on screen, and its caption.
-const STAGES: {
-  at: number;
-  label: string;
-  ms: number;
-  says: ReactNode;
-}[] = [
-  {
-    at: 0.31,
-    label: 'Bad code is flagged',
-    ms: 4500,
-    says: (
-      <>
-        Removing features should leave simpler code.{' '}
-        <span style={{ color: '#f85149' }}>This code got worse.</span>
-      </>
-    ),
-  },
-  {
-    at: 0.6,
-    label: 'Your agent pushes a fix',
-    ms: 4200,
-    says: 'Your agent reads the comment and rewrites the code.',
-  },
-  {
-    at: 1,
-    label: 'Good code is merged',
-    ms: 4500,
-    says: (
-      <span className="text-clover">The code is now simpler than main.</span>
-    ),
-  },
+// Each step sets the comment animation and the time it stays on screen.
+const STAGES: { at: number; label: string; ms: number }[] = [
+  { at: 0.31, label: 'Bad code is flagged', ms: 4500 },
+  { at: 0.6, label: 'Your agent pushes a fix', ms: 4200 },
+  { at: 1, label: 'Good code is merged', ms: 4500 },
 ];
 
 function Story() {
@@ -1007,19 +980,6 @@ function Story() {
           <span className="absolute left-0 top-0 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-clover" />
         </span>
       </div>
-      {/* What the step means, right above the pull request. */}
-      <div className="mt-4 grid text-[17px] leading-snug text-white md:text-[20px]">
-        {STAGES.map((st, i) => (
-          <p
-            aria-hidden={i !== stage}
-            className="[grid-area:1/1] transition-opacity duration-300"
-            key={st.label}
-            style={{ opacity: i === stage ? 1 : 0 }}
-          >
-            {st.says}
-          </p>
-        ))}
-      </div>
     </div>
   );
   return (
@@ -1065,9 +1025,6 @@ function Comment({
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
       <p className="v4-h3 text-head" style={PIXEL}>
         Code quality, on every pull request.
-      </p>
-      <p className="mt-2 text-[18px] text-white/70">
-        No model in the loop, so the token bill is $0.
       </p>
       {/* CI/CD by default: the action that posts the comment, in one line. */}
       <p className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[14px]">
