@@ -172,7 +172,7 @@ baml cloud alerts create --project acme/ai-pipeline --env production \
   --name "FindFacts failing" --every 15m --to "#ai-pipeline" --sql-file findfacts.sql
 ```
 
-By default it posts when it starts firing and when it resolves. `--after 3` fires only after 3 bad checks in a row, `--remind 1h` repeats while it stays firing, and `--notify every-check` posts on every bad check instead. `--at 09:00 --time-zone Europe/Madrid --days weekdays` runs it at a time instead of `--every`, and `--run-now` also runs it once right away. `baml cloud alerts list`, `show`, `update`, `runs`, `mute <alert> 24h`, `unmute` and `delete` manage alerts; add `--json` to read the output.
+By default it posts when it starts firing and when it resolves. `--after 3` fires only after 3 bad checks in a row, `--remind 1h` repeats while it stays firing, and `--notify every-check` posts on every bad check instead. `--at 09:00 --time-zone Europe/Madrid --days weekdays` runs it at a time instead of `--every`, and `--run-now` also runs it once right away. `baml cloud alerts list`, `show`, `update`, `runs`, `mute <alert> 24h`, `unmute` and `delete` manage alerts; add `--output-format json` to read the output as JSON.
 
 ## Tests
 
