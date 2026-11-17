@@ -48,9 +48,8 @@ class String {
     /// "😀".length()     // 1
     /// "".length()       // 0
     /// ```
-    /// baml:$trace=trace.hidden
     function length(self) -> int throws never {
-        self.char_count()
+        $rust_function
     }
 
     /// Alias for `length()`.

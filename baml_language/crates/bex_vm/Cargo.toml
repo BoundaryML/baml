@@ -45,6 +45,7 @@ getrandom = { workspace = true }
 indexmap = { workspace = true }
 itoa = { workspace = true }
 log = { workspace = true }
+memchr = { workspace = true }
 num-bigint = { workspace = true }
 rand_chacha = { workspace = true }
 rand_core = { workspace = true }

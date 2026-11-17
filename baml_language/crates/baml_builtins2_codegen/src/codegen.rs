@@ -1890,12 +1890,19 @@ fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) 
         return;
     }
     // List(String) needs two steps to avoid double-borrow of vm:
-    // first map+collect into Value vec, then alloc_array.
+    // first fill a Value vec, then alloc_array. The vec is sized up front:
+    // collecting in place from the wider `BexStr` buffer would shrink it with
+    // a realloc on every call.
     if matches!(&b.return_type, BamlType::List(inner) if matches!(inner.as_ref(), BamlType::String))
     {
         writeln!(
             out,
-            "{indent}let result_values: Vec<Value> = result.into_iter().map(|s| Value::object(vm.alloc_string(s))).collect();"
+            "{indent}let mut result_values: Vec<Value> = Vec::with_capacity(result.len());"
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "{indent}for s in result {{ result_values.push(Value::object(vm.alloc_string(s))); }}"
         )
         .unwrap();
         writeln!(

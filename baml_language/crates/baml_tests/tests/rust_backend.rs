@@ -593,10 +593,11 @@ fn constructs_and_generated_shapes() {
         );
     }
     syn::parse_file(&module.source).expect("generated module parses as Rust");
+    // Stdlib bytecode the probes reach compiles with them. (`baml.String.length`,
+    // which `tracing.total` calls, is a native and has no body to compile.)
     assert_admitted(
         &module,
         &[
-            "baml.String.length",
             "baml.iter.Range.new",
             "baml.<(baml.iter.Range as baml.iter.Iterator)>.next",
             "baml.<(baml.iter.Range as baml.iter.Iterable)>.iter",
