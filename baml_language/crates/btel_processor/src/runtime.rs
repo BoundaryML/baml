@@ -3,11 +3,10 @@ use std::{
     future::{Future, poll_fn},
     marker::PhantomData,
     pin::pin,
-    ptr::NonNull,
     rc::Rc,
     sync::{
         Arc, Mutex, OnceLock, Weak,
-        atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -96,60 +95,10 @@ impl Drop for Binding {
     }
 }
 
-/// A thread's binding for one runtime, at an address that stays fixed while
-/// it is listed: an execution scope publishes that address to a
-/// [`ProducerCache`]. Every access goes through this pointer, so the cached
-/// copy and the list never hold conflicting borrows.
-struct BindingPtr(NonNull<Binding>);
-
-#[expect(
-    unsafe_code,
-    reason = "a binding's owning pointer, shared with a cache"
-)]
-impl BindingPtr {
-    fn new(binding: Binding) -> Self {
-        // SAFETY: `Box::into_raw` never returns null.
-        Self(unsafe { NonNull::new_unchecked(Box::into_raw(Box::new(binding))) })
-    }
-
-    fn get(&mut self) -> &mut Binding {
-        // SAFETY: the allocation lives until `drop`, and no other borrow of
-        // it is live: the cached copy is used only between thread-local
-        // accesses, never across one.
-        unsafe { self.0.as_mut() }
-    }
-
-    fn get_ref(&self) -> &Binding {
-        // SAFETY: as in `get`.
-        unsafe { self.0.as_ref() }
-    }
-}
-
-#[expect(unsafe_code, reason = "frees the allocation `BindingPtr::new` made")]
-impl Drop for BindingPtr {
-    fn drop(&mut self) {
-        // SAFETY: allocated by `new` and freed only here.
-        drop(unsafe { Box::from_raw(self.0.as_ptr()) });
-    }
-}
-
 thread_local! {
     // One predetermined slot per engine/OS worker, retained across polls. Weak
     // owners keep idle bindings from extending engine or pool lifetimes.
-    static BINDINGS: RefCell<Vec<BindingPtr>> = const { RefCell::new(Vec::new()) };
-}
-
-/// The producer binding a VM's execution scope holds on its thread, so the
-/// VM's writes skip the thread-local lookup. Set by
-/// [`TelemetryRuntime::enter_caching`] and restored when that scope ends; see
-/// its contract. Empty, writes take the lookup.
-#[derive(Debug, Default)]
-pub struct ProducerCache(AtomicPtr<Binding>);
-
-impl ProducerCache {
-    fn binding(&self) -> Option<NonNull<Binding>> {
-        NonNull::new(self.0.load(Ordering::Relaxed))
-    }
+    static BINDINGS: RefCell<Vec<Binding>> = const { RefCell::new(Vec::new()) };
 }
 
 /// A runtime-owned operation can outlive its last VM call. Shutdown closes
@@ -423,43 +372,26 @@ impl TelemetryRuntime {
     /// The worker slot and stream selectors survive across polls. Only the
     /// active producer and its private payload chunks are released on suspension.
     pub fn enter(self: &Arc<Self>) -> ExecutionScope {
-        self.enter_with(None)
-    }
-
-    /// [`Self::enter`], publishing the binding an active scope holds to
-    /// `cache` until the scope ends, when `cache` gets back what it held.
-    ///
-    /// # Safety
-    /// While the scope is alive, writes through `cache` must run on this
-    /// thread and not inside another access to this thread's bindings: the
-    /// cache points at this thread's producer. Every scope entered with
-    /// `cache` must be for this runtime.
-    #[expect(unsafe_code, reason = "the cache's contract is the caller's")]
-    pub unsafe fn enter_caching(self: &Arc<Self>, cache: &Arc<ProducerCache>) -> ExecutionScope {
-        self.enter_with(Some(cache))
-    }
-
-    fn enter_with(self: &Arc<Self>, cache: Option<&Arc<ProducerCache>>) -> ExecutionScope {
-        let binding = BINDINGS.with_borrow_mut(|bindings| {
+        let active = BINDINGS.with_borrow_mut(|bindings| {
             if self.is_disabled() {
-                return None;
+                return false;
             }
-            if let Some(entry) = bindings.iter_mut().find(|b| b.get_ref().runtime == self.id) {
-                let ptr = entry.0;
-                let binding = entry.get();
+            if let Some(binding) = bindings.iter_mut().find(|b| b.runtime == self.id) {
                 if binding.depth == 0 {
                     binding.producer = self.bind_worker(binding.worker.as_ref().unwrap());
-                    binding.producer.as_ref()?;
+                    if binding.producer.is_none() {
+                        return false;
+                    }
                 }
                 binding.depth += 1;
-                return Some(ptr);
+                return true;
             }
             // Cold first attachment only. Dead engines leave no pool ownership;
             // remove their tiny TLS entries before attaching another engine.
-            bindings.retain(|binding| binding.get_ref().owner.strong_count() != 0);
+            bindings.retain(|binding| binding.owner.strong_count() != 0);
             let worker = match self.pool.reserve_worker() {
                 Ok(worker) => worker,
-                Err(SetupError::Disabled | SetupError::Closed) => return None,
+                Err(SetupError::Disabled | SetupError::Closed) => return false,
                 Err(_) => {
                     self.pool.fail();
                     std::panic::panic_any(TransportFailed);
@@ -467,9 +399,9 @@ impl TelemetryRuntime {
             };
             let Some(producer) = self.bind_worker(&worker) else {
                 self.pool.release_worker(worker);
-                return None;
+                return false;
             };
-            let entry = BindingPtr::new(Binding {
+            bindings.push(Binding {
                 runtime: self.id,
                 depth: 1,
                 producer: Some(producer),
@@ -479,20 +411,11 @@ impl TelemetryRuntime {
                 span_thread: None,
                 span_context: None,
             });
-            let ptr = entry.0;
-            bindings.push(entry);
-            Some(ptr)
-        });
-        let active = binding.is_some();
-        // Only an active scope holds a producer to publish.
-        let cached = cache.zip(binding).map(|(cache, binding)| {
-            let previous = cache.0.swap(binding.as_ptr(), Ordering::Relaxed);
-            (Arc::clone(cache), binding.as_ptr(), previous)
+            true
         });
         let scope = ExecutionScope {
             active,
             runtime: Arc::clone(self),
-            cached,
             _thread_bound: PhantomData,
         };
         if active {
@@ -578,12 +501,7 @@ impl TelemetryRuntime {
     fn acquire_snapshot_slow(&self) -> Option<btel_snapshot::Builder> {
         let start = web_time::Instant::now();
         BINDINGS.with_borrow_mut(|bindings| {
-            if let Some(binding) = bindings
-                .iter_mut()
-                .rev()
-                .map(BindingPtr::get)
-                .find(|b| b.runtime == self.id)
-            {
+            if let Some(binding) = bindings.iter_mut().rev().find(|b| b.runtime == self.id) {
                 if let Some(producer) = &mut binding.producer {
                     producer.seal();
                 }
@@ -682,52 +600,10 @@ impl TelemetryRuntime {
         self.pool.is_disabled() || self.finished.load(Ordering::Acquire)
     }
 
-    /// Run `f` on this thread's binding for this runtime, if any: the one
-    /// `cache` holds, or else the thread-local lookup's.
-    #[expect(
-        unsafe_code,
-        reason = "a cached binding is borrowed through its pointer"
-    )]
-    #[inline]
-    fn with_binding<R>(
-        &self,
-        cache: Option<&ProducerCache>,
-        f: impl FnOnce(Option<&mut Binding>) -> R,
-    ) -> R {
-        if let Some(mut binding) = cache.and_then(ProducerCache::binding) {
-            // SAFETY: `enter_caching`'s contract: a scope that holds this
-            // binding is alive on this thread, so it is listed (its runtime is
-            // alive) with a producer, and nothing else borrows it now.
-            let binding = unsafe { binding.as_mut() };
-            // Another runtime's cache takes the lookup for this one.
-            if binding.runtime == self.id {
-                return f(Some(binding));
-            }
-        }
-        BINDINGS.with_borrow_mut(|bindings| {
-            f(bindings
-                .iter_mut()
-                .rev()
-                .map(BindingPtr::get)
-                .find(|b| b.runtime == self.id))
-        })
-    }
-
     #[inline]
     pub fn write_timing(&self, thread: TelemetryId, record: TimingRecord) {
-        self.write_timing_cached(None, thread, record);
-    }
-
-    /// [`Self::write_timing`] through the binding `cache` holds, if any.
-    #[inline]
-    pub fn write_timing_cached(
-        &self,
-        cache: Option<&ProducerCache>,
-        thread: TelemetryId,
-        record: TimingRecord,
-    ) {
-        self.with_binding(cache, |binding| {
-            let Some(binding) = binding else {
+        BINDINGS.with_borrow_mut(|bindings| {
+            let Some(binding) = bindings.iter_mut().rev().find(|b| b.runtime == self.id) else {
                 assert!(
                     self.is_disabled(),
                     "telemetry emission outside execution scope"
@@ -765,24 +641,11 @@ impl TelemetryRuntime {
         &self,
         thread: TelemetryId,
         context: btel_records::ContextReference,
-        snapshot: Option<btel_snapshot::Snapshot>,
-        record: Span,
-    ) -> bool {
-        self.write_span_with_context_cached(None, thread, context, snapshot, record)
-    }
-
-    /// [`Self::write_span_with_context`] through the binding `cache` holds,
-    /// if any.
-    pub fn write_span_with_context_cached(
-        &self,
-        cache: Option<&ProducerCache>,
-        thread: TelemetryId,
-        context: btel_records::ContextReference,
         mut snapshot: Option<btel_snapshot::Snapshot>,
         record: Span,
     ) -> bool {
-        self.with_binding(cache, |binding| {
-            let Some(binding) = binding else {
+        BINDINGS.with_borrow_mut(|bindings| {
+            let Some(binding) = bindings.iter_mut().rev().find(|b| b.runtime == self.id) else {
                 assert!(
                     self.is_disabled(),
                     "telemetry emission outside execution scope"
@@ -941,38 +804,22 @@ pub struct Diagnostics {
 pub struct ExecutionScope {
     active: bool,
     runtime: Arc<TelemetryRuntime>,
-    /// The cache this scope published its binding to, the binding, and what
-    /// the cache held before.
-    cached: Option<(Arc<ProducerCache>, *mut Binding, *mut Binding)>,
     _thread_bound: PhantomData<Rc<()>>,
 }
 
 impl Drop for ExecutionScope {
     fn drop(&mut self) {
-        // Before the producer can go: the cache never outlives the scope. A
-        // cache that no longer holds this scope's binding was emptied by a
-        // scope entered before this one and ended first; it stays empty.
-        if let Some((cache, published, previous)) = &self.cached {
-            let _ = cache.0.compare_exchange(
-                *published,
-                *previous,
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            );
-        }
         if !self.active {
             return;
         }
         let released = BINDINGS.with_borrow_mut(|bindings| {
-            let binding = bindings
-                .iter_mut()
-                .rev()
-                .map(BindingPtr::get)
-                .find(|b| b.runtime == self.runtime.id)
+            let index = bindings
+                .iter()
+                .rposition(|b| b.runtime == self.runtime.id)
                 .unwrap();
-            binding.depth -= 1;
-            (binding.depth == 0)
-                .then(|| binding.producer.take())
+            bindings[index].depth -= 1;
+            (bindings[index].depth == 0)
+                .then(|| bindings[index].producer.take())
                 .flatten()
         });
         #[cfg(feature = "diagnostics")]
@@ -1405,73 +1252,6 @@ mod tests {
         assert_eq!(timings, [a, a, a, b, a, a]);
         assert_eq!(span_selectors, [b, a]);
         assert_eq!(spans, [b, b, a]);
-        assert!(!pool.is_failed());
-    }
-
-    #[test]
-    #[expect(unsafe_code, reason = "enters scopes that publish to a cache")]
-    fn a_cached_producer_writes_the_same_stream_while_its_scope_lives() {
-        use btel_types::{AwaitDuration, CallPathId, ClockInstant, InvocationOutcome};
-        let (runtime, pool) = manual_runtime();
-        let mut consumer = pool.bind_consumer().unwrap();
-        let cache = Arc::new(ProducerCache::default());
-        let thread = allocate_telemetry_id();
-        let timing = |ticks| TimingRecord::FunctionTimingCompletion {
-            call_path: CallPathId::ROOT,
-            entered_at: ClockInstant::from_ticks(ticks),
-            exited_at: ClockInstant::from_ticks(ticks),
-            await_time: AwaitDuration::ZERO,
-            outcome: InvocationOutcome::Ok,
-            reentry: false,
-        };
-        assert!(cache.binding().is_none());
-        {
-            // SAFETY: every write below runs on this thread, outside any
-            // other binding access.
-            let outer = unsafe { runtime.enter_caching(&cache) };
-            assert!(cache.binding().is_some());
-            runtime.write_timing_cached(Some(&cache), thread, timing(1));
-            runtime.write_timing(thread, timing(2));
-            {
-                // SAFETY: as above.
-                let _inner = unsafe { runtime.enter_caching(&cache) };
-                runtime.write_timing_cached(Some(&cache), thread, timing(3));
-            }
-            assert!(cache.binding().is_some(), "the outer scope still holds it");
-            runtime.write_timing_cached(Some(&cache), thread, timing(4));
-            // Out of order: the outer scope ends first and empties the cache,
-            // which the inner one's end leaves empty.
-            // SAFETY: as above.
-            let inner = unsafe { runtime.enter_caching(&cache) };
-            drop(outer);
-            assert!(cache.binding().is_none());
-            runtime.write_timing_cached(Some(&cache), thread, timing(5));
-            drop(inner);
-        }
-        assert!(cache.binding().is_none());
-        pool.close_admission();
-        let mut seen = Vec::new();
-        let drained = consumer.drain_chunks(
-            NonZeroUsize::new(8).unwrap(),
-            |_, records| {
-                for record in records {
-                    match record {
-                        TimingRecord::ThreadSelected { thread_id } => {
-                            assert_eq!(thread_id, thread);
-                            seen.push(0);
-                        }
-                        TimingRecord::FunctionTimingCompletion { entered_at, .. } => {
-                            seen.push(entered_at.get());
-                        }
-                        TimingRecord::SysOpTime { .. } => unreachable!(),
-                    }
-                }
-            },
-            |_, _| unreachable!(),
-        );
-        assert!(drained.complete);
-        // One selector: cached and looked-up writes share the binding.
-        assert_eq!(seen, [0, 1, 2, 3, 4, 5]);
         assert!(!pool.is_failed());
     }
 

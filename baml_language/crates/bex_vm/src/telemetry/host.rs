@@ -52,9 +52,7 @@ impl TelemetryState {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn host_recording_scope(&self) -> btel_processor::ExecutionScope {
-        // Not `execution_scope`: a host may hold this scope anywhere, so its
-        // writes take the thread-local lookup.
-        self.runtime.enter()
+        self.execution_scope()
     }
 
     #[cfg(not(target_arch = "wasm32"))]

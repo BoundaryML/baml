@@ -446,8 +446,7 @@ impl<P> Processing<P> {
 mod runtime;
 #[cfg(not(target_arch = "wasm32"))]
 pub use runtime::{
-    ExecutionScope, FutureErrorLinks, ProducerCache, RecordingControl, RuntimeError, SpanOwner,
-    TelemetryRuntime,
+    ExecutionScope, FutureErrorLinks, RecordingControl, RuntimeError, SpanOwner, TelemetryRuntime,
 };
 /// What [`TelemetryRuntime::diagnostics`] reads, and the transport readings
 /// it is made of, so a reader need not name the transport crate.
