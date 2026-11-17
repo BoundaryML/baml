@@ -619,7 +619,7 @@ const POST = {
   slug: 'teaching-agents-to-write-maintainable-code',
 };
 
-/** The section's closing claim, with the post that backs it: its before-and-after drawing, then the
+/** The post behind the section's answer, under the question: its before-and-after drawing, then the
  *  claim and a link to the post. */
 function Research() {
   return (
@@ -1263,7 +1263,8 @@ export default function Review() {
           by building amazing <span className="text-clover">backpressure</span>{' '}
           into the toolchain.
         </p>
-        <div className="mt-10">
+        <Research />
+        <div className="mt-16">
           <Errors />
         </div>
         <div className="mt-16">
@@ -1281,7 +1282,6 @@ export default function Review() {
             design.
           </p>
         </div>
-        <Research />
       </div>
     </section>
   );
