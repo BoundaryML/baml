@@ -2182,6 +2182,11 @@ impl BexEngine {
             })
             .transpose()?;
 
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(telemetry) = &telemetry {
+            telemetry.start_network_recording();
+        }
+
         // No VM runs outside a heap permit, `$init` included: the permit
         // manager exists before the first VM does, and each package's `$init`
         // runs as an ordinary permit holder, so its roots (its stack and the
@@ -2398,6 +2403,7 @@ impl BexEngine {
         );
 
         let sys_op_ctx = sys_types::EngineSysOpContext {
+            http_readers: Arc::default(),
             llm_functions: Arc::new(llm_functions),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
@@ -3087,6 +3093,27 @@ impl BexEngine {
 
         self.collect_garbage_with_reason("shutdown").await;
         #[cfg(not(target_arch = "wasm32"))]
+        if let Err(error) = tokio::spawn(Arc::clone(self).finish_shutdown_native(shutdown)).await {
+            tracing::error!(%error, "native shutdown task failed");
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.finish_network_spans();
+            shutdown.complete();
+        }
+    }
+
+    /// Once native cleanup starts, its guard and reader joins survive dropping
+    /// the host's shutdown future, just like the final telemetry join does.
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn finish_shutdown_native(self: Arc<Self>, shutdown: ShutdownGuard) {
+        #[cfg(not(target_arch = "wasm32"))]
+        self.sys_op_ctx
+            .http_readers
+            .shutdown(std::time::Duration::from_millis(100))
+            .await;
+        self.finish_network_spans();
+        #[cfg(not(target_arch = "wasm32"))]
         {
             // All normal executions and their poll scopes have ended. Joining
             // may encode/deliver a final file; never block a runtime worker or
@@ -3128,8 +3155,6 @@ impl BexEngine {
             }
             self.bex_work.join_worker().await;
         }
-        #[cfg(target_arch = "wasm32")]
-        shutdown.complete();
     }
 
     fn enqueue_unhandled_spawn_errors(

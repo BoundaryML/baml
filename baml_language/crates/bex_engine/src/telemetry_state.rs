@@ -9,9 +9,8 @@ use bex_vm::{
 pub(crate) struct EngineTelemetry {
     pub(super) clock: btel_clock::ClockRuntime,
     pub(super) policies: Arc<TelemetryPolicies>,
-    /// Events of traced HTTP requests, queued by the IO side and written by
-    /// whichever VM thread runs the next sys-op. Holds raw header values:
-    /// never handed to anything but the IO side's `NetworkContext`.
+    /// Serialized heap-free native recording, with a VM-safe fallback queue.
+    /// Raw header/body values are sanitized and permission-filtered on record.
     pub(super) network: Arc<sys_types::network::NetworkQueue>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) runtime: Arc<btel_processor::TelemetryRuntime>,
@@ -129,6 +128,90 @@ impl Drop for GcTelemetry {
     }
 }
 impl EngineTelemetry {
+    #[cfg(not(target_arch = "wasm32"))]
+    /// A heap-free recording producer makes native EOF/error visible even
+    /// while every BAML VM is idle. The queue serializes calls to this writer.
+    pub(super) fn start_network_recording(&self) {
+        use std::sync::Mutex;
+
+        use bex_vm::telemetry::{ClockInstant, InvocationOutcome, TelemetryId};
+        use sys_types::network::NetworkEventKind;
+        struct Writer {
+            state: Mutex<TelemetryState>,
+            used: std::sync::atomic::AtomicBool,
+        }
+        impl Writer {
+            fn record(&self, event: &sys_types::network::NetworkEvent) {
+                self.used.store(true, std::sync::atomic::Ordering::Relaxed);
+                let mut state = self
+                    .state
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let _scope = state.host_recording_scope();
+                let Some(span) = TelemetryId::from_raw(event.span) else {
+                    return;
+                };
+                let at = ClockInstant::from_ticks(event.at_ticks);
+                match &event.kind {
+                    NetworkEventKind::Complete { error } => {
+                        state.complete_network_io(span, at, error.as_ref());
+                    }
+                    NetworkEventKind::Cancelled => {
+                        // SAFETY: owned cancellation contains no VM values.
+                        unsafe {
+                            state.close_network_span(
+                                span,
+                                at,
+                                InvocationOutcome::Cancelled,
+                                None,
+                                &[],
+                            );
+                        }
+                    }
+                    kind => {
+                        state.network_event(span, at, kind);
+                        if *kind == NetworkEventKind::Drop {
+                            // SAFETY: owned network metadata contains no VM values.
+                            unsafe {
+                                state.close_network_span(
+                                    span,
+                                    at,
+                                    InvocationOutcome::Cancelled,
+                                    None,
+                                    &[],
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        impl Drop for Writer {
+            fn drop(&mut self) {
+                let state = self
+                    .state
+                    .get_mut()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let _scope = state.host_recording_scope();
+                if self.used.load(std::sync::atomic::Ordering::Relaxed) {
+                    state.complete_thread(InvocationOutcome::Ok);
+                } else {
+                    state.abandon_host();
+                }
+            }
+        }
+        let Some(mut state) = Self::new_root(Some(self)) else {
+            return;
+        };
+        state.name_root_thread("baml.http.response_readers");
+        let writer = Writer {
+            state: Mutex::new(state),
+            used: std::sync::atomic::AtomicBool::new(false),
+        };
+        self.network
+            .set_recorder(Arc::new(move |event| writer.record(&event)));
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn result(&self) -> Option<Result<(), btel_processor::RuntimeError>> {
         let processing = self.runtime.result();

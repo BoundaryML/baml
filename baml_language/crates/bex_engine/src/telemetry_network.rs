@@ -1,14 +1,11 @@
 //! Network spans around the HTTP sys-ops.
 //!
-//! The VM thread writes every record; the IO side only timestamps what
-//! happens to a request and queues it. Before `_send`, `_fetch` or
-//! `_send_sse` the engine opens the request's span and hands the op a
-//! `NetworkContext`. After every sys-op it drains the queue on the VM thread.
-//!
-//! A span ends when the program finishes reading its response (`text()`,
-//! `bytes()`, the `next()` that finds a stream done), closes a stream, or when
-//! the op fails or is cancelled: the span then ends with the thrown value, in
-//! `inject_sysop_throw`. A response that is never read stays open.
+//! The VM opens spans and supplies IO with a `NetworkContext`. Native body
+//! readers record through an engine-owned producer without needing a live VM;
+//! other platforms drain owned metadata at VM-safe boundaries. Small fetch/send
+//! bodies finish at EOF/error, and application reads independently emit await.
+//! SSE keeps its existing read/close lifecycle. Unfinished responses end with
+//! a drop and cancelled outcome on ownership loss or engine shutdown.
 
 use std::sync::Arc;
 
@@ -136,18 +133,74 @@ impl BexEngine {
     /// belong to. Called after every sys-op, before its result reaches the VM,
     /// so a span's events come before the completion that op may write. The
     /// queue drops the events of a span that ended since they were queued.
-    /// Events still queued when the engine shuts down are not written: a
-    /// last drain onto the root thread belongs in `shutdown`, with the GC
-    /// `drop` hook (see `NetworkTraced`).
+    /// A terminal `drop` preserves earlier queued events, then completes the
+    /// abandoned body as cancelled (not a transport error or a full read).
     pub(crate) fn drain_network_events(&self, vm: &mut BexVm) {
         let Some(telemetry) = &self.telemetry else {
             return;
         };
         for event in telemetry.network.drain() {
             if let Some(span) = TelemetryId::from_raw(event.span) {
-                vm.network_event(span, ClockInstant::from_ticks(event.at_ticks), &event.kind);
+                let at = ClockInstant::from_ticks(event.at_ticks);
+                if let NetworkEventKind::Complete { error } = &event.kind {
+                    vm.complete_network_io(span, at, error.as_ref());
+                    continue;
+                }
+                if event.kind == NetworkEventKind::Cancelled {
+                    vm.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[]);
+                    continue;
+                }
+                vm.network_event(span, at, &event.kind);
+                if event.kind == NetworkEventKind::Drop {
+                    vm.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[]);
+                }
             }
         }
+    }
+
+    /// Drain the final GC drops and abandon responses still rooted by host handles
+    /// or globals after native body readers have stopped and joined.
+    pub(crate) fn finish_network_spans(&self) {
+        let Some(telemetry) = &self.telemetry else {
+            return;
+        };
+        telemetry.network.abandon_open();
+        let events = telemetry.network.drain();
+        telemetry.network.seal();
+        if events.is_empty() {
+            return;
+        }
+        let Some(mut state) = crate::telemetry_state::EngineTelemetry::new_root(Some(telemetry))
+        else {
+            return;
+        };
+        telemetry.clock.validate(state.clock(), true);
+        #[cfg(not(target_arch = "wasm32"))]
+        let _scope = state.host_recording_scope();
+        for event in events {
+            if let Some(span) = TelemetryId::from_raw(event.span) {
+                let at = ClockInstant::from_ticks(event.at_ticks);
+                if let NetworkEventKind::Complete { error } = &event.kind {
+                    state.complete_network_io(span, at, error.as_ref());
+                    continue;
+                }
+                if event.kind == NetworkEventKind::Cancelled {
+                    // SAFETY: owned cancellation contains no VM values.
+                    unsafe {
+                        state.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[]);
+                    }
+                    continue;
+                }
+                state.network_event(span, at, &event.kind);
+                if event.kind == NetworkEventKind::Drop {
+                    // SAFETY: a dropped response has no heap-backed error to capture.
+                    unsafe {
+                        state.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[]);
+                    }
+                }
+            }
+        }
+        state.complete_thread(InvocationOutcome::Ok);
     }
 
     /// After an HTTP sys-op succeeded: end the span a finished read or a
@@ -166,6 +219,14 @@ impl BexEngine {
             NetworkOp::Reads {
                 operation, traced, ..
             } => {
+                if matches!(
+                    operation,
+                    SysOp::BamlHttpResponseText | SysOp::BamlHttpResponseBytes
+                ) {
+                    if let Some(traced) = NetworkTraced::of(traced.as_ref()) {
+                        traced.network().application_await();
+                    }
+                }
                 let end = match operation {
                     SysOp::BamlHttpSseStreamClose => NetworkEventKind::Close,
                     // A stream is read to its end when `next()` finds it done.
@@ -271,4 +332,72 @@ fn instance_field(vm: &BexVm, value: Value, name: &str) -> Option<Value> {
     };
     let index = class.fields.iter().position(|field| field.name == name)?;
     instance.try_load_field(index)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::Duration,
+    };
+
+    use sys_native::SysOpsExt;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn native_reader_join_survives_cancelling_the_shutdown_caller() {
+        let directory = tempfile::tempdir().unwrap();
+        let engine = Arc::new(
+            BexEngine::new_with_telemetry_recording(
+                baml_test_support::compile_source("function main() -> int { 1 }"),
+                Arc::new(sys_native::SysOps::native()),
+                vec![],
+                None,
+                btel_clock::ClockMode::Monotonic,
+                crate::TelemetryRecording::local_files_in(
+                    directory.path(),
+                    btel_recorder::RecordingConfig::default(),
+                ),
+            )
+            .unwrap(),
+        );
+        let release = sys_types::CancellationToken::new();
+        let observed = release.clone();
+        let joined = Arc::new(AtomicBool::new(false));
+        let finished = Arc::clone(&joined);
+        assert!(engine.sys_op_ctx.http_readers.spawn(release, async move {
+            observed.cancelled().await;
+            tokio::time::sleep(Duration::from_millis(40)).await;
+            finished.store(true, Ordering::Release);
+        }));
+        let started = engine.sys_op_ctx.http_readers.clone();
+        // A second controlled reader exposes the exact join phase without
+        // timing a GC or assuming a particular executor scheduling order.
+        let entered = sys_types::CancellationToken::new();
+        let signal = entered.clone();
+        assert!(started.spawn(signal.clone(), async move {
+            signal.cancelled().await;
+        }));
+        let closing = Arc::clone(&engine);
+        let caller = tokio::spawn(async move {
+            closing.shutdown().await;
+        });
+        tokio::time::timeout(Duration::from_secs(2), entered.cancelled())
+            .await
+            .unwrap();
+        caller.abort();
+        let _ = caller.await;
+        tokio::time::timeout(Duration::from_secs(2), engine.shutdown())
+            .await
+            .unwrap();
+        assert!(
+            joined.load(Ordering::Acquire),
+            "recorder cannot close before readers join"
+        );
+        assert_eq!(engine.telemetry_result(), Some(Ok(())));
+    }
 }
