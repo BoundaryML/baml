@@ -1199,7 +1199,7 @@ contexts:
     - include: function-call-type-arguments
     - include: call-arguments
   function-call-expression:
-    - match: '\b(?:(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(\.)\s*)?((?:\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*\s*\.\s*)*)(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<[^(){};]*>\s*)?\()'
+    - match: '\b(?:(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(\.)\s*)?((?:\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*\s*\.\s*)*)(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<(?:[^(){};]|\([^(){};]*\))*>\s*)?\()'
       captures:
         1: variable.other.readwrite.baml
         2: punctuation.accessor.baml
@@ -1718,6 +1718,7 @@ contexts:
     - include: await-expression
     - include: throw-expression
     - include: catch-expression
+    - include: tuple-field-access-expression
     - include: expression-operator
     - include: function-call-expression
     - include: dotted-expression
@@ -1820,7 +1821,7 @@ contexts:
     - include: optional-method-call-type-arguments
     - include: call-arguments
   optional-method-call-expression:
-    - match: '(\?\.)\s*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<[^(){};]*>\s*)?\()'
+    - match: '(\?\.)\s*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<(?:[^(){};]|\([^(){};]*\))*>\s*)?\()'
       captures:
         1: punctuation.accessor.baml
         2: entity.name.function.baml
@@ -1915,7 +1916,7 @@ contexts:
     - include: postfix-method-call-type-arguments
     - include: call-arguments
   postfix-method-call-expression:
-    - match: '([.$])\s*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<[^(){};]*>\s*)?\()'
+    - match: '([.$])\s*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<(?:[^(){};]|\([^(){};]*\))*>\s*)?\()'
       captures:
         1: punctuation.accessor.baml
         2: entity.name.function.baml
@@ -2422,7 +2423,7 @@ contexts:
     - include: pattern
     - include: comma
   tuple-destructure-pattern:
-    - match: '(?:\b((?:let|const))\b\s*)?(\()(?![^)\r\n]*\bas\b)'
+    - match: '(?:\b((?:let|const))\b\s*)?(\()(?![^)\r\n]*\bas\b)(?!(?:[^()]|\([^()]*\))*\)\s*(?:->|[\[?]))'
       captures:
         1: keyword.declaration.binding.baml
         2: punctuation.definition.group.begin.baml

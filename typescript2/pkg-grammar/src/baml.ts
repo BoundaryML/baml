@@ -729,7 +729,7 @@ const callArguments: Rule = {
 
 // The lookahead every call begin uses to require `(` (optionally after a
 // type-argument list) without consuming it.
-const CALL_ARGS_LOOKAHEAD = String.raw`(?=\s*(?:<[^(){};]*>\s*)?\()`;
+const CALL_ARGS_LOOKAHEAD = String.raw`(?=\s*(?:<(?:[^(){};]|\([^(){};]*\))*>\s*)?\()`;
 
 // `obj.method(...)` and `obj?.method(...)` differ only by the accessor.
 function memberCall(
@@ -1323,12 +1323,13 @@ const arrayDestructurePattern: Rule = {
   ],
 };
 
-// `(let a, let b)`, `const (const a, _)`, `(0, let s)`, `(A | B)`. An
-// associated-type projection `(T as I).Assoc` stays a type.
+// `(let a, let b)`, `const (const a, _)`, `(0, let s)`, `(A | B)`. A group
+// followed by `->`, `[` or `?` is a type (`(int) -> int`, `(A | B)[]`), as in
+// the parser's pattern lookahead, and so is a projection `(T as I).Assoc`.
 const tupleDestructurePattern: Rule = {
   key: 'tuple-destructure-pattern',
   scope: 'meta.pattern.destructure.tuple.baml',
-  begin: String.raw`(?:\b(${BINDING_INTRO})\b\s*)?(\()(?![^)\r\n]*\bas\b)`,
+  begin: String.raw`(?:\b(${BINDING_INTRO})\b\s*)?(\()(?![^)\r\n]*\bas\b)(?!(?:[^()]|\([^()]*\))*\)\s*(?:->|[\[?]))`,
   beginCaptures: {
     '1': { scope: 'keyword.declaration.binding.baml' },
     '2': { scope: 'punctuation.definition.group.begin.baml' },
@@ -1494,6 +1495,7 @@ const matchScrutinee: Rule = {
     awaitExpression,
     throwExpression,
     catchExpression,
+    tupleFieldAccessExpression,
     expressionOperator,
     functionCallExpression,
     dottedExpression,

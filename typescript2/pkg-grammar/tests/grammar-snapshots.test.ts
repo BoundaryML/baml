@@ -188,6 +188,50 @@ describe('BAML TextMate grammar', () => {
     const scrutinee = inFunction('match ((a, b): (int, string)) { _ => 1 }');
     expect(scrutinee).toContainEqual(['int', 'support.type.primitive']);
     expect(scrutinee).toContainEqual(['string', 'support.type.primitive']);
+
+    expect(inFunction('match t?.1.0 { _ => 0 }')).toEqual(
+      expect.arrayContaining([
+        ['1', PROPERTY],
+        ['0', PROPERTY],
+      ]),
+    );
+
+    // Tuple types inside a call's type arguments.
+    const typeArgs = inFunction('reflect.Type.of<(never, string)>()');
+    expect(typeArgs).toContainEqual([
+      '<',
+      'punctuation.definition.type-arguments.begin',
+    ]);
+    expect(typeArgs).toContainEqual(['never', 'support.type.primitive']);
+    expect(typeArgs).toContainEqual(['string', 'support.type.primitive']);
+    expect(typeArgs).toContainEqual(['of', 'entity.name.function']);
+
+    // A parenthesized function or suffixed type in a pattern is a type, not a
+    // tuple destructure.
+    const tupleScope = (source: string) => {
+      const { tokens } = highlighter.codeToTokens(source, {
+        includeExplanation: 'scopeName',
+        lang: 'baml',
+        theme: THEME,
+      });
+      return tokens
+        .flat()
+        .flatMap(explanationParts)
+        .some((part) =>
+          part.scopes?.some((s) => s.scopeName.includes('destructure.tuple')),
+        );
+    };
+    expect(
+      tupleScope('function F() -> int {\n  let f: (int) -> int = g;\n}'),
+    ).toBe(false);
+    expect(
+      tupleScope(
+        'function F() -> int {\n  match (x) {\n    (int) -> int => 1,\n    (int | string)[] => 2,\n    (int | string)? => 3,\n  }\n}',
+      ),
+    ).toBe(false);
+    expect(
+      tupleScope('function F() -> int {\n  let (let a, let b) = p;\n}'),
+    ).toBe(true);
   });
 
   it('separates comma-separated fields on one line', () => {

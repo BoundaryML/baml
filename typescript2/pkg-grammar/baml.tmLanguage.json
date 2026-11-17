@@ -2445,7 +2445,7 @@
     },
     "function-call-expression": {
       "name": "meta.function-call.baml",
-      "begin": "\\b(?:(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\s*(\\.)\\s*)?((?:\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*\\s*\\.\\s*)*)(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\b(?=\\s*(?:<[^(){};]*>\\s*)?\\()",
+      "begin": "\\b(?:(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\s*(\\.)\\s*)?((?:\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*\\s*\\.\\s*)*)(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\b(?=\\s*(?:<(?:[^(){};]|\\([^(){};]*\\))*>\\s*)?\\()",
       "beginCaptures": {
         "1": {
           "patterns": [
@@ -3465,6 +3465,9 @@
           "include": "#catch-expression"
         },
         {
+          "include": "#tuple-field-access-expression"
+        },
+        {
           "include": "#expression-operator"
         },
         {
@@ -3644,7 +3647,7 @@
     },
     "optional-method-call-expression": {
       "name": "meta.function-call.optional.member.baml",
-      "begin": "(\\?\\.)\\s*(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\b(?=\\s*(?:<[^(){};]*>\\s*)?\\()",
+      "begin": "(\\?\\.)\\s*(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\b(?=\\s*(?:<(?:[^(){};]|\\([^(){};]*\\))*>\\s*)?\\()",
       "beginCaptures": {
         "1": {
           "name": "punctuation.accessor.baml"
@@ -3843,7 +3846,7 @@
     },
     "postfix-method-call-expression": {
       "name": "meta.function-call.member.baml",
-      "begin": "([.$])\\s*(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\b(?=\\s*(?:<[^(){};]*>\\s*)?\\()",
+      "begin": "([.$])\\s*(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\b(?=\\s*(?:<(?:[^(){};]|\\([^(){};]*\\))*>\\s*)?\\()",
       "beginCaptures": {
         "1": {
           "name": "punctuation.accessor.baml"
@@ -4767,7 +4770,7 @@
     },
     "tuple-destructure-pattern": {
       "name": "meta.pattern.destructure.tuple.baml",
-      "begin": "(?:\\b((?:let|const))\\b\\s*)?(\\()(?![^)\\r\\n]*\\bas\\b)",
+      "begin": "(?:\\b((?:let|const))\\b\\s*)?(\\()(?![^)\\r\\n]*\\bas\\b)(?!(?:[^()]|\\([^()]*\\))*\\)\\s*(?:->|[\\[?]))",
       "beginCaptures": {
         "1": {
           "name": "keyword.declaration.binding.baml"
