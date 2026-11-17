@@ -281,9 +281,10 @@ implement Equals for bool {
 implement Compare for bool {
     function cmp(self, other: Self) -> Ordering throws never {
         match (self, other) {
-            (true, let _other: false) => Ordering.Greater,
-            (false, let _other: true) => Ordering.Less,
-            _ => Ordering.Equal,
+            (let _self: false, let _other: false) => Ordering.Equal,
+            (let _self: false, let _other: true) => Ordering.Less,
+            (let _self: true, let _other: false) => Ordering.Greater,
+            (let _self: true, let _other: true) => Ordering.Equal,
         }
     }
 }
