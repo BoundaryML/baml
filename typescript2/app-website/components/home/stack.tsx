@@ -19,7 +19,7 @@ import { BoundaryLogo, BoundaryMark } from '@/components/home/boundary-logo';
 import { LAMB_PATHS } from '@/components/home/lamb';
 import { MarkTile } from '@/components/home/mark';
 import { MARKS } from '@/components/home/marks';
-import { Hyper, Looped, Pinned, Played, sweep } from '@/components/home/pinned';
+import { Hyper, Looped, Played, sweep } from '@/components/home/pinned';
 import { ramp } from '@/components/home/scroll';
 
 // The stack, then what it costs to see every function. BAML times every function, which measured
@@ -148,7 +148,7 @@ const TONES: Record<
 };
 
 /** One layer of the stack drawn in one look. Each layer is drawn three times, dim, lit and hot, and
- *  scrolling only fades between them. */
+ *  the animation only fades between them. */
 function SlabArt({
   name,
   row,
@@ -1553,7 +1553,9 @@ export default function Stack() {
           language.
         </h2>
         <div className="mt-12 md:mt-16">
-          <Pinned length="160vh">{(p) => <Layers p={p} />}</Pinned>
+          <Played line={0.5} linear ms={4500}>
+            {(p) => <Layers p={p} />}
+          </Played>
         </div>
       </div>
     </section>

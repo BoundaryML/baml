@@ -13,7 +13,7 @@ import { section } from '@/components/home/analytics';
 import { Highlight } from '@/components/home/code';
 import { LAMB_PATHS } from '@/components/home/lamb';
 import { Panel } from '@/components/home/phase';
-import { Hyper, Pinned } from '@/components/home/pinned';
+import { Hyper, Played } from '@/components/home/pinned';
 import { ramp } from '@/components/home/scroll';
 
 // ---------- the code and the traces ----------
@@ -106,7 +106,7 @@ type Span = {
   auto?: boolean;
   // Instead of a duration, for something that isn't a span.
   kind?: string;
-  // The step of the scroll build that adds it.
+  // The step of the build that adds it.
   step?: number;
 };
 
@@ -200,7 +200,7 @@ const BAML_GROUPS = [
   'draft_reply',
 ];
 
-// What the TypeScript records, built up as you scroll: each row arrives with the step that adds it.
+// What the TypeScript records, built up step by step: each row arrives with the step that adds it.
 // The HTTP span is there from the start, from OpenTelemetry's auto-instrumentation.
 const BUILT: Span[] = [
   { depth: 0, ms: 1842, name: 'draftReply', start: 0, step: 1 },
@@ -390,13 +390,13 @@ function Waterfall({
   );
 }
 
-// ---------- the code, side by side, the left side building as you scroll ----------
+// ---------- the code, side by side, the left side building as it plays ----------
 
 const STEP_GAP = 0.28;
 const STEP_LEN = 0.18;
 
-/** How many of the four tracing steps are done at scroll progress `p`, holding still between them.
- *  The first, a span around the function, is in from the start; scrolling adds the other three. */
+/** How many of the four tracing steps are done at progress `p`, holding still between them. The
+ *  first, a span around the function, is in from the start; playing adds the other three. */
 function stepsDone(p: number) {
   return [0, 1, 2].reduce(
     (sum, i) =>
@@ -435,7 +435,7 @@ function FilePanel({
 const SIDE_ROWS = TS.length + BUILT.length;
 if (BAML.length + DEEP.length !== SIDE_ROWS) {
   throw new Error(
-    'The two sides of the scroll build must have the same number of rows.',
+    'The two sides of the build must have the same number of rows.',
   );
 }
 
@@ -481,10 +481,10 @@ function HyperSide() {
 
 function SideBySide() {
   return (
-    <Pinned length="240vh">
+    <Played line={0.45} linear ms={6500}>
       {(p) => {
         const steps = stepsDone(p);
-        // The TypeScript starts with a span around its logic and piles on more tracing as you scroll; the BAML
+        // The TypeScript starts with a span around its logic and piles on more tracing as it plays; the BAML
         // side has every span from the start.
         const lines = Math.round(
           TS.reduce(
@@ -531,7 +531,7 @@ function SideBySide() {
           </div>
         );
       }}
-    </Pinned>
+    </Played>
   );
 }
 
