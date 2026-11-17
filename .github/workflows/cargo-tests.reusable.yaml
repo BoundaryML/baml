@@ -365,9 +365,7 @@ jobs:
     # Skip in the merge queue: windows already ran on the PR. The merge_group
     # event is inherited from ci.yaml through the workflow_call boundary.
     if: ${{ github.event_name != 'merge_group' }}
-    # 8-vCPU + CARGO_BUILD_JOBS=16 (2x cores) was the value sweet spot for the
-    # native Windows Rust builds (build-caching/04 Exp 7/9).
-    runs-on: blacksmith-8vcpu-windows-2025
+    runs-on: blacksmith-16vcpu-windows-2025
     env:
       CARGO_BUILD_JOBS: "16"
       # Windows debug builds emit very large PDBs; full debuginfo across the
