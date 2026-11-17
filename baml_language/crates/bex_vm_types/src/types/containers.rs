@@ -539,30 +539,17 @@ pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<MapData>>;
 
 pub type EntryId = u64;
 
-/// The process-wide secret that keys every map key hash. Keys can come from
-/// untrusted input (JSON), so where they land must be unpredictable. The
-/// seed comes from std's `RandomState`, which draws from the OS; foldhash's
-/// own global seed mixes only addresses and the clock.
-struct MapKeySeed {
-    per_hasher: u64,
-    shared: foldhash::SharedSeed,
-}
+/// The process-wide secret that keys every map key hash: std's `RandomState`,
+/// whose SipHash-1-3 keys come from the OS. Keys can come from untrusted
+/// input (JSON), so where they land must be unpredictable.
+static MAP_KEY_STATE: LazyLock<std::collections::hash_map::RandomState> =
+    LazyLock::new(std::collections::hash_map::RandomState::new);
 
-static MAP_KEY_SEED: LazyLock<MapKeySeed> = LazyLock::new(|| {
-    let random = std::collections::hash_map::RandomState::new();
-    MapKeySeed {
-        per_hasher: random.hash_one(0_u64),
-        shared: foldhash::SharedSeed::from_u64(random.hash_one(1_u64)),
-    }
-});
-
-/// The hash a map files a key under: keyed foldhash of everything the key's
-/// `Hash` wrote, as one stream, so it does not depend on how the writes were
-/// chunked (`baml.hash.Hasher` promises that). Not `baml.hash.DefaultHasher`,
-/// whose results are the same in every process.
+/// The hash a map files a key under: keyed SipHash-1-3 of everything the
+/// key's `Hash` wrote, as one stream. Not `baml.hash.DefaultHasher`, whose
+/// results are the same in every process.
 pub fn map_key_hash(stream: &[u8]) -> u64 {
-    let seed = &*MAP_KEY_SEED;
-    let mut hasher = foldhash::quality::FoldHasher::with_seed(seed.per_hasher, &seed.shared);
+    let mut hasher = MAP_KEY_STATE.build_hasher();
     hasher.write(stream);
     hasher.finish()
 }
