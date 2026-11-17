@@ -40,8 +40,8 @@ impl EvalStack {
 
     /// Push into spare capacity, or report that the stack must grow first.
     ///
-    /// The dispatch loop's operand pushes take this path: one capacity
-    /// compare, no `Result`. On `false` nothing was pushed, and the caller
+    /// Pushes outside the dispatch loop's reserved operand space take this
+    /// path: one capacity compare, no `Result`. On `false` nothing was pushed, and the caller
     /// grows the stack through [`Self::try_push`], which owns the budget and
     /// the allocation-failure handling.
     #[allow(clippy::inline_always, unsafe_code)]
@@ -59,6 +59,29 @@ impl EvalStack {
             self.values.set_len(len + 1);
         }
         true
+    }
+
+    /// Push into capacity reserved in advance, without checking it.
+    ///
+    /// # Safety
+    ///
+    /// The stack must have spare capacity. The dispatch loop's operand
+    /// pushes guarantee it: entering a bytecode frame reserves the
+    /// function's locals and operand bound (`Function::frame_reserve`), and
+    /// the stack's capacity never shrinks while the frame runs.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    pub(crate) unsafe fn push_reserved(&mut self, value: Value) {
+        let len = self.values.len();
+        debug_assert!(
+            len < self.values.capacity(),
+            "operand push past reserved capacity"
+        );
+        // SAFETY: the caller guarantees `len < capacity`; `Value` is `Copy`.
+        unsafe {
+            self.values.as_mut_ptr().add(len).write(value);
+            self.values.set_len(len + 1);
+        }
     }
 
     /// Base pointer, length, and capacity of the value array, for a dispatch

@@ -2562,6 +2562,9 @@ pub struct CompactCode {
     pub jump_tables: Vec<CompactJumpTable>,
     /// Instruction byte offsets retained by [`Bytecode::lower_to_compact_with_offsets`].
     pub instruction_offsets: Vec<usize>,
+    /// [`Bytecode::max_operand_depth`]: the operand slots a frame running
+    /// this code reserves above its locals on entry.
+    pub max_stack: usize,
 }
 
 impl CompactCode {
@@ -2695,6 +2698,25 @@ impl Default for Bytecode {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Where control goes after an instruction, for
+/// [`Bytecode::max_operand_depth`]. Offsets are from the instruction itself.
+#[derive(Clone, Copy)]
+enum Flow {
+    /// The next instruction.
+    Next,
+    /// Only the target.
+    Jump(isize),
+    /// The next instruction or the target, with the same stack.
+    Branch(isize),
+    /// The target with the tested value kept, or the next instruction with it
+    /// popped.
+    BranchOrPop(isize),
+    /// A jump table's targets and its default.
+    Table(usize),
+    /// Nowhere in this frame.
+    Stop,
 }
 
 impl Bytecode {
@@ -3295,6 +3317,228 @@ impl Bytecode {
             } else {
                 Vec::new()
             },
+            max_stack: self.max_operand_depth(),
+        }
+    }
+
+    /// An upper bound on the operand values a frame running this code holds
+    /// above its arguments and locals at any one time. The VM reserves that
+    /// many slots when it enters the frame, so the dispatch loop pushes
+    /// without a capacity check.
+    ///
+    /// A forward pass gives each reachable instruction the operand depth of
+    /// the first path that reaches it: 0 at entry and at each exception
+    /// handler (unwinding truncates to the locals), 1 at the trace-hook
+    /// decision boundary (unwinding pushes a null there). The emitter's stack
+    /// discipline makes the depth at an instruction the same on every path,
+    /// and each step takes the fewest values the instruction can pop and the
+    /// most it can push, so no depth found is below the real one. A call
+    /// without a recorded argument layout (compiler-synthesized calls), whose
+    /// argument count the callee decides, counts none of its arguments as
+    /// popped. An overestimate only costs headroom in the topmost frame: a
+    /// callee's frame starts at its caller's actual stack top.
+    pub fn max_operand_depth(&self) -> usize {
+        let count = self.instructions.len();
+        let mut depth: Vec<Option<usize>> = vec![None; count];
+        let mut pending: Vec<usize> = Vec::new();
+        // The first depth to reach an instruction is its depth.
+        let reach =
+            |index: usize, at: usize, depth: &mut [Option<usize>], pending: &mut Vec<usize>| {
+                if let Some(slot @ None) = depth.get_mut(index) {
+                    *slot = Some(at);
+                    pending.push(index);
+                }
+            };
+        reach(0, 0, &mut depth, &mut pending);
+        for entry in &self.exception_table {
+            reach(entry.handler_pc, 0, &mut depth, &mut pending);
+        }
+        let mut max = 0;
+        if let Some(finish) = self.instructions.iter().position(|instruction| {
+            matches!(
+                instruction,
+                Instruction::EndTraceHook
+                    | Instruction::TraceHookHidden
+                    | Instruction::TraceHookTiming
+                    | Instruction::TraceHookSpan
+                    | Instruction::TraceHookRich
+                    | Instruction::TraceHookEmptySpan
+            )
+        }) {
+            reach(finish, 1, &mut depth, &mut pending);
+            max = 1;
+        }
+        while let Some(index) = pending.pop() {
+            let at = depth[index].expect("queued instructions have a depth");
+            let (pops, pushes, flow) = self.operand_effect(index);
+            // Every instruction pops its operands before it pushes.
+            let after = at.saturating_sub(pops) + pushes;
+            max = max.max(after);
+            let target = |offset: isize| index.checked_add_signed(offset);
+            match flow {
+                Flow::Next => reach(index + 1, after, &mut depth, &mut pending),
+                Flow::Jump(offset) => {
+                    if let Some(target) = target(offset) {
+                        reach(target, after, &mut depth, &mut pending);
+                    }
+                }
+                Flow::Branch(offset) => {
+                    reach(index + 1, after, &mut depth, &mut pending);
+                    if let Some(target) = target(offset) {
+                        reach(target, after, &mut depth, &mut pending);
+                    }
+                }
+                // Taken, the tested value stays; otherwise it is popped.
+                Flow::BranchOrPop(offset) => {
+                    reach(index + 1, at.saturating_sub(1), &mut depth, &mut pending);
+                    if let Some(target) = target(offset) {
+                        reach(target, at, &mut depth, &mut pending);
+                    }
+                }
+                Flow::Table(table) => {
+                    let table = &self.jump_tables[table];
+                    for offset in table.offsets.iter().flatten().chain([&table.default]) {
+                        if let Some(target) = target(*offset) {
+                            reach(target, after, &mut depth, &mut pending);
+                        }
+                    }
+                }
+                Flow::Stop => {}
+            }
+        }
+        max
+    }
+
+    /// The values instruction `index` pops at least and then pushes at most,
+    /// and where control goes next, for [`Self::max_operand_depth`]. A count
+    /// that depends on the callee or on a value is taken as its known part.
+    #[allow(clippy::too_many_lines)]
+    fn operand_effect(&self, index: usize) -> (usize, usize, Flow) {
+        use Instruction as I;
+        let layout = || {
+            self.call_layouts
+                .get(&index)
+                .map_or(0, |layout| layout.0.len())
+        };
+        match self.instructions[index] {
+            I::LoadConst(_)
+            | I::LoadVar(_)
+            | I::LoadGlobal(_)
+            | I::LoadCurrentPackage(_)
+            | I::LoadType(_)
+            | I::LoadDeref(_)
+            | I::LoadCapture(_)
+            | I::CaptureRef(_)
+            | I::Copy(_)
+            | I::LoadVarField(..)
+            | I::LoadVarFieldLocal(..)
+            | I::ArrayIterNext { .. }
+            | I::ArrayIterNextLocal { .. }
+            | I::BeginTraceHook(_)
+            | I::MakeVirtualBoundMethod { .. }
+            | I::MakeVirtualFunction { .. }
+            | I::MakeGenericFunction { .. }
+            | I::MakeGenericFunctionFromValue { .. }
+            | I::MakeGenericBoundMethod { .. }
+            | I::MakeClosure { .. }
+            | I::InitInstance(_) => (0, 1, Flow::Next),
+            I::LoadVar2(..) => (0, 2, Flow::Next),
+            I::StoreVarLoadVar(_)
+            | I::AddLocalSmall(..)
+            | I::TraceHookHidden
+            | I::TraceHookTiming
+            | I::TraceHookSpan
+            | I::TraceHookRich
+            | I::TraceHookEmptySpan => (0, 0, Flow::Next),
+            I::StoreVar(_)
+            | I::StoreGlobal(_)
+            | I::StoreDeref(_)
+            | I::StoreCapture(_)
+            | I::InitSpread(_)
+            | I::BindType(_)
+            | I::SetCallTrace
+            | I::EndTraceHook => (1, 0, Flow::Next),
+            I::StoreVar2(..) | I::StoreField(_) | I::StoreFieldLocal(_) => (2, 0, Flow::Next),
+            I::VirtualStoreField(_)
+            | I::StoreArrayElement
+            | I::StoreArrayElementLocal
+            | I::StoreMapElement => (3, 0, Flow::Next),
+            I::Pop(n) => (n, 0, Flow::Next),
+            I::LoadField(_)
+            | I::LoadFieldLocal(_)
+            | I::LoadTupleField(_)
+            | I::UnaryOp(_)
+            | I::TypeTag
+            | I::Discriminant
+            | I::IsType(_)
+            | I::NarrowBind { .. }
+            | I::DenseTag(_)
+            | I::ContainerLen
+            | I::ContainerLenLocal
+            | I::IsNull
+            | I::IsNotNull
+            | I::MakeCell
+            | I::MakeBoundMethod(_)
+            | I::AllocVariant(_)
+            | I::Await
+            | I::AwaitAny
+            | I::Spawn => (1, 1, Flow::Next),
+            I::BinOp(_)
+            | I::CmpOp(_)
+            | I::AddInt
+            | I::SubInt
+            | I::MulInt
+            | I::DivInt
+            | I::ModInt
+            | I::AddFloat
+            | I::SubFloat
+            | I::MulFloat
+            | I::DivFloat
+            | I::AddBigint
+            | I::SubBigint
+            | I::MulBigint
+            | I::DivBigint
+            | I::ModBigint
+            | I::BitAndBigint
+            | I::BitOrBigint
+            | I::BitXorBigint
+            | I::ShlBigint
+            | I::ShrBigint
+            | I::CmpIntOp(_)
+            | I::CmpFloatOp(_)
+            | I::CmpBigintOp(_)
+            | I::LoadArrayElement
+            | I::LoadArrayElementLocal
+            | I::LoadMapElement
+            | I::VirtualLoadField(_)
+            | I::InitField(_)
+            | I::SatisfiesBound
+            | I::CallEquals(_)
+            // A log or event resumes with nothing pushed or one null.
+            | I::SendEvent => (2, 1, Flow::Next),
+            I::AllocArray(n) | I::AllocTuple(n) | I::ConcatStrings(n) => (n, 1, Flow::Next),
+            I::AllocMap(n) => (n.saturating_mul(2), 1, Flow::Next),
+            I::AllocInstance { ntypeargs, .. } => (usize::from(ntypeargs), 1, Flow::Next),
+            I::Call { ntypeargs, .. }
+            | I::CallLocal { ntypeargs, .. }
+            | I::CallHooked { ntypeargs, .. } => (usize::from(ntypeargs) + layout(), 1, Flow::Next),
+            I::CallIndirect => (1 + layout(), 1, Flow::Next),
+            I::VirtualCall {
+                nargs, ntypeargs, ..
+            } => (usize::from(nargs) + usize::from(ntypeargs) + 2, 1, Flow::Next),
+            // The sys-op's arity comes from the callee.
+            I::SysOp(_) => (0, 1, Flow::Next),
+            I::Jump(offset) => (0, 0, Flow::Jump(offset)),
+            I::PopJumpIfFalse(offset) | I::PopJumpIfTrue(offset) => (1, 0, Flow::Branch(offset)),
+            I::JumpIfFalse(offset) => (0, 0, Flow::Branch(offset)),
+            I::JumpIfLocalsCmp { offset, .. } | I::JumpIfLocalConstCmp { offset, .. } => {
+                (0, 0, Flow::Branch(offset))
+            }
+            I::JumpIfFalseOrPop(offset)
+            | I::JumpIfTrueOrPop(offset)
+            | I::JumpIfNotNullOrPop(offset) => (0, 0, Flow::BranchOrPop(offset)),
+            I::JumpTable(table) => (1, 0, Flow::Table(table)),
+            I::Return | I::Throw | I::Rethrow | I::Unreachable => (0, 0, Flow::Stop),
         }
     }
 
@@ -3776,6 +4020,155 @@ mod compact_tests {
             OpCode::try_from(OpCode::SetCallTrace as u8).unwrap(),
             OpCode::SetCallTrace
         );
+    }
+
+    #[test]
+    fn operand_depth_follows_straight_line_code() {
+        // `a + b * c`: three loads deep, then one value.
+        let bc = make_bytecode(
+            vec![
+                Instruction::LoadVar(1),
+                Instruction::LoadVar(2),
+                Instruction::LoadVar(3),
+                Instruction::MulInt,
+                Instruction::AddInt,
+                Instruction::StoreVar(4),
+                Instruction::LoadVar2(1, 2),
+                Instruction::Pop(2),
+                Instruction::LoadConst(0),
+                Instruction::Return,
+            ],
+            vec![ConstValue::Null],
+        );
+        assert_eq!(bc.max_operand_depth(), 3);
+        assert_eq!(bc.lower_to_compact().max_stack, 3);
+    }
+
+    #[test]
+    fn operand_depth_settles_on_loops_and_branches() {
+        // while (i < n) { if (a or b) { s = s + 1 } i += 1 }
+        let bc = make_bytecode(
+            vec![
+                /* 0 */
+                Instruction::JumpIfLocalsCmp {
+                    cmp: CmpOp::GtEq,
+                    a: 1,
+                    b: 2,
+                    offset: 11,
+                },
+                /* 1 */ Instruction::LoadVar(3),
+                /* 2 */ Instruction::JumpIfTrueOrPop(2),
+                /* 3 */ Instruction::LoadVar(4),
+                /* 4 */ Instruction::PopJumpIfFalse(5),
+                /* 5 */ Instruction::LoadVar(5),
+                /* 6 */ Instruction::LoadConst(0),
+                /* 7 */ Instruction::AddInt,
+                /* 8 */ Instruction::StoreVar(5),
+                /* 9 */ Instruction::AddLocalSmall(1, 1, 1),
+                /* 10 */ Instruction::Jump(-10),
+                /* 11 */ Instruction::LoadVar(5),
+                /* 12 */ Instruction::Return,
+            ],
+            vec![ConstValue::Int(1)],
+        );
+        assert_eq!(bc.max_operand_depth(), 2);
+    }
+
+    #[test]
+    fn operand_depth_starts_handlers_and_the_hook_boundary_fresh() {
+        let mut bc = make_bytecode(
+            vec![
+                /* 0 */ Instruction::LoadVar(1),
+                /* 1 */ Instruction::LoadVar(2),
+                /* 2 */ Instruction::LoadVar(3),
+                /* 3 */ Instruction::Throw,
+                // Only reachable by unwinding: the stack is back at the locals.
+                /* 4 */
+                Instruction::LoadVar(4),
+                /* 5 */ Instruction::Return,
+            ],
+            Vec::new(),
+        );
+        bc.exception_table.push(ExceptionTableEntry {
+            start_pc: 0,
+            end_pc: 4,
+            handler_pc: 4,
+            error_slot: 4,
+            context_slot: 5,
+        });
+        assert_eq!(bc.max_operand_depth(), 3);
+
+        // An unwound hook prologue resumes at its decision boundary with one
+        // null pushed.
+        let bc = make_bytecode(
+            vec![
+                Instruction::Jump(2),
+                Instruction::EndTraceHook,
+                Instruction::LoadVar(1),
+                Instruction::Return,
+            ],
+            Vec::new(),
+        );
+        assert_eq!(bc.max_operand_depth(), 1);
+    }
+
+    #[test]
+    fn operand_depth_counts_call_arguments_only_when_known() {
+        let call = |layout: Option<usize>| {
+            let mut bc = make_bytecode(
+                vec![
+                    Instruction::LoadVar(1),
+                    Instruction::LoadVar(2),
+                    Instruction::Call {
+                        callee: GlobalIndex::from_raw(0),
+                        ntypeargs: 0,
+                    },
+                    Instruction::LoadVar(3),
+                    Instruction::AddInt,
+                    Instruction::Return,
+                ],
+                Vec::new(),
+            );
+            if let Some(slots) = layout {
+                bc.call_layouts
+                    .insert(2, baml_type::CallLayout(vec![None; slots]));
+            }
+            bc.max_operand_depth()
+        };
+        // With its layout, the call pops both arguments: `f(a, b) + c` is
+        // two deep.
+        assert_eq!(call(Some(2)), 2);
+        // Without one, the callee decides how many it takes, so none count
+        // as popped: an overestimate, never an underestimate.
+        assert_eq!(call(None), 4);
+    }
+
+    #[test]
+    fn operand_depth_follows_every_jump_table_target() {
+        let mut bc = make_bytecode(
+            vec![
+                /* 0 */ Instruction::LoadVar(1),
+                /* 1 */ Instruction::JumpTable(0),
+                /* 2 */ Instruction::LoadVar(2),
+                /* 3 */ Instruction::Return,
+                /* 4 */ Instruction::LoadVar(2),
+                /* 5 */ Instruction::LoadVar(3),
+                /* 6 */ Instruction::AddInt,
+                /* 7 */ Instruction::Return,
+                /* 8 */ Instruction::LoadVar2(2, 3),
+                /* 9 */ Instruction::LoadVar(4),
+                /* 10 */ Instruction::Pop(3),
+                /* 11 */ Instruction::LoadConst(0),
+                /* 12 */ Instruction::Return,
+            ],
+            vec![ConstValue::Null],
+        );
+        let mut table = JumpTableData::new(0, 1);
+        table.set(0, 3);
+        table.set(1, 7);
+        table.default = 1;
+        bc.jump_tables.push(table);
+        assert_eq!(bc.max_operand_depth(), 3);
     }
 
     #[test]

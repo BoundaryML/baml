@@ -587,6 +587,21 @@ pub struct Function {
 }
 
 impl Function {
+    /// The stack slots entering a bytecode frame of this function reserves
+    /// past its arguments: its locals, then its operand bound
+    /// ([`crate::bytecode::CompactCode::max_stack`]), so the dispatch loop's
+    /// pushes inside the frame need no capacity check. Before lowering, only
+    /// the locals.
+    #[must_use]
+    pub fn frame_reserve(&self) -> usize {
+        self.real_local_count
+            + self
+                .bytecode
+                .compact
+                .as_ref()
+                .map_or(0, |code| code.max_stack)
+    }
+
     /// The function's rendered name: [`FunctionIdentity::render`] under its
     /// owner package's display label (lossy display, as a class's
     /// [`name`](super::Class::name) is), or the identity alone when it has no
