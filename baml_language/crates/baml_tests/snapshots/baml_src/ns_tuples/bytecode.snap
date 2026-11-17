@@ -2,15 +2,15 @@
 source: crates/baml_tests/src/corpus.rs
 ---
 function tuples.tpe_carried_calls() -> (int, string) {
-    call user.tuples.tpe_int
-    call user.tuples.tpe_str
+    load_const 1
+    load_const "s"
     load_type (int, string)
     alloc_tuple 2
     return
 }
 
 function tuples.tpe_carried_prefix() -> (int, int) {
-    call user.tuples.tpe_int
+    load_const 1
     load_const 2
     load_type (int, int)
     alloc_tuple 2
@@ -20,8 +20,8 @@ function tuples.tpe_carried_prefix() -> (int, int) {
 function tuples.tpe_slot_sum(t: (int, string, int)) -> int {
     load_var t
     load_tuple_field .0
-    store_var a
-    load_var2 2 1
+    store_var_load_var a
+    load_var t
     load_tuple_field .2
     add_int
     return
@@ -34,12 +34,10 @@ function tuples.tpe_union_slot_mixed(t: (int, bool) | (float, bool)) -> string {
     narrow_bind (int, bool), slot=2
     pop_jump_if_true L0
     load_const "float"
-    jump L1
+    return
 
   L0:
     load_const "int"
-
-  L1:
     return
 }
 
@@ -58,14 +56,12 @@ function tuples.tpe_union_slot_sum(t: (int, bool) | (int, string, float)) -> int
     load_tuple_field .0
     load_const 2
     add_int
-    jump L2
+    return
 
   L1:
     load_var t
     load_tuple_field .0
     load_const 1
     add_int
-
-  L2:
     return
 }

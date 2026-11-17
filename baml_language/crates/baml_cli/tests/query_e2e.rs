@@ -3,11 +3,12 @@ use std::{io::Write as _, path::Path, process::Command};
 
 use serde_json::Value;
 
-// `Leaf` declares a span so the optimizer keeps its call: an inlined
-// function has no record of its own.
+// `Leaf` and `Work` declare spans so the optimizer keeps their calls: an
+// inlined function has no record of its own.
 const PROGRAM: &str = r"
 /// baml:$trace=trace.span
 function Leaf(n: int) -> int { n + 1 }
+/// baml:$trace=trace.span
 function Work(n: int) -> int {
     let i = 0;
     let sum = 0;
