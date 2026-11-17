@@ -1,6 +1,6 @@
 use std::{collections::hash_map::DefaultHasher, hash::Hasher as _, sync::Arc};
 
-use bex_vm_types::{MeteredGuard, MeteredMutex, RetainedFootprint, Value};
+use bex_vm_types::{AllocDebt, MeteredGuard, MeteredMutex, RetainedFootprint, Value};
 
 use super::{
     BamlClassHashDefaultHasher, BamlClassHashHasher_for_DefaultHasher, BamlNamespaceHash,
@@ -54,9 +54,14 @@ impl bex_vm_types::BexRustData for HasherState {
     }
 }
 
-pub(super) fn finish_state(state: &Arc<HasherState>) -> u64 {
-    // Finishing never grows the state.
-    state.0.lock_uncharged().finish()
+pub(super) fn finish_state(state: &Arc<HasherState>, vm: &BexVm) -> u64 {
+    finish_charged(state, vm.tlab.alloc_debt())
+}
+
+/// Finish, charging `debt` what the state grew since its last charge: the
+/// last write's growth, which no later lock would charge.
+fn finish_charged(state: &HasherState, debt: &AllocDebt) -> u64 {
+    state.0.lock(debt).finish()
 }
 
 #[expect(
@@ -112,10 +117,11 @@ impl BamlNamespaceHash for PackageBamlImpl {}
 mod tests {
     use bex_vm_types::{AllocDebt, BexRustData, Meter, MeteredMutex};
 
-    use super::{Algorithm, HasherState};
+    use super::{Algorithm, HasherState, finish_charged};
 
     /// A map-key hasher keeps what it is written until it finishes, so its
-    /// buffer is reported to a census and charged to the writer's account.
+    /// buffer is reported to a census and, by the time the map has its hash,
+    /// charged to the VM's account, even for a key whose `Hash` wrote once.
     #[test]
     fn a_map_key_hasher_reports_and_charges_its_buffer() {
         let state = HasherState(MeteredMutex::new(Algorithm::MapKey(Vec::new())));
@@ -126,7 +132,7 @@ mod tests {
         state.measure(&mut meter);
         assert!(meter.total() >= 4096, "measured {}", meter.total());
 
-        drop(state.0.lock(&debt));
+        finish_charged(&state, &debt);
         assert!(debt.balance() >= 4096, "charged {}", debt.balance());
     }
 

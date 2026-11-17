@@ -67,7 +67,7 @@ impl HashDriver {
                     self.map_hashes
                         .last_mut()
                         .expect("map entry belongs to an active map")
-                        .push(super::hasher::finish_state(&handle));
+                        .push(super::hasher::finish_state(&handle, vm));
                     continue;
                 }
                 Work::FinishMap => {
