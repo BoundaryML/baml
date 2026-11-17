@@ -525,6 +525,7 @@ impl CacheContext {
             opt_level: opt as u8,
             files: &files,
             dependencies: &dependencies,
+            claim: &root.claim(db),
         })
     }
 
@@ -2061,6 +2062,9 @@ mod tests {
         let (mut db, _) = build_db(&[("a.baml", A_V1)]);
 
         let sentinel = WireInterface {
+            claimed: baml_db::ClaimedIdentity::default(),
+            compiler_version: baml_db::baml_compiler2_hir_ty::package_interface::COMPILER_VERSION
+                .to_owned(),
             dependencies: Vec::new(),
             rows: PackageInterface::<baml_type::WireName> {
                 types: Default::default(),

@@ -8,6 +8,15 @@ enum Mode {
 /// Per-invocation capture requests: true requests capture; false and null add
 /// no request. Applicable function-policy requests still capture; false is not
 /// a privacy veto. Requests do not propagate to descendant invocations.
+/// By default, the innermost span a thrown error or a panic escapes records
+/// that error, unless it passes `error = false`; the spans the error then
+/// unwinds through record only that they failed. `error = true` records it at
+/// that span too. An LLM function's default policy requests its inputs,
+/// output and error, so `false` and `trace.empty_span()` do not leave them
+/// out; use `@trace.redact`, `trace.timing()` or `trace.hidden()`. A cancelled span records only that
+/// it was cancelled.
+/// `http_bodies = false` in `baml.toml` overrides every option here: no error
+/// value is recorded, since an error can quote a response body.
 class Capture {
     inputs: bool?,
     output: bool?,
@@ -60,18 +69,19 @@ class Options {
         $rust_function
     }
 
-    /// Select Span mode and replace all three capture requests.
-    /// Capture outputs and errors by default; inputs require an explicit request.
+    /// Select Span mode and replace all three capture requests, by default
+    /// with requests for inputs, output and error, as `trace.span` does.
     function span(
         self,
-        inputs: bool? = null,
+        inputs: bool? = true,
         output: bool? = true,
         error: bool? = true,
     ) -> Options throws never {
         self._span(inputs, output, error)
     }
 
-    /// Select Span mode without requesting value capture.
+    /// Select Span mode without requesting value capture: the span records
+    /// no inputs, no output and no error.
     /// Applicable function-policy requests still capture values.
     function empty_span(self) -> Options throws never {
         self._span(false, false, false)
@@ -134,17 +144,21 @@ function timing() -> Options throws never {
     $rust_function
 }
 
-/// Record this invocation individually, capturing outputs and errors by default.
-/// Inputs require an explicit request.
+/// Record this invocation individually, capturing its inputs, output and error
+/// by default: a span asked for by name shows what went in and what came out.
+/// Pass `inputs = false`, `output = false` or `error = false` to leave one
+/// out, or use `empty_span` to record the invocation alone. A value that must
+/// never be recorded is withheld with `@trace.redact` wherever it is captured.
 function span(
-    inputs: bool? = null,
+    inputs: bool? = true,
     output: bool? = true,
     error: bool? = true,
 ) -> Options throws never {
     _span(inputs, output, error)
 }
 
-/// Record this invocation individually without requesting value capture.
+/// Record this invocation individually without requesting value capture:
+/// the span records no inputs, no output and no error.
 /// Applicable function-policy requests still capture values.
 function empty_span() -> Options throws never {
     _span(false, false, false)

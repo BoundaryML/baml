@@ -11,44 +11,6 @@ use crate::{
     errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
-/// Equality matching BAML's `==` operator: by-value for primitives, by-content
-/// for strings / uint8arrays / variants, by-`HeapPtr` reference for arrays /
-/// maps / class instances. Used by `includes`, `index_of`, `last_index_of`.
-fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
-    if let (Some(la), Some(rb)) = (a.as_object_ptr(), b.as_object_ptr()) {
-        // Try content comparison for the types where `==` is content-based;
-        // fall through to HeapPtr equality otherwise.
-        let lobj = vm.get_object(la);
-        let robj = vm.get_object(rb);
-        match (lobj, robj) {
-            (Object::String(_), Object::String(_)) => match (vm.as_string(&a), vm.as_string(&b)) {
-                (Ok(ls), Ok(rs)) => ls == rs,
-                _ => false,
-            },
-            (Object::Uint8Array(_), Object::Uint8Array(_)) => {
-                match (
-                    vm.as_uint8array(&a).map(|bytes| bytes.to_vec()),
-                    vm.as_uint8array(&b).map(|bytes| bytes.to_vec()),
-                ) {
-                    (Ok(lb), Ok(rb)) => lb == rb,
-                    _ => false,
-                }
-            }
-            (Object::Variant(lv), Object::Variant(rv)) => lv.enm == rv.enm && lv.index == rv.index,
-            // Heap-boxed floats compare by content (the post-tagged-pointer
-            // encoding allocates a fresh `Object::Float` per float, so two
-            // semantically-equal floats land at distinct `HeapPtr`s and
-            // would otherwise miss the reference-equality fallback), through
-            // the same reflexive equality `==` uses — so `[nan].includes(nan)`
-            // agrees with `nan == nan`.
-            (Object::Float(lf), Object::Float(rf)) => bex_vm_types::float_order::eq(*lf, *rf),
-            _ => la == rb,
-        }
-    } else {
-        a == b
-    }
-}
-
 // ── GC bookkeeping helpers ────────────────────────────────────────────────────
 //
 // All callback-driven continuations capture an `f_ptr` (the callable) plus
@@ -142,6 +104,9 @@ fn value_type_name(vm: &BexVm, value: Value) -> String {
     if value.is_omitted() {
         return "omitted".to_string();
     }
+    if value.is_inline_float() {
+        return ObjectType::Float.to_string();
+    }
     if let Some(ptr) = value.as_object_ptr() {
         return ObjectType::of(vm.get_object(ptr)).to_string();
     }
@@ -170,6 +135,9 @@ fn natural_kind(vm: &BexVm, context: &str, value: Value) -> Result<NaturalKind, 
     }
     if value.as_int().is_some() {
         return Ok(NaturalKind::Int);
+    }
+    if value.is_inline_float() {
+        return Ok(NaturalKind::Float);
     }
     let Some(ptr) = value.as_object_ptr() else {
         return Err(invalid_sort(
@@ -239,18 +207,14 @@ pub(super) fn validate_natural_order_with_vm(
     }
 }
 
-fn value_as_float_for_sort(vm: &BexVm, value: Value) -> f64 {
+fn value_as_float_for_sort(value: Value) -> f64 {
     if let Some(i) = value.as_int() {
         #[allow(clippy::cast_precision_loss)]
         return i as f64;
     }
-    let ptr = value
-        .as_object_ptr()
-        .expect("validated float sort value should be object-backed");
-    match vm.get_object(ptr) {
-        Object::Float(f) => *f,
-        _ => unreachable!("validated float sort value should be float or int"),
-    }
+    value
+        .as_float()
+        .expect("validated float sort value should be float or int")
 }
 
 fn value_as_bigint_cow_for_sort(vm: &BexVm, value: Value) -> Cow<'_, BigInt> {
@@ -292,8 +256,8 @@ pub(super) fn compare_natural_values(
                     .expect("validated int sort value should be int"),
             ),
         NaturalDomain::Float => bex_vm_types::float_order::cmp(
-            value_as_float_for_sort(vm, left),
-            value_as_float_for_sort(vm, right),
+            value_as_float_for_sort(left),
+            value_as_float_for_sort(right),
         ),
         NaturalDomain::Bigint => {
             value_as_bigint_cow_for_sort(vm, left).cmp(&value_as_bigint_cow_for_sort(vm, right))
@@ -311,7 +275,7 @@ pub(super) fn is_primitive_array_values(vm: &BexVm, values: &[Value]) -> bool {
     match values.first() {
         None => true,
         Some(v) => {
-            if v.as_int().is_some() {
+            if v.as_int().is_some() || v.is_inline_float() {
                 true
             } else if let Some(ptr) = v.as_object_ptr() {
                 matches!(
@@ -1216,26 +1180,6 @@ impl BamlClassArray for PackageBamlImpl {
                 return_value: false,
             }),
         }
-    }
-
-    fn includes(vm: &BexVm, array: ArrayView<'_>, item: &Value) -> bool {
-        array.iter().any(|v| baml_eq(vm, *v, *item))
-    }
-
-    #[allow(clippy::cast_possible_wrap)]
-    fn index_of(vm: &BexVm, array: ArrayView<'_>, item: &Value) -> Option<i64> {
-        array
-            .iter()
-            .position(|v| baml_eq(vm, *v, *item))
-            .map(|i| i as i64)
-    }
-
-    #[allow(clippy::cast_possible_wrap)]
-    fn last_index_of(vm: &BexVm, array: ArrayView<'_>, item: &Value) -> Option<i64> {
-        array
-            .iter()
-            .rposition(|v| baml_eq(vm, *v, *item))
-            .map(|i| i as i64)
     }
 
     fn reduce(

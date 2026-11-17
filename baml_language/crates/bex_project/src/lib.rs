@@ -120,7 +120,8 @@ pub fn is_cancelled_runtime_error(err: &RuntimeError) -> bool {
 /// Compile a BAML project from in-memory sources and initialize a runtime.
 ///
 /// `files` are the project's `.baml` sources keyed by the path the host
-/// spelled (relative to `root_path` or absolute); the embedded stdlib is
+/// spelled (relative to `root_path` or absolute), optionally including the root
+/// `baml.toml` for shared package metadata; the embedded stdlib is
 /// compiled from source alongside them. Compile errors surface as
 /// [`RuntimeError::Compilation`] listing every diagnostic.
 ///
@@ -214,6 +215,31 @@ pub fn prepare(
     sys_ops: SysOps,
     files: std::collections::HashMap<crate::fs::FsPath, String>,
 ) -> Result<PreparedRuntime, RuntimeError> {
+    let manifest_path =
+        root_path
+            .join("baml.toml")
+            .map_err(|error| RuntimeError::InvalidArgument {
+                name: format!("root path: {error}"),
+            })?;
+    let is_manifest = |path: &crate::fs::FsPath| {
+        path.as_path() == std::path::Path::new("baml.toml")
+            || path.as_path() == std::path::Path::new(manifest_path.as_str())
+    };
+    let mut manifests = files.iter().filter(|(path, _)| is_manifest(path));
+    let manifest = manifests.next();
+    if manifests.next().is_some() {
+        return Err(RuntimeError::InvalidArgument {
+            name: "baml.toml supplied with both relative and absolute paths".to_owned(),
+        });
+    }
+    let claim = manifest
+        .map(|(_, text)| baml_db::manifest::parse(text))
+        .transpose()
+        .map_err(|error| RuntimeError::InvalidArgument {
+            name: format!("baml.toml: {error}"),
+        })?
+        .map(|manifest| baml_db::manifest::claimed_identity(&manifest))
+        .unwrap_or_default();
     let mut db = baml_db::ProjectDatabase::new();
     db.ensure_stdlib_sources();
     let root = db
@@ -222,10 +248,12 @@ pub fn prepare(
             baml_base::SourceRootKind::Workspace,
         ))
         .unwrap_or_else(|e| unreachable!("fresh database accepts one workspace root: {e}"));
+    db.set_claimed_identity(root, claim);
     db.add_or_update_files_in(
         root,
         files
             .iter()
+            .filter(|(path, _)| !is_manifest(path))
             .map(|(path, text)| (path.as_path(), text.as_str())),
     );
 
@@ -299,6 +327,80 @@ mod bytecode_artifact_tests {
     use super::*;
 
     #[test]
+    fn source_runtime_reads_the_shared_root_manifest() {
+        let root = vfs::VfsPath::new(vfs::MemoryFS::new())
+            .join("project")
+            .unwrap();
+        for path in ["baml.toml", "/project/baml.toml"] {
+            let mut files = HashMap::from([
+                (
+                    FsPath::from_str("main.baml".to_owned()),
+                    "function main() -> int { 7 }".to_owned(),
+                ),
+                (
+                    FsPath::from_str(path.to_owned()),
+                    "[package]\nname = 'app'\nversion = '  1.2.3-beta.4+build.5  '".to_owned(),
+                ),
+            ]);
+            let prepared = prepare(root.clone(), sys_ops::SysOps::native(), files.clone()).unwrap();
+            assert_eq!(
+                prepared.program.packages[prepared.program.root as usize]
+                    .metadata
+                    .as_ref()
+                    .unwrap()
+                    .claimed
+                    .version
+                    .as_deref(),
+                Some("1.2.3-beta.4+build.5")
+            );
+            files
+                .get_mut(&FsPath::from_str(path.to_owned()))
+                .unwrap()
+                .push_str("invalid");
+            assert!(matches!(
+                prepare(root.clone(), sys_ops::SysOps::native(), files),
+                Err(RuntimeError::InvalidArgument { .. })
+            ));
+        }
+        let files = HashMap::from([
+            (FsPath::from_str("baml.toml".to_owned()), String::new()),
+            (
+                FsPath::from_str("/project/baml.toml".to_owned()),
+                String::new(),
+            ),
+        ]);
+        assert!(matches!(
+            prepare(root, sys_ops::SysOps::native(), files),
+            Err(RuntimeError::InvalidArgument { .. })
+        ));
+        let prepared = prepare(
+            vfs::VfsPath::new(vfs::MemoryFS::new()),
+            sys_ops::SysOps::native(),
+            HashMap::from([
+                (
+                    FsPath::from_str("/main.baml".to_owned()),
+                    "function main() -> int { 7 }".to_owned(),
+                ),
+                (
+                    FsPath::from_str("/baml.toml".to_owned()),
+                    "[package]\nversion = '4.5.6'".to_owned(),
+                ),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(
+            prepared.program.packages[prepared.program.root as usize]
+                .metadata
+                .as_ref()
+                .unwrap()
+                .claimed
+                .version
+                .as_deref(),
+            Some("4.5.6")
+        );
+    }
+
+    #[test]
     fn bytecode_without_artifact_policy_uses_source_runtime_defaults() {
         const CHILD: &str = "BAML_BYTECODE_POLICY_TEST";
         if std::env::var_os(CHILD).is_none() {
@@ -343,13 +445,13 @@ mod bytecode_artifact_tests {
         ] {
             assert_eq!(engine.telemetry_recording_id(), None);
         }
-        // An explicit publisher policy still controls generated artifacts.
+        // Legacy unbound policies also honor the standard off-only veto.
         let artifact = prepare_from_bytecode(&bytecode, sys_ops::SysOps::native())
             .unwrap()
             .with_artifact_telemetry(btel_settings::artifact::ArtifactTelemetry::default())
             .build()
             .unwrap();
-        assert!(artifact.telemetry_recording_id().is_some());
+        assert_eq!(artifact.telemetry_recording_id(), None);
     }
 
     #[test]

@@ -162,6 +162,7 @@ nullable slot; **descriptor** = the typed `baml_bridge.BamlType` (or `null` = wi
 | `Ty::List(T, …)` | `Ty::List(T)` | `tags string[]` | `java.util.List<T>` (T boxed) | (same) | `BamlType.list(D)` | :136–139 |
 | `Ty::Map(K, V, …)` | `Ty::Map { key, value }` | `metadata map<string,int>` | `java.util.Map<java.lang.String, V>` (key forced to String) | (same) | `BamlType.map(BamlType.STRING, Dval)` | :142–145 |
 | `Ty::Union(types, …)` | `Ty::Union(types)` | `result string \| int` | `baml_bridge.Union2<…>` … `Union10<…>`; arity>10 → `java.lang.Object`; same-base literal union → base | (same) | `BamlType.union(a, b, …)` ordered | :146, :198–233 |
+| `Ty::Tuple(items, …)` | `Ty::Tuple(items)` | `pair (int, string)` | generated record `baml_sdk.Tuple2_IntString` (root package; components `item0`, `item1`, …); a tuple mentioning a type variable → `java.lang.Object` | (same) | `BamlType.tuple(a, b, …)` ordered — the identity the record is registered under (`TypeRegistry.registerTuple`) | `tuple_type` |
 | `Ty::Unknown { … }` | `Ty::Unknown` | `unknown` keyword | `java.lang.Object` | (same) | `null` (wire-driven) | :147 |
 | `Ty::Function { params, ret, throws, … }` | `Ty::Function { params, ret }` | callable type | `java.util.function.*` by arity; optional/arity>2 → generated `@FunctionalInterface` (`IntOptCallback` shape, landed `202883518`) | (same) | `null` (wire-driven) | :148, :407–435 |
 | no direct TIR variant | `Ty::BamlOptions` (Python-only) | generated function options plumbing | — no CodegenTy variant; options ride the trailing configurator overload | — | — | n/a |
@@ -272,6 +273,12 @@ class/enum/alias arms → the identifier + `Value`; container arms → `{token}L
 {BamlType.BOOL, BamlType.INT, BamlType.FLOAT, BamlType.STRING, BamlType.list(BamlType.classByFqn(
 "baml.json.json")), BamlType.map(BamlType.STRING, BamlType.classByFqn("baml.json.json"))}, {
 "…json$BooleanValue", "…json$IntValue", …})` plus a `registerUnionAlias("baml.json.json", …)`.
+
+### Tuples — generated records registered by identity
+
+Java has no native tuple, so every concrete tuple identity the pool mentions (at any depth, non-recursive aliases erased) gets a generated `public record TupleN_Type1Type2…(T1 item0, T2 item1, …)` in the root `baml_sdk` package (`sdkgen_java/src/tuples.rs`). Slot tokens come from `union_arm_token` in slot order with repeats kept (a union slot spells its members, `IntOrString`; an optional slot is `OptionalString`); colliding names get a trailing counter in identity order. `(int, string)` and `(string, int)` are two records, `(int,)` is `Tuple1_Int` (not `int`), and `(int | string, bool)` is a different record from the union `(int, bool) | (string, bool)`. The anchor registers each record under its tuple identity; decode constructs it by identity and encode states the identity its class was registered for (reverse lookup by class, never by name).
+
+Inbound, a record crosses as a list stating its tuple type; a plain `List` stands in for a tuple only under a slot that supplies the shape (a `BamlTypedValue`, a callback's declared return), with exactly its arity — a list member or open member keeps a list a list, and several same-arity tuple members are ambiguous. Outbound fallback when no record is registered: list of the slot join, then `List<Object>`.
 
 ### Callables — `java.util.function` by arity
 
@@ -413,6 +420,7 @@ discriminator resolved from the per-call handle table.
 | `Uint8Array(Vec<u8>)` | `uint8array_value` (`bytes`) | `byte[]` (:356) |
 | — | `literal_value` (`BamlLiteralValue`) | `decodeLiteral` unwraps to the inner `Long` / `String` / `Boolean` / `BigInteger` / `Double`; envelope discarded. No BEX variant produces this on the FFI path (:352, :376–392) |
 | `Array { element_type, items }` | `list_value` (`BamlValueList`) | `java.util.List` (`ArrayList`), elements recursively decoded (:353, :394) |
+| `Tuple { items }` | `tuple_value` (`BamlValueTuple`) | with a tuple descriptor: the record registered for that identity (`TypeRegistry.constructTuple`), else an immutable list of the join of the slot types (`Union{k}` arms; one member → bare items), else an immutable `List<Object>`; arity mismatch → `BamlError` (lenient: the plain list). Without a descriptor (dynamic results, thrown values): the tuple's carried type (`BamlValueTuple.tuple_type`) supplies the identity for the same record → union list → plain list chain (`ProtoReader.decodeTuple`); a tuple whose carried type is absent, of another arity, or outside the token grammar is the immutable `List<Object>` of its slots, each decoded wire-driven. |
 | `Map { key_type, value_type, entries }` | `map_value` (`BamlValueMap`) | `java.util.Map` (`LinkedHashMap`), **String keys**, values recursively decoded (:354, :409) |
 | `Instance { class_name, fields, type_args }` | `class_value` (`BamlValueClass`) | generated class in `baml_sdk/`, resolved via `TypeRegistry`; `type_args` reify generics (:358) |
 | `Variant { enum_name, variant_name }` | `enum_value` (`BamlValueEnum`) | generated Java `enum`, resolved via `TypeRegistry` (:359) |

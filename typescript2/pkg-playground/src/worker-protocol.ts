@@ -103,6 +103,9 @@ export type FieldSchema =
   | { type: 'enumVariant'; name: string; value: string }
   | { type: 'list'; item: FieldSchema }
   | { type: 'map'; key: FieldSchema; value: FieldSchema }
+  /** A fixed-arity tuple: one schema per slot, in slot order. Its value is
+   *  a JSON array of exactly `elements.length` entries. */
+  | { type: 'tuple'; elements: FieldSchema[] }
   | { type: 'optional'; inner: FieldSchema }
   | { type: 'union'; variants: FieldSchema[] }
   | { type: 'unsupported'; display: string };

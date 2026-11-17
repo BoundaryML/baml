@@ -1984,20 +1984,34 @@ fn rich_source_aware_tir_type_error_message(
         }
         TirTypeError::UnresolvedMember {
             base_type, member, ..
-        } => DiagnosticText::new()
-            .text("type ")
-            .type_expr(ty(base_type))
-            .text(" has no member ")
-            .identifier(member, DiagnosticIdentifierKind::Field),
+        } => {
+            let message = DiagnosticText::new()
+                .text("type ")
+                .type_expr(ty(base_type))
+                .text(" has no member ")
+                .identifier(member, DiagnosticIdentifierKind::Field);
+            if matches!(base_type, Ty::Tuple(_)) {
+                message.text("; tuple slots are numbered, such as `.0`")
+            } else {
+                message
+            }
+        }
         TirTypeError::NotCallable { ty: callee_ty } => DiagnosticText::new()
             .type_expr(ty(callee_ty))
             .text(" is not a function and cannot be called"),
         TirTypeError::NotIterable { ty: iter_ty } => DiagnosticText::new()
             .text("cannot iterate over type ")
             .type_expr(ty(iter_ty)),
-        TirTypeError::NotIndexable { ty: index_ty } => DiagnosticText::new()
-            .text("cannot index into type ")
-            .type_expr(ty(index_ty)),
+        TirTypeError::NotIndexable { ty: index_ty } => {
+            let message = DiagnosticText::new()
+                .text("cannot index into type ")
+                .type_expr(ty(index_ty));
+            if matches!(index_ty, Ty::Tuple(_)) {
+                message.text("; tuples use fixed dot slots such as `.0`; use `reflect.Tuple.get_element` for a runtime-selected slot")
+            } else {
+                message
+            }
+        }
         TirTypeError::ImplicitUnit {
             form,
             expected,
@@ -2181,6 +2195,7 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::UnionMemberAssociatedTypeConflict { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnknownClassField { .. } | TirTypeError::UnknownClassPatternField { .. } => {
             DiagnosticId::NoSuchField
         }
@@ -2225,6 +2240,11 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ItemShadowsPackage { .. } => DiagnosticId::UnknownVariable,
         TirTypeError::RemovedReflectSpelling { .. } => DiagnosticId::RemovedFeature,
         TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,
+        TirTypeError::TupleElementNotAssignable | TirTypeError::FunctionFieldNeedsParens => {
+            DiagnosticId::TypeMismatch
+        }
+        TirTypeError::TupleIndexOutOfRange { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::TupleTypeTestNeverMatches { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,
         TirTypeError::AmbiguousAssociatedTypeProjection { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ArgumentCountMismatch { .. }

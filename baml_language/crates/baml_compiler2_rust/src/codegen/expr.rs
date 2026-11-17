@@ -19,6 +19,11 @@ impl<'db> Generator<'_, 'db> {
         let code = match rvalue {
             Rvalue::Use(operand) => return self.operand(block, operand),
             Rvalue::BinaryOp { op, left, right } => {
+                if let Some((tested, negate)) = rvalue.null_test() {
+                    let value = self.value_operand(block, tested)?;
+                    let not = if negate { "!" } else { "" };
+                    return Ok(Expr::new(format!("({not}({value}).is_null())"), Repr::Bool));
+                }
                 let left = self.operand(block, left)?;
                 let right = self.operand(block, right)?;
                 return self.binary(block, *op, &left, &right);
@@ -80,6 +85,18 @@ impl<'db> Generator<'_, 'db> {
                 let element_ty = self.realized_type(template)?;
                 let values = self.arg_values(block, elements)?;
                 format!("vm.new_array({element_ty}, vec![{}])", values.join(", "))
+            }
+            Rvalue::Aggregate {
+                kind: AggregateKind::Tuple { element_templates },
+                fields,
+            } => {
+                let tuple_ty =
+                    self.realized_type(&TyTemplate::Tuple(element_templates.clone().into()))?;
+                let values = self.arg_values(block, fields)?;
+                self.fallible(
+                    block,
+                    &format!("vm.new_tuple({tuple_ty}, vec![{}])", values.join(", ")),
+                )?
             }
             Rvalue::Aggregate {
                 kind:

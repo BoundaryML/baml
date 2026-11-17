@@ -135,6 +135,13 @@ pub trait RootHaver: Send {
     /// forwarded. For state derived from the heap's layout rather than from
     /// a pointer (a TLAB's cached allocation cursor); most holders have none.
     fn relocated(&mut self) {}
+
+    /// This holder as [`Any`](std::any::Any), for a walk over every holder
+    /// that looks for one kind (the stuck-task report finds tasks this way).
+    /// `None` for a holder no such walk looks for.
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        None
+    }
 }
 
 /// The collector's two walks over a [`RootHaver`]. Blanket-implemented, so

@@ -886,6 +886,8 @@ impl Function {
             lambda_path,
             definition_key: Some(btel_types::DefinitionKey(format!("function:{fqn}"))),
             package_name,
+            compilation_unit_hash: super::owner::package_compilation_unit_hash(self.owner)
+                .map(|hash| hash.0),
             namespace,
             argument_layout: self.telemetry_argument_layout(),
             source_map: self.telemetry_source_map(),

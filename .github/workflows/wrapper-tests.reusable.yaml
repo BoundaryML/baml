@@ -81,12 +81,7 @@ jobs:
         with:
           name: wrapper-baml
           path: release-candidates/baml
-      - uses: actions/download-artifact@v8
-        if: inputs.release_candidates
-        with:
-          name: rust-wrapper-${{ env.TARGET }}
-          path: release-candidates/rust
-      - name: Run high-value wrapper tests against both implementations and variants
+      - name: Run high-value wrapper tests against both variants
         shell: bash
         env:
           RELEASE_CANDIDATES: ${{ inputs.release_candidates }}

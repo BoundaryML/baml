@@ -99,6 +99,16 @@ pub struct Package {
     #[serde(default)]
     pub prelude: bool,
 
+    /// `[package].version`: the version the package claims to be.
+    pub version: Option<String>,
+
+    /// `[package].organization`: who the package claims to be published by.
+    pub organization: Option<String>,
+
+    /// `[package].registry`: URL of the package repository the package claims
+    /// to be published on. The default repository when omitted.
+    pub registry: Option<String>,
+
     #[serde(flatten)]
     pub unknown: IndexMap<String, toml::Value>,
 }
@@ -253,6 +263,29 @@ pub fn package_name(
     Ok(name.clone())
 }
 
+/// What the manifest claims the package is (BEP-085): `[package]`'s name,
+/// version, organization and registry, as written. A blank value claims
+/// nothing, the same as an omitted one.
+pub fn claimed_identity(manifest: &BamlToml) -> baml_base::ClaimedIdentity {
+    let stated = |value: &Option<String>| {
+        value
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+    };
+    manifest
+        .package
+        .as_ref()
+        .map(|package| baml_base::ClaimedIdentity {
+            registry: stated(&package.registry),
+            organization: stated(&package.organization),
+            name: stated(&package.name),
+            version: stated(&package.version),
+        })
+        .unwrap_or_default()
+}
+
 /// Human-readable warnings for keys we didn't recognize, so a typo
 /// (`[scriptz]`, `nmae = ...`, `outpt_type = ...`) surfaces instead of being
 /// silently ignored. Each warning is non-fatal — forward-compatible
@@ -308,6 +341,31 @@ mod tests {
         let m = parse("[package]\nname = \"app\"\n[scripts]\ndev = \"-f main\"\n").unwrap();
         assert_eq!(m.package.unwrap().name.as_deref(), Some("app"));
         assert_eq!(m.scripts["dev"].tokens(), vec!["-f", "main"]);
+    }
+
+    #[test]
+    fn claimed_identity_reads_the_package_table() {
+        let m = parse(
+            "[package]\nname = \"app\"\nversion = \"1.2.0\"\norganization = \"acme\"\n\
+             registry = \"https://packages.example.com\"\n",
+        )
+        .unwrap();
+        assert!(unknown_field_warnings(&m).is_empty());
+        assert_eq!(
+            claimed_identity(&m),
+            baml_base::ClaimedIdentity {
+                registry: Some("https://packages.example.com".to_owned()),
+                organization: Some("acme".to_owned()),
+                name: Some("app".to_owned()),
+                version: Some("1.2.0".to_owned()),
+            }
+        );
+        let blank = parse("[package]\nname = \"app\"\nversion = \" \"\n").unwrap();
+        assert_eq!(claimed_identity(&blank).version, None);
+        assert_eq!(
+            claimed_identity(&parse("[scripts]\n").unwrap()),
+            baml_base::ClaimedIdentity::default()
+        );
     }
 
     #[test]

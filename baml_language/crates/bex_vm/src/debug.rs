@@ -145,6 +145,7 @@ pub(crate) fn display_instruction(
         Instruction::Call { callee, .. }
         | Instruction::CallLocal { callee, .. }
         | Instruction::CallHooked { callee, .. }
+        | Instruction::CallEquals(callee)
         | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
@@ -162,10 +163,21 @@ pub(crate) fn display_instruction(
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
-        | Instruction::StoreVarLoadVar(index) => match function.local_names.get(*index) {
+        | Instruction::StoreVarLoadVar(index)
+        | Instruction::LoadVarField(index, _)
+        | Instruction::LoadVarFieldLocal(index, _) => match function.local_names.get(*index) {
             Some(name) => format!("({name})"),
             None => "(?)".to_string(),
         },
+        Instruction::AddLocalSmall(dst, src, value) => {
+            let name = |index: &usize| {
+                function
+                    .local_names
+                    .get(*index)
+                    .map_or_else(|| "?".to_string(), ToString::to_string)
+            };
+            format!("({} = {} + {value})", name(dst), name(src))
+        }
         Instruction::LoadField(_)
         | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
@@ -194,6 +206,43 @@ pub(crate) fn display_instruction(
         | Instruction::JumpIfNotNullOrPop(offset)
         | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
+        }
+        Instruction::JumpIfLocalsCmp { cmp, a, b, offset } => {
+            let name = |index: &usize| {
+                function
+                    .local_names
+                    .get(*index)
+                    .map_or_else(|| "?".to_string(), ToString::to_string)
+            };
+            format!(
+                "(if {} {cmp} {}, to {})",
+                name(a),
+                name(b),
+                instruction_ptr.wrapping_add_signed(*offset)
+            )
+        }
+        Instruction::JumpIfLocalConstCmp {
+            cmp,
+            a,
+            constant,
+            offset,
+        } => {
+            let name = function
+                .local_names
+                .get(*a)
+                .map_or_else(|| "?".to_string(), ToString::to_string);
+            let constant = function
+                .bytecode
+                .resolved_constants
+                .get(*constant)
+                .map_or_else(
+                    || format!("const {constant}"),
+                    |value| display_value(*value),
+                );
+            format!(
+                "(if {name} {cmp} {constant}, to {})",
+                instruction_ptr.wrapping_add_signed(*offset)
+            )
         }
         Instruction::AllocInstance {
             class_obj: index, ..
@@ -257,6 +306,8 @@ pub(crate) fn display_instruction(
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::ConcatStrings(_)
+        | Instruction::AllocTuple(_)
+        | Instruction::LoadTupleField(_)
         | Instruction::AllocMap(_)
         | Instruction::LoadArrayElement
         | Instruction::LoadArrayElementLocal
@@ -288,6 +339,8 @@ pub(crate) fn display_instruction(
         | Instruction::SendEvent
         | Instruction::ContainerLen
         | Instruction::ContainerLenLocal
+        | Instruction::IsNull
+        | Instruction::IsNotNull
         | Instruction::Spawn
         | Instruction::LoadType(_)
         | Instruction::BindType(_)
@@ -400,16 +453,20 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::ArrayIterNext { .. }
         | Instruction::ArrayIterNextLocal { .. }
         | Instruction::LoadVar2(..)
+        | Instruction::LoadVarField(..)
+        | Instruction::LoadVarFieldLocal(..)
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
+        | Instruction::LoadTupleField(_)
         | Instruction::LoadArrayElement
         | Instruction::LoadArrayElementLocal
         | Instruction::LoadMapElement => Style::new().blue(),
         Instruction::StoreVar(_)
         | Instruction::StoreVarLoadVar(_)
         | Instruction::StoreVar2(..)
+        | Instruction::AddLocalSmall(..)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
         | Instruction::StoreFieldLocal(_)
@@ -451,11 +508,14 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpIfTrueOrPop(_)
         | Instruction::JumpIfNotNullOrPop(_)
         | Instruction::JumpIfFalse(_)
+        | Instruction::JumpIfLocalsCmp { .. }
+        | Instruction::JumpIfLocalConstCmp { .. }
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. }
         | Instruction::CallLocal { .. }
         | Instruction::CallHooked { .. }
+        | Instruction::CallEquals(_)
         | Instruction::BeginTraceHook(_)
         | Instruction::EndTraceHook
         | Instruction::TraceHookHidden
@@ -476,7 +536,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_)
-        | Instruction::ConcatStrings(_) => Style::new().cyan(),
+        | Instruction::ConcatStrings(_)
+        | Instruction::AllocTuple(_) => Style::new().cyan(),
         Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await | Instruction::AwaitAny => {
             Style::new().green().bright()
         }
@@ -502,6 +563,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Style::new().green(),
         Instruction::SendEvent => Style::new().green().bright(),
         Instruction::ContainerLen | Instruction::ContainerLenLocal => Style::new().cyan(),
+        Instruction::IsNull | Instruction::IsNotNull => Style::new().yellow(),
     }
 }
 
@@ -706,7 +768,9 @@ fn display_bytecode_textual(function: &Function) -> String {
             | Instruction::JumpIfFalseOrPop(offset)
             | Instruction::JumpIfTrueOrPop(offset)
             | Instruction::JumpIfNotNullOrPop(offset)
-            | Instruction::JumpIfFalse(offset) => {
+            | Instruction::JumpIfFalse(offset)
+            | Instruction::JumpIfLocalsCmp { offset, .. }
+            | Instruction::JumpIfLocalConstCmp { offset, .. } => {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
             }
@@ -804,6 +868,15 @@ fn display_instruction_textual(
             format!("array_iter_next_local {iterator} {index}")
         }
         Instruction::StoreVar2(a, b) => format!("store_var2 {a} {b}"),
+        Instruction::AddLocalSmall(dst, src, value) => {
+            format!("add_local_small {dst} {src} {value}")
+        }
+        Instruction::LoadVarField(slot, field) => {
+            format!("load_var_field {slot} .{}", meta_str(field))
+        }
+        Instruction::LoadVarFieldLocal(slot, field) => {
+            format!("load_var_field_local {slot} .{}", meta_str(field))
+        }
 
         // --- Globals ---
         Instruction::LoadGlobal(idx) => format!("load_global {}", meta_str(&idx.raw())),
@@ -826,6 +899,7 @@ fn display_instruction_textual(
             let name = meta_str(idx);
             format!("store_field_local .{name}")
         }
+        Instruction::LoadTupleField(slot) => format!("load_tuple_field .{slot}"),
         // The operand indexes the *interface's* field list, not the receiver's
         // layout, so show the name and mark it virtual.
         Instruction::VirtualLoadField(idx) => {
@@ -887,6 +961,31 @@ fn display_instruction_textual(
                 .cloned()
                 .unwrap_or_else(|| format!("?{target}"));
             format!("{name} {label}")
+        }
+        Instruction::JumpIfLocalsCmp { cmp, a, b, offset } => {
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            format!("jump_if_locals_cmp {a} {cmp} {b} {label}")
+        }
+        Instruction::JumpIfLocalConstCmp {
+            cmp,
+            a,
+            constant,
+            offset,
+        } => {
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            let constant = match function.bytecode.constants.get(*constant) {
+                Some(ConstValue::Int(value)) => value.to_string(),
+                _ => format!("const {constant}"),
+            };
+            format!("jump_if_local_const_cmp {a} {cmp} {constant} {label}")
         }
         Instruction::JumpTable(table_idx) => {
             let default_target =
@@ -956,6 +1055,7 @@ fn display_instruction_textual(
         // --- Allocation ---
         Instruction::AllocArray(n) => format!("alloc_array {n}"),
         Instruction::ConcatStrings(n) => format!("concat_strings {n}"),
+        Instruction::AllocTuple(n) => format!("alloc_tuple {n}"),
         Instruction::AllocMap(n) => format!("alloc_map {n}"),
         Instruction::AllocInstance {
             class_obj: _,
@@ -995,6 +1095,7 @@ fn display_instruction_textual(
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallHooked { .. } => format!("call_hooked {}", meta_str(&"")),
         Instruction::CallLocal { .. } => format!("call_local {}", meta_str(&"")),
+        Instruction::CallEquals(_) => format!("call_equals {}", meta_str(&"")),
         Instruction::BeginTraceHook(value) => format!("begin_trace_hook {value}"),
         Instruction::EndTraceHook => "end_trace_hook".into(),
         Instruction::TraceHookHidden => "trace_hook_hidden".into(),
@@ -1104,6 +1205,8 @@ fn display_instruction_textual(
         Instruction::SendEvent => "send_event".to_string(),
         Instruction::ContainerLen => "container_len".to_string(),
         Instruction::ContainerLenLocal => "container_len_local".to_string(),
+        Instruction::IsNull => "is_null".to_string(),
+        Instruction::IsNotNull => "is_not_null".to_string(),
     }
 }
 
@@ -1270,6 +1373,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::Call { .. }
         | Instruction::CallLocal { .. }
         | Instruction::CallHooked { .. }
+        | Instruction::CallEquals(_)
         | Instruction::BeginTraceHook(_)
         | Instruction::EndTraceHook
         | Instruction::TraceHookHidden
@@ -1393,6 +1497,8 @@ pub fn display_compact_bytecode(
             | OpCode::SendEvent
             | OpCode::ContainerLen
             | OpCode::ContainerLenLocal
+            | OpCode::IsNull
+            | OpCode::IsNotNull
             | OpCode::Spawn
             | OpCode::Add
             | OpCode::Sub
@@ -1488,10 +1594,13 @@ pub fn display_compact_bytecode(
             | OpCode::Copy
             | OpCode::AllocArray
             | OpCode::ConcatStrings
+            | OpCode::AllocTuple
+            | OpCode::LoadTupleField
             | OpCode::AllocMap
             | OpCode::InitInstance
             | OpCode::AllocVariant
             | OpCode::SysOp
+            | OpCode::CallEquals
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType
@@ -1577,10 +1686,32 @@ pub fn display_compact_bytecode(
             | OpCode::StoreVar2
             | OpCode::NarrowBind
             | OpCode::ArrayIterNext
-            | OpCode::ArrayIterNextLocal => {
+            | OpCode::ArrayIterNextLocal
+            | OpCode::LoadVarField
+            | OpCode::LoadVarFieldLocal => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;
+            }
+
+            // u8 comparison + u32 local + u32 local/constant + i32 offset
+            OpCode::JumpIfLocalsCmp | OpCode::JumpIfLocalConstCmp => {
+                let cmp = OpCode::try_from(code[pc]).map_err(|_| std::fmt::Error)?;
+                pc += 1;
+                let a = read_u32(code, &mut pc);
+                let b = read_u32(code, &mut pc);
+                let offset_val = read_i32(code, &mut pc);
+                let target = (pc as i64 + offset_val as i64) as usize;
+                writeln!(f, "{cmp:?} {a} {b} {offset_val:+}  (-> {target:04})")?;
+            }
+
+            // u32 destination + u32 source + i8 addend
+            OpCode::AddLocalSmall => {
+                let dst = read_u32(code, &mut pc);
+                let src = read_u32(code, &mut pc);
+                let value = code[pc] as i8;
+                pc += 1;
+                writeln!(f, "{dst} {src} {value}")?;
             }
         }
     }

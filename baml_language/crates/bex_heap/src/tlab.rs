@@ -163,6 +163,10 @@ impl Tlab {
     /// If the current chunk is exhausted, refill from the heap.
     #[inline]
     pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
+        debug_assert!(
+            !matches!(obj, Object::Float(f) if Value::try_inline_float(f).is_some()),
+            "a float with an inline encoding must not be boxed; use float_value"
+        );
         self.charge(&mut obj);
 
         if self.alloc_ptr >= self.alloc_limit {
@@ -267,10 +271,23 @@ impl Tlab {
         Ok(unsafe { self.publish(reservation, Object::Function(function)) })
     }
 
-    /// Allocate a float object.
-    #[inline]
-    pub fn alloc_float(&mut self, f: f64) -> HeapPtr {
-        self.alloc(Object::Float(f))
+    /// The `Value` of a float: inline when it has an inline encoding,
+    /// otherwise a fresh `Object::Float` box (NaN, `±inf`, extreme
+    /// magnitudes). The one way to build a float value, which keeps the
+    /// representation canonical — see [`Value`].
+    #[inline(always)]
+    #[allow(clippy::inline_always)]
+    pub fn float_value(&mut self, f: f64) -> Value {
+        match Value::try_inline_float(f) {
+            Some(v) => v,
+            None => self.box_float(f),
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn box_float(&mut self, f: f64) -> Value {
+        Value::object(self.alloc(Object::Float(f)))
     }
 
     /// Allocate a string object.
@@ -287,6 +304,11 @@ impl Tlab {
         values: Vec<Value>,
     ) -> HeapPtr {
         self.alloc(Object::Array(Array::new(element_ty, values)))
+    }
+
+    #[inline]
+    pub fn alloc_tuple(&mut self, tuple: bex_vm_types::Tuple) -> HeapPtr {
+        self.alloc(Object::Tuple(tuple))
     }
 
     /// Allocate a map object whose keys/values have static types `key_ty`/`value_ty`.
@@ -499,8 +521,9 @@ pub trait TlabHolder {
         self.tlab_mut().alloc(obj)
     }
 
-    fn alloc_float(&mut self, f: f64) -> HeapPtr {
-        self.tlab_mut().alloc_float(f)
+    /// See [`Tlab::float_value`].
+    fn float_value(&mut self, f: f64) -> Value {
+        self.tlab_mut().float_value(f)
     }
 
     fn alloc_string(&mut self, s: impl Into<bex_str::BexStr>) -> HeapPtr {
@@ -518,6 +541,10 @@ pub trait TlabHolder {
         values: IndexMap<bex_str::BexStr, Value>,
     ) -> HeapPtr {
         self.tlab_mut().alloc_map(key_ty, value_ty, values)
+    }
+
+    fn alloc_tuple(&mut self, tuple: bex_vm_types::Tuple) -> HeapPtr {
+        self.tlab_mut().alloc_tuple(tuple)
     }
 
     fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
@@ -866,6 +893,7 @@ mod tests {
             other: Default::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
 
         // Allocate a variant (Color::Green = index 1)
@@ -1140,7 +1168,7 @@ mod tests {
                     (0..PER_THREAD)
                         .map(|i| {
                             let key = u32::try_from(thread * PER_THREAD + i).unwrap();
-                            (key, tlab.alloc_float(f64::from(key)))
+                            (key, tlab.alloc_string(key.to_string()))
                         })
                         .collect::<Vec<_>>()
                 })
@@ -1162,7 +1190,7 @@ mod tests {
             assert!(gen0.contains_ptr(ptr.as_ptr()));
             // SAFETY: the allocating thread wrote this slot and has joined.
             match unsafe { ptr.get() } {
-                Object::Float(value) => assert_eq!(*value, f64::from(key)),
+                Object::String(value) => assert_eq!(value.as_str(), key.to_string()),
                 other => panic!("slot for {key} holds {other:?}"),
             }
         }

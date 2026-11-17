@@ -38,6 +38,7 @@ pub mod json;
 mod map;
 mod media;
 mod ops;
+pub(crate) use ops::{EnumEqualsMemo, equals_without_driver};
 mod ops_bitwise;
 mod ops_math;
 mod prompt;
@@ -54,6 +55,9 @@ pub use spawn::{
 };
 mod stack_trace;
 mod string;
+mod sync;
+pub use sync::MonitorRoot;
+pub(crate) use sync::TaskMonitors;
 mod sys;
 mod time;
 mod toml;

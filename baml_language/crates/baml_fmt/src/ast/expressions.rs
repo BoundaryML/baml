@@ -54,6 +54,7 @@ pub(crate) trait ExprExt: Copy {
     fn binds_as_postfix_operand(self, tree: &FileTree) -> bool;
     fn has_optional_chain_link(self, tree: &FileTree) -> bool;
     fn effective_postfix_operand(self, printer: &Printer<'_>) -> AnyExpr;
+    fn effective_call_operand(self, printer: &Printer<'_>) -> AnyExpr;
     fn effective_unary_operand(self, printer: &Printer<'_>) -> AnyExpr;
     fn peel_to_needed_paren(self, printer: &Printer<'_>, unary: bool) -> AnyExpr;
 }
@@ -95,6 +96,24 @@ impl ExprExt for AnyExpr {
             AnyExpr::Backtick(s) => verbatim_width(input, s),
             AnyExpr::Path(path) => path.single_line_width(input),
             AnyExpr::GenericApply(ga) => ga.single_line_width(input),
+            AnyExpr::Tuple(id) => {
+                let elements = tree.list(tree.get(id).elements);
+                let mut width = 2 + usize::from(elements.len() == 1);
+                for (i, element) in elements.iter().enumerate() {
+                    width += element.item.single_line_width(input)? + if i > 0 { 2 } else { 0 };
+                }
+                Some(width)
+            }
+            AnyExpr::TupleField(id) => {
+                let node = tree.get(id);
+                Some(
+                    node.base
+                        .effective_postfix_operand(input)
+                        .single_line_width(input)?
+                        + usize::from(input.range(node.dot).len())
+                        + usize::from(input.range(node.slot).len()),
+                )
+            }
             AnyExpr::Paren(paren) => paren.single_line_width(input),
             AnyExpr::Binary(binary) => binary.single_line_width(input),
             AnyExpr::Is(is) => is.single_line_width(input),
@@ -137,11 +156,13 @@ impl ExprExt for AnyExpr {
 
     fn binds_as_postfix_operand(self, tree: &FileTree) -> bool {
         match self {
-            AnyExpr::Call(_) | AnyExpr::Index(_) | AnyExpr::FieldAccess(_) => {
-                !self.has_optional_chain_link(tree)
-            }
+            AnyExpr::Call(_)
+            | AnyExpr::Index(_)
+            | AnyExpr::FieldAccess(_)
+            | AnyExpr::TupleField(_) => !self.has_optional_chain_link(tree),
             AnyExpr::Path(_)
             | AnyExpr::EnvAccess(_)
+            | AnyExpr::Tuple(_)
             | AnyExpr::Array(_)
             | AnyExpr::String(_)
             | AnyExpr::Backtick(_) => true,
@@ -156,10 +177,32 @@ impl ExprExt for AnyExpr {
             | AnyExpr::OptionalCall(_) => true,
             AnyExpr::Call(call) => tree.get(call).callee.has_optional_chain_link(tree),
             AnyExpr::Index(index) => tree.get(index).base.has_optional_chain_link(tree),
+            AnyExpr::TupleField(id) => {
+                let node = tree.get(id);
+                tree.tokens().kind(node.dot.idx) == baml_syntax::token::TokenKind::QuestionDot
+                    || node.base.has_optional_chain_link(tree)
+            }
             AnyExpr::FieldAccess(fa) => tree.get(fa).base.has_optional_chain_link(tree),
             AnyExpr::Paren(paren) => present(tree.get(paren).inner).has_optional_chain_link(tree),
             _ => false,
         }
+    }
+
+    fn effective_call_operand(self, printer: &Printer<'_>) -> AnyExpr {
+        if matches!(self, AnyExpr::Paren(_)) {
+            let inner = self.peel_transparent_parens(printer);
+            let member = match inner {
+                AnyExpr::Path(id) => !printer.tree.list(printer.tree.get(id).segments).is_empty(),
+                AnyExpr::FieldAccess(_)
+                | AnyExpr::OptionalFieldAccess(_)
+                | AnyExpr::TupleField(_) => true,
+                _ => false,
+            };
+            if member {
+                return self;
+            }
+        }
+        self.effective_postfix_operand(printer)
     }
 
     fn effective_postfix_operand(self, printer: &Printer<'_>) -> AnyExpr {
@@ -208,6 +251,14 @@ impl Printable for AnyExpr {
                 chain.print(shape, printer)
             }
             AnyExpr::GenericApply(ga) => printer.print(ga, shape),
+            AnyExpr::Tuple(id) => printer.print(id, shape),
+            AnyExpr::TupleField(id) => {
+                let node = printer.tree.get(id);
+                let info = printer.print(node.base.effective_postfix_operand(printer), shape);
+                printer.print_token(node.dot);
+                printer.print_token(node.slot);
+                info
+            }
             AnyExpr::Paren(paren) => printer.print(paren, shape),
             AnyExpr::Binary(binary) => printer.print(binary, shape),
             AnyExpr::Is(is) => printer.print(is, shape),
@@ -908,6 +959,10 @@ fn match_scrutinee_single_line(
     let tree = printer.tree;
     let node = tree.get(id);
     let (scrutinee, parens, ascription) = scrutinee_parts(present(node.scrutinee), tree);
+    if matches!(scrutinee, AnyExpr::Tuple(_)) && ascription.is_none() {
+        let info = printer.print(scrutinee, *shape);
+        return (!info.multi_lined && printer.output.len() <= shape.width).then_some(info);
+    }
     match parens {
         Some((open, _)) => {
             printer.print_token(open);
@@ -947,6 +1002,10 @@ fn match_scrutinee_multi_line(id: Id<MatchExpr>, shape: &Shape, printer: &mut Pr
     let tree = printer.tree;
     let node = tree.get(id);
     let (scrutinee, parens, ascription) = scrutinee_parts(present(node.scrutinee), tree);
+    if matches!(scrutinee, AnyExpr::Tuple(_)) && ascription.is_none() {
+        printer.print(scrutinee, *shape);
+        return;
+    }
     let paren_inner_indent = shape.indent + printer.config.indent_width;
     match parens {
         Some((open, _)) => {
@@ -1297,7 +1356,7 @@ impl CallExprExt for Id<CallExpr> {
         let node = input.tree.get(self);
         let callee = node
             .callee
-            .effective_postfix_operand(input)
+            .effective_call_operand(input)
             .single_line_width(input)?;
         let args = node.args.single_line_width(input)?;
         Some(callee + args)
@@ -1309,7 +1368,7 @@ impl Printable for Id<CallExpr> {
         let node = printer.tree.get(self);
         let mut multi_lined = false;
         let line_len_before = printer.current_line_len();
-        let callee = node.callee.effective_postfix_operand(printer);
+        let callee = node.callee.effective_call_operand(printer);
         multi_lined |= printer.print(callee, shape).multi_lined;
         let args_shape = Shape {
             first_line_offset: shape.first_line_offset
@@ -1858,7 +1917,7 @@ impl OptionalCallExt for Id<OptionalCallExpr> {
         let node = input.tree.get(self);
         let callee = node
             .callee
-            .effective_postfix_operand(input)
+            .effective_call_operand(input)
             .single_line_width(input)?;
         let args = node.args.single_line_width(input)?;
         Some(callee + usize::from(input.range(node.qdot).len()) + args)
@@ -1869,7 +1928,7 @@ impl Printable for Id<OptionalCallExpr> {
     fn print(self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let node = printer.tree.get(self);
         let mut multi_lined = false;
-        let callee = node.callee.effective_postfix_operand(printer);
+        let callee = node.callee.effective_call_operand(printer);
         multi_lined |= printer.print(callee, shape).multi_lined;
         printer.print_token(node.qdot);
         multi_lined |= printer.print(node.args, shape).multi_lined;
@@ -3080,6 +3139,15 @@ impl PrintChain {
             }
             AnyExpr::Call(call_expr) => {
                 let node = tree.get(call_expr);
+                if matches!(
+                    node.callee.effective_call_operand(printer),
+                    AnyExpr::Paren(_)
+                ) {
+                    return Self {
+                        first: ChainFirst::Expr(from),
+                        chain_members: Vec::new(),
+                    };
+                }
                 let mut chain = Self::new(node.callee, printer);
                 if chain.chain_members.is_empty() {
                     Self {

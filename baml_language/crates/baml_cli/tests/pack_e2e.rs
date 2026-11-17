@@ -28,6 +28,7 @@ use std::{
 };
 
 use common::BuiltPaths;
+use sys_native::SysOpsExt as _;
 
 // ============================================================================
 // Helpers
@@ -37,7 +38,7 @@ fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
     let out_bin = dir.join("out");
     let mut cmd = Command::new(&built.baml_cli);
     cmd.arg("pack")
-        .arg("--from")
+        .arg("--project-dir")
         .arg(dir)
         .arg("-o")
         .arg(&out_bin);
@@ -84,6 +85,160 @@ fn pack_project(
 // ============================================================================
 // Tests
 // ============================================================================
+
+/// The application has one version regardless of transport. Exercise source
+/// execution (including a warm cache), a real packed host, and generated SDK
+/// bytecode through the runtime that bridges use, all before package `$init`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn package_version_reaches_source_pack_and_bridge_before_initialization() {
+    let built = common::ensure_built();
+    let project = tempfile::tempdir().unwrap();
+    let source = format!(
+        r#"
+function version(key: string) -> string {{
+    match (trace.current_context().metadata.get(key)) {{
+        let value: string => value,
+        _ => "<unset>",
+    }}
+}}
+const initial_baml_version = version("baml.ctx.baml_version");
+const initial_app_version = version("baml.ctx.app_version");
+function main() -> string {{
+    assert.equal(initial_baml_version, {baml_version:?});
+    assert.equal(version("baml.ctx.baml_version"), initial_baml_version);
+    assert.equal(version("baml.ctx.app_version"), initial_app_version);
+    initial_app_version
+}}
+"#,
+        baml_version = baml_version::CANONICAL_VERSION
+    );
+    common::write_project(project.path(), &source);
+    let cli = |args: &[&str]| {
+        Command::new(&built.baml_cli)
+            .args(args)
+            .current_dir(project.path())
+            .env("BAML_HOME", common::shared_baml_home())
+            .env("BAML_CLI_ALLOW_DIRECT", "1")
+            .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+            .env("DO_NOT_TRACK", "1")
+            .env("BAML_TELEMETRY", "off")
+            .env("BOUNDARY_API_KEY", "local")
+            .env_remove("BAML_CONTEXT")
+            .output()
+            .unwrap()
+    };
+    for version in [
+        None,
+        Some("1.2.3+build.4"),
+        Some("2.0.0-beta.1"),
+        Some(""),
+        Some(" \t "),
+        Some(" 3.4.5+build.6 "),
+        Some("build-canary"),
+        None,
+    ] {
+        let setting = version
+            .map(|value| format!("version = {value:?}\n"))
+            .unwrap_or_default();
+        std::fs::write(
+            project.path().join("baml.toml"),
+            format!(
+                r#"[package]
+name = "version-context"
+{setting}
+[pack.env_var_names]
+BAML_TELEMETRY = "BAML_TELEMETRY"
+[generator.rust]
+output_type = "rust"
+output_dir = "generated"
+naming_convention = "preserve-case"
+"#
+            ),
+        )
+        .unwrap();
+        let expected = version
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("<unset>");
+        for _ in 0..2 {
+            let output = cli(&["run", "main", "--output-format", "json"]);
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                serde_json::from_slice::<String>(&output.stdout).unwrap(),
+                expected
+            );
+        }
+        let packed = cli(&["pack", "main", "--output", "app"]);
+        assert!(
+            packed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&packed.stderr)
+        );
+        let output = Command::new(project.path().join("app"))
+            .env("BAML_HOME", project.path().join("packed-home"))
+            .env("BOUNDARY_API_KEY", "local")
+            .env("DO_NOT_TRACK", "1")
+            .env("BAML_TELEMETRY", "off")
+            .env(
+                "BAML_CONTEXT",
+                if expected != "<unset>" {
+                    r#"{"metadata":{"baml.ctx.baml_version":"spoofed","baml.ctx.app_version":"spoofed"}}"#
+                } else {
+                    r#"{"metadata":{"baml.ctx.baml_version":"spoofed"}}"#
+                },
+            )
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            serde_json::from_slice::<String>(&output.stdout).unwrap(),
+            expected
+        );
+
+        let generated = cli(&["generate"]);
+        assert!(
+            generated.status.success(),
+            "{}",
+            String::from_utf8_lossy(&generated.stderr)
+        );
+        let bytes = std::fs::read(
+            project
+                .path()
+                .join("generated/baml_sdk/src/_inlinedbaml.bin"),
+        )
+        .unwrap();
+        let runtime = bex_project::prepare_from_bytecode(&bytes, sys_native::SysOps::native())
+            .unwrap()
+            .with_artifact_telemetry(btel_settings::artifact::ArtifactTelemetry {
+                recording_level: btel_settings::artifact::RecordingLevel::Off,
+                ..Default::default()
+            })
+            .build()
+            .unwrap();
+        let result = runtime
+            .call_function(
+                "main",
+                vec![],
+                bex_engine::FunctionCallContextBuilder::new(bex_engine::CallId::next()).build(),
+                true,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            result,
+            bex_engine::BexExternalValue::String(expected.into())
+        );
+        runtime.shutdown().await;
+    }
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn artifact_recording_level_requires_explicit_permission_and_off_skips_auth() {
@@ -305,7 +460,7 @@ fn pack_e2e_omits_compile_file_status() {
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("BAML_HOME", common::shared_baml_home())
         .arg("pack")
-        .arg("--from")
+        .arg("--project-dir")
         .arg(tmp.path())
         .arg("-o")
         .arg(&out_bin)
@@ -375,45 +530,30 @@ fn pack_e2e_hermetic_baml_file() {
     assert!(String::from_utf8_lossy(&run_out.stdout).contains("hermetic"));
 }
 
-/// The baked-in output format actually governs the running binary.
-/// Default is JSON; the stdout must parse as a JSON document. If the
-/// envelope's `output_format` weren't honored, `debug` formatting would
-/// leak through and this would fail.
+/// A packed binary picks its output format at run time, like `baml run`:
+/// text by default, `--output-format json` among a typed target's flags.
 #[test]
-fn pack_e2e_output_format_json_baked_in() {
-    let built = common::ensure_built();
-    let (_tmp, bin) = pack_project(built, "function main() -> int { 42 }\n", &["main"]);
-    let out = run(&bin, &[]);
-    assert!(out.status.success());
-    let stdout = String::from_utf8(out.stdout).unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(stdout.trim())
-        .unwrap_or_else(|_| panic!("stdout should be valid JSON; got: {stdout}"));
-    assert_eq!(parsed, serde_json::json!(42));
-}
-
-/// `--output-format debug` at pack time should reach the packed binary
-/// and change its runtime output. Using a string target because that's
-/// where the two formats render differently (debug uses Rust's
-/// `{:?}` escaping; JSON uses `"…"` as a `serde_json` value).
-#[test]
-fn pack_e2e_output_format_debug_baked_in() {
+fn pack_e2e_output_format_is_a_runtime_flag() {
     let built = common::ensure_built();
     let (_tmp, bin) = pack_project(
         built,
-        "function main() -> string { \"hello\" }\n",
-        &["main", "--output-format", "debug"],
+        "class Point {\n    x: int,\n}\n\nfunction main(x: int) -> Point {\n    Point { x: x }\n}\n",
+        &["main"],
     );
-    let out = run(&bin, &[]);
-    assert!(out.status.success());
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    // Debug format writes the string; a JSON-default build would also
-    // write a string — but in debug mode it's NOT wrapped in the JSON
-    // pretty-printer, so there's no extra whitespace / quoting artifacts.
-    // Easiest distinguishing check: debug output is one line ending
-    // with the string; JSON pretty-print output would be the same for
-    // a simple string, so we verify the content is there and trust the
-    // envelope roundtrip test below for separation.
-    assert!(stdout.contains("hello"));
+
+    let text = run(&bin, &["--x", "42"]);
+    assert!(text.status.success(), "{text:?}");
+    let stdout = String::from_utf8(text.stdout).unwrap();
+    assert!(stdout.contains("42"), "{stdout}");
+    assert!(
+        serde_json::from_str::<serde_json::Value>(stdout.trim()).is_err(),
+        "the default is text, not JSON: {stdout}"
+    );
+
+    let json = run(&bin, &["--x", "42", "--output-format", "json"]);
+    assert!(json.status.success(), "{json:?}");
+    let parsed: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(parsed, serde_json::json!({"x": 42}));
 }
 
 /// `baml.sys.exit(n)` must cross the subprocess boundary unchanged.
@@ -579,7 +719,7 @@ fn rust_pack_from_outside_workspace_with_cargo_overrides() {
             .args(["pack", "main", "--rust", "--rust-profile", "fast"])
             .arg("--rust-workspace")
             .arg(workspace)
-            .arg("--from")
+            .arg("--project-dir")
             .arg(project.path())
             .arg("--output")
             .arg(&output_path)

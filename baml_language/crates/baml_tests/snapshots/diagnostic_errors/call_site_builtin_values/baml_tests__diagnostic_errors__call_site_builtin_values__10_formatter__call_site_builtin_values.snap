@@ -63,6 +63,6 @@ function current_package() -> reflect.Package {
 // do not change that.
 function direct_calls() -> reflect.Package {
     log.info("direct");
-    log.info("parenthesized");
+    (log.info)("parenthesized");
     reflect.Package.current()
 }

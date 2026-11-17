@@ -1,7 +1,7 @@
 //! Fixed-work recording benchmark, run by `tools/btel_query_bench.py`.
 //!
 //! `MODE WORKLOAD ROOTS PROJECT [PAYLOAD_BYTES] [TARGET_BYTES]`. Records into
-//! `PROJECT/.baml/btel` exactly like `baml run`, so `baml query --from PROJECT`
+//! `PROJECT/.baml/btel` exactly like `baml run`, so `baml query --project-dir PROJECT`
 //! reads the result. Uses only engine APIs that also exist on the base commit,
 //! so the same file measures the recorder before and after this branch.
 //! Adapted from the archived SQLite-recorder experiment's harness.

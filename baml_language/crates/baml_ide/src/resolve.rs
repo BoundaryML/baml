@@ -521,6 +521,154 @@ pub fn receiver_at_dot<'db>(
         .map(|(owner, ty, _)| (owner, ty))
 }
 
+fn visit_bodies_at<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    offset: TextSize,
+    mut visit: impl FnMut(
+        baml_compiler2_hir::body::BodyOwnerId<'db>,
+        &baml_compiler2_ast::ExprBody,
+        &baml_compiler2_ast::AstSourceMap,
+        &'db baml_compiler2_hir_ty::infer::InferenceResult<'db>,
+    ),
+) {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let mut seen: Vec<baml_compiler2_hir::body::BodyOwnerId<'db>> = Vec::new();
+    for scope_id in scope_candidates_at(db, file, index, offset) {
+        let Some(owner_scope) = enclosing_body_scope(index, scope_id) else {
+            continue;
+        };
+        let Some(owner) = scope_body_owner(db, index, owner_scope) else {
+            continue;
+        };
+        if seen.contains(&owner) {
+            continue;
+        }
+        seen.push(owner);
+        let body = baml_compiler2_hir::body::body(db, owner);
+        let (Some(expr_body), Some(source_map), Some(inference)) = (
+            body.expr_body(),
+            baml_compiler2_hir::body::body_source_map(db, owner),
+            baml_compiler2_hir_ty::ide::infer_for_scope(
+                db,
+                index.scope_ids[owner_scope.index() as usize],
+            ),
+        ) else {
+            continue;
+        };
+        visit(owner, expr_body, &source_map, inference);
+    }
+}
+
+pub(crate) fn tuple_slots(
+    db: &dyn baml_compiler2_hir::Db,
+    ty: &baml_type::Ty,
+) -> Option<Vec<baml_type::Ty>> {
+    let mut ty = ty.clone();
+    for _ in 0..32 {
+        match ty {
+            baml_type::Ty::Tuple(elements) => return Some(elements.into_vec()),
+            baml_type::Ty::TypeAlias(ref name) => {
+                let alias = baml_compiler2_hir_ty::layout::alias_ref_of(db, name)?;
+                ty = baml_compiler2_hir_ty::layout::alias_value(db, alias).clone();
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
+pub struct TupleAccess {
+    pub access: String,
+    pub ty: baml_type::Ty,
+}
+
+pub fn tuple_access_at(
+    db: &dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    offset: TextSize,
+) -> Option<TupleAccess> {
+    let nullable = |ty: &baml_type::Ty| {
+        let mut ty = ty.clone();
+        for _ in 0..32 {
+            if let baml_type::Ty::TypeAlias(ref name) = ty {
+                let Some(alias) = baml_compiler2_hir_ty::layout::alias_ref_of(db, name) else {
+                    return false;
+                };
+                ty = baml_compiler2_hir_ty::layout::alias_value(db, alias).clone();
+            } else {
+                return ty.is_null() || ty.is_nullable_union();
+            }
+        }
+        false
+    };
+    let mut best: Option<(TextSize, TupleAccess)> = None;
+    visit_bodies_at(db, file, offset, |_, body, source_map, inference| {
+        for (id, expr) in body.exprs.iter() {
+            let (Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. }) =
+                expr
+            else {
+                continue;
+            };
+            if member.as_str().parse::<u32>().is_err() {
+                continue;
+            }
+            let Some(span) = source_map.member_name_span(id) else {
+                continue;
+            };
+            // A chain may share one float-shaped token, so find the separator
+            // from this slot's own range rather than from the token range.
+            let before = &file.text(db)[..usize::from(span.start())];
+            let dot_start = before.trim_end().strip_suffix('.').map(|prefix| {
+                let prefix = prefix.strip_suffix('?').unwrap_or(prefix);
+                TextSize::of(prefix)
+            });
+            if !TextRange::new(dot_start.unwrap_or(span.start()), span.end()).contains(offset) {
+                continue;
+            }
+            let Some(ty) = inference
+                .type_of_expr
+                .get(&id)
+                .filter(|ty| !matches!(ty, baml_type::Ty::Error))
+            else {
+                continue;
+            };
+            if best.as_ref().is_none_or(|(len, _)| span.len() < *len) {
+                // Inference records the non-null payload at each link and
+                // adds null at the enclosing OptionalChain. Hover presents
+                // the selected access as an expression of its own.
+                let mut link = id;
+                let mut optional = false;
+                loop {
+                    match &body.exprs[link] {
+                        Expr::OptionalMemberAccess { base, .. }
+                        | Expr::OptionalIndex { base, .. }
+                        | Expr::OptionalCall { callee: base, .. } => {
+                            optional |= inference.type_of_expr.get(base).is_some_and(&nullable);
+                            link = *base;
+                        }
+                        Expr::MemberAccess { base, .. } | Expr::Index { base, .. } => link = *base,
+                        Expr::Call { callee, .. } => link = *callee,
+                        _ => break,
+                    }
+                }
+                best = Some((
+                    span.len(),
+                    TupleAccess {
+                        access: body.display_expr(id),
+                        ty: if optional {
+                            baml_type::Ty::optional(ty.clone())
+                        } else {
+                            ty.clone()
+                        },
+                    },
+                ));
+            }
+        }
+    });
+    best.map(|(_, access)| access)
+}
+
 /// The type declaration a qualifier path names, when it names one:
 /// `baml.iter.Range`, `root.Point`, or a builtin alias like `int` (whose
 /// declaration is the companion class the language defines it by).
@@ -1293,6 +1441,11 @@ fn operator_target_at(
 
     let (_, dispatch, lhs, rhs) = claim?;
     let inference = baml_compiler2_hir_ty::ide::infer_for_scope(db, func_owner)?;
+    if dispatch == ops::INDEX_DISPATCH
+        && tuple_slots(db, inference.type_of_expr.get(&lhs)?).is_some()
+    {
+        return None;
+    }
     let lhs_ty = baml_type::interned::Ty::from_plain(inference.type_of_expr.get(&lhs)?);
     let rhs_ty = rhs
         .and_then(|rhs| inference.type_of_expr.get(&rhs))
@@ -1522,7 +1675,9 @@ pub(crate) fn member_resolution_target<'db>(
             ..
         } => Some(SymbolTarget::Method { func: *func }),
         MemberResolution::Method {
-            callee: MethodCallee::Virtual { interface, method },
+            callee: MethodCallee::Virtual {
+                interface, method, ..
+            },
             ..
         } => {
             // Only the slot (interface + name) is known statically — and the

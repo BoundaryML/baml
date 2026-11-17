@@ -24,3 +24,5 @@ steps:
   - script: { name: Toolchains, on: build, run: ./ci-runners-toolchains.sh }
   - script: { name: Rust builds, on: build, run: ./ci-runners-rust.sh }
   - script: { name: SDK test legs, on: build, run: ./ci-runners-sdk.sh }
+  # Last, so it also sees a tool that a later step changed.
+  - script: { name: Check mise tools, on: build, run: ./ci-runners-check-tools.sh }

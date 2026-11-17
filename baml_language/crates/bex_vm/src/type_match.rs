@@ -99,6 +99,7 @@ fn primitive_member(vm: &BexVm, value: Value, ty: &Ty) -> Option<bool> {
         | Ty::Enum(_)
         | Ty::EnumVariant(..)
         | Ty::List(_)
+        | Ty::Tuple(_)
         | Ty::Map { .. }
         | Ty::Union(_)
         | Ty::Function { .. }
@@ -163,6 +164,9 @@ pub fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
     if value.is_null() {
         return Some(Primitive::Null);
     }
+    if value.is_inline_float() {
+        return Some(Primitive::Float);
+    }
     match vm.get_object(value.as_object_ptr()?) {
         Object::Float(_) => Some(Primitive::Float),
         Object::Bigint(_) => Some(Primitive::Bigint),
@@ -182,6 +186,7 @@ pub fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
         | Object::GenericFunction(_)
         | Object::HostClosure(_)
         | Object::Array(_)
+        | Object::Tuple(_)
         | Object::Map(_)
         | Object::Future(_)
         | Object::RustData(_)

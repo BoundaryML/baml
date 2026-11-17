@@ -7,7 +7,7 @@
 // the release workflow runs this over every uploaded build artifact before any
 // publisher:
 //
-//   baml-cli run --from tools/release-fingerprints check -- \
+//   baml-cli run --project-dir tools/release-fingerprints check -- \
 //     --artifacts <one subdirectory per artifact> --commit <release commit>
 //
 // Every artifact must belong to exactly one family below. A new artifact fails

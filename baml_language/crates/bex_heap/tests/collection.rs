@@ -34,6 +34,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
             name: Name::default(),
             kind: PackageKind::Ordinary,
             edges: IndexMap::new(),
+            metadata: None,
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -364,6 +365,7 @@ fn empty_package() -> Package {
         name: Name::default(),
         kind: PackageKind::Ordinary,
         edges: IndexMap::new(),
+        metadata: None,
         classes: IndexMap::new(),
         enums: IndexMap::new(),
         interfaces: IndexMap::new(),
@@ -569,6 +571,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         type_tag: enum_tag,
         owner: bex_vm_types::types::Owner::Package(package_ptr),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        shared_variants: Box::default(),
     })));
     let field_ty = RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enum_tag));
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {

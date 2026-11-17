@@ -60,6 +60,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::CallHooked { callee: slot, .. }
             | I::Call { callee: slot, .. }
             | I::CallLocal { callee: slot, .. }
+            | I::CallEquals(slot)
             | I::MakeGenericFunction { function: slot, .. }
             | I::MakeGenericBoundMethod { function: slot, .. } => {
                 $visit($operand::Global(slot));
@@ -76,6 +77,8 @@ macro_rules! visit_bytecode_index_operands {
             I::LoadField(..)
             | I::StoreField(..)
             | I::LoadFieldLocal(..)
+            | I::LoadVarField(..)
+            | I::LoadVarFieldLocal(..)
             | I::ArrayIterNext { .. }
             | I::ArrayIterNextLocal { .. }
             | I::StoreFieldLocal(..)
@@ -137,6 +140,8 @@ macro_rules! visit_bytecode_index_operands {
             | I::UnaryOp(..)
             | I::AllocArray(..)
             | I::ConcatStrings(..)
+            | I::AllocTuple(..)
+            | I::LoadTupleField(..)
             | I::AllocMap(..)
             | I::LoadArrayElement
             | I::ContainerLen
@@ -145,6 +150,8 @@ macro_rules! visit_bytecode_index_operands {
             | I::LoadArrayElementLocal
             | I::StoreArrayElementLocal
             | I::ContainerLenLocal
+            | I::IsNull
+            | I::IsNotNull
             | I::StoreMapElement
             | I::Spawn
             | I::Await
@@ -172,7 +179,10 @@ macro_rules! visit_bytecode_index_operands {
             | I::CaptureRef(..)
             | I::SendEvent
             | I::LoadVar2(..)
-            | I::StoreVar2(..) => {}
+            | I::StoreVar2(..)
+            | I::AddLocalSmall(..)
+            | I::JumpIfLocalsCmp { .. }
+            | I::JumpIfLocalConstCmp { .. } => {}
             }
         }
         // Constant-pool object references. Exhaustive on `ConstValue` so a new
@@ -307,6 +317,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
         | Object::Cell(..)
         | Object::Array(..)
         | Object::Map(..)
+        | Object::Tuple(..)
         | Object::Float(..)
         | Object::Future(..)
         | Object::RustData(..)
@@ -315,7 +326,7 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::{
         HeapPtr, Object,
@@ -323,7 +334,7 @@ mod tests {
         types::{FunctionKind, FunctionOrigin},
     };
 
-    fn test_function() -> Function {
+    pub(crate) fn test_function() -> Function {
         use Instruction as I;
         let bytecode = Bytecode {
             instructions: vec![

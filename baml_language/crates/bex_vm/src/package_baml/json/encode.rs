@@ -310,6 +310,7 @@ fn collect(
 fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
     match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
+        Object::Tuple(tuple) => tuple.slot_values().collect(),
         Object::Map(map) => map
             .snapshot_entries()
             .into_iter()
@@ -637,6 +638,9 @@ impl Walker<'_, '_> {
                 sink.int(vm, i);
                 return Ok(());
             }
+            // Like an int, an inline float cannot carry an override: `float`
+            // and `baml.ToJson` are both the `baml` package's (E0139).
+            ValueKind::Float(f) => return self.float(vm, value, f, sink),
             ValueKind::Object(ptr) => ptr,
         };
         if !spliced {
@@ -669,6 +673,7 @@ impl Walker<'_, '_> {
             Object::String(_) => Shape::String,
             Object::Bigint(_) => Shape::Bigint,
             Object::Array(values) => Shape::Array(values.to_vec()),
+            Object::Tuple(tuple) => Shape::Array(tuple.slot_values().collect()),
             Object::Map(_) => Shape::Map,
             Object::Instance(instance) => Shape::Instance(instance.class),
             Object::Variant(variant) => Shape::Variant(variant.enm, variant.index),
@@ -734,7 +739,7 @@ impl Walker<'_, '_> {
         Ok(())
     }
 
-    /// Write the float object `value`, holding `f`, as the sink takes it.
+    /// Write the float `value`, holding `f`, as the sink takes it.
     fn float(
         &self,
         vm: &mut BexVm,
@@ -775,6 +780,7 @@ impl Walker<'_, '_> {
             Object::String(_) => JsonShape::String,
             Object::Bigint(_) => JsonShape::Bigint,
             Object::Array(values) => JsonShape::Array(values.to_vec()),
+            Object::Tuple(tuple) => JsonShape::Array(tuple.slot_values().collect()),
             Object::Map(_) => JsonShape::Map,
             Object::Variant(variant) => JsonShape::Variant(match vm.get_object(variant.enm) {
                 Object::Enum(e) => e.variants.get(variant.index).map(|v| v.name.clone()),

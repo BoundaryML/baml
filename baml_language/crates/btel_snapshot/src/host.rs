@@ -262,6 +262,13 @@ fn resolve_type<'a>(
             bytes,
             resolve,
         )?)),
+        HostType::Tuple(items) => OwnedType::Tuple(
+            items
+                .iter()
+                .map(|ty| resolve_type(ty, depth + 1, remaining, bytes, resolve))
+                .collect::<Result<Vec<_>, _>>()?
+                .into(),
+        ),
         HostType::Map { key, value } => OwnedType::Map {
             key: Box::new(resolve_type(key, depth + 1, remaining, bytes, resolve)?),
             value: Box::new(resolve_type(value, depth + 1, remaining, bytes, resolve)?),

@@ -20,8 +20,7 @@ for (const project of projects) {
   const result = await runBamlProcess(binary, [
     '--color',
     'never',
-    '--no-progress',
-    '--project',
+    '--project-dir',
     project.absolutePath,
     'test',
   ]);
@@ -70,11 +69,12 @@ for (const [name, expected] of signatures) {
     `Displayed signature for ${name} differs from the checked contract`,
   );
   const result = await runBamlProcess(binary, [
-    '--project',
+    '--project-dir',
     resolve(errors.absolutePath),
     'describe',
     name,
-    '--json',
+    '--output-format',
+    'json',
   ]);
   assert.equal(result.exitCode, 0, result.output);
   assert.equal(

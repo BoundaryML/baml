@@ -476,6 +476,12 @@ impl<'db> LowerCtx<'db> {
                     .iter()
                     .map(|variant| self.lower_type_ref(store, *variant)),
             ),
+            TypeRefKind::Tuple { elements } => LoweringTy::Tuple(
+                elements
+                    .iter()
+                    .map(|element| self.lower_type_ref(store, *element))
+                    .collect(),
+            ),
             TypeRefKind::Literal { value } => {
                 LoweringTy::Literal(value.clone(), Freshness::Regular)
             }
@@ -1661,6 +1667,31 @@ pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::intern
     )
 }
 
+/// [`substitute_params`] for one arm of a union `Self`. `args` binds `Self`
+/// (slot 0) to the union and `arm_args` binds it to the arm. A bare `Self`
+/// is the union, but an associated-type projection is taken over the arm:
+/// the value's own impl binds it, and the arms of one union can bind it
+/// differently.
+pub(crate) fn substitute_params_through_arm(
+    ty: &baml_type::interned::Ty,
+    args: &[baml_type::interned::Ty],
+    arm_args: &[baml_type::interned::Ty],
+) -> Ty {
+    use baml_type::interned::TypeFlags;
+    if !ty.flags().contains(TypeFlags::HAS_TYPEVAR) {
+        return ty.clone();
+    }
+    match ty.kind() {
+        InferTy::AssociatedTypeProjection { .. } => substitute_params(ty, arm_args),
+        InferTy::TypeVar(param) if args.get(param.index() as usize).is_some() => {
+            args[param.index() as usize].clone()
+        }
+        kind => Ty::intern(
+            kind.map_children(|child| substitute_params_through_arm(child, args, arm_args)),
+        ),
+    }
+}
+
 /// Generic-arity recovery: extras truncated, missing padded with
 /// `Error`. The arity report is `record_arity`'s, made before this runs;
 /// a sink-less re-lowering (MIR, emit) only sees signatures the checked
@@ -2068,6 +2099,7 @@ fn fill_holes_as_errors(ty: &LoweringTy) -> baml_type::Ty {
             value: Box::new(fill_holes_as_errors(value)),
         },
         LoweringTy::Union(members) => baml_type::Ty::Union(fill_all(members)),
+        LoweringTy::Tuple(elements) => baml_type::Ty::Tuple(fill_all(elements)),
         LoweringTy::Class(name, args) => baml_type::Ty::Class(name.clone(), fill_all(args)),
         LoweringTy::Interface(name, args, assoc) => baml_type::Ty::Interface(
             name.clone(),
@@ -2870,6 +2902,61 @@ pub fn class_lowering_diagnostics<'db>(
     out
 }
 
+fn file_root(
+    db: &dyn baml_compiler2_hir::Db,
+    file: baml_base::SourceFile,
+) -> baml_base::SourceRoot {
+    baml_compiler2_hir::file_package::file_package(db, file).root
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DeclCycles {
+    pub invalid_aliases: Vec<DeclName>,
+    pub class_cycles: Vec<Vec<DeclName>>,
+}
+
+#[salsa::tracked(returns(ref))]
+pub fn package_decl_cycles(
+    db: &dyn baml_compiler2_hir::Db,
+    root: baml_base::SourceRoot,
+) -> DeclCycles {
+    let mut aliases = std::collections::HashMap::new();
+    let mut class_fields = std::collections::HashMap::new();
+    for ns in baml_compiler2_hir::package::package_items(db, root)
+        .namespaces
+        .values()
+    {
+        for (name, def) in &ns.types {
+            match def {
+                Definition::TypeAlias(loc) => {
+                    aliases.insert(qualify_def(db, *def, name), type_alias_value(db, *loc));
+                }
+                Definition::Class(loc) => {
+                    let fields = resolve_class_fields(db, *loc)
+                        .iter()
+                        .map(|(n, ty, _)| (n.clone(), ty.clone()))
+                        .collect::<Vec<_>>();
+                    class_fields.insert(qualify_def(db, *def, name), fields);
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut invalid_aliases: Vec<DeclName> =
+        baml_type::decl_cycles::find_invalid_alias_cycles(&aliases)
+            .into_iter()
+            .collect();
+    invalid_aliases.sort();
+    let class_cycles = baml_type::decl_cycles::find_invalid_class_cycles(&class_fields, &aliases)
+        .into_iter()
+        .map(|cycle| cycle.members)
+        .collect();
+    DeclCycles {
+        invalid_aliases,
+        class_cycles,
+    }
+}
+
 /// The check layer's INTERFACE-declaration diagnostic walk: requires
 /// targets re-lowered with the sink under the interface's own frame
 /// (unresolved paths, wrong type-arg counts, non-interface targets).
@@ -3191,6 +3278,19 @@ pub fn type_alias_lowering_diagnostics<'db>(
     // the declaration instead of one per use.
     for error in crate::interfaces::type_generic_bound_errors(db, &FxHashMap::default(), &lowered) {
         out.push((source_map.type_refs.span(value), error));
+    }
+    let head = qualify_def(db, Definition::TypeAlias(alias), &data.name);
+    if package_decl_cycles(db, file_root(db, alias.file(db)))
+        .invalid_aliases
+        .binary_search(&head)
+        .is_ok()
+    {
+        out.push((
+            source_map.name_span,
+            crate::diagnostics::TirTypeError::AliasCycle {
+                name: data.name.clone(),
+            },
+        ));
     }
     out
 }

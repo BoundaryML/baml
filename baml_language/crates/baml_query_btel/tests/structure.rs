@@ -44,6 +44,8 @@ impl Recording {
             process_started_at_unix_ns: self.process.map(|_| 1_790_000_000_000_000_000),
             source_cas_id: None,
             initial_context_cas_id: None,
+            program_id: None,
+            build: None,
         });
         file.sequence = sequence;
         let part = self.dir.join(format!("{sequence:020}.btel.part"));
@@ -177,6 +179,7 @@ fn thread_done(ticks: u64, outcome: proto::InvocationOutcome, panicked: bool) ->
         outcome: outcome as i32,
         panicked,
         usage: Vec::new(),
+        error_cas_id: None,
     })
 }
 
@@ -901,6 +904,7 @@ fn self_usage_is_an_invokes_own_and_total_usage_sums_the_tree() {
                     outcome: proto::InvocationOutcome::Ok as i32,
                     panicked: false,
                     usage: vec![usage(Some("some-new-model"), 10, None, None)],
+                    error_cas_id: None,
                 }),
             ],
         )],

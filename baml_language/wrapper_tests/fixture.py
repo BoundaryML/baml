@@ -145,6 +145,7 @@ def init():
 class ReleaseMode(str, Enum):
     VALID = "valid"
     MISSING_CLI = "missing-cli"
+    NON_EXECUTABLE_CLI = "non-executable-cli"
     INVALID_LAYOUT = "layout"
     TRAVERSAL = "traversal"
     LINK = "link"
@@ -216,15 +217,24 @@ class FixtureFiles:
                     for name, data in files.items():
                         entry = zipfile.ZipInfo(name)
                         entry.create_system = 3
+                        permissions = (
+                            0o100644
+                            if mode == "non-executable-cli" and name == "bin/baml-cli" + SUFFIX
+                            else 0o100755
+                        )
                         entry.external_attr = (
-                            0o120777 if name == "bin/link" else 0o100755
+                            0o120777 if name == "bin/link" else permissions
                         ) << 16
                         archive.writestr(entry, data)
             else:
                 with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
                     for name, data in files.items():
                         entry = tarfile.TarInfo(name)
-                        entry.mode = 0o755
+                        entry.mode = (
+                            0o644
+                            if mode == "non-executable-cli" and name == "bin/baml-cli" + SUFFIX
+                            else 0o755
+                        )
                         entry.size = len(data)
                         if name == "bin/link":
                             entry.type = tarfile.SYMTYPE

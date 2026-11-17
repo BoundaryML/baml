@@ -562,6 +562,12 @@ impl ReachWalk<'_> {
                 Ok(())
             }
             RealizedTy::List(element) => self.visit(element, &origins.list_element()),
+            RealizedTy::Tuple(elements) => {
+                for (index, element) in elements.iter().enumerate() {
+                    self.visit(element, &origins.tuple_element(index))?;
+                }
+                Ok(())
+            }
             RealizedTy::Map { key, value } => {
                 self.visit(key, &origins.map_key())?;
                 self.visit(value, &origins.map_value())
@@ -893,6 +899,10 @@ enum Parsed<'s> {
         element: ParseTy,
         items: Vec<Parsed<'s>>,
     },
+    Tuple {
+        elements: Vec<ParseTy>,
+        items: Vec<Parsed<'s>>,
+    },
     Map {
         key: ParseTy,
         value: ParseTy,
@@ -949,6 +959,14 @@ impl<'s> Parsed<'s> {
                         .collect::<Result<_, _>>()?,
                 }
             }
+            BamlValue::Tuple(tuple) => Parsed::Tuple {
+                elements: tuple_slot_types(value)?,
+                items: tuple
+                    .value
+                    .iter()
+                    .map(Parsed::of)
+                    .collect::<Result<_, _>>()?,
+            },
             BamlValue::Map(map) => {
                 let TyResolvedRef::Map(map_ty) = value.meta.ty else {
                     return Err(invariant(format!(
@@ -1008,6 +1026,10 @@ impl<'s> Parsed<'s> {
                 element,
                 items: items.into_iter().map(Parsed::into_owned).collect(),
             },
+            Parsed::Tuple { elements, items } => Parsed::Tuple {
+                elements,
+                items: items.into_iter().map(Parsed::into_owned).collect(),
+            },
             Parsed::Map {
                 key,
                 value,
@@ -1040,7 +1062,7 @@ impl<'s> Parsed<'s> {
     /// The children of this node, in order.
     fn children(&self) -> Vec<&Parsed<'s>> {
         match self {
-            Parsed::List { items, .. } => items.iter().collect(),
+            Parsed::List { items, .. } | Parsed::Tuple { items, .. } => items.iter().collect(),
             Parsed::Map { entries, .. } => entries.iter().map(|(_, value)| value).collect(),
             Parsed::Class { fields, .. } => fields.values().collect(),
             Parsed::Shaped { shape, .. } => vec![shape],
@@ -1051,7 +1073,7 @@ impl<'s> Parsed<'s> {
     /// The `index`-th child of this node, in the order of [`Self::children`].
     fn child_mut(&mut self, index: usize) -> Option<&mut Parsed<'s>> {
         match self {
-            Parsed::List { items, .. } => items.get_mut(index),
+            Parsed::List { items, .. } | Parsed::Tuple { items, .. } => items.get_mut(index),
             Parsed::Map { entries, .. } => entries.get_mut(index).map(|(_, value)| value),
             Parsed::Class { fields, .. } => fields.get_index_mut(index).map(|(_, value)| value),
             Parsed::Shaped { shape, .. } if index == 0 => Some(shape),
@@ -1110,7 +1132,7 @@ fn to_heap(
         BamlValue::String(s) => Value::object(vm.alloc_string(s.value.as_ref())),
         BamlValue::Int(i) => heap_int(i.value, mode)?,
         BamlValue::Bigint(b) => vm.try_alloc_bigint(Arc::new(b.value.clone()))?,
-        BamlValue::Float(f) => Value::object(vm.alloc_float(f.value)),
+        BamlValue::Float(f) => vm.float_value(f.value),
         BamlValue::Bool(b) => Value::bool(b.value),
         BamlValue::Null(_) => Value::NULL,
         BamlValue::Media(_) => {
@@ -1132,6 +1154,18 @@ fn to_heap(
                 .map(|item| to_heap(vm, item, declarations, mode))
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
+        }
+        BamlValue::Tuple(tuple) => {
+            let elements = tuple_slot_types(value)?
+                .iter()
+                .map(|element| declarations.realize(element))
+                .collect::<Result<Vec<_>, _>>()?;
+            let items = tuple
+                .value
+                .iter()
+                .map(|item| to_heap(vm, item, declarations, mode))
+                .collect::<Result<Vec<_>, _>>()?;
+            heap_tuple(vm, elements, items)?
         }
         BamlValue::Map(map) => {
             let TyResolvedRef::Map(map_ty) = value.meta.ty else {
@@ -1189,7 +1223,7 @@ fn parsed_to_heap(
         Parsed::String(s) => Value::object(vm.alloc_string(s.as_ref())),
         Parsed::Int(i) => heap_int(*i, mode)?,
         Parsed::Bigint(b) => vm.try_alloc_bigint(Arc::new(b.clone()))?,
-        Parsed::Float(f) => Value::object(vm.alloc_float(*f)),
+        Parsed::Float(f) => vm.float_value(*f),
         Parsed::Bool(b) => Value::bool(*b),
         Parsed::Null => Value::NULL,
         Parsed::List { element, items } => {
@@ -1199,6 +1233,17 @@ fn parsed_to_heap(
                 .map(|item| parsed_to_heap(vm, item, declarations, mode))
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
+        }
+        Parsed::Tuple { elements, items } => {
+            let elements = elements
+                .iter()
+                .map(|element| declarations.realize(element))
+                .collect::<Result<Vec<_>, _>>()?;
+            let items = items
+                .iter()
+                .map(|item| parsed_to_heap(vm, item, declarations, mode))
+                .collect::<Result<Vec<_>, _>>()?;
+            heap_tuple(vm, elements, items)?
         }
         Parsed::Map {
             key,
@@ -1239,6 +1284,28 @@ fn heap_int(value: i64, mode: Mode) -> Result<Value, VmRustFnError> {
             Value::INT_MAX
         ))
     })
+}
+
+fn tuple_slot_types(
+    value: &BamlValueWithFlags<'_, '_, '_, NamedTy>,
+) -> Result<Vec<ParseTy>, VmRustFnError> {
+    let TyResolvedRef::Tuple(tuple_ty) = value.meta.ty else {
+        return Err(invariant(format!(
+            "a parsed tuple is typed `{}`, not as a tuple",
+            value.meta.ty.to_baml_ty()
+        )));
+    };
+    Ok(tuple_ty.items.iter().map(ToBamlTy::to_baml_ty).collect())
+}
+
+fn heap_tuple(
+    vm: &mut BexVm,
+    elements: Vec<RealizedTy>,
+    items: Vec<Value>,
+) -> Result<Value, VmRustFnError> {
+    let tuple = bex_vm_types::Tuple::new(elements, items)
+        .map_err(|err| invariant(format!("a parsed tuple does not fit its target: {err}")))?;
+    Ok(Value::object(vm.tlab.alloc_tuple(tuple)))
 }
 
 /// The variant `variant` of the enum `decl`.
@@ -1559,7 +1626,7 @@ pub(super) fn empty_value(
         RealizedTy::Null | RealizedTy::Unknown => Value::NULL,
         RealizedTy::Int => Value::int(0),
         RealizedTy::Bigint => vm.try_alloc_bigint(Arc::new(num_bigint::BigInt::default()))?,
-        RealizedTy::Float => Value::object(vm.alloc_float(0.0)),
+        RealizedTy::Float => vm.float_value(0.0),
         RealizedTy::Bool => Value::bool(false),
         RealizedTy::String => Value::object(vm.alloc_string("")),
         RealizedTy::Uint8Array => Value::object(vm.alloc_uint8array(Vec::new())),
@@ -1567,7 +1634,7 @@ pub(super) fn empty_value(
             Literal::Int(n) => Value::int(*n),
             Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n.clone()))?,
             Literal::Float(text) => match text.parse::<f64>() {
-                Ok(f) => Value::object(vm.alloc_float(f)),
+                Ok(f) => vm.float_value(f),
                 Err(_) => return Ok(None),
             },
             Literal::String(s) => Value::object(vm.alloc_string(s.as_str())),
@@ -1576,6 +1643,16 @@ pub(super) fn empty_value(
         RealizedTy::List(element) => Value::object(vm.alloc_array((**element).clone(), Vec::new())),
         RealizedTy::Map { key, value } => {
             Value::object(vm.alloc_map((**key).clone(), (**value).clone(), IndexMap::new()))
+        }
+        RealizedTy::Tuple(elements) => {
+            let mut items = Vec::with_capacity(elements.len());
+            for element in elements {
+                let Some(item) = empty_value(vm, element, within)? else {
+                    return Ok(None);
+                };
+                items.push(item);
+            }
+            heap_tuple(vm, elements.to_vec(), items)?
         }
         RealizedTy::Enum(head) => {
             let Object::Enum(enm) = vm.get_object(head.ptr()) else {

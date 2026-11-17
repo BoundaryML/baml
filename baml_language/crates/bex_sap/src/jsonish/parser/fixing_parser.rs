@@ -5,6 +5,57 @@ use self::json_parse_state::JsonParseState;
 use super::ParseOptions;
 use crate::jsonish::{CompletionState, JsonishError, Value, value::Fixes};
 
+/// Distinguish positional data from grouping and function signatures in prose.
+/// Complete nonempty tuples need a comma; incomplete data can still stream.
+pub(super) fn is_tuple_start(mut chars: impl Iterator<Item = char>) -> bool {
+    let mut stack = Vec::new();
+    let mut quote = None;
+    let mut escaped = false;
+    let mut comma = false;
+    let mut first = None;
+    while let Some(c) = chars.next() {
+        if let Some(delimiter) = quote {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == delimiter {
+                quote = None;
+            }
+            continue;
+        }
+        if c == ')' && stack.is_empty() {
+            return (comma || first.is_none())
+                && !matches!(chars.find(|c| !c.is_whitespace()), Some('=' | '-'));
+        }
+        if !c.is_whitespace() && first.is_none() {
+            first = Some(c);
+        }
+        match c {
+            '"' | '\'' | '`' => quote = Some(c),
+            '(' => stack.push(')'),
+            '[' => stack.push(']'),
+            '{' => stack.push('}'),
+            ')' | ']' | '}' => {
+                if stack.pop() != Some(c) {
+                    return false;
+                }
+            }
+            ',' if stack.is_empty() => comma = true,
+            ':' if stack.is_empty() => return false,
+            _ => {}
+        }
+    }
+    comma
+        || first.is_none_or(|c| {
+            c.is_ascii_digit()
+                || matches!(
+                    c,
+                    '"' | '\'' | '`' | '-' | '[' | '{' | '(' | 't' | 'f' | 'n'
+                )
+        })
+}
+
 pub(super) fn parse<'s>(
     str: &'s str,
     _options: &ParseOptions,
@@ -104,6 +155,22 @@ pub(super) fn parse<'s>(
 mod tests {
     use super::*;
     use crate::jsonish::{ParseOptions, Value};
+
+    #[test]
+    fn tuple_openers_distinguish_data_from_function_text() {
+        for tail in ["1, true)", "\"a\",)", ")", "1", "1,", "(1,), true)"] {
+            assert!(is_tuple_start(tail.chars()), "({tail}");
+        }
+        for tail in [
+            "1)",
+            "\"hello\")",
+            ") => void",
+            "filters: object) => void",
+            "a, b) -> int",
+        ] {
+            assert!(!is_tuple_start(tail.chars()), "({tail}");
+        }
+    }
 
     #[test]
     fn test_partial_array() {

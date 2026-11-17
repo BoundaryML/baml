@@ -307,7 +307,7 @@ class TestRegistry {
             null => {
                 let start = baml.time.Instant.now();
                 let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] };
-                ts.collector(sub_collector);
+                (ts.collector)(sub_collector);
                 // `loading_time_ms` is an `int`, so narrowing the bigint millisecond
                 // count is declared fallible. An expansion would have to run for
                 // ~146 million years to leave `int`'s range; there is no honest
@@ -552,13 +552,13 @@ function _run_children_parallel(
             // Containers only spawn and await; admitting them freely cannot
             // oversubscribe the machine, and gating them could deadlock the
             // slots their own leaves need.
-            futures.push(spawn { _NamedChildReport { name: child.name, report: child.run() } })
+            futures.push(spawn { _NamedChildReport { name: child.name, report: (child.run)() } })
         } else {
             // Acquire on the dispatcher, before the spawn exists: the whole
             // point is that an inadmissible leaf has no thread yet.
             pool.acquire();
             futures.push(spawn {
-                let named = _NamedChildReport { name: child.name, report: child.run() };
+                let named = _NamedChildReport { name: child.name, report: (child.run)() };
                 // `run` is total: a leaf is `run_test`, whose runner arm
                 // catches middleware panics precisely so this release is
                 // reached on every outcome.
@@ -607,12 +607,21 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
         if (timeout_ms > 0) {
             let timer: baml.future.Future<RunReport, never> = spawn {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms));
+                // Read before the race cancels the body: where it is stuck,
+                // and every task it is waiting on.
+                let report = baml.future._task_report(work._id());
+                let stuck = if (report == "") {
+                    ""
+                } else {
+                    "\n" + report
+                };
                 RunReport {
                     outcome: "fail",
                     duration_ms: 0,
                     message: "test timed out after "
                         + timeout_ms.to_string()
-                        + "ms (override with --test-timeout)",
+                        + "ms (override with --test-timeout)"
+                        + stuck,
                 }
             };
             racers.push(timer);

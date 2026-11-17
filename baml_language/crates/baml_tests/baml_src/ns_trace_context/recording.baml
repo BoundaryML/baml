@@ -26,10 +26,11 @@ function recording_options(capture: bool) -> trace.Options {
 function context_record(capture: bool) -> int throws string {
     (
         () -> {
+            let initial_metadata = trace.current_context().metadata;
             let options = recording_options(capture);
             let child = spawn { context_leaf(false, $trace = options) };
             let value = context_leaf(false, $trace = options);
-            if (trace.current_context().metadata.length() != 1) {
+            if (trace.current_context().metadata != initial_metadata) {
                 throw "child context leaked";
             }
             value + (await child)

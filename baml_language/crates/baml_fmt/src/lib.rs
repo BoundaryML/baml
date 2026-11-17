@@ -1,5 +1,6 @@
 pub mod ast;
 mod newline_style;
+pub mod package_source;
 pub mod printer;
 mod trivia_classifier;
 
@@ -12,6 +13,8 @@ pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
 #[cfg(test)]
 mod formatter_scenario_tests;
+#[cfg(test)]
+mod tuple_tests;
 
 /// Runs the formatter on the given source code. The output keeps the line
 /// ending of `source`'s first line, `\n` or `\r\n`. A file that opts out with

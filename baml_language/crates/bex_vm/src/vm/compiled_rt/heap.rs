@@ -45,6 +45,7 @@ impl BexVm {
             Object::Map(map) if THREAD_LOCAL => unsafe { map.lock_thread_local() }.len() as i64,
             Object::Array(arr) => arr.len() as i64,
             Object::Uint8Array(bytes) => bytes.len() as i64,
+            Object::Tuple(tuple) => tuple.len() as i64,
             Object::Map(map) => map.len() as i64,
             Object::String(s) => s.byte_len() as i64,
             other => return Err(object_type_error(ObjectType::Array, other)),
@@ -322,6 +323,17 @@ impl BexVm {
         Ok(())
     }
 
+    pub fn load_tuple_field(&mut self, tuple: Value, idx: usize) -> Result<Value, Box<VmError>> {
+        let load_result = {
+            let tuple = self.as_tuple(&tuple)?;
+            tuple.try_load_slot(idx).ok_or_else(|| tuple.len())
+        };
+        match load_result {
+            Ok(value) => Ok(value),
+            Err(length) => Err(Box::new(self.invalid_field_access_error(idx, length))),
+        }
+    }
+
     pub fn make_closure(
         &mut self,
         function: HeapPtr,
@@ -398,6 +410,17 @@ impl BexVm {
     }
 
     #[inline]
+    pub fn new_tuple(
+        &mut self,
+        tuple_ty: RealizedTy,
+        values: Vec<Value>,
+    ) -> Result<Value, Box<VmError>> {
+        let tuple =
+            Self::tuple_at_type(tuple_ty, values).map_err(|err| Box::new(VmError::from(err)))?;
+        Ok(Value::object(self.tlab.alloc_tuple(tuple)))
+    }
+
+    #[inline]
     pub fn new_map(&mut self, key_ty: RealizedTy, value_ty: RealizedTy) -> Value {
         Value::object(
             self.tlab
@@ -407,6 +430,13 @@ impl BexVm {
 
     #[inline]
     pub fn new_variant(&mut self, enm: HeapPtr, index: usize) -> Value {
+        // A compile-time enum's variants are permanent shared objects (see
+        // `Enum::shared_variants`); only a runtime enum allocates.
+        if let Object::Enum(declaration) = self.get_object(enm)
+            && let Some(&shared) = declaration.shared_variants.get(index)
+        {
+            return Value::object(shared);
+        }
         Value::object(self.tlab.alloc_variant(enm, index))
     }
 
@@ -462,6 +492,7 @@ mod tests {
             other: IndexMap::default(),
             owner: Owner::default(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         }))
     }
 

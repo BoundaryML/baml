@@ -20,8 +20,6 @@ import './styles/diagram-styles.css';
 import './styles/v3.css';
 import './styles/home.css';
 
-// The boundaryml.com homepage. It sells the whole stack, and every section leads to booking a call.
-
 export default function Home() {
   return (
     <div
@@ -33,13 +31,14 @@ export default function Home() {
       <main id="main">
         <Hero />
         <Logos />
-        <Hyperobs />
+        <Hyperobs>
+          <Observe />
+        </Hyperobs>
         <Agents />
         <Stack />
         <Language />
         <Review />
         <Software />
-        <Observe />
         <Improve />
         <Adopt />
         <Book />

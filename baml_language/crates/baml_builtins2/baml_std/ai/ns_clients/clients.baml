@@ -227,8 +227,10 @@ function _wrapper_turn(attempts: root.ModelTurn[]) -> root.ModelTurn {
 
 /// One `Retry` attempt, as a span of its own: `attempt` counts from 1 and
 /// `client` is the member's `requested_model()`. Run with `$trace = _attempt_trace()`, which
-/// captures only those inputs (`body` is recorded as an opaque closure), never
-/// the client, the prompt or an error's body. The attempt's requests are
+/// captures those inputs (`body` is recorded as an opaque closure) and never
+/// the client or the prompt. An attempt that fails records the error it ended
+/// with, as any span does, so a failed attempt says why it failed; a recording
+/// made with HTTP bodies withheld records none. The attempt's requests are
 /// network spans under it, and each attempt's span ends before the next starts.
 function retry_attempt<T, E>(attempt: int, client: string, body: () -> T throws E) -> T throws E {
     body()
@@ -241,9 +243,10 @@ function fallback_attempt<T, E>(member: int, client: string, body: () -> T throw
     body()
 }
 
-/// (internal) The tracing options of an attempt span: its inputs only.
+/// (internal) The tracing options of an attempt span: its inputs, and the
+/// error it ends with, as every span records it.
 function _attempt_trace() -> trace.Options throws never {
-    trace.span(inputs = true, output = false, error = false)
+    trace.span(inputs = true, output = false)
 }
 
 /// (internal) An attempt that failed and may be tried again: kept apart from
@@ -321,7 +324,7 @@ class Retry {
     function _wants_retry(self, cause: Retryable) -> bool {
         _may_try_again(cause)
             && match (cause) {
-                let failure: root.errors.Failure => self.retry_if(failure),
+                let failure: root.errors.Failure => (self.retry_if)(failure),
                 baml.errors.Timeout => true,
             }
     }
@@ -755,8 +758,8 @@ class StreamRelay {
     function recover(self, error: root.errors.RaisedInClient) -> void {
         match (root.errors.normalize_invoke(error)) {
             let cause: Retryable => {
-                let failed = self.member();
-                if (!self.emitted && self.retry(cause)) {
+                let failed = (self.member)();
+                if (!self.emitted && (self.retry)(cause)) {
                     self.child_turns.push(_failed_attempt(failed, cause));
                     self.close_current();
                     self.current = null;
@@ -781,7 +784,7 @@ class StreamRelay {
             return root.stream.Done {};
         }
         if (self.current == null) {
-            let opened: root.stream.TurnStream | StreamRelayError = self.open() catch_all (e) {
+            let opened: root.stream.TurnStream | StreamRelayError = (self.open)() catch_all (e) {
                 _ => StreamRelayError { error: e },
             };
             if let failed: StreamRelayError = opened {

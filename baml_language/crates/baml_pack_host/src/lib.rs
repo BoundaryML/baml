@@ -300,7 +300,7 @@ fn launch(
         target_name,
         parsed.cli_values,
         json_args,
-        envelope.output_format,
+        parsed.output_format.unwrap_or_default(),
         has_compiled_bodies,
     )
 }

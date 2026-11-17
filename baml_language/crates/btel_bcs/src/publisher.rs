@@ -255,7 +255,11 @@ impl CloudPublisher {
             return Err(RecordingError::InvalidConfig);
         }
         Ok(Self {
-            recording: RecordingBuilder::new(id, recording)?.with_metadata_replay(),
+            // BCS has not adopted recording minor 14: cloud files leave the
+            // package identity fields out and stay readable as minor 13.
+            recording: RecordingBuilder::new(id, recording)?
+                .with_metadata_replay()
+                .without_package_identity(),
             recording_target: recording.target_bytes.get(),
             config,
             offered: HashSet::new(),
@@ -1718,6 +1722,8 @@ mod tests {
             sources: Some(sources),
             context: None,
             exit: Arc::default(),
+            program_id: None,
+            build: None,
         });
         assert_eq!(publisher.queue.len(), 1);
         assert_eq!(publisher.queue[0].id, id);

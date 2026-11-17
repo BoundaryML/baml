@@ -35,6 +35,11 @@ pub fn release_outbound_references(value: BamlOutboundValue) {
                 release_outbound_references(value);
             }
         }
+        Some(Value::TupleValue(tuple)) => {
+            for value in tuple.items {
+                release_outbound_references(value);
+            }
+        }
         Some(Value::MapValue(map)) => {
             for entry in map.entries {
                 if let Some(value) = entry.value {

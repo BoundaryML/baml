@@ -297,22 +297,11 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> f64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.load_field({}).as_object_ptr() {{",
+                    "{inner2}match self.instance.load_field({}).as_float() {{",
                     field.index
                 )
                 .unwrap();
-                writeln!(
-                    out,
-                    "{inner2}    Some(ptr) => match unsafe {{ ptr.get() }} {{"
-                )
-                .unwrap();
-                writeln!(out, "{inner2}        bex_vm_types::Object::Float(f) => *f,").unwrap();
-                writeln!(
-                    out,
-                    "{inner2}        _ => panic!(\"{class_name}.{raw_name}: expected Float\"),"
-                )
-                .unwrap();
-                writeln!(out, "{inner2}    }},").unwrap();
+                writeln!(out, "{inner2}    Some(f) => f,").unwrap();
                 writeln!(
                     out,
                     "{inner2}    None => panic!(\"{class_name}.{raw_name}: expected Float\"),"
@@ -486,13 +475,7 @@ fn view_optional_type_and_expr(
         BamlType::Float => (
             "Option<f64>".to_string(),
             format!(
-                "{{ \
-                    let Some(ptr) = self.instance.load_field({field_index}).as_object_ptr() \
-                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
-                    let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
-                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
-                    *f \
-                }}"
+                "self.instance.load_field({field_index}).as_float().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Float\"))"
             ),
         ),
         BamlType::Bool => (
@@ -654,7 +637,7 @@ fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
                 \"failed to allocate bigint field `{field_name}`: {{p}}\"))"
         ),
         BamlType::Float => {
-            format!("bex_vm_types::Value::object(vm.alloc_float(self.{field_name}))")
+            format!("vm.float_value(self.{field_name})")
         }
         BamlType::Bool => format!("bex_vm_types::Value::bool(self.{field_name})"),
         BamlType::Null => "bex_vm_types::Value::NULL".to_string(),
@@ -1629,11 +1612,9 @@ fn receiver_immut_extraction_expr(
         "Float" => format!(
             "{{ \
                 let __v = {val}; \
-                let Some(ptr) = __v.as_object_ptr() \
+                let Some(f) = __v.as_float() \
                     else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
-                let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
-                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
-                *f \
+                f \
             }}"
         ),
         // Bigint is heap-allocated behind an Arc; always clone the Arc so the
@@ -1689,11 +1670,9 @@ fn extraction_expr(
         BamlType::Float => format!(
             "{{ \
                 let __v = {val}; \
-                let Some(ptr) = __v.as_object_ptr() \
+                let Some(f) = __v.as_float() \
                     else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
-                let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
-                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
-                *f \
+                f \
             }}"
         ),
         BamlType::Bool => format!(
@@ -2106,7 +2085,7 @@ fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> Str
             }})?"
         ),
         BamlType::Bigint => format!("vm.try_alloc_bigint({name})?"),
-        BamlType::Float => format!("Value::object(vm.alloc_float({name}))"),
+        BamlType::Float => format!("vm.float_value({name})"),
         BamlType::Bool => format!("Value::bool({name})"),
         BamlType::Null => "Value::NULL".to_string(),
         BamlType::List(inner) => {

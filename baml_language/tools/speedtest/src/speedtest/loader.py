@@ -42,7 +42,7 @@ def load_workload(path):
     category = path.parent.name
     return {
         "id": f"{category}/{path.name}",
-        # `category::name` is the stable identity: CodSpeed bench names and
+        # `category::name` is the stable identity: divan bench names and
         # saved baselines are derived from it, so renaming a workload breaks
         # its history.
         "name": f"{category}::{meta['name']}",

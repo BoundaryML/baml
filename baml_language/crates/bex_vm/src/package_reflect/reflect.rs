@@ -1184,6 +1184,7 @@ impl BamlClassPackage for PackageReflectImpl {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
             kind: PackageKind::Ordinary,
             edges: runtime_edges(vm, &dependencies),
+            metadata: artifact.emitted.record.metadata.clone(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -1385,6 +1386,7 @@ impl BamlClassPackage for PackageReflectImpl {
             name,
             kind: PackageKind::Ordinary,
             edges: view_edges(vm, base_ptr, &reached),
+            metadata: None,
             classes: additions.classes,
             enums: additions.enums,
             interfaces: additions.interfaces,
@@ -1808,6 +1810,11 @@ fn graft_session_submission(
         unreachable!("Session payload is a Package")
     };
     package.surface = ExportSurface::Compiled(artifact.interface_blob.clone());
+    // A session is one package compiled a submission at a time: it carries
+    // the metadata of the latest one.
+    package
+        .metadata
+        .clone_from(&artifact.emitted.record.metadata);
     let Some(state) = package.session.as_deref_mut() else {
         unreachable!("Session graft target is a Session package")
     };
@@ -1845,6 +1852,7 @@ impl BamlClassSession for PackageReflectImpl {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
             kind: PackageKind::Ordinary,
             edges: runtime_edges(vm, &dependencies),
+            metadata: None,
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -2101,7 +2109,7 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
 
 /// `reflect.call_any` mirrors the ordinary call boundary's one numeric
 /// conversion: an exactly representable `int` may enter a `float` (or
-/// `float?`) slot. Materialize the boxed float before dispatch so the callee
+/// `float?`) slot. Materialize the float before dispatch so the callee
 /// receives the runtime representation its signature promises.
 #[expect(
     clippy::cast_precision_loss,
@@ -2129,7 +2137,7 @@ fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy
         if widened as i64 != number {
             return None;
         }
-        return Some(Value::object(vm.tlab.alloc(Object::Float(widened))));
+        return Some(vm.float_value(widened));
     }
     value_fits(vm, value, expected).then_some(value)
 }

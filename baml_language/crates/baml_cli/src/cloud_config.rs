@@ -35,8 +35,8 @@ impl Boundary {
         bcs_api::Endpoint::with_default(self.api_url.as_deref())
     }
 }
-pub(crate) fn login_endpoint() -> Result<bcs_api::Endpoint> {
-    let root =
-        crate::project_load::find_project_root_from(None)?.unwrap_or(std::env::current_dir()?);
+pub(crate) fn login_endpoint(project_dir: Option<&Path>) -> Result<bcs_api::Endpoint> {
+    let root = crate::project_load::find_project_root_from(project_dir)?
+        .unwrap_or(std::env::current_dir()?);
     Ok(Boundary::read(&root)?.endpoint()?)
 }

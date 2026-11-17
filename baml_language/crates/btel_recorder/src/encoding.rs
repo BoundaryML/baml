@@ -92,12 +92,19 @@ impl EncodedSpans {
             }
             Event::ThreadCompletion(m) if !m.usage.is_empty() => {
                 self.require(btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR);
+                if m.error_cas_id.is_some() {
+                    self.require(btel_settings::encoding::THREAD_ERROR_FORMAT_MINOR);
+                }
                 self.variable(2, &m);
             }
             Event::FunctionCompletion(m) => self.completion(4, &m),
             Event::LateFunctionCompletion(m) => self.completion(5, &m),
             Event::Log(message) => {
-                self.require(btel_settings::encoding::LOG_FORMAT_MINOR);
+                self.require(if message.line.is_some() {
+                    btel_settings::encoding::LOG_LINE_FORMAT_MINOR
+                } else {
+                    btel_settings::encoding::LOG_FORMAT_MINOR
+                });
                 self.variable(6, &message);
             }
             Event::NetworkAnnouncement(message) => {
@@ -112,7 +119,12 @@ impl EncodedSpans {
                 let length = begin(&mut self.bytes, 2, 1);
                 match other {
                     Event::ThreadAnnouncement(m) => leaf(&mut self.bytes, 1, &m),
-                    Event::ThreadCompletion(m) => leaf(&mut self.bytes, 2, &m),
+                    Event::ThreadCompletion(m) => {
+                        if m.error_cas_id.is_some() {
+                            self.require(btel_settings::encoding::THREAD_ERROR_FORMAT_MINOR);
+                        }
+                        leaf(&mut self.bytes, 2, &m);
+                    }
                     Event::ThreadRunning(m) => {
                         self.require(btel_settings::encoding::THREAD_RUNNING_FORMAT_MINOR);
                         leaf(&mut self.bytes, 7, &m);
@@ -331,6 +343,30 @@ mod tests {
         }
     }
 
+    /// A failed future that also used a model takes the usage path, and still
+    /// declares the minor that introduced its error.
+    #[test]
+    fn a_thread_error_requires_its_minor_with_or_without_usage() {
+        for usage in [Vec::new(), vec![proto::ModelUsage::default()]] {
+            let mut encoded = EncodedSpans::default();
+            encoded.reserve(MAX_EVENT_BYTES);
+            encoded.event(
+                btel_types::allocate_telemetry_id(),
+                Event::ThreadCompletion(proto::ThreadCompletion {
+                    outcome: proto::InvocationOutcome::Errored as i32,
+                    usage,
+                    error_cas_id: Some(proto::CasId { low: 1, high: 2 }),
+                    ..proto::ThreadCompletion::default()
+                }),
+            );
+            assert!(
+                encoded.format_minor() >= btel_settings::encoding::THREAD_ERROR_FORMAT_MINOR,
+                "{}",
+                encoded.format_minor()
+            );
+        }
+    }
+
     #[test]
     fn maximum_scalar_widths_fit_admission_and_decode_with_generated_schema() {
         let thread = btel_types::allocate_telemetry_id();
@@ -356,6 +392,10 @@ mod tests {
                 outcome: proto::InvocationOutcome::Errored as i32,
                 panicked: true,
                 usage: Vec::new(),
+                error_cas_id: Some(proto::CasId {
+                    low: u64::MAX,
+                    high: u64::MAX,
+                }),
             }),
             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
                 manual: false,

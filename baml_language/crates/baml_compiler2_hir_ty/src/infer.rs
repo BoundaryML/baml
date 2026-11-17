@@ -281,6 +281,19 @@ fn format_float(value: f64) -> Option<String> {
     }
 }
 
+/// A union of members that may still contain inference variables: canonical
+/// when every member is closed, structural until then.
+pub(crate) fn union_of_tys(facts: &crate::facts::Facts<'_>, members: &[Ty]) -> Ty {
+    let closed: Result<Vec<_>, _> = members
+        .iter()
+        .map(baml_type::interned::ClosedTy::try_from)
+        .collect();
+    match closed {
+        Ok(closed) => canonical_union_interned(&closed, facts).into_ty(),
+        Err(baml_type::interned::OpenTy) => syntactic_union(members),
+    }
+}
+
 /// The STRUCTURAL third of union canonicalization, safe on
 /// var-carrying members: flatten nested unions, drop `never`, dedup
 /// identical members, collapse the empty union to `never` and the
@@ -325,7 +338,7 @@ fn syntactic_union(members: &[Ty]) -> Ty {
 /// discipline as the canonical walk's fuel. Any real chain is far
 /// shorter; a cyclic binding is a declaration-level error caught
 /// elsewhere.
-const PROJECTION_FINALIZE_FUEL: u32 = 32;
+pub(crate) const PROJECTION_FINALIZE_FUEL: u32 = 32;
 
 /// Depth budget for the role-marker walk over an interpolated type; a
 /// recursive alias (`baml.json.json`) would otherwise never bottom out.
@@ -382,9 +395,11 @@ pub enum MethodCallee<'db, T = baml_type::Ty> {
     /// (`callable_owner_type`), never carried alongside it.
     Inherent(FunctionRef<'db>),
     /// A virtual interface slot: dispatch resolves to the receiver's
-    /// runtime impl.
+    /// runtime impl, keyed on the realized declaring-interface view
+    /// (`view`) the access was checked through.
     Virtual {
         interface: InterfaceRef<'db>,
+        view: T,
         method: baml_type::Name,
     },
     /// A statically-matched impl's method: the method the impl provides,
@@ -424,7 +439,9 @@ impl<'db, T> MethodCallee<'db, T> {
     pub fn callable(&self, db: &'db dyn baml_compiler2_hir::Db) -> Option<FunctionRef<'db>> {
         match self {
             MethodCallee::Inherent(func) | MethodCallee::Concrete { func, .. } => Some(*func),
-            MethodCallee::Virtual { interface, method } => match interface {
+            MethodCallee::Virtual {
+                interface, method, ..
+            } => match interface {
                 DeclRef::Source(interface) => {
                     baml_compiler2_hir::item_data::interface_data(db, *interface)
                         .methods
@@ -915,6 +932,15 @@ enum PendingDiag<'db> {
         base: Ty,
         member: baml_type::Name,
     },
+    /// A member on a union receiver whose type needs one answer where the
+    /// arms bind an associated type differently.
+    UnionAssociatedTypeConflict {
+        expr: ExprId,
+        base: Ty,
+        member: baml_type::Name,
+        is_method: bool,
+        types: Vec<Ty>,
+    },
     /// An abstract type (union or interface existential) instantiating an
     /// interface-bounded generic parameter - no single runtime type to
     /// dispatch on (E0001).
@@ -1114,6 +1140,18 @@ enum PendingDiag<'db> {
     PositionalAfterNamed {
         expr: ExprId,
     },
+    TupleElementAssign {
+        expr: ExprId,
+    },
+    FunctionFieldNeedsParens {
+        expr: ExprId,
+    },
+    TupleIndexOutOfRange {
+        expr: ExprId,
+        index: i64,
+        tuple: Ty,
+        variant: Option<Ty>,
+    },
     /// The same argument name supplied twice.
     DuplicateNamedArg {
         expr: ExprId,
@@ -1240,6 +1278,11 @@ enum PendingDiag<'db> {
         pat: PatId,
         expected: Ty,
         found: Ty,
+    },
+    TupleTypeTestNeverMatches {
+        pat: PatId,
+        scrutinee: Ty,
+        tested: Ty,
     },
     OperatorNotApplicable {
         expr: ExprId,
@@ -1439,7 +1482,11 @@ impl<'db, T> InferenceResult<'db, T> {
         }
         fn resolution_types<'a, T>(resolution: &'a MemberResolution<'_, T>, out: &mut Vec<&'a T>) {
             match resolution {
-                MemberResolution::InterfaceVirtualField { view, .. } => out.push(view),
+                MemberResolution::InterfaceVirtualField { view, .. }
+                | MemberResolution::Method {
+                    callee: MethodCallee::Virtual { view, .. },
+                    ..
+                } => out.push(view),
                 MemberResolution::Method {
                     callee:
                         MethodCallee::Concrete {
@@ -1448,7 +1495,7 @@ impl<'db, T> InferenceResult<'db, T> {
                     ..
                 } => out.extend(frame_type_args.iter()),
                 MemberResolution::Method {
-                    callee: MethodCallee::Inherent(_) | MethodCallee::Virtual { .. },
+                    callee: MethodCallee::Inherent(_),
                     ..
                 }
                 | MemberResolution::Field { .. }
@@ -2183,6 +2230,7 @@ struct InferenceContext<'db> {
     /// to overlap reports, from the chain's own frame) and `is` tests
     /// (a disjoint runtime type test is legal and answers `false`).
     pub(crate) or_probe_depth: u32,
+    pub(crate) silent_test_depth: u32,
     /// Nonzero while lowering the subtree of an already-REJECTED rest
     /// sub-pattern. The subtree still lowers (bindings must record, no
     /// unresolved-name cascades) but further rest-shape reports and
@@ -2330,6 +2378,7 @@ impl<'db> InferenceContext<'db> {
             member_probe_depth: 0,
             optional_call_callee_depth: 0,
             or_probe_depth: 0,
+            silent_test_depth: 0,
             rest_reject_depth: 0,
             template_params: Vec::new(),
             table: InferenceTable::new(),
@@ -2900,10 +2949,12 @@ impl<'db> InferenceContext<'db> {
             // byte-string; TIR agrees).
             Expr::ByteStringLiteral(_) => Ty::intern(InferTy::Uint8Array),
             Expr::Path(segments) => self.resolve_value_path(body, expr, segments, expected),
-            Expr::Index { base, index } => self.infer_index(body, expr, *base, *index, false),
+            Expr::Index { base, index } => {
+                self.infer_index(body, expr, *base, *index, false, false)
+            }
             Expr::Await { future } => self.infer_await(body, expr, *future),
             Expr::OptionalIndex { base, index } => {
-                self.infer_index(body, expr, *base, *index, true)
+                self.infer_index(body, expr, *base, *index, true, false)
             }
             Expr::Block { stmts, tail_expr } => {
                 let type_scope = self.scoped_type_bindings.len();
@@ -2912,7 +2963,7 @@ impl<'db> InferenceContext<'db> {
                 let mut deferred_diverges = false;
                 for stmt in stmts {
                     if let Stmt::Defer { body: deferred } = body.stmts[*stmt] {
-                        deferred_writes.extend(self.assigned_bindings(body, deferred));
+                        deferred_writes.extend(self.assigned_bindings(body, deferred, None));
                     }
                     self.infer_stmt(body, *stmt);
                     if let Stmt::Defer { body: deferred } = body.stmts[*stmt] {
@@ -3278,6 +3329,26 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
             }
+            Expr::Tuple { elements } => {
+                match self.expected_tuple_elements(expected, elements.len()) {
+                    Some(slots) => {
+                        for (element, slot) in elements.iter().zip(&slots) {
+                            self.check_expr(body, *element, slot);
+                        }
+                        Ty::tuple(slots)
+                    }
+                    None => {
+                        let element_tys: Vec<Ty> = elements
+                            .iter()
+                            .map(|element| {
+                                let ty = self.infer_expr(body, *element, &Expectation::None);
+                                self.widen_fresh(&ty)
+                            })
+                            .collect();
+                        Ty::tuple(element_tys)
+                    }
+                }
+            }
             Expr::Map { entries } => {
                 // With an expected map type, entries are CHECKED against
                 // its key/value (the Array arm's rule; r-a's
@@ -3523,7 +3594,7 @@ impl<'db> InferenceContext<'db> {
                 // condition's true facts, and the POST-loop environment is
                 // loop entry plus the false facts - a zero-iteration loop
                 // keeps no body narrowing (B-735).
-                for binding in self.assigned_bindings(body, *loop_body) {
+                for binding in self.assigned_bindings(body, *loop_body, *after) {
                     self.flow.remove(&binding);
                 }
                 let (condition_ty, facts) = self.check_condition(body, *condition);
@@ -3559,7 +3630,7 @@ impl<'db> InferenceContext<'db> {
                 scrutinee,
                 body: loop_body,
             } => {
-                for binding in self.assigned_bindings(body, *loop_body) {
+                for binding in self.assigned_bindings(body, *loop_body, None) {
                     self.flow.remove(&binding);
                 }
                 let scrut_ty = self.infer_expr(body, *scrutinee, &Expectation::None);
@@ -3581,7 +3652,7 @@ impl<'db> InferenceContext<'db> {
                 collection,
                 body: loop_body,
             } => {
-                for havoced in self.assigned_bindings(body, *loop_body) {
+                for havoced in self.assigned_bindings(body, *loop_body, None) {
                     self.flow.remove(&havoced);
                 }
                 let collection_ty = self.infer_expr(body, *collection, &Expectation::None);
@@ -4291,6 +4362,21 @@ impl<'db> InferenceContext<'db> {
         value: ExprId,
         op: Option<baml_compiler2_ast::AssignOp>,
     ) {
+        let mut place = target;
+        if let Expr::OptionalChain { expr } = body.exprs[place] {
+            place = expr;
+        }
+        if let Expr::MemberAccess { member, .. } | Expr::OptionalMemberAccess { member, .. } =
+            &body.exprs[place]
+        {
+            if member.as_str().parse::<u32>().is_ok() {
+                self.infer_expr(body, target, &Expectation::None);
+                self.infer_expr(body, value, &Expectation::None);
+                self.pending_diags
+                    .push(PendingDiag::TupleElementAssign { expr: target });
+                return;
+            }
+        }
         // An INDEX target (`xs[0] = v`, `xs[0] += v`): the element type
         // comes from the same `baml.ops.Index` dispatch as a read, the
         // value checks against it (expectation propagation - an empty
@@ -4300,7 +4386,7 @@ impl<'db> InferenceContext<'db> {
         // declared element type is the contract.
         if let Expr::Index { base, index } = &body.exprs[target] {
             let (base, index) = (*base, *index);
-            let element = self.infer_index(body, target, base, index, false);
+            let element = self.infer_index(body, target, base, index, false, true);
             self.result.type_of_expr.insert(target, element.clone());
             match op {
                 None => {
@@ -4423,15 +4509,6 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// A path target (`x`, `x.f.g`) writes through the local or global its
-    /// root names. AST lowering admits any path syntactically; a root that
-    /// resolves to something else - a function, an enum variant - has no
-    /// storage, and MIR would otherwise either fail to find a place or store
-    /// into a temporary that is thrown away. A global root is not this
-    /// check's concern: `x.f = v` through a global is a real store, and
-    /// `x = v` already reports `AssignmentToGlobal`. An unresolved root
-    /// already reported `unresolved name` (its type is the error sentinel)
-    /// and is skipped.
     fn check_path_assignment_target(&mut self, body: &ExprBody, target: ExprId) {
         let Expr::Path(segments) = &body.exprs[target] else {
             return;
@@ -4766,6 +4843,20 @@ impl<'db> InferenceContext<'db> {
                 let value_ok = self.eq_piece(&av, &bv);
                 let error_ok = self.eq_piece(&ae, &be);
                 value_ok && error_ok
+            }
+            (InferTy::Tuple(a_elems), InferTy::Tuple(b_elems))
+                if a_elems.len() == b_elems.len() =>
+            {
+                let pairs: Vec<(Ty, Ty)> = a_elems
+                    .iter()
+                    .cloned()
+                    .zip(b_elems.iter().cloned())
+                    .collect();
+                let mut ok = true;
+                for (a, b) in pairs {
+                    ok &= self.eq_piece(&a, &b);
+                }
+                ok
             }
             // Function types: contravariant params, covariant ret/throws.
             // The parameter lists pair by the spec's rule (required
@@ -5121,14 +5212,7 @@ impl<'db> InferenceContext<'db> {
     /// join stays syntactic until resolution - the S13 finalize pass
     /// re-canonicalizes once every variable is solved or ruled an error.
     fn union_of(&mut self, members: &[Ty]) -> Ty {
-        let closed: Result<Vec<_>, _> = members
-            .iter()
-            .map(baml_type::interned::ClosedTy::try_from)
-            .collect();
-        match closed {
-            Ok(closed) => canonical_union_interned(&closed, &self.facts).into_ty(),
-            Err(baml_type::interned::OpenTy) => syntactic_union(members),
-        }
+        union_of_tys(&self.facts, members)
     }
 
     /// The control-flow join: a canonical union that PRESERVES literal
@@ -5522,6 +5606,7 @@ impl<'db> InferenceContext<'db> {
         base: ExprId,
         index: ExprId,
         optional: bool,
+        _write: bool,
     ) -> Ty {
         let base_ty = self.infer_expr(body, base, &Expectation::None);
         let subject = if optional {
@@ -6932,11 +7017,10 @@ impl<'db> InferenceContext<'db> {
         let resolved = self.structurally_resolve(receiver);
         let candidate =
             crate::method_resolution::lookup_method(self.db, &self.facts, &resolved, member);
-        if candidate.is_none()
-            && let Some((field, resolution)) =
-                self.class_field_access(member_expr, &resolved, member)
-        {
-            return (field, false, resolution);
+        if member.as_str().parse::<u32>().is_ok() {
+            self.pending_diags
+                .push(PendingDiag::FunctionFieldNeedsParens { expr: member_expr });
+            return (Ty::error(), false, None);
         }
         // Callee position on a UNION: the member resolves through the
         // single interface every arm shares (TIR's rule - the union as
@@ -6966,6 +7050,22 @@ impl<'db> InferenceContext<'db> {
                     );
                     let (ty, bound) = self.interface_member_callee(interface_member, call, true);
                     return (ty, bound, resolution);
+                }
+                crate::method_resolution::UnionMemberLookup::AssociatedTypeConflict {
+                    is_method,
+                    types,
+                } => {
+                    if self.member_probe_depth == 0 {
+                        self.pending_diags
+                            .push(PendingDiag::UnionAssociatedTypeConflict {
+                                expr: member_expr,
+                                base: resolved.clone(),
+                                member: member.clone(),
+                                is_method,
+                                types,
+                            });
+                    }
+                    return (Ty::error(), false, None);
                 }
                 crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
                     if self.member_probe_depth == 0 {
@@ -7106,6 +7206,16 @@ impl<'db> InferenceContext<'db> {
             self.member_probe_depth += 1;
             let (field, field_resolution) = self.field_access_resolved(call, &resolved, member);
             self.member_probe_depth -= 1;
+            if matches!(
+                field_resolution,
+                Some(
+                    MemberResolution::Field { .. } | MemberResolution::InterfaceVirtualField { .. }
+                )
+            ) {
+                self.pending_diags
+                    .push(PendingDiag::FunctionFieldNeedsParens { expr: member_expr });
+                return (Ty::error(), false, None);
+            }
             // Every tier exhausted: the COMMITTED member failure reports
             // here (probes above stayed silent). A union base says "no
             // common interface" - each arm may well declare `member` via
@@ -7262,13 +7372,21 @@ impl<'db> InferenceContext<'db> {
         call: ExprId,
         bind_self: bool,
     ) -> (Ty, bool) {
+        if !interface_member.is_method {
+            self.pending_diags
+                .push(PendingDiag::FunctionFieldNeedsParens { expr: call });
+            return (Ty::error(), false);
+        }
         // A `self`-LESS method binds no receiver whatever the spelling: the
         // receiver named where to find the member, it is not an argument.
         let bound = interface_member.is_method
             && bind_self
             && self.interface_member_takes_self(&interface_member);
-        if let Some(crate::method_resolution::PendingOwnGenerics { callable, prefix }) =
-            interface_member.pending_own
+        if let Some(crate::method_resolution::PendingOwnGenerics {
+            callable,
+            prefix,
+            arms,
+        }) = interface_member.pending_own
         {
             let own_params = callable_signature(self.db, callable).generic_params.clone();
             let method_name = callable_display_name(self.db, callable).clone();
@@ -7283,7 +7401,13 @@ impl<'db> InferenceContext<'db> {
             let instantiation = self.write_call_type_args(call, &instantiation, own_offset);
             self.register_callable_instantiation(callable, &instantiation, call);
             return (
-                instantiate_callable_signature(self.db, callable, &instantiation),
+                crate::method_resolution::instantiate_member_signature(
+                    self.db,
+                    &self.facts,
+                    callable,
+                    &instantiation,
+                    arms.as_deref(),
+                ),
                 bound,
             );
         }
@@ -7920,7 +8044,7 @@ impl<'db> InferenceContext<'db> {
         // E0790, whose fix is the fully-qualified spelling.
         let dispatch = crate::callable::callable_self_dispatch(self.db, method);
         let iface_ref = InferInterface::new(
-            iface_qtn,
+            iface_qtn.clone(),
             // The WRITTEN arguments: `Conv<int>` and `Conv<string>` are
             // different interfaces, so a message naming a bare `Conv` would
             // not say which one the reference meant. Empty for the inferred
@@ -7957,6 +8081,9 @@ impl<'db> InferenceContext<'db> {
                 None => self.fresh_required_arg(param, anchor),
             });
         }
+        // The slot's interface at the frame's generics group (`Self` is slot 0).
+        let view =
+            InferInterface::new(iface_qtn, instantiation[1..].into(), Box::new([])).existential();
         let own_args = self.own_instantiation_with_bounds(
             own,
             own_params,
@@ -7994,6 +8121,7 @@ impl<'db> InferenceContext<'db> {
                 MemberResolution::Method {
                     callee: MethodCallee::Virtual {
                         interface,
+                        view,
                         method: member.clone(),
                     },
                     receiver: Receiver::Unbound,
@@ -10009,6 +10137,20 @@ impl<'db> InferenceContext<'db> {
         // answers as its union and an alias-of-class answers as the
         // class - every arm below sees the target.
         let resolved = self.structurally_resolve(base_ty);
+        if let Ok(slot) = member.as_str().parse::<usize>() {
+            if let InferTy::Tuple(elements) = resolved.kind() {
+                if let Some(element) = elements.get(slot) {
+                    return (element.clone(), None);
+                }
+                self.pending_diags.push(PendingDiag::TupleIndexOutOfRange {
+                    expr: at,
+                    index: i64::try_from(slot).unwrap_or(i64::MAX),
+                    tuple: resolved,
+                    variant: None,
+                });
+                return (Ty::error(), None);
+            }
+        }
         if let Some(field) = self.class_field_access(at, &resolved, member) {
             return field;
         }
@@ -10214,6 +10356,22 @@ impl<'db> InferenceContext<'db> {
                     resolution,
                 )
             }
+            crate::method_resolution::UnionMemberLookup::AssociatedTypeConflict {
+                is_method,
+                types,
+            } => {
+                if self.member_probe_depth == 0 {
+                    self.pending_diags
+                        .push(PendingDiag::UnionAssociatedTypeConflict {
+                            expr: at,
+                            base: union_ty.clone(),
+                            member: member.clone(),
+                            is_method,
+                            types,
+                        });
+                }
+                (Ty::error(), None)
+            }
             crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
                 if self.member_probe_depth == 0 {
                     self.pending_diags.push(PendingDiag::AmbiguousMember {
@@ -10287,9 +10445,14 @@ impl<'db> InferenceContext<'db> {
                 field_index: *field_index,
                 field: member.clone(),
             }),
-            MemberDeclarer::VirtualMethod { interface, .. } => Some(MemberResolution::Method {
+            MemberDeclarer::VirtualMethod {
+                interface,
+                realized,
+                ..
+            } => Some(MemberResolution::Method {
                 callee: MethodCallee::Virtual {
                     interface: *interface,
+                    view: realized.existential(),
                     method: member.clone(),
                 },
                 receiver,
@@ -10627,8 +10790,11 @@ impl<'db> InferenceContext<'db> {
         interface_member: crate::method_resolution::InterfaceMember<'db>,
         at: ExprId,
     ) -> Ty {
-        if let Some(crate::method_resolution::PendingOwnGenerics { callable, prefix }) =
-            interface_member.pending_own
+        if let Some(crate::method_resolution::PendingOwnGenerics {
+            callable,
+            prefix,
+            arms,
+        }) = interface_member.pending_own
         {
             // A VALUE reference, reported as the unspecialized value (see
             // the inherent method value road), not as an uninferred slot;
@@ -10649,10 +10815,12 @@ impl<'db> InferenceContext<'db> {
                 // `default`'s adopted frame) supplies the owner prefix.
                 self.write_call_type_args(at, &instantiation, owner_count);
             }
-            return bind_receiver(instantiate_callable_signature(
+            return bind_receiver(crate::method_resolution::instantiate_member_signature(
                 self.db,
+                &self.facts,
                 callable,
                 &instantiation,
+                arms.as_deref(),
             ));
         }
         // Same rule as the call road: a `self`-less method binds nothing.
@@ -10739,6 +10907,18 @@ impl<'db> InferenceContext<'db> {
         )
     }
 
+    fn expected_tuple_elements(&mut self, expected: &Expectation, arity: usize) -> Option<Vec<Ty>> {
+        let shape = self.expectation_shape(expected)?;
+        self.unique_expected_arm(
+            &shape,
+            |arm| match arm.kind() {
+                InferTy::Tuple(elements) if elements.len() == arity => Some(elements.to_vec()),
+                _ => None,
+            },
+            PartialEq::eq,
+        )
+    }
+
     /// The MAP literal's counterpart of `expected_list_element`.
     fn expected_map_entry(&mut self, expected: &Expectation) -> Option<(Ty, Ty)> {
         let shape = self.expectation_shape(expected)?;
@@ -10764,6 +10944,9 @@ impl<'db> InferenceContext<'db> {
         match &body.exprs[expr] {
             Expr::Array { .. } => self.expected_list_element(expected).is_some(),
             Expr::Map { .. } => self.expected_map_entry(expected).is_some(),
+            Expr::Tuple { elements } => self
+                .expected_tuple_elements(expected, elements.len())
+                .is_some(),
             Expr::Lambda(_) => expected
                 .only_has_type()
                 .cloned()
@@ -11247,6 +11430,12 @@ impl<'db> InferenceContext<'db> {
                     .map(|member| self.ingest_lowered(member, policy))
                     .collect(),
             ),
+            LoweringTyShape::Tuple(elements) => InferTy::Tuple(
+                elements
+                    .iter()
+                    .map(|element| self.ingest_lowered(element, policy))
+                    .collect(),
+            ),
             LoweringTyShape::Class(name, args) => InferTy::Class(
                 name.clone(),
                 args.iter()
@@ -11342,9 +11531,9 @@ impl<'db> InferenceContext<'db> {
         // An exception can leave the base at any point, and a handler may
         // assign outer locals (including through a defer at its block exit).
         let mut entry_flow = self.flow.clone();
-        let mut writes = self.assigned_bindings(body, base);
+        let mut writes = self.assigned_bindings(body, base, None);
         for &arm in &clause.arms {
-            writes.extend(self.assigned_bindings(body, body.catch_arms[arm].body));
+            writes.extend(self.assigned_bindings(body, body.catch_arms[arm].body, None));
         }
         for binding in writes {
             entry_flow.remove(&binding);
@@ -13030,6 +13219,25 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::FunctionFieldNeedsParens { expr } => {
+                        (TirTypeError::FunctionFieldNeedsParens, expr)
+                    }
+                    PendingDiag::TupleElementAssign { expr } => {
+                        (TirTypeError::TupleElementNotAssignable, expr)
+                    }
+                    PendingDiag::TupleIndexOutOfRange {
+                        expr,
+                        index,
+                        tuple,
+                        variant,
+                    } => (
+                        TirTypeError::TupleIndexOutOfRange {
+                            index,
+                            tuple: self.plain_finalized(&tuple),
+                            variant: variant.map(|variant| self.plain_finalized(&variant)),
+                        },
+                        expr,
+                    ),
                     PendingDiag::PositionalAfterNamed { expr } => {
                         (TirTypeError::PositionalArgumentAfterNamed, expr)
                     }
@@ -13177,6 +13385,21 @@ impl<'db> InferenceContext<'db> {
                         TirTypeError::UnionMemberNoCommonInterface {
                             union: self.plain_finalized(&base),
                             member,
+                        },
+                        expr,
+                    ),
+                    PendingDiag::UnionAssociatedTypeConflict {
+                        expr,
+                        base,
+                        member,
+                        is_method,
+                        types,
+                    } => (
+                        TirTypeError::UnionMemberAssociatedTypeConflict {
+                            union: self.plain_finalized(&base),
+                            member,
+                            is_method,
+                            types: types.iter().map(|ty| self.plain_finalized(ty)).collect(),
                         },
                         expr,
                     ),
@@ -13999,6 +14222,22 @@ impl<'db> InferenceContext<'db> {
                         });
                         continue;
                     }
+                    PendingDiag::TupleTypeTestNeverMatches {
+                        pat,
+                        scrutinee,
+                        tested,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::TupleTypeTestNeverMatches {
+                                scrutinee: self.plain_finalized(&scrutinee),
+                                tested: self.plain_finalized(&tested),
+                            },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
                     PendingDiag::UnresolvedPatternName {
                         pat,
                         name,
@@ -14082,10 +14321,15 @@ impl<'db> InferenceContext<'db> {
                     } else {
                         DiagnosticSeverity::Error
                     };
+                let primary = if matches!(error, TirTypeError::TupleIndexOutOfRange { .. }) {
+                    DiagnosticLocation::ExprMember(expr)
+                } else {
+                    DiagnosticLocation::Expr(expr)
+                };
                 diags.push(TirDiagnostic {
                     error,
                     severity,
-                    primary: DiagnosticLocation::Expr(expr),
+                    primary,
                     related,
                 });
             }
@@ -15198,6 +15442,7 @@ fn same_head_constructor(source: &Ty, target: &Ty) -> bool {
         (InferTy::Class(a, a_args), InferTy::Class(b, b_args)) => {
             a == b && a_args.len() == b_args.len()
         }
+        (InferTy::Tuple(a), InferTy::Tuple(b)) => a.len() == b.len(),
         (InferTy::Interface(a, a_args, _), InferTy::Interface(b, b_args, _)) => {
             a == b && a_args.len() == b_args.len()
         }
@@ -15473,8 +15718,6 @@ impl RelaxationVariance {
 /// `unknown`; under a parameter, `(T | int) -> void` → `(int) -> void`); a
 /// function flips the direction for its parameters and keeps it for the
 /// return and throws (`() -> T throws T` → `() -> unknown throws unknown`);
-/// an invariant constructor (classes, lists, maps, interfaces, futures,
-/// projections) has no nearer relative than the bound itself, so any
 /// mention inside collapses it whole (`T[]` → `unknown`).
 ///
 /// This is what a clause outside the block may say about a value typed by
@@ -15526,7 +15769,8 @@ fn nearest_scoped_relaxation(ty: &baml_type::Ty, variance: RelaxationVariance) -
             ret: Box::new(nearest_scoped_relaxation(ret, variance)),
             throws: Box::new(nearest_scoped_relaxation(throws, variance)),
         },
-        Plain::Class(..)
+        Plain::Tuple(..)
+        | Plain::Class(..)
         | Plain::Interface(..)
         | Plain::List(..)
         | Plain::Map { .. }
@@ -15765,9 +16009,15 @@ impl<'db> InferenceContext<'db> {
             MemberResolution::Method { callee, receiver } => MemberResolution::Method {
                 callee: match callee {
                     MethodCallee::Inherent(func) => MethodCallee::Inherent(func),
-                    MethodCallee::Virtual { interface, method } => {
-                        MethodCallee::Virtual { interface, method }
-                    }
+                    MethodCallee::Virtual {
+                        interface,
+                        view,
+                        method,
+                    } => MethodCallee::Virtual {
+                        interface,
+                        view: self.materialize_ty(&view),
+                        method,
+                    },
                     MethodCallee::Concrete {
                         impl_block,
                         func,
@@ -15896,6 +16146,7 @@ fn may_become_unit(ty: &Ty) -> bool {
         | InferTy::Enum(..)
         | InferTy::EnumVariant(..)
         | InferTy::List(..)
+        | InferTy::Tuple(..)
         | InferTy::Map { .. }
         | InferTy::Function { .. }
         | InferTy::Future(..)
@@ -15965,7 +16216,11 @@ fn finalize_member_resolution(
     resolution: &mut MemberResolution<'_, Ty>,
 ) {
     match resolution {
-        MemberResolution::InterfaceVirtualField { view, .. } => {
+        MemberResolution::InterfaceVirtualField { view, .. }
+        | MemberResolution::Method {
+            callee: MethodCallee::Virtual { view, .. },
+            ..
+        } => {
             *view = ctx.finalize_ty(view).into_ty();
         }
         MemberResolution::Method {
@@ -15979,7 +16234,7 @@ fn finalize_member_resolution(
             }
         }
         MemberResolution::Method {
-            callee: MethodCallee::Inherent(_) | MethodCallee::Virtual { .. },
+            callee: MethodCallee::Inherent(_),
             ..
         }
         | MemberResolution::Field { .. }

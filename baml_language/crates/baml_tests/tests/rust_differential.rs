@@ -51,6 +51,8 @@ const PROBES: &[&str] = &[
     "Scalars",
     "Overflow",
     "Containers",
+    "Tuples",
+    "TupleAccess",
     "Shapes",
     "Closures",
     "Interfaces",
@@ -151,6 +153,41 @@ const MODES: &[Mode] = &[
 
 const OUTPUT_LIMIT: usize = 1024 * 1024;
 
+fn probe_timeout(probe: &str, mode: &Mode, configured: Option<u64>) -> Duration {
+    let (_, bodies, _, frames, telemetry) = mode;
+    // NoLeaks measures the full native stack three times. Frameless high tracing
+    // emits a span per recursive call; retain that workload with headroom on
+    // slower runners. Explicit timeout overrides stay exact.
+    Duration::from_secs(configured.unwrap_or(
+        if probe == "NoLeaks" && *bodies == "1" && *frames == "0" && *telemetry == Some("high") {
+            240
+        } else {
+            120
+        },
+    ))
+}
+
+#[test]
+fn only_the_two_expensive_no_leaks_modes_get_extra_time() {
+    let mut extended = Vec::new();
+    for probe in PROBES {
+        for mode in MODES {
+            let seconds = probe_timeout(probe, mode, None).as_secs();
+            if seconds != 120 {
+                extended.push((*probe, mode.0, seconds));
+            }
+            assert_eq!(probe_timeout(probe, mode, Some(7)), Duration::from_secs(7));
+        }
+    }
+    assert_eq!(
+        extended,
+        [
+            ("NoLeaks", "compiled-telemetry-high", 240),
+            ("NoLeaks", "gc-stress-telemetry-high", 240),
+        ]
+    );
+}
+
 fn capture(mut stream: impl Read) -> io::Result<(Vec<u8>, bool)> {
     let mut bytes = Vec::new();
     let mut exceeded = false;
@@ -237,15 +274,17 @@ fn probe_timeout_kills_and_reaps() {
 #[ignore = "builds a generated Rust crate with cargo"]
 fn rust_differential() {
     #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
-    let timeout = std::env::var("BAML_RUST_DIFF_TIMEOUT_SECS")
+    let timeout_secs = std::env::var("BAML_RUST_DIFF_TIMEOUT_SECS")
+        .ok()
         .map(|value| {
             value
                 .parse::<u64>()
                 .expect("BAML_RUST_DIFF_TIMEOUT_SECS must be seconds")
-        })
-        .unwrap_or(120);
-    assert!(timeout > 0, "BAML_RUST_DIFF_TIMEOUT_SECS must be positive");
-    let timeout = Duration::from_secs(timeout);
+        });
+    assert!(
+        timeout_secs != Some(0),
+        "BAML_RUST_DIFF_TIMEOUT_SECS must be positive"
+    );
     #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
     let only = std::env::var("BAML_RUST_DIFF_PROBES").ok();
     #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
@@ -267,7 +306,7 @@ fn rust_differential() {
         workspace.display().to_string(),
         "--rust-build-dir".into(),
         build.display().to_string(),
-        "--from".into(),
+        "--project-dir".into(),
         manifest.join("rust_diff").display().to_string(),
         "-o".into(),
         executable.display().to_string(),
@@ -293,7 +332,8 @@ fn rust_differential() {
     });
     for probe in selected {
         let mut outputs = Vec::new();
-        for (mode, bodies, stress, frames, telemetry) in MODES {
+        for mode_config @ (mode, bodies, stress, frames, telemetry) in MODES {
+            let timeout = probe_timeout(probe, mode_config, timeout_secs);
             let start = Instant::now();
             let mut command = Command::new(initializer_binaries.get(probe).unwrap_or(&executable));
             if !initializer_probes::collects_tests(probe) {

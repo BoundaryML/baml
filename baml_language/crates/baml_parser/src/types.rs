@@ -12,8 +12,8 @@ use baml_syntax::{
     nodes::{
         AnyExpr, AnyLiteralTypeValue, AnyType, AnyTypeArg, Arenas, ArrayType, AssocTypeBinding,
         BacktickString, FunctionType, FunctionTypeParam, FunctionTypeParamName, LiteralType,
-        NodeKind, OptionalType, ParenType, PathType, QualifiedPath, ThrowsClause, TypeArgs,
-        UnionArm, UnionType,
+        NodeKind, OptionalType, ParenType, PathType, QualifiedPath, ThrowsClause, TupleType,
+        TypeArgs, UnionArm, UnionType,
     },
     token::{
         Ident, KindSet, TokenIdx, TokenKind, TokenSet as _, ctx, kw, lit, punct,
@@ -410,6 +410,20 @@ fn paren_group_contents(p: &mut Parser<'_, '_>, l: Token!["("]) -> Result<AnyTyp
         return Ok(AnyType::Paren(p.alloc(mark, ParenType { l, inner, r })));
     }
 
+    if !had_named && !elements.is_empty() {
+        let elements = elements
+            .into_iter()
+            .filter_map(|element| {
+                element.ty.ok().map(|item| SepItem {
+                    item,
+                    sep: element.sep,
+                })
+            })
+            .collect();
+        let elements = p.out.alloc_list(elements);
+        return Ok(AnyType::Tuple(p.alloc(mark, TupleType { l, elements, r })));
+    }
+
     // Named parameters are only legal in a function type; a group of several
     // types is neither a type nor a tuple. The element types were parsed for
     // their diagnostics; the group itself is recovered as one `Bogus`.
@@ -664,6 +678,11 @@ fn collect_ambiguous_pipes(
     out: &mut Vec<(Id<FunctionType>, Vec<TokenIdx>)>,
 ) {
     match ty {
+        AnyType::Tuple(id) => {
+            for element in p.out.list(p.out.get(id).elements) {
+                collect_ambiguous_pipes(p, element.item, None, out);
+            }
+        }
         AnyType::Literal(_) | AnyType::Bogus(_) => {}
         AnyType::Path(id) => {
             if let Some(args) = p.out.get(id).args {
@@ -760,7 +779,8 @@ fn is_function_shaped(p: &Parser<'_, '_>, mut ty: AnyType) -> bool {
                 Ok(inner) => inner,
                 Err(_) => return false,
             },
-            AnyType::Path(_)
+            AnyType::Tuple(_)
+            | AnyType::Path(_)
             | AnyType::Literal(_)
             | AnyType::Union(_)
             | AnyType::Qualified(_)

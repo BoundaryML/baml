@@ -59,8 +59,8 @@ def main():
         version = run("baml", "--version", capture=True).stdout
         assert f"baml wrapper {args.version}" in version and "Arch CLI fixture" in version, version
         assert "installed toolchains: (none)" in run("baml", "toolchain", "list", capture=True).stdout
-        disabled = run("baml", "self-update", capture=True, check=False)
-        assert disabled.returncode == 1 and "self-update is disabled in this build" in disabled.stderr, disabled
+        disabled = run("baml", "self", "update", capture=True, check=False)
+        assert disabled.returncode == 1 and "baml self update is disabled in this build" in disabled.stderr, disabled
         print("Arch makepkg metadata, package build, installed bytes, and wrapper smoke checks passed.")
 
 

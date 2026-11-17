@@ -12,7 +12,7 @@
 // read the bank, run the compiler, or search. It has the specification and its
 // own reasoning, which is what we are trying to measure.
 //
-//   baml run take_quiz --from tools/type_quiz -- --sessions 3 --models opus,sonnet,haiku
+//   baml run take_quiz --project-dir tools/type_quiz -- --sessions 3 --models opus,sonnet,haiku
 //
 // run from `baml_language`, where TYPE_SYSTEM.md and target/ are. Every run
 // writes as it goes and can be resumed, because the whole state of a sitting
@@ -681,7 +681,7 @@ function take_quiz(
         });
     // `Limit` replaced `TaskGroup`: a pure admission counter, capacity
     // positive (`.max(1)` is what makes the arm below unreachable).
-    let limit = baml.spawn.Limit.new(concurrency.max(1)) catch (e) {
+    let limit = baml.sync.Semaphore.new(concurrency.max(1)) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic("max(1) is positive"),
     };
     let futures: baml.future.Future<Run, never>[] = [];

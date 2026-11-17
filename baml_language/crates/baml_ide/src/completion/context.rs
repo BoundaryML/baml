@@ -246,8 +246,19 @@ fn speculative_parse(text: &str, offset: TextSize) -> Option<Speculative> {
     if !text.is_char_boundary(at) {
         return None;
     }
+    // Appending a word to a numeric member makes `t.0.1<marker>` an
+    // invalid float token. Replace the slot fragment in the speculative
+    // text, keeping the separator's original offset for receiver lookup.
+    let digits_start = text[..at]
+        .trim_end_matches(|c: char| c.is_ascii_digit())
+        .len();
+    let start = if digits_start < at && text[..digits_start].ends_with('.') {
+        digits_start
+    } else {
+        at
+    };
     let mut faked = String::with_capacity(text.len() + MARKER.len());
-    faked.push_str(&text[..at]);
+    faked.push_str(&text[..start]);
     faked.push_str(MARKER);
     faked.push_str(&text[at..]);
     let tree = baml_parser::parse(&faked).tree;
@@ -255,7 +266,7 @@ fn speculative_parse(text: &str, offset: TextSize) -> Option<Speculative> {
     Some(Speculative {
         tree,
         index,
-        marker: TextRange::at(offset, TextSize::of(MARKER)),
+        marker: TextRange::at(TextSize::try_from(start).ok()?, TextSize::of(MARKER)),
     })
 }
 

@@ -33,6 +33,8 @@ fn sdk_completion_is_emitted_only_in_the_terminal_file() {
             sources: None,
             context: None,
             exit: Arc::clone(&exit),
+            program_id: None,
+            build: None,
         });
     exit.set(btel_types::ProcessExit {
         status: btel_types::ProcessStatus::Unknown,
@@ -1376,6 +1378,7 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
         lambda_path: None,
         definition_key: None,
         package_name: Some("user".into()),
+        compilation_unit_hash: None,
         namespace: Vec::new(),
         argument_layout: Some(btel_types::ArgumentLayout {
             slots: vec![btel_types::ArgumentSlot {
@@ -1819,4 +1822,302 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     assert_eq!(done.completion_flags, 16 | 8);
     assert_eq!(done.self_await_ticks, 4);
     assert_eq!(done.exited_at_ticks, 9);
+}
+
+/// A recording that leaves package identity out names no program, build or
+/// package hash, and so reads as the minor it had before those were added.
+#[test]
+fn package_identity_is_recorded_unless_the_destination_declines_it() {
+    use proto::function_definition::Resolution;
+    let allocator = FunctionIdAllocator::default();
+    let function = allocator.allocate().unwrap();
+    let record = |with_identity: bool| {
+        let files = RefCell::new(Vec::new());
+        let table = std::sync::Arc::new(btel_types::FunctionMetadataTable {
+            functions: vec![btel_types::FunctionMetadata {
+                function_id: function,
+                fqn: "user.main".into(),
+                display_name: "main".into(),
+                source_file: None,
+                source_span: None,
+                kind: btel_types::RuntimeFunctionKind::Bytecode,
+                origin: btel_types::RuntimeFunctionOrigin::UserDefined,
+                owner_type: None,
+                parent_function: None,
+                lambda_path: None,
+                definition_key: None,
+                package_name: Some("user".into()),
+                compilation_unit_hash: Some([7; 32]),
+                namespace: Vec::new(),
+                argument_layout: None,
+                source_map: None,
+                model_invoke: false,
+            }],
+        });
+        let mut publisher = RecordingPublisher::new(RecordingId::generate(), config(), |file| {
+            files.borrow_mut().push(file);
+        })
+        .unwrap();
+        if !with_identity {
+            publisher = publisher.without_package_identity();
+        }
+        let mut publisher =
+            publisher
+                .with_function_metadata(table)
+                .with_process(ProcessRecording {
+                    info: btel_types::ProcessInfo {
+                        process_id: [9; 16],
+                        ..Default::default()
+                    },
+                    sources: None,
+                    context: None,
+                    exit: Arc::default(),
+                    program_id: Some([4; 16]),
+                    build: Some(btel_types::BuildRecord {
+                        build_id: [1; 16],
+                        timestamp_unix_ns: 7,
+                        origin: btel_types::BuildOrigin::Run,
+                        git: None,
+                        source_hash: [2; 32],
+                        compilation_unit_hash: [7; 32],
+                    }),
+                });
+        publisher.span(
+            allocate_telemetry_id(),
+            &mut SpanRecord::CallPathDefined {
+                call_path: CallPathId::new_non_root(1).unwrap(),
+                parent_call_path: CallPathId::ROOT,
+                visible_caller: None,
+                caller_pc: 0,
+                callee: function,
+                edge: btel_types::CallPathEdge::Synchronous,
+            },
+        );
+        publisher.flush_recording().unwrap();
+        let file = decode(&files.borrow()[0]);
+        let header = file.header.unwrap();
+        let Some(Resolution::Metadata(definition)) =
+            file.definitions.unwrap().functions[0].resolution.clone()
+        else {
+            panic!("the function is defined")
+        };
+        (header, definition.compilation_unit_hash)
+    };
+
+    let (header, unit) = record(true);
+    assert_eq!(header.program_id, Some(vec![4; 16]));
+    assert_eq!(header.build.unwrap().origin, "run");
+    assert_eq!(unit, Some(vec![7; 32]));
+    assert_eq!(
+        header.format_minor,
+        btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR
+    );
+
+    let (header, unit) = record(false);
+    assert_eq!(header.program_id, None);
+    assert_eq!(header.build, None);
+    assert_eq!(unit, None);
+    assert!(header.format_minor < btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR);
+}
+
+#[test]
+fn a_log_carries_its_line_and_raises_the_file_minor_only_with_one() {
+    use proto::span_event::Event;
+
+    let files = RefCell::new(Vec::new());
+    let allocator = FunctionIdAllocator::default();
+    let (mapped, unmapped) = (allocator.allocate().unwrap(), allocator.allocate().unwrap());
+    let metadata_for = |function_id, source_map| btel_types::FunctionMetadata {
+        function_id,
+        fqn: "user.Logger".into(),
+        display_name: "Logger".into(),
+        source_file: Some("main.baml".into()),
+        source_span: Some(btel_types::SourceSpan {
+            file_id: 3,
+            start: 0,
+            end: 500,
+        }),
+        kind: btel_types::RuntimeFunctionKind::Bytecode,
+        origin: btel_types::RuntimeFunctionOrigin::UserDefined,
+        owner_type: None,
+        parent_function: None,
+        lambda_path: None,
+        definition_key: None,
+        package_name: Some("user".into()),
+        compilation_unit_hash: None,
+        namespace: Vec::new(),
+        argument_layout: None,
+        source_map,
+        model_invoke: false,
+    };
+    let table = Arc::new(btel_types::FunctionMetadataTable {
+        functions: vec![
+            metadata_for(
+                mapped,
+                Some(btel_types::SourceMap {
+                    code_bytes: 30,
+                    entries: vec![btel_types::SourceMapEntry {
+                        pc: 4,
+                        file_id: 3,
+                        start: 100,
+                        end: 110,
+                        line: 12,
+                    }],
+                }),
+            ),
+            metadata_for(unmapped, None),
+        ],
+    });
+    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap()
+    .with_function_metadata(table);
+    let thread = allocate_telemetry_id();
+    // One log per file: (function, pc) and the line the event must carry.
+    let cases = [
+        (mapped, 4, Some(12)),
+        (mapped, 29, Some(12)),
+        // Before the first mapped instruction, past the code, the sentinel.
+        (mapped, 0, None),
+        (mapped, 30, None),
+        (mapped, u32::MAX, None),
+        (unmapped, 4, None),
+    ];
+    for (function, pc, _) in cases {
+        p.span(
+            thread,
+            &mut SpanRecord::Log {
+                parent_id: thread,
+                function,
+                pc,
+                at: ClockInstant::from_ticks(1),
+                level: btel_records::LogLevel::Warn,
+                event_name: None,
+                captured_data: None,
+            },
+        );
+        p.flush_recording().unwrap();
+    }
+    let files = files.borrow();
+    assert_eq!(files.len(), cases.len());
+    for (file, (function, pc, line)) in files.iter().zip(cases) {
+        let file = decode(file);
+        // A file without a line stays readable at the minor logs came with.
+        assert_eq!(
+            file.header.unwrap().format_minor,
+            if line.is_some() {
+                btel_settings::encoding::LOG_LINE_FORMAT_MINOR
+            } else {
+                btel_settings::encoding::LOG_FORMAT_MINOR
+            },
+            "pc {pc}"
+        );
+        let Some(Event::Log(log)) = file
+            .spans
+            .unwrap()
+            .sections
+            .remove(0)
+            .events
+            .remove(0)
+            .event
+        else {
+            panic!("a log event");
+        };
+        assert_eq!((log.function_id, log.pc), (function.get(), pc));
+        assert_eq!(log.line, line, "pc {pc}");
+    }
+}
+
+#[test]
+fn a_thread_error_travels_on_its_threads_completion_and_raises_the_file_minor() {
+    use proto::span_event::Event;
+
+    let files = RefCell::new(Vec::new());
+    let received = RefCell::new(Vec::new());
+    let mut p = RecordingPublisher::with_snapshot_receiver(
+        RecordingId::generate(),
+        config(),
+        |f| files.borrow_mut().push(f),
+        |snapshot| received.borrow_mut().push(crate::cas_id(&snapshot)),
+    )
+    .unwrap();
+    let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+    let complete = |p: &mut RecordingPublisher<_, _>, thread, outcome| {
+        p.span(
+            thread,
+            &mut SpanRecord::ThreadSpanCompletion {
+                id: thread,
+                parent_id: None,
+                spawn_call_path: CallPathId::ROOT,
+                started_at: ClockInstant::from_ticks(1),
+                completed_at: ClockInstant::from_ticks(2),
+                outcome,
+                clock: Arc::clone(&clock),
+                name: None,
+            },
+        );
+    };
+    let error = snapshot();
+    let error_id = crate::cas_id(&error);
+    let (failed, plain, uncaptured) = (
+        allocate_telemetry_id(),
+        allocate_telemetry_id(),
+        allocate_telemetry_id(),
+    );
+    p.span(
+        failed,
+        &mut SpanRecord::ThreadSpanError {
+            captured_error: Some(error),
+        },
+    );
+    // The error waits for its own thread's completion, across a file and
+    // another thread's completion.
+    p.flush_recording().unwrap();
+    complete(&mut p, plain, InvocationOutcome::Errored);
+    p.flush_recording().unwrap();
+    complete(&mut p, failed, InvocationOutcome::Panicked);
+    p.flush_recording().unwrap();
+    // A capture the pool refused leaves the completion without an error.
+    p.span(
+        uncaptured,
+        &mut SpanRecord::ThreadSpanError {
+            captured_error: None,
+        },
+    );
+    complete(&mut p, uncaptured, InvocationOutcome::Errored);
+    p.flush_recording().unwrap();
+
+    // The error's snapshot is retained for the CAS like any capture.
+    assert_eq!(*received.borrow(), [error_id]);
+    let completions: Vec<(u32, u64, proto::ThreadCompletion)> = files
+        .borrow()
+        .iter()
+        .map(decode)
+        .filter_map(|file| {
+            let minor = file.header.unwrap().format_minor;
+            let mut section = file.spans?.sections.remove(0);
+            match section.events.remove(0).event {
+                Some(Event::ThreadCompletion(done)) => Some((minor, section.thread_id, done)),
+                other => panic!("only completions are events here: {other:?}"),
+            }
+        })
+        .collect();
+    let base = btel_settings::encoding::FORMAT_MINOR;
+    assert_eq!(
+        completions
+            .iter()
+            .map(|(minor, thread, done)| (*minor, *thread, done.error_cas_id, done.panicked))
+            .collect::<Vec<_>>(),
+        vec![
+            (base, plain.get(), None, false),
+            (
+                btel_settings::encoding::THREAD_ERROR_FORMAT_MINOR,
+                failed.get(),
+                Some(error_id),
+                true
+            ),
+            (base, uncaptured.get(), None, false),
+        ]
+    );
 }

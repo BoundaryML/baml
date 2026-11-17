@@ -141,7 +141,7 @@ function draw_flow(
     seed: root.engine.Seed,
 ) -> Drawn? throws never {
     let streams = root.engine.split(seed);
-    let d = fact.generate(streams.left).value;
+    let d = (fact.generate)(streams.left).value;
     let relation = root.algebra.decided(root.algebra.knowledge(d))
         ?? return null;
     let direction = root.engine.below(streams.right, 2);
@@ -492,8 +492,72 @@ class FlowItem {
     }
 }
 
-/// `type B = B;` and its two-alias form, which the spec rejects with E0068.
-/// The compiler accepts both today: see COMPILER_DIVERGENCE.md, CD-001.
+class CycleCase {
+    case: root.engine.Case,
+    casting: root.engine.Casting,
+}
+
+function closed(cycle: root.algebra.Ty, guarded: bool) -> root.algebra.Ty throws never {
+    if (guarded) {
+        root.algebra.Union.new([cycle, root.algebra.Array.new(cycle)])
+    } else {
+        cycle
+    }
+}
+
+function cycle_case(a: string, b: string, two: bool, guarded: bool) -> CycleCase throws never {
+    let decl = if (two) {
+        root.algebra.AliasDecl.recursive(a, (cycle) -> {
+            root.algebra.Alias {
+                decl: root.algebra.AliasDecl { name: b, body: closed(cycle, guarded) },
+            }
+        })
+    } else {
+        root.algebra.AliasDecl.recursive(a, (cycle) -> {
+            closed(cycle, guarded)
+        })
+    };
+    let ty: root.algebra.Ty = root.algebra.Alias { decl };
+    let source = root.algebra.render_decls(root.algebra.decls_of(ty));
+    let file = "case.baml";
+    let claim = if (guarded) {
+        root.engine.Claim {
+            rule: guarded_cycle_legal(),
+            instance: `the cycle through \`${a}\` passes through \`${a}[]\`, a list: its unguarded reference contributes nothing, and the declaration is accepted`,
+            bearing: true,
+        }
+    } else {
+        root.engine.Claim {
+            rule: unguarded_cycle_rejected(),
+            instance: `\`${a}\` is a fully unguarded cycle: it denotes \`never\` and is rejected`,
+            bearing: true,
+        }
+    };
+    let trace = [claim];
+    let key: root.engine.Verdict = if (guarded) {
+        root.engine.Compiles { tests: [] }
+    } else {
+        let more: string[] = if (two) {
+            ["E0068"]
+        } else {
+            []
+        };
+        let at = source.index_of(a)
+            ?? throw baml.panics.Unreachable { message: `no \`${a}\` in the case it names` };
+        let prefix = source.slice(0, at);
+        let start = prefix.to_utf8().length();
+        root.engine.Rejected {
+            code: "E0068",
+            more,
+            at: root.engine.Region { file, start, end: start + a.to_utf8().length() },
+        }
+    };
+    CycleCase {
+        case: root.engine.Case { files: root.engine.one_file(file, source), key, trace },
+        casting: casting(trace, 0, [ty], []),
+    }
+}
+
 class UnguardedCycleItem {
     implements root.engine.Item {
         function id(self) -> string throws never {
@@ -501,72 +565,28 @@ class UnguardedCycleItem {
         }
 
         function status(self) -> root.engine.Status throws never {
-            root.engine.CompilerDiverges {
-                divergence: "CD-001",
-                contradiction: root.engine.Contradiction.Accepts,
-            }
+            root.engine.Verified {}
         }
 
         function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
             let names = root.engine.pick_distinct(seed, type_names(), 2);
             let form = root.engine.below(names.next, 2);
+            let guard = root.engine.below(form.next, 2);
             let a = names.value[0];
             let b = names.value[1];
-            let decl = if (form.value == 0) {
-                root.algebra.AliasDecl.recursive(a, (cycle) -> {
-                    cycle
-                })
-            } else {
-                root.algebra.AliasDecl.recursive(a, (cycle) -> {
-                    root.algebra.Alias { decl: root.algebra.AliasDecl { name: b, body: cycle } }
-                })
-            };
-            let ty: root.algebra.Ty = root.algebra.Alias { decl };
-            let source = root.algebra.render_decls(root.algebra.decls_of(ty));
-            let file = "case.baml";
-            // The spec's E0068 is per cycle member, so the two-alias form
-            // expects two. Where the compiler will point is the first alias's
-            // name: its first occurrence in the source is its declaration.
-            let more: string[] = if (form.value == 0) {
-                []
-            } else {
-                ["E0068"]
-            };
-            // The alias's own name, which this source always spells: byte
-            // zero would be a region pointing at whatever happens to be
-            // first, and a wrong region reads as a compiler disagreement.
-            let at = source.index_of(a)
-                ?? throw baml.panics.Unreachable { message: `no \`${a}\` in the case it names` };
-            let prefix = source.slice(0, at);
-            let start = prefix.to_utf8().length();
-            let trace = [
-                root.engine.Claim {
-                    rule: unguarded_cycle_rejected(),
-                    instance: `\`${a}\` is a fully unguarded cycle: it denotes \`never\` and is rejected`,
-                    bearing: true,
-                },
-            ];
-            // A cycle has no direction and no counterpart, so the one way it
-            // can be served is the only casting there is.
-            let only = casting(trace, 0, [ty], []);
+            let members = [false, true].map((guarded) -> {
+                cycle_case(a, b, form.value == 1, guarded)
+            });
+            let served = members[guard.value];
             root.engine.Candidate.new(
-                root.engine.Case {
-                    files: root.engine.one_file(file, source),
-                    key: root.engine.Rejected {
-                        code: "E0068",
-                        more,
-                        at: root.engine.Region { file, start, end: start + a.to_utf8().length() },
-                    },
-                    trace,
-                },
-                only,
-                [only],
+                served.case,
+                served.casting,
+                members.map((member) -> {
+                    member.casting
+                }),
             )
         }
 
-        /// A cycle has no neighbouring program that compiles: what would
-        /// have to change to make one is the whole of what the case is
-        /// about.
         function foil(self, seed: root.engine.Seed) -> root.engine.Foil? throws never {
             null
         }
