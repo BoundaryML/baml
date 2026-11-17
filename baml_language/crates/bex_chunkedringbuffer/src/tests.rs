@@ -839,6 +839,84 @@ fn worker_slot_is_predetermined_across_polls_and_reuses_fifo_after_retirement() 
 }
 
 #[test]
+fn full_chunks_wake_a_consumer_sleeping_until_a_deadline_in_batches() {
+    // Lanes of 8 chunks: a batch is 4 ready chunks.
+    let pool = ChunkPool::<usize, usize>::new(config(2, 8)).unwrap();
+    let _reader = pool.bind_consumer().unwrap();
+    let mut writer = pool.register_producer().unwrap();
+    let sleep = |until_deadline: bool| {
+        let mut state = pool.shared.lock();
+        state.consumer = if until_deadline {
+            ConsumerSleep::ParkedUntilDeadline
+        } else {
+            ConsumerSleep::Parked
+        };
+    };
+    sleep(true);
+    for record in 0..6 {
+        writer.write_timing(record);
+    }
+    assert_eq!(pool.stats().ready_chunks, 3);
+    assert_eq!(
+        pool.stats().wakeups,
+        0,
+        "three full chunks wait for the deadline"
+    );
+    writer.write_timing(6);
+    writer.write_timing(7);
+    assert_eq!(pool.stats().wakeups, 1, "the fourth ready chunk wakes it");
+    sleep(true);
+    writer.write_timing(8);
+    writer.seal();
+    assert_eq!(pool.stats().wakeups, 2, "an explicit seal wakes it at once");
+    sleep(false);
+    writer.write_timing(9);
+    writer.write_timing(10);
+    assert_eq!(
+        pool.stats().wakeups,
+        3,
+        "without a deadline, every full chunk wakes it"
+    );
+    sleep(true);
+    writer.write_timing(11);
+    drop(writer);
+    assert_eq!(
+        pool.stats().wakeups,
+        4,
+        "a release's partial chunk wakes it at once"
+    );
+}
+
+#[cfg(not(baml_loom))]
+#[test]
+fn a_full_chunk_left_asleep_is_seen_by_the_consumer_deadline() {
+    let pool = ChunkPool::<usize, usize>::new(config(1, 8)).unwrap();
+    let mut reader = pool.bind_consumer().unwrap();
+    let (sealed, wait_sealed) = std::sync::mpsc::channel();
+    let (done, wait_done) = std::sync::mpsc::channel::<()>();
+    let writer = std::thread::spawn(move || {
+        let mut producer = pool.register_producer().unwrap();
+        // Let the consumer fall asleep, then fill one chunk and stay live.
+        std::thread::sleep(Duration::from_millis(20));
+        producer.write_timing(1);
+        sealed.send(()).unwrap();
+        wait_done.recv().unwrap();
+    });
+    let start = web_time::Instant::now();
+    reader.wait_until(Some(start + Duration::from_millis(200)));
+    wait_sealed.recv().unwrap();
+    let mut seen = Vec::new();
+    reader.drain(nz(8), |_, v| seen.push(v), |_, _| unreachable!());
+    assert_eq!(
+        seen,
+        [1],
+        "the deadline bounds how long a sealed chunk waits"
+    );
+    done.send(()).unwrap();
+    writer.join().unwrap();
+}
+
+#[test]
 fn expired_consumer_deadline_does_not_wait_for_a_live_producer() {
     model(|| {
         let pool = ChunkPool::<usize, usize>::new(config(4, 1)).unwrap();

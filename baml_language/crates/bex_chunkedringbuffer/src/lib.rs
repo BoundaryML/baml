@@ -13,7 +13,10 @@
 //! further the lane already is over its size, then allocates beyond it
 //! ([`btel_settings::overage`]); a lane over its size frees chunks as they
 //! return idle. Producers spin on metadata contention; a producer out of chunks
-//! spins, yields, then sleeps between probes, and the idle consumer parks.
+//! spins, yields, then sleeps between probes, and the idle consumer parks. A
+//! chunk sealed because it is full wakes a consumer parked until a deadline only
+//! once a batch of chunks is ready ([`btel_settings::transport::WAKE_BATCH_CHUNKS`]);
+//! the deadline bounds the wait, and every other seal wakes it at once.
 //! Explicit recording disable abandons queued data and makes writes
 //! return without storing; invariant failures remain terminal.
 #![allow(
@@ -193,6 +196,14 @@ struct Chunk<T, S> {
     producer: ProducerId,
     records: Records<T, S>,
 }
+/// Whether the consumer is parked, and whether it wakes by itself at a
+/// deadline.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConsumerSleep {
+    Awake,
+    Parked,
+    ParkedUntilDeadline,
+}
 struct State<T, S> {
     timing: Lane<T>,
     span: Lane<S>,
@@ -204,7 +215,7 @@ struct State<T, S> {
     active_producers: usize,
     closed: bool,
     bound: bool,
-    sleeping: bool,
+    consumer: ConsumerSleep,
     sealed_chunks: usize,
     sealed_records: usize,
     wakeups: usize,
@@ -227,6 +238,9 @@ struct Shared<T, S> {
     #[cfg(feature = "diagnostics")]
     diagnostics: Diagnostics,
     config: Config,
+    /// Ready chunks at which a full chunk's seal wakes a consumer sleeping
+    /// until a deadline; see [`btel_settings::transport::WAKE_BATCH_CHUNKS`].
+    wake_batch: usize,
 }
 
 #[cold]
@@ -337,9 +351,9 @@ impl<T, S> Shared<T, S> {
             // Counted until the next locked look, so a chunk coming back
             // meanwhile is kept for this writer.
             lane.waiting += 1;
-            let notify = state.sleeping;
+            let notify = state.consumer != ConsumerSleep::Awake;
             if notify {
-                state.sleeping = false;
+                state.consumer = ConsumerSleep::Awake;
                 state.wakeups += 1;
             }
             drop(state);
@@ -370,7 +384,10 @@ impl<T, S> Shared<T, S> {
             }
         }
     }
-    fn seal(&self, producer: ProducerId, records: Records<T, S>) -> bool {
+    /// Queue a sealed chunk. A chunk sealed because it is `full` leaves a
+    /// consumer sleeping until a deadline asleep until `wake_batch` chunks
+    /// are ready; any other seal wakes it.
+    fn seal(&self, producer: ProducerId, records: Records<T, S>, full: bool) -> bool {
         let len = match &records {
             Records::Timing(v) => v.len(),
             Records::Span(v) => v.len(),
@@ -390,9 +407,12 @@ impl<T, S> Shared<T, S> {
         }
         state.sealed_chunks += 1;
         state.sealed_records += len;
-        let notify = state.sleeping;
+        let deferred = full
+            && state.consumer == ConsumerSleep::ParkedUntilDeadline
+            && state.ready.len() < self.wake_batch;
+        let notify = state.consumer != ConsumerSleep::Awake && !deferred;
         if notify {
-            state.sleeping = false;
+            state.consumer = ConsumerSleep::Awake;
             state.wakeups += 1;
         }
         drop(state);
@@ -452,7 +472,7 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
                     active_producers: 0,
                     closed: false,
                     bound: false,
-                    sleeping: false,
+                    consumer: ConsumerSleep::Awake,
                     sealed_chunks: 0,
                     sealed_records: 0,
                     wakeups: 0,
@@ -471,6 +491,11 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
                 #[cfg(feature = "diagnostics")]
                 diagnostics: Diagnostics::default(),
                 config,
+                // At most half a lane, so deferring the wake never keeps a
+                // producer waiting for a chunk the consumer could return.
+                wake_batch: btel_settings::transport::WAKE_BATCH_CHUNKS
+                    .min(timing.min(span) / 2)
+                    .max(1),
             }),
         })
     }
@@ -686,7 +711,8 @@ impl<T, S> Producer<T, S> {
             return false;
         }
         if self.span_remaining() < records {
-            self.seal_span();
+            // As good as full: the group needs a chunk of its own.
+            self.seal_span(true);
         }
         true
     }
@@ -715,7 +741,7 @@ impl<T, S> Producer<T, S> {
         };
         chunk.push(record);
         if chunk.len() == self.shared.config.chunk_capacity.get() {
-            self.seal_timing();
+            self.seal_timing(true);
         }
     }
     #[inline(always)]
@@ -736,21 +762,23 @@ impl<T, S> Producer<T, S> {
         };
         chunk.push(record);
         if chunk.len() == self.shared.config.chunk_capacity.get() {
-            self.seal_span();
+            self.seal_span(true);
         }
     }
+    /// Seal the timing chunk; `full` when it is sealed because it is full.
     #[cold]
-    fn seal_timing(&mut self) {
+    fn seal_timing(&mut self, full: bool) {
         if let Some(chunk) = self.timing.take() {
-            if !self.shared.seal(self.id, Records::Timing(chunk)) {
+            if !self.shared.seal(self.id, Records::Timing(chunk), full) {
                 self.shared.check();
             }
         }
     }
+    /// Seal the span chunk; `full` when it is sealed because it is full.
     #[cold]
-    fn seal_span(&mut self) {
+    fn seal_span(&mut self, full: bool) {
         if let Some(chunk) = self.span.take() {
-            if !self.shared.seal(self.id, Records::Span(chunk)) {
+            if !self.shared.seal(self.id, Records::Span(chunk), full) {
                 self.shared.check();
             }
         }
@@ -759,8 +787,8 @@ impl<T, S> Producer<T, S> {
     /// idle producer holds no payload allocation after this call.
     pub fn seal(&mut self) {
         self.shared.check();
-        self.seal_timing();
-        self.seal_span();
+        self.seal_timing(false);
+        self.seal_span(false);
     }
 }
 impl<T, S> Drop for Producer<T, S> {
@@ -768,10 +796,10 @@ impl<T, S> Drop for Producer<T, S> {
         // This publishes already-produced data; it does NOT generate invocation
         // outcomes or completion records. Explicit VM finalization remains separate.
         if let Some(c) = self.timing.take() {
-            self.shared.seal(self.id, Records::Timing(c));
+            self.shared.seal(self.id, Records::Timing(c), false);
         }
         if let Some(c) = self.span.take() {
-            self.shared.seal(self.id, Records::Span(c));
+            self.shared.seal(self.id, Records::Span(c), false);
         }
         let mut state = self.shared.lock();
         let slot = &mut state.workers[self.id.index()];
@@ -1057,7 +1085,11 @@ impl<T, S> Consumer<T, S> {
             if deadline.is_some_and(|at| web_time::Instant::now() >= at) {
                 break;
             }
-            s.sleeping = true;
+            s.consumer = if deadline.is_some() {
+                ConsumerSleep::ParkedUntilDeadline
+            } else {
+                ConsumerSleep::Parked
+            };
             s = if let Some(at) = deadline {
                 self.shared
                     .wake
@@ -1070,7 +1102,7 @@ impl<T, S> Consumer<T, S> {
                     .wait(s)
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
             };
-            s.sleeping = false;
+            s.consumer = ConsumerSleep::Awake;
         }
         drop(s);
         self.shared.check();

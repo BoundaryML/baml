@@ -224,6 +224,10 @@ pub struct TelemetryState {
     clock: Arc<ClockEpoch>,
     #[cfg(not(target_arch = "wasm32"))]
     runtime: Arc<btel_processor::TelemetryRuntime>,
+    /// The producer this state's execution scope holds; see
+    /// [`Self::execution_scope`].
+    #[cfg(not(target_arch = "wasm32"))]
+    producer_cache: Arc<btel_processor::ProducerCache>,
     /// Exception-path bookkeeping, allocated by the first recorded raise.
     errors: Option<Box<ErrorBook>>,
     /// Model usage charged to open spans (or the thread), one entry per model,
@@ -400,6 +404,8 @@ impl TelemetryState {
             clock,
             #[cfg(not(target_arch = "wasm32"))]
             runtime,
+            #[cfg(not(target_arch = "wasm32"))]
+            producer_cache: Arc::default(),
             errors: None,
             usage: Vec::new(),
             #[cfg(test)]
@@ -1641,9 +1647,14 @@ impl TelemetryState {
         }
     }
 
+    /// Enter the runtime for this state's writes, which reach the thread's
+    /// producer without the thread-local lookup while the scope lives.
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn execution_scope(&self) -> btel_processor::ExecutionScope {
-        self.runtime.enter()
+        // SAFETY: the VM holds the scope only inside a call that has the VM,
+        // and so this state, borrowed on this thread, and it writes records
+        // only from its own code, never inside the runtime's.
+        unsafe { self.runtime.enter_caching(&self.producer_cache) }
     }
 
     // Tests retain VM-backed captures locally. Native production writes only
@@ -1660,7 +1671,8 @@ impl TelemetryState {
         #[cfg(test)]
         self.timing_records.push(record);
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
-        self.runtime.write_timing(self.thread.id, record);
+        self.runtime
+            .write_timing_cached(Some(&self.producer_cache), self.thread.id, record);
         #[cfg(all(not(test), target_arch = "wasm32"))]
         let _ = (self, record);
     }
@@ -1679,14 +1691,23 @@ impl TelemetryState {
             use btel_records::ContextReference;
 
             if !record.is_context_observation() {
-                self.runtime.write_span(self.thread.id, record);
+                self.runtime.write_span_with_context_cached(
+                    Some(&self.producer_cache),
+                    self.thread.id,
+                    ContextReference::Unavailable,
+                    None,
+                    record,
+                );
                 return;
             }
             let (reference, snapshot) = self.context_reference();
-            if self
-                .runtime
-                .write_span_with_context(self.thread.id, reference, snapshot, record)
-                && let ContextReference::Snapshot(id) = reference
+            if self.runtime.write_span_with_context_cached(
+                Some(&self.producer_cache),
+                self.thread.id,
+                reference,
+                snapshot,
+                record,
+            ) && let ContextReference::Snapshot(id) = reference
             {
                 self.context_snapshot = Some((self.context.clone(), id));
             }
@@ -1732,6 +1753,8 @@ impl ::bex_vm_types::RootHaver for TelemetryState {
             clock: _,
             #[cfg(not(target_arch = "wasm32"))]
                 runtime: _,
+            #[cfg(not(target_arch = "wasm32"))]
+                producer_cache: _,
             errors: _,
             usage: _,
             #[cfg(test)]
