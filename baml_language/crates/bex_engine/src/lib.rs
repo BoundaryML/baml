@@ -8907,11 +8907,11 @@ mod completion_tests;
 /// lowercase hex.
 pub fn process_id_hex() -> String {
     use std::fmt::Write as _;
-    bex_events::ids::ProcessEuid::current()
-        .0
-        .iter()
-        .fold(String::with_capacity(32), |mut hex, byte| {
+    bex_events::ids::ProcessEuid::current().0.iter().fold(
+        String::with_capacity(32),
+        |mut hex, byte| {
             let _ = write!(hex, "{byte:02x}");
             hex
-        })
+        },
+    )
 }

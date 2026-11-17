@@ -393,6 +393,7 @@ fn process(url: &str, commit: &str) -> (Arc<BexEngine>, bex_hotswap::agent::Agen
     let build = Arc::new(bex_hotswap::HotswapBuild {
         sources: [("main.baml".to_string(), SOURCE.to_string())].into(),
         commit: Some(commit.to_string()),
+        dirty: false,
         config: bex_hotswap::HotswapConfig::default(),
     });
     let program = baml_tests::engine::compile_source(SOURCE);

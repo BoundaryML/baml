@@ -540,9 +540,11 @@ impl PackArgs {
         else {
             anyhow::bail!("failed to read the project's sources for hot swapping");
         };
+        let (commit, dirty) = crate::build_record::hotswap_commit(&root);
         let build = bex_hotswap::HotswapBuild {
             sources,
-            commit: bex_hotswap::git_commit(&root),
+            commit,
+            dirty,
             config,
         };
         if build.marked().is_empty() {
@@ -558,6 +560,7 @@ impl PackArgs {
         Ok(Some(baml_exec::PackedHotswap {
             sources: build.sources.into_iter().collect(),
             commit: build.commit,
+            dirty: build.dirty,
             default_rule: build.config.default_rule.map(|rule| rule.to_string()),
             require_approval: build.config.require_approval,
             startup_wait_ms: u64::try_from(build.config.startup_wait.as_millis())

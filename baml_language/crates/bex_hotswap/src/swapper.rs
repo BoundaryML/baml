@@ -188,6 +188,12 @@ impl Swapper {
             ));
         }
         match &self.build.commit {
+            Some(commit) if self.build.dirty => {
+                return reject(format!(
+                    "the process was built with changes since {}",
+                    short(commit)
+                ));
+            }
             Some(commit) if same_commit(commit, &swap.baseline) => {}
             Some(commit) => {
                 return reject(format!(

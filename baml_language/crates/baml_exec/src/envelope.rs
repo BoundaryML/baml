@@ -80,6 +80,8 @@ pub struct PackedHotswap {
     pub sources: Vec<(String, String)>,
     /// The git commit the binary was packed from.
     pub commit: Option<String>,
+    /// Whether the package had changes since `commit` when packed.
+    pub dirty: bool,
     pub default_rule: Option<String>,
     pub require_approval: bool,
     pub startup_wait_ms: u64,

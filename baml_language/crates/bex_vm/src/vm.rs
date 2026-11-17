@@ -5493,7 +5493,7 @@ impl BexVm {
     /// Whether a call of `callee` must take the general call path, which
     /// selects a hot swap's replacement. The fast paths that enter a callee
     /// directly hand back when this holds.
-    #[inline(always)]
+    #[inline]
     fn hotswap_selects(&self, callee: &Function) -> bool {
         self.hotswap_enabled
             && (callee.hotswap_redirect.get().is_some() || self.hotswap_prepared.is_some())

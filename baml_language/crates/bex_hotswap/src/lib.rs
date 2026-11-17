@@ -28,6 +28,8 @@ pub struct HotswapBuild {
     pub sources: BTreeMap<String, String>,
     /// The git commit the build came from, when it records one.
     pub commit: Option<String>,
+    /// Whether the package had changes since `commit` when built.
+    pub dirty: bool,
     pub config: HotswapConfig,
 }
 
@@ -101,22 +103,6 @@ impl HotswapBuild {
                 .map(|(path, text)| (path.as_str(), text.as_str())),
         )
     }
-}
-
-/// The git commit at `HEAD` of the repository holding `dir`, if any.
-pub fn git_commit(dir: &std::path::Path) -> Option<String> {
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(["rev-parse", "--verify", "HEAD"])
-        .stderr(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let commit = String::from_utf8(output.stdout).ok()?.trim().to_string();
-    (!commit.is_empty()).then_some(commit)
 }
 
 /// Whether `commit` is `baseline`, either possibly abbreviated (at least 7

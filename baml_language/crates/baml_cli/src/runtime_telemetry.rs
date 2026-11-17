@@ -96,17 +96,10 @@ pub(crate) fn create_engine_with_hotswap(
     use anyhow::Context as _;
     // Swaps come from Boundary Cloud, so a run that records nothing swaps
     // nothing.
-    if baml_env::hotswap_enabled() || flags.disabled || btel_settings::mode::from_env()?.is_none()
-    {
-        let engine = create_engine_with_context(
-            program,
-            argv,
-            project_root,
-            sources,
-            build,
-            launch_context,
-        )
-        .context("failed to create engine")?;
+    if baml_env::hotswap_enabled() || flags.disabled || btel_settings::mode::from_env()?.is_none() {
+        let engine =
+            create_engine_with_context(program, argv, project_root, sources, build, launch_context)
+                .context("failed to create engine")?;
         return Ok((engine, None));
     }
     let mut config = hotswap_config(project_root)?;
@@ -115,9 +108,11 @@ pub(crate) fn create_engine_with_hotswap(
     }
     let boundary = crate::cloud_config::Boundary::read(project_root)?;
     let recording = recording(project_root, &boundary, sources.clone(), build);
+    let (commit, dirty) = crate::build_record::hotswap_commit(project_root);
     let build = bex_hotswap::HotswapBuild {
         sources: sources.iter().cloned().collect(),
-        commit: bex_hotswap::git_commit(project_root),
+        commit,
+        dirty,
         config,
     };
     let prepared =

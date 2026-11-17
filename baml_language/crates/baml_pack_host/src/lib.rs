@@ -175,6 +175,7 @@ fn new_engine(
             let build = bex_hotswap::HotswapBuild {
                 sources: packed.sources.into_iter().collect(),
                 commit: packed.commit,
+                dirty: packed.dirty,
                 config: bex_hotswap::HotswapConfig {
                     enabled: true,
                     default_rule,

@@ -39,12 +39,16 @@ fn build(config: HotswapConfig) -> Arc<HotswapBuild> {
     Arc::new(HotswapBuild {
         sources: [("main.baml".to_string(), SOURCE.to_string())].into(),
         commit: Some(COMMIT.to_string()),
+        dirty: false,
         config,
     })
 }
 
 fn swapper_with(config: HotswapConfig) -> (Arc<BexEngine>, Swapper) {
-    let build = build(config);
+    swapper_of(build(config))
+}
+
+fn swapper_of(build: Arc<HotswapBuild>) -> (Arc<BexEngine>, Swapper) {
     let program = baml_test_support::compile_multi_file(&[("main.baml", SOURCE)]);
     let engine = Arc::new(
         BexEngine::new_with_config(
@@ -275,6 +279,18 @@ async fn a_swap_installs_only_on_its_baseline_and_with_approval() {
     });
     swapper.install(&unapproved).await.unwrap();
     assert_eq!(int(&engine, "step", 1).await, 20);
+
+    // A build with changes since its commit is not that commit.
+    let (_, mut swapper) = swapper_of(Arc::new(HotswapBuild {
+        dirty: true,
+        ..(*build(HotswapConfig::default())).clone()
+    }));
+    rejected(
+        swapper
+            .install(&swap("hs_3", &[("step", "helper(x)", "helper(x) * 10")]))
+            .await,
+        "the process was built with changes since 3f2a91c",
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -305,6 +321,7 @@ fn marks_without_a_rule_need_a_default_rule() {
         )]
         .into(),
         commit: None,
+        dirty: false,
         config: HotswapConfig::default(),
     };
     assert_eq!(
@@ -363,6 +380,7 @@ fn a_key_implementations_share_is_swappable_only_if_all_are_marked() {
         ]
         .into(),
         commit: None,
+        dirty: false,
         config: HotswapConfig::default(),
     }
     };
