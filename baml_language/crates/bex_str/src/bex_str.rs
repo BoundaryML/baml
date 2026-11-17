@@ -1,5 +1,6 @@
 use std::{
     borrow::Borrow,
+    cell::Cell,
     fmt,
     hash::{Hash, Hasher},
     ops::{Deref, Range},
@@ -97,6 +98,30 @@ pub(crate) enum ConcatState {
     Released,
 }
 
+thread_local! {
+    /// Bytes flattening has allocated on this thread since the last
+    /// [`take_materialized_bytes`]: the buffers [`BexStr::unshared_heap_bytes`]
+    /// leaves out of a concatenation's charge, reported once they exist.
+    /// Per thread, so a VM is charged for the ropes it reads itself.
+    static MATERIALIZED_BYTES: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Bytes rope flattening has allocated on this thread since the last call,
+/// which resets the count. A VM adds them to its allocation debt, so text a
+/// concatenation materializes counts toward the next collection like any
+/// other allocation.
+#[inline]
+pub fn take_materialized_bytes() -> usize {
+    MATERIALIZED_BYTES.with(|bytes| {
+        // A read first: no flattening since the last call is the usual case.
+        if bytes.get() == 0 {
+            0
+        } else {
+            bytes.replace(0)
+        }
+    })
+}
+
 /// Bytes of an `Arc<FlatStr>` allocation beyond the text itself: the two
 /// reference counts and the header.
 const FLAT_OVERHEAD: usize = 2 * std::mem::size_of::<usize>() + std::mem::size_of::<FlatStr>();
@@ -149,8 +174,11 @@ impl BexStr {
 
     /// Heap bytes this string would own if it shared nothing: zero when
     /// inline, otherwise an allocation holding its full length. A slice counts
-    /// only the bytes it views, and a concatenation counts the buffer that
-    /// reading it would materialize. Never flattens.
+    /// only the bytes it views. A concatenation counts only its node: its
+    /// pieces are strings of their own, and the buffer reading it materializes
+    /// is reported when that happens (see [`take_materialized_bytes`]), so a
+    /// loop of `s = s + piece` is not charged the whole text at every step.
+    /// Never flattens.
     ///
     /// Every handle to shared storage reports it in full, so summing this over
     /// handles overestimates; see [`Self::shared_heap_bytes`] for the share.
@@ -159,8 +187,7 @@ impl BexStr {
             Self::Inline { .. } => 0,
             Self::Flat(flat) => FLAT_OVERHEAD.saturating_add(flat.data.len()),
             Self::Slice { byte_len, .. } => usize::try_from(*byte_len).unwrap_or(usize::MAX),
-            Self::Concat(node) => CONCAT_OVERHEAD
-                .saturating_add(usize::try_from(node.total_byte_len).unwrap_or(usize::MAX)),
+            Self::Concat(_) => CONCAT_OVERHEAD,
         }
     }
 
@@ -169,7 +196,7 @@ impl BexStr {
     /// handle, a shared buffer is counted about once. A slice shares its whole
     /// parent, so a small slice of a large string reports a large share.
     ///
-    /// A concatenation is sized as in [`Self::unshared_heap_bytes`] without
+    /// A concatenation is sized as its node plus the text it holds, without
     /// looking inside, so its pieces are counted again if they are also held
     /// elsewhere. Never flattens.
     pub fn shared_heap_bytes(&self) -> usize {
@@ -722,6 +749,8 @@ impl ConcatNode {
             }
         }
 
+        let materialized = FLAT_OVERHEAD.saturating_add(buf.len());
+        MATERIALIZED_BYTES.with(|bytes| bytes.set(bytes.get().saturating_add(materialized)));
         let flat = Arc::new(FlatStr::from_parts(
             buf.into_boxed_slice(),
             self.total_char_len,
