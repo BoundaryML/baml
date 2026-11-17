@@ -133,6 +133,24 @@ pub struct Program {
 pub struct InvalidProgram(pub String);
 
 impl Program {
+    /// The program's content identity
+    /// ([`crate::identity::linked_program_id`]): `None` when a package in it
+    /// carries no metadata, which leaves it without one.
+    #[must_use]
+    pub fn linked_id(&self) -> Option<[u8; 16]> {
+        let packages = self
+            .packages
+            .iter()
+            .map(|package| {
+                Some(crate::identity::LinkedPackage {
+                    unit: package.metadata.as_ref()?.compilation_unit_hash,
+                    edges: &package.edges,
+                })
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(crate::identity::linked_program_id(self.root, &packages))
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

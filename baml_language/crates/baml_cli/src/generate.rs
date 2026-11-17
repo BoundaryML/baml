@@ -1719,7 +1719,7 @@ naming_convention = "preserve-case"
     #[test]
     fn embedded_manifest_preserves_project_content_and_appends_owned_metadata() {
         let directory = tempfile::tempdir().unwrap();
-        let original = "# keep this byte-for-byte\n[package]\nname = \"test\"";
+        let original = "# keep this byte-for-byte\n[package]\nname = \"test\"\nversion = \"1.2.3-beta.4+build.5\"";
         fs::write(directory.path().join("baml.toml"), original).unwrap();
 
         let embedded = build_embedded_baml_toml(directory.path()).unwrap();
@@ -1739,6 +1739,10 @@ naming_convention = "preserve-case"
             Some("medium")
         );
         assert_eq!(parsed["package"]["name"].as_str(), Some("test"));
+        assert_eq!(
+            parsed["package"]["version"].as_str(),
+            Some("1.2.3-beta.4+build.5")
+        );
         assert_eq!(
             fs::read_to_string(directory.path().join("baml.toml")).unwrap(),
             original

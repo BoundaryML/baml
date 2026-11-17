@@ -1,6 +1,6 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase3a_recursion.rs
-expression: "render_labeled_cases(&[(\"class_optional_field_breaks_cycle\",\n\"class A { b B? }\\nclass B { a A }\",),\n(\"class_list_field_breaks_cycle\", \"class A { bs B[] }\\nclass B { a A }\",),\n(\"class_map_field_breaks_cycle\",\n\"class A { bm map<string, B> }\\nclass B { a A }\",),])"
+expression: "render_labeled_cases(&[(\"class_optional_field_breaks_cycle\",\n\"class A { b B? }\\nclass B { a A }\",),\n(\"class_optional_tuple_element_breaks_cycle\",\n\"class Link { next (int, Link?) }\",),\n(\"class_list_field_breaks_cycle\", \"class A { bs B[] }\\nclass B { a A }\",),\n(\"class_map_field_breaks_cycle\",\n\"class A { bm map<string, B> }\\nclass B { a A }\",),])"
 ---
 === class_optional_field_breaks_cycle ===
 class user.A {
@@ -8,6 +8,11 @@ class user.A {
 }
 class user.B {
   a: user.A
+}
+
+=== class_optional_tuple_element_breaks_cycle ===
+class user.Link {
+  next: (int, user.Link | null)
 }
 
 === class_list_field_breaks_cycle ===

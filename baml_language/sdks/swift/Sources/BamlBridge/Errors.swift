@@ -32,6 +32,13 @@ public struct BamlError: Error {
         }
         return try T._bamlDecode(payload)
     }
+
+    public func value<T>(as slot: BamlSlot<T>) throws -> T {
+        guard let payload else {
+            throw BamlDecodeError.unsupported("thrown value has no payload")
+        }
+        return try slot._bamlDecode(payload)
+    }
 }
 
 extension BamlError {

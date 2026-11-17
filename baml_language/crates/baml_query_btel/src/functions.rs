@@ -560,6 +560,15 @@ impl Composer {
                     items: items.iter().map(shift).collect(),
                     original_len: *original_len,
                 },
+                DecodedObject::Tuple {
+                    element_types,
+                    items,
+                    original_len,
+                } => DecodedObject::Tuple {
+                    element_types: element_types.clone(),
+                    items: items.iter().map(shift).collect(),
+                    original_len: *original_len,
+                },
                 DecodedObject::Map {
                     key_type,
                     value_type,

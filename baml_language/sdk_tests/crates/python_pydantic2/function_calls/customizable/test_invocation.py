@@ -24,6 +24,13 @@ from baml_sdk.baml.spawn import CancelToken
 from baml_sdk.experimental import invoke, invoke_sync
 
 
+def assert_metadata(actual, expected):
+    """Require native identity while comparing the complete authored context."""
+    version = actual.get("baml.ctx.baml_version")
+    assert isinstance(version, str) and version
+    assert actual == {**expected, "baml.ctx.baml_version": version}
+
+
 # invocation_options: the four forms, empty controls, and omission.
 def test_four_call_forms():
     opts: BamlOptions = {"timeout_ms": 1000}
@@ -300,7 +307,7 @@ def test_layered_callback_context_inheritance_and_restoration_python_only(
         assert not active.is_cancelled_sync()
         assert host_request.get() == "application"
         current = trace.current_context_sync()
-        assert current.metadata == (root_metadata if depth >= 2 else child_metadata)
+        assert_metadata(current.metadata, root_metadata if depth >= 2 else child_metadata)
         assert current.distinct_id == ("root-id" if depth >= 2 else "child-id")
 
     def child_controls(depth):
@@ -366,9 +373,9 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
 
     async def leaf(value):
         assert trace.current_cancel_token() is not None
-        assert trace.current_context_sync().metadata == {"request": "C", "keep": 7}
+        assert_metadata(trace.current_context_sync().metadata, {"request": "C", "keep": 7})
         await asyncio.sleep(0)
-        assert trace.current_context_sync().metadata == {"request": "C", "keep": 7}
+        assert_metadata(trace.current_context_sync().metadata, {"request": "C", "keep": 7})
         if leaf_throws:
             raise original
         return value + 1
@@ -380,12 +387,12 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
 
     async def overridden(value):
         assert trace.current_cancel_token() is not None
-        assert trace.current_context_sync().metadata == {"request": "C", "keep": 7}
+        assert_metadata(trace.current_context_sync().metadata, {"request": "C", "keep": 7})
         try:
             return await forward(value)
         finally:
             assert trace.current_cancel_token() is not None
-            assert trace.current_context_sync().metadata == {"request": "C", "keep": 7}
+            assert_metadata(trace.current_context_sync().metadata, {"request": "C", "keep": 7})
 
     async def sibling(value):
         assert trace.current_cancel_token() is not None
@@ -393,7 +400,7 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
         return value
 
     async def inherited(value):
-        assert trace.current_context_sync().metadata == {"request": "A", "keep": 7}
+        assert_metadata(trace.current_context_sync().metadata, {"request": "A", "keep": 7})
         try:
             result = await baml.call_int_callback(
                 overridden, value, _baml={"trace": trace.context_sync(metadata={"request": "C"})}
@@ -404,17 +411,18 @@ async def test_layered_callback_context_restores_after_returned_callable(leaf_th
             result = value + 1
         finally:
             assert trace.current_cancel_token() is not None
-            assert trace.current_context_sync().metadata == {"request": "A", "keep": 7}
+            assert_metadata(trace.current_context_sync().metadata, {"request": "A", "keep": 7})
         # A later sibling inherits A, never the earlier child's C override.
         assert await baml.call_int_callback(sibling, value) == value
-        assert sibling_requests == [{"request": "A", "keep": 7}]
+        assert len(sibling_requests) == 1
+        assert_metadata(sibling_requests[0], {"request": "A", "keep": 7})
         return result
 
     async def outer(value):
         assert trace.current_cancel_token() is not None
-        assert trace.current_context_sync().metadata == {"request": "A", "keep": 7}
+        assert_metadata(trace.current_context_sync().metadata, {"request": "A", "keep": 7})
         result = await baml.call_int_callback(inherited, value)
-        assert trace.current_context_sync().metadata == {"request": "A", "keep": 7}
+        assert_metadata(trace.current_context_sync().metadata, {"request": "A", "keep": 7})
         return result
 
     assert await baml.call_int_callback(

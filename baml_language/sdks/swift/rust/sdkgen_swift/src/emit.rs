@@ -12,8 +12,9 @@ use baml_sdkgen_types::{
 use crate::{
     escape_ident,
     translate_ty::{
-        TranslateCtx, arm_slot, generic_param_slot, normalize_union, optional_arg_inner_slot,
-        own_slot, slot_expr, translate_optional_arg_inner, translate_ty, union_arms,
+        TranslateCtx, arm_slot, generic_param_slot, holds_native_tuple, normalize_union,
+        optional_arg_inner_slot, own_slot, slot_expr, translate_optional_arg_inner, translate_ty,
+        union_arms,
     },
 };
 
@@ -104,6 +105,7 @@ pub(crate) struct RenderedField {
     /// The field's [`slot_expr`], its type variables spelled as the class
     /// slot's arguments ([`class_argument_local`]).
     pub slot: String,
+    pub equal_slot: Option<String>,
 }
 
 /// The local holding the slot of a class's generic parameter `index` inside
@@ -210,6 +212,26 @@ pub(crate) fn render_class(
         }
     }
     out.push_str("\t}\n");
+
+    if fields.iter().any(|field| field.equal_slot.is_some()) {
+        let comparisons = fields
+            .iter()
+            .map(|field| match &field.equal_slot {
+                Some(slot) => format!(
+                    "({slot})._bamlEqual(lhs.{name}, rhs.{name})",
+                    name = field.name
+                ),
+                None => format!("lhs.{name} == rhs.{name}", name = field.name),
+            })
+            .collect::<Vec<_>>()
+            .join("\n\t\t\t&& ");
+        let _ = write!(
+            out,
+            "\n\tpublic nonisolated static func == (lhs: Self, rhs: Self) -> Swift.Bool {{\n\
+             \t\t{comparisons}\n\
+             \t}}\n"
+        );
+    }
 
     let _ = write!(
         out,
@@ -944,6 +966,32 @@ pub(crate) fn render_recursive_union_alias(
     }
     out.push_str("\t\t}\n\t}\n\n");
 
+    let tuple_arms: Vec<bool> = arms
+        .iter()
+        .map(|arm| {
+            arm.members
+                .iter()
+                .any(|member| holds_native_tuple(member, ctx))
+        })
+        .collect();
+    if tuple_arms.iter().any(|holds| *holds) {
+        out.push_str(
+            "\tpublic static func == (lhs: Self, rhs: Self) -> Swift.Bool {\n\t\tswitch (lhs, rhs) {\n",
+        );
+        for (i, slot) in arm_slots.iter().enumerate() {
+            let compare = if tuple_arms[i] {
+                format!("({slot})._bamlEqual(lhs, rhs)")
+            } else {
+                "lhs == rhs".to_string()
+            };
+            let _ = writeln!(
+                out,
+                "\t\tcase (.t{i}(let lhs), .t{i}(let rhs)): return {compare}"
+            );
+        }
+        out.push_str("\t\tdefault: return false\n\t\t}\n\t}\n\n");
+    }
+
     let _ = writeln!(
         out,
         "\tpublic static var _bamlSlot: BamlSlot<Self> {{ ._leaf(.typeAlias(\"{fqn}\")) }}\n"
@@ -972,10 +1020,10 @@ pub(crate) fn render_recursive_union_alias(
     out.push_str("\t\tif let selected = try v.unionSelectedType() {\n");
     // A case is the declared arm the engine selected, which the arm's Swift
     // type alone cannot tell (`"a"[] | "b"[]`); it decodes under that arm.
-    for (i, (ty, slot)) in arm_tys.iter().zip(&arm_slots).enumerate() {
+    for (i, slot) in arm_slots.iter().enumerate() {
         let _ = writeln!(
             out,
-            "\t\t\tif ({slot})._bamlSelects(selected) {{ return .t{i}(try {ty}._bamlDecode(v, as: {slot})) }}"
+            "\t\t\tif ({slot})._bamlSelects(selected) {{ return .t{i}(try ({slot})._bamlDecode(v)) }}"
         );
     }
     let _ = writeln!(
@@ -989,17 +1037,17 @@ pub(crate) fn render_recursive_union_alias(
             if let Ty::Class(class_name, _) = member {
                 let _ = writeln!(
                     out,
-                    "\t\t\tif fqn == \"{class_name}\" {{ return .t{i}(try {}._bamlDecode(v, as: {})) }}",
-                    arm.swift, arm_slots[i]
+                    "\t\t\tif fqn == \"{class_name}\" {{ return .t{i}(try ({})._bamlDecode(v)) }}",
+                    arm_slots[i]
                 );
             }
         }
     }
     out.push_str("\t\t}\n");
-    for (i, (ty, slot)) in arm_tys.iter().zip(&arm_slots).enumerate() {
+    for (i, slot) in arm_slots.iter().enumerate() {
         let _ = writeln!(
             out,
-            "\t\tif let value = try? {ty}._bamlDecode(v, as: {slot}) {{ return .t{i}(value) }}"
+            "\t\tif let value = try? ({slot})._bamlDecode(v) {{ return .t{i}(value) }}"
         );
     }
     let _ = write!(
@@ -1300,7 +1348,7 @@ pub(crate) fn render_closure_type(
         "        _ = result; return ()".into()
     } else {
         format!(
-            "        return try {ret_ty}._bamlDecode(result, as: {})",
+            "        return try ({})._bamlDecode(result)",
             slot_expr(ret, ctx, &generic_param_slot)?
         )
     };

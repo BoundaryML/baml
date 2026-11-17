@@ -17,7 +17,21 @@ class Selection {
     }
 
     function ensure_installed(self, telemetry: WrapperTelemetry? = null) -> string {
-        self.selector.ensure_installed(self.source, telemetry)
+        self.selector.ensure_installed(
+            self.source,
+            telemetry,
+            $trace = trace.span(inputs = false, output = false, error = false),
+        ) catch (error) {
+            _ => {
+                record_wrapper_error(
+                    "acquisition",
+                    wrapper_error_category(error, $trace = trace.hidden()),
+                    "propagated",
+                    $trace = trace.hidden(),
+                );
+                throw error;
+            }
+        }
     }
 
     function warn_if_outdated(self) -> bool {

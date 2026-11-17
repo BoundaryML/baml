@@ -324,7 +324,7 @@ class Retry {
     function _wants_retry(self, cause: Retryable) -> bool {
         _may_try_again(cause)
             && match (cause) {
-                let failure: root.errors.Failure => self.retry_if(failure),
+                let failure: root.errors.Failure => (self.retry_if)(failure),
                 baml.errors.Timeout => true,
             }
     }
@@ -758,8 +758,8 @@ class StreamRelay {
     function recover(self, error: root.errors.RaisedInClient) -> void {
         match (root.errors.normalize_invoke(error)) {
             let cause: Retryable => {
-                let failed = self.member();
-                if (!self.emitted && self.retry(cause)) {
+                let failed = (self.member)();
+                if (!self.emitted && (self.retry)(cause)) {
                     self.child_turns.push(_failed_attempt(failed, cause));
                     self.close_current();
                     self.current = null;
@@ -784,7 +784,7 @@ class StreamRelay {
             return root.stream.Done {};
         }
         if (self.current == null) {
-            let opened: root.stream.TurnStream | StreamRelayError = self.open() catch_all (e) {
+            let opened: root.stream.TurnStream | StreamRelayError = (self.open)() catch_all (e) {
                 _ => StreamRelayError { error: e },
             };
             if let failed: StreamRelayError = opened {

@@ -12,6 +12,7 @@
 
 pub(crate) mod agent_command;
 pub(crate) mod auth;
+pub(crate) mod build_record;
 pub(crate) mod bytecode_cache;
 #[cfg(test)]
 mod cache_test_support;

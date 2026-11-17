@@ -25,7 +25,10 @@ use btel_settings::identity::ID_RANGE_SIZE;
 pub use definitions::{Definition, DefinitionBlob, DefinitionCell};
 pub use function_lookup::{FunctionLookup, FunctionRegistration};
 pub use functions::*;
-pub use recording::{ProcessExit, ProcessExitSlot, ProcessInfo, ProcessStatus, RecordingId};
+pub use recording::{
+    BuildOrigin, BuildRecord, GitHash, GitInfo, ProcessExit, ProcessExitSlot, ProcessInfo,
+    ProcessStatus, RecordingId,
+};
 
 /// Identity of an individually identified telemetry graph node.
 ///

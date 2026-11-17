@@ -187,6 +187,11 @@ impl ClassFields {
         match v.value {
             Some(Out::ClassValue(class)) => {
                 if class.name != expected_fqn {
+                    class
+                        .fields
+                        .into_iter()
+                        .filter_map(|entry| entry.value)
+                        .for_each(release);
                     return Err(crate::DecodeError::FqnMismatch {
                         expected: expected_fqn,
                         got: class.name,
@@ -201,10 +206,14 @@ impl ClassFields {
                         .collect(),
                 })
             }
-            _ => Err(crate::DecodeError::WrongType {
-                expected: expected_fqn,
-                got: crate::baml_value::wire_variant_kind(&v),
-            }),
+            _ => {
+                let error = crate::DecodeError::WrongType {
+                    expected: expected_fqn,
+                    got: crate::baml_value::wire_variant_kind(&v),
+                };
+                release(v);
+                Err(error)
+            }
         }
     }
 
@@ -224,6 +233,12 @@ impl ClassFields {
                 }
             }),
         }
+    }
+}
+
+impl Drop for ClassFields {
+    fn drop(&mut self) {
+        self.fields.drain().for_each(|(_, value)| release(value));
     }
 }
 
@@ -259,6 +274,23 @@ pub fn no_union_arm(expected: &'static str, v: &wire::BamlOutboundValue) -> crat
         expected,
         got: crate::baml_value::wire_variant_kind(v),
     }
+}
+
+pub fn refuse_union(expected: &'static str, v: wire::BamlOutboundValue) -> crate::DecodeError {
+    let error = no_union_arm(expected, &v);
+    release(v);
+    error
+}
+
+pub fn release(v: wire::BamlOutboundValue) {
+    crate::outbound::release(v);
+}
+
+pub fn trial<T: BamlValue>(v: &wire::BamlOutboundValue) -> Option<T> {
+    let mut encoder = crate::encode::Encoder::new();
+    let copy = crate::outbound::clone(v, &mut encoder).ok()?;
+    encoder.commit();
+    T::from_baml(copy).ok()
 }
 
 /// The class FQN of an error-arm value, when it is a class instance.

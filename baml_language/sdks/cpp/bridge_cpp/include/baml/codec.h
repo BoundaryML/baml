@@ -26,6 +26,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -922,6 +923,48 @@ struct codec<std::vector<T>> {
   }
 };
 
+template <typename... Ts>
+struct codec<std::tuple<Ts...>> {
+  static_assert(sizeof...(Ts) > 0, "a BAML tuple has at least one slot");
+  using T = std::tuple<Ts...>;
+
+  static detail::pb::BamlTy baml_ty() {
+    detail::pb::BamlTy ty;
+    auto* tuple = ty.mutable_tuple();
+    (tuple->add_items()->CopyFrom(codec<Ts>::baml_ty()), ...);
+    return ty;
+  }
+  static void encode(detail::pb::InboundValue& value_msg, const T& v) {
+    const detail::encode_level level;
+    detail::pb::InboundListValue* list = value_msg.mutable_list_value();
+    std::apply(
+        [list](const Ts&... items) {
+          (codec<Ts>::encode(*list->add_values(), items), ...);
+        },
+        v);
+    *value_msg.mutable_value_type() = baml_ty();
+  }
+  static T decode(const detail::pb::BamlOutboundValue& raw) {
+    const auto& v = detail::unwrap(raw);
+    if (v.value_case() != detail::pb::BamlOutboundValue::kTupleValue) {
+      detail::kind_mismatch("tuple", v);
+    }
+    const auto& items = v.tuple_value().items();
+    if (items.size() != static_cast<int>(sizeof...(Ts))) {
+      throw error("BAML decode error: expected a tuple of " +
+                  std::to_string(sizeof...(Ts)) + " slots, got " +
+                  std::to_string(items.size()));
+    }
+    return decode_slots(items, std::index_sequence_for<Ts...>{});
+  }
+
+ private:
+  template <typename Items, std::size_t... Is>
+  static T decode_slots(const Items& items, std::index_sequence<Is...>) {
+    return T{codec<Ts>::decode(items.Get(static_cast<int>(Is)))...};
+  }
+};
+
 template <typename T>
 struct codec<std::unordered_map<std::string, T>> {
   static detail::pb::BamlTy baml_ty() {
@@ -1037,8 +1080,6 @@ struct codec<lit<Vs...>> {
 //     unions with a float arm but no int arm.
 //
 // Class/enum alternatives dispatch precisely by wire FQN inside their own
-// codecs; structurally ambiguous alternatives (two lists) resolve by
-// probing elements.
 template <class... Ts>
 struct codec<std::variant<Ts...>> {
   using V = std::variant<Ts...>;
@@ -1081,6 +1122,12 @@ struct codec<std::variant<Ts...>> {
     }
     const auto& v = detail::unwrap(raw);
     std::optional<V> out;
+    if (v.value_case() == detail::pb::BamlOutboundValue::kTupleValue &&
+        v.tuple_value().has_tuple_type()) {
+      const std::string carried =
+          v.tuple_value().tuple_type().SerializeAsString();
+      if ((claim_carried<Ts>(v, carried, out) || ...)) return std::move(*out);
+    }
     const bool lit = (try_arm<Ts>(v, out, pass::literal) || ...);
     if (!lit) {
       const bool strict = (try_arm<Ts>(v, out, pass::strict) || ...);
@@ -1110,6 +1157,14 @@ struct codec<std::variant<Ts...>> {
     throw error(
         "BAML decode error: selected union type is not representable by the "
         "generated C++ union");
+  }
+
+  template <class T>
+  static bool claim_carried(const detail::pb::BamlOutboundValue& v,
+                            const std::string& carried, std::optional<V>& out) {
+    if (codec<T>::baml_ty().SerializeAsString() != carried) return false;
+    out.emplace(std::in_place_type<T>, codec<T>::decode(v));
+    return true;
   }
 
   static bool is_int_arm(const detail::pb::BamlOutboundValue& v) {

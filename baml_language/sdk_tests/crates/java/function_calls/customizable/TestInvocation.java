@@ -91,11 +91,13 @@ class TestInvocation {
                 final int controls = empty;
                 baml_sdk.host_callable_tests.Fns.call_int_callback(a -> {
                     assertEquals("A", baml_sdk.vendor.trace.Fns.current_context().distinct_id());
+                    var bamlVersion = baml_sdk.vendor.trace.Fns.current_context().metadata().get("baml.ctx.baml_version");
+                    assertNotNull(bamlVersion);
                     java.util.function.Function<Long,Long> layerB = b -> {
                         assertEquals("A", baml_sdk.vendor.trace.Fns.current_context().distinct_id());
                         baml_sdk.host_callable_tests.Fns.call_int_callback(c -> {
                             java.util.function.Function<Long,Long> layerD = d -> {
-                                var current = baml_sdk.vendor.trace.Fns.current_context(); assertEquals("C",current.distinct_id()); assertEquals(Map.of("outer",new baml_bridge.Union4.Arm1<String,Long,Double,Boolean>(1L),"inner",new baml_bridge.Union4.Arm1<String,Long,Double,Boolean>(2L),"shared",new baml_bridge.Union4.Arm0<String,Long,Double,Boolean>("C")), current.metadata());
+                                var current = baml_sdk.vendor.trace.Fns.current_context(); assertEquals("C",current.distinct_id()); assertEquals(Map.of("outer",new baml_bridge.Union4.Arm1<String,Long,Double,Boolean>(1L),"inner",new baml_bridge.Union4.Arm1<String,Long,Double,Boolean>(2L),"shared",new baml_bridge.Union4.Arm0<String,Long,Double,Boolean>("C"),"baml.ctx.baml_version",bamlVersion), current.metadata());
                                 var active = Invocation.current().orElseThrow();
                                 assertEquals("C", CompletableFuture.completedFuture(1L).thenApplyAsync(active.wrapFunction(value -> baml_sdk.vendor.trace.Fns.current_context().distinct_id())).join());
                                 return d;

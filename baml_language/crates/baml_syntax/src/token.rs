@@ -668,6 +668,7 @@ pub mod sets {
             | LegacyHashString | UnclosedString | UnclosedRawString | UnclosedByteString | UnclosedHashString;
         /// `.` or the `$` member separator.
         MemberDot = Dot | Dollar;
+        TupleDot = Dot | QuestionDot;
         /// The selector of `F@spec`, `F@stream`, ….
         SpecSelector = Spec | Stream | RenderPrompt | BuildRequest | Parse;
         EndTagKw = Endfor | Endif;

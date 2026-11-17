@@ -248,6 +248,8 @@ mod crafted {
                 process_started_at_unix_ns: Some(1_000),
                 source_cas_id: None,
                 initial_context_cas_id: None,
+                program_id: None,
+                build: None,
             });
             file.sequence = sequence;
             std::fs::write(

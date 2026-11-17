@@ -54,6 +54,7 @@ wasm-bindgen-futures = { workspace = true }
 cbindgen = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+bcs_api = { workspace = true, features = [ "auth" ] }
 btel_file = { workspace = true }
 btel_recorder = { workspace = true }
 tempfile = { workspace = true }

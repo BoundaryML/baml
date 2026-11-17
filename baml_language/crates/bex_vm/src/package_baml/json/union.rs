@@ -371,6 +371,7 @@ fn fit(vm: &BexVm, member: &RealizedTy, kind: Kind) -> Option<Fit> {
             rank(kind == Kind::String, 2)
         }
         RealizedTy::List(_) => rank(kind == Kind::Array, 0),
+        RealizedTy::Tuple(_) => rank(kind == Kind::Array, 1),
         RealizedTy::Map { .. }
         | RealizedTy::Class(..)
         | RealizedTy::Interface(..)

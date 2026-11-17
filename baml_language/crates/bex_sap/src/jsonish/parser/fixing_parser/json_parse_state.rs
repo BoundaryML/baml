@@ -45,7 +45,7 @@ enum Pos {
     Unknown,       // 1
     InObjectKey,   // 2
     InObjectValue, // 3
-    InArray,       // 4
+    InArray(char), // 4: closing sequence delimiter
 }
 
 impl<'s> JsonParseState<'s> {
@@ -116,7 +116,7 @@ impl<'s> JsonParseState<'s> {
                         values.push(value);
                     }
                 }
-                JsonCollection::Array(values, _) => {
+                JsonCollection::Array(values, _, _) => {
                     values.push(value);
                 }
                 _ => {
@@ -161,7 +161,7 @@ impl<'s> JsonParseState<'s> {
                 // println!("Consuming: {s} + {:?}", token);
                 s.to_mut().push(token);
             }
-            JsonCollection::Object(_, _, _) | JsonCollection::Array(_, _) => {
+            JsonCollection::Object(_, _, _) | JsonCollection::Array(_, _, _) => {
                 panic!("Unexpected token: {token:?} in: {last:?}");
             }
         }
@@ -195,7 +195,7 @@ impl<'s> JsonParseState<'s> {
                             Pos::InObjectValue
                         }
                     }
-                    JsonCollection::Array(_, _) => Pos::InArray,
+                    JsonCollection::Array(_, _, close) => Pos::InArray(*close),
                     _ => Pos::Unknown,
                 })
                 .unwrap()
@@ -354,14 +354,16 @@ impl<'s> JsonParseState<'s> {
                 }
                 CloseStringResult::Close(counter + 1, CompletionState::Incomplete)
             }
-            Pos::InArray => {
+            Pos::InArray(close) => {
                 // in array
                 let mut counter = 0;
                 for (idx, c) in next {
                     counter = idx;
                     match c {
                         ',' => return CloseStringResult::Close(idx, CompletionState::Complete),
-                        ']' => return CloseStringResult::Close(idx, CompletionState::Complete),
+                        c if c == close => {
+                            return CloseStringResult::Close(idx, CompletionState::Complete);
+                        }
                         x => {
                             let _ = self.consume(x);
                         }
@@ -381,26 +383,27 @@ impl<'s> JsonParseState<'s> {
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
         closing_char: char,
     ) -> bool {
-        let (has_some_object, in_object_key, in_object_value, in_array) =
+        let (has_some_object, in_object_key, in_object_value, array_end) =
             if self.collection_stack.len() >= 2 {
                 self.collection_stack
                     .get(self.collection_stack.len() - 2)
                     .map(|(c, _)| match c {
                         JsonCollection::Object(keys, values, _) => {
                             if keys.len() == values.len() {
-                                (true, false, false)
+                                (true, false, None)
                             } else {
-                                (false, true, false)
+                                (false, true, None)
                             }
                         }
-                        JsonCollection::Array(_, _) => (false, false, true),
-                        _ => (false, false, false),
+                        JsonCollection::Array(_, _, close) => (false, false, Some(*close)),
+                        _ => (false, false, None),
                     })
                     .map(|(a, b, c)| (true, a, b, c))
                     .unwrap()
             } else {
-                (false, false, false, false)
+                (false, false, false, None)
             };
+        let in_array = array_end.is_some();
         // Use pre-computed quote count from incremental tracking (O(1) instead of O(n²))
         let closing_char_count = if closing_char == '"' {
             let (last, _) = self.collection_stack.last().unwrap();
@@ -436,7 +439,7 @@ impl<'s> JsonParseState<'s> {
                     log::debug!("Closing due to: value");
                     true
                 }
-                ']' if in_array => {
+                c if Some(*c) == array_end => {
                     // We're ready to close the value
                     log::debug!("Closing due to: array");
                     true
@@ -449,7 +452,8 @@ impl<'s> JsonParseState<'s> {
                             '}' if in_object_key || in_object_value => return true,
                             ':' if in_object_key => return true,
                             ',' if in_object_value => return true,
-                            ',' | ']' if in_array => return true,
+                            ',' if in_array => return true,
+                            c if Some(c) == array_end => return true,
                             '/' => {
                                 // Could be a comment
                                 match next.peek() {
@@ -492,7 +496,7 @@ impl<'s> JsonParseState<'s> {
     pub(super) fn process_token(
         &mut self,
         token: char,
-        mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        mut next: Peekable<impl Iterator<Item = (usize, char)> + Clone>,
     ) -> Result<usize, JsonishError> {
         // println!("Processing: {:?}..{:?}", token, next.peek());
         match self.collection_stack.last() {
@@ -510,14 +514,15 @@ impl<'s> JsonParseState<'s> {
                         _ => self.find_any_starting_value(token, next),
                     }
                 }
-                JsonCollection::Array(_, _) => {
+                JsonCollection::Array(_, _, close) => {
+                    let close = *close;
                     // We could be expecting:
                     // - A value
                     // - a comma
                     // - a closing bracket
                     match token {
-                        ']' => {
-                            // We're ready to close the array
+                        c if c == close => {
+                            // We're ready to close the sequence
                             self.complete_collection(CompletionState::Complete);
                             Ok(0)
                         }
@@ -731,7 +736,7 @@ impl<'s> JsonParseState<'s> {
     fn find_any_starting_value(
         &mut self,
         token: char,
-        mut next: Peekable<impl Iterator<Item = (usize, char)>>,
+        mut next: Peekable<impl Iterator<Item = (usize, char)> + Clone>,
     ) -> Result<usize, JsonishError> {
         match token {
             '{' => {
@@ -740,9 +745,13 @@ impl<'s> JsonParseState<'s> {
                     Vec::default(),
                 ));
             }
-            '[' => {
+            '[' | '(' if token == '[' || super::is_tuple_start(next.clone().map(|(_, c)| c)) => {
                 self.collection_stack.push((
-                    JsonCollection::Array(vec![], CompletionState::Incomplete),
+                    JsonCollection::Array(
+                        vec![],
+                        CompletionState::Incomplete,
+                        if token == '(' { ')' } else { ']' },
+                    ),
                     Vec::default(),
                 ));
             }

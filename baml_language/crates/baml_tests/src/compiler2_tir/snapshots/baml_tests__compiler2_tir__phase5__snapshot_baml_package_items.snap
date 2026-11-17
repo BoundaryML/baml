@@ -23,6 +23,7 @@ namespace baml:
   type ToString
   class Uint8Array { methods: [length, at, push, pop, concat, includes, index_of, reverse, slice, zeroes, from_array, to_array, from_hex, to_hex, from_base64, to_base64, _to_string_impl, sort] }
   function _cleanup_begin<T>
+  function _compare_structural_default
   function _equals_structural_default
   function _from_json_structural_default<T>
   function _hash_structural_default

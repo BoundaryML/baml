@@ -15,12 +15,19 @@ from baml_sdk import execution_context_tests as context_baml
 from baml_sdk.baml.spawn import CancelToken
 
 
+def assert_metadata(actual, expected):
+    """Require native identity while comparing the complete authored context."""
+    version = actual.get("baml.ctx.baml_version")
+    assert isinstance(version, str) and version
+    assert actual == {**expected, "baml.ctx.baml_version": version}
+
+
 async def test_callback_captures_internal_baml_context():
     def callback(value):
         assert trace.current_cancel_token() is not None
         current = trace.current_context_sync()
         assert current.distinct_id == "internal-id"
-        assert current.metadata == {"phase": "internal", "keep": 7}
+        assert_metadata(current.metadata, {"phase": "internal", "keep": 7})
         return value
 
     assert await context_baml.internal_context(
@@ -40,7 +47,7 @@ async def test_current_context_returns_detached_snapshot():
         observed = trace.current_context_sync()
         observed.metadata["request"] = 99
         observed.distinct_id = "changed"
-        assert trace.current_context_sync().metadata == {"request": 7}
+        assert_metadata(trace.current_context_sync().metadata, {"request": 7})
         assert trace.current_context_sync().distinct_id == "original"
         return value
 
@@ -56,12 +63,12 @@ async def test_concurrent_invocations_isolate_context():
 
     async def request(index):
         async def callback(value):
-            assert trace.current_context_sync().metadata == {"request": index}
+            assert_metadata(trace.current_context_sync().metadata, {"request": index})
             ready[index].set()
             await release.wait()
-            assert trace.current_context_sync().metadata == {"request": index}
+            assert_metadata(trace.current_context_sync().metadata, {"request": index})
             nested = await context_baml.current_context()
-            assert nested.metadata == {"request": index}
+            assert_metadata(nested.metadata, {"request": index})
             return value
 
         return await baml.call_int_callback(
@@ -89,10 +96,10 @@ async def test_retained_context_survives_parent_completion():
         callback, 1, _baml={"trace": trace.hidden_sync().context_sync(metadata={"request": 7})}
     ) == 1
     assert trace.current_cancel_token() is None
-    assert captured[0].run(trace.current_context_sync).metadata == {"request": 7}
+    assert_metadata(captured[0].run(trace.current_context_sync).metadata, {"request": 7})
 
     def child_callback(value):
-        assert trace.current_context_sync().metadata == {"request": 7}
+        assert_metadata(trace.current_context_sync().metadata, {"request": 7})
         return value
 
     # Constructing a coroutine does not execute it in a copied Python context.
@@ -108,7 +115,7 @@ async def test_reservation_does_not_inherit():
 
     async def callback(value):
         nested = await context_baml.current_context()
-        assert nested.metadata == {"request": 7}
+        assert_metadata(nested.metadata, {"request": 7})
         return value
 
     assert await baml.call_int_callback(callback, 1, _baml={"trace": reserved}) == 1
@@ -138,10 +145,10 @@ async def test_cancelled_waiter_preserves_callback_context():
         finally:
             cleanup_started.set()
             try:
-                assert trace.current_context_sync().metadata == {"request": 7}
+                assert_metadata(trace.current_context_sync().metadata, {"request": 7})
                 assert trace.current_cancel_token().is_cancelled_sync()
                 await release.wait()
-                assert trace.current_context_sync().metadata == {"request": 7}
+                assert_metadata(trace.current_context_sync().metadata, {"request": 7})
             except Exception as error:
                 # The waiter is already cancelled, so it cannot report a
                 # callback assertion failure during physical cleanup.

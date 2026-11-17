@@ -28,6 +28,7 @@ use std::{
 };
 
 use common::BuiltPaths;
+use sys_native::SysOpsExt as _;
 
 // ============================================================================
 // Helpers
@@ -84,6 +85,160 @@ fn pack_project(
 // ============================================================================
 // Tests
 // ============================================================================
+
+/// The application has one version regardless of transport. Exercise source
+/// execution (including a warm cache), a real packed host, and generated SDK
+/// bytecode through the runtime that bridges use, all before package `$init`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn package_version_reaches_source_pack_and_bridge_before_initialization() {
+    let built = common::ensure_built();
+    let project = tempfile::tempdir().unwrap();
+    let source = format!(
+        r#"
+function version(key: string) -> string {{
+    match (trace.current_context().metadata.get(key)) {{
+        let value: string => value,
+        _ => "<unset>",
+    }}
+}}
+const initial_baml_version = version("baml.ctx.baml_version");
+const initial_app_version = version("baml.ctx.app_version");
+function main() -> string {{
+    assert.equal(initial_baml_version, {baml_version:?});
+    assert.equal(version("baml.ctx.baml_version"), initial_baml_version);
+    assert.equal(version("baml.ctx.app_version"), initial_app_version);
+    initial_app_version
+}}
+"#,
+        baml_version = baml_version::CANONICAL_VERSION
+    );
+    common::write_project(project.path(), &source);
+    let cli = |args: &[&str]| {
+        Command::new(&built.baml_cli)
+            .args(args)
+            .current_dir(project.path())
+            .env("BAML_HOME", common::shared_baml_home())
+            .env("BAML_CLI_ALLOW_DIRECT", "1")
+            .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+            .env("DO_NOT_TRACK", "1")
+            .env("BAML_TELEMETRY", "off")
+            .env("BOUNDARY_API_KEY", "local")
+            .env_remove("BAML_CONTEXT")
+            .output()
+            .unwrap()
+    };
+    for version in [
+        None,
+        Some("1.2.3+build.4"),
+        Some("2.0.0-beta.1"),
+        Some(""),
+        Some(" \t "),
+        Some(" 3.4.5+build.6 "),
+        Some("build-canary"),
+        None,
+    ] {
+        let setting = version
+            .map(|value| format!("version = {value:?}\n"))
+            .unwrap_or_default();
+        std::fs::write(
+            project.path().join("baml.toml"),
+            format!(
+                r#"[package]
+name = "version-context"
+{setting}
+[pack.env_var_names]
+BAML_TELEMETRY = "BAML_TELEMETRY"
+[generator.rust]
+output_type = "rust"
+output_dir = "generated"
+naming_convention = "preserve-case"
+"#
+            ),
+        )
+        .unwrap();
+        let expected = version
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("<unset>");
+        for _ in 0..2 {
+            let output = cli(&["run", "main", "--output-format", "json"]);
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                serde_json::from_slice::<String>(&output.stdout).unwrap(),
+                expected
+            );
+        }
+        let packed = cli(&["pack", "main", "--output", "app"]);
+        assert!(
+            packed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&packed.stderr)
+        );
+        let output = Command::new(project.path().join("app"))
+            .env("BAML_HOME", project.path().join("packed-home"))
+            .env("BOUNDARY_API_KEY", "local")
+            .env("DO_NOT_TRACK", "1")
+            .env("BAML_TELEMETRY", "off")
+            .env(
+                "BAML_CONTEXT",
+                if expected != "<unset>" {
+                    r#"{"metadata":{"baml.ctx.baml_version":"spoofed","baml.ctx.app_version":"spoofed"}}"#
+                } else {
+                    r#"{"metadata":{"baml.ctx.baml_version":"spoofed"}}"#
+                },
+            )
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            serde_json::from_slice::<String>(&output.stdout).unwrap(),
+            expected
+        );
+
+        let generated = cli(&["generate"]);
+        assert!(
+            generated.status.success(),
+            "{}",
+            String::from_utf8_lossy(&generated.stderr)
+        );
+        let bytes = std::fs::read(
+            project
+                .path()
+                .join("generated/baml_sdk/src/_inlinedbaml.bin"),
+        )
+        .unwrap();
+        let runtime = bex_project::prepare_from_bytecode(&bytes, sys_native::SysOps::native())
+            .unwrap()
+            .with_artifact_telemetry(btel_settings::artifact::ArtifactTelemetry {
+                recording_level: btel_settings::artifact::RecordingLevel::Off,
+                ..Default::default()
+            })
+            .build()
+            .unwrap();
+        let result = runtime
+            .call_function(
+                "main",
+                vec![],
+                bex_engine::FunctionCallContextBuilder::new(bex_engine::CallId::next()).build(),
+                true,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            result,
+            bex_engine::BexExternalValue::String(expected.into())
+        );
+        runtime.shutdown().await;
+    }
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn artifact_recording_level_requires_explicit_permission_and_off_skips_auth() {

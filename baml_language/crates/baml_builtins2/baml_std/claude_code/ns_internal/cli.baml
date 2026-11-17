@@ -263,7 +263,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     // The CLI accepts one prompt rather than a chat-message array. Keep the
     // structural prompt until this transport boundary; `stdin_message` sends
     // its readable role-headed projection as content blocks, media included.
-    let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
+    let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
     let has_tools = !input.toolbox.is_empty();
     let schema = if (has_tools) {
         baml.json.from(envelope_schema(input.output_type))

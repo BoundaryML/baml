@@ -100,6 +100,9 @@ pub enum FieldSchema {
         key: Box<FieldSchema>,
         value: Box<FieldSchema>,
     },
+    Tuple {
+        elements: Vec<FieldSchema>,
+    },
     Optional {
         inner: Box<FieldSchema>,
     },
@@ -214,6 +217,9 @@ impl From<baml_ide::FieldSchema> for FieldSchema {
             Src::Map { key, value } => FieldSchema::Map {
                 key: Box::new((*key).into()),
                 value: Box::new((*value).into()),
+            },
+            Src::Tuple { elements } => FieldSchema::Tuple {
+                elements: elements.into_iter().map(Into::into).collect(),
             },
             Src::Optional { inner } => FieldSchema::Optional {
                 inner: Box::new((*inner).into()),

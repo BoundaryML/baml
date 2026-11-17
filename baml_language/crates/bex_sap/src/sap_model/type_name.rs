@@ -5,7 +5,8 @@ use std::{borrow::Cow, fmt};
 use crate::sap_model::{
     ArrayTy, BigintLiteralTy, BigintTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy,
     FloatTy, IntLiteralTy, IntTy, LiteralTy, MapTy, MediaTy, NullTy, PrimitiveTy, ShapedTy,
-    StreamStateTy, StringLiteralTy, StringTy, Ty, TyResolved, TyResolvedRef, TypeIdent, UnionTy,
+    StreamStateTy, StringLiteralTy, StringTy, TupleTy, Ty, TyResolved, TyResolvedRef, TypeIdent,
+    UnionTy,
 };
 
 /// A trait that provides a type name for a given type.
@@ -111,6 +112,17 @@ impl<N: TypeIdent> TypeName for ArrayTy<'_, N> {
     }
 }
 
+impl<N: TypeIdent> TypeName for TupleTy<'_, N> {
+    fn type_name(&self) -> Cow<'static, str> {
+        let items: Vec<String> = self
+            .items
+            .iter()
+            .map(|item| item.type_name().into_owned())
+            .collect();
+        Cow::Owned(baml_type::render_tuple(&items))
+    }
+}
+
 impl<N: TypeIdent> TypeName for MapTy<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
         Cow::Owned(format!(
@@ -164,6 +176,7 @@ impl<N: TypeIdent> TypeName for TyResolved<'_, N> {
             TyResolved::LiteralBigint(v) => v.type_name(),
             TyResolved::LiteralBool(v) => v.type_name(),
             TyResolved::Array(a) => a.type_name(),
+            TyResolved::Tuple(t) => t.type_name(),
             TyResolved::Map(m) => m.type_name(),
             TyResolved::Class(c) => c.type_name(),
             TyResolved::Enum(e) => e.type_name(),
@@ -204,6 +217,7 @@ impl<N: TypeIdent> TypeName for TyResolvedRef<'_, N> {
             TyResolvedRef::LiteralBigint(v) => v.type_name(),
             TyResolvedRef::LiteralBool(v) => v.type_name(),
             TyResolvedRef::Array(a) => a.type_name(),
+            TyResolvedRef::Tuple(t) => t.type_name(),
             TyResolvedRef::Map(m) => m.type_name(),
             TyResolvedRef::Class(c) => c.type_name(),
             TyResolvedRef::Enum(e) => e.type_name(),

@@ -41,24 +41,6 @@ source: crates/baml_tests/src/generated_tests.rs
   [parse] E0010
 
   × unexpected token
-    ╭─[main.baml:27:22]
- 27 │     f<int, string>>(1, "two")
-    ·                      ┬
-    ·                      ╰── expected `')'`, found `','`
-    ╰────
-
-  [parse] E0010
-
-  × unexpected token
-    ╭─[main.baml:27:29]
- 27 │     f<int, string>>(1, "two")
-    ·                             ┬
-    ·                             ╰── expected `expression`, found `')'`
-    ╰────
-
-  [parse] E0010
-
-  × unexpected token
     ╭─[main.baml:32:11]
  32 │     (1 + 2]
     ·           ┬
