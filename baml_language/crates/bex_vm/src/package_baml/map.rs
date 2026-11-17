@@ -168,7 +168,7 @@ impl MapDriver {
         let (state, hasher) = if native_hash.is_some() {
             (Value::NULL, None)
         } else {
-            let (state, hasher) = super::hasher::new_state(vm);
+            let (state, hasher) = super::hasher::new_map_key_state(vm);
             (state, Some(hasher))
         };
         let mut driver = Self {

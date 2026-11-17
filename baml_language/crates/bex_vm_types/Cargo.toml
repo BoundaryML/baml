@@ -29,6 +29,7 @@ bex_resource_types = { workspace = true }
 bex_str = { workspace = true }
 btel_types = { workspace = true }
 borsh = { workspace = true }
+foldhash = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
 rustc-hash = { workspace = true }

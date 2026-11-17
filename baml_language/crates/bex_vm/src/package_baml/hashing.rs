@@ -276,16 +276,16 @@ pub(super) fn hash_value(vm: &mut BexVm, value: Value, state: Value) -> NativeCa
 
 #[cfg(test)]
 mod tests {
-    use std::hash::Hasher as _;
+    use super::{super::hasher::Algorithm, framed};
 
-    use super::framed;
-
-    /// What the driver computes for a primitive: its framing written to a
-    /// fresh `baml.hash.DefaultHasher`, as a map's key hash.
-    fn driver_hash(tag: u8, bytes: &[u8]) -> u64 {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        hasher.write(&framed(tag, bytes));
-        hasher.finish()
+    /// What a map computes for a key whose `Hash` runs BAML code and writes
+    /// `chunks`: its map-key state fed those writes, then finished.
+    fn driver_hash(chunks: &[&[u8]]) -> u64 {
+        let mut state = Algorithm::MapKey(Vec::new());
+        for chunk in chunks {
+            state.write(chunk);
+        }
+        state.finish()
     }
 
     /// Maps hash string and int keys natively. A key whose `Hash` writes the
@@ -296,14 +296,34 @@ mod tests {
         for int in [0, 1, -1, 42, i64::from(i32::MAX), -(1 << 62)] {
             assert_eq!(
                 bex_vm_types::map_int_hash(int),
-                driver_hash(1, &int.to_le_bytes())
+                driver_hash(&[&framed(1, &int.to_le_bytes())])
             );
         }
-        for text in ["", "a", "ggtatt", "a string longer than one SipHash block"] {
+        let long = "a key longer than the stack buffer a native hash frames into, ".repeat(3);
+        for text in [
+            "",
+            "a",
+            "ggtatt",
+            "a string longer than sixteen bytes",
+            &long,
+        ] {
             assert_eq!(
                 bex_vm_types::map_string_hash(text),
-                driver_hash(5, text.as_bytes())
+                driver_hash(&[&framed(5, text.as_bytes())])
             );
         }
+    }
+
+    /// `baml.hash.Hasher` promises that writing a stream in chunks hashes
+    /// like writing it whole; a map's key hash keeps that promise.
+    #[test]
+    fn map_key_hash_ignores_chunking() {
+        let stream = framed(5, b"a string longer than sixteen bytes");
+        let whole = driver_hash(&[&stream]);
+        for split in [0, 1, 9, 17, stream.len()] {
+            let (head, tail) = stream.split_at(split);
+            assert_eq!(driver_hash(&[head, tail]), whole);
+        }
+        assert_ne!(driver_hash(&[&framed(5, b"ggtatt")]), whole);
     }
 }

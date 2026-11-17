@@ -1,4 +1,9 @@
-use std::{cell::UnsafeCell, collections::HashMap};
+use std::{
+    cell::UnsafeCell,
+    collections::HashMap,
+    hash::{BuildHasher, BuildHasherDefault, Hasher},
+    sync::LazyLock,
+};
 
 use indexmap::IndexMap;
 use rustc_hash::FxBuildHasher;
@@ -534,26 +539,82 @@ pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<MapData>>;
 
 pub type EntryId = u64;
 
-/// Hash a native string key with the same framing as the VM's `Hash` driver.
+/// The process-wide secret that keys every map key hash. Keys can come from
+/// untrusted input (JSON), so where they land must be unpredictable. The
+/// seed comes from std's `RandomState`, which draws from the OS; foldhash's
+/// own global seed mixes only addresses and the clock.
+struct MapKeySeed {
+    per_hasher: u64,
+    shared: foldhash::SharedSeed,
+}
+
+static MAP_KEY_SEED: LazyLock<MapKeySeed> = LazyLock::new(|| {
+    let random = std::collections::hash_map::RandomState::new();
+    MapKeySeed {
+        per_hasher: random.hash_one(0_u64),
+        shared: foldhash::SharedSeed::from_u64(random.hash_one(1_u64)),
+    }
+});
+
+/// The hash a map files a key under: keyed foldhash of everything the key's
+/// `Hash` wrote, as one stream, so it does not depend on how the writes were
+/// chunked (`baml.hash.Hasher` promises that). Not `baml.hash.DefaultHasher`,
+/// whose results are the same in every process.
+pub fn map_key_hash(stream: &[u8]) -> u64 {
+    let seed = &*MAP_KEY_SEED;
+    let mut hasher = foldhash::quality::FoldHasher::with_seed(seed.per_hasher, &seed.shared);
+    hasher.write(stream);
+    hasher.finish()
+}
+
+/// Hash a native string key as the VM's `Hash` driver frames it, so a map
+/// finds a string key whichever of the two hashed it.
 pub fn map_string_hash(key: &str) -> u64 {
     framed_hash(5, key.as_bytes())
 }
 
-/// Hash a native int key with the same framing as the VM's `Hash` driver,
-/// so a map finds an int key whichever of the two hashed it.
+/// Hash a native int key as the VM's `Hash` driver frames it.
 pub fn map_int_hash(key: i64) -> u64 {
     framed_hash(1, &key.to_le_bytes())
 }
 
-/// The `Hash` driver's framing of a primitive (`tag`, byte length, bytes),
-/// hashed with `baml.hash.DefaultHasher`'s algorithm.
+/// [`map_key_hash`] of the `Hash` driver's framing of a primitive: `tag`,
+/// the byte length, the bytes. A short key is framed on the stack.
 fn framed_hash(tag: u8, bytes: &[u8]) -> u64 {
-    use std::hash::Hasher;
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    hasher.write(&[tag]);
-    hasher.write(&(bytes.len() as u64).to_le_bytes());
-    hasher.write(bytes);
-    hasher.finish()
+    const HEADER: usize = 1 + size_of::<u64>();
+    const INLINE: usize = 128;
+    let len = HEADER + bytes.len();
+    let mut inline = [0_u8; INLINE];
+    let mut heap = Vec::new();
+    let stream = if len <= INLINE {
+        &mut inline[..len]
+    } else {
+        heap.resize(len, 0);
+        heap.as_mut_slice()
+    };
+    stream[0] = tag;
+    stream[1..HEADER].copy_from_slice(&(bytes.len() as u64).to_le_bytes());
+    stream[HEADER..].copy_from_slice(bytes);
+    map_key_hash(stream)
+}
+
+/// The bucket table's hasher. Its keys are [`map_key_hash`] results, already
+/// keyed and well mixed, so they index the table as they are.
+#[derive(Default)]
+struct KeyHashHasher(u64);
+
+impl Hasher for KeyHashHasher {
+    fn write(&mut self, _bytes: &[u8]) {
+        unreachable!("bucket-table keys are u64 hashes")
+    }
+
+    fn write_u64(&mut self, hash: u64) {
+        self.0 = hash;
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -590,9 +651,9 @@ fn spilled_capacity(bucket: &MapBucket) -> usize {
 pub struct MapData {
     /// Fx-hashed: entry ids are this map's own counter, never program input.
     entries: IndexMap<EntryId, MapEntry, FxBuildHasher>,
-    /// Randomly keyed: the hashes come from keys a program may take from
-    /// untrusted input.
-    buckets: HashMap<u64, MapBucket>,
+    /// Indexed by the keys' [`map_key_hash`]es, which are randomly keyed:
+    /// keys may come from untrusted input.
+    buckets: HashMap<u64, MapBucket, BuildHasherDefault<KeyHashHasher>>,
     /// Id slots allocated by buckets that outgrew their inline room, for the
     /// footprint. A bucket keeps its allocation until it is dropped.
     spilled_capacity: usize,
