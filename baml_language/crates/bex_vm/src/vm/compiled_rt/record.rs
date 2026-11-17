@@ -121,8 +121,6 @@ impl FrameRecord {
             entry: _,
             scoped: _,
             receipt: _,
-            // Only statically declared types, which never move; see
-            // `call_record_typed`. A closure's are visited through it.
             type_args: _,
         } = self;
         let visit = |cell: &Cell<HeapPtr>, visitor: &mut dyn RootVisitor| {
@@ -519,7 +517,6 @@ impl BexVm {
     #[inline(never)]
     fn zombify(&mut self, linked: *const FrameRecord, record: FrameRecord) {
         let chain = &*self.compiled.records;
-        // The zombie outlives the caller's type arguments: drop the borrow.
         let zombie = Box::new(FrameRecord {
             type_args: &[],
             ..record

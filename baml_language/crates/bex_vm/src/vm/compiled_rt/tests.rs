@@ -1965,8 +1965,6 @@ fn call_safepoints_keep_yielding_under_gc_stress() {
 const TELEMETRY_LEVELS: [Option<btel_settings::mode::AutoTelemetryLevel>; 2] =
     [None, Some(btel_settings::mode::AutoTelemetryLevel::Medium)];
 
-// A record borrows its caller's type arguments; they must still read back
-// after the body parks and the heap moves.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_generic_record_reads_its_type_arguments_after_a_collection() {
@@ -2005,8 +2003,6 @@ fn a_generic_record_reads_its_type_arguments_after_a_collection() {
     }
 }
 
-// A dispatched closure's record reads the closure's captured type arguments
-// through the closure, wherever a collection moved it.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_closure_record_reads_captured_type_arguments_after_a_collection() {
@@ -2038,8 +2034,6 @@ fn a_closure_record_reads_captured_type_arguments_after_a_collection() {
     }
 }
 
-// An error leaving a generic record keeps its frame in the trace, after the
-// type arguments it borrowed are gone.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn an_error_through_a_generic_record_traces_as_bytecode_does() {
