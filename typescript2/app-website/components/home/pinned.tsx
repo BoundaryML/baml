@@ -143,7 +143,9 @@ export function Played({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const seen = useInView(ref, line);
-  const p = useTween(seen ? 1 : 0, ms, false, linear);
+  // Anyone who asked for less motion gets the finished figure from the start, not once it's in view.
+  const reduce = useReducedMotion();
+  const p = useTween(seen || reduce ? 1 : 0, ms, false, linear);
   return <div ref={ref}>{children(p)}</div>;
 }
 
