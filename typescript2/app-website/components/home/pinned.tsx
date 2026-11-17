@@ -167,6 +167,57 @@ export function Played({
   return <div ref={ref}>{children(p)}</div>;
 }
 
+/** A figure whose progress follows the scroll, without pinning: 0 while its middle is `from` of the
+ *  way down the window, 1 once its middle reaches `to`, so scrolling back plays it in reverse. Under
+ *  reduced motion it shows the finished figure. */
+export function Scrubbed({
+  children,
+  from = 0.9,
+  to = 0.3,
+}: {
+  children: (p: number) => ReactNode;
+  from?: number;
+  to?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || reduce) return;
+    let frame = 0;
+    let shown = -1;
+    const target = () => {
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const mid = r.top + r.height / 2;
+      return Math.min(1, Math.max(0, (vh * from - mid) / (vh * (from - to))));
+    };
+    // The shown progress covers part of the distance each frame, so a jump in the scroll position
+    // eases in rather than snapping.
+    const tick = () => {
+      frame = 0;
+      const t = target();
+      shown = shown < 0 ? t : shown + (t - shown) * 0.18;
+      if (Math.abs(t - shown) < 0.0005) shown = t;
+      setP(shown);
+      if (shown !== t) frame = requestAnimationFrame(tick);
+    };
+    const wake = () => {
+      if (!frame) frame = requestAnimationFrame(tick);
+    };
+    wake();
+    window.addEventListener('scroll', wake, { passive: true });
+    window.addEventListener('resize', wake);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', wake);
+      window.removeEventListener('resize', wake);
+    };
+  }, [from, to, reduce]);
+  return <div ref={ref}>{children(reduce ? 1 : p)}</div>;
+}
+
 // How long a picked side takes to arrive.
 const PICK_MS = 320;
 

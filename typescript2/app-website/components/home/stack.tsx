@@ -19,7 +19,13 @@ import { BoundaryLogo, BoundaryMark } from '@/components/home/boundary-logo';
 import { LAMB_PATHS } from '@/components/home/lamb';
 import { MarkTile } from '@/components/home/mark';
 import { MARKS } from '@/components/home/marks';
-import { Hyper, Looped, Played, sweep } from '@/components/home/pinned';
+import {
+  Hyper,
+  Looped,
+  Played,
+  Scrubbed,
+  sweep,
+} from '@/components/home/pinned';
 import { ramp } from '@/components/home/scroll';
 
 // The stack, then what it costs to see every function. BAML times every function, which measured
@@ -1542,9 +1548,7 @@ export default function Stack() {
           language.
         </h2>
         <div className="mt-12 md:mt-16">
-          <Played line={0.5} linear ms={6000}>
-            {(p) => <Layers p={p} />}
-          </Played>
+          <Scrubbed>{(p) => <Layers p={p} />}</Scrubbed>
         </div>
       </div>
     </section>
