@@ -128,16 +128,16 @@ class Bigint {
     /// # Throws
     ///
     /// - `baml.errors.InvalidArgument` if `self` falls outside `int`'s range.
-    ///   BAML integers are 63-bit signed, so `int.min_value()` through
-    ///   `int.max_value()` is narrower than a machine 64-bit integer.
+    ///   BAML integers are 64-bit signed, from `int.min_value()` through
+    ///   `int.max_value()`.
     ///
     /// # Examples
     ///
     /// ```baml
     /// (42n).to_int()                          // 42
     /// (-7n).to_int()                          // -7
-    /// (4611686018427387903n).to_int()         // int.max_value()
-    /// (4611686018427387904n).to_int()         // throws — one past int.max_value()
+    /// (9223372036854775807n).to_int()         // int.max_value()
+    /// (9223372036854775808n).to_int()         // throws — one past int.max_value()
     /// (10n).pow(30n).to_int()                 // throws
     /// ```
     function to_int(self) -> int throws root.errors.InvalidArgument {

@@ -66,7 +66,8 @@ impl BamlClassHashHasher_for_DefaultHasher for PackageBamlImpl {
     }
 
     fn finish(vm: &BexVm, hasher: &view::hash::DefaultHasher<'_>) -> i64 {
-        // Arithmetic shift maps all u64 hashes into BAML's signed 63-bit range.
+        // Arithmetic shift maps all u64 hashes into the signed 63-bit range,
+        // so a hash is an inline int and never allocates.
         state(hasher, vm).finish().cast_signed() >> 1
     }
 }

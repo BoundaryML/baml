@@ -2328,7 +2328,7 @@ mod tests {
         let TypeInfo::Documentation { detail, .. } = info_at(&test) else {
             panic!("builtin type hovers as documentation");
         };
-        assert!(detail.contains("A 63-bit signed integer"));
+        assert!(detail.contains("A 64-bit signed integer"));
         assert!(!detail.contains("with checked arithmetic"));
     }
 

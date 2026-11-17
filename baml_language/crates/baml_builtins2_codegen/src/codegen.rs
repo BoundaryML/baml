@@ -1194,9 +1194,8 @@ fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &N
 
     // Use a closure returning NativeFunctionResult so `?` operators work inside.
     match int_return {
-        Some(IntReturn::Int) => out.push_str(
-            "        let __result: Result<i64, crate::errors::VmRustFnError> = (|| {\n",
-        ),
+        Some(IntReturn::Int) => out
+            .push_str("        let __result: Result<i64, crate::errors::VmRustFnError> = (|| {\n"),
         Some(IntReturn::Optional) => out.push_str(
             "        let __result: Result<Option<i64>, crate::errors::VmRustFnError> = (|| {\n",
         ),

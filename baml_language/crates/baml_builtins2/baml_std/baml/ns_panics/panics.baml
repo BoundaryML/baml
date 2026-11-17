@@ -177,8 +177,8 @@ class HostContractViolation {
 }
 
 /// Raised when an `int` arithmetic operation (`+`, `-`, `*`, `/`, unary `-`)
-/// overflows the representable range. `int` is a 63-bit signed integer
-/// (`[-2^62, 2^62 - 1]`); operations that would fall outside it throw this
+/// overflows the representable range. `int` is a 64-bit signed integer
+/// (`[-2^63, 2^63 - 1]`); operations that would fall outside it throw this
 /// rather than silently wrapping. Use `bigint` for unbounded integers.
 ///
 /// # Examples

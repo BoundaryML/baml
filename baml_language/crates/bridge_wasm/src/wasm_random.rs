@@ -53,7 +53,7 @@ impl io::IoClassRandomSystemRandom for WasmRandom {
         let mut buf = [0u8; 8];
         match getrandom_03::fill(&mut buf) {
             // Arithmetic shift right by one maps the uniform 64-bit draw onto
-            // the BAML i63 range `[INT_MIN, INT_MAX]`.
+            // the 63-bit range `[-2^62, 2^62)`, so the int never needs a box.
             Ok(()) => SysOpOutput::ok(i64::from_le_bytes(buf) >> 1),
             Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {
                 resource: "randomness".to_string(),

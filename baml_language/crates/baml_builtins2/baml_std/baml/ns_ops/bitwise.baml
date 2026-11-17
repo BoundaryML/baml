@@ -11,11 +11,11 @@
 //!
 //! Panics are orthogonal to the `throws` contract (see `math.baml`), so every
 //! signature stays `throws never`:
-//!   - `int << int` truncates: bits shifted past the 63-bit width are
-//!     discarded, so `1 << 62` is `int.min_value()` and any count at or past 63
+//!   - `int << int` truncates: bits shifted past the 64-bit width are
+//!     discarded, so `1 << 63` is `int.min_value()` and any count at or past 64
 //!     gives `0`. Only a negative count raises `baml.panics.NegativeBitShift`.
 //!   - `int << bigint` does not truncate: the `bigint` count widens the shifted
-//!     value first, so no bits are lost and `1 << 62n` is the exact `bigint`,
+//!     value first, so no bits are lost and `1 << 63n` is the exact `bigint`,
 //!     not `int.min_value()`.
 //!   - `int >> int` raises `baml.panics.NegativeBitShift` on a negative count; a
 //!     count past every bit saturates to the sign (arithmetic shift).
