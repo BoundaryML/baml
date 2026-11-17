@@ -759,10 +759,6 @@ pub fn generate_native_trait_for(
     out
 }
 
-// ============================================================================
-// Entry points
-// ============================================================================
-
 /// Where a builtin's entry point lives and how to call it: `baml.Array.push`
 /// is `bex_vm::package_baml::builtins::Array::push(vm, array, item)`.
 ///
@@ -935,8 +931,6 @@ fn push_entry(
     });
     let impl_ty = format!("Package{}Impl", to_pascal_case(package));
     let body = modules.entry(module).or_default();
-    // A builtin that cannot pause returns its body's `Result` itself; one
-    // that can returns `NativeCallResult` from its entry.
     let array_args = params.join(", ");
     let mut twin = |suffix: &str, glue_suffix: &str, doc: &str| {
         let (result_ty, call) = if b.may_yield {
@@ -2847,7 +2841,6 @@ mod tests {
     fn test_array_push_mut_receiver() {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
-        // The trait methods, not the `builtins` entry points, which all take `vm`.
         let (output, _) = output.split_once("pub mod builtins").unwrap();
 
         assert!(

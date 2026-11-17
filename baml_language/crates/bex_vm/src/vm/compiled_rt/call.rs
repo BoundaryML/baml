@@ -87,8 +87,6 @@ impl BexVm {
             .replace(super::state::LentTypeArgs(std::ptr::NonNull::from(
                 type_args,
             )));
-        // Restores the loan even if the call unwinds, so no collection ever
-        // visits the lender's array once it is gone.
         let guard = RestoreLoan { vm: self, previous };
         call(&mut *guard.vm)
     }

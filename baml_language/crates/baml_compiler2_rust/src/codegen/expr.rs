@@ -479,7 +479,6 @@ impl<'db> Generator<'_, 'db> {
         } else {
             entry.path.clone()
         };
-        // Arguments are evaluated before `vm` is lent to the call.
         let names: Vec<String> = (0..args.len()).map(|i| format!("__a{i}")).collect();
         let call = if names.is_empty() {
             format!("{path}(vm)")
@@ -491,7 +490,6 @@ impl<'db> Generator<'_, 'db> {
         } else {
             format!("let ({},) = ({},);", names.join(", "), args.join(", "))
         };
-        // A builtin that cannot read type arguments is not given them.
         let call = if types.is_empty() || !entry.reads_type_args {
             call
         } else {

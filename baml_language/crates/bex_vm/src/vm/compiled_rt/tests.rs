@@ -1695,7 +1695,6 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
         match lane {
             0 => vm.pending_call_type_args.push(ty),
             1 => vm.compiled.call_type_args.push(ty),
-            // The array compiled code lends a builtin it calls directly.
             4 => {
                 vm.compiled.lent_type_args = Some(super::state::LentTypeArgs(
                     std::ptr::NonNull::from(&mut lent[..]),
