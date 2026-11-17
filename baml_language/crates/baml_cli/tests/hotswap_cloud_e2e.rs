@@ -810,5 +810,7 @@ async fn a_forgotten_process_registers_again() {
     }
     assert_eq!(registrations(&state), 2);
     assert!(state.lock().unwrap().processes.contains("p_91"));
-    tokio::task::spawn_blocking(move || agent.stop()).await.unwrap();
+    tokio::task::spawn_blocking(move || agent.stop())
+        .await
+        .unwrap();
 }

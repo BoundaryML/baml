@@ -549,6 +549,12 @@ impl PackArgs {
             return Ok(None);
         }
         build.check_marks().map_err(anyhow::Error::msg)?;
+        // The binary carries its source, so it can splice a swap in: say so.
+        crate::reporter::print_note(format_args!(
+            "embedding {} source file{} so the binary can be hot swapped; pass --no-hotswap to leave them out",
+            build.sources.len(),
+            if build.sources.len() == 1 { "" } else { "s" }
+        ));
         Ok(Some(baml_exec::PackedHotswap {
             sources: build.sources.into_iter().collect(),
             commit: build.commit,

@@ -557,17 +557,10 @@ fn local_change(root: &Path, baseline: &str) -> anyhow::Result<LocalChange> {
         after_files.iter().map(|(p, t)| (p.as_str(), t.as_str())),
     );
     let config = crate::runtime_telemetry::hotswap_config(&root)?;
-    let swappable = |key: &str| {
-        let is_function =
-            key.starts_with("fn ") || key.starts_with("method ") || key.starts_with("implmethod ");
-        is_function
-            && old.get(key).is_some_and(|source| {
-                matches!(
-                    bex_project::hotswap_rules::mark_of(&source.text),
-                    Some(Ok(_))
-                )
-            })
+    let is_function = |key: &str| {
+        key.starts_with("fn ") || key.starts_with("method ") || key.starts_with("implmethod ")
     };
+    let marked = |text: &str| matches!(bex_project::hotswap_rules::mark_of(text), Some(Ok(_)));
     let label = |key: &str| {
         key.split_once(' ')
             .map_or(key, |(_, name)| name)
@@ -584,38 +577,56 @@ fn local_change(root: &Path, baseline: &str) -> anyhow::Result<LocalChange> {
             continue;
         }
         let name = label(key);
-        let (Some(original), Some(replacement)) = (old.get(key), new.get(key)) else {
-            bail!("`{name}` changed, and only swappable functions can change without a deploy");
+        let refused = || {
+            anyhow::anyhow!(
+                "`{name}` changed, and only swappable functions can change without a deploy"
+            )
         };
-        // A client's configuration counts as a change to each function that
-        // uses it; the processes check those functions' marks and rules.
-        let rule = if key.starts_with("client ") {
-            String::new()
-        } else if swappable(key) {
-            match bex_project::hotswap_rules::mark_of(&original.text) {
-                Some(Ok(mark)) => mark
-                    .rule
-                    .or_else(|| config.default_rule.clone())
-                    .map(|rule| rule.name().to_string())
-                    .unwrap_or_default(),
-                _ => String::new(),
+        let (Some(originals), Some(replacements)) = (old.get(key), new.get(key)) else {
+            return Err(refused());
+        };
+        if originals.len() != replacements.len() {
+            return Err(refused());
+        }
+        // Implementations can share a key: each changed one is its own entry.
+        for (original, replacement) in originals.iter().zip(replacements) {
+            if original.text == replacement.text {
+                continue;
             }
-        } else {
-            bail!("`{name}` changed, and only swappable functions can change without a deploy");
-        };
-        functions.push(SwapFunction {
-            name,
-            file: original.file.clone(),
-            rule,
-            old_source: original.text.clone(),
-            new_source: replacement.text.clone(),
-        });
+            // A client's configuration counts as a change to each function
+            // that uses it; the processes check those functions' marks and rules.
+            let rule = if key.starts_with("client ") {
+                String::new()
+            } else if is_function(key) && marked(&original.text) {
+                match bex_project::hotswap_rules::mark_of(&original.text) {
+                    Some(Ok(mark)) => mark
+                        .rule
+                        .or_else(|| config.default_rule.clone())
+                        .map(|rule| rule.name().to_string())
+                        .unwrap_or_default(),
+                    _ => String::new(),
+                }
+            } else {
+                return Err(refused());
+            };
+            functions.push(SwapFunction {
+                name: name.clone(),
+                file: original.file.clone(),
+                rule,
+                old_source: original.text.clone(),
+                new_source: replacement.text.clone(),
+            });
+        }
     }
     // Every function a changed client reaches must be swappable too.
     let mut affects = Vec::new();
     for name in bex_hotswap::hotswap_changes(&old_fingerprints, &new_fingerprints) {
-        let marked = old.keys().any(|key| label(key) == name && swappable(key));
-        if !marked {
+        let swappable = old.iter().any(|(key, sources)| {
+            label(key) == name
+                && is_function(key)
+                && sources.iter().all(|source| marked(&source.text))
+        });
+        if !swappable {
             bail!("`{name}` changed, and only swappable functions can change without a deploy");
         }
         if functions.iter().all(|function| function.name != name) {

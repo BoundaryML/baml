@@ -37,11 +37,15 @@ pub struct DeclSource {
     pub text: String,
 }
 
-/// The fingerprints of `files`, and the source of each declaration under the
-/// same key. A key that several declarations share keeps the first.
+/// Every declaration under one fingerprint key, in file order then source
+/// order. Implementations are keyed by bare names, so several can share one.
+pub type DeclSources = BTreeMap<String, Vec<DeclSource>>;
+
+/// The fingerprints of `files`, and the source of every declaration under the
+/// same keys.
 pub fn declarations<'a>(
     files: impl Iterator<Item = (&'a str, &'a str)>,
-) -> (DeclFingerprints, BTreeMap<String, DeclSource>) {
+) -> (DeclFingerprints, DeclSources) {
     let mut fingerprints = DeclFingerprints::default();
     let sources = std::cell::RefCell::new(BTreeMap::new());
     for (path, text) in files {
@@ -102,7 +106,7 @@ struct File<'t> {
     namespace: String,
     path: &'t str,
     text: &'t str,
-    sources: &'t std::cell::RefCell<BTreeMap<String, DeclSource>>,
+    sources: &'t std::cell::RefCell<DeclSources>,
 }
 
 impl File<'_> {
@@ -168,7 +172,8 @@ impl File<'_> {
         self.sources
             .borrow_mut()
             .entry(key.clone())
-            .or_insert_with(|| DeclSource {
+            .or_default()
+            .push(DeclSource {
                 file: self.path.to_string(),
                 text: self.text[range].to_string(),
             });

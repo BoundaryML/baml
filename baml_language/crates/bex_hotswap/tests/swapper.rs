@@ -344,3 +344,60 @@ async fn a_rejected_replacement_leaves_the_swap_it_replaces() {
     assert_eq!(int(&engine, "guarded", 1).await, 8);
     assert!(swapper.is_retired("hs_a"));
 }
+
+/// Implementations keyed by the same bare names are swappable only when every
+/// one is marked, so an unmarked one is never swapped under another's mark.
+#[test]
+fn a_key_implementations_share_is_swappable_only_if_all_are_marked() {
+    let build = |second: &str| {
+        HotswapBuild {
+        sources: [
+            (
+                "main.baml".to_string(),
+                "interface Show { function show(self) -> string; }\nclass Foo { n int }\nimplement Show for Foo {\n    /// baml:hotswap=hotswap.any\n    function show(self) -> string { \"root\" }\n}\n".to_string(),
+            ),
+            (
+                "ns_a/a.baml".to_string(),
+                format!("class Foo {{ n int }}\nimplement root.Show for Foo {{\n{second}    function show(self) -> string {{ \"nested\" }}\n}}\n"),
+            ),
+        ]
+        .into(),
+        commit: None,
+        config: HotswapConfig::default(),
+    }
+    };
+    assert!(build("").marked().is_empty());
+    assert_eq!(
+        build("    /// baml:hotswap=hotswap.any\n")
+            .marked()
+            .into_iter()
+            .collect::<Vec<_>>(),
+        ["Show for Foo.show"]
+    );
+}
+
+/// A revision older than one the process removed never installs again, and a
+/// replacement retires the swap it replaces, to be reported removed.
+#[tokio::test(flavor = "multi_thread")]
+async fn removed_revisions_stay_removed_and_replaced_swaps_are_reported() {
+    let (engine, mut swapper) = swapper();
+    let mut first = swap("hs_a", &[("step", "helper(x)", "helper(x) * 10")]);
+    first.revision = 5;
+    swapper.install(&first).await.unwrap();
+    swapper.remove("hs_a", "deleted").await.unwrap();
+    let mut stale = first.clone();
+    stale.revision = 4;
+    rejected(swapper.install(&stale).await, "not newer than revision 5");
+    assert_eq!(int(&engine, "step", 1).await, 2);
+
+    let mut again = first.clone();
+    again.revision = 6;
+    swapper.install(&again).await.unwrap();
+    let mut replacement = swap("hs_b", &[("step", "helper(x)", "helper(x) * 20")]);
+    replacement.replaces = Some("hs_a".into());
+    swapper.install(&replacement).await.unwrap();
+    let retired = swapper.take_retired();
+    assert_eq!(retired.len(), 1);
+    assert_eq!((retired[0].id.as_str(), retired[0].revision), ("hs_a", 6));
+    assert_eq!(int(&engine, "step", 1).await, 40);
+}

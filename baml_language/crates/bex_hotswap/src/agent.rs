@@ -8,6 +8,7 @@
 //! for an hour is removed here, without BCS, and reported when BCS is back.
 
 use std::{
+    collections::BTreeMap,
     sync::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -28,6 +29,11 @@ use crate::{HotswapBuild, Swapper};
 const DEFAULT_HOLD: Duration = Duration::from_secs(300);
 /// The wait after a request to BCS fails, before the next.
 const RETRY: Duration = Duration::from_secs(5);
+/// The longest the agent holds a connection, whatever BCS asks, so it checks
+/// for lapsed swaps at least this often.
+const MAX_HOLD: Duration = Duration::from_secs(300);
+/// Outcomes kept for BCS while it cannot take them; older ones are dropped.
+const MAX_PENDING: usize = 1000;
 
 /// Where and as whom a process talks to BCS: the endpoint and credential its
 /// telemetry uses.
@@ -125,20 +131,40 @@ pub fn start(
                     return;
                 }
             };
-            let mut swapper = Swapper::new(engine, build);
+            let mut swapper = Swapper::new(Arc::clone(&engine), Arc::clone(&build));
             if let Some(lapse) = options.lapse {
                 swapper = swapper.with_lapse(lapse);
             }
-            Loop {
-                swapper,
-                link,
-                options,
-                runtime,
-                ready,
-                stop,
-                pending: Vec::new(),
+            let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                Loop {
+                    swapper,
+                    link,
+                    options,
+                    runtime,
+                    ready: Arc::clone(&ready),
+                    stop,
+                    pending: Vec::new(),
+                    rejected: BTreeMap::new(),
+                }
+                .run();
+            }));
+            if ran.is_err() {
+                // Nothing will renew or remove the swaps now: return every
+                // function to the code as built rather than run unvouched code.
+                tracing::error!("the hot swap agent panicked; removing every swap");
+                let files = build
+                    .sources
+                    .iter()
+                    .map(|(path, text)| (path.clone(), text.clone()))
+                    .collect();
+                if let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                {
+                    let _ = runtime.block_on(engine.hotswap_patch_named(files, &BTreeMap::new()));
+                }
+                signal(&ready);
             }
-            .run();
         })?;
     Ok(agent)
 }
@@ -157,6 +183,9 @@ struct Loop {
     stop: Arc<AtomicBool>,
     /// Outcomes BCS has not acknowledged, oldest first.
     pending: Vec<(String, SwapOutcome)>,
+    /// The revision of each swap this process rejected: offered again, it is
+    /// not fetched again.
+    rejected: BTreeMap<String, u64>,
 }
 
 impl Loop {
@@ -199,6 +228,8 @@ impl Loop {
                 Err(error) => {
                     tracing::debug!(%error, "hot swap registration failed; retrying");
                     signal(&self.ready);
+                    // Unreachable BCS renews nothing: swaps still lapse.
+                    self.lapse();
                     std::thread::sleep(self.retry());
                 }
             }
@@ -212,7 +243,7 @@ impl Loop {
         let mut first = true;
         while !self.stop.load(Ordering::Relaxed) {
             if let Some(seconds) = delivery.hold_seconds {
-                hold = Duration::from_secs(seconds);
+                hold = Duration::from_secs(seconds).min(MAX_HOLD);
             }
             self.handle(delivery);
             if first {
@@ -259,13 +290,26 @@ impl Loop {
                     status: "installed".into(),
                     reason: None,
                 },
-                Err(error) => SwapOutcome {
-                    revision: swap.revision,
-                    status: "rejected".into(),
-                    reason: Some(error.0),
-                },
+                Err(error) => {
+                    self.rejected.insert(swap.id.clone(), swap.revision);
+                    SwapOutcome {
+                        revision: swap.revision,
+                        status: "rejected".into(),
+                        reason: Some(error.0),
+                    }
+                }
             };
-            self.pending.push((swap.id.clone(), outcome));
+            self.report(swap.id.clone(), outcome);
+            for retired in self.swapper.take_retired() {
+                self.report(
+                    retired.id,
+                    SwapOutcome {
+                        revision: retired.revision,
+                        status: "removed".into(),
+                        reason: Some(format!("replaced by {}", swap.id)),
+                    },
+                );
+            }
         }
         let mut fetch = Vec::new();
         for notification in delivery.notifications {
@@ -283,20 +327,39 @@ impl Loop {
                 {
                     self.swapper.renew(&notification.id);
                 }
+                // Rejected at this revision already: the answer would not change.
+                "active"
+                    if self
+                        .rejected
+                        .get(&notification.id)
+                        .is_some_and(|&revision| revision >= notification.revision) => {}
                 "active" => fetch.push(notification.id),
-                "disabled" | "deleted" => {
-                    if self.swapper.is_installed(&notification.id, 0) {
-                        let result = self
-                            .runtime
-                            .block_on(self.swapper.remove(&notification.id, &notification.status));
-                        self.pending.push((
+                // A notice older than the installed revision is stale.
+                "disabled" | "deleted"
+                    if self
+                        .swapper
+                        .revision(&notification.id)
+                        .is_some_and(|revision| revision <= notification.revision) =>
+                {
+                    match self
+                        .runtime
+                        .block_on(self.swapper.remove(&notification.id, &notification.status))
+                    {
+                        Ok(()) => self.report(
                             notification.id,
                             SwapOutcome {
                                 revision: notification.revision,
                                 status: "removed".into(),
-                                reason: result.err().map(|error| error.0),
+                                reason: None,
                             },
-                        ));
+                        ),
+                        // Still running: the notice repeats, and the swap lapses
+                        // without renewal if removal keeps failing.
+                        Err(error) => tracing::warn!(
+                            %error,
+                            hotswap = notification.id,
+                            "a removed swap was not removed"
+                        ),
                     }
                 }
                 _ => {}
@@ -331,20 +394,29 @@ impl Loop {
                 .map_or(0, |installed| installed.revision);
             // A failed removal leaves the swap running; the next pass tries again.
             match self.runtime.block_on(self.swapper.remove(&id, "lapsed")) {
-                Ok(()) => self.pending.push((
+                Ok(()) => self.report(
                     id,
                     SwapOutcome {
                         revision,
                         status: "lapsed".into(),
                         reason: None,
                     },
-                )),
+                ),
                 Err(error) => tracing::warn!(%error, hotswap = id, "a lapsed swap was not removed"),
             }
         }
     }
 
-    /// Report outcomes in order, each in its own request, until one fails.
+    /// Queue an outcome for BCS, keeping the newest when too many wait.
+    fn report(&mut self, id: String, outcome: SwapOutcome) {
+        if self.pending.len() >= MAX_PENDING {
+            self.pending.remove(0);
+        }
+        self.pending.push((id, outcome));
+    }
+
+    /// Report outcomes in order, each in its own request, until BCS cannot be
+    /// reached. One BCS refuses for good is dropped, so it blocks no other.
     fn flush(&mut self) {
         while let Some((id, outcome)) = self.pending.first().cloned() {
             match self.link.client.report_swap(
@@ -361,12 +433,29 @@ impl Loop {
                         self.handle(delivery);
                     }
                 }
+                Err(error) if refused(&error) => {
+                    tracing::warn!(%error, hotswap = id, "BCS refused a hot swap outcome");
+                    self.pending.remove(0);
+                }
                 Err(error) => {
                     tracing::debug!(%error, "hot swap outcome not reported; retrying later");
                     return;
                 }
             }
         }
+    }
+}
+
+/// Whether BCS refused a request for good: a client error other than an
+/// expired credential or too many requests, or a request never sent because
+/// it was malformed.
+fn refused(error: &bcs_api::Error) -> bool {
+    match error.http_failure() {
+        Some(failure) => {
+            let status = failure.status.as_u16();
+            (400..500).contains(&status) && !matches!(status, 401 | 408 | 429)
+        }
+        None => matches!(error, bcs_api::Error::Protocol(_)),
     }
 }
 

@@ -9,7 +9,7 @@ use std::{
 use bcs_api::hotswaps::{InstalledSwap, Swap};
 use bex_engine::{BexEngine, HostCapture};
 use bex_project::{
-    hotswap_fingerprint::{DeclSource, declarations},
+    hotswap_fingerprint::{DeclSources, declarations},
     hotswap_rules::{self, Change, Rule},
 };
 use indexmap::IndexMap;
@@ -46,8 +46,13 @@ pub struct Swapper {
     engine: Arc<BexEngine>,
     build: Arc<HotswapBuild>,
     /// Each declaration as built, by fingerprint key.
-    built: BTreeMap<String, DeclSource>,
+    built: DeclSources,
     installed: BTreeMap<String, Installed>,
+    /// The last revision of each swap this process removed or retired: an
+    /// older revision of it never installs again.
+    removed: BTreeMap<String, u64>,
+    /// Swaps retired by a replacement since [`Self::take_retired`] last ran.
+    retired: Vec<InstalledSwap>,
     lapse: Duration,
 }
 
@@ -64,6 +69,8 @@ impl Swapper {
             build,
             built,
             installed: BTreeMap::new(),
+            removed: BTreeMap::new(),
+            retired: Vec::new(),
             lapse: LAPSE,
         }
     }
@@ -96,6 +103,18 @@ impl Swapper {
         self.installed
             .values()
             .any(|installed| installed.swap.replaces.as_deref() == Some(id))
+    }
+
+    /// Swaps a replacement retired, each to be reported removed.
+    pub fn take_retired(&mut self) -> Vec<InstalledSwap> {
+        std::mem::take(&mut self.retired)
+    }
+
+    /// The revision `id` is installed at, if it is.
+    pub fn revision(&self, id: &str) -> Option<u64> {
+        self.installed
+            .get(id)
+            .map(|installed| installed.swap.revision)
     }
 
     pub fn is_installed(&self, id: &str, revision: u64) -> bool {
@@ -149,15 +168,25 @@ impl Swapper {
             return Ok(installed.changes.clone());
         }
         let result = self.check_and_install(swap).await;
-        let (event, reason) = match &result {
-            Ok(_) => ("hotswap.installed", None),
-            Err(error) => ("hotswap.rejected", Some(error.0.as_str())),
-        };
-        self.audit(event, swap, reason);
+        match &result {
+            Ok(changes) => self.audit("hotswap.installed", swap, changes, None),
+            Err(error) => {
+                let listed = swap.functions.iter().map(|f| f.name.clone()).collect();
+                self.audit("hotswap.rejected", swap, &listed, Some(&error.0));
+            }
+        }
         result
     }
 
     async fn check_and_install(&mut self, swap: &Swap) -> Result<BTreeSet<String>, SwapperError> {
+        if let Some(&removed) = self.removed.get(&swap.id)
+            && removed >= swap.revision
+        {
+            return reject(format!(
+                "revision {} of {} is not newer than revision {removed}, which this process removed",
+                swap.revision, swap.id
+            ));
+        }
         match &self.build.commit {
             Some(commit) if same_commit(commit, &swap.baseline) => {}
             Some(commit) => {
@@ -181,11 +210,20 @@ impl Swapper {
                 .sources
                 .get(&function.file)
                 .map_or(0, |text| text.matches(function.old_source.as_str()).count());
-            if built != 1 {
-                return reject(format!(
-                    "`{}`: its source as built differs from the swap's baseline",
-                    function.name
-                ));
+            match built {
+                1 => {}
+                0 => {
+                    return reject(format!(
+                        "`{}`: its source as built differs from the swap's baseline",
+                        function.name
+                    ));
+                }
+                times => {
+                    return reject(format!(
+                        "`{}`: its source as built appears {times} times in {}, so the swap cannot say which to replace",
+                        function.name, function.file
+                    ));
+                }
             }
         }
         let keep: Vec<&Swap> = self
@@ -201,20 +239,7 @@ impl Swapper {
         let (next_fingerprints, next_sources) =
             declarations(next.iter().map(|(p, t)| (p.as_str(), t.as_str())));
         let changes = bex_vm::hotswap::hotswap_changes(&current_fingerprints, &next_fingerprints);
-        let changed_clients: BTreeSet<String> = next_fingerprints
-            .decls
-            .iter()
-            .filter(|(key, text)| {
-                key.starts_with("client ") && current_fingerprints.decls.get(*key) != Some(*text)
-            })
-            .map(|(key, _)| {
-                label(key)
-                    .rsplit('.')
-                    .next()
-                    .unwrap_or_default()
-                    .to_string()
-            })
-            .collect();
+        let changed_clients = changed_clients(&current_fingerprints, &next_fingerprints);
         // One swap per function: those it lists, and those it changes through
         // a client.
         let listed = swap.functions.iter().map(|function| &function.name);
@@ -257,7 +282,22 @@ impl Swapper {
             .await
             .map_err(|error| SwapperError(error.to_string()))?;
         for retired in retiring {
-            self.installed.remove(retired);
+            if let Some(old) = self.installed.remove(retired)
+                && old.swap.id != swap.id
+            {
+                // Retired by its replacement: the process reports it removed.
+                self.removed.insert(old.swap.id.clone(), old.swap.revision);
+                self.audit(
+                    "hotswap.removed",
+                    &old.swap,
+                    &old.changes,
+                    Some(&format!("replaced by {}", swap.id)),
+                );
+                self.retired.push(InstalledSwap {
+                    id: old.swap.id,
+                    revision: old.swap.revision,
+                });
+            }
         }
         self.installed.insert(
             swap.id.clone(),
@@ -270,12 +310,13 @@ impl Swapper {
         Ok(changes)
     }
 
-    /// Whether the mark on the changed function `name` lets this change in:
-    /// it must be marked, keep its mark, and its rule must accept.
+    /// Whether the marks on the changed function `name` let this change in:
+    /// every declaration under its key that changed must be marked, keep its
+    /// mark, and its rule must accept.
     fn check_rule(
         &self,
         name: &str,
-        next: &BTreeMap<String, DeclSource>,
+        next: &DeclSources,
         fingerprints: &bex_vm_types::DeclFingerprints,
         changed_clients: &BTreeSet<String>,
     ) -> Result<(), String> {
@@ -284,30 +325,11 @@ impl Swapper {
             .keys()
             .find(|key| is_function_key(key) && label(key) == name)
             .ok_or_else(|| format!("`{name}` is new, and a swap cannot add declarations"))?;
-        let original = &self.built[key];
-        let replacement = next
+        let originals = &self.built[key];
+        let replacements = next
             .get(key)
-            .ok_or_else(|| format!("`{name}` was deleted, which needs a deploy"))?;
-        let mark = match hotswap_rules::mark_of(&original.text) {
-            Some(Ok(mark)) => mark,
-            Some(Err(problem)) => return Err(format!("{name}: {problem}")),
-            None => {
-                return Err(format!(
-                    "`{name}` is not marked `/// baml:hotswap`, so changing it needs a deploy"
-                ));
-            }
-        };
-        if hotswap_rules::mark_of(&replacement.text) != Some(Ok(mark.clone())) {
-            return Err(format!(
-                "`{name}`: a swap cannot change its `/// baml:hotswap` mark, which needs a deploy"
-            ));
-        }
-        let rule: Rule = mark
-            .rule
-            .or_else(|| self.build.config.default_rule.clone())
-            .ok_or_else(|| {
-                format!("`{name}` names no rule, and baml.toml sets no `[hotswap] default_rule`")
-            })?;
+            .filter(|replacements| replacements.len() == originals.len())
+            .ok_or_else(|| format!("`{name}` was added or deleted, which needs a deploy"))?;
         let uses: Vec<String> = fingerprints
             .refs
             .get(key)
@@ -318,18 +340,58 @@ impl Swapper {
                     .collect()
             })
             .unwrap_or_default();
+        // A key implementations share pairs up in source order, which a swap,
+        // replacing text in place, keeps.
+        for (original, replacement) in originals.iter().zip(replacements) {
+            if original.text == replacement.text && uses.is_empty() {
+                continue;
+            }
+            self.check_declaration(name, &original.text, &replacement.text, &uses)?;
+        }
+        Ok(())
+    }
+
+    fn check_declaration(
+        &self,
+        name: &str,
+        original: &str,
+        replacement: &str,
+        uses: &[String],
+    ) -> Result<(), String> {
+        let mark = match hotswap_rules::mark_of(original) {
+            Some(Ok(mark)) => mark,
+            Some(Err(problem)) => return Err(format!("{name}: {problem}")),
+            None => {
+                return Err(format!(
+                    "`{name}` is not marked `/// baml:hotswap`, so changing it needs a deploy"
+                ));
+            }
+        };
+        if hotswap_rules::mark_of(replacement) != Some(Ok(mark.clone())) {
+            return Err(format!(
+                "`{name}`: a swap cannot change its `/// baml:hotswap` mark, which needs a deploy"
+            ));
+        }
+        let rule: Rule = mark
+            .rule
+            .or_else(|| self.build.config.default_rule.clone())
+            .ok_or_else(|| {
+                format!("`{name}` names no rule, and baml.toml sets no `[hotswap] default_rule`")
+            })?;
         let shipped = |function: &str| {
             self.built
                 .iter()
-                .find(|(key, _)| is_function_key(key) && label(key) == function)
-                .map(|(_, source)| source.text.clone())
+                .find(|(key, sources)| {
+                    is_function_key(key) && label(key) == function && sources.len() == 1
+                })
+                .map(|(_, sources)| sources[0].text.clone())
         };
         hotswap_rules::check(
             &rule,
             &Change {
-                original: &original.text,
-                replacement: &replacement.text,
-                changed_clients: &uses,
+                original,
+                replacement,
+                changed_clients: uses,
             },
             &shipped,
         )
@@ -368,16 +430,19 @@ impl Swapper {
             .map(|_| ())
             .map_err(|error| SwapperError(error.to_string()));
         // A failed removal leaves the swap running, so only a removal is recorded.
-        if result.is_ok() {
-            self.installed.remove(id);
-            self.audit("hotswap.removed", &removed, Some(reason));
+        if result.is_ok()
+            && let Some(old) = self.installed.remove(id)
+        {
+            self.removed.insert(old.swap.id.clone(), old.swap.revision);
+            self.audit("hotswap.removed", &removed, &old.changes, Some(reason));
         }
         result
     }
 
     /// Record an audit event in the process's own recording: a span named
-    /// `event`, with the swap's ID, publisher, approver and the reason.
-    fn audit(&self, event: &str, swap: &Swap, reason: Option<&str>) {
+    /// `event`, with the swap's ID, publisher, approver, the functions it
+    /// changed and the reason.
+    fn audit(&self, event: &str, swap: &Swap, functions: &BTreeSet<String>, reason: Option<&str>) {
         let definition = bex_engine::HostDefinition {
             language: "baml".into(),
             module: "hotswap".into(),
@@ -404,9 +469,9 @@ impl Swapper {
             (
                 "functions".into(),
                 HostCapture::List(
-                    swap.functions
+                    functions
                         .iter()
-                        .map(|function| HostCapture::String(function.name.clone()))
+                        .map(|name| HostCapture::String(name.clone()))
                         .collect(),
                 ),
             ),
@@ -436,6 +501,91 @@ impl Swapper {
     }
 }
 
-fn short(commit: &str) -> &str {
-    &commit[..commit.len().min(7)]
+/// Clients whose configuration differs between `current` and `next`, and
+/// every client built from one of them, by simple name: a client built from a
+/// changed client holds the changed one too.
+fn changed_clients(
+    current: &bex_vm_types::DeclFingerprints,
+    next: &bex_vm_types::DeclFingerprints,
+) -> BTreeSet<String> {
+    let simple = |key: &str| {
+        label(key)
+            .rsplit('.')
+            .next()
+            .unwrap_or_default()
+            .to_string()
+    };
+    let mut changed: BTreeSet<String> = next
+        .decls
+        .iter()
+        .filter(|(key, text)| key.starts_with("client ") && current.decls.get(*key) != Some(*text))
+        .map(|(key, _)| simple(key))
+        .collect();
+    loop {
+        let reached: Vec<String> = next
+            .decls
+            .keys()
+            .filter(|key| key.starts_with("client ") && !changed.contains(&simple(key)))
+            .filter(|key| {
+                next.refs
+                    .get(*key)
+                    .is_some_and(|refs| refs.iter().any(|name| changed.contains(name)))
+            })
+            .map(|key| simple(key))
+            .collect();
+        if reached.is_empty() {
+            return changed;
+        }
+        changed.extend(reached);
+    }
+}
+
+/// The first seven characters of a commit, whatever BCS sent.
+fn short(commit: &str) -> String {
+    commit.chars().take(7).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use bex_vm_types::DeclFingerprints;
+
+    use super::changed_clients;
+
+    fn fingerprints(decls: &[(&str, &str)]) -> DeclFingerprints {
+        DeclFingerprints {
+            decls: decls
+                .iter()
+                .map(|(key, text)| ((*key).to_string(), (*text).to_string()))
+                .collect(),
+            refs: decls
+                .iter()
+                .map(|(key, text)| {
+                    let words = text.split_whitespace().map(str::to_string).collect();
+                    ((*key).to_string(), words)
+                })
+                .collect(),
+        }
+    }
+
+    /// A client built from a changed client holds the change too, so rules
+    /// see it for every function that uses either.
+    #[test]
+    fn a_client_built_from_a_changed_client_changes_too() {
+        let before = fingerprints(&[
+            ("client Base", "make 1"),
+            ("client Wrapped", "retry Base"),
+            ("client Other", "make 2"),
+        ]);
+        let after = fingerprints(&[
+            ("client Base", "make 3"),
+            ("client Wrapped", "retry Base"),
+            ("client Other", "make 2"),
+        ]);
+        assert_eq!(
+            changed_clients(&before, &after)
+                .into_iter()
+                .collect::<Vec<_>>(),
+            ["Base", "Wrapped"]
+        );
+    }
 }

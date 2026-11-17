@@ -6,6 +6,8 @@
 //! Every rule runs on tokens, so formatting and plain comments never matter.
 //! Rules are defense in depth: approval and the audit trail still apply.
 
+use std::collections::BTreeSet;
+
 use baml_syntax::token::TokenKind;
 
 pub use baml_syntax::hotswap::{Mark, Rule, parse_mark};
@@ -208,14 +210,19 @@ fn without_telemetry<'s>(tokens: &[Token<'s>]) -> Vec<Token<'s>> {
                 .is_some_and(|t| t.kind == TokenKind::LParen)
             && starts_statement(tokens, index);
         if is_log_call {
-            index = past_close(tokens, index + 3);
+            let mut end = past_close(tokens, index + 3);
             if tokens
-                .get(index)
+                .get(end)
                 .is_some_and(|t| t.kind == TokenKind::Semicolon)
             {
-                index += 1;
+                end += 1;
             }
-            continue;
+            // Last in its block, a log call is the block's value: removing it
+            // would change what the block evaluates to.
+            if !tokens.get(end).is_some_and(|t| t.kind == TokenKind::RBrace) {
+                index = end;
+                continue;
+            }
         }
         let is_trace_argument = token.kind == TokenKind::Word
             && token.text == "$trace"
@@ -425,18 +432,64 @@ fn callees(tokens: &[Token<'_>]) -> std::collections::BTreeSet<String> {
     found
 }
 
+/// The names `tokens` refers to by their first segment, which a function
+/// value can hide behind (`let f = other; f(x)`, `xs.map(other)`), leaving out
+/// the names it declares itself and named arguments.
+fn referenced(tokens: &[Token<'_>]) -> (BTreeSet<String>, BTreeSet<String>) {
+    let mut heads = BTreeSet::new();
+    let mut declared = BTreeSet::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if token.kind != TokenKind::Word {
+            continue;
+        }
+        let previous = index.checked_sub(1).map(|i| tokens[i].kind);
+        let next = tokens.get(index + 1).map(|t| t.kind);
+        if matches!(
+            previous,
+            Some(TokenKind::Let | TokenKind::For | TokenKind::Function)
+        ) || (previous == Some(TokenKind::LParen)
+            && index >= 2
+            && tokens[index - 2].kind == TokenKind::For)
+        {
+            declared.insert(token.text.to_string());
+        } else if !matches!(previous, Some(TokenKind::Dot | TokenKind::QuestionDot))
+            && next != Some(TokenKind::Equals)
+        {
+            heads.insert(token.text.to_string());
+        }
+    }
+    (heads, declared)
+}
+
 fn no_new_calls(change: &Change<'_>) -> Result<(), String> {
-    let original = callees(&tokens(change.original));
-    let new: Vec<String> = callees(&tokens(change.replacement))
+    let (original_tokens, replacement_tokens) =
+        (tokens(change.original), tokens(change.replacement));
+    let original = callees(&original_tokens);
+    let new: Vec<String> = callees(&replacement_tokens)
         .into_iter()
         .filter(|callee| !original.contains(callee))
         .map(|callee| format!("`{callee}`"))
+        .collect();
+    if !new.is_empty() {
+        return Err(format!(
+            "the replacement calls {}, which the original does not",
+            new.join(", ")
+        ));
+    }
+    // A name the original never mentions may be a function called through a
+    // value, so any new name is refused, though it may be harmless.
+    let (original_heads, _) = referenced(&original_tokens);
+    let (heads, declared) = referenced(&replacement_tokens);
+    let new: Vec<String> = heads
+        .into_iter()
+        .filter(|name| !original_heads.contains(name) && !declared.contains(name))
+        .map(|name| format!("`{name}`"))
         .collect();
     if new.is_empty() {
         Ok(())
     } else {
         Err(format!(
-            "the replacement calls {}, which the original does not",
+            "the replacement refers to {}, which the original does not, and could call through it",
             new.join(", ")
         ))
     }
@@ -547,6 +600,12 @@ mod tests {
             run(&rule, TRIAGE, &behavior),
             Err("the change does more than add telemetry".to_string())
         );
+        // A log line that ends a block is its value, which it would change.
+        let gate = "/// baml:hotswap=hotswap.telemetry_only\nfunction Check(x: int) -> string? { if (x > 0) { \"blocked\" } else { null } }";
+        let trailing = gate.replace("\"blocked\" }", "\"blocked\"\n    log.info(\"seen\") }");
+        assert!(run(&rule, gate, &trailing).is_err());
+        let leading = gate.replace("{ \"blocked\"", "{ log.info(\"seen\"); \"blocked\"");
+        assert_eq!(run(&rule, gate, &leading), Ok(()));
         // A log call used as a value is not a log line.
         let as_value = TRIAGE.replace(
             "let intent = Classify(ticket.text)",
@@ -619,6 +678,21 @@ mod tests {
         );
         let method = REPLY.replace("LookupCustomer(", "customers.delete(");
         assert!(run(&rule, REPLY, &method).is_err());
+        // A function reached through a value is a new call too.
+        for hidden in [
+            "  let f = RefundOrder\n  f(ticket.order_id)\n  DraftReply(",
+            "  (RefundOrder)(ticket.order_id)\n  DraftReply(",
+            "  [ticket].map(RefundOrder)\n  DraftReply(",
+        ] {
+            let replaced = REPLY.replace("  DraftReply(", hidden);
+            assert!(run(&rule, REPLY, &replaced).is_err(), "{hidden}");
+        }
+        // A new local is not.
+        let local = REPLY.replace(
+            "  DraftReply(ticket, customer)",
+            "  let formal = true\n  DraftReply(ticket, customer, tone = formal)",
+        );
+        assert_eq!(run(&rule, REPLY, &local), Ok(()));
         let client = SUMMARIZE.replace("client: Writer", "client: Other");
         assert!(run(&rule, SUMMARIZE, &client).is_err());
     }

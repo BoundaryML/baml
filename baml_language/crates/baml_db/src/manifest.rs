@@ -96,6 +96,13 @@ impl Default for HotswapConfig {
 
 impl HotswapConfig {
     pub fn from_manifest(manifest: &HotswapManifest) -> Result<Self, String> {
+        // Signing is a later stage. A project that asks for it expects unsigned
+        // swaps refused, so it fails closed rather than ignore the key.
+        if manifest.unknown.contains_key("signers") && manifest.enabled != Some(false) {
+            return Err(
+                "[hotswap] signers: signed swaps are not supported yet, so a project that sets signers cannot be hot swapped; remove signers, or set enabled = false".to_string(),
+            );
+        }
         let default_rule = manifest
             .default_rule
             .as_deref()
@@ -404,6 +411,9 @@ pub fn unknown_field_warnings(manifest: &BamlToml) -> Vec<String> {
         }
     }
     for key in manifest.hotswap.unknown.keys() {
+        if key == "signers" {
+            continue;
+        }
         warnings.push(format!("ignoring unrecognized key `{key}` in [hotswap]"));
     }
     for key in manifest.test.unknown.keys() {
@@ -618,5 +628,24 @@ mod tests {
             .unwrap();
         assert_eq!(*threshold.get_ref(), 0);
         assert!(threshold.span().end > threshold.span().start);
+    }
+}
+
+#[cfg(test)]
+mod hotswap_config_tests {
+    use super::{HotswapConfig, parse};
+
+    /// Signing is not built: a project that asks for it cannot be swapped.
+    #[test]
+    fn signers_fail_closed_until_signing_exists() {
+        let config = |text: &str| HotswapConfig::from_manifest(&parse(text).unwrap().hotswap);
+        assert!(config("[hotswap]\nsigners = [\"ed25519:x\"]\n").is_err());
+        assert!(config("[hotswap]\nenabled = false\nsigners = [\"ed25519:x\"]\n").is_ok());
+        assert_eq!(
+            config("[hotswap]\nstartup_wait = \"5s\"\n")
+                .unwrap()
+                .startup_wait,
+            std::time::Duration::from_secs(5)
+        );
     }
 }

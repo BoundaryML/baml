@@ -41,14 +41,18 @@ impl HotswapBuild {
                 .iter()
                 .map(|(path, text)| (path.as_str(), text.as_str())),
         );
+        // A key several declarations share (implementations are keyed by bare
+        // names) is swappable only when every one of them is marked.
         declarations
             .iter()
             .filter(|(key, _)| is_function_key(key))
-            .filter(|(_, source)| {
-                matches!(
-                    bex_project::hotswap_rules::mark_of(&source.text),
-                    Some(Ok(_))
-                )
+            .filter(|(_, sources)| {
+                sources.iter().all(|source| {
+                    matches!(
+                        bex_project::hotswap_rules::mark_of(&source.text),
+                        Some(Ok(_))
+                    )
+                })
             })
             .map(|(key, _)| label(key).to_string())
             .collect()
@@ -68,11 +72,13 @@ impl HotswapBuild {
         let unruled: Vec<String> = declarations
             .iter()
             .filter(|(key, _)| is_function_key(key))
-            .filter(|(_, source)| {
-                matches!(
-                    bex_project::hotswap_rules::mark_of(&source.text),
-                    Some(Ok(bex_project::hotswap_rules::Mark { rule: None }))
-                )
+            .filter(|(_, sources)| {
+                sources.iter().any(|source| {
+                    matches!(
+                        bex_project::hotswap_rules::mark_of(&source.text),
+                        Some(Ok(bex_project::hotswap_rules::Mark { rule: None }))
+                    )
+                })
             })
             .map(|(key, _)| format!("`{}`", label(key)))
             .collect();
