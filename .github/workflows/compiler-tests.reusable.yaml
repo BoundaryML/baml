@@ -76,7 +76,7 @@ jobs:
           direnv export gha >> "$GITHUB_ENV"
 
       - name: "Run the Rust backend differential test"
-        run: cargo nextest run -p baml_tests --all-features --run-ignored only -E 'binary(=rust_differential)'
+        run: cargo nextest run -p baml_tests --test rust_differential --all-features --run-ignored only --success-output immediate
         working-directory: baml_language
 
   snapshot-tests:
