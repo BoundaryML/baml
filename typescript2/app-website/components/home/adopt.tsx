@@ -54,11 +54,7 @@ const WAYS: {
   },
   {
     body: 'Keep your code. Send the traces you already have.',
-    callout: {
-      label: 'Get ready',
-      text: 'Prepare to take advantage of BAML and hyperobservability, at your own pace.',
-      tone: 'ready',
-    },
+    callout: { label: 'Get ready', tone: 'ready' },
     cta: 'Learn more',
     fill: 'none',
     href: '/adopt#otel',

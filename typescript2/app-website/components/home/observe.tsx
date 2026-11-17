@@ -187,10 +187,6 @@ export default function Observe() {
       <h3 className="v4-h3 text-head scroll-mt-28" id="observe">
         Turn those traces into dashboards and alerts.
       </h3>
-      <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-        Use the SQL-based query API to track the metrics that matter to your
-        product, from function latency to changes in model output.
-      </p>
       <div className="mt-8 grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Tile
           chart={<CallsChart />}

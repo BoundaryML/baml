@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { section } from '@/components/home/analytics';
-import { Hyper, Played } from '@/components/home/pinned';
+import { Played } from '@/components/home/pinned';
 import { ramp } from '@/components/home/scroll';
 import { RED } from '@/components/home/story';
 
@@ -477,10 +477,6 @@ export default function Agents() {
         <h2 className="v4-h2 text-head max-w-[22em]" id="agents">
           No person could read this much data. Agents can, and they need to.
         </h2>
-        <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-          Automated systems are only as good as their data. Give an agent gaps
-          and it fills them with assumptions. With <Hyper />, there are no gaps.
-        </p>
         <div className="mt-10 md:mt-12">
           <Played line={0.45} linear ms={10000}>
             {(p) => <DataWall p={p} />}

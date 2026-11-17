@@ -594,8 +594,7 @@ export default function Software() {
           Boundary gives them great defaults.
         </h2>
         <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-          With BAML it takes zero config. Every team's data lands in one place,
-          so anyone can ask any question, or hand it to their agent.
+          With BAML it takes zero config.
         </p>
         <div className="mt-10 md:mt-12">
           <Looped hold={2400} move={5200}>

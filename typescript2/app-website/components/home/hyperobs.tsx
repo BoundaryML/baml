@@ -1654,10 +1654,6 @@ export default function Hyperobs({ children }: { children: ReactNode }) {
           <h3 className="v4-h2 text-head max-w-[24em]">
             <Rotating />
           </h3>
-          <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-            Observability only answers the questions you thought of before you
-            shipped. <Hyper>Hyperobservability</Hyper> answers all of them.
-          </p>
         </div>
         <div className="mt-10 md:mt-12">
           <Threads />
