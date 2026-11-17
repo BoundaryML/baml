@@ -445,7 +445,6 @@ impl<'db> Generator<'_, 'db> {
         if arms.is_empty() {
             return Ok(fallback);
         }
-        // Each arm binds its own arguments; the site's stay outside.
         let site_bindings = std::mem::take(&mut self.pending);
         let index = self.index;
         let mut code = format!("{{ let class = vm.instance_class({receiver}); ");
@@ -456,7 +455,6 @@ impl<'db> Generator<'_, 'db> {
         } in arms
         {
             let class_ptr = format!("vm.record_object(fr, ObjectIndex::from_raw({class}))");
-            // A default body's frame is `Self`, the receiver's class.
             let types = if default {
                 vec![format!("vm.class_type({class_ptr})")]
             } else {
