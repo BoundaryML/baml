@@ -96,7 +96,7 @@ impl BytecodeFrame {
             function,
             instruction_ptr: crate::compiled_rt::RUNNING,
             locals_offset,
-            type_args,
+            type_args: type_args.into(),
             faulting_pc: 0,
             telemetry,
             context,
@@ -451,6 +451,7 @@ impl BexVm {
         // Call-site type arguments follow those carried by the callee.
         frame
             .type_args
+            .to_mut()
             .extend_from_slice(&self.pending_call_type_args);
     }
     pub(in crate::vm) fn unwind_suspended_compiled(
