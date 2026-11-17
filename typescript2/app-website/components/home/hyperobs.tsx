@@ -1623,15 +1623,17 @@ function Rotating() {
         Observability makes {SLOWED.join(', ')} slow. Hyperobservability makes
         them fast.
       </span>
+      {/* On a phone each sentence holds two lines' height, so a shorter word doesn't pull the page
+          up when it rotates in. */}
       <span aria-hidden>
-        <span className="block sm:whitespace-nowrap">
+        <span className="block max-sm:min-h-[2.4em] sm:whitespace-nowrap">
           Observability makes{' '}
           <span className="heading-swap" key={n}>
             {SLOWED[n % SLOWED.length]}
           </span>{' '}
           slow.
         </span>
-        <span className="block sm:whitespace-nowrap">
+        <span className="block max-sm:min-h-[2.4em] sm:whitespace-nowrap">
           <Hyper>Hyperobservability</Hyper> makes{' '}
           <span className="heading-swap" key={n}>
             {SLOWED[n % SLOWED.length]}
@@ -1663,7 +1665,7 @@ export default function Hyperobs({ children }: { children: ReactNode }) {
         </div>
 
         <div className="mt-20 md:mt-28">
-          <h3 className="v4-h2 text-head max-w-[24em]">
+          <h3 className="v4-h2 v4-sub text-head max-w-[24em]">
             <Rotating />
           </h3>
         </div>

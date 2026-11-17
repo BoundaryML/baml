@@ -364,7 +364,7 @@ function Layers({ p }: { p: number }) {
   const landed = ramp(base, 1.4, 2);
   return (
     <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-x-12 gap-y-8 items-center">
-      <h3 className="v4-h2 text-head">
+      <h3 className="v4-h2 v4-sub text-head">
         <span
           className="block origin-left will-change-[transform,opacity]"
           style={{

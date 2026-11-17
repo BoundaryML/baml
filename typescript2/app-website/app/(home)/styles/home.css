@@ -51,12 +51,18 @@
   font-family: var(--font-geist-pixel);
 }
 
-/* The homepage's two heading tiers: every section heading at the size .v4-h3 has elsewhere, and
-   every heading inside a section (a box's title, a step, a column) one tier below it. */
+/* The homepage's three heading tiers under the hero's 64px, each about three quarters of the one
+   above: a section's heading (48px), a second statement inside a section (36px, .v4-sub), and a
+   heading inside a figure (28px: a box's title, a step, a column). The section heading also shrinks
+   on a short window, like the hero's, so it never reaches the hero's size. */
 .home-page .v4-h2 {
-  font-size: clamp(26px, 3vw, 40px);
-  line-height: 1.2;
+  font-size: clamp(28px, min(3.4vw, 6.4vh), 48px);
+  line-height: 1.15;
   letter-spacing: -0.03em;
+}
+.home-page .v4-h2.v4-sub {
+  font-size: clamp(24px, 2.6vw, 36px);
+  line-height: 1.2;
 }
 .home-page .v4-h3 {
   font-size: clamp(20px, 2.1vw, 28px);
