@@ -59,19 +59,32 @@ export function useInView(ref: RefObject<HTMLElement | null>, line = 0.75) {
   const [seen, setSeen] = useState(false);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setSeen(true);
-          io.disconnect();
-        }
-      },
-      { rootMargin: `0px 0px -${Math.round((1 - line) * 100)}% 0px` },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [ref, line]);
+    if (!el || seen) return;
+    let io: IntersectionObserver | undefined;
+    // The margin is in pixels of the window's height: browsers have disagreed on what a percentage
+    // margin is relative to. A resize before the figure is seen moves the line with the window.
+    const watch = () => {
+      io?.disconnect();
+      io = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setSeen(true);
+            io?.disconnect();
+          }
+        },
+        {
+          rootMargin: `0px 0px -${Math.round((1 - line) * window.innerHeight)}px 0px`,
+        },
+      );
+      io.observe(el);
+    };
+    watch();
+    window.addEventListener('resize', watch);
+    return () => {
+      window.removeEventListener('resize', watch);
+      io?.disconnect();
+    };
+  }, [ref, line, seen]);
   return seen;
 }
 
@@ -144,8 +157,13 @@ export function Played({
   const ref = useRef<HTMLDivElement>(null);
   const seen = useInView(ref, line);
   // Anyone who asked for less motion gets the finished figure from the start, not once it's in view.
+  // Once finished it stays finished, even if reduced motion is turned off afterward.
   const reduce = useReducedMotion();
-  const p = useTween(seen || reduce ? 1 : 0, ms, false, linear);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (seen || reduce) setDone(true);
+  }, [seen, reduce]);
+  const p = useTween(done || seen || reduce ? 1 : 0, ms, false, linear);
   return <div ref={ref}>{children(p)}</div>;
 }
 
