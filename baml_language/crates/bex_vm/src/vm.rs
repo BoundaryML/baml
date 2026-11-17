@@ -1347,6 +1347,221 @@ pub(crate) mod tests {
         assert!(named_paths[&timings[5].0].1.contains("<lambda"));
     }
 
+    /// Run `main` with the dispatch fast path on or off, at the telemetry
+    /// level `level`, under a context every frame inherits (as the engine
+    /// installs one). Returns the result and what telemetry recorded: span
+    /// records, and timing completions, without clock readings, and with
+    /// engine-allocated identities numbered by first appearance (see
+    /// `normalized_ids`) and functions named.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recorded_run(
+        source: &str,
+        fast_path: bool,
+        level: btel_settings::mode::AutoTelemetryLevel,
+    ) -> (i64, Vec<String>, Vec<String>) {
+        use btel_types::context::{Context, ContextPatch, ContextValue};
+
+        use crate::telemetry::{SpanRecord, TimingRecord};
+
+        let program = baml_test_support::compile_source(source);
+        let entry = program.rendered_callables()["user.main"].object.raw();
+        let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        vm.dispatch_fast_path = fast_path;
+        vm.telemetry = Some(TelemetryState::new_root(
+            Arc::new(TelemetryPolicies::with_auto_level(level)),
+            btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+            crate::telemetry::test_runtime(),
+        ));
+        vm.set_root_context(
+            Context::default().with_patch(&ContextPatch {
+                metadata: [(
+                    "baml_version".to_owned(),
+                    Some(ContextValue::String("test".to_owned())),
+                )]
+                .into(),
+                distinct_id: None,
+            }),
+        );
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+        let result = loop {
+            match vm.exec().unwrap() {
+                VmExecState::EarlyYield => {}
+                VmExecState::Complete(value) => break value.as_int().unwrap(),
+                other => panic!("unexpected execution state: {other:?}"),
+            }
+        };
+
+        let state = vm.telemetry.as_ref().unwrap();
+        let mut ids = HashMap::new();
+        let name = |id| {
+            vm.heap
+                .function_metadata(vm.proof(), id)
+                .map(|metadata| metadata.fqn)
+        };
+        let mut spans = Vec::new();
+        for record in state.span_records() {
+            spans.push(match record {
+                // Names and the caller's pc are kept whole.
+                SpanRecord::CallPathDefined {
+                    call_path,
+                    parent_call_path,
+                    visible_caller,
+                    caller_pc,
+                    callee,
+                    edge,
+                } => format!(
+                    "{} from {:?} to {:?} at pc {caller_pc}",
+                    normalized_ids(
+                        &format!("{call_path:?} in {parent_call_path:?} ({edge:?})"),
+                        &mut ids,
+                    ),
+                    visible_caller.and_then(name),
+                    name(*callee),
+                ),
+                // Its clock prints durations in units that vary by run.
+                SpanRecord::ThreadSpanAnnouncement {
+                    id,
+                    parent_id,
+                    spawn_call_path,
+                    name: thread_name,
+                    ..
+                } => format!(
+                    "{} {thread_name:?}",
+                    normalized_ids(
+                        &format!("thread {id:?} in {parent_id:?} by {spawn_call_path:?}"),
+                        &mut ids,
+                    ),
+                ),
+                other => normalized_ids(&format!("{other:?}"), &mut ids),
+            });
+        }
+        let mut timings = Vec::new();
+        for record in state.timing_records() {
+            match record {
+                TimingRecord::FunctionTimingCompletion {
+                    call_path,
+                    outcome,
+                    reentry,
+                    ..
+                } => timings.push(normalized_ids(
+                    &format!("{call_path:?} {outcome:?} reentry {reentry}"),
+                    &mut ids,
+                )),
+                TimingRecord::SysOpTime { call_path, .. } => {
+                    timings.push(normalized_ids(&format!("sysop in {call_path:?}"), &mut ids));
+                }
+                TimingRecord::ThreadSelected { .. } => {}
+            }
+        }
+        (result, spans, timings)
+    }
+
+    /// `debug` with each identity the engine allocates (a `TelemetryId`,
+    /// `CallPathId` or `FunctionId`) replaced by the order it first appeared
+    /// in this run (`ids`), in letters, and every other number (a clock
+    /// reading) masked. Digits within a word are kept; callers keep
+    /// function names out of `debug` altogether.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn normalized_ids(debug: &str, ids: &mut HashMap<String, usize>) -> String {
+        const KINDS: [&str; 3] = ["TelemetryId(", "CallPathId(", "FunctionId("];
+        let mut out = String::new();
+        let mut rest = debug;
+        'scan: while let Some(c) = rest.chars().next() {
+            for kind in KINDS {
+                let Some(tail) = rest.strip_prefix(kind) else {
+                    continue;
+                };
+                let digits = tail
+                    .find(|c: char| !c.is_ascii_digit())
+                    .unwrap_or(tail.len());
+                if digits == 0 {
+                    continue;
+                }
+                let next = ids.len();
+                let mut ordinal = *ids
+                    .entry(format!("{kind}{}", &tail[..digits]))
+                    .or_insert(next);
+                out.push_str(kind);
+                loop {
+                    out.push(char::from(b'a' + u8::try_from(ordinal % 26).unwrap()));
+                    ordinal /= 26;
+                    if ordinal == 0 {
+                        break;
+                    }
+                }
+                rest = &tail[digits..];
+                continue 'scan;
+            }
+            // A digit that continues a name (`user.F1`) is part of it.
+            let in_name = out
+                .chars()
+                .next_back()
+                .is_some_and(|prev| prev.is_alphanumeric() || prev == '_');
+            if c.is_ascii_digit() && !in_name {
+                out.push('#');
+                rest = rest.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.');
+            } else {
+                out.push(c);
+                rest = &rest[c.len_utf8()..];
+            }
+        }
+        out
+    }
+
+    /// The dispatch fast path runs plain calls and returns with telemetry on,
+    /// through the full dispatch's telemetry helpers: what it records must
+    /// be exactly what the full dispatch alone records, at every level.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn fast_path_records_what_the_full_dispatch_records() {
+        use btel_settings::mode::AutoTelemetryLevel;
+
+        let source = r#"
+            class Vec2 {
+                x: int
+                y: int
+                function norm2(self) -> int { self.x * self.x + self.y * self.y }
+            }
+            function fib(n: int) -> int { if (n <= 1) { n } else { fib(n - 1) + fib(n - 2) } }
+            function leaf(n: int) -> int { n }
+            function twice(n: int) -> int { leaf(n) + leaf(n) }
+            function id<T>(x: T) -> T { x }
+            function fail(n: int) -> int {
+                if (n % 4 == 3) { throw "fail"; }
+                leaf(n)
+            }
+            function apply(f: (int) -> int, n: int) -> int { f(n) }
+            function main() -> int {
+                let s = 0;
+                for (let i = 0; i < 12; i += 1) {
+                    s += twice(i);
+                    let v = Vec2 { x: i, y: i + 1 };
+                    s += v.norm2();
+                    s += fail(i) catch (e) { _ => 100 };
+                    s += apply(leaf, i) + id<int>(i);
+                }
+                let doubled = [1, 2, 3].map((n: int) -> int { twice(n) });
+                s + fib(8) + doubled[2]
+            }
+        "#;
+        for level in [
+            AutoTelemetryLevel::Low,
+            AutoTelemetryLevel::Medium,
+            AutoTelemetryLevel::High,
+        ] {
+            let full = recorded_run(source, false, level);
+            let fast = recorded_run(source, true, level);
+            assert!(
+                level == AutoTelemetryLevel::Low || !full.2.is_empty() || !full.1.is_empty(),
+                "{level:?}: the run records invocations"
+            );
+            assert_eq!(
+                fast, full,
+                "{level:?}: the fast path changes what is recorded"
+            );
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn await_and_async_sysop_start_waits_at_their_semantic_boundaries() {
@@ -3503,11 +3718,11 @@ impl BexVm {
             .iter()
             .rev()
             .find_map(|frame| match frame {
-                Frame::Bytecode(frame) => Some(frame.context.clone()),
+                Frame::Bytecode(frame) => Some(&frame.context),
                 Frame::Native(_) => None,
             })
-            .unwrap_or_else(|| self.root_context.clone());
-        state.set_context(context);
+            .unwrap_or(&self.root_context);
+        state.select_context(context);
     }
 
     pub(crate) fn span_creation_trace(&self, value: Value) -> Result<CallTrace, &'static str> {
@@ -6946,6 +7161,23 @@ impl BexVm {
         }
     }
 
+    /// `pop_finished_bytecode_frame` for a returning frame whose type
+    /// arguments allocate nothing and whose context is the version its
+    /// caller holds: dropping the context then only releases a reference.
+    /// Dropping the whole frame instead would bring the type arguments' and
+    /// the native frame's drop glue into the fast path.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn pop_frame_sharing_caller_context(&mut self) {
+        let popped = std::mem::ManuallyDrop::new(self.frames.pop());
+        if let Some(Frame::Bytecode(frame)) = &*popped {
+            debug_assert!(frame.type_args.owns_nothing());
+            // SAFETY: the context is moved out of a frame that is never
+            // dropped, so it is dropped exactly once.
+            drop(unsafe { std::ptr::read(&raw const frame.context) });
+        }
+    }
+
     /// `locals_offset - 1` of the bytecode frame at `frame_idx`; see
     /// [`Self::local_at`].
     #[allow(clippy::inline_always)]
@@ -9721,7 +9953,7 @@ impl BexVm {
             .as_mut()
             .expect("observed invocation has telemetry");
         if let Frame::Bytecode(frame) = &self.frames[frame_idx] {
-            state.set_context(frame.context.clone());
+            state.select_context(&frame.context);
         }
         // SAFETY: completion holds the heap permit and the result/error is live.
         unsafe {
@@ -10997,6 +11229,146 @@ impl BexVm {
         }
     }
 
+    /// What telemetry records as the dispatching frame `frame_idx` makes an
+    /// exact call, at the instruction starting at `call_pc`, to the bytecode
+    /// function `callee`, whose arguments start at `locals_offset` and whose
+    /// frame starts with `type_args`. Returns the callee frame's receipt.
+    /// Both dispatch loops enter observed calls through this, so they record
+    /// the same invocations; it is out of line so neither loop carries the
+    /// producer code.
+    #[inline(never)]
+    #[allow(unsafe_code)]
+    fn observe_exact_call(
+        &mut self,
+        frame_idx: usize,
+        call_pc: usize,
+        callee_ptr: HeapPtr,
+        callee: &Function,
+        locals_offset: StackIndex,
+        type_args: &[bex_vm_types::RealizedTy],
+    ) -> Option<FrameTelemetry> {
+        // The dispatching frame is the top frame, so its context is
+        // `current_context()` without the walk.
+        debug_assert_eq!(frame_idx + 1, self.frames.len());
+        let (Some(Frame::Bytecode(caller)), Some(telemetry)) =
+            (self.frames.get(frame_idx), self.telemetry.as_mut())
+        else {
+            return None;
+        };
+        telemetry.select_context(&caller.context);
+        let actual_caller = self.frame_function_identity(frame_idx);
+        let caller_is_observed = matches!(
+            self.frames.get(frame_idx),
+            Some(Frame::Bytecode(BytecodeFrame {
+                telemetry: Some(_),
+                ..
+            }))
+        );
+        let caller_pc = u32::try_from(call_pc).unwrap_or(u32::MAX);
+        let args = &self.stack.as_slice()
+            [locals_offset.raw()..locals_offset.raw().saturating_add(callee.arity)];
+        // SAFETY: arguments and callable remain live under the heap permit.
+        self.telemetry.as_mut().and_then(|telemetry| unsafe {
+            telemetry.enter_bytecode_with_trace(
+                callee,
+                callee_ptr,
+                actual_caller,
+                caller_pc,
+                caller_is_observed,
+                args,
+                None,
+                CallTypeArgs {
+                    carried: &[],
+                    passed: type_args,
+                },
+                |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+            )
+        })
+    }
+
+    /// The fast path's exact call of the plain bytecode `callee` with
+    /// telemetry on, from the dispatching frame `frame_idx` at the
+    /// `CallExactArgs` spanning `call_pc..return_pc`: the full dispatch's arm
+    /// for a non-generic callee (`observe_exact_call`, then the frame push).
+    /// Returns where dispatch continues, in the callee. Out of line, so the
+    /// fast path's telemetry-off call keeps its registers.
+    #[inline(never)]
+    fn enter_observed_exact_callee(
+        &mut self,
+        frame_idx: usize,
+        call_pc: usize,
+        return_pc: usize,
+        callee_ptr: HeapPtr,
+        callee: &'static Function,
+        locals_offset: StackIndex,
+    ) -> DispatchState {
+        let telemetry =
+            self.observe_exact_call(frame_idx, call_pc, callee_ptr, callee, locals_offset, &[]);
+        self.enter_exact_callee(
+            call_pc,
+            return_pc,
+            callee_ptr,
+            callee,
+            locals_offset,
+            telemetry,
+        );
+        self.resume_state(frame_idx + 1, callee)
+    }
+
+    /// The fast path's return from the frame `frame_idx` (running
+    /// `function`) into its bytecode caller, with telemetry on: the full
+    /// dispatch's `Return` arm for a frame that owns nothing but its
+    /// caller's context. Returns where dispatch continues, in the caller.
+    /// Out of line, so the fast path's telemetry-off return keeps its
+    /// registers.
+    #[inline(never)]
+    fn return_observed_to_caller(
+        &mut self,
+        frame_idx: usize,
+        function: &Function,
+    ) -> DispatchState {
+        let result = self.stack.get_at(self.stack.ensure_stack_top());
+        let Some(Frame::Bytecode(returning)) = self.frames.get_mut(frame_idx) else {
+            verifier_unreachable!()
+        };
+        let locals_offset = returning.locals_offset;
+        match returning.telemetry.take() {
+            // Ends by selecting the context of the nearest bytecode frame
+            // below `frame_idx`: the caller's, which the `Return` arm
+            // selects again after the pop.
+            Some(telemetry) => self.complete_bytecode_invocation_with_function(
+                frame_idx,
+                function,
+                telemetry,
+                InvocationOutcome::Ok,
+                Some(result),
+            ),
+            // `end_manual_activation` has nothing to end: the fast path
+            // hands back a frame that scopes a trace. Selecting the caller's
+            // context now is what the `Return` arm does after the pop.
+            None => self.restore_caller_context(frame_idx),
+        }
+        self.leave_returning_frame_slots(locals_offset);
+        self.pop_frame_sharing_caller_context();
+        self.resume_top_bytecode_frame()
+    }
+
+    /// `resume_state` for the top frame, a bytecode frame running a
+    /// function object, as the fast path checks before it returns into it.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn resume_top_bytecode_frame(&self) -> DispatchState {
+        let frame_idx = self.frames.len() - 1;
+        let Some(Frame::Bytecode(frame)) = self.frames.get(frame_idx) else {
+            verifier_unreachable!()
+        };
+        // SAFETY: frames hold rooted function objects under the heap permit.
+        let Object::Function(function) = (unsafe { frame.function.get() }) else {
+            verifier_unreachable!()
+        };
+        self.resume_state(frame_idx, function)
+    }
+
     /// Replace the returning frame's slots, from `locals_offset` up, with
     /// its result, the top stack value.
     #[allow(clippy::inline_always, unsafe_code)]
@@ -11050,9 +11422,12 @@ impl BexVm {
     /// reloaded from spill slots on every instruction. It never allocates on
     /// the VM heap, reaches a GC safepoint, runs native code, or polls for an
     /// early yield, so nothing can observe the stack length it keeps in a
-    /// register; it publishes that length before returning. It does not
-    /// record `cur_pc`: nothing reads it during these instructions, and the
-    /// full dispatch records it for the instruction it runs next.
+    /// register; it publishes that length before returning, and before a
+    /// call or return records telemetry, which reads the arguments and the
+    /// result off the stack. It does not record `cur_pc`: nothing reads it
+    /// during these instructions (a recorded call gets the call's pc
+    /// passed), and the full dispatch records it for the instruction it runs
+    /// next.
     ///
     /// The two variants trade entry cost against reach. Without `CALLS` the
     /// loop is a leaf that saves almost nothing on entry, which matters for
@@ -11063,8 +11438,8 @@ impl BexVm {
     ///
     /// Each arm runs only its common case. When an instruction would grow
     /// the stack or frame stack, overflow, poll for an early yield, meet an
-    /// operand it does not handle, or involve telemetry, trace hooks, generic
-    /// type arguments, or a native frame, the loop stops *before* that
+    /// operand it does not handle, or involve trace hooks, model usage,
+    /// generic type arguments, or a native frame, the loop stops *before* that
     /// instruction, with no effect, and the full dispatch runs it. Every
     /// result is therefore what the full dispatch alone would produce.
     #[inline(never)]
@@ -11113,7 +11488,7 @@ impl BexVm {
             mut runtime_package,
         } = *state;
         let mut constants: &[Value] = &function.bytecode.resolved_constants;
-        let (base, mut sp, cap) = self.stack.raw_parts();
+        let (mut base, mut sp, mut cap) = self.stack.raw_parts();
         // SAFETY (every arm): the encoder validates each instruction's stack
         // effect and local slots, so operand reads stay within `0..sp` and
         // local slots within the frame. Pushes check `sp < cap` first, and
@@ -11367,11 +11742,11 @@ impl BexVm {
                         }
                     }
                     // `run_compact`'s `CallExactArgs` arm, for a plain,
-                    // non-generic bytecode callee with telemetry off. Both
-                    // enter the callee through `enter_exact_callee`.
+                    // non-generic bytecode callee. Both enter the callee
+                    // through `enter_exact_callee`, and with telemetry on
+                    // record the call through `observe_exact_call`.
                     OpCode::CallExactArgs if CALLS => {
-                        if self.telemetry.is_some()
-                            || self.pending_call_trace.is_some()
+                        if self.pending_call_trace.is_some()
                             || !self.pending_call_type_args.is_empty()
                             || operand_u16(code, pc + 5) != 0
                         {
@@ -11403,31 +11778,53 @@ impl BexVm {
                         self.thread_local_call = false;
                         let locals_offset = sp - callee.arity;
                         self.stack.set_len(sp);
-                        self.enter_exact_callee(
-                            pc,
-                            pc + CALL_EXACT_LEN,
-                            callee_ptr,
-                            callee,
-                            StackIndex::from_raw(locals_offset),
-                            None,
-                        );
-                        sp = self.stack.len();
-                        frame_idx += 1;
-                        function = callee;
-                        runtime_package = self.runtime_package_of(function);
-                        code = &callee_code.code;
+                        if self.telemetry.is_some() {
+                            // Everything the loop keeps in registers is
+                            // reloaded after this call, so none of it lives
+                            // across the call in a callee-saved register.
+                            DispatchState {
+                                pc,
+                                code,
+                                function,
+                                frame_idx,
+                                locals_base,
+                                runtime_package,
+                            } = self.enter_observed_exact_callee(
+                                frame_idx,
+                                pc,
+                                pc + CALL_EXACT_LEN,
+                                callee_ptr,
+                                callee,
+                                StackIndex::from_raw(locals_offset),
+                            );
+                            (base, sp, cap) = self.stack.raw_parts();
+                        } else {
+                            self.enter_exact_callee(
+                                pc,
+                                pc + CALL_EXACT_LEN,
+                                callee_ptr,
+                                callee,
+                                StackIndex::from_raw(locals_offset),
+                                None,
+                            );
+                            sp = self.stack.len();
+                            frame_idx += 1;
+                            function = callee;
+                            runtime_package = self.runtime_package_of(function);
+                            code = &callee_code.code;
+                            locals_base = locals_offset.wrapping_sub(1);
+                            pc = 0;
+                        }
                         constants = &function.bytecode.resolved_constants;
-                        locals_base = locals_offset.wrapping_sub(1);
-                        pc = 0;
                     }
                     // `run_compact`'s `Return` arm, back into a plain bytecode
-                    // caller, with telemetry off and no model usage or trace
-                    // scope to settle. Both share `leave_returning_frame_slots`
-                    // and `resume_state`; only the frame pop differs (see
-                    // below).
+                    // caller, with no model usage or trace scope to settle.
+                    // Both share `leave_returning_frame_slots` and
+                    // `resume_state`, and with telemetry on it runs out of
+                    // line in `return_observed_to_caller`; only the frame pop
+                    // differs (see below).
                     OpCode::Return if CALLS => {
-                        if self.telemetry.is_some()
-                            || frame_idx == 0
+                        if frame_idx == 0
                             || self.trace_scope_frame == frame_idx
                             || matches!(
                                 function.body_meta,
@@ -11441,33 +11838,29 @@ impl BexVm {
                         else {
                             break;
                         };
-                        // Only a frame that owns nothing is popped here; see
-                        // the `mem::forget` below.
-                        if returning.telemetry.is_some()
+                        // Only a frame that owns nothing but its caller's
+                        // context is popped here; see the pop below. Its
+                        // receipt is `Copy`.
+                        let observed = self.telemetry.is_some();
+                        if (returning.telemetry.is_some() && !observed)
                             || !returning.type_args.owns_nothing()
-                            || !returning.context.is_empty()
+                            || !returning.context.same_version(&caller.context)
                         {
                             break;
                         }
-                        let Object::Function(caller_function) = caller.function.get() else {
-                            break;
-                        };
-                        if !self.early_yield.tick_unless_due() {
+                        if !matches!(caller.function.get(), Object::Function(_))
+                            || !self.early_yield.tick_unless_due()
+                        {
                             break;
                         }
                         let returned_locals = returning.locals_offset;
                         self.stack.set_len(sp);
-                        self.leave_returning_frame_slots(returned_locals);
-                        sp = self.stack.len();
-                        // KEEP IN SYNC with `pop_finished_bytecode_frame`,
-                        // which the `Return` arm uses: the same pop, minus
-                        // the drops. Checked above: no type arguments
-                        // allocated and no context, and the other fields are
-                        // `Copy`. Dropping here would put calls that return
-                        // in this loop, which costs every entry a
-                        // register-saving prologue.
-                        std::mem::forget(self.frames.pop());
-                        frame_idx -= 1;
+                        // Both ways, everything the loop keeps in registers
+                        // is reloaded after the frame is popped, so none of
+                        // it lives across a call in a callee-saved register:
+                        // the telemetry call, or the drop of the context's
+                        // last reference (which the caller's makes
+                        // impossible, but the compiler cannot know).
                         DispatchState {
                             pc,
                             code,
@@ -11475,7 +11868,19 @@ impl BexVm {
                             frame_idx,
                             locals_base,
                             runtime_package,
-                        } = self.resume_state(frame_idx, caller_function);
+                        } = if observed {
+                            self.return_observed_to_caller(frame_idx, function)
+                        } else {
+                            self.leave_returning_frame_slots(returned_locals);
+                            // KEEP IN SYNC with `pop_finished_bytecode_frame`,
+                            // which the `Return` arm uses: the same pop, minus
+                            // the drop of the type arguments, which checked
+                            // above allocate nothing (the other fields are
+                            // `Copy`).
+                            self.pop_frame_sharing_caller_context();
+                            self.resume_top_bytecode_frame()
+                        };
+                        (base, sp, cap) = self.stack.raw_parts();
                         constants = &function.bytecode.resolved_constants;
                     }
                     _ => break,
@@ -12366,11 +12771,12 @@ impl BexVm {
                         let callee_value = self.load_global_in(runtime_package, callee_global);
 
                         // `run_fast_path` runs the plain case of this exact
-                        // call itself (non-generic bytecode callee, telemetry
-                        // off) and hands every other case back here. A step
-                        // added to this path that applies to plain calls must
-                        // go into `enter_exact_callee`, which both share, or
-                        // become one of the fast path's hand-back guards.
+                        // call itself (non-generic bytecode callee) and hands
+                        // every other case back here. A step added to this
+                        // path that applies to plain calls must go into
+                        // `enter_exact_callee` or `observe_exact_call`, which
+                        // both share, or become one of the fast path's
+                        // hand-back guards.
                         if op == OpCode::CallExactArgs
                             && self.pending_call_trace.is_none()
                             && self.pending_call_type_args.is_empty()
@@ -12406,47 +12812,15 @@ impl BexVm {
                                 );
                                 self.reserve_call_frame()?;
                                 self.reserve_stack(callee.real_local_count)?;
-                                if self.telemetry.is_some() {
-                                    // The dispatching frame is the top frame, so its
-                                    // context is `current_context()` without the walk.
-                                    let context = self.dispatch_frame_context(*frame_idx).clone();
-                                    if let Some(telemetry) = &mut self.telemetry {
-                                        telemetry.set_context(context);
-                                    }
-                                }
                                 let frame_telemetry = if self.telemetry.is_some() {
-                                    let actual_caller = self.frame_function_identity(*frame_idx);
-                                    let caller_is_observed = matches!(
-                                        self.frames.get(*frame_idx),
-                                        Some(Frame::Bytecode(BytecodeFrame {
-                                            telemetry: Some(_),
-                                            ..
-                                        }))
-                                    );
-                                    let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
-                                    let args = &self.stack.as_slice()[locals_offset.raw()
-                                        ..locals_offset.raw().saturating_add(callee.arity)];
-                                    // SAFETY: arguments and callable remain live under the heap permit.
-                                    self.telemetry.as_mut().and_then(|telemetry| unsafe {
-                                        telemetry.enter_bytecode_with_trace(
-                                            callee,
-                                            callee_ptr,
-                                            actual_caller,
-                                            caller_pc,
-                                            caller_is_observed,
-                                            args,
-                                            None,
-                                            CallTypeArgs {
-                                                carried: &[],
-                                                passed: &type_args,
-                                            },
-                                            |caller, callee| {
-                                                Self::register_call_path_functions(
-                                                    &self.heap, caller, callee,
-                                                )
-                                            },
-                                        )
-                                    })
+                                    self.observe_exact_call(
+                                        *frame_idx,
+                                        self.cur_pc,
+                                        callee_ptr,
+                                        callee,
+                                        locals_offset,
+                                        &type_args,
+                                    )
                                 } else {
                                     None
                                 };
@@ -12902,11 +13276,13 @@ impl BexVm {
 
                     // ── Return ────────────────────────────────────────────────────
                     // `run_fast_path` runs the plain case of this return
-                    // itself (bytecode caller, telemetry off, no model usage,
-                    // trace scope or owned frame state) and hands every
-                    // other case back here. A step added here that applies to
-                    // plain returns must go into the helpers both share
-                    // (`leave_returning_frame_slots`, `resume_state`) or
+                    // itself (bytecode caller, no model usage, trace scope or
+                    // owned frame state) and hands every other case back
+                    // here. A step added here that applies to plain returns
+                    // must go into the helpers both share
+                    // (`leave_returning_frame_slots`, `resume_state`), into
+                    // the fast path's telemetry return
+                    // (`return_observed_to_caller`), or
                     // become one of the fast path's hand-back guards.
                     OpCode::Return => {
                         let result = self.stack.get_at(self.stack.ensure_stack_top());

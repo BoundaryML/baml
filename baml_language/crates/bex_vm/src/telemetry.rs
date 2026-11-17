@@ -301,6 +301,16 @@ impl TelemetryState {
         }
     }
 
+    /// [`Self::set_context`] to `context`, cloning it only when it is not
+    /// the version already selected: calls and returns reselect the
+    /// context their frame inherited, which is almost always unchanged.
+    #[inline]
+    pub fn select_context(&mut self, context: &btel_types::context::Context) {
+        if !self.has_context(context) {
+            self.set_context(context.clone());
+        }
+    }
+
     pub fn set_context(&mut self, context: btel_types::context::Context) {
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
         if !context.same_version(&self.context) {
@@ -829,10 +839,7 @@ impl TelemetryState {
         let saved_call_path = self.thread.active_call_path;
         let reentry = caller_is_observed
             && visible_caller == Some(callee)
-            && self
-                .call_path_keys
-                .get(&saved_call_path)
-                .is_some_and(|key| key.callee == callee);
+            && self.call_path_callee(saved_call_path) == Some(callee);
         let call_path = if reentry {
             saved_call_path
         } else {
@@ -927,10 +934,7 @@ impl TelemetryState {
         let saved_call_path = self.thread.active_call_path;
         let reentry = caller_is_observed
             && visible_caller == Some(callee)
-            && self
-                .call_path_keys
-                .get(&saved_call_path)
-                .is_some_and(|key| key.callee == callee);
+            && self.call_path_callee(saved_call_path) == Some(callee);
         let call_path = if reentry {
             saved_call_path
         } else {
@@ -1520,6 +1524,21 @@ impl TelemetryState {
             &function.telemetry_policy_id,
             policy,
         )
+    }
+
+    /// The callee of the call path `id`, as `call_path_keys` records it.
+    /// A recursive call asks this of the path it is already on, which is
+    /// usually the one the resolver resolved last: its cache holds the
+    /// same entry, so the map is read only when the cache holds another.
+    #[inline(always)]
+    fn call_path_callee(&self, id: CallPathId) -> Option<HeapPtr> {
+        if let Some((key, cached)) = self.last_call_path[0]
+            && cached == id
+        {
+            debug_assert_eq!(self.call_path_keys.get(&id), Some(&key));
+            return Some(key.callee);
+        }
+        self.call_path_keys.get(&id).map(|key| key.callee)
     }
 
     #[inline(always)]
