@@ -598,6 +598,12 @@ fn local_change(root: &Path, baseline: &str) -> anyhow::Result<LocalChange> {
             let rule = if key.starts_with("client ") {
                 String::new()
             } else if is_function(key) && marked(&original.text) {
+                // Caught here, before anything uploads, as each process would.
+                if let Some(problem) =
+                    bex_project::hotswap_rules::signature_problem(&original.text, &replacement.text)
+                {
+                    bail!("`{name}`: {problem}");
+                }
                 match bex_project::hotswap_rules::mark_of(&original.text) {
                     Some(Ok(mark)) => mark
                         .rule

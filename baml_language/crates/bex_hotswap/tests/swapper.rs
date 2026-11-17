@@ -49,7 +49,12 @@ fn swapper_with(config: HotswapConfig) -> (Arc<BexEngine>, Swapper) {
 }
 
 fn swapper_of(build: Arc<HotswapBuild>) -> (Arc<BexEngine>, Swapper) {
-    let program = baml_test_support::compile_multi_file(&[("main.baml", SOURCE)]);
+    let files: Vec<(&str, &str)> = build
+        .sources
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()))
+        .collect();
+    let program = baml_test_support::compile_multi_file(&files);
     let engine = Arc::new(
         BexEngine::new_with_config(
             program,
@@ -418,4 +423,88 @@ async fn removed_revisions_stay_removed_and_replaced_swaps_are_reported() {
     assert_eq!(retired.len(), 1);
     assert_eq!((retired[0].id.as_str(), retired[0].revision), ("hs_a", 6));
     assert_eq!(int(&engine, "step", 1).await, 40);
+}
+
+const CLIENTS: &str = r#"
+class Count {
+    n: int,
+}
+
+const Runs = Count { n: 0 };
+
+function model_of(c: Count, name: string) -> string {
+    c.n += 1;
+    if (c.n > 2) {
+        throw baml.errors.InvalidArgument { message: "no more" }
+    }
+    name
+}
+
+client Base = anthropic.Client.new(model = model_of(Runs, "model-one"), api_key = "k", base_url = "http://127.0.0.1:9");
+
+/// baml:hotswap=hotswap.any
+function Ask(q: string) -> string {
+    client: Base
+    prompt: `ask ${q}`
+}
+
+function ask() -> string { Ask("x") }
+
+/// baml:hotswap=hotswap.any
+function step(x: int) -> int { x + 1 }
+"#;
+
+/// Removing a swap never fails on another one. Here the other swap's
+/// changed client cannot be built again, so the process returns to the code
+/// as built and drops that swap too, to be reported rejected.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_removal_that_cannot_rebuild_another_swap_drops_it() {
+    let (engine, mut swapper) = swapper_of(Arc::new(HotswapBuild {
+        sources: [("main.baml".to_string(), CLIENTS.to_string())].into(),
+        commit: Some(COMMIT.to_string()),
+        dirty: false,
+        config: HotswapConfig::default(),
+    }));
+    let edit = |id: &str, name: &str, from: &str, to: &str| {
+        let start = CLIENTS.find(from).expect("present");
+        let start = CLIENTS[..start].rfind("\n\n").map_or(0, |blank| blank + 2);
+        let end = CLIENTS[start..]
+            .find("\n\n")
+            .map_or(CLIENTS.trim_end().len(), |end| start + end);
+        let old_source = CLIENTS[start..end].to_string();
+        Swap {
+            functions: vec![SwapFunction {
+                name: name.into(),
+                file: "main.baml".into(),
+                rule: String::new(),
+                new_source: old_source.replacen(from, to, 1),
+                old_source,
+            }],
+            ..swap(id, &[])
+        }
+    };
+    swapper
+        .install(&edit("hs_a", "step", "x + 1", "x + 2"))
+        .await
+        .unwrap();
+    // Builds `Base` a second time; a third would throw.
+    swapper
+        .install(&edit("hs_b", "Base", "\"model-one\"", "\"model-two\""))
+        .await
+        .unwrap();
+    assert_eq!(int(&engine, "step", 1).await, 3);
+
+    swapper.remove("hs_a", "deleted").await.unwrap();
+    assert_eq!(int(&engine, "step", 1).await, 2);
+    assert!(swapper.installed().is_empty());
+    let dropped = swapper.take_dropped();
+    assert_eq!(dropped.len(), 1);
+    assert_eq!(dropped[0].0.id, "hs_b");
+    assert!(
+        dropped[0]
+            .1
+            .contains("rebuilding it after removing hs_a failed"),
+        "{}",
+        dropped[0].1
+    );
 }

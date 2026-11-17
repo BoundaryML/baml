@@ -53,6 +53,8 @@ pub struct Swapper {
     removed: BTreeMap<String, u64>,
     /// Swaps retired by a replacement since [`Self::take_retired`] last ran.
     retired: Vec<InstalledSwap>,
+    /// Swaps dropped, with why, since [`Self::take_dropped`] last ran.
+    dropped: Vec<(InstalledSwap, String)>,
     lapse: Duration,
 }
 
@@ -71,6 +73,7 @@ impl Swapper {
             installed: BTreeMap::new(),
             removed: BTreeMap::new(),
             retired: Vec::new(),
+            dropped: Vec::new(),
             lapse: LAPSE,
         }
     }
@@ -108,6 +111,12 @@ impl Swapper {
     /// Swaps a replacement retired, each to be reported removed.
     pub fn take_retired(&mut self) -> Vec<InstalledSwap> {
         std::mem::take(&mut self.retired)
+    }
+
+    /// Swaps dropped because they could not be rebuilt when another was
+    /// removed, each with why, to be reported rejected.
+    pub fn take_dropped(&mut self) -> Vec<(InstalledSwap, String)> {
+        std::mem::take(&mut self.dropped)
     }
 
     /// The revision `id` is installed at, if it is.
@@ -406,7 +415,10 @@ impl Swapper {
 
     /// Remove swap `id`, returning its functions to the code as built, or
     /// to no other swap's code. `reason` is `removed`, `disabled`,
-    /// `deleted` or `lapsed`, for the audit event.
+    /// `deleted`, `unmatched` or `lapsed`, for the audit event. When the
+    /// other swaps cannot be rebuilt without it, they are dropped too, for
+    /// [`Self::take_dropped`]. Fails only if the code as built cannot be
+    /// restored.
     pub async fn remove(&mut self, id: &str, reason: &str) -> Result<(), SwapperError> {
         let Some(removed) = self
             .installed
@@ -429,20 +441,40 @@ impl Swapper {
                 swap_ids.insert(name.clone(), swap_id.clone());
             }
         }
-        let result = self
-            .engine
-            .hotswap_patch_named(files, &swap_ids)
-            .await
-            .map(|_| ())
-            .map_err(|error| SwapperError(error.to_string()));
-        // A failed removal leaves the swap running, so only a removal is recorded.
-        if result.is_ok()
-            && let Some(old) = self.installed.remove(id)
-        {
+        if let Err(error) = self.engine.hotswap_patch_named(files, &swap_ids).await {
+            // Rebuilding the others failed, such as a changed client whose
+            // initializer now throws. A removal must not fail on another swap,
+            // so the process returns to the code as built and drops them all.
+            self.engine
+                .hotswap_patch_named(self.spliced(std::iter::empty()), &BTreeMap::new())
+                .await
+                .map_err(|error| SwapperError(error.to_string()))?;
+            let why = format!("rebuilding it after removing {id} failed: {error}");
+            let others: Vec<String> = self
+                .installed
+                .keys()
+                .filter(|other| *other != id)
+                .cloned()
+                .collect();
+            for other in others {
+                if let Some(old) = self.installed.remove(&other) {
+                    self.removed.insert(old.swap.id.clone(), old.swap.revision);
+                    self.audit("hotswap.removed", &old.swap, &old.changes, Some(&why));
+                    self.dropped.push((
+                        InstalledSwap {
+                            id: old.swap.id,
+                            revision: old.swap.revision,
+                        },
+                        why.clone(),
+                    ));
+                }
+            }
+        }
+        if let Some(old) = self.installed.remove(id) {
             self.removed.insert(old.swap.id.clone(), old.swap.revision);
             self.audit("hotswap.removed", &removed, &old.changes, Some(reason));
         }
-        result
+        Ok(())
     }
 
     /// Record an audit event in the process's own recording: a span named
@@ -508,8 +540,9 @@ impl Swapper {
 }
 
 /// Clients whose configuration differs between `current` and `next`, and
-/// every client built from one of them, by simple name: a client built from a
-/// changed client holds the changed one too.
+/// every client built from one of them, directly or through functions, by
+/// simple name: a client built from a changed client holds the changed one
+/// too. This follows the engine, which rebuilds those clients.
 fn changed_clients(
     current: &bex_vm_types::DeclFingerprints,
     next: &bex_vm_types::DeclFingerprints,
@@ -521,28 +554,36 @@ fn changed_clients(
             .unwrap_or_default()
             .to_string()
     };
+    let refers = |key: &str, names: &BTreeSet<String>| {
+        next.refs
+            .get(key)
+            .is_some_and(|refs| refs.iter().any(|name| names.contains(name)))
+    };
     let mut changed: BTreeSet<String> = next
         .decls
         .iter()
         .filter(|(key, text)| key.starts_with("client ") && current.decls.get(*key) != Some(*text))
         .map(|(key, _)| simple(key))
         .collect();
+    // Functions whose result may hold a changed client.
+    let mut through: BTreeSet<String> = BTreeSet::new();
     loop {
-        let reached: Vec<String> = next
-            .decls
-            .keys()
-            .filter(|key| key.starts_with("client ") && !changed.contains(&simple(key)))
-            .filter(|key| {
-                next.refs
-                    .get(*key)
-                    .is_some_and(|refs| refs.iter().any(|name| changed.contains(name)))
-            })
-            .map(|key| simple(key))
-            .collect();
-        if reached.is_empty() {
+        let reached: BTreeSet<String> = changed.union(&through).cloned().collect();
+        let mut grew = false;
+        for key in next.decls.keys() {
+            let name = simple(key);
+            if is_function_key(key) && !through.contains(&name) && refers(key, &reached) {
+                grew |= through.insert(name);
+            } else if key.starts_with("client ")
+                && !changed.contains(&name)
+                && refers(key, &reached)
+            {
+                grew |= changed.insert(name);
+            }
+        }
+        if !grew {
             return changed;
         }
-        changed.extend(reached);
     }
 }
 
@@ -585,6 +626,30 @@ mod tests {
         let after = fingerprints(&[
             ("client Base", "make 3"),
             ("client Wrapped", "retry Base"),
+            ("client Other", "make 2"),
+        ]);
+        assert_eq!(
+            changed_clients(&before, &after)
+                .into_iter()
+                .collect::<Vec<_>>(),
+            ["Base", "Wrapped"]
+        );
+    }
+
+    /// A client built by calling a function that returns a changed client
+    /// changes too, as the engine rebuilds it.
+    #[test]
+    fn a_client_built_through_a_function_changes_too() {
+        let before = fingerprints(&[
+            ("client Base", "make 1"),
+            ("fn get_base", "Base"),
+            ("client Wrapped", "retry get_base"),
+            ("client Other", "make 2"),
+        ]);
+        let after = fingerprints(&[
+            ("client Base", "make 3"),
+            ("fn get_base", "Base"),
+            ("client Wrapped", "retry get_base"),
             ("client Other", "make 2"),
         ]);
         assert_eq!(

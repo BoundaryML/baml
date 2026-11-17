@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 23;
+pub const SCHEMA_VERSION: i64 = 24;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -153,7 +153,7 @@ CREATE TABLE function_def (
   -- 1 for an ai.Client.invoke implementation or a stream's settle step
   -- (format minor 13): its spans' usage is its own.
   model_invoke INTEGER,
-  -- The hot swap whose code the function is (format minor 14); NULL as built.
+  -- The hot swap whose code the function is (format minor 16); NULL as built.
   hotswap_id TEXT,
   conflict INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (rec, function_id)

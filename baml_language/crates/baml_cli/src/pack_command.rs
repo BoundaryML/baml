@@ -196,6 +196,9 @@ impl Command for PackArgs {
     }
 }
 
+/// Source files by project-relative path.
+type Sources = Vec<(String, String)>;
+
 impl PackArgs {
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<()> {
         self.validate_flags()?;
@@ -210,7 +213,9 @@ impl PackArgs {
             btel_settings::artifact::ArtifactKind::Pack,
         )?;
 
-        let (db, root, program, needs_format_hint) = self.load_and_compile()?;
+        // Read before compiling, so a checkout that moves meanwhile is caught.
+        let git_before = self.project_git()?;
+        let (db, root, program, needs_format_hint, compiled) = self.load_and_compile()?;
         // Mirror `baml run`'s format advisory: if any source file
         // round-trips through `baml fmt` differently, surface a
         // non-fatal warning so users learn to keep packaged
@@ -245,7 +250,7 @@ impl PackArgs {
                 })
                 .collect(),
             telemetry,
-            hotswap: self.packed_hotswap()?,
+            hotswap: self.packed_hotswap(compiled, git_before)?,
         };
 
         let (serialized, fingerprint) = baml_artifact::encode_with_digest(
@@ -367,7 +372,9 @@ impl PackArgs {
         }
     }
 
-    fn load_and_compile(&self) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
+    fn load_and_compile(
+        &self,
+    ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool, Sources)> {
         if let Some(file) = self.file.as_deref() {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
@@ -382,7 +389,7 @@ impl PackArgs {
                 crate::bytecode_cache::compile_program(&world, None)
                     .map_err(|e| anyhow!("compilation failed: {e}"))?
             };
-            return Ok((db, package, program, needs_format_hint));
+            return Ok((db, package, program, needs_format_hint, Sources::new()));
         }
         self.load_and_compile_project()
     }
@@ -523,7 +530,25 @@ impl PackArgs {
     /// commit and `[hotswap]` settings, unless `--no-hotswap`, `[hotswap]
     /// enabled = false`, `--rust` (native code cannot be swapped), or no
     /// function is marked.
-    fn packed_hotswap(&self) -> Result<Option<baml_exec::PackedHotswap>> {
+    /// The project's git commit and whether it has changes, for
+    /// [`Self::packed_hotswap`]; `None` outside a project.
+    fn project_git(&self) -> Result<Option<(Option<String>, bool)>> {
+        if self.file.is_some() {
+            return Ok(None);
+        }
+        Ok(
+            crate::project_load::find_project_root_from(self.project_dir.as_deref())?
+                .map(|root| crate::build_record::hotswap_commit(&root)),
+        )
+    }
+
+    /// `compiled` is the source the program was compiled from, and
+    /// `git_before` the checkout's state before it compiled.
+    fn packed_hotswap(
+        &self,
+        compiled: Sources,
+        git_before: Option<(Option<String>, bool)>,
+    ) -> Result<Option<baml_exec::PackedHotswap>> {
         if self.no_hotswap || self.rust || self.file.is_some() {
             return Ok(None);
         }
@@ -535,12 +560,14 @@ impl PackArgs {
         if !config.enabled {
             return Ok(None);
         }
-        let Some(sources) =
-            crate::hot_reload::read_sources(&crate::hot_reload::HotFiles::Project(root.clone()))
-        else {
-            anyhow::bail!("failed to read the project's sources for hot swapping");
-        };
+        // The source compiled, not the files now, which may have changed since.
+        let sources = compiled.into_iter().collect();
         let (commit, dirty) = crate::build_record::hotswap_commit(&root);
+        let (commit_before, dirty_before) = git_before.unwrap_or((None, true));
+        if commit != commit_before {
+            anyhow::bail!("the checkout moved to another commit while packing; pack again");
+        }
+        let dirty = dirty || dirty_before;
         let build = bex_hotswap::HotswapBuild {
             sources,
             commit,
@@ -602,7 +629,7 @@ impl PackArgs {
     /// Compiled bodies and bytecode must come from the same lowering.
     fn load_and_compile_project(
         &self,
-    ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
+    ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool, Sources)> {
         let mut session = crate::project_session::ProjectSession::open(
             self.project_dir.as_deref(),
             if self.rust {
@@ -618,9 +645,10 @@ impl PackArgs {
         // the formatter and emit a single advisory if any file would change.
         let needs_format_hint = session.needs_format_hint();
 
+        let sources = crate::runtime_telemetry::session_sources(&session);
         if let Some(program) = session.try_cached_program() {
             let package = session.package;
-            return Ok((session.db, package, program, needs_format_hint));
+            return Ok((session.db, package, program, needs_format_hint, sources));
         }
 
         // Seed the stdlib typed interface and install the served check rows —
@@ -664,7 +692,7 @@ impl PackArgs {
                 stdlib_interface_hit,
             )?;
         }
-        Ok((session.db, package, program, needs_format_hint))
+        Ok((session.db, package, program, needs_format_hint, sources))
     }
 
     fn load_standalone(

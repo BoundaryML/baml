@@ -215,7 +215,7 @@ pub struct Notification {
     pub kind: String,
     pub id: String,
     pub revision: u64,
-    /// `active`, `disabled` or `deleted`.
+    /// `active`, `disabled`, `deleted` or `unmatched`.
     pub status: String,
 }
 
@@ -241,6 +241,11 @@ pub struct Delivery {
     /// How long BCS holds an idle process's connection.
     #[serde(default)]
     pub hold_seconds: Option<u64>,
+    /// On registration, the token the process sends as
+    /// [`PROCESS_TOKEN_HEADER`] on every later request, which proves it is
+    /// the process it names.
+    #[serde(default)]
+    pub process_token: Option<String>,
 }
 
 /// `POST /v1/processes/{id}/hotswaps/{hotswap}/status`: `installed`,
@@ -277,6 +282,14 @@ fn same_origin(url: &str, endpoint: &str) -> bool {
         _ => false,
     }
 }
+
+/// The header a process proves itself with, carrying the token its
+/// registration returned.
+pub const PROCESS_TOKEN_HEADER: &str = "Boundary-Process-Token";
+
+/// The largest response a process route may send: a delivery carries swaps'
+/// source, up to BCS's payload limit and its JSON escaping.
+const MAX_PROCESS_RESPONSE_BYTES: u64 = 16 * 1024 * 1024;
 
 /// The target as query parameters, for `GET` routes.
 fn target_query(target: Option<&Target>) -> Vec<(&'static str, String)> {
@@ -315,6 +328,29 @@ impl Client {
             Ok(url) => url.to_string(),
             Err(_) => base,
         }
+    }
+
+    /// `POST` to a process route, as the process `token` names.
+    fn post_process<T: serde::de::DeserializeOwned>(
+        &self,
+        authorization: &RequestAuthorization,
+        token: Option<&str>,
+        path: &str,
+        fields: impl Serialize,
+        timeout: Option<Duration>,
+    ) -> Result<T> {
+        let body = with_target(authorization, fields);
+        let response = self.send_authorized(authorization, || {
+            let mut request = self.http.post(self.url(path)).json(&body);
+            if let Some(token) = token {
+                request = request.header(PROCESS_TOKEN_HEADER, token);
+            }
+            match timeout {
+                Some(timeout) => request.timeout(timeout),
+                None => request,
+            }
+        })?;
+        Self::read_json_limited(response, MAX_PROCESS_RESPONSE_BYTES)
     }
 
     fn post_hotswap<T: serde::de::DeserializeOwned>(
@@ -438,6 +474,17 @@ impl Client {
             same_origin(&url, self.endpoint.as_str()),
             "Boundary named an upload outside its endpoint",
         )?;
+        // A `PUT` of the file has no JSON body to carry the target.
+        let url = match url::Url::parse(&url) {
+            Ok(mut parsed) => {
+                let target = target_query(authorization.target.as_ref());
+                if !target.is_empty() {
+                    parsed.query_pairs_mut().extend_pairs(target);
+                }
+                parsed.to_string()
+            }
+            Err(_) => url,
+        };
         self.send_authorized(authorization, || {
             self.http
                 .put(&url)
@@ -483,24 +530,29 @@ impl Client {
 
     // ----- a process's routes -----
 
+    /// Register the process. `token` is the one an earlier registration
+    /// returned, which BCS needs to register a process it still sees running.
     pub fn register_process(
         &self,
         authorization: &RequestAuthorization,
+        token: Option<&str>,
         request: &RegisterProcess,
     ) -> Result<Delivery> {
-        self.post_hotswap(authorization, "/v1/processes", request, None)
+        self.post_process(authorization, token, "/v1/processes", request, None)
     }
 
     pub fn fetch_swaps(
         &self,
         authorization: &RequestAuthorization,
+        token: Option<&str>,
         process_id: &str,
         installed: &[InstalledSwap],
         ids: &[String],
     ) -> Result<Delivery> {
         let path = format!("/v1/processes/{}/hotswaps/fetch", checked_id(process_id)?);
-        self.post_hotswap(
+        self.post_process(
             authorization,
+            token,
             &path,
             json!({ "installed": installed, "ids": ids }),
             None,
@@ -510,6 +562,7 @@ impl Client {
     pub fn report_swap(
         &self,
         authorization: &RequestAuthorization,
+        token: Option<&str>,
         process_id: &str,
         hotswap_id: &str,
         installed: &[InstalledSwap],
@@ -522,22 +575,28 @@ impl Client {
         );
         let mut body = serde_json::to_value(outcome).unwrap_or_else(|_| json!({}));
         body["installed"] = json!(installed);
-        self.post_hotswap(authorization, &path, body, None)
+        self.post_process(authorization, token, &path, body, None)
     }
 
     /// Say the process is stopping, so no rollout waits on it.
     pub fn process_stopped(
         &self,
         authorization: &RequestAuthorization,
+        token: Option<&str>,
         process_id: &str,
     ) -> Result<()> {
         let path = format!("/v1/processes/{}/stop", checked_id(process_id)?);
         let body = with_target(authorization, json!({}));
         self.send_authorized(authorization, || {
-            self.http
+            let request = self
+                .http
                 .post(self.url(&path))
                 .timeout(Duration::from_secs(2))
-                .json(&body)
+                .json(&body);
+            match token {
+                Some(token) => request.header(PROCESS_TOKEN_HEADER, token),
+                None => request,
+            }
         })?;
         Ok(())
     }
@@ -547,6 +606,7 @@ impl Client {
     pub fn wait_for_notifications(
         &self,
         authorization: &RequestAuthorization,
+        token: Option<&str>,
         process_id: &str,
         installed: &[InstalledSwap],
         hold: Duration,
@@ -555,8 +615,9 @@ impl Client {
             "/v1/processes/{}/notifications/wait",
             checked_id(process_id)?
         );
-        self.post_hotswap(
+        self.post_process(
             authorization,
+            token,
             &path,
             json!({ "installed": installed }),
             Some(hold + Duration::from_secs(30)),

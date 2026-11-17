@@ -225,16 +225,24 @@ impl Client {
         Self::read_json(response)
     }
     pub(crate) fn read_json<T: DeserializeOwned>(
+        response: reqwest::blocking::Response,
+    ) -> Result<T> {
+        Self::read_json_limited(response, MAX_RESPONSE_BYTES)
+    }
+
+    /// [`Self::read_json`] for a response up to `limit` bytes.
+    pub(crate) fn read_json_limited<T: DeserializeOwned>(
         mut response: reqwest::blocking::Response,
+        limit: u64,
     ) -> Result<T> {
         let mut bytes = Vec::new();
         response
             .by_ref()
-            .take(MAX_RESPONSE_BYTES + 1)
+            .take(limit + 1)
             .read_to_end(&mut bytes)
             .map_err(Error::Read)?;
         require(
-            bytes.len() as u64 <= MAX_RESPONSE_BYTES,
+            bytes.len() as u64 <= limit,
             "Boundary response exceeded the size limit",
         )?;
         serde_json::from_slice(&bytes).map_err(|_| Error::Protocol("Invalid Boundary response"))

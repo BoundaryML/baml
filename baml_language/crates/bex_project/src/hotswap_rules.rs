@@ -95,17 +95,26 @@ pub fn check(
         Rule::SelectOnly(names) => select_only(names, change, shipped),
         Rule::TelemetryOnly => telemetry_only(change),
         Rule::TextOnly => text_only(change),
-        Rule::NoNewCalls => no_new_calls(change),
+        Rule::NoNewCalls => no_new_calls(change, shipped),
     }
 }
 
-/// The tokens from `function` on, without the leading comments and without
-/// the function's own name, so two functions compare by code alone.
+/// The tokens from `function` on, without the function's own name, so two
+/// functions compare by code alone. Of the leading comments, only directives
+/// stay, such as a `$trace` hook, which runs code; the hot swap mark goes.
 fn code_without_name<'s>(tokens: &[Token<'s>]) -> Vec<Token<'s>> {
-    let mut code: Vec<Token<'s>> = tokens
+    let leading = tokens
+        .iter()
+        .take_while(|token| is_comment(token.kind))
+        .count();
+    let mut code: Vec<Token<'s>> = tokens[..leading]
         .iter()
         .copied()
-        .skip_while(|token| is_comment(token.kind))
+        .filter(|token| {
+            let text = token.text.trim_start_matches('/').trim();
+            text.starts_with("baml:") && !text.starts_with("baml:hotswap")
+        })
+        .chain(tokens[leading..].iter().copied())
         .collect();
     if let Some(function) = code
         .iter()
@@ -189,6 +198,8 @@ fn past_close(tokens: &[Token<'_>], open: usize) -> usize {
 /// `tokens` without what telemetry adds: `log.<level>(...)` statements,
 /// `$trace = ...` arguments, and `$trace` hook directives.
 fn without_telemetry<'s>(tokens: &[Token<'s>]) -> Vec<Token<'s>> {
+    // A parameter or local named `log` is no logger.
+    let log_is_std = !binds(tokens, "log");
     let mut out = Vec::with_capacity(tokens.len());
     let mut index = 0;
     while index < tokens.len() {
@@ -197,14 +208,15 @@ fn without_telemetry<'s>(tokens: &[Token<'s>]) -> Vec<Token<'s>> {
             index += 1;
             continue;
         }
-        let is_log_call = token.kind == TokenKind::Word
+        let is_log_call = log_is_std
+            && token.kind == TokenKind::Word
             && token.text == "log"
             && tokens
                 .get(index + 1)
                 .is_some_and(|t| t.kind == TokenKind::Dot)
-            && tokens
-                .get(index + 2)
-                .is_some_and(|t| t.kind == TokenKind::Word)
+            && tokens.get(index + 2).is_some_and(|t| {
+                t.kind == TokenKind::Word && matches!(t.text, "info" | "debug" | "warn" | "error")
+            })
             && tokens
                 .get(index + 3)
                 .is_some_and(|t| t.kind == TokenKind::LParen)
@@ -257,6 +269,60 @@ fn without_telemetry<'s>(tokens: &[Token<'s>]) -> Vec<Token<'s>> {
         index += 1;
     }
     out
+}
+
+/// The tokens of a function's signature: from `function` to its body,
+/// without parameter defaults, which a swap may change.
+fn signature<'s>(tokens: &[Token<'s>]) -> Vec<Token<'s>> {
+    let Some(start) = tokens.iter().position(|t| t.kind == TokenKind::Function) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let (mut depth, mut in_default) = (0usize, false);
+    for token in &tokens[start..] {
+        match token.kind {
+            TokenKind::LBrace if depth == 0 => break,
+            TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+            TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    in_default = false;
+                }
+            }
+            TokenKind::Comma if depth == 1 => in_default = false,
+            TokenKind::Equals if depth == 1 => in_default = true,
+            _ => {}
+        }
+        if !in_default {
+            out.push(*token);
+        }
+    }
+    out
+}
+
+/// Why `replacement` cannot replace `original` in a running process: it
+/// changes the function's signature, defaults aside. `None` when it keeps it.
+#[must_use]
+pub fn signature_problem(original: &str, replacement: &str) -> Option<String> {
+    (signature(&tokens(original)) != signature(&tokens(replacement)))
+        .then(|| "the change edits the signature, which needs a deploy".to_string())
+}
+
+/// Whether the tokens bind `name` themselves: as a parameter, a `let` or a
+/// loop variable.
+fn binds(tokens: &[Token<'_>], name: &str) -> bool {
+    tokens.iter().enumerate().any(|(index, token)| {
+        token.kind == TokenKind::Word
+            && token.text == name
+            && (index.checked_sub(1).is_some_and(|i| {
+                matches!(tokens[i].kind, TokenKind::Let | TokenKind::For)
+                    || (tokens[i].kind == TokenKind::LParen
+                        && i.checked_sub(1)
+                            .is_some_and(|j| tokens[j].kind == TokenKind::For))
+            }) || tokens
+                .get(index + 1)
+                .is_some_and(|t| t.kind == TokenKind::Colon))
+    })
 }
 
 fn telemetry_only(change: &Change<'_>) -> Result<(), String> {
@@ -357,12 +423,16 @@ fn text_only(change: &Change<'_>) -> Result<(), String> {
     if original.skeleton != replacement.skeleton {
         return Err("the change edits more than static text".to_string());
     }
+    // Each expression runs no more often than it did: a repeated one is new.
     for (text, expression) in replacement
         .expressions
         .iter()
         .zip(&replacement.expression_tokens)
     {
-        if !original.expression_tokens.contains(expression) {
+        let count = |expressions: &[Vec<Token<'_>>]| {
+            expressions.iter().filter(|e| *e == expression).count()
+        };
+        if count(&replacement.expression_tokens) > count(&original.expression_tokens) {
             return Err(format!("the change adds an expression, `{text}`"));
         }
     }
@@ -461,7 +531,48 @@ fn referenced(tokens: &[Token<'_>]) -> (BTreeSet<String>, BTreeSet<String>) {
     (heads, declared)
 }
 
-fn no_new_calls(change: &Change<'_>) -> Result<(), String> {
+/// Each function the tokens name as a value rather than calling it, in
+/// order: a dotted path `shipped` knows as a function, not followed by `(`.
+fn function_values(tokens: &[Token<'_>], shipped: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        let after_dot = index
+            .checked_sub(1)
+            .is_some_and(|i| matches!(tokens[i].kind, TokenKind::Dot | TokenKind::QuestionDot));
+        if tokens[index].kind != TokenKind::Word || after_dot {
+            index += 1;
+            continue;
+        }
+        let mut path = tokens[index].text.to_string();
+        let mut end = index + 1;
+        while end + 1 < tokens.len()
+            && tokens[end].kind == TokenKind::Dot
+            && tokens[end + 1].kind == TokenKind::Word
+        {
+            path.push('.');
+            path.push_str(tokens[end + 1].text);
+            end += 2;
+        }
+        let called = tokens.get(end).is_some_and(|t| t.kind == TokenKind::LParen);
+        if !called && shipped(&path).is_some() {
+            found.push(path);
+        }
+        index = end;
+    }
+    found
+}
+
+/// Whether `part` is `whole` with items left out, in the same order.
+fn is_subsequence(part: &[String], whole: &[String]) -> bool {
+    let mut rest = whole.iter();
+    part.iter().all(|item| rest.any(|other| other == item))
+}
+
+fn no_new_calls(
+    change: &Change<'_>,
+    shipped: &dyn Fn(&str) -> Option<String>,
+) -> Result<(), String> {
     let (original_tokens, replacement_tokens) =
         (tokens(change.original), tokens(change.replacement));
     let original = callees(&original_tokens);
@@ -475,6 +586,16 @@ fn no_new_calls(change: &Change<'_>) -> Result<(), String> {
             "the replacement calls {}, which the original does not",
             new.join(", ")
         ));
+    }
+    // A function named as a value may be called through it, so each keeps
+    // its place: exchanging two would call the other.
+    if !is_subsequence(
+        &function_values(&replacement_tokens, shipped),
+        &function_values(&original_tokens, shipped),
+    ) {
+        return Err(
+            "the replacement moves a function it names as a value, and could call it".to_string(),
+        );
     }
     // A name the original never mentions may be a function called through a
     // value, so any new name is refused, though it may be harmless.
@@ -575,6 +696,12 @@ mod tests {
         // Calling the shipped function is not its code either.
         let calls = ROUTE.replace("\"general\"", "RouteTicketByIntent(text)");
         assert!(run(&rule, ROUTE, &calls).is_err());
+        // A copy that adds a `$trace` hook runs code the shipped one does not.
+        let hooked = by_intent.replace(
+            "\nfunction RouteTicket",
+            "\n/// baml:$trace=decide\nfunction RouteTicket",
+        );
+        assert!(run(&rule, ROUTE, &hooked).is_err());
     }
 
     const TRIAGE: &str = "/// baml:hotswap=hotswap.telemetry_only\nfunction Triage(ticket: Ticket) -> Queue {\n  let intent = Classify(ticket.text)\n  if (intent == \"refund\") { Queue.Billing } else { Queue.General }\n}";
@@ -606,6 +733,10 @@ mod tests {
         assert!(run(&rule, gate, &trailing).is_err());
         let leading = gate.replace("{ \"blocked\"", "{ log.info(\"seen\"); \"blocked\"");
         assert_eq!(run(&rule, gate, &leading), Ok(()));
+        // A parameter named `log` is not the logger.
+        let shadowed = "/// baml:hotswap=hotswap.telemetry_only\nfunction Audit(log: Ledger, x: int) -> int {\n  x\n}";
+        let calls = shadowed.replace("  x\n", "  log.info(\"seen\")\n  x\n");
+        assert!(run(&rule, shadowed, &calls).is_err());
         // A log call used as a value is not a log line.
         let as_value = TRIAGE.replace(
             "let intent = Classify(ticket.text)",
@@ -630,6 +761,11 @@ mod tests {
         assert_eq!(
             run(&rule, SUMMARIZE, &added),
             Err("the change adds an expression, `${lookup(doc)}`".to_string())
+        );
+        let repeated = SUMMARIZE.replace("${doc}`", "${doc}\\n\\nAgain: ${doc}`");
+        assert_eq!(
+            run(&rule, SUMMARIZE, &repeated),
+            Err("the change adds an expression, `${doc}`".to_string())
         );
         let client = SUMMARIZE.replace("client: Writer", "client: Other");
         assert_eq!(
@@ -695,6 +831,35 @@ mod tests {
         assert_eq!(run(&rule, REPLY, &local), Ok(()));
         let client = SUMMARIZE.replace("client: Writer", "client: Other");
         assert!(run(&rule, SUMMARIZE, &client).is_err());
+    }
+
+    #[test]
+    fn a_signature_change_is_found_and_a_default_change_is_not() {
+        let original = "function f(a: int, b: string = \"x\") -> int { a }";
+        assert_eq!(
+            signature_problem(original, &original.replace("{ a }", "{ a + 1 }")),
+            None
+        );
+        assert_eq!(
+            signature_problem(original, &original.replace("\"x\"", "\"y\"")),
+            None
+        );
+        assert!(signature_problem(original, &original.replace("a: int", "n: int")).is_some());
+        assert!(signature_problem(original, &original.replace("-> int", "-> int?")).is_some());
+    }
+
+    /// Exchanging which locals hold two functions keeps every name and call
+    /// spelling, but calls the other function.
+    #[test]
+    fn no_new_calls_rejects_exchanged_function_values() {
+        let original = "/// baml:hotswap=hotswap.no_new_calls\nfunction Route(text: string) -> string {\n  let a = RouteTicketByKeywords\n  let b = RouteTicketByIntent\n  a(text)\n}";
+        let exchanged = original
+            .replace("a = RouteTicketByKeywords", "a = RouteTicketByIntent")
+            .replace("b = RouteTicketByIntent", "b = RouteTicketByKeywords");
+        assert!(run(&Rule::NoNewCalls, original, &exchanged).is_err());
+        // Dropping one is fine.
+        let dropped = original.replace("  let b = RouteTicketByIntent\n", "");
+        assert_eq!(run(&Rule::NoNewCalls, original, &dropped), Ok(()));
     }
 
     #[test]

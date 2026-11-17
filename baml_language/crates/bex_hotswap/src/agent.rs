@@ -4,7 +4,8 @@
 //! The agent runs on its own thread, so the program serves while it works.
 //! Every request lists the installed swaps, and every response may carry
 //! notifications: `active` offers a revision the process lacks, or renews
-//! one it has; `disabled` and `deleted` remove one. A swap BCS has not renewed
+//! one it has; `disabled`, `deleted` and `unmatched` (its query no longer
+//! selects this process) remove one. A swap BCS has not renewed
 //! for an hour is removed here, without BCS, and reported when BCS is back.
 
 use std::{
@@ -60,6 +61,18 @@ pub struct Agent {
     stop: Arc<AtomicBool>,
     link: Arc<CloudLink>,
     process_id: String,
+    token: Token,
+}
+
+/// The token BCS returned when the process registered, which every later
+/// request carries.
+type Token = Arc<Mutex<Option<String>>>;
+
+fn token_of(token: &Token) -> Option<String> {
+    token
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
 }
 
 impl Agent {
@@ -90,9 +103,10 @@ impl Agent {
         // On a thread of its own: the blocking client cannot run inside an
         // async runtime, which a host may be in.
         let (link, process_id) = (Arc::clone(&self.link), self.process_id.clone());
+        let token = token_of(&self.token);
         let told = std::thread::spawn(move || {
             link.client
-                .process_stopped(&link.authorization, &process_id)
+                .process_stopped(&link.authorization, token.as_deref(), &process_id)
         })
         .join();
         if let Ok(Err(error)) = told {
@@ -117,11 +131,13 @@ pub fn start(
     let ready = Arc::new((Mutex::new(false), Condvar::new()));
     let stop = Arc::new(AtomicBool::new(false));
     let link = Arc::new(link);
+    let token = Token::default();
     let agent = Agent {
         ready: Arc::clone(&ready),
         stop: Arc::clone(&stop),
         link: Arc::clone(&link),
         process_id: options.process_id.clone(),
+        token: Arc::clone(&token),
     };
     std::thread::Builder::new()
         .name("baml-hotswap".into())
@@ -149,6 +165,7 @@ pub fn start(
                     runtime,
                     ready: Arc::clone(&ready),
                     stop,
+                    token,
                     pending: Vec::new(),
                     rejected: BTreeMap::new(),
                 }
@@ -190,6 +207,7 @@ struct Loop {
     runtime: tokio::runtime::Runtime,
     ready: Arc<(Mutex<bool>, Condvar)>,
     stop: Arc<AtomicBool>,
+    token: Token,
     /// Outcomes BCS has not acknowledged, oldest first.
     pending: Vec<(String, SwapOutcome)>,
     /// The revision of each swap this process rejected: offered again, it is
@@ -228,12 +246,21 @@ impl Loop {
                 host: self.options.host.clone(),
                 installed: self.swapper.installed(),
             };
-            match self
-                .link
-                .client
-                .register_process(&self.link.authorization, &request)
-            {
-                Ok(delivery) => return Some(delivery),
+            match self.link.client.register_process(
+                &self.link.authorization,
+                self.token().as_deref(),
+                &request,
+            ) {
+                Ok(delivery) => {
+                    if let Some(token) = &delivery.process_token {
+                        *self
+                            .token
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                            Some(token.clone());
+                    }
+                    return Some(delivery);
+                }
                 Err(error) => {
                     tracing::debug!(%error, "hot swap registration failed; retrying");
                     signal(&self.ready);
@@ -266,6 +293,7 @@ impl Loop {
             }
             delivery = match self.link.client.wait_for_notifications(
                 &self.link.authorization,
+                self.token().as_deref(),
                 &self.options.process_id,
                 &self.swapper.installed(),
                 hold,
@@ -279,6 +307,10 @@ impl Loop {
                 }
             };
         }
+    }
+
+    fn token(&self) -> Option<String> {
+        token_of(&self.token)
     }
 
     fn swapper_build_commit(&self) -> Option<String> {
@@ -344,7 +376,7 @@ impl Loop {
                         .is_some_and(|&revision| revision >= notification.revision) => {}
                 "active" => fetch.push(notification.id),
                 // A notice older than the installed revision is stale.
-                "disabled" | "deleted"
+                "disabled" | "deleted" | "unmatched"
                     if self
                         .swapper
                         .revision(&notification.id)
@@ -354,14 +386,17 @@ impl Loop {
                         .runtime
                         .block_on(self.swapper.remove(&notification.id, &notification.status))
                     {
-                        Ok(()) => self.report(
-                            notification.id,
-                            SwapOutcome {
-                                revision: notification.revision,
-                                status: "removed".into(),
-                                reason: None,
-                            },
-                        ),
+                        Ok(()) => {
+                            self.report(
+                                notification.id,
+                                SwapOutcome {
+                                    revision: notification.revision,
+                                    status: "removed".into(),
+                                    reason: None,
+                                },
+                            );
+                            self.report_dropped();
+                        }
                         // Still running: the notice repeats, and the swap lapses
                         // without renewal if removal keeps failing.
                         Err(error) => tracing::warn!(
@@ -379,6 +414,7 @@ impl Loop {
         }
         match self.link.client.fetch_swaps(
             &self.link.authorization,
+            self.token().as_deref(),
             &self.options.process_id,
             &self.swapper.installed(),
             &fetch,
@@ -403,16 +439,35 @@ impl Loop {
                 .map_or(0, |installed| installed.revision);
             // A failed removal leaves the swap running; the next pass tries again.
             match self.runtime.block_on(self.swapper.remove(&id, "lapsed")) {
-                Ok(()) => self.report(
-                    id,
-                    SwapOutcome {
-                        revision,
-                        status: "lapsed".into(),
-                        reason: None,
-                    },
-                ),
+                Ok(()) => {
+                    self.report(
+                        id,
+                        SwapOutcome {
+                            revision,
+                            status: "lapsed".into(),
+                            reason: None,
+                        },
+                    );
+                    self.report_dropped();
+                }
                 Err(error) => tracing::warn!(%error, hotswap = id, "a lapsed swap was not removed"),
             }
+        }
+    }
+
+    /// Report each swap a removal dropped as rejected at its revision, which
+    /// this process then never retries.
+    fn report_dropped(&mut self) {
+        for (dropped, why) in self.swapper.take_dropped() {
+            self.rejected.insert(dropped.id.clone(), dropped.revision);
+            self.report(
+                dropped.id,
+                SwapOutcome {
+                    revision: dropped.revision,
+                    status: "rejected".into(),
+                    reason: Some(why),
+                },
+            );
         }
     }
 
@@ -430,6 +485,7 @@ impl Loop {
         while let Some((id, outcome)) = self.pending.first().cloned() {
             match self.link.client.report_swap(
                 &self.link.authorization,
+                self.token().as_deref(),
                 &self.options.process_id,
                 &id,
                 &self.swapper.installed(),

@@ -48,6 +48,8 @@ struct FakeSwap {
     events: Vec<Value>,
     payload: bool,
     enabled: bool,
+    /// Processes its query no longer selects, which lose it.
+    unmatched: Vec<String>,
 }
 
 #[derive(Default)]
@@ -119,6 +121,8 @@ impl State {
                     "deleted"
                 } else if !swap.enabled {
                     "disabled"
+                } else if swap.unmatched.iter().any(|p| p == process) {
+                    "unmatched"
                 } else if swap.deliverable() {
                     "active"
                 } else {
@@ -156,6 +160,18 @@ impl Respond for Fake {
         let body: Value = serde_json::from_slice(&request.body).unwrap_or(Value::Null);
         let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
         let ok = |value: Value| ResponseTemplate::new(200).set_body_json(value);
+        // A process proves itself with the token its registration returned.
+        let token = request
+            .headers
+            .get(bcs_api::hotswaps::PROCESS_TOKEN_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        if let ["v1", "processes", process, ..] = segments.as_slice()
+            && token != Some(format!("token-{process}"))
+        {
+            return ResponseTemplate::new(403)
+                .set_body_json(json!({"code": "ACCESS_REQUIRED", "retryable": false}));
+        }
         match (method.as_str(), segments.as_slice()) {
             ("POST", ["v1", "hotswaps"]) => {
                 let id = format!("hs_{}", state.swaps.len() + 1);
@@ -255,11 +271,17 @@ impl Respond for Fake {
             }
             ("POST", ["v1", "processes"]) => {
                 let process = body["processId"].as_str().unwrap().to_string();
+                // A process still known registers again only with its token.
+                if state.processes.contains(&process) && token != Some(format!("token-{process}")) {
+                    return ResponseTemplate::new(409)
+                        .set_body_json(json!({"code": "CONFLICT", "retryable": false}));
+                }
                 state.processes.insert(process.clone());
                 ResponseTemplate::new(201).set_body_json(json!({
                     "swaps": state.deliverable_to(&process),
                     "notifications": [],
                     "holdSeconds": 1,
+                    "processToken": format!("token-{process}"),
                 }))
             }
             ("POST", ["v1", "processes", process, "notifications", "wait"])
@@ -799,6 +821,69 @@ async fn a_forgotten_process_registers_again() {
     }
     assert_eq!(registrations(&state), 2);
     assert!(state.lock().unwrap().processes.contains("p_91"));
+    tokio::task::spawn_blocking(move || agent.stop())
+        .await
+        .unwrap();
+}
+
+/// A process whose swap's query no longer selects it removes the swap and
+/// reports it removed, and every request after registering carries its token.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_process_the_query_no_longer_selects_loses_the_swap() {
+    let server = wiremock::MockServer::start().await;
+    let state = Arc::new(Mutex::new(State::default()));
+    wiremock::Mock::given(wiremock::matchers::any())
+        .respond_with(Fake(Arc::clone(&state)))
+        .mount(&server)
+        .await;
+    let url = server.uri();
+    let commit = "3f2a91c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6";
+    let (engine, agent) = tokio::task::spawn_blocking(move || process(&url, commit))
+        .await
+        .unwrap();
+    assert_eq!(step(&engine).await, 2);
+    let old_source =
+        "/// baml:hotswap=hotswap.no_new_calls\nfunction step(x: int) -> int { helper(x) }";
+    {
+        let mut state = state.lock().unwrap();
+        let mut swap = FakeSwap {
+            id: "hs_1".into(),
+            baseline: commit.into(),
+            revision: 1,
+            status: "approved".into(),
+            approved_by: Some("bob".into()),
+            matched: vec!["p_91".into()],
+            payload: true,
+            enabled: true,
+            ..FakeSwap::default()
+        };
+        swap.functions = vec![json!({
+            "name": "step", "file": "main.baml", "rule": "hotswap.no_new_calls",
+            "oldSource": old_source,
+            "newSource": old_source.replace("helper(x) }", "helper(x) * 10 }"),
+        })];
+        state.swaps.push(swap);
+    }
+    let outcome =
+        |state: &Arc<Mutex<State>>| state.lock().unwrap().swaps[0].outcomes.get("p_91").cloned();
+    for _ in 0..100 {
+        if outcome(&state).as_deref() == Some("installed") {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(outcome(&state).as_deref(), Some("installed"));
+    assert_eq!(step(&engine).await, 20);
+
+    state.lock().unwrap().swaps[0].unmatched = vec!["p_91".into()];
+    for _ in 0..100 {
+        if outcome(&state).as_deref() == Some("removed") {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(outcome(&state).as_deref(), Some("removed"));
+    assert_eq!(step(&engine).await, 2);
     tokio::task::spawn_blocking(move || agent.stop())
         .await
         .unwrap();
