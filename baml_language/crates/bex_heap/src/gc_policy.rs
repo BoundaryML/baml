@@ -17,8 +17,6 @@ use crate::BexHeap;
 
 pub(crate) const MIN_FULL_BUDGET: usize = 32 * 1024 * 1024;
 const LIVE_HEADROOM: usize = 4;
-pub(crate) const FIRST_TLAB_SLOTS: usize = 32;
-pub(crate) const MAX_TLAB_SLOTS: usize = 1024;
 /// Number of existing VM control-flow checks between pressure/park polls.
 pub const POLL_INTERVAL: u64 = 4096;
 
@@ -115,7 +113,7 @@ impl BexHeap {
 
 #[cfg(test)]
 mod tests {
-    use bex_vm_types::Object;
+    use bex_vm_types::{OBJECT_CELL_WORDS, Object};
 
     use super::*;
     use crate::Tlab;
@@ -229,14 +227,14 @@ mod tests {
         for _ in 0..65 {
             tlab.alloc_string("inline");
         }
-        assert_eq!(tlab.remaining(), 63);
+        assert_eq!(tlab.remaining(), 63 * OBJECT_CELL_WORDS);
         // SAFETY: single-threaded heap with no surviving roots.
         unsafe {
             heap.collect_garbage(&[]);
         }
         tlab.invalidate();
         tlab.alloc_string("inline");
-        assert_eq!(tlab.remaining(), 127);
+        assert_eq!(tlab.remaining(), 127 * OBJECT_CELL_WORDS);
         assert_eq!(
             heap.gc_budget().bytes_since_full_gc,
             (128 * size_of::<Object>()) as isize

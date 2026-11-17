@@ -45,7 +45,7 @@ pub use meter::{AllocDebt, Meter};
 pub use monitor::{MonitorTable, Waiter};
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{
-    CollectRoots, ForwardRoots, NothingCollected, PermitProof, RootHaver, RootHaverExt,
+    CollectRoots, ForwardRoots, Forwarding, NothingCollected, PermitProof, RootHaver, RootHaverExt,
     RootVisitor, Survival, Weak,
 };
 pub use runtime_compile::{
@@ -168,16 +168,17 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
     ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
 }
 pub use types::{
-    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod, Class,
-    ClassField, ClassMethodDef, CleanupLatch, ConstValue, DeclPath, DeclarationName, EntryId, Enum,
-    EnumVariant, FnPath, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
-    GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, Instance,
-    InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
-    MapContainer, MapData, MapEntry, MapEpochChanged, MapKeyUndecided, MapReadGuard, MapWriteGuard,
-    Object, ObjectType, PanicClass, Program, RenderedCallable, SpelledBound, SysOp,
-    SysOpErrorCategory, SysOpPanicCategory, Tuple, TupleShapeMismatch, Uint8ArrayContainer,
-    Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value, ValueKind, Variant, format_float,
-    map_int_hash, map_string_hash, sys_op_for_path, type_tags,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod,
+    CLEANED, Class, ClassField, ClassLayout, ClassMethodDef, ConstValue, DeclPath, DeclarationName,
+    EntryId, Enum, EnumVariant, FORWARDED, Field, FieldRef, FnPath, Function, FunctionKind,
+    FunctionMeta, FunctionOrigin, Future, FutureRead, GenericFunction, HEADER_FLAGS, HostClosure,
+    ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, InstanceRef, InterfaceBound, InterfaceKey,
+    ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer, MapData, MapEntry,
+    MapEpochChanged, MapKeyUndecided, MapReadGuard, MapWriteGuard, OBJECT_BODY, OBJECT_CELL_WORDS,
+    Object, ObjectType, PanicClass, Program, RenderedCallable, SlotKind, SlotKindMismatch,
+    SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory, Tuple, TupleShapeMismatch,
+    Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value, ValueKind, Variant,
+    WORD_BYTES, format_float, map_int_hash, map_string_hash, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

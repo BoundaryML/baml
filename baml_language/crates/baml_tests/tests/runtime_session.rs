@@ -471,11 +471,10 @@ async fn session_shape(engine: &Arc<BexEngine>, name: &str) -> PackageShape {
         .resolve_handle(active.proof(), &handle)
         .expect("the handle roots the session wrapper");
     // SAFETY: the active permit excludes collection; the handle roots the wrapper.
-    let Object::Instance(wrapper) = (unsafe { wrapper_ptr.get() }) else {
-        panic!("a Session handle wraps an instance")
-    };
+    let wrapper = unsafe { bex_vm_types::InstanceRef::of(wrapper_ptr) }
+        .expect("a Session handle wraps an instance");
     let package_ptr = wrapper
-        .load_field(0)
+        .load_value(0)
         .as_object_ptr()
         .expect("the wrapper holds its package");
     // SAFETY: the wrapper roots its package payload under the same permit.
@@ -699,7 +698,7 @@ async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
         )
         .expect("Session perf engine"),
     );
-    let before_objects = engine.heap_stats().runtime_objects;
+    let before_words = engine.heap_stats().runtime_words;
     trim_allocator();
     let before_rss = resident_kib();
     let result = engine
@@ -711,7 +710,7 @@ async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
         )
         .await
         .expect("500 Session evals");
-    let after_objects = engine.heap_stats().runtime_objects;
+    let after_words = engine.heap_stats().runtime_words;
     trim_allocator();
     let after_rss = resident_kib();
     let BexExternalValue::String(timing) = result else {
@@ -721,11 +720,11 @@ async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
         .split_once(',')
         .map(|(a, b)| (a.parse::<u128>().unwrap(), b.parse::<u128>().unwrap()))
         .expect("two timing samples");
-    let object_growth = after_objects.saturating_sub(before_objects);
+    let word_growth = after_words.saturating_sub(before_words);
     let rss_growth = after_rss.saturating_sub(before_rss);
     eprintln!(
         "SESSION_PERF eval10_ns={tenth} eval500_ns={five_hundredth} \
-         runtime_object_growth={object_growth} rss_growth_kib={rss_growth}"
+         runtime_word_growth={word_growth} rss_growth_kib={rss_growth}"
     );
 
     // A 100ms floor keeps the wall-clock pin stable on loaded CI machines;
@@ -735,8 +734,8 @@ async fn five_hundred_evals_have_flat_latency_and_bounded_artifacts() {
         "eval #500 regressed against eval #10: {timing}"
     );
     assert!(
-        object_growth < 10_000,
-        "500 constant-size submissions retained too many VM objects: {object_growth}"
+        word_growth < 10_000 * bex_vm_types::OBJECT_CELL_WORDS,
+        "500 constant-size submissions retained too many heap words: {word_growth}"
     );
     assert!(
         rss_growth < 256 * 1024,

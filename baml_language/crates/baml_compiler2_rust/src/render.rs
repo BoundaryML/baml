@@ -73,7 +73,18 @@ pub(crate) fn render_module(
 }
 
 pub(crate) fn object_value(object: usize) -> String {
-    format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))")
+    format!("Value::object({})", object_ptr(object))
+}
+
+/// The heap pointer to `object` in the body's package.
+pub(crate) fn object_ptr(object: usize) -> String {
+    format!("vm.record_object(fr, ObjectIndex::from_raw({object}))")
+}
+
+/// The heap pointer to the class `object`, through the `statics` base the
+/// body reads at entry.
+pub(crate) fn class_ptr(object: usize) -> String {
+    format!("vm.class_at(statics, fr, ObjectIndex::from_raw({object}))")
 }
 
 pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {

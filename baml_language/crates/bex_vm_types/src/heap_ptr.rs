@@ -8,22 +8,12 @@
 //! the index-based `ObjectIndex` to eliminate data races during concurrent
 //! access.
 //!
-//! # Why Raw Pointers?
-//!
-//! With index-based access, reading an object required traversing the
-//! `ChunkedVec`'s internal `Vec` to find the chunk. If another thread
-//! was resizing (adding chunks), the `Vec`'s buffer could reallocate,
-//! causing the reader to access freed memory.
-//!
-//! With raw pointers, reading is just a dereference. The pointer points
-//! directly into a chunk, and chunks never move (they're `Box<[T]>`).
-//!
 //! # Safety Invariants
 //!
 //! For `HeapPtr` to be sound:
 //!
-//! 1. **Pointer stability:** Points into a `ChunkedVec` chunk or compile-time
-//!    Vec, neither of which ever relocate existing data.
+//! 1. **Pointer stability:** Points at a cell in a heap block or at a
+//!    compile-time object; neither moves except by a collection.
 //!
 //! 2. **Lifetime:** Valid until GC collects or moves the object. After GC,
 //!    use the forwarding table to get the new pointer.
@@ -31,17 +21,26 @@
 //! 3. **Thread safety:** The pointer can be copied across threads (it's just
 //!    8 bytes). Dereferencing only happens within a single VM.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::Object;
+use crate::{OBJECT_BODY, Object};
+
+/// What [`HeapPtr::get`] returns for an instance, whose cell is not an
+/// [`Object`]: enough for code that only asks what kind of object it holds.
+/// The instance itself is read through [`InstanceRef`](crate::InstanceRef).
+static INSTANCE: Object = Object::Instance;
 
 /// A pointer to an object in the heap.
 ///
 /// # Safety
 ///
 /// `HeapPtr` contains a raw pointer that is:
-/// - Stable: points into a `ChunkedVec` chunk that never moves
-/// - Valid: only created by heap allocation, always points to valid Object
+/// - Stable: names a cell that stays put until a collection forwards it
+/// - Valid: only created by heap allocation; names an [`Object`] cell, an
+///   instance cell (read through [`InstanceRef`](crate::InstanceRef)), or a
+///   compile-time object
 /// - Synchronized: dereferencing only happens within a single VM
 #[derive(Clone, Copy)]
 pub struct HeapPtr {
@@ -103,10 +102,54 @@ impl HeapPtr {
         Self { ptr, epoch }
     }
 
-    /// Get the raw pointer.
+    /// A reference to the instance cell starting at `cell`.
+    ///
+    /// # Safety
+    ///
+    /// `cell` must be an instance cell in a heap cell space.
+    #[inline]
+    pub unsafe fn from_cell(cell: *mut AtomicU64) -> Self {
+        Self {
+            ptr: cell.cast(),
+            #[cfg(feature = "heap_debug")]
+            epoch: 0,
+        }
+    }
+
+    /// Get the raw pointer: the first word of the cell this names. For an
+    /// instance that word is not an [`Object`]; read it through
+    /// [`Self::cell`].
     #[inline]
     pub fn as_ptr(self) -> *mut Object {
         self.ptr
+    }
+
+    /// Whether this names an instance cell rather than an [`Object`]: its
+    /// header lacks [`OBJECT_BODY`], which a forwarded cell keeps. A pointer
+    /// carries no tag of its own: every low bit a [`Value`](crate::Value)
+    /// leaves free of a pointer encodes an inline float.
+    ///
+    /// The pointer must name a live cell (or a forwarded one, during a
+    /// collection), as for [`Self::get`].
+    #[inline]
+    pub fn is_instance(self) -> bool {
+        // SAFETY: a non-null `HeapPtr` names a cell, whose first word is its
+        // header; the allocator writes it before the pointer escapes.
+        let header = unsafe { (*self.ptr.cast::<AtomicU64>()).load(Ordering::Relaxed) };
+        header & OBJECT_BODY == 0
+    }
+
+    /// The first word of the instance cell this names.
+    #[inline]
+    pub fn cell(self) -> *mut AtomicU64 {
+        debug_assert!(self.is_instance(), "{self:?} is not an instance");
+        self.ptr.cast()
+    }
+
+    /// The first word of the cell this names, whichever kind it is.
+    #[inline]
+    pub fn cell_start(self) -> *mut AtomicU64 {
+        self.ptr.cast()
     }
 
     /// Whether this is the inert compile-time/runtime-owner sentinel.
@@ -124,6 +167,9 @@ impl HeapPtr {
     /// - With `heap_debug`: epoch must match current heap epoch
     #[inline]
     pub unsafe fn get(self) -> &'static Object {
+        if self.is_instance() {
+            return &INSTANCE;
+        }
         // SAFETY: Caller guarantees pointer validity and aliasing rules
         unsafe { &*self.ptr }
     }
@@ -137,6 +183,10 @@ impl HeapPtr {
     /// - With `heap_debug`: epoch must match current heap epoch
     #[inline]
     pub unsafe fn get_mut(self) -> &'static mut Object {
+        assert!(
+            !self.is_instance(),
+            "{self:?} is an instance; write it through `InstanceRef`"
+        );
         // SAFETY: Caller guarantees pointer validity and exclusive access
         unsafe { &mut *self.ptr }
     }

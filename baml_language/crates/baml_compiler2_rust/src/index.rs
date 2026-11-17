@@ -13,7 +13,7 @@ use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef, GlobalRe
 use baml_compiler2_mir::{FunctionOwner, MirFunctionId};
 use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
-    Bytecode, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TypeHead,
+    Bytecode, ClassLayout, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TypeHead,
     types::{FunctionIdentity, PackageKind},
 };
 
@@ -209,6 +209,24 @@ impl<'p> ProgramIndex<'p> {
 
     pub(crate) fn enum_at(&self, head: &baml_type::DeclName) -> Option<usize> {
         self.lookup(enum_head_coords(head))
+    }
+
+    /// Where an instance of the class at `object` keeps its fields.
+    pub(crate) fn class_layout(&self, object: usize) -> Option<ClassLayout<'p>> {
+        let Object::Class(class) = &self.program.objects[ObjectIndex::from_raw(object)] else {
+            return None;
+        };
+        Some(ClassLayout::of(class))
+    }
+
+    /// Whether instances of class `object` are a header and their fields
+    /// alone, with nothing to register: no class type arguments and no
+    /// finalizer.
+    pub(crate) fn plain_class(&self, object: usize) -> bool {
+        matches!(
+            &self.program.objects[ObjectIndex::from_raw(object)],
+            Object::Class(class) if class.cleanup.is_none() && class.generic_param_count == 0
+        )
     }
 
     fn class_fields(&self, coords: DeclCoords) -> Option<(usize, usize)> {

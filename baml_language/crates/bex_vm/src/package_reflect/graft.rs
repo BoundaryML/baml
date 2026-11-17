@@ -1190,7 +1190,7 @@ fn adopt(object: &mut Object, package_ptr: HeapPtr) {
         | Object::Type(_)
         | Object::Package(_)
         | Object::ImplRule(_)
-        | Object::Instance(_)
+        | Object::Instance
         | Object::Variant(_)
         | Object::Closure(_)
         | Object::BoundMethod(_)
@@ -1351,7 +1351,7 @@ fn relocate(
         | Object::Type(_)
         | Object::Package(_)
         | Object::ImplRule(_)
-        | Object::Instance(_)
+        | Object::Instance
         | Object::Variant(_)
         | Object::Closure(_)
         | Object::BoundMethod(_)

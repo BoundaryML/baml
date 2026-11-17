@@ -331,7 +331,7 @@ macro_rules! impl_aead_class {
                 // borrow.
                 let opened = {
                     let view = view::crypto::$class {
-                        instance: vm.as_instance(cipher)?,
+                        instance: &vm.as_instance(cipher)?,
                     };
                     open(
                         &$algorithm,

@@ -676,6 +676,31 @@ fn entry_points_prune_admission_to_what_they_reach() {
     }
 }
 
+/// A class with nothing to register at allocation takes the inline bump
+/// path; one with a finalizer still allocates through the runtime, which
+/// registers it.
+#[test]
+fn plain_classes_allocate_inline() {
+    let db = baml_test_support::setup_test_db(
+        r#"
+class Plain { x: int, y: float }
+class Kept {
+    n: int,
+    function cleanup(self) -> void {}
+}
+function make_plain(i: int) -> Plain { Plain { x: i, y: 1.5 } }
+function make_kept(i: int) -> Kept { Kept { n: i } }
+"#,
+    );
+    let program = lower(&db, OptLevel::Two);
+    let module = render(&db, &program, OptLevel::Two, None);
+    let plain = body_of(&module, "user.make_plain");
+    assert!(plain.contains("vm.new_plain_instance("), "{plain}");
+    let kept = body_of(&module, "user.make_kept");
+    assert!(kept.contains("vm.new_instance_of("), "{kept}");
+    assert!(!kept.contains("vm.new_plain_instance("), "{kept}");
+}
+
 #[test]
 fn unsupported_programs_remain_bytecode() {
     let mut large = String::from("function large(n: int) -> int { let total = 0;\n");

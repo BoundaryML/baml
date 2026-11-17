@@ -13,7 +13,7 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArrayReadGuard, MapReadGuard,
     errors::VmInternalError,
-    types::{Instance, Type, Value},
+    types::{InstanceRef, Type, Value},
 };
 use indexmap::IndexMap;
 

@@ -944,8 +944,7 @@ mod tests {
             "dead owners must sweep their rules"
         );
         let forwarded_owner = forwarding
-            .get(&owners[0])
-            .copied()
+            .get(owners[0])
             .expect("live owner must be forwarded");
         assert!(
             !tables.rules_for_class(forwarded_owner).is_empty(),

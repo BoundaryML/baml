@@ -3,7 +3,7 @@
 //! charged to the innermost span. Read natively, so it needs no value capture
 //! and works whether or not the invoke is a span.
 
-use bex_vm_types::{Object, Value, ValueKind};
+use bex_vm_types::{Value, ValueKind};
 use btel_records::ModelUsage;
 
 use crate::BexVm;
@@ -67,10 +67,8 @@ impl BexVm {
 
     fn field(&self, value: Value, name: &str) -> Option<Value> {
         let instance = self.as_instance(&value).ok()?;
-        let Object::Class(class) = self.get_object(instance.class) else {
-            return None;
-        };
+        let class = instance.class_object();
         let index = class.fields.iter().position(|field| field.name == name)?;
-        instance.try_load_field(index)
+        Some(instance.load_value(index))
     }
 }

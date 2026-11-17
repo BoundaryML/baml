@@ -248,7 +248,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     // Struct definition
     writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
     writeln!(out, "{indent}pub struct {class_name}<'a> {{").unwrap();
-    writeln!(out, "{inner}pub instance: &'a Instance,").unwrap();
+    writeln!(out, "{inner}pub instance: &'a InstanceRef,").unwrap();
     writeln!(out, "{indent}}}\n").unwrap();
 
     // Impl block with typed accessors
@@ -267,7 +267,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_rust_data::<T>(&self.instance.load_field({}))",
+                    "{inner2}vm.as_rust_data::<T>(&self.instance.load_value({}))",
                     field.index
                 )
                 .unwrap();
@@ -282,7 +282,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> i64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}self.instance.load_field({}).as_int()",
+                    "{inner2}self.instance.load_value({}).as_int()",
                     field.index
                 )
                 .unwrap();
@@ -295,26 +295,14 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             }
             BamlType::Float => {
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> f64 {{").unwrap();
-                writeln!(
-                    out,
-                    "{inner2}match self.instance.load_field({}).as_float() {{",
-                    field.index
-                )
-                .unwrap();
-                writeln!(out, "{inner2}    Some(f) => f,").unwrap();
-                writeln!(
-                    out,
-                    "{inner2}    None => panic!(\"{class_name}.{raw_name}: expected Float\"),"
-                )
-                .unwrap();
-                writeln!(out, "{inner2}}}").unwrap();
+                writeln!(out, "{inner2}self.instance.load_float({})", field.index).unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Bool => {
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> bool {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}self.instance.load_field({}).as_bool()",
+                    "{inner2}self.instance.load_value({}).as_bool()",
                     field.index
                 )
                 .unwrap();
@@ -334,7 +322,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_string(&self.instance.load_field({}))",
+                    "{inner2}vm.as_string(&self.instance.load_value({}))",
                     field.index
                 )
                 .unwrap();
@@ -353,7 +341,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_array(&self.instance.load_field({}))",
+                    "{inner2}vm.as_array(&self.instance.load_value({}))",
                     field.index
                 )
                 .unwrap();
@@ -372,7 +360,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_map(&self.instance.load_field({}))",
+                    "{inner2}vm.as_map(&self.instance.load_value({}))",
                     field.index
                 )
                 .unwrap();
@@ -394,7 +382,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}if self.instance.load_field({}).is_null() {{",
+                    "{inner2}if self.instance.load_value({}).is_null() {{",
                     field.index
                 )
                 .unwrap();
@@ -414,7 +402,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.load_field({}).as_object_ptr() {{",
+                    "{inner2}match self.instance.load_value({}).as_object_ptr() {{",
                     field.index
                 )
                 .unwrap();
@@ -449,7 +437,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                     "{inner}pub fn {field_name}(&self) -> bex_vm_types::Value {{"
                 )
                 .unwrap();
-                writeln!(out, "{inner2}self.instance.load_field({})", field.index).unwrap();
+                writeln!(out, "{inner2}self.instance.load_value({})", field.index).unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
         }
@@ -469,30 +457,30 @@ fn view_optional_type_and_expr(
         BamlType::Int => (
             "Option<i64>".to_string(),
             format!(
-                "self.instance.load_field({field_index}).as_int().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
+                "self.instance.load_value({field_index}).as_int().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
             ),
         ),
         BamlType::Float => (
             "Option<f64>".to_string(),
             format!(
-                "self.instance.load_field({field_index}).as_float().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Float\"))"
+                "self.instance.load_value({field_index}).as_float().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Float\"))"
             ),
         ),
         BamlType::Bool => (
             "Option<bool>".to_string(),
             format!(
-                "self.instance.load_field({field_index}).as_bool().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
+                "self.instance.load_value({field_index}).as_bool().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
             ),
         ),
         BamlType::String => (
             "Option<&'v str>".to_string(),
             format!(
-                "vm.as_string(&self.instance.load_field({field_index})).expect(\"{class_name}.{field_name}: expected String\")"
+                "vm.as_string(&self.instance.load_value({field_index})).expect(\"{class_name}.{field_name}: expected String\")"
             ),
         ),
         _ => (
             "Option<bex_vm_types::Value>".to_string(),
-            format!("self.instance.load_field({field_index})"),
+            format!("self.instance.load_value({field_index})"),
         ),
     }
 }
@@ -1446,7 +1434,7 @@ fn emit_immut_receiver_extraction_indented(
                 .unwrap();
                 writeln!(
                     out,
-                    "{indent}let {name} = view::media::{cls} {{ instance: __instance }};"
+                    "{indent}let {name} = view::media::{cls} {{ instance: &__instance }};"
                 )
                 .unwrap();
             }
@@ -1464,7 +1452,7 @@ fn emit_immut_receiver_extraction_indented(
             .unwrap();
             writeln!(
                 out,
-                "{indent}let {name} = {view_path} {{ instance: __instance }};"
+                "{indent}let {name} = {view_path} {{ instance: &__instance }};"
             )
             .unwrap();
         }
@@ -2654,8 +2642,8 @@ mod tests {
             "missing Pdf view struct:\n{output}"
         );
         assert!(
-            output.contains("pub instance: &'a Instance"),
-            "Pdf view should hold &Instance:\n{output}"
+            output.contains("pub instance: &'a InstanceRef"),
+            "Pdf view should hold &InstanceRef:\n{output}"
         );
         // _data accessor downcasts to any payload type.
         assert!(

@@ -88,7 +88,7 @@ fn atomic_key(vm: &BexVm, key: Value) -> Result<AtomicKey, VmRustFnError> {
     let instance = |value: Value| {
         value
             .as_object_ptr()
-            .filter(|&ptr| matches!(vm.get_object(ptr), Object::Instance(_)))
+            .filter(|&ptr| vm.get_instance(ptr).is_some())
     };
     if let Some(ptr) = instance(key) {
         return Ok(AtomicKey::One(ptr));
