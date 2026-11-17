@@ -1,14 +1,15 @@
 //! The dispatch loop's fast path must not change what a program computes.
 //!
 //! Every program here runs with the fast path on and off
-//! (`BexVm::dispatch_fast_path`), with telemetry present and absent (the
-//! fast path runs plain calls and returns only without it, as with
-//! `BAML_TELEMETRY=off`), and at several early-yield intervals with a park
-//! request pending, so execution hands off between the fast path, the full
-//! dispatch and the engine loop at many different instructions. The result
-//! and the number of early yields must be identical in every mode: the yield
-//! count also checks that both paths tick the early-yield counter at the
-//! same instructions.
+//! (`BexVm::dispatch_fast_path`), with telemetry present and absent (as with
+//! `BAML_TELEMETRY=off`), with and without a context every frame inherits
+//! (the engine installs one), and at several early-yield intervals with a
+//! park request pending, so execution hands off between the fast path, the
+//! full dispatch and the engine loop at many different instructions. The
+//! result and the number of early yields must be identical in every mode:
+//! the yield count also checks that both paths tick the early-yield counter
+//! at the same instructions. (What telemetry records is checked by the VM's
+//! `fast_path_records_what_the_full_dispatch_records`.)
 //!
 //! The programs cover what the fast path runs (local and constant traffic,
 //! int arithmetic and comparisons, truthiness, branches, field loads, exact
@@ -20,6 +21,7 @@ use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_test_support::compile_source;
 use bex_vm::{BexVm, VmExecState};
+use btel_types::context::{Context, ContextPatch, ContextValue};
 
 const PROGRAMS: &[(&str, &str)] = &[
     (
@@ -247,6 +249,7 @@ fn run(
     source: &str,
     fast_path: bool,
     telemetry: bool,
+    context: bool,
     interval: Option<u64>,
 ) -> (Result<i64, String>, usize) {
     let program = compile_source(source);
@@ -256,6 +259,18 @@ fn run(
     vm.dispatch_fast_path = fast_path;
     if !telemetry {
         vm.disable_telemetry();
+    }
+    if context {
+        vm.set_root_context(
+            Context::default().with_patch(&ContextPatch {
+                metadata: [(
+                    "baml_version".to_owned(),
+                    Some(ContextValue::String("test".to_owned())),
+                )]
+                .into(),
+                distinct_id: None,
+            }),
+        );
     }
     if let Some(interval) = interval {
         vm.early_yield = bex_vm_types::EarlyYieldCheck::with_interval(Arc::clone(&flag), interval);
@@ -281,22 +296,29 @@ fn run(
 #[test]
 fn fast_path_matches_full_dispatch() {
     for (name, source) in PROGRAMS {
-        let expected = run(source, false, true, None).0;
+        let expected = run(source, false, true, false, None).0;
         assert!(expected.is_ok(), "{name}: {expected:?}");
         for telemetry in [true, false] {
-            for &interval in INTERVALS {
-                let full = run(source, false, telemetry, interval);
-                let fast = run(source, true, telemetry, interval);
-                assert_eq!(
-                    fast, full,
-                    "{name}, telemetry {telemetry}, early-yield interval {interval:?}: \
-                     (result, yields) with the fast path differ from the full dispatch"
-                );
-                // Neither telemetry nor a park request changes the result.
-                assert_eq!(
-                    full.0, expected,
-                    "{name}, telemetry {telemetry}, {interval:?}"
-                );
+            for context in [true, false] {
+                // Programs run under a context; without one, the
+                // early-yield boundaries are those with one.
+                let intervals = if context { INTERVALS } else { &INTERVALS[..2] };
+                for &interval in intervals {
+                    let full = run(source, false, telemetry, context, interval);
+                    let fast = run(source, true, telemetry, context, interval);
+                    assert_eq!(
+                        fast, full,
+                        "{name}, telemetry {telemetry}, context {context}, early-yield \
+                         interval {interval:?}: (result, yields) with the fast path differ \
+                         from the full dispatch"
+                    );
+                    // Neither telemetry, a context nor a park request
+                    // changes the result.
+                    assert_eq!(
+                        full.0, expected,
+                        "{name}, telemetry {telemetry}, context {context}, {interval:?}"
+                    );
+                }
             }
         }
     }
