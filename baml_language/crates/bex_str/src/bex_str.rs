@@ -99,15 +99,24 @@ pub(crate) enum ConcatState {
 }
 
 thread_local! {
-    /// Bytes flattening has allocated on this thread since the last
-    /// [`take_materialized_bytes`]: the buffers [`BexStr::unshared_heap_bytes`]
-    /// leaves out of a concatenation's charge, reported once they exist.
+    /// Text allocated for ropes on this thread since the last
+    /// [`take_materialized_bytes`] (a flattened buffer, or a run of short
+    /// parts [`BexStr::concat_many`] copied into one): what
+    /// [`BexStr::unshared_heap_bytes`] leaves out of a concatenation's
+    /// charge, reported once it exists.
     /// Per thread, so a VM is charged for the ropes it reads itself.
     static MATERIALIZED_BYTES: Cell<usize> = const { Cell::new(0) };
 }
 
-/// Bytes rope flattening has allocated on this thread since the last call,
-/// which resets the count. A VM adds them to its allocation debt, so text a
+/// Report `bytes` of text allocated for a rope on this thread.
+fn record_materialized(bytes: usize) {
+    if bytes != 0 {
+        MATERIALIZED_BYTES.with(|count| count.set(count.get().saturating_add(bytes)));
+    }
+}
+
+/// Text allocated for ropes on this thread since the last call, which
+/// resets the count. A VM adds them to its allocation debt, so text a
 /// concatenation materializes counts toward the next collection like any
 /// other allocation.
 #[inline]
@@ -559,6 +568,7 @@ impl BexStr {
     /// still costs nothing in the length of `s`.
     pub fn concat_many(parts: &[&BexStr]) -> BexStr {
         let mut result = BexStr::empty();
+        let mut copied_bytes = 0_usize;
         let mut rest = parts;
         loop {
             let short = rest
@@ -566,13 +576,22 @@ impl BexStr {
                 .take_while(|part| part.byte_len() <= CONCAT_MANY_COPY_LIMIT)
                 .count();
             let (copied, after) = rest.split_at(short);
-            result = BexStr::concat(result, copy_parts(copied));
+            let copy = copy_parts(copied);
+            copied_bytes = copied_bytes.saturating_add(copy.unshared_heap_bytes());
+            result = BexStr::concat(result, copy);
             let Some((long, after)) = after.split_first() else {
-                return result;
+                break;
             };
             result = BexStr::concat(result, (*long).clone());
             rest = after;
         }
+        // A copied run that ends up inside a rope is new memory the rope's
+        // node-only charge leaves out. When the copy is the whole result,
+        // the string's own charge already counts it.
+        if matches!(result, BexStr::Concat(_)) {
+            record_materialized(copied_bytes);
+        }
+        result
     }
 
     /// Pointer equality check — true if both point to the same Arc.
@@ -749,8 +768,7 @@ impl ConcatNode {
             }
         }
 
-        let materialized = FLAT_OVERHEAD.saturating_add(buf.len());
-        MATERIALIZED_BYTES.with(|bytes| bytes.set(bytes.get().saturating_add(materialized)));
+        record_materialized(FLAT_OVERHEAD.saturating_add(buf.len()));
         let flat = Arc::new(FlatStr::from_parts(
             buf.into_boxed_slice(),
             self.total_char_len,

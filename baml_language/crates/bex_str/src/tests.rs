@@ -57,6 +57,34 @@ fn unshared_heap_bytes_counts_each_handle_in_full() {
     ));
 }
 
+/// A run of short parts `concat_many` copies into a rope is reported like a
+/// flattened buffer; a copy that is the whole result is not, since the
+/// string's own charge counts it.
+#[test]
+fn concat_many_reports_runs_it_copies_into_a_rope() {
+    let long = BexStr::from("x".repeat(2_000));
+    let short = BexStr::from("y".repeat(1_000));
+    crate::take_materialized_bytes();
+    let parts: Vec<&BexStr> = std::iter::once(&long)
+        .chain(std::iter::repeat_n(&short, 8))
+        .collect();
+    let rope = BexStr::concat_many(&parts);
+    assert!(matches!(rope, BexStr::Concat(_)));
+    let reported = crate::take_materialized_bytes();
+    assert!(
+        reported >= 8_000,
+        "{reported} bytes reported for an 8 kB copy"
+    );
+    assert!(
+        reported < 9_000,
+        "{reported} bytes reported for an 8 kB copy"
+    );
+
+    let flat = BexStr::concat_many(&[&short, &short, &short]);
+    assert!(matches!(flat, BexStr::Flat(_)));
+    assert_eq!(crate::take_materialized_bytes(), 0);
+}
+
 /// The buffer a rope materializes when it is read is reported once, on the
 /// thread that read it, and taking the count resets it.
 #[test]
