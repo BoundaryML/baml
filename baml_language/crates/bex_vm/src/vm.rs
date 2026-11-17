@@ -418,7 +418,12 @@ struct StaticVirtualCallTarget {
 /// answers it with four word compares instead of building, hashing and
 /// comparing a cache key. An iterator adapter's `next` calls its source this
 /// way on every element. A collection rebuilds the cache and clears every
-/// memo. Plain words, so remembering a call costs a few stores.
+/// memo.
+///
+/// A site that sees a new receiver on every call (`shapes[i].area()`) would
+/// only pay to remember each one, so a memo that was never answered is not
+/// replaced by the same site's next call, except every
+/// [`VIRTUAL_CALL_MEMO_RETRY`]th time, in case the site settles down.
 #[derive(Clone, Copy)]
 struct VirtualCallMemo {
     /// The caller's cache identity; zero for an empty slot (no identity is
@@ -429,6 +434,11 @@ struct VirtualCallMemo {
     iface: usize,
     /// The entry's index in `static_virtual_call_cache`.
     entry: usize,
+    /// Whether the memo has answered a call.
+    answered: bool,
+    /// The site's calls since the memo was made that it did not answer and
+    /// did not replace it.
+    passed_over: u32,
 }
 
 impl VirtualCallMemo {
@@ -438,8 +448,13 @@ impl VirtualCallMemo {
         receiver: 0,
         iface: 0,
         entry: 0,
+        answered: false,
+        passed_over: 0,
     };
 }
+
+/// See [`VirtualCallMemo`].
+const VIRTUAL_CALL_MEMO_RETRY: u32 = 32;
 
 /// How many sites the `VirtualCall` memo remembers at once, direct-mapped
 /// by site. A power of two.
@@ -8417,15 +8432,27 @@ impl BexVm {
             .map_or(0, |ptr| ptr.as_ptr() as usize);
         let iface_addr = iface_ptr.as_ptr() as usize;
         let slot = ((identity >> 4) ^ pc) & (VIRTUAL_CALL_MEMO_SLOTS - 1);
-        let memo = self.virtual_call_memo[slot];
-        let remembered = memo.caller == identity
-            && memo.pc == pc
+        let memo = &mut self.virtual_call_memo[slot];
+        let same_site = memo.caller == identity && memo.pc == pc;
+        let (callee_ptr, shared) = if same_site
             && memo.receiver == receiver_addr
-            && memo.iface == iface_addr;
-        let entry = if remembered {
+            && memo.iface == iface_addr
+        {
+            memo.answered = true;
+            let entry = memo.entry;
             // Checked when the memo was made, against the same entry.
-            memo.entry
+            let Some((_, target)) = self.static_virtual_call_cache.get_index(entry) else {
+                verifier_unreachable!()
+            };
+            (target.callee.ptr(), target.shared_frame_type_args.clone())
         } else {
+            // A site that never used its memo keeps it, and counts the call.
+            let remember = if same_site && !memo.answered {
+                memo.passed_over += 1;
+                memo.passed_over >= VIRTUAL_CALL_MEMO_RETRY
+            } else {
+                true
+            };
             let mut scratch = None;
             let Some(query) =
                 self.virtual_site_query(Some(identity), receiver, iface_ptr, &mut scratch)
@@ -8435,7 +8462,7 @@ impl BexVm {
             // Only an instance of a compile-time class keeps the type the
             // cache keyed for as long as it lives; a container's type is
             // read off it each time.
-            let memoizable = matches!(query.receiver, VirtualReceiverQuery::Class { .. });
+            let remember = remember && matches!(query.receiver, VirtualReceiverQuery::Class { .. });
             let Some((entry, _, target)) = self.static_virtual_call_cache.get_full(&query) else {
                 return Ok(None);
             };
@@ -8445,25 +8472,21 @@ impl BexVm {
             {
                 return Ok(None);
             }
-            if memoizable {
+            let found = (target.callee.ptr(), target.shared_frame_type_args.clone());
+            if remember {
                 self.virtual_call_memo[slot] = VirtualCallMemo {
                     caller: identity,
                     pc,
                     receiver: receiver_addr,
                     iface: iface_addr,
                     entry,
+                    answered: false,
+                    passed_over: 0,
                 };
             }
-            entry
+            found
         };
-        let Some((_, target)) = self.static_virtual_call_cache.get_index(entry) else {
-            verifier_unreachable!()
-        };
-        let callee_ptr = target.callee.ptr();
-        let type_args = match &target.shared_frame_type_args {
-            Some(shared) => FrameTypeArgs::Shared(Arc::clone(shared)),
-            None => FrameTypeArgs::default(),
-        };
+        let type_args = shared.map_or_else(FrameTypeArgs::default, FrameTypeArgs::Shared);
         // SAFETY: the callee is live: collection drops cache entries whose
         // callee died and clears the memo. The active heap permit prevents
         // collection during frame/stack growth, as at `CallExactArgs`.
