@@ -175,6 +175,43 @@ class Array<T> {
         $rust_function
     }
 
+    /// `filter` as a loop, for the optimizer to copy into a caller that passes
+    /// a closure it can see. It behaves exactly as `filter` does: the same
+    /// elements, the same calls in the same order, the same result.
+    function _inlined_filter<E>(self, predicate: (T) -> bool throws E) -> T[] throws E {
+        // The copy is both the elements `filter` was called with and, from
+        // the front, the elements kept so far.
+        let out = self._copy();
+        let n = out.length();
+        let kept = 0;
+        let i = 0;
+        while (i < n) {
+            let x = out[i];
+            if (predicate(x)) {
+                out[kept] = x;
+                kept += 1;
+            }
+            i += 1;
+        }
+        out._truncate(kept);
+        out
+    }
+
+    /// A new array holding this array's elements, with this array's run-time
+    /// element type.
+    //baml:mut_vm
+    //baml:may_yield
+    function _copy(self) -> T[] throws never {
+        $rust_function
+    }
+
+    /// Drops every element from index `length` on. `length` is between zero
+    /// and the array's length.
+    //baml:mut_self
+    function _truncate(self, length: int) -> null throws never {
+        $rust_function
+    }
+
     /// Returns the non-null results of `fn` — mapping and filtering in one
     /// pass.
     ///
@@ -372,6 +409,30 @@ class Array<T> {
         $rust_function
     }
 
+    /// `map` as a loop, for the optimizer to copy into a caller that passes
+    /// a closure it can see. It behaves exactly as `map` does: the same
+    /// elements, the same calls in the same order, the same result.
+    function _inlined_map<U, E>(self, f: (T) -> U throws E) -> U[] throws E {
+        let items = self._copy();
+        let out = items._results<U>();
+        let n = items.length();
+        let i = 0;
+        while (i < n) {
+            out[i] = f(items[i]);
+            i += 1;
+        }
+        out
+    }
+
+    /// The array a `map` to `U` returns, before any slot is written: as long
+    /// as this array, with element type `U`. The caller writes every slot
+    /// before anything else can read the array.
+    //baml:mut_vm
+    //baml:may_yield
+    function _results<U>(self) -> U[] throws never {
+        $rust_function
+    }
+
     // ─── Predicate scans (callback-driven) ────────────────────────────────────
 
     /// Returns `true` if `predicate` returns true for any element.
@@ -393,6 +454,22 @@ class Array<T> {
         $rust_function
     }
 
+    /// `some` as a loop, for the optimizer to copy into a caller that passes
+    /// a closure it can see. It behaves exactly as `some` does: the same
+    /// elements, the same calls in the same order, the same result.
+    function _inlined_some<E>(self, predicate: (T) -> bool throws E) -> bool throws E {
+        let items = self._copy();
+        let n = items.length();
+        let i = 0;
+        while (i < n) {
+            if (predicate(items[i])) {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+
     /// Returns `true` if `predicate` returns true for *every* element.
     ///
     /// Scans left to right and short-circuits on the first false. An empty
@@ -409,6 +486,22 @@ class Array<T> {
     //baml:may_yield
     function every<E>(self, predicate: (T) -> bool throws E) -> bool throws E {
         $rust_function
+    }
+
+    /// `every` as a loop, for the optimizer to copy into a caller that passes
+    /// a closure it can see. It behaves exactly as `every` does: the same
+    /// elements, the same calls in the same order, the same result.
+    function _inlined_every<E>(self, predicate: (T) -> bool throws E) -> bool throws E {
+        let items = self._copy();
+        let n = items.length();
+        let i = 0;
+        while (i < n) {
+            if (!predicate(items[i])) {
+                return false;
+            }
+            i += 1;
+        }
+        true
     }
 
     /// Returns the first element matching `predicate`, or `null` if none does.
@@ -428,6 +521,23 @@ class Array<T> {
         $rust_function
     }
 
+    /// `find` as a loop, for the optimizer to copy into a caller that passes
+    /// a closure it can see. It behaves exactly as `find` does: the same
+    /// elements, the same calls in the same order, the same result.
+    function _inlined_find<E>(self, predicate: (T) -> bool throws E) -> T? throws E {
+        let items = self._copy();
+        let n = items.length();
+        let i = 0;
+        while (i < n) {
+            let x = items[i];
+            if (predicate(x)) {
+                return x;
+            }
+            i += 1;
+        }
+        null
+    }
+
     /// Returns the index of the first element matching `predicate`, or `null`
     /// if none does.
     ///
@@ -443,6 +553,22 @@ class Array<T> {
     //baml:may_yield
     function find_index<E>(self, predicate: (T) -> bool throws E) -> int? throws E {
         $rust_function
+    }
+
+    /// `find_index` as a loop, for the optimizer to copy into a caller that passes
+    /// a closure it can see. It behaves exactly as `find_index` does: the same
+    /// elements, the same calls in the same order, the same result.
+    function _inlined_find_index<E>(self, predicate: (T) -> bool throws E) -> int? throws E {
+        let items = self._copy();
+        let n = items.length();
+        let i = 0;
+        while (i < n) {
+            if (predicate(items[i])) {
+                return i;
+            }
+            i += 1;
+        }
+        null
     }
 
     /// Returns the *last* element matching `predicate`, or `null` if none does.
@@ -553,6 +679,21 @@ class Array<T> {
     //baml:may_yield
     function reduce<A, E>(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E {
         $rust_function
+    }
+
+    /// `reduce` as a loop, for the optimizer to copy into a caller that passes
+    /// a closure it can see. It behaves exactly as `reduce` does: the same
+    /// elements, the same calls in the same order, the same result.
+    function _inlined_reduce<A, E>(self, reducer: (A, T) -> A throws E, initial: A) -> A throws E {
+        let items = self._copy();
+        let n = items.length();
+        let acc = initial;
+        let i = 0;
+        while (i < n) {
+            acc = reducer(acc, items[i]);
+            i += 1;
+        }
+        acc
     }
 
     /// Maps each element to an array via `f`, then concatenates the results —

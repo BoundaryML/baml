@@ -222,6 +222,17 @@ fn write_block(f: &mut impl Write, db: &dyn crate::Db, block: &BasicBlock<'_>) -
     if block.shielded {
         write!(f, " [shielded]")?;
     }
+    if let Some(scope) = &block.inline {
+        // Outermost call first, as a stack trace reads.
+        let mut chain: Vec<_> = scope.chain().collect();
+        chain.reverse();
+        write!(f, " [inlined")?;
+        for (depth, scope) in chain.into_iter().enumerate() {
+            let name = scope.callee.display_name(db);
+            write!(f, "{}{name}", if depth == 0 { " " } else { " > " })?;
+        }
+        write!(f, "]")?;
+    }
     writeln!(f, ": {{")?;
 
     for stmt in &block.statements {
@@ -628,6 +639,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
                 AggregateKind::Class {
                     class,
                     type_arg_templates,
+                    ..
                 } => {
                     write!(f, "{}", crate::lower::class_display_name(db, *class))?;
                     if !type_arg_templates.is_empty() {

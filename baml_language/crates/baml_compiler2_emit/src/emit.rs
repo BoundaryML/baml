@@ -217,6 +217,19 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj, 'w> {
     arity: usize,
     /// Line index for the MIR's source file.
     line_starts: &'ctx [u32],
+    /// The MIR's source file, when the function has a span. Code inlined
+    /// from this file shares `line_starts`.
+    own_file: Option<baml_base::FileId>,
+    /// Line indexes of the other files code was inlined from.
+    inlined_line_starts: HashMap<baml_base::FileId, Vec<u32>>,
+    /// Per MIR block, the inlined call it belongs to, as an index into
+    /// `Bytecode::inline_frames`.
+    block_inline: Vec<Option<u32>>,
+    /// Per entry of `Bytecode::inline_frames`, whether it is the frame of a
+    /// function written in Rust, which reports line 0.
+    inline_native: Vec<bool>,
+    /// The inlined call the instructions being emitted belong to.
+    current_inline: Option<u32>,
     /// The database link names are rendered through at this boundary.
     db: &'ctx dyn baml_compiler2_mir::Db,
 
@@ -376,6 +389,11 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             body,
             arity,
             line_starts,
+            own_file: None,
+            inlined_line_starts: HashMap::new(),
+            block_inline: Vec::new(),
+            inline_native: Vec::new(),
+            current_inline: None,
             db: ctx.db,
             refs: ctx.refs,
             class_fields: ctx.class_fields,
@@ -819,6 +837,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     /// Compile a MIR function to bytecode.
     fn compile(mut self, identity: bex_vm_types::types::FunctionIdentity) -> Function {
         let mir = self.body;
+        self.collect_inline_frames(mir);
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
 
@@ -1103,9 +1122,17 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         self.bytecode.instructions.len()
     }
 
+    /// The line index of the file `span` is in: this function's own, or that
+    /// of a file code was inlined from.
+    fn line_starts_of(&self, span: Span) -> &[u32] {
+        self.inlined_line_starts
+            .get(&span.file_id)
+            .map_or(self.line_starts, Vec::as_slice)
+    }
+
     /// Convert a byte offset to a 1-indexed line number.
-    fn offset_to_line(&self, offset: u32) -> usize {
-        match self.line_starts.binary_search(&offset) {
+    fn offset_to_line(line_starts: &[u32], offset: u32) -> usize {
+        match line_starts.binary_search(&offset) {
             Ok(idx) => idx + 1,
             Err(idx) => idx,
         }
@@ -1115,12 +1142,81 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     ///
     /// Some statement spans start at the newline byte preceding the real token.
     /// If `start + 1` is a known line start, prefer that offset.
-    fn normalize_span_start_offset(&self, start: u32) -> u32 {
-        if self.line_starts.binary_search(&(start + 1)).is_ok() {
+    fn normalize_span_start_offset(line_starts: &[u32], start: u32) -> u32 {
+        if line_starts.binary_search(&(start + 1)).is_ok() {
             start + 1
         } else {
             start
         }
+    }
+
+    /// Number the inlined calls `mir`'s blocks belong to and describe each as
+    /// the frame a stack trace shows for it (`Bytecode::inline_frames`).
+    fn collect_inline_frames(&mut self, mir: &MirFunctionBody<'ctx>) {
+        let mut indices: HashMap<*const baml_compiler2_mir::InlineScope<'ctx>, u32> =
+            HashMap::new();
+        self.block_inline = mir
+            .blocks
+            .iter()
+            .map(|block| {
+                block
+                    .inline
+                    .as_ref()
+                    .map(|scope| self.inline_frame(scope, &mut indices))
+            })
+            .collect();
+    }
+
+    /// The index of `scope`'s frame, describing it and its ancestors first
+    /// when they are new.
+    fn inline_frame(
+        &mut self,
+        scope: &std::sync::Arc<baml_compiler2_mir::InlineScope<'ctx>>,
+        indices: &mut HashMap<*const baml_compiler2_mir::InlineScope<'ctx>, u32>,
+    ) -> u32 {
+        let key = std::sync::Arc::as_ptr(scope);
+        if let Some(&index) = indices.get(&key) {
+            return index;
+        }
+        // The parent first: the call's line is read in the parent's file.
+        let parent = scope
+            .parent
+            .as_ref()
+            .map(|parent| self.inline_frame(parent, indices));
+        // A call made by a function written in Rust has no line.
+        let call_line = match (&scope.parent, scope.call_span) {
+            (Some(parent), _) if parent.native => 0,
+            (_, Some(span)) => self.span_to_line(span, true),
+            (_, None) => 0,
+        };
+        let file = scope.callee.file(self.db);
+        let file_id = file.file_id(self.db);
+        if self.own_file != Some(file_id) {
+            self.inlined_line_starts
+                .entry(file_id)
+                .or_insert_with(|| crate::build_line_starts(file.text(self.db)));
+        }
+        let index = u32::try_from(self.bytecode.inline_frames.len())
+            .unwrap_or_else(|_| unreachable!("a function's inlined calls fit in u32"));
+        self.bytecode
+            .inline_frames
+            .push(bex_vm_types::bytecode::InlineFrame {
+                function: crate::refs::function_identity(self.db, &scope.callee),
+                package: (file.source_root(self.db) != self.refs.root).then(|| {
+                    baml_compiler2_hir_ty::render::Viewpoint::canonical(self.db)
+                        .display_label(file.source_root(self.db))
+                }),
+                source_file: if scope.native {
+                    String::new()
+                } else {
+                    crate::relative_source_path(self.db, file)
+                },
+                call_line,
+                parent,
+            });
+        self.inline_native.push(scope.native);
+        indices.insert(key, index);
+        index
     }
 
     /// Convert a source span to a display line number.
@@ -1130,9 +1226,10 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     /// when a span crosses lines, which avoids collapsing multiline operand
     /// spans to the previous line.
     fn span_to_line(&self, span: Span, sequence_point: bool) -> usize {
+        let line_starts = self.line_starts_of(span);
         let start: u32 = span.range.start().into();
-        let start = self.normalize_span_start_offset(start);
-        let start_line = self.offset_to_line(start);
+        let start = Self::normalize_span_start_offset(line_starts, start);
+        let start_line = Self::offset_to_line(line_starts, start);
 
         if sequence_point {
             return start_line;
@@ -1142,7 +1239,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         let end_u32: u32 = span.range.end().into();
         if end_u32 > start_u32 {
             let end_minus_one = end_u32 - 1;
-            let end_line = self.offset_to_line(end_minus_one);
+            let end_line = Self::offset_to_line(line_starts, end_minus_one);
             if end_line > start_line && end_line - start_line <= 1 {
                 return end_line;
             }
@@ -1170,13 +1267,24 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             return;
         };
 
+        let native = self
+            .current_inline
+            .is_some_and(|frame| self.inline_native[frame as usize]);
+        let line = if native {
+            0
+        } else {
+            self.span_to_line(span, self.pending_sequence_point)
+        };
         let must_emit = match self.bytecode.line_table.last() {
             None => true,
-            Some(last) => last.span != span || self.pending_sequence_point,
+            // Code from a function written in Rust may share a span with the
+            // code around it and still reports its own line, 0.
+            Some(last) => {
+                last.span != span || (last.line == 0) != native || self.pending_sequence_point
+            }
         };
 
         if must_emit {
-            let line = self.span_to_line(span, self.pending_sequence_point);
             let discriminator = if self.pending_sequence_point {
                 let counter = self.next_line_discriminator.entry(line).or_insert(0);
                 let out = *counter;
@@ -1203,6 +1311,21 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         self.bytecode.instructions.push(instruction);
         self.bytecode.meta.push(InstructionMeta { operand: None });
         self.emit_line_table_entry(index);
+        // Run-length, like the line table: an entry where the inlined call
+        // changes, and none at all in a function nothing was inlined into.
+        let recorded = self
+            .bytecode
+            .inline_table
+            .last()
+            .and_then(|entry| entry.frame);
+        if recorded != self.current_inline {
+            self.bytecode
+                .inline_table
+                .push(bex_vm_types::bytecode::InlineTableEntry {
+                    pc: index,
+                    frame: self.current_inline,
+                });
+        }
         index
     }
 
@@ -1285,7 +1408,13 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         };
         // `AddInt` is the step that can raise.
         let span = self.span_at(n - 1);
-        self.fuse_tail(first, Instruction::AddLocalSmall(dst, src, addend), span)
+        let inline = self.inline_at(n - 1);
+        self.fuse_tail(
+            first,
+            Instruction::AddLocalSmall(dst, src, addend),
+            span,
+            inline,
+        )
     }
 
     /// The span a fused instruction that cannot raise a user-visible error
@@ -1311,12 +1440,25 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             .map(|entry| entry.span)
     }
 
+    /// The inlined call the instruction at `index` belongs to.
+    fn inline_at(&self, index: usize) -> Option<u32> {
+        self.bytecode.inline_frame_for_pc(index)
+    }
+
     /// Replace the instructions from `first` on, all in the current basic
     /// block, with the superinstruction `fused`, which takes `span`: the
     /// span of the one replaced step that can raise, so errors keep their
-    /// source location. Declines, changing nothing, when that would drop a
-    /// sequence point or move one to another span.
-    fn fuse_tail(&mut self, first: usize, fused: Instruction, span: Option<Span>) -> bool {
+    /// source location. `inline` is the inlined call that step belongs to;
+    /// a superinstruction that keeps a sequence point at `first` keeps that
+    /// instruction's inlined call with its span. Declines, changing nothing,
+    /// when that would drop a sequence point or move one to another span.
+    fn fuse_tail(
+        &mut self,
+        first: usize,
+        fused: Instruction,
+        span: Option<Span>,
+        inline: Option<u32>,
+    ) -> bool {
         debug_assert!(first >= self.current_block_start);
         let from = self
             .bytecode
@@ -1333,6 +1475,13 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             .first()
             .filter(|entry| entry.sequence_point)
             .cloned();
+        // The span and the inlined call come from the same replaced step: a
+        // stack trace reads the line from one and the file from the other.
+        let inline = if sequence_point.is_some() {
+            self.inline_at(first)
+        } else {
+            inline
+        };
         // A statement whose final instruction was replaced now ends in the
         // superinstruction, which runs that instruction's operation.
         let end = self.bytecode.instructions.len();
@@ -1360,6 +1509,31 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         self.bytecode.meta.truncate(first);
         self.bytecode.instructions.push(fused);
         self.bytecode.meta.push(InstructionMeta { operand: None });
+        // The replaced instructions' entries go with them, and the
+        // superinstruction gets one where its inlined call differs from the
+        // code before it, as `emit` would have recorded.
+        let kept = self
+            .bytecode
+            .inline_table
+            .partition_point(|entry| entry.pc < first);
+        self.bytecode.inline_table.truncate(kept);
+        if self
+            .bytecode
+            .inline_table
+            .last()
+            .and_then(|entry| entry.frame)
+            != inline
+        {
+            self.bytecode
+                .inline_table
+                .push(bex_vm_types::bytecode::InlineTableEntry {
+                    pc: first,
+                    frame: inline,
+                });
+        }
+        // As in `emit_line_table_entry`: code from a function written in
+        // Rust reports line 0.
+        let native = inline.is_some_and(|frame| self.inline_native[frame as usize]);
         if let Some(entry) = sequence_point {
             self.bytecode.line_table.push(entry);
         } else if let Some(span) = span
@@ -1367,9 +1541,13 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 .bytecode
                 .line_table
                 .last()
-                .is_none_or(|entry| entry.span != span)
+                .is_none_or(|entry| entry.span != span || (entry.line == 0) != native)
         {
-            let line = self.span_to_line(span, false);
+            let line = if native {
+                0
+            } else {
+                self.span_to_line(span, false)
+            };
             self.bytecode.line_table.push(LineTableEntry {
                 pc: first,
                 span,
@@ -1499,7 +1677,8 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 // Nothing in it can raise; it takes the comparison's span,
                 // or that of a sequence point it starts with.
                 let span = self.span_keeping_sequence_point(first, self.span_at(n - 1));
-                if self.fuse_tail(first, branch, span) {
+                let inline = self.inline_at(n - 1);
+                if self.fuse_tail(first, branch, span, inline) {
                     return first;
                 }
             }
@@ -1564,6 +1743,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     /// Emit a basic block, recording where its statements and terminator
     /// landed (`Bytecode::block_pcs`).
     fn emit_block(&mut self, block: &BasicBlock<'ctx>) {
+        self.current_inline = self.block_inline[block.id.0];
         // Emit all statements. A statement's PC is its last instruction,
         // where its final operation runs: the line bytecode reports for an
         // error it raises. One that emits nothing (a definition inlined at its
@@ -2046,6 +2226,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 baml_compiler2_mir::AggregateKind::Class {
                     class,
                     type_arg_templates,
+                    ..
                 },
             fields,
         } = rvalue
@@ -3640,6 +3821,12 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
                 // expression, not to its last inlined operand.
                 let consumer_span = self.current_debug_span;
                 self.set_debug_span(self.def_span_for_local(local), false);
+                // Likewise the inlined call: an error the definition raises
+                // is raised by the code it was written in.
+                let consumer_inline = self.current_inline;
+                if let Some(def) = self.analysis.def_use[&local].def.as_ref() {
+                    self.current_inline = self.block_inline[def.block.0];
+                }
                 let start = self.current_pc();
                 // Inline the definition rvalue at use site.
                 let rvalue = self.analysis.def_use[&local]
@@ -3670,6 +3857,7 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
                 }
                 self.note_inlined_definition(local, start);
                 self.restore_debug_span(consumer_span);
+                self.current_inline = consumer_inline;
                 LocalPullAction::Done
             }
             LocalClassification::PhiLike
@@ -3716,7 +3904,7 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
                 Instruction::LoadVarField(slot, field)
             };
             let span = self.span_keeping_sequence_point(n - 1, self.current_debug_span);
-            if self.fuse_tail(n - 1, fused, span) {
+            if self.fuse_tail(n - 1, fused, span, self.current_inline) {
                 self.set_operand(n - 1, OperandMeta::Field(name.to_string()));
                 return Ok(());
             }
@@ -3955,6 +4143,7 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
             baml_type::typetag::LIST => "_[]".to_string(),
             baml_type::typetag::MAP => "map<_, _>".to_string(),
             baml_type::typetag::PANIC => "baml.panics.Panic".to_string(),
+            baml_type::typetag::NULL => "null".to_string(),
             other => format!("type tag {other}"),
         };
         self.set_operand(inst, OperandMeta::Const(meta));
@@ -4207,7 +4396,8 @@ pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
     // Compile with stackification
     let escape = (opt != crate::analysis::OptLevel::Zero)
         .then(|| baml_compiler2_mir::escape::analyze(ctx.db, ctx.refs.root, body, arity, opt));
-    let codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis, escape);
+    let mut codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis, escape);
+    codegen.own_file = mir_span.map(|span| span.file_id);
     let mut f = codegen.compile(identity);
     if let Some(span) = mir_span {
         f.span = span;

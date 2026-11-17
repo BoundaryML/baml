@@ -38,15 +38,11 @@ fn user.score(query: string, max_results: int, filter: string | null) -> int {
 
     bb5: {
         _0 = copy _2 + const 1_i64;
-        goto -> bb7;
+        return;
     }
 
     bb6: {
         _0 = copy _2;
-        goto -> bb7;
-    }
-
-    bb7: {
         return;
     }
 }
@@ -69,10 +65,6 @@ fn user.is_null(value: int | null) -> bool {
 
     bb2: {
         _0 = copy _1 == const null;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -80,12 +72,24 @@ fn user.is_null(value: int | null) -> bool {
 fn user.omitted_middle() -> int {
     // Locals:
     let _0: int // _0 // return
+    let _1: bool
 
     bb0: {
-        _0 = call const fn user.score(const "cats", const <omitted>, const "recent") -> [bb1];
+        goto -> bb1;
     }
 
-    bb1: {
+    bb1 [inlined user.score]: {
+        _1 = const "recent" == const null;
+        branch copy _1 -> [bb3, bb2];
+    }
+
+    bb2 [inlined user.score]: {
+        _0 = const 11_i64;
+        return;
+    }
+
+    bb3 [inlined user.score]: {
+        _0 = const 10_i64;
         return;
     }
 }
@@ -95,10 +99,11 @@ fn user.explicit_null() -> bool {
     let _0: bool // _0 // return
 
     bb0: {
-        _0 = call const fn user.is_null(const null) -> [bb1];
+        goto -> bb1;
     }
 
-    bb1: {
+    bb1 [inlined user.is_null]: {
+        _0 = const true;
         return;
     }
 }

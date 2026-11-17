@@ -3,7 +3,7 @@
 //! This module defines the core types for the Mid-level Intermediate Representation:
 //! functions as control flow graphs, basic blocks, statements, terminators, and operands.
 
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use baml_base::{Name, Span};
 pub use baml_compiler2_ast::BuiltinKind;
@@ -317,6 +317,39 @@ pub struct BasicBlock<'db> {
     /// suspend. Fixed at creation, like `unwind`; the emitter derives the
     /// bytecode's shield table from it.
     pub shielded: bool,
+    /// Set on a block the inliner copied out of a callee: whose body it came
+    /// from and where it was called. `None` for the function's own code.
+    /// Fixed at creation, like `unwind`, and never merged away: the emitter
+    /// records the scope of the block each instruction's statement is in, so
+    /// an error raised there still reports the callee's frame.
+    pub inline: Option<Arc<InlineScope<'db>>>,
+}
+
+/// The call an inlined block stands in for. A stack trace taken while the
+/// block runs shows one frame for `callee`, as if the call had been made,
+/// below the frame of the code that called it: the `parent` scope's callee,
+/// or the function the block is in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineScope<'db> {
+    /// The function the block was copied from: a declared function, or a
+    /// lambda of the function the block is in.
+    pub callee: MirFunctionId<'db>,
+    /// The span of the call the copy replaced, in the caller's source.
+    pub call_span: Option<Span>,
+    /// The scope of the block that held the call, when that block was
+    /// itself inlined.
+    pub parent: Option<Arc<InlineScope<'db>>>,
+    /// Whether `callee` is written in Rust and the block is from the BAML
+    /// form of it. The frame a stack trace shows is then the Rust
+    /// function's, which has no file and no lines.
+    pub native: bool,
+}
+
+impl<'db> InlineScope<'db> {
+    /// This scope and its ancestors, innermost first.
+    pub fn chain(&self) -> impl Iterator<Item = &InlineScope<'db>> {
+        std::iter::successors(Some(self), |scope| scope.parent.as_deref())
+    }
 }
 
 impl BasicBlock<'_> {
@@ -332,6 +365,7 @@ impl BasicBlock<'_> {
             handling: None,
             landing: None,
             shielded: false,
+            inline: None,
         }
     }
 
@@ -485,6 +519,15 @@ pub enum TypeTest<'db> {
 }
 
 impl TypeTest<'_> {
+    /// Every template the test carries, for rewriting in place.
+    pub fn for_each_template_mut(&mut self, f: &mut impl FnMut(&mut TyTemplate)) {
+        match self {
+            Self::Class { args, .. } => args.iter_mut().for_each(f),
+            Self::Enum(_) => {}
+            Self::Template(template) => f(template),
+        }
+    }
+
     /// Every frame type-argument slot the test reads.
     pub fn for_each_type_arg_ref(&self, f: &mut impl FnMut(u32)) {
         match self {
@@ -1248,6 +1291,14 @@ impl<'db> Rvalue<'db> {
             | Self::CurrentPackage
             | Self::Uint8Array(_)
             | Self::MakeGenericFunction { .. } => true,
+            // An instance with a finalizer is observed when it is collected.
+            Self::Aggregate {
+                kind:
+                    AggregateKind::Class {
+                        finalizable: true, ..
+                    },
+                ..
+            } => false,
             // Joining strings cannot fail.
             Self::Array(_, elements)
             | Self::ConcatStrings(elements)
@@ -1287,9 +1338,16 @@ pub enum AggregateKind<'db> {
     /// `enclosing_generic_params()`). These templates are emitted as
     /// `LoadType` instructions before `AllocInstance` so the VM can store
     /// resolved `Ty` values in `Instance::class_type_args`.
+    ///
+    /// `finalizable` says the class may have a `cleanup` finalizer, as the
+    /// package that wrote the literal sees it. The collector runs the
+    /// finalizer when the instance dies, so building one is an effect even
+    /// when nothing reads the result: [`Rvalue::can_discard`] refuses it,
+    /// and with it every pass that drops unused evaluations.
     Class {
         class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
         type_arg_templates: Vec<TyTemplate>,
+        finalizable: bool,
     },
     Tuple {
         element_templates: Vec<TyTemplate>,
@@ -1416,6 +1474,17 @@ pub enum FunctionOwner<'db> {
     Synthetic(Box<MirFunctionId<'db>>),
 }
 
+impl<'db> MirFunctionId<'db> {
+    /// The source file the function is written in. A synthetic function is
+    /// written inside its owner.
+    pub fn file(&self, db: &'db dyn crate::Db) -> baml_base::SourceFile {
+        match self {
+            MirFunctionId::Declared(function) => function.file(db),
+            MirFunctionId::Synthetic { parent, .. } => parent.file(db),
+        }
+    }
+}
+
 impl MirFunctionId<'_> {
     /// The name this function displays as — the declaration's canonical
     /// display name, or the synthetic spelling `<lambda(owner, i)>` /
@@ -1474,6 +1543,15 @@ impl MirFunctionId<'_> {
 }
 
 impl<'db> FunctionOwner<'db> {
+    /// The source file the owner is written in.
+    pub fn file(&self, db: &'db dyn crate::Db) -> baml_base::SourceFile {
+        match self {
+            FunctionOwner::Function(function) => function.file(db),
+            FunctionOwner::Let(binding) => binding.file(db),
+            FunctionOwner::Synthetic(id) => id.file(db),
+        }
+    }
+
     /// The spelling a synthetic function names this owner by — see
     /// [`MirFunctionId::short_name`].
     pub fn short_name(&self, db: &dyn crate::Db) -> String {

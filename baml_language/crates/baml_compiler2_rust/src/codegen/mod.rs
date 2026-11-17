@@ -94,7 +94,7 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) analysis: &'a Analysis,
     pub(crate) positions: &'a bex_vm_types::Bytecode,
     /// Source location and shielding last recorded in this leaf.
-    pub(crate) current_mark: Option<(usize, bool)>,
+    pub(crate) current_mark: Option<(usize, bool, Option<u32>)>,
     /// Exact position for error branches; normal execution coalesces by line.
     pub(crate) current_pc: Option<usize>,
     pub(crate) out: String,
@@ -799,14 +799,16 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Record a PC only when its source location or shielding changes.
-    /// Positions without bytecode retain the last PC.
+    /// Record a PC only when its source location, its shielding or the
+    /// inlined call it belongs to changes. Positions without bytecode retain
+    /// the last PC.
     fn set_pc(&mut self, pc: Option<usize>) {
         let Some(pc) = pc else { return };
         self.current_pc = Some(pc);
         let mark = (
             self.positions.source_line_for_pc(pc),
             self.positions.pc_is_shielded(pc),
+            self.positions.inline_frame_for_pc(pc),
         );
         if self.current_mark != Some(mark) {
             self.current_mark = Some(mark);

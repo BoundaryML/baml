@@ -230,7 +230,15 @@ use sha2::{Digest, Sha256};
 /// and the compiler version, a `PackageRecord` carries the package's
 /// `metadata` (its content hashes and claim, BEP-085), and a
 /// `ProgramPackage` carries it into the executable.
-pub const FORMAT_VERSION: u32 = 28;
+///
+/// Version 31: `Bytecode` carries `inline_frames` and `inline_table`, the
+/// calls the optimizer inlined into a function and the PCs each one covers,
+/// which a stack trace expands back into frames, and the instruction and
+/// opcode sets gained `IsNull`, `IsNotNull`, `CallEquals`, `AddLocalSmall`,
+/// `LoadVarField`, `LoadVarFieldLocal`, `JumpIfLocalsCmp` and
+/// `JumpIfLocalConstCmp`. Versions 29 and 30 are skipped: unreleased builds
+/// wrote other layouts under them.
+pub const FORMAT_VERSION: u32 = 31;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

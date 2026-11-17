@@ -30,7 +30,7 @@ fn user.f(xs: int[]) -> int {
 
     bb2: {
         _0 = const 0_i64;
-        goto -> bb6;
+        return;
     }
 
     bb3: {
@@ -50,10 +50,6 @@ fn user.f(xs: int[]) -> int {
     bb5: {
         _12 = copy _7;
         _0 = copy _11 + copy _12;
-        goto -> bb6;
-    }
-
-    bb6: {
         return;
     }
 }

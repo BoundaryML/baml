@@ -61,10 +61,13 @@ function consume(it: baml.iter.Iterator<Item = int, Error = never>) -> int {
 
 /// `(local name, thread-local)` for each named local of `function`, in
 /// declaration order. A shadowed name reports its first declaration.
+///
+/// Lowered at `OptLevel::One`: at `Two` an instance that stays in its
+/// function is replaced by locals, which leaves no object to classify.
 fn classify(source: &str, function: &str) -> Vec<(String, bool)> {
     let mut db = make_db();
     let file = db.file("test.baml", source);
-    classify_file(&db, file, function)
+    classify_file_at_opt(&db, file, function, OptLevel::One)
 }
 
 fn classify_file(
@@ -120,13 +123,15 @@ fn needs(source: &str, function: &str) -> (Vec<(String, u64)>, Vec<Vec<u64>>) {
         .iter()
         .find(|&&loc| function_data(&db, loc).name.as_str() == function)
         .unwrap_or_else(|| panic!("no function `{function}`"));
-    let mir = lower_function(&db, loc, OptLevel::Two)
+    // At `One`, where a call to a small function is still a call: what a
+    // caller proves about its arguments is the subject here.
+    let mir = lower_function(&db, loc, OptLevel::One)
         .as_ref()
         .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("`{function}` must lower to bytecode")
     };
-    let facts = escape::analyze(&db, file.source_root(&db), body, mir.arity, OptLevel::Two);
+    let facts = escape::analyze(&db, file.source_root(&db), body, mir.arity, OptLevel::One);
     let mut seen = std::collections::HashSet::new();
     let locals = body
         .locals
@@ -1284,11 +1289,11 @@ fn bytecode_takes_relaxed_field_paths_for_thread_local_instances() {
 class Counter {
   n: int
 }
-function build(k: int) -> int {
+function build(k: int) -> Counter {
   let c = Counter { n: 0 };
   let i = 0;
   while (i < k) { c.n = c.n + i; i += 1; }
-  c.n
+  c
 }
 function bump(c: Counter) -> int {
   c.n = c.n + 1;

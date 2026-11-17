@@ -122,23 +122,26 @@ test "other initializer" { assert.equal(LATER.length(), 3) }
 fn entry_points_keep_initializer_helpers_and_their_lambda_callees() {
     let db = baml_test_support::setup_test_db(
         r#"
-function only_from_initializer(n: int) -> int { n + 1 }
+// The helpers call themselves on a path never taken, so their calls are
+// not inlined away.
+function only_from_initializer(n: int) -> int { if (n < 0) { only_from_initializer(0) } else { n + 1 } }
 const CALLBACK = (n: int) -> int { only_from_initializer(n) };
 const UNUSED = only_from_initializer(8);
 function main() -> int { 42 }
 function dead() -> int { 0 }
-function only_from_test() -> int { 9 }
-test "registered initializer" { assert.equal(only_from_test(), 9) }
+function only_from_test(n: int) -> int { if (n < 0) { only_from_test(0) } else { n } }
+test "registered initializer" { assert.equal(only_from_test(9), 9) }
 "#,
     );
     let program = lower(&db, OptLevel::Two);
     let entries = [program.rendered_callables()["user.main"].object.raw()];
     let module = render(&db, &program, OptLevel::Two, Some(&entries));
     let dead = program.rendered_callables()["user.dead"].object.raw();
-    for (object, _) in user_functions(&program).filter(|(object, _)| *object != dead) {
+    for (object, function) in user_functions(&program).filter(|(object, _)| *object != dead) {
         assert!(
             module.functions.iter().any(|f| f.object == object),
-            "object {object} missing"
+            "{} missing",
+            function.name()
         );
     }
     assert!(matches!(
@@ -649,7 +652,9 @@ fn entry_points_prune_admission_to_what_they_reach() {
     #[rustfmt::skip]
     let cases: &[(&str, &[&str], &[&str])] = &[
         ("fib", &["fib"], &["sum", "main", "uses_closure"]),
-        ("main", &["main", "sum", "fib", "manhattan", "safe_div", "mean"], &["build"]),
+        // `sum`, `manhattan` and `mean` are inlined into `main`, which leaves
+        // nothing reaching them.
+        ("main", &["main", "fib", "safe_div"], &["build", "sum", "manhattan", "mean"]),
     ];
     for (entry, admitted, unreached) in cases {
         let entries = [callables[&format!("user.{entry}")].object.raw()];

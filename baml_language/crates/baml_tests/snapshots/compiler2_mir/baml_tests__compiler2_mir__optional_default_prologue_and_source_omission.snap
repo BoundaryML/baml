@@ -20,10 +20,6 @@ fn user.add(base: int, amount: int) -> int {
 
     bb2: {
         _0 = copy _1 + copy _2;
-        goto -> bb3;
-    }
-
-    bb3: {
         return;
     }
 }
@@ -33,10 +29,11 @@ fn user.main() -> int {
     let _0: int // _0 // return
 
     bb0: {
-        _0 = call const fn user.add(const 5_i64, const <omitted>) -> [bb1];
+        goto -> bb1;
     }
 
-    bb1: {
+    bb1 [inlined user.add]: {
+        _0 = const 12_i64;
         return;
     }
 }

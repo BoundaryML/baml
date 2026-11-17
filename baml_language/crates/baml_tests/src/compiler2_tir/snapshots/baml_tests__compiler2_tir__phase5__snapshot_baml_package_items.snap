@@ -3,7 +3,7 @@ source: crates/baml_tests/src/compiler2_tir/phase5.rs
 expression: output
 ---
 namespace baml:
-  class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, filter_map, reverse, sort_by, sort_by_key, slice, join, map, some, every, find, find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, flat_map, clear, shift, unshift, insert, splice] }
+  class Array<T> { methods: [filled, generate, length, at, push, pop, remove_at, concat, for_each, filter, _inlined_filter, _copy, _truncate, filter_map, reverse, sort_by, sort_by_key, slice, join, map, _inlined_map, _results, some, _inlined_some, every, _inlined_every, find, _inlined_find, find_index, _inlined_find_index, find_last, find_last_index, includes, index_of, last_index_of, reduce, _inlined_reduce, flat_map, clear, shift, unshift, insert, splice] }
   class Bigint { methods: [abs, isqrt, pow, ilog, to_int, parse, random, _random_byte_count, _random_in_range] }
   class Bool { methods: [random] }
   type Concrete

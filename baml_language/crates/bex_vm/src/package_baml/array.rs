@@ -896,6 +896,28 @@ impl BamlClassArray for PackageBamlImpl {
         array.clear();
     }
 
+    fn _copy(vm: &mut BexVm, array: ArrayView<'_>) -> NativeCallResult {
+        let element_ty = (*array.ty).clone();
+        let items = array.to_vec();
+        NativeCallResult::Done(Value::object(vm.alloc_array(element_ty, items)))
+    }
+
+    fn _results(vm: &mut BexVm, array: ArrayView<'_>) -> NativeCallResult {
+        // The type arguments are the receiver's, then `U`.
+        let element_ty = vm
+            .current_call_type_args()
+            .last()
+            .cloned()
+            .unwrap_or_else(bex_vm_types::RealizedTy::unknown);
+        let slots = vec![Value::NULL; array.len()];
+        NativeCallResult::Done(Value::object(vm.alloc_array(element_ty, slots)))
+    }
+
+    #[allow(clippy::unused_unit)]
+    fn _truncate(array: &mut Vec<Value>, length: i64) -> () {
+        array.truncate(usize::try_from(length).unwrap_or(0));
+    }
+
     fn shift(array: &mut Vec<Value>) -> Option<Value> {
         if array.is_empty() {
             None

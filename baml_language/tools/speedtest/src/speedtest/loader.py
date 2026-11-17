@@ -6,6 +6,7 @@ A workload is a directory under ``workloads/<category>/<slug>/``:
     main.baml    the BAML program; ``main()`` performs one job
     main.py      the same program in Python; ``main()`` returns the same value
     main.js      the same program in JavaScript (node and bun)
+    main.go      the same program in Go; ``Main()`` returns the same value (optional)
 
 ``main()`` must be deterministic: every implementation returns the value in
 ``bench.toml``'s ``expect``, and every trial is checked against it.
@@ -17,6 +18,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 SOURCES = {"baml": "main.baml", "python": "main.py", "js": "main.js"}
+# Ports a workload may lack; a row without its port is drawn as unavailable.
+OPTIONAL_SOURCES = {"go": "main.go"}
 REQUIRED = ("name", "description", "expect")
 
 
@@ -39,6 +42,7 @@ def load_workload(path):
         if not src.exists():
             raise ValueError(f"{path}: missing {filename}")
         sources[key] = src.read_text()
+    optional = {key: path / filename for key, filename in OPTIONAL_SOURCES.items() if (path / filename).exists()}
     category = path.parent.name
     return {
         "id": f"{category}/{path.name}",
@@ -53,8 +57,9 @@ def load_workload(path):
         "jobs": int(meta.get("jobs", 1)),
         "warmup": int(meta.get("warmup", 1)),
         "path": path,
-        "files": {key: path / filename for key, filename in SOURCES.items()},
+        "files": {**{key: path / filename for key, filename in SOURCES.items()}, **optional},
         **sources,
+        **{key: src.read_text() for key, src in optional.items()},
     }
 
 

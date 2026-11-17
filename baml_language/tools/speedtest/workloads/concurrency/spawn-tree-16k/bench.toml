@@ -1,0 +1,5 @@
+name = "spawn tree 16k"
+description = "16,383 tasks in a binary tree: each spawns two children and awaits both"
+expect = "16383"
+jobs = 2
+warmup = 1

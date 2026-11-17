@@ -245,6 +245,23 @@ pub fn analyze<'db>(
     facts
 }
 
+/// [`analyze`] from this body alone: every call to a source function is
+/// opaque, so its arguments are shared. Builtins keep their known effects.
+/// Usable while lowering is still in progress, where a callee's summary would
+/// ask for MIR that depends on this body.
+pub fn analyze_local<'db>(
+    db: &'db dyn crate::Db,
+    root: SourceRoot,
+    body: &MirFunctionBody<'db>,
+    arity: usize,
+    opt: OptLevel,
+) -> EscapeFacts {
+    let types = Types::new(db, root, body);
+    let mut graph = Graph::new(body.locals.len(), &types);
+    walk(&mut graph, db, body, arity, opt, Callees::Opaque);
+    graph.finish(arity)
+}
+
 /// What calling `function` does with its arguments and result, for callers:
 /// its graph, restricted to what its parameters and return value reach, with
 /// parameters assumed thread-local. `None` when the analysis cannot see the
@@ -315,7 +332,11 @@ fn component_summaries<'db>(
     for (index, &(function, mir, body)) in members.iter().enumerate() {
         graph.offset = offsets[&function].0;
         graph.types = &types[index];
-        walk(&mut graph, db, body, mir.arity, opt, None, Some(&offsets));
+        let callees = Callees::Summarized {
+            current: None,
+            component: Some(&offsets),
+        };
+        walk(&mut graph, db, body, mir.arity, opt, callees);
     }
     members
         .iter()
@@ -419,7 +440,7 @@ fn can_summarize(db: &dyn crate::Db, caller: SourceRoot, callee: FunctionLoc<'_>
 /// Whether an instance of `class` built in `caller` may have a finalizer.
 /// Read from source only where [`can_summarize`] sees bodies, so a user
 /// dependency answers the same mounted or not: anything else may.
-fn may_finalize(db: &dyn crate::Db, caller: SourceRoot, class: &ClassRef<'_>) -> bool {
+pub(crate) fn may_finalize(db: &dyn crate::Db, caller: SourceRoot, class: &ClassRef<'_>) -> bool {
     let DeclRef::Source(class) = *class else {
         return true;
     };
@@ -443,30 +464,54 @@ fn build<'a, 'db>(
     types: &'a Types<'a, 'db>,
 ) -> Graph<'a, 'db> {
     let mut graph = Graph::new(body.locals.len(), types);
-    walk(&mut graph, db, body, arity, opt, current, None);
+    let callees = Callees::Summarized {
+        current,
+        component: None,
+    };
+    walk(&mut graph, db, body, arity, opt, callees);
     graph
 }
 
+/// How a walk sees the calls a body makes to source functions.
+#[derive(Clone, Copy)]
+enum Callees<'a, 'db> {
+    /// Each one is opaque. For a body still being lowered: a summary reads
+    /// lowered MIR, which may be the very function the body belongs to.
+    Opaque,
+    /// Through their summaries.
+    Summarized {
+        /// The function whose summary is being built, if any: calls within
+        /// its recursive component are opaque.
+        current: Option<FunctionLoc<'db>>,
+        /// The other bodies of a recursive component, placed in the same
+        /// graph: each callee's node offset and arity. A call to one joins
+        /// the callee's nodes directly.
+        component: Option<&'a FxHashMap<FunctionLoc<'db>, (usize, usize)>>,
+    },
+}
+
 /// Add `body`'s constraints to `graph`, whose locals for it start at
-/// `graph.offset` and whose types are `body`'s. `component` places the other
-/// bodies of a recursive component in the same graph: each callee's node
-/// offset and arity.
+/// `graph.offset` and whose types are `body`'s.
 fn walk<'a, 'db>(
     graph: &mut Graph<'a, 'db>,
     db: &'db dyn crate::Db,
     body: &'a MirFunctionBody<'db>,
     arity: usize,
     opt: OptLevel,
-    current: Option<FunctionLoc<'db>>,
-    component: Option<&FxHashMap<FunctionLoc<'db>, (usize, usize)>>,
+    callees: Callees<'_, 'db>,
 ) {
     let builtins = Builtins::new(db);
     let array_iterators = array_iterators(db, body, arity);
+    let (current, component, summaries) = match callees {
+        Callees::Opaque => (None, None, false),
+        Callees::Summarized { current, component } => (current, component, true),
+    };
     let walker = Walker {
         db,
         opt,
         current,
         component,
+        summaries,
         types: graph.types,
         builtins: &builtins,
         array_iterators: &array_iterators,
@@ -959,6 +1004,8 @@ struct Walker<'a, 'db> {
     /// The bodies of a recursive component sharing this graph: a call to one
     /// joins the callee's nodes directly.
     component: Option<&'a FxHashMap<FunctionLoc<'db>, (usize, usize)>>,
+    /// Whether calls to source functions are seen through their summaries.
+    summaries: bool,
     types: &'a Types<'a, 'db>,
     builtins: &'a Builtins<'db>,
     array_iterators: &'a [bool],
@@ -1091,6 +1138,9 @@ impl<'a, 'db> Walker<'a, 'db> {
     /// The summary of a call's target, unless it is opaque or in the same
     /// recursive component as the function being summarized.
     fn summary(&self, callee: &Operand<'db>) -> Option<&'db Summary> {
+        if !self.summaries {
+            return None;
+        }
         let DeclRef::Source(callee) = static_callee(callee)? else {
             return None;
         };

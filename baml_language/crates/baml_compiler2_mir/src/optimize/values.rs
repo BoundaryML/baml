@@ -196,6 +196,19 @@ fn fold<'db>(value: &Rvalue<'db>) -> Option<Constant<'db>> {
                 BinOp::Ne => Some(Constant::Bool(false)),
                 _ => None,
             },
+            // A defaulted parameter's entry test, once inlining has put a
+            // call's argument in the parameter's place: only the omission
+            // sentinel equals itself.
+            (Constant::OmittedArg, other) | (other, Constant::OmittedArg)
+                if scalar(other) || matches!(other, Constant::OmittedArg) =>
+            {
+                let omitted = matches!(other, Constant::OmittedArg);
+                match op {
+                    BinOp::Eq => Some(Constant::Bool(omitted)),
+                    BinOp::Ne => Some(Constant::Bool(!omitted)),
+                    _ => None,
+                }
+            }
             _ => None,
         },
         _ => None,
@@ -288,9 +301,11 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
     let effects = super::effects::Analysis::new(body);
     let n = body.locals.len();
     let mut live_in = vec![vec![false; n]; body.blocks.len()];
+    let order = backward_order(body);
     loop {
         let mut changed = false;
-        for block in body.blocks.iter().rev() {
+        for &index in &order {
+            let block = &body.blocks[index];
             let (mut live, exceptional) = live_out::<false>(body, block, &live_in);
             for statement in block.statements.iter().rev() {
                 transfer(statement, &mut live, &exceptional);
@@ -335,9 +350,11 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
 pub fn live_in_precise(body: &MirFunctionBody<'_>) -> Vec<Vec<bool>> {
     let n = body.locals.len();
     let mut live_in = vec![vec![false; n]; body.blocks.len()];
+    let order = backward_order(body);
     loop {
         let mut changed = false;
-        for block in body.blocks.iter().rev() {
+        for &index in &order {
+            let block = &body.blocks[index];
             let (mut live, exceptional) = live_out::<true>(body, block, &live_in);
             for statement in block.statements.iter().rev() {
                 transfer(statement, &mut live, &exceptional);
@@ -430,15 +447,48 @@ fn transfer(statement: &Statement<'_>, live: &mut [bool], exceptional: &[bool]) 
         ..
     } = &statement.kind
     {
-        live[local.0] = false;
+        // A panic can enter the handler before this statement stores its
+        // result, so a local the handler reads stays live across the store.
+        // `live` already holds everything else in `exceptional`.
+        live[local.0] = exceptional[local.0];
     }
     let mut uses = vec![0; live.len()];
     super::count_in_statement(statement, &mut uses);
     for (live, uses) in live.iter_mut().zip(uses) {
         *live |= uses != 0;
     }
-    // A panic can enter the handler before this statement stores its result.
-    union(live, exceptional);
+}
+
+/// Blocks in postorder, successors before predecessors, so a backward
+/// analysis settles in a sweep or two whatever order the blocks are stored in.
+/// Unreachable blocks follow in stored order.
+fn backward_order(body: &MirFunctionBody<'_>) -> Vec<usize> {
+    let mut visited = vec![false; body.blocks.len()];
+    let mut order = Vec::with_capacity(body.blocks.len());
+    let mut stack = vec![(body.entry.0, false)];
+    while let Some((index, done)) = stack.pop() {
+        if done {
+            order.push(index);
+            continue;
+        }
+        if std::mem::replace(&mut visited[index], true) {
+            continue;
+        }
+        stack.push((index, true));
+        let block = &body.blocks[index];
+        let successors = block
+            .terminator
+            .iter()
+            .flat_map(Terminator::successors)
+            .chain(block.unwind);
+        for successor in successors {
+            if !visited[successor.0] {
+                stack.push((successor.0, false));
+            }
+        }
+    }
+    order.extend((0..body.blocks.len()).filter(|index| !visited[*index]));
+    order
 }
 
 fn union(into: &mut [bool], from: &[bool]) {
@@ -726,7 +776,7 @@ mod tests {
             );
             assert_eq!(defs[2], 1, "unnamed temporary at {opt:?}");
             if opt == OptLevel::Zero {
-                super::super::optimize_body(&mut body, 0, opt);
+                super::super::optimize_body(&mut body, 0, opt, None);
                 let named = body
                     .locals
                     .iter()

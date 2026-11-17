@@ -4,9 +4,28 @@ source: crates/baml_tests/src/corpus.rs
 function fixtures.json_parse_stringify_intrinsics.parse_and_roundtrip(s: string) -> string {
     load_var s
     call baml.json.parse
-    load_const <omitted>
-    load_const <omitted>
-    load_const <omitted>
-    call baml.json.stringify
+    store_var j
+    load_const baml.json.Naming.Declared
+    alloc_variant baml.json.Naming
+    discriminant
+    load_const Naming.Aliased
+    cmp_int_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const false
+    store_var _6
+    jump L2
+
+  L1:
+    load_const true
+    store_var _6
+
+  L2:
+    load_var2 2 3
+    load_const 0
+    load_const false
+    call baml.json._stringify
     return
 }

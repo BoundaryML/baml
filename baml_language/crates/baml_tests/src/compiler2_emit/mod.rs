@@ -169,8 +169,14 @@ fn optional_param_metadata_and_omitted_sentinel_emit() {
         "expected default prologue to compare against OmittedArg"
     );
 
-    let main_idx = callable(&program, "user.main");
-    let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
+    // The call site's sentinel, where the call is still a call: at `Two` it
+    // is inlined and the omission folds away with it.
+    let unoptimized = CheckedWorld::collect(&db, db.workspace_root().expect("workspace root"))
+        .expect("the world checks")
+        .compile_with(OptLevel::One, prefix(OptLevel::One))
+        .expect("compilation should succeed");
+    let main_idx = callable(&unoptimized, "user.main");
+    let bex_vm_types::Object::Function(main) = &(*unoptimized.objects)[main_idx] else {
         panic!("expected user.main to be a function");
     };
     assert!(
@@ -576,14 +582,15 @@ function main(n: int) -> int {{
                     code.exception_handlers_for_pc(outer).next().is_none(),
                     "the last handler must not catch its own failures"
                 );
-                let throw_pc = code
-                    .instructions
-                    .iter()
-                    .position(|op| matches!(op, Instruction::Throw))
-                    .expect("first arm throws a new value");
+                // `fail`'s own throw may be inlined ahead of the first arm's.
                 assert!(
-                    code.exception_handlers_for_pc(throw_pc)
-                        .any(|entry| entry.handler_pc == outer),
+                    code.instructions
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, op)| matches!(op, Instruction::Throw))
+                        .any(|(throw_pc, _)| code
+                            .exception_handlers_for_pc(throw_pc)
+                            .any(|entry| entry.handler_pc == outer)),
                     "throws in the first arm must enter the second handler"
                 );
                 let compact = code.lower_to_compact();

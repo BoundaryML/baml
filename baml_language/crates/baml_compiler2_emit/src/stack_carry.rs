@@ -1798,6 +1798,7 @@ mod tests {
                 handling: None,
                 landing: None,
                 shielded: false,
+                inline: None,
             }],
             entry: baml_compiler2_mir::BlockId(0),
             locals: local_tys.into_iter().map(local_decl).collect(),
@@ -2030,6 +2031,7 @@ mod tests {
             &Rvalue::Aggregate {
                 kind: AggregateKind::Class {
                     class: crate::tests::class_ref(&db, file, "Box"),
+                    finalizable: false,
                     type_arg_templates: vec![TyTemplate::from(
                         baml_compiler2_mir::RealizedTy::int(),
                     )],
@@ -2090,6 +2092,7 @@ mod tests {
         let rvalue = Rvalue::Aggregate {
             kind: AggregateKind::Class {
                 class: crate::tests::class_ref(&db, file, "Box"),
+                finalizable: false,
                 type_arg_templates: vec![],
             },
             fields: vec![Operand::Copy(Place::Field {
@@ -2120,6 +2123,7 @@ mod tests {
         let rvalue = Rvalue::Aggregate {
             kind: AggregateKind::Class {
                 class: crate::tests::class_ref(&db, file, "GuideHooks"),
+                finalizable: false,
                 type_arg_templates: vec![],
             },
             fields: vec![

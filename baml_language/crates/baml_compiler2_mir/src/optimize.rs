@@ -16,7 +16,12 @@ use crate::{
     Place, Terminator, memory,
 };
 
+mod devirtualize;
 mod effects;
+pub(crate) mod inline;
+mod loops;
+mod redundancy;
+mod scalar_replace;
 mod values;
 
 pub use values::live_in_precise;
@@ -30,12 +35,27 @@ pub(crate) fn optimize_function(
     let MirFunctionKind::Bytecode(body) = &mut func.kind else {
         return; // nothing to clean up on builtins
     };
-    optimize_body(body, func.arity, opt);
+    let scope =
+        (opt >= crate::OptLevel::Two).then(|| scalar_replace::Scope::of(db, &func.identity));
+    optimize_body(body, func.arity, opt, scope.as_ref());
 
     // `cfg!`, not `#[cfg]`: the verifier stays type-checked in every
     // profile and the call folds away in release.
     if cfg!(debug_assertions) {
         verify_mir(db, body, func.arity, &func.identity.display(db));
+    }
+}
+
+/// Run the cleanup passes again on a function and every lambda lowered
+/// inside it, after a pass that rewrote their bodies.
+pub(crate) fn optimize_function_tree(
+    db: &dyn crate::Db,
+    func: &mut MirFunction<'_>,
+    opt: crate::OptLevel,
+) {
+    optimize_function(db, func, opt);
+    for lambda in &mut func.lambdas {
+        optimize_function_tree(db, lambda, opt);
     }
 }
 
@@ -48,14 +68,20 @@ pub(crate) fn optimize_function_body(
     body: &mut MirFunctionBody,
     opt: crate::OptLevel,
 ) {
-    optimize_body(body, 0, opt);
+    // An initializer has no owning function to read class layouts as.
+    optimize_body(body, 0, opt, None);
 
     if cfg!(debug_assertions) {
         verify_mir(db, body, 0, &"$init_let._");
     }
 }
 
-fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel) {
+fn optimize_body(
+    body: &mut MirFunctionBody,
+    arity: usize,
+    opt: crate::OptLevel,
+    scope: Option<&scalar_replace::Scope<'_>>,
+) {
     loop {
         let size = |body: &MirFunctionBody| {
             (
@@ -73,6 +99,9 @@ fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel)
         if opt >= crate::OptLevel::Two {
             values::fold_constants(body, arity);
             eliminate_dead_blocks(body);
+            if let Some(scope) = scope {
+                scalar_replace::run(scope, body, arity);
+            }
         }
         effects::remove_trivial_drops(body);
         values::eliminate_dead_stores(body, arity, opt);
@@ -82,6 +111,9 @@ fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel)
         if before == size(body) {
             break;
         }
+    }
+    if opt >= crate::OptLevel::Two {
+        redundancy::optimize(body, arity, scope);
     }
     if opt >= crate::OptLevel::One {
         values::materialize_operand_prefixes(body);
@@ -905,7 +937,13 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                         if src.0 >= 1
                             && src.0 <= arity
                             && defs[src.0] == 0
-                            && !place_bound.contains(dest) =>
+                            && !place_bound.contains(dest)
+                            // A copy that narrows the parameter to an array
+                            // is the only local typed as one, which is what
+                            // array iteration is recognised by
+                            // (`escape::array_walks`).
+                            && (!matches!(body.locals[dest.0].ty, crate::RuntimeTy::List(_))
+                                || matches!(body.locals[src.0].ty, crate::RuntimeTy::List(_))) =>
                     {
                         // A bare captured parameter would be its cell pointer,
                         // which no `Use` reads.
@@ -1569,6 +1607,159 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
         } => {
             remap_operand(operand, map);
             remap_place(destination, map);
+        }
+        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
+    }
+}
+
+/// Call `f` on every place a statement reads or writes, whole: a projection
+/// is visited once, as the place it is. The mutable sibling of the local
+/// rewriting above, for a rewrite that is not a renumbering.
+pub(crate) fn for_each_place_in_statement(
+    stmt: &mut crate::Statement,
+    f: &mut impl FnMut(&mut Place),
+) {
+    let operand = |op: &mut Operand, f: &mut dyn FnMut(&mut Place)| {
+        if let Operand::Copy(place) | Operand::Move(place) = op {
+            f(place);
+        }
+    };
+    match &mut stmt.kind {
+        crate::StatementKind::Assign { destination, value } => {
+            f(destination);
+            match value {
+                crate::Rvalue::Use(op)
+                | crate::Rvalue::UnaryOp { operand: op, .. }
+                | crate::Rvalue::IsType { operand: op, .. }
+                | crate::Rvalue::IsTypeTag { operand: op, .. }
+                | crate::Rvalue::SatisfiesBound { ty: op, .. }
+                | crate::Rvalue::MakeBoundMethod { receiver: op, .. }
+                | crate::Rvalue::MakeVirtualBoundMethod { receiver: op, .. }
+                | crate::Rvalue::VirtualFieldAccess { receiver: op, .. }
+                | crate::Rvalue::MakeGenericFunctionFromValue { value: op, .. } => operand(op, f),
+                crate::Rvalue::BinaryOp { left, right, .. } => {
+                    operand(left, f);
+                    operand(right, f);
+                }
+                crate::Rvalue::Array(_, operands)
+                | crate::Rvalue::ConcatStrings(operands)
+                | crate::Rvalue::Aggregate {
+                    fields: operands, ..
+                }
+                | crate::Rvalue::MakeClosure {
+                    captures: operands, ..
+                }
+                | crate::Rvalue::MakeVirtualFunction {
+                    type_args: operands,
+                    ..
+                } => {
+                    for op in operands {
+                        operand(op, f);
+                    }
+                }
+                crate::Rvalue::Map(_, _, entries) => {
+                    for (key, value) in entries {
+                        operand(key, f);
+                        operand(value, f);
+                    }
+                }
+                crate::Rvalue::Discriminant(place)
+                | crate::Rvalue::TypeTag(place)
+                | crate::Rvalue::Len(place) => f(place),
+                crate::Rvalue::Uint8Array(_)
+                | crate::Rvalue::LoadType(_)
+                | crate::Rvalue::TraceHookSettings { .. }
+                | crate::Rvalue::CurrentPackage
+                | crate::Rvalue::MakeGenericFunction { .. } => {}
+            }
+        }
+        crate::StatementKind::VirtualFieldStore {
+            receiver, value, ..
+        } => {
+            operand(receiver, f);
+            operand(value, f);
+        }
+        crate::StatementKind::Drop(place) => f(place),
+        crate::StatementKind::Intrinsic { args, .. } => {
+            for arg in args {
+                operand(arg, f);
+            }
+        }
+        crate::StatementKind::FreshCell { .. } | crate::StatementKind::Nop => {}
+    }
+}
+
+/// [`for_each_place_in_statement`] for a terminator.
+pub(crate) fn for_each_place_in_terminator(term: &mut Terminator, f: &mut impl FnMut(&mut Place)) {
+    let operand = |op: &mut Operand, f: &mut dyn FnMut(&mut Place)| {
+        if let Operand::Copy(place) | Operand::Move(place) = op {
+            f(place);
+        }
+    };
+    match term {
+        Terminator::Branch { condition: op, .. }
+        | Terminator::Switch {
+            discriminant: op, ..
+        }
+        | Terminator::NarrowBind { source: op, .. }
+        | Terminator::Throw { value: op } => operand(op, f),
+        Terminator::Call {
+            callee,
+            args,
+            destination,
+            ..
+        }
+        | Terminator::SysOp {
+            callee,
+            args,
+            destination,
+            ..
+        } => {
+            operand(callee, f);
+            for arg in args {
+                operand(arg, f);
+            }
+            f(destination);
+        }
+        Terminator::VirtualCall {
+            args, destination, ..
+        } => {
+            for arg in args {
+                operand(arg, f);
+            }
+            f(destination);
+        }
+        Terminator::Spawn { plan, future, .. } => {
+            operand(plan, f);
+            f(future);
+        }
+        Terminator::Await {
+            future,
+            destination,
+            ..
+        } => {
+            f(future);
+            f(destination);
+        }
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            ..
+        } => {
+            operand(futures, f);
+            f(destination);
+        }
+        Terminator::Rethrow { value, context } => {
+            operand(value, f);
+            operand(context, f);
+        }
+        Terminator::ShortCircuit {
+            operand: op,
+            destination,
+            ..
+        } => {
+            operand(op, f);
+            f(destination);
         }
         Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }

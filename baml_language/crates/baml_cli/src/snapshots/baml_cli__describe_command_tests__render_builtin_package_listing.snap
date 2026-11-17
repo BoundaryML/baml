@@ -5,9 +5,9 @@ expression: output
 class            baml.Bigint                      <builtin>/baml/bigint.baml:26
 class            baml.Bool                        <builtin>/baml/bool.baml:2
 class            baml.Array                       <builtin>/baml/containers.baml:26
-class            baml.Map                         <builtin>/baml/containers.baml:715
-interface        baml.Summable                    <builtin>/baml/containers.baml:869
-interface        baml.FloatStats                  <builtin>/baml/containers.baml:938
+class            baml.Map                         <builtin>/baml/containers.baml:856
+interface        baml.Summable                    <builtin>/baml/containers.baml:1010
+interface        baml.FloatStats                  <builtin>/baml/containers.baml:1079
 interface        baml.ToString                    <builtin>/baml/conversions.baml:24
 interface        baml.ToJson                      <builtin>/baml/conversions.baml:180
 interface        baml.FromJson                    <builtin>/baml/conversions.baml:227

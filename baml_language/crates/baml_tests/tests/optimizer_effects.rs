@@ -231,7 +231,11 @@ fn dead_allocations_and_guarded_patterns_keep_their_old_instruction_budgets() {
         ("arb_tail_len", 21),
         ("arb_grab", 30),
         ("arb_pushing_to_rest_does_not_mutate_source", 43),
-        ("gc_map_survives_pressure", 17),
+        // The five insertions of the inlined `gc_build_map` (29 with the
+        // map's construction), a rotated loop, which holds its test twice
+        // and no jump back, and the read of the length. The loop's dead
+        // array is not built.
+        ("gc_map_survives_pressure", 46),
         ("parameter_default", 10),
     ] {
         let index = program.rendered_callables()[&format!("user.{name}")]

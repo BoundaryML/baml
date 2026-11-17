@@ -597,6 +597,18 @@ impl Function {
             .render(super::owner::package_label(self.owner).as_ref())
     }
 
+    /// The name a function inlined into this one displays as: what its own
+    /// [`Self::name`] renders.
+    #[must_use]
+    pub fn inlined_name(&self, inlined: &crate::bytecode::InlineFrame) -> String {
+        match &inlined.package {
+            Some(label) => inlined.function.render(Some(label)),
+            None => inlined
+                .function
+                .render(super::owner::package_label(self.owner).as_ref()),
+        }
+    }
+
     /// The name the function was declared with; see
     /// [`FunctionIdentity::declared_name`].
     #[must_use]

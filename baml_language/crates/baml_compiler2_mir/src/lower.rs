@@ -2037,6 +2037,23 @@ impl<'db> LoweringContext<'db> {
     /// A class the language ships and lowering constructs by identity
     /// (`baml.TaggedString`, `baml.spawn.Params`), whichever lane serves the
     /// package. Its absence is a compiler/stdlib mismatch.
+    /// The aggregate kind of a `class` literal written in this body.
+    fn class_aggregate(
+        &self,
+        class: ClassRef<'db>,
+        type_arg_templates: Vec<TyTemplate>,
+    ) -> AggregateKind<'db> {
+        AggregateKind::Class {
+            finalizable: crate::escape::may_finalize(
+                self.db,
+                self.file.source_root(self.db),
+                &class,
+            ),
+            class,
+            type_arg_templates,
+        }
+    }
+
     fn lang_class(
         &self,
         package: baml_base::LangPackage,
@@ -5724,14 +5741,10 @@ impl<'db> LoweringContext<'db> {
                 self.builder.assign(
                     Place::local(ret),
                     Rvalue::Aggregate {
-                        kind: AggregateKind::Class {
-                            class: self.lang_class(
-                                baml_base::LangPackage::Baml,
-                                &[],
-                                "TaggedString",
-                            ),
-                            type_arg_templates: vec![],
-                        },
+                        kind: self.class_aggregate(
+                            self.lang_class(baml_base::LangPackage::Baml, &[], "TaggedString"),
+                            vec![],
+                        ),
                         fields: vec![
                             Operand::Copy(Place::local(parts_local)),
                             Operand::Copy(Place::local(values_local)),
@@ -10511,10 +10524,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
-                    kind: AggregateKind::Class {
-                        class,
-                        type_arg_templates,
-                    },
+                    kind: self.class_aggregate(class, type_arg_templates),
                     fields: field_operands,
                 },
             );
@@ -10598,10 +10608,7 @@ impl<'db> LoweringContext<'db> {
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
-                    kind: AggregateKind::Class {
-                        class,
-                        type_arg_templates,
-                    },
+                    kind: self.class_aggregate(class, type_arg_templates),
                     fields: result,
                 },
             );
@@ -15459,26 +15466,91 @@ fn check_function_call_layouts(function: &MirFunction<'_>) -> Result<(), MirInte
         .try_for_each(check_function_call_layouts)
 }
 
-/// Lower one function to MIR.
+/// Lower one function to MIR, with the calls the optimizer inlines replaced
+/// by their callees' bodies at [`OptLevel::Two`](crate::OptLevel::Two).
 ///
-/// Tracked (with `(func_loc, opt)` as the memo key) so emit's parallel Pass-4
-/// stage can warm the shared memo table from worker database handles and the
-/// main thread's re-query is a cache hit branded with its own `'db` — see
-/// `lower_seed_mirs` in the emit crate. `no_eq`: nothing tracked consumes the
-/// output, so backdating is inert and the MIR tree carries no `PartialEq`.
+/// Both halves are tracked (with `(func_loc, opt)` as the memo key) so emit's
+/// parallel Pass-4 stage can warm the shared memo table from worker database
+/// handles and the main thread's re-query is a cache hit branded with its own
+/// `'db` — see `lower_seed_mirs` in the emit crate.
 ///
 /// Lowering runs on CHECKED programs only, so it cannot fail on a user's
 /// account: `Err` is an internal inconsistency between what the checker
 /// recorded and what lowering finds. Such a function has no MIR — never a
 /// placeholder body that compiles and misbehaves when run — and the compile
 /// fails with the error.
-#[salsa::tracked(returns(ref), no_eq)]
 pub fn lower_function<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: FunctionLoc<'db>,
+    opt: crate::OptLevel,
+) -> &'db Result<MirFunction<'db>, MirInternalError> {
+    if opt >= crate::OptLevel::Two
+        && let Some(inlined) = lower_function_inlined(db, func_loc, opt)
+    {
+        return inlined;
+    }
+    lower_function_local(db, func_loc, opt)
+}
+
+/// One function's MIR from its own source alone: no pass has looked at
+/// another function's body. This is what the inliner copies from, so reading
+/// a callee never depends on a caller's result, however they call each other.
+///
+/// `no_eq`: nothing tracked compares the output, so backdating is inert and
+/// the MIR tree carries no `PartialEq`.
+#[salsa::tracked(returns(ref), no_eq)]
+pub(crate) fn lower_function_local<'db>(
     db: &'db dyn crate::Db,
     func_loc: FunctionLoc<'db>,
     opt: crate::OptLevel,
 ) -> Result<MirFunction<'db>, MirInternalError> {
     lower_function_impl(db, func_loc, opt)
+}
+
+/// [`lower_function_local`] with eligible calls inlined and the result
+/// cleaned up again, or `None` when no call was inlined and the local MIR
+/// stands as it is.
+#[salsa::tracked(returns(ref), no_eq)]
+fn lower_function_inlined<'db>(
+    db: &'db dyn crate::Db,
+    func_loc: FunctionLoc<'db>,
+    opt: crate::OptLevel,
+) -> Option<Result<MirFunction<'db>, MirInternalError>> {
+    let local = lower_function_local(db, func_loc, opt).as_ref().ok()?;
+    let mut mir = local.clone();
+    if !optimize::inline::inline_function(db, func_loc, &mut mir, opt) {
+        return None;
+    }
+    optimize::optimize_function_tree(db, &mut mir, opt);
+    // With the closures gone, what they captured need not live in cells.
+    if optimize::inline::release_cells(&mut mir) {
+        optimize::optimize_function_tree(db, &mut mir, opt);
+    }
+    Some(Ok(mir))
+}
+
+/// An `ai.Client.invoke` implementation, or `ai.stream.TurnStream._settle`:
+/// the functions whose returned turn telemetry charges as model usage.
+pub fn is_model_invoke<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -> bool {
+    use baml_compiler2_hir_ty::callable::{callable_display_name, callable_owner_type};
+    let function = DeclRef::Source(func_loc);
+    let Some(owner) = callable_owner_type(db, function) else {
+        return false;
+    };
+    if !baml_compiler2_hir::package::lang_roots(db).is(baml_base::LangPackage::Ai, owner.root()) {
+        return false;
+    }
+    let namespace: Vec<&str> = owner.namespace().iter().map(Name::as_str).collect();
+    match (
+        namespace.as_slice(),
+        owner.name().as_str(),
+        callable_display_name(db, function).as_str(),
+    ) {
+        // The interface's own `invoke` is abstract, so only implementations
+        // reach codegen.
+        ([], "Client", "invoke") | (["stream"], "TurnStream", "_settle") => true,
+        _ => false,
+    }
 }
 
 fn lower_function_impl<'db>(
@@ -15552,6 +15624,7 @@ fn lower_function_impl<'db>(
                     handling: None,
                     landing: None,
                     shielded: false,
+                    inline: None,
                 }],
                 entry: BlockId(0),
                 // The body is a lone `Unreachable`: control never enters it,

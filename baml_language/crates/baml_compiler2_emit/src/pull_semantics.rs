@@ -464,6 +464,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             AggregateKind::Class {
                 class,
                 type_arg_templates,
+                ..
             } => {
                 let ntypeargs = u16::try_from(type_arg_templates.len())
                     .expect("type_arg_templates count fits in u16");

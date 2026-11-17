@@ -1,7 +1,7 @@
 # The KPIs on the speedtest report (kpis.html), in page order.
 #
 # Each KPI is a question a user asks of a language, answered by one chart in
-# which every row of the run (BAML at each telemetry level, Node, Bun, Python)
+# which every row of the run (BAML at each telemetry level, Go, Node, Bun, Python)
 # is a bar. A KPI lists the workloads that answer it, by `category::name`; the
 # first is shown by default and the rest are one click away.
 #
@@ -19,8 +19,8 @@ key = "programs"
 title = "Real programs"
 question = "How fast does a realistic program run?"
 metric = "throughput"
-measure = "One job runs a whole program: a task scheduler with interface dispatch, a hand-written JSON parser, or an agent loop that decodes model responses into typed unions and retries on malformed ones."
-workloads = ["programs::richards 50", "programs::json parser 15", "programs::agent loop 300"]
+measure = "One job runs a whole program: a task scheduler with interface dispatch, a hand-written JSON parser, an agent loop that decodes model responses into typed unions and retries on malformed ones, or an API service that routes requests, decodes typed JSON bodies and updates accounts."
+workloads = ["programs::richards 50", "programs::json parser 15", "programs::agent loop 300", "programs::request handler 2k"]
 
 [[kpi]]
 key = "sort"
@@ -77,6 +77,22 @@ question = "How fast is float math, hashing and string work?"
 metric = "throughput"
 measure = "One job integrates a five-body system in floats, counts k-mers of a DNA string in a map, or splits and concatenates strings."
 workloads = ["compute::nbody 20k", "compute::k-nucleotide 25k", "string::split medium literal 10k", "string::concat loop 10k"]
+
+[[kpi]]
+key = "tasks"
+title = "Concurrent tasks"
+question = "What does it cost to start, park and join many tasks?"
+metric = "throughput"
+measure = "One job runs 16,383 tasks in a tree where each spawns two children and awaits both, awaits 10,000 spawned tasks one after another, or splits a sum across four tasks."
+workloads = ["concurrency::spawn tree 16k", "concurrency::spawn await x10k", "concurrency::parallel sum 4x250k"]
+
+[[kpi]]
+key = "task_memory"
+title = "Memory per idle task"
+question = "How much memory do thousands of waiting tasks hold?"
+metric = "peak_rss_mib"
+measure = "Peak resident memory of a process holding 8,192 sleeping tasks and the 8,191 parents parked on them. Subtract the startup figure under Peak memory for the cost of the tasks alone."
+workloads = ["concurrency::idle tasks 8k"]
 
 [[kpi]]
 key = "startup"

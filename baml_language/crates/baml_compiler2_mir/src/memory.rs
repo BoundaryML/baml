@@ -27,7 +27,7 @@ use baml_type::Literal;
 pub use crate::ir::CellId;
 use crate::{
     AggregateKind, BinOp, Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place, RuntimeTy,
-    Rvalue, StatementKind, Terminator, UnaryOp,
+    Rvalue, StatementKind, Terminator, TyTemplate, UnaryOp,
 };
 
 /// A set of resources, read by an evaluation or written by an instruction.
@@ -263,6 +263,108 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
                 }
             }
         },
+    }
+}
+
+/// Every template an rvalue carries, for rewriting in place. Arm for arm the
+/// mutable sibling of [`walk_rvalue_type_slots`], and exhaustive for the
+/// same reason.
+pub fn for_each_rvalue_template_mut(rvalue: &mut Rvalue<'_>, f: &mut impl FnMut(&mut TyTemplate)) {
+    match rvalue {
+        Rvalue::Array(element, _) => f(element),
+        Rvalue::Map(key, value, _) => {
+            f(key);
+            f(value);
+        }
+        Rvalue::Aggregate { kind, .. } => match kind {
+            AggregateKind::Class {
+                type_arg_templates: templates,
+                ..
+            }
+            | AggregateKind::Tuple {
+                element_templates: templates,
+            } => templates.iter_mut().for_each(f),
+            AggregateKind::Array => {}
+        },
+        Rvalue::IsType { test, .. } => test.for_each_template_mut(f),
+        Rvalue::SatisfiesBound { bound, .. } => bound.for_each_template_mut(f),
+        Rvalue::MakeClosure {
+            type_arg_templates, ..
+        }
+        | Rvalue::MakeGenericFunction {
+            type_arg_templates, ..
+        }
+        | Rvalue::MakeGenericFunctionFromValue {
+            type_arg_templates, ..
+        } => type_arg_templates.iter_mut().for_each(f),
+        Rvalue::MakeVirtualBoundMethod {
+            iface, type_args, ..
+        } => {
+            iface.for_each_template_mut(f);
+            type_args.iter_mut().for_each(f);
+        }
+        Rvalue::MakeVirtualFunction { self_ty, iface, .. } => {
+            f(self_ty);
+            iface.for_each_template_mut(f);
+        }
+        Rvalue::VirtualFieldAccess { iface, .. } => iface.for_each_template_mut(f),
+        Rvalue::LoadType(template) => f(template),
+        Rvalue::Use(_)
+        | Rvalue::BinaryOp { .. }
+        | Rvalue::UnaryOp { .. }
+        | Rvalue::ConcatStrings(_)
+        | Rvalue::Uint8Array(_)
+        | Rvalue::Len(_)
+        | Rvalue::Discriminant(_)
+        | Rvalue::TypeTag(_)
+        | Rvalue::IsTypeTag { .. }
+        | Rvalue::TraceHookSettings { .. }
+        | Rvalue::CurrentPackage => {}
+        Rvalue::MakeBoundMethod { frame, .. } => match frame {
+            crate::BoundFrame::Receiver => {}
+            crate::BoundFrame::Explicit(type_arg_templates) => {
+                type_arg_templates.iter_mut().for_each(f);
+            }
+        },
+    }
+}
+
+/// Every template a statement carries, for rewriting in place.
+pub fn for_each_statement_template_mut(
+    kind: &mut StatementKind<'_>,
+    f: &mut impl FnMut(&mut TyTemplate),
+) {
+    match kind {
+        StatementKind::Assign { value, .. } => for_each_rvalue_template_mut(value, f),
+        StatementKind::VirtualFieldStore { iface, .. } => iface.for_each_template_mut(f),
+        StatementKind::Drop(_)
+        | StatementKind::FreshCell { .. }
+        | StatementKind::Intrinsic { .. }
+        | StatementKind::Nop => {}
+    }
+}
+
+/// Every template a terminator carries, for rewriting in place.
+pub fn for_each_terminator_template_mut(
+    terminator: &mut Terminator<'_>,
+    f: &mut impl FnMut(&mut TyTemplate),
+) {
+    match terminator {
+        Terminator::NarrowBind { test, .. } => test.for_each_template_mut(f),
+        Terminator::VirtualCall { iface, .. } => iface.for_each_template_mut(f),
+        Terminator::Goto { .. }
+        | Terminator::Branch { .. }
+        | Terminator::Switch { .. }
+        | Terminator::Return
+        | Terminator::Call { .. }
+        | Terminator::Unreachable
+        | Terminator::SysOp { .. }
+        | Terminator::Await { .. }
+        | Terminator::AwaitAny { .. }
+        | Terminator::Spawn { .. }
+        | Terminator::Throw { .. }
+        | Terminator::Rethrow { .. }
+        | Terminator::ShortCircuit { .. } => {}
     }
 }
 
