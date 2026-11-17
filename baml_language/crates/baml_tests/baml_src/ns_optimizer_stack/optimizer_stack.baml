@@ -132,7 +132,7 @@ function handler_observes_store(divisor: int) -> int {
 }
 function constant_overflow() -> int {
     {
-        let largest = 4611686018427387903
+        let largest = 9223372036854775807
         let one = 1
         largest + one
     } catch (e) { baml.panics.IntegerOverflow => 7 }

@@ -57,7 +57,7 @@ test "join_strings_are_bare" {
 }
 
 test "join_primitives" {
-    assert.equal([1, -2, int.max_value()].join(", "), "1, -2, 4611686018427387903");
+    assert.equal([1, -2, int.max_value()].join(", "), "1, -2, 9223372036854775807");
     assert.equal([1.0, 0.5, -0.0, float.nan()].join(" "), "1.0 0.5 -0.0 NaN");
     assert.equal([true, false].join("||"), "true||false");
     let mixed: (int | string | float | bool | null)[] = [1, "a", 2.5, true, null];

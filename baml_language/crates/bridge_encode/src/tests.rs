@@ -20,7 +20,6 @@ use bridge_ctypes::{
     },
     proto_ty_to_runtime_ty,
 };
-use num_bigint::BigInt;
 
 use super::*;
 
@@ -78,11 +77,7 @@ impl HostValue for Mock {
     fn shape(&self) -> Result<HostShape<'_, Self>, String> {
         Ok(match self {
             Mock::Null => HostShape::Null,
-            Mock::Int(int) => HostShape::Scalar(if baml_type::int::fits(*int) {
-                Scalar::Int(*int)
-            } else {
-                Scalar::BigInt(BigInt::from(*int))
-            }),
+            Mock::Int(int) => HostShape::Scalar(Scalar::Int(*int)),
             Mock::Float(float) => HostShape::Scalar(Scalar::Float(*float)),
             Mock::Bool(bool) => HostShape::Scalar(Scalar::Bool(*bool)),
             Mock::Str(_) => HostShape::Scalar(Scalar::String),
@@ -530,14 +525,18 @@ fn scalars_follow_the_slot_and_the_hosts_rules() {
         f.refusal(Mock::Bool(true), "a"),
         "argument `x`: expected int, found Bool(true)"
     );
-    // Beyond the VM's integers the host classifies a bigint.
+    // An int converts exactly into a bigint slot.
     assert!(matches!(
         f.encode_in(Mock::Int(1 << 62), &StatedTy::Bigint).unwrap().value,
         Some(Value::BigintValue(hex)) if hex == "4000000000000000"
     ));
+    // Every `i64` is a VM integer, the extremes included.
     assert_eq!(
-        stated(&f.ok(Mock::List(vec![Mock::Int(1 << 62)]), "g")),
-        Some(list_ty(StatedTy::Bigint))
+        stated(&f.ok(
+            Mock::List(vec![Mock::Int(1 << 62), Mock::Int(i64::MIN)]),
+            "g"
+        )),
+        Some(list_ty(StatedTy::Int))
     );
     assert!(matches!(
         f.encode_in(Mock::Bytes(vec![1, 2]), &StatedTy::Uint8Array).unwrap().value,

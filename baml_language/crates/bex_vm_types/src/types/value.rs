@@ -107,7 +107,7 @@ const FLOAT_LO_FLIP: u64 = 1;
 // The tagged-pointer encoding *is* a hot path: every Value access
 // goes through `as_int`/`as_object_ptr`/`kind`, and the encoding round-trips
 // between `u64` and signed `i64` by design (shift-left/right with sign
-// extension is what gives us i63 ints in a u64). The explicit `bits & 0b111`
+// extension is what gives us 63-bit inline ints in a u64). The explicit `bits & 0b111`
 // checks for "low 3 bits clear" are more idiomatic for tagged pointers than
 // the suggested `.trailing_zeros() >= 3`.
 #[allow(
@@ -228,10 +228,12 @@ impl Value {
     /// first or use [`Value::try_inline_int`].
     #[inline(always)]
     pub const fn int(i: i64) -> Self {
-        assert!(
-            !cfg!(any(debug_assertions, feature = "narrow_inline_int")) || Self::fits_inline(i),
-            "Value::int called with an i64 outside the inline int range"
-        );
+        if cfg!(any(debug_assertions, feature = "narrow_inline_int")) {
+            assert!(
+                Self::fits_inline(i),
+                "Value::int called with an i64 outside the inline int range"
+            );
+        }
         // Cast is well-defined: `(i as u64) << 1` may technically
         // overflow at the i64 boundary but the result is still a valid
         // u64 bit pattern that decodes back via `as_int`'s arithmetic
@@ -352,6 +354,13 @@ impl Value {
         }
     }
 
+    /// The int of a value the caller checked is inline (see
+    /// [`Value::both_inline_ints`]); meaningless for any other value.
+    #[inline(always)]
+    pub const fn inline_int_unchecked(self) -> i64 {
+        (self.0 as i64) >> 1
+    }
+
     /// Extract an `i64` if this is an int, inline or heap-boxed: the one
     /// accessor for reading an int out of a `Value`.
     #[inline(always)]
@@ -363,8 +372,9 @@ impl Value {
     }
 
     /// The boxed half of [`Value::as_int`]: `Some` iff `self` points at an
-    /// `Object::Int`.
-    #[inline]
+    /// `Object::Int`. Out of line, so the inline case stays a shift and a test.
+    #[cold]
+    #[inline(never)]
     fn as_boxed_int(self) -> Option<i64> {
         let ptr = self.as_object_ptr()?;
         // SAFETY: a heap pointer held in a live `Value` is valid for reads;
@@ -963,5 +973,68 @@ mod float_encoding_tests {
             let back: Value = borsh::from_slice(&bytes).unwrap();
             assert_eq!(back, v);
         }
+    }
+}
+
+#[cfg(all(test, not(feature = "heap_debug")))]
+mod int_encoding_tests {
+    use super::{Value, ValueKind};
+    use crate::{HeapPtr, Object};
+
+    /// A `Value` pointing at a boxed int kept alive by `object`.
+    fn boxed(object: &mut Object) -> Value {
+        // SAFETY: the caller keeps `object` alive while the value is read.
+        Value::object(unsafe { HeapPtr::from_ptr(std::ptr::from_mut(object)) })
+    }
+
+    #[test]
+    fn inline_range_round_trips_and_rejects_beyond() {
+        for i in [0, 1, -1, Value::INLINE_INT_MAX, Value::INLINE_INT_MIN] {
+            let v = Value::try_inline_int(i).expect("inline");
+            assert_eq!(v.as_inline_int(), Some(i));
+            assert_eq!(v.as_int(), Some(i));
+            assert!(matches!(v.kind(), ValueKind::Int(j) if j == i));
+        }
+        for i in [
+            Value::INLINE_INT_MAX + 1,
+            Value::INLINE_INT_MIN - 1,
+            i64::MAX,
+            i64::MIN,
+        ] {
+            assert_eq!(Value::try_inline_int(i), None);
+            assert!(!Value::fits_inline(i));
+        }
+    }
+
+    #[test]
+    fn boxed_int_reads_through_as_int() {
+        for i in [i64::MAX, i64::MIN, Value::INLINE_INT_MAX + 1] {
+            let mut object = Box::new(Object::Int(i));
+            let v = boxed(&mut object);
+            assert_eq!(v.as_int(), Some(i));
+            assert_eq!(v.as_inline_int(), None);
+            assert_eq!(v.as_float(), None);
+            assert!(matches!(v.kind(), ValueKind::Object(_)));
+        }
+    }
+
+    #[test]
+    fn tagged_arithmetic_declines_boxed_operands_and_inline_overflow() {
+        let one = Value::int(1);
+        assert_eq!(Value::tagged_int_add_checked(one, one), Some(Value::int(2)));
+        assert_eq!(
+            Value::tagged_int_add_checked(Value::int(Value::INLINE_INT_MAX), one),
+            None
+        );
+        assert_eq!(
+            Value::tagged_int_sub_checked(Value::int(Value::INLINE_INT_MIN), one),
+            None
+        );
+        let mut object = Box::new(Object::Int(i64::MAX));
+        let big = boxed(&mut object);
+        assert_eq!(Value::tagged_int_add_checked(big, one), None);
+        assert_eq!(Value::tagged_int_sub_checked(one, big), None);
+        assert!(!Value::both_inline_ints(big, one));
+        assert!(Value::both_inline_ints(one, one));
     }
 }

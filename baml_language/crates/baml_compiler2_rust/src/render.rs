@@ -93,6 +93,16 @@ pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {
     }
 }
 
+/// An `i64` as a Rust literal. `i64::MIN` is spelled by name: its magnitude
+/// alone is not an `i64` literal.
+pub(crate) fn int_literal(n: i64) -> String {
+    if n == i64::MIN {
+        "i64::MIN".to_string()
+    } else {
+        format!("{n}i64")
+    }
+}
+
 pub(crate) fn float_literal(f: f64) -> String {
     if f.is_nan() {
         "f64::NAN".to_string()

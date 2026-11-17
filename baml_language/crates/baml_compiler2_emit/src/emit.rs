@@ -105,8 +105,9 @@ fn analyze_switch(arms: &[(SwitchKey, BlockId)]) -> SwitchStrategy {
     // Find min and max values
     let min = values.iter().copied().min().unwrap();
     let max = values.iter().copied().max().unwrap();
-    // Safety: max >= min always, and we limit jump tables to 256 entries
-    let range = (max - min + 1) as usize;
+    // max >= min always. The span is computed wide: keys at both ends of the
+    // int range span more than an i64.
+    let range = usize::try_from(i128::from(max) - i128::from(min) + 1).unwrap_or(usize::MAX);
 
     // Calculate density (how much of the range is covered)
     // Safety: precision loss acceptable for density calculation

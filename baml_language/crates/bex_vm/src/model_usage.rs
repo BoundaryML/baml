@@ -3,7 +3,7 @@
 //! charged to the innermost span. Read natively, so it needs no value capture
 //! and works whether or not the invoke is a span.
 
-use bex_vm_types::{Object, Value, ValueKind};
+use bex_vm_types::{Object, Value};
 use btel_records::ModelUsage;
 
 use crate::BexVm;

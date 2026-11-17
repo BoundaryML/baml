@@ -138,8 +138,7 @@ pub enum Shape<C> {
 }
 
 /// A scalar value. The host classifies by the VM's integer range: an `Int`
-/// holds a BAML `int` (see `baml_type::int::fits`), and any integer beyond it
-/// is a `BigInt`. String and byte payloads stay in the host
+/// holds a BAML `int` (an `i64`), and any integer beyond it is a `BigInt`. String and byte payloads stay in the host
 /// object until the wire is written ([`HostValue::text`], [`HostValue::bytes`]).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Scalar {

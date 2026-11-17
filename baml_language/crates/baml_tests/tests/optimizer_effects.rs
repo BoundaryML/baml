@@ -64,8 +64,8 @@ function repeated_read_after_mutation(xs: int[]) -> int {
 }
 function copied_predicate_after_reassignment(index: int) -> int {
     {
-        let safe = index < 4611686018427387903
-        index = 4611686018427387903
+        let safe = index < 9223372036854775807
+        index = 9223372036854775807
         if (safe) { let unused = index + 1 }
         42
     } catch (e) { baml.panics.IntegerOverflow => 7 }
@@ -144,7 +144,7 @@ function may_overflow(value: int) -> int {
         catch (e) { baml.panics.IntegerOverflow => 7 }
 }
 function bounded_arithmetic(value: int) -> int {
-    if (value < 4611686018427387903) { let unused = value + 1 }
+    if (value < 9223372036854775807) { let unused = value + 1 }
     42
 }
 function loop_bound(count: int) -> int {
@@ -177,8 +177,8 @@ function verify_effects() -> bool {
         && index_reassignment_invalidates_bounds() == 7 && stale_length_is_not_a_bounds_proof() == 7
         && unguarded_join(false) == 7 && unguarded_join(true) == 42
         && handler_invalidates_facts() == 7
-        && may_overflow(4611686018427387903) == 7 && may_overflow(0) == 42
-        && bounded_arithmetic(4611686018427387903) == 42 && bounded_arithmetic(0) == 42
+        && may_overflow(9223372036854775807) == 7 && may_overflow(0) == 42
+        && bounded_arithmetic(9223372036854775807) == 42 && bounded_arithmetic(0) == 42
         && loop_bound(1000) == 1000
 }
 "#;

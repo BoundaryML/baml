@@ -131,7 +131,7 @@ fn fold_concat_parts(value: &mut Rvalue<'_>) {
 }
 
 fn fold<'db>(value: &Rvalue<'db>) -> Option<Constant<'db>> {
-    let int = |value| baml_type::int::fits(value).then_some(Constant::Int(value));
+    let int = |value| Some(Constant::Int(value));
     match value {
         Rvalue::UnaryOp {
             op,

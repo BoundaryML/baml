@@ -57,20 +57,19 @@ use crate::{BexVm, errors::VmRustFnError};
 // ── shared helpers ──────────────────────────────────────────────────────────
 
 /// A checked `int` result, or the catchable `baml.panics.IntegerOverflow` the
-/// int opcodes throw. `checked` is `None` on i64 overflow; a result outside the
-/// int range overflows too. Mirrors `BexVm::int_arith_result`, message
-/// included.
+/// int opcodes throw. `checked` is `None` on overflow. Mirrors
+/// `BexVm::int_arith_result`, message included.
 fn checked_int(checked: Option<i64>, l: i64, op: char, r: i64) -> Result<i64, VmRustFnError> {
     match checked {
-        Some(v) if baml_type::int::fits(v) => Ok(v),
-        _ => Err(VmPanic::IntegerOverflow {
+        Some(v) => Ok(v),
+        None => Err(VmPanic::IntegerOverflow {
             message: format!("{l} {op} {r} overflows int"),
         }
         .into()),
     }
 }
 
-/// Widen a BAML `int` (i63) to `f64` for mixed `int`/`float` arithmetic. Values
+/// Widen a BAML `int` to `f64` for mixed `int`/`float` arithmetic. Values
 /// past 2^53 lose precision — the same widening the `AddFloat`-family bytecode
 /// applies (`as_int().map(|i| i as f64)`), so operator and method agree.
 #[expect(clippy::cast_precision_loss)]
@@ -401,7 +400,7 @@ impl BamlClassOpsRemainder_bigint__for_int for PackageBamlImpl {
 impl BamlClassOpsNegate_for_int for PackageBamlImpl {
     // `-MIN` throws IntegerOverflow with the `Neg` opcode's message.
     fn neg(int: i64) -> Result<i64, VmRustFnError> {
-        match int.checked_neg().filter(|v| baml_type::int::fits(*v)) {
+        match int.checked_neg() {
             Some(v) => Ok(v),
             None => Err(VmPanic::IntegerOverflow {
                 message: format!("-({int}) overflows int"),

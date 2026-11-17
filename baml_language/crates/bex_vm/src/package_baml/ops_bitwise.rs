@@ -7,11 +7,11 @@
 //! the operand types are statically known. They back the same operations when
 //! one is reached through a generic bound (`T extends BitAnd<...>`) and define
 //! the canonical result the specialized bytecode matches:
-//! - `int` `& | ^` are plain i63 bitwise ops (a result of two in-range
-//!   operands is always in range) - never panic, like the tagged fast path.
+//! - `int` `& | ^` are plain 64-bit bitwise ops - never panic, like the tagged
+//!   fast path.
 //! - `int << int` shares `baml_type::int`'s implementation with the `Shl` opcode, so it
-//!   truncates rather than overflowing: bits past the i63 width are discarded
-//!   (`1 << 62` is `int.min_value()`, `1 << 63` is `0`) and only a negative
+//!   truncates rather than overflowing: bits past the 64-bit width are discarded
+//!   (`1 << 63` is `int.min_value()`, `1 << 64` is `0`) and only a negative
 //!   count raises the catchable `baml.panics.NegativeBitShift`.
 //! - `int >> int` is arithmetic; negative counts throw `NegativeBitShift`, a
 //!   count past every bit saturates to the sign (`min(63)`).
@@ -61,18 +61,12 @@ fn negative_bit_shift(count: impl std::fmt::Display) -> VmRustFnError {
 
 /// `int << r`, sharing `baml_type::int`'s semantics with the `Shl` opcode.
 ///
-/// Truncating, never overflowing: bits shifted past the i63 width are
-/// discarded, so `1 << 62` is `int.min_value()` and any count at or above 63
+/// Truncating, never overflowing: bits shifted past the 64-bit width are
+/// discarded, so `1 << 63` is `int.min_value()` and any count at or above 64
 /// yields `0`. Delegating to `baml_type::int` is what keeps the operator and this
 /// interface impl from drifting apart — they were previously separate
 /// implementations that disagreed on every truncating input.
 fn int_shl(l: i64, r: i64) -> Result<i64, VmRustFnError> {
-    if !baml_type::int::fits(l) {
-        return Err(VmPanic::IntegerOverflow {
-            message: format!("{l} is outside the int range"),
-        }
-        .into());
-    }
     match baml_type::int::shl(l, r) {
         Ok(shifted) => Ok(shifted),
         Err(IntShiftError::NegativeCount(count)) => Err(negative_bit_shift(count)),
@@ -81,15 +75,9 @@ fn int_shl(l: i64, r: i64) -> Result<i64, VmRustFnError> {
 
 /// `int >> r` (arithmetic), sharing `baml_type::int`'s semantics with the `Shr` opcode.
 ///
-/// A count at or above the i63 width saturates to the sign: `0` for a
+/// A count at or above the 64-bit width saturates to the sign: `0` for a
 /// non-negative receiver, `-1` for a negative one.
 fn int_shr(l: i64, r: i64) -> Result<i64, VmRustFnError> {
-    if !baml_type::int::fits(l) {
-        return Err(VmPanic::IntegerOverflow {
-            message: format!("{l} is outside the int range"),
-        }
-        .into());
-    }
     match baml_type::int::shr(l, r) {
         Ok(shifted) => Ok(shifted),
         Err(IntShiftError::NegativeCount(count)) => Err(negative_bit_shift(count)),

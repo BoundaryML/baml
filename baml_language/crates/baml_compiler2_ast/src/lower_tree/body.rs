@@ -1518,6 +1518,16 @@ fn unary_expr(ctx: &mut LoweringContext, v: View<'_>, id: Id<UnaryExpr>) -> Expr
         }
         _ => None,
     };
+    // `-<literal>` past the positive range of `int` is one negative literal,
+    // never a positive intermediate: `-9223372036854775808` (the smallest
+    // `int`) has no positive counterpart. Its operand is not lowered.
+    if matches!(op, ops::UnaryOp::Neg)
+        && let Some(text) = direct_int_lit
+        && baml_base::num_lit::parse_int_literal(text).is_err()
+        && let Ok(value) = baml_base::num_lit::parse_negated_int_literal(text)
+    {
+        return ctx.alloc_expr(Expr::Literal(Literal::Int(value)), span);
+    }
     let expr = expr_or_missing(ctx, v, node.operand, span);
     match op {
         // `~x` is `-x - 1`, every node of it synthesized.
@@ -1542,23 +1552,13 @@ fn unary_expr(ctx: &mut LoweringContext, v: View<'_>, id: Id<UnaryExpr>) -> Expr
             ctx.synthesizing = prev_synth;
             result
         }
-        ops::UnaryOp::Neg => {
-            // `-<literal>` beyond the positive range is one negative literal
-            // (`INT_MIN`), never a positive intermediate the VM rejects.
-            if let Some(text) = direct_int_lit
-                && let Ok(value) = baml_base::num_lit::parse_int_literal(text)
-                && value > (i64::MAX >> 1)
-            {
-                return ctx.alloc_expr(Expr::Literal(Literal::Int(value.wrapping_neg())), span);
-            }
-            ctx.alloc_expr(
-                Expr::Unary {
-                    op: UnaryOp::Neg,
-                    expr,
-                },
-                span,
-            )
-        }
+        ops::UnaryOp::Neg => ctx.alloc_expr(
+            Expr::Unary {
+                op: UnaryOp::Neg,
+                expr,
+            },
+            span,
+        ),
         ops::UnaryOp::Not => ctx.alloc_expr(
             Expr::Unary {
                 op: UnaryOp::Not,

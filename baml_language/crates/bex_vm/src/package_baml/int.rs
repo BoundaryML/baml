@@ -1,25 +1,23 @@
-use bex_vm_types::Value;
-
 use super::{BamlClassInt, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
 
-/// Number of values in the BAML `int` domain.
-const INT_DOMAIN_SPAN: u128 = (Value::INT_MAX as i128 - Value::INT_MIN as i128 + 1).cast_unsigned();
+/// Smallest draw of `Rng.random_int`, which draws 63 random bits so that the
+/// value always has an inline encoding: `[-2^62, 2^62)`.
+const DRAW_MIN: i64 = -(1 << 62);
+/// Number of values `Rng.random_int` draws from.
+const DRAW_SPAN: u128 = 1 << 63;
 
 impl BamlClassInt for PackageBamlImpl {
     // ── Magnitude ─────────────────────────────────────────────────────────────
 
     fn abs(int: i64) -> Result<i64, VmRustFnError> {
-        // BAML int is i63 (low bit reserved for the Value tag). The
-        // absolute value of `Value::INT_MIN` (`-2^62`) is `2^62`, which is
-        // ONE PAST `Value::INT_MAX` and therefore not representable.
-        if int == Value::INT_MIN {
-            return Err(VmPanic::IntegerOverflow {
+        // The absolute value of the smallest int is one past the largest.
+        int.checked_abs().ok_or_else(|| {
+            VmPanic::IntegerOverflow {
                 message: format!("abs({int}) overflows int"),
             }
-            .into());
-        }
-        Ok(int.wrapping_abs())
+            .into()
+        })
     }
 
     // No `min` / `max` / `clamp` here: `int` gets them from
@@ -34,8 +32,6 @@ impl BamlClassInt for PackageBamlImpl {
             }
             .into());
         }
-        // Result of isqrt always fits in i63 since INT_MAX < 2^62 and
-        // floor(sqrt(2^62)) = 2^31.
         Ok(int.isqrt())
     }
 
@@ -59,41 +55,27 @@ impl BamlClassInt for PackageBamlImpl {
         } else {
             exp as u32
         };
-        // Saturation value if checked_pow overflows or if the result
-        // doesn't fit in i63: positive if base >= 0, or if exp is even
-        // (i.e. mathematical sign of result). Use the *original* `exp`
-        // for the parity check: clamping to `u32::MAX` (odd) above would
-        // otherwise flip the sign for even exponents above u32 range.
+        // Saturation value if checked_pow overflows: positive if base >= 0,
+        // or if exp is even (i.e. mathematical sign of result). Use the
+        // *original* `exp` for the parity check: clamping to `u32::MAX` (odd)
+        // above would otherwise flip the sign for even exponents above u32
+        // range.
         let saturated = if int >= 0 || exp & 1 == 0 {
-            Value::INT_MAX
+            i64::MAX
         } else {
-            Value::INT_MIN
+            i64::MIN
         };
-        match int.checked_pow(exp_u32) {
-            Some(v) if (Value::INT_MIN..=Value::INT_MAX).contains(&v) => v,
-            _ => saturated,
-        }
+        int.checked_pow(exp_u32).unwrap_or(saturated)
     }
 
     fn parse(text: &bex_str::BexStr) -> Result<i64, VmRustFnError> {
         let s = text.as_str();
-        let v: i64 = s.parse::<i64>().map_err(|e| -> VmRustFnError {
+        s.parse::<i64>().map_err(|e| -> VmRustFnError {
             VmBamlError::ParseError {
                 message: format!("int.parse: cannot parse {s:?} as int: {e}"),
             }
             .into()
-        })?;
-        if !(Value::INT_MIN..=Value::INT_MAX).contains(&v) {
-            return Err(VmBamlError::ParseError {
-                message: format!(
-                    "int.parse: {s:?} is outside the representable BAML int range [{}, {}]",
-                    Value::INT_MIN,
-                    Value::INT_MAX
-                ),
-            }
-            .into());
-        }
-        Ok(v)
+        })
     }
 
     fn _random_in_range(draw: i64, lower: i64, upper: i64) -> i64 {
@@ -101,10 +83,12 @@ impl BamlClassInt for PackageBamlImpl {
             return upper;
         }
         let range = (i128::from(upper) - i128::from(lower)).cast_unsigned();
-        let u = (i128::from(draw) - i128::from(Value::INT_MIN)).cast_unsigned();
+        // A draw outside `[DRAW_MIN, DRAW_MIN + DRAW_SPAN)` (from an `Rng` that
+        // overrides `random_int`) lands past `zone` and is rejected too.
+        let u = (i128::from(draw) - i128::from(DRAW_MIN)).cast_unsigned();
 
         // Reject the remainder above the largest multiple of `range`.
-        let zone = INT_DOMAIN_SPAN / range * range;
+        let zone = DRAW_SPAN / range * range;
         if u >= zone {
             return upper;
         }

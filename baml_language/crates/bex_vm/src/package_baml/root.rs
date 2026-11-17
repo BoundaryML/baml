@@ -171,18 +171,16 @@ impl BamlPackageBaml for PackageBamlImpl {
 
     /// `baml._sum_int(values)` — native backing for `int[].sum()`.
     ///
-    /// Accumulates left-to-right from `0`, checking the running total against
-    /// the `int` range at each step so overflow raises `IntegerOverflow` exactly
-    /// like repeated `+` would. Both `acc` and each element are already in range,
-    /// so the intermediate i64 add never wraps; the tighter range check is the
-    /// meaningful bound. The empty array sums to `0`.
+    /// Accumulates left-to-right from `0` with a checked add at each step, so
+    /// overflow raises `IntegerOverflow` exactly like repeated `+` would. The
+    /// empty array sums to `0`.
     fn _sum_int(values: &[Value]) -> Result<i64, VmRustFnError> {
         let mut acc: i64 = 0;
         for (index, value) in values.iter().enumerate() {
             let x = expect_int(*value, "_sum_int", index);
             match acc.checked_add(x) {
-                Some(v) if (Value::INT_MIN..=Value::INT_MAX).contains(&v) => acc = v,
-                _ => {
+                Some(v) => acc = v,
+                None => {
                     return Err(VmPanic::IntegerOverflow {
                         message: format!("{acc} + {x} overflows int"),
                     }

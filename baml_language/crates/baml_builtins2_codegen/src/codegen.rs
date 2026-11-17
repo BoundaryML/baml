@@ -1188,8 +1188,20 @@ fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &N
 
     let fallible = is_fallible(b);
 
+    // An int result may need a heap box, which borrows the VM mutably; the
+    // closure returns the raw int so its container guards are released first.
+    let int_return = int_return_kind(&b.return_type);
+
     // Use a closure returning NativeFunctionResult so `?` operators work inside.
-    out.push_str("        let __result: NativeFunctionResult = (|| {\n");
+    match int_return {
+        Some(IntReturn::Int) => out.push_str(
+            "        let __result: Result<i64, crate::errors::VmRustFnError> = (|| {\n",
+        ),
+        Some(IntReturn::Optional) => out.push_str(
+            "        let __result: Result<Option<i64>, crate::errors::VmRustFnError> = (|| {\n",
+        ),
+        None => out.push_str("        let __result: NativeFunctionResult = (|| {\n"),
+    }
 
     emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
 
@@ -1220,9 +1232,22 @@ fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &N
         }
     }
 
-    emit_result_conversion_ok(out, b, "            ");
+    if int_return.is_some() {
+        out.push_str("            Ok(result)\n");
+    } else {
+        emit_result_conversion_ok(out, b, "            ");
+    }
 
     out.push_str("        })();\n");
+    match int_return {
+        Some(IntReturn::Int) => {
+            out.push_str("        let __result = __result.map(|r| vm.int_value(r));\n");
+        }
+        Some(IntReturn::Optional) => out.push_str(
+            "        let __result = __result.map(|r| match r { Some(v) => vm.int_value(v), None => Value::NULL });\n",
+        ),
+        None => {}
+    }
     out.push_str("        match __result {\n");
     out.push_str("            Ok(v) => NativeCallResult::Done(v),\n");
     out.push_str("            Err(e) => NativeCallResult::Error(e),\n");
@@ -1870,6 +1895,23 @@ fn call_arg_needs_ref(ty: &BamlType) -> bool {
 // ============================================================================
 // Result conversion
 // ============================================================================
+
+/// How a native returns an `int`, when it does.
+#[derive(Clone, Copy)]
+enum IntReturn {
+    Int,
+    Optional,
+}
+
+fn int_return_kind(ty: &BamlType) -> Option<IntReturn> {
+    match ty {
+        BamlType::Int => Some(IntReturn::Int),
+        BamlType::Optional(inner) if matches!(inner.as_ref(), BamlType::Int) => {
+            Some(IntReturn::Optional)
+        }
+        _ => None,
+    }
+}
 
 /// Emit `Ok(...)` return for the inner closure body with the given indentation.
 fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) {

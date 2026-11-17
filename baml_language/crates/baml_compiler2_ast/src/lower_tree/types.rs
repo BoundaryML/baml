@@ -123,10 +123,11 @@ fn lower_literal(
             let text = cx.text(token.idx);
             let range = cx.token_range(token.idx);
             match cx.tree.tokens().kind(token.idx) {
-                TokenKind::Integer => {
-                    let value = crate::lower_int_literal(text, range, diags);
-                    Literal::Int(if negated { -value } else { value })
-                }
+                TokenKind::Integer => Literal::Int(if negated {
+                    crate::lower_negated_int_literal(text, range, diags)
+                } else {
+                    crate::lower_int_literal(text, range, diags)
+                }),
                 TokenKind::Bigint => {
                     let value = crate::lower_bigint_literal(text, range, diags);
                     Literal::Bigint(if negated { -value } else { value })

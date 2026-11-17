@@ -86,7 +86,7 @@ fn build_type(
         // The runtime boundary normalizes a literal's freshness to `Regular`.
         TyTemplate::Literal(literal, _) => {
             let literal = match literal {
-                Literal::Int(n) => format!("Literal::Int({n}i64)"),
+                Literal::Int(n) => format!("Literal::Int({})", crate::render::int_literal(*n)),
                 Literal::Bool(b) => format!("Literal::Bool({b})"),
                 Literal::String(s) => format!("Literal::String(String::from({s:?}))"),
                 Literal::Float(f) => format!("Literal::Float(String::from({f:?}))"),

@@ -100,8 +100,8 @@ impl BexVm {
     #[inline]
     pub fn add_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         match l.checked_add(r) {
-            Some(v) if baml_type::int::fits(v) => Ok(v),
-            _ => Err(self.int_overflow(l, '+', r)),
+            Some(v) => Ok(v),
+            None => Err(self.int_overflow(l, '+', r)),
         }
     }
 
@@ -109,21 +109,17 @@ impl BexVm {
     #[inline]
     pub fn sub_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         match l.checked_sub(r) {
-            Some(v) if baml_type::int::fits(v) => Ok(v),
-            _ => Err(self.int_overflow(l, '-', r)),
+            Some(v) => Ok(v),
+            None => Err(self.int_overflow(l, '-', r)),
         }
     }
 
-    /// `l * r` on raw ints, overflow-checked: the i64 product must not
-    /// overflow and must fit the int range. Both checks are evaluated and
-    /// combined without short-circuiting, so the fast path takes one branch.
+    /// `l * r` on raw ints, overflow-checked.
     #[inline]
     pub fn mul_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        let (v, overflowed) = l.overflowing_mul(r);
-        if !overflowed & baml_type::int::fits(v) {
-            Ok(v)
-        } else {
-            Err(self.int_overflow(l, '*', r))
+        match l.checked_mul(r) {
+            Some(v) => Ok(v),
+            None => Err(self.int_overflow(l, '*', r)),
         }
     }
 
@@ -135,8 +131,8 @@ impl BexVm {
             return Err(self.division_by_zero_boxed(l, r));
         }
         match l.checked_div(r) {
-            Some(v) if baml_type::int::fits(v) => Ok(v),
-            _ => Err(self.int_overflow(l, '/', r)),
+            Some(v) => Ok(v),
+            None => Err(self.int_overflow(l, '/', r)),
         }
     }
 
@@ -178,8 +174,8 @@ impl BexVm {
     #[inline]
     pub fn neg_i64(&mut self, n: i64) -> Result<i64, Box<VmError>> {
         match n.checked_neg() {
-            Some(v) if baml_type::int::fits(v) => Ok(v),
-            _ => Err(self.neg_overflow(n)),
+            Some(v) => Ok(v),
+            None => Err(self.neg_overflow(n)),
         }
     }
 

@@ -66,9 +66,9 @@ fn checked_arithmetic_preserves_catch_and_caller_stack() {
             function add(a: int, b: int) -> int { 100 + (a + b) }
             function subtract(a: int, b: int) -> int { 100 + (a - b) }
             function main() -> int {
-                let first = add(4611686018427387903, 1)
+                let first = add(9223372036854775807, 1)
                     catch (e) { baml.panics.IntegerOverflow => 7 };
-                let second = subtract(-4611686018427387904, 1)
+                let second = subtract(-9223372036854775808, 1)
                     catch (e) { baml.panics.IntegerOverflow => 11 };
                 first + second + add(2, 3) + subtract(9, 4)
             }

@@ -648,7 +648,7 @@ function named_panic_binding_integer_overflow_message_fn() -> string {
 test "named_panic_binding_integer_overflow_message" {
     assert.equal(
         named_panic_binding_integer_overflow_message_fn(),
-        "4611686018427387903 + 1 overflows int",
+        "9223372036854775807 + 1 overflows int",
     )
 }
 

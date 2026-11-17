@@ -76,8 +76,8 @@ use crate::{
 
 /// Negate a numeric literal into the negative literal TYPE (ruling 2:
 /// `-1` is a type, TS parity). Freshness carries through. `None` skips
-/// the fold: non-numeric literals, and an int result outside BAML's i63
-/// value range (`-int.min_value()` = 2^62) - the unfolded dispatch result stands
+/// the fold: non-numeric literals, and an int result outside BAML's 64-bit
+/// value range (`-int.min_value()` = 2^63) - the unfolded dispatch result stands
 /// and the VM raises the catchable overflow, identical to the
 /// through-a-variable path (TIR's `fold_int` rule).
 /// Where a type-qualified reference's OWN generic args come from -
@@ -101,10 +101,7 @@ struct WrittenQualifier<'a> {
 
 fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
     let negated = match lit {
-        Literal::Int(n) => {
-            let v = n.checked_neg()?;
-            baml_type::int::fits(v).then_some(Literal::Int(v))?
-        }
+        Literal::Int(n) => Literal::Int(n.checked_neg()?),
         Literal::Bigint(n) => Literal::Bigint(-n.clone()),
         // The float's WRITTEN digits are preserved exactly: negation is a
         // sign-prefix toggle, never a parse/format round trip.
@@ -124,7 +121,7 @@ fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
 /// Freshness merges - fresh operands make a fresh result, so bindings
 /// still widen (`let x = 1n + 2n` is `bigint`; only checked positions
 /// see `3n`). `None` skips the fold: non-literal operands, mixed
-/// bases, and any result the VM could not materialize (i63 overflow,
+/// bases, and any result the VM could not materialize (int overflow,
 /// the bigint allocation cap, division by zero, non-finite floats) -
 /// the unfolded dispatch result stands and the runtime raises the
 /// same catchable error the through-a-variable path gets.
@@ -140,7 +137,7 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
     };
     let lit = |value: Literal| Ty::intern(InferTy::Literal(value, freshness));
     let boolean = |value: bool| Some(lit(Literal::Bool(value)));
-    let int = |value: i64| baml_type::int::fits(value).then(|| lit(Literal::Int(value)));
+    let int = |value: i64| Some(lit(Literal::Int(value)));
     match (a, b) {
         (Literal::Int(a), Literal::Int(b)) => {
             let (a, b) = (*a, *b);
@@ -867,11 +864,6 @@ enum PendingDiag<'db> {
     /// E0147: a written `_` in an expression-position type argument.
     ExprPositionHole {
         expr: ExprId,
-    },
-    /// E0150: an `int` literal outside the VM's i63 value range.
-    IntLiteralOutOfRange {
-        expr: ExprId,
-        value: i64,
     },
     /// BEP-044 method disambiguation: `member` on `base` is declared by
     /// two or more realized-distinct interfaces (rustc's E0034 shape) -
@@ -2906,24 +2898,7 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_expr(&mut self, body: &ExprBody, expr: ExprId, expected: &Expectation) -> Ty {
         let ty = match &body.exprs[expr] {
-            Expr::Literal(lit) => {
-                // An `int` literal whose value doesn't fit i63 (a valid i64
-                // like 2^62, but out of `int` range) would otherwise reach
-                // the VM and panic at engine load. Reject it here (E0150,
-                // pointing at `bigint`) and substitute an in-range
-                // placeholder so a failed compile can't carry the bad value
-                // forward - TIR's rule verbatim.
-                let lit = if let Literal::Int(v) = lit
-                    && !baml_type::int::fits(*v)
-                {
-                    self.pending_diags
-                        .push(PendingDiag::IntLiteralOutOfRange { expr, value: *v });
-                    &Literal::Int(0)
-                } else {
-                    lit
-                };
-                Ty::intern(InferTy::Literal(lit.clone(), Freshness::Fresh))
-            }
+            Expr::Literal(lit) => Ty::intern(InferTy::Literal(lit.clone(), Freshness::Fresh)),
             Expr::Null => Ty::null(),
             // A byte-string literal (`b"..."`) IS a `uint8array` value -
             // its own expr kind, not a `Literal` (no literal TYPE per
@@ -5657,9 +5632,9 @@ impl<'db> InferenceContext<'db> {
                 // discipline): dispatch through `Negate` is the semantic
                 // gate above; a literal operand then constant-FOLDS to
                 // the negated literal, preserving freshness, so `-1` has
-                // type `-1`. An i63-range overflow (`-INT_MIN`) skips the
-                // fold and keeps the dispatch result - the VM throws the
-                // same catchable IntegerOverflow either way.
+                // type `-1`. An overflow (`-MIN`) skips the fold and keeps
+                // the dispatch result - the VM throws the same catchable
+                // IntegerOverflow either way.
                 let resolved = self.table.resolve_completely(&ty);
                 if let InferTy::Literal(lit, freshness) = resolved.kind()
                     && !dispatched.has_error()
@@ -13187,9 +13162,6 @@ impl<'db> InferenceContext<'db> {
                         continue;
                     }
                     PendingDiag::ExprPositionHole { expr } => (TirTypeError::CannotInferType, expr),
-                    PendingDiag::IntLiteralOutOfRange { expr, value } => {
-                        (TirTypeError::IntegerLiteralOutOfRange { value }, expr)
-                    }
                     PendingDiag::AmbiguousMember {
                         expr,
                         base,

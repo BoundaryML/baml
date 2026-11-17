@@ -638,9 +638,7 @@ impl<'py> PyValue<'_, 'py> {
 
     /// Python's `int`: the VM's integer when it fits, a `bigint` beyond.
     fn int_scalar(&self) -> PyResult<Scalar> {
-        if let Ok(int) = self.obj.extract::<i64>()
-            && baml_type::int::fits(int)
-        {
+        if let Ok(int) = self.obj.extract::<i64>() {
             return Ok(Scalar::Int(int));
         }
         // `int.__format__` itself, not the object's: a subclass must not get

@@ -29,8 +29,8 @@
 //   - test_int_param_accepts_bigint_from_host_in_range
 //   - test_int_param_rejects_bigint_overflow
 //   - test_int_param_rejects_bigint_above_i63
-//   - test_int_param_rejects_host_int_above_i63
-//   - test_int_param_accepts_max_i63
+//   - test_int_param_accepts_every_host_i64
+//   - test_int_param_arithmetic_on_host_ints_past_the_inline_range
 //
 // NOTE — within-file duplicates preserved 1:1 with the Rust source (identical
 // input + assertion, kept in separate sections there as regression markers):
@@ -439,22 +439,26 @@ test "bigint_to_int_zero" {
     assert.equal((0n).to_int(), 0)
 }
 
-// int is 63-bit signed, so the boundaries are ±2^62 — narrower than a machine
-// 64-bit integer's. Both ends must round-trip exactly.
+// int is 64-bit signed, so the boundaries are -2^63 and 2^63 - 1. Both ends
+// must round-trip exactly.
 test "bigint_to_int_at_max_value" {
-    assert.equal((4611686018427387903n).to_int(), int.max_value())
+    assert.equal((9223372036854775807n).to_int(), int.max_value())
 }
 
 test "bigint_to_int_at_min_value" {
-    assert.equal((-4611686018427387904n).to_int(), int.min_value())
+    assert.equal((-9223372036854775808n).to_int(), int.min_value())
 }
 
-// One past each boundary: these still fit an i64, so they exercise the i63
-// range check rather than the i64 conversion.
+// Values past the 63-bit inline range of the VM still convert.
+test "bigint_to_int_above_inline_range" {
+    assert.equal((4611686018427387904n).to_int(), 4611686018427387904)
+}
+
+// One past each boundary.
 test "bigint_to_int_above_max_throws" {
     {
-        (4611686018427387904n).to_int();
-        baml.sys.panic("expected (4611686018427387904n).to_int() to throw")
+        (9223372036854775808n).to_int();
+        baml.sys.panic("expected (9223372036854775808n).to_int() to throw")
     } catch (e) {
         baml.errors.InvalidArgument => null
     }
@@ -462,8 +466,8 @@ test "bigint_to_int_above_max_throws" {
 
 test "bigint_to_int_below_min_throws" {
     {
-        (-4611686018427387905n).to_int();
-        baml.sys.panic("expected (-4611686018427387905n).to_int() to throw")
+        (-9223372036854775809n).to_int();
+        baml.sys.panic("expected (-9223372036854775809n).to_int() to throw")
     } catch (e) {
         baml.errors.InvalidArgument => null
     }

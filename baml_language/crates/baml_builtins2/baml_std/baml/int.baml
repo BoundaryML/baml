@@ -1,17 +1,14 @@
-/// A 63-bit signed integer, from `-2^62` (`-4_611_686_018_427_387_904`) to
-/// `2^62 - 1` (`4_611_686_018_427_387_903`).
+/// A 64-bit signed integer, from `-2^63` (`-9_223_372_036_854_775_808`) to
+/// `2^63 - 1` (`9_223_372_036_854_775_807`).
 ///
-/// The runtime reserves one bit of a 64-bit machine word for its pointer/value
-/// tag, so the usable width is 63 bits rather than 64. Unlike Python's `int`,
-/// an `int` does not grow to fit; use `bigint` for arbitrary precision.
+/// Unlike Python's `int`, an `int` does not grow to fit; use `bigint` for
+/// arbitrary precision.
 ///
 /// Literals may be decimal (`42`), hex (`0xFF`), octal (`0o755`), or binary
 /// (`0b1010`), with `_` digit separators allowed (`1_000_000`).
 ///
 /// Bit operations such as `leading_zeros` and `count_ones` read `self` as a
-/// 64-bit two's-complement word. The value is stored sign-extended, so those
-/// counts include the high sign/tag bits: `(1).leading_zeros()` is `63`, not
-/// `62`.
+/// 64-bit two's-complement word: `(1).leading_zeros()` is `63`.
 ///
 /// # Panics
 ///
@@ -25,10 +22,11 @@
 ///   negative.
 ///
 /// `<<` is the exception to the overflow rule: it truncates, discarding
-/// whatever is shifted past the 63-bit width. `1 << 62` is `int.min_value()`
-/// (bit 62 is the sign bit) and `1 << 63` is `0`. `>>` cannot overflow either;
-/// a count of 63 or more saturates to the sign, giving `0` for a non-negative
-/// `self` and `-1` for a negative one.
+/// whatever is shifted past the 64-bit width. `1 << 63` is `int.min_value()`
+/// (bit 63 is the sign bit) and `1 << 64` is `0`. `>>` cannot overflow either;
+/// a count of 64 or more saturates to the sign, giving `0` for a non-negative
+/// `self` and `-1` for a negative one. `int.min_value() / -1` overflows;
+/// `int.min_value() % -1` is `0`.
 
 class Int {
     // ─── Magnitude ────────────────────────────────────────────────────────────
@@ -38,7 +36,7 @@ class Int {
     /// # Panics
     ///
     /// - `baml.panics.IntegerOverflow` for `int.min_value()`, whose absolute
-    ///   value `2^62` is one past `int.max_value()`.
+    ///   value `2^63` is one past `int.max_value()`.
     ///
     /// # Examples
     ///
@@ -127,11 +125,9 @@ class Int {
 
     // ─── Bit operations ───────────────────────────────────────────────────────
     //
-    // All bit operations interpret `int` as a 64-bit two's-complement value:
-    // although `int`'s value range is 63-bit, it is stored sign-extended in a
-    // 64-bit machine word, and these operations expose all 64 bits of that word
-    // (e.g. `count_zeros` of a small positive value counts the high tag/sign
-    // bits too).
+    // All bit operations interpret `int` as a 64-bit two's-complement value
+    // (e.g. `count_zeros` of a small positive value counts the high sign bits
+    // too).
 
     /// Returns the number of leading zero bits.
     ///
@@ -216,7 +212,7 @@ class Int {
     ///
     /// Accepts an optional leading `+` or `-` followed by one or more ASCII
     /// digits, and nothing else: no surrounding whitespace, no underscores, no
-    /// other numeric formats. The value must fit the 63-bit `int` range.
+    /// other numeric formats. The value must fit the 64-bit `int` range.
     ///
     /// # Throws
     ///
@@ -274,6 +270,11 @@ class Int {
                 message: `int.random: lower (${lower}) must be less than upper (${upper})`
             };
         }
+        // One `random_int` draw holds 63 bits. A range of more than 2^63
+        // values (only possible when `lower` is negative) draws as a `bigint`.
+        if (lower < 0 && upper > lower + int.max_value() + 1) {
+            return bigint.random(0n + lower, 0n + upper, rng = rng).to_int();
+        }
         // Rust maps each draw; BAML owns retries because it can call `rng` again.
         let r = int._random_in_range(rng.random_int(), lower, upper);
         while (r == upper) {
@@ -290,17 +291,15 @@ class Int {
 
     // ─── Constants (as zero-arg static methods) ───────────────────────────────
 
-    /// Returns the largest representable `int`, `2^62 - 1`
-    /// (`4_611_686_018_427_387_903`).
+    /// Returns the largest representable `int`, `2^63 - 1`
+    /// (`9_223_372_036_854_775_807`).
     function max_value() -> int throws never {
-        4611686018427387903
+        9223372036854775807
     }
 
-    /// Returns the smallest representable `int`, `-2^62`
-    /// (`-4_611_686_018_427_387_904`). `int.min_value().abs()` panics.
+    /// Returns the smallest representable `int`, `-2^63`
+    /// (`-9_223_372_036_854_775_808`). `int.min_value().abs()` panics.
     function min_value() -> int throws never {
-        // Written as `-MAX - 1` to avoid the literal parser; same trick as the
-        // old i64::MIN definition.
-        -4611686018427387903 - 1
+        -9223372036854775808
     }
 }

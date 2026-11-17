@@ -308,9 +308,9 @@ test "float_itrunc_negative" {
     assert.equal((-3.7).itrunc(), -3)
 }
 
-// -2^62 (BAML int.min_value()) is exactly representable as f64.
-test "float_iround_at_i63_min_is_ok" {
-    assert.equal((-4611686018427387904.0).iround(), -4611686018427387904)
+// -2^63 (BAML int.min_value()) is exactly representable as f64.
+test "float_iround_at_int_min_is_ok" {
+    assert.equal((-9223372036854775808.0).iround(), int.min_value())
 }
 
 test "float_iround_too_large_throws" {
@@ -804,7 +804,8 @@ class FixedFloatRng {
 
 test "float_random_uses_rng" {
     assert.equal(float.random(rng = FixedFloatRng { draw: 0 }), 0.0);
-    assert.equal(float.random(rng = FixedFloatRng { draw: int.min_value() }), 0.5);
+    // The smallest 63-bit draw sets only bit 62 of the 53 bits used.
+    assert.equal(float.random(rng = FixedFloatRng { draw: -(1 << 62) }), 0.5);
     let high = float.random(rng = FixedFloatRng { draw: -1 });
     assert.is_true(high > 0.99 && high < 1.0)
 }

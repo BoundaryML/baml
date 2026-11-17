@@ -1017,7 +1017,7 @@ function bump(value: int) -> int {
 }
 
 function main() -> int {
-  let total = 4611686018427387901
+  let total = 9223372036854775805
   for (let i = 0; i < 4; i += 1) {
     total = bump(total)
   }
@@ -1053,7 +1053,7 @@ function main() -> int {
     Traceback (most recent call last):
       File \"test.baml\", line 10, in user.main
       File \"test.baml\", line 3, in user.bump
-    uncaught throw: baml.panics.IntegerOverflow {message: \"4611686018427387903 + 1 overflows int\"}
+    uncaught throw: baml.panics.IntegerOverflow {message: \"9223372036854775807 + 1 overflows int\"}
     ");
 }
 

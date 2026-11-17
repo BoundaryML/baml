@@ -234,7 +234,10 @@ use sha2::{Digest, Sha256};
 /// `CallEquals`, `AddLocalSmall`, `LoadVarField`, `LoadVarFieldLocal`,
 /// `JumpIfLocalsCmp` and `JumpIfLocalConstCmp`. Version 29 is skipped:
 /// unreleased builds wrote a different instruction set under it.
-pub const FORMAT_VERSION: u32 = 30;
+///
+/// Version 31: `int` is 64-bit. An int constant may lie outside the 63-bit
+/// inline range of a runtime `Value`; an older runtime would truncate it.
+pub const FORMAT_VERSION: u32 = 31;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

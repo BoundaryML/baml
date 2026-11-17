@@ -129,12 +129,10 @@ fn javascript(scalar: &Scalar, slot: ScalarSlot) -> Answer<Scalar> {
             ScalarSlot::Bigint | ScalarSlot::Bool | ScalarSlot::String | ScalarSlot::Bytes,
         ) => Answer::No,
         (Scalar::BigInt(_), ScalarSlot::Bigint | ScalarSlot::Open) => Answer::AsIs(scalar.clone()),
-        (Scalar::BigInt(big), ScalarSlot::Int) => {
-            match big.to_i64().filter(|int| baml_type::int::fits(*int)) {
-                Some(int) => Answer::Converted(Scalar::Int(int)),
-                None => Answer::No,
-            }
-        }
+        (Scalar::BigInt(big), ScalarSlot::Int) => match big.to_i64() {
+            Some(int) => Answer::Converted(Scalar::Int(int)),
+            None => Answer::No,
+        },
         (
             Scalar::BigInt(_),
             ScalarSlot::Float | ScalarSlot::Bool | ScalarSlot::String | ScalarSlot::Bytes,
@@ -152,9 +150,10 @@ fn javascript(scalar: &Scalar, slot: ScalarSlot) -> Answer<Scalar> {
 )]
 fn exact_float(int: i64) -> Option<f64> {
     let float = int as f64;
-    // `as i64` saturates, so a value past the range that rounds to a power of
-    // two would compare equal; the magnitude bound rules that out.
-    (float.abs() < 9_223_372_036_854_775_808.0 && float as i64 == int).then_some(float)
+    // `as i64` saturates, so `i64::MAX`, which rounds up to `2^63`, would
+    // compare equal; the half-open bound rules that out. `-2^63` is exact.
+    const LIMIT: f64 = 9_223_372_036_854_775_808.0;
+    ((-LIMIT..LIMIT).contains(&float) && float as i64 == int).then_some(float)
 }
 
 /// A big integer as a double, when the double is exactly that integer.
@@ -165,17 +164,14 @@ fn exact_float_big(big: &BigInt) -> Option<f64> {
 
 /// An integral double as a VM integer, when the double is exactly one.
 #[expect(
-    clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
-    clippy::float_cmp,
-    reason = "the round trip checks the cast was exact"
+    reason = "the bounds make the cast exact"
 )]
 fn integral(value: f64) -> Option<i64> {
-    if !value.is_finite() || value.fract() != 0.0 {
-        return None;
-    }
-    let int = value as i64;
-    (int as f64 == value && baml_type::int::fits(int)).then_some(int)
+    // `as i64` saturates, so `2^63` itself would read back as `i64::MAX`; the
+    // half-open bound keeps it out. Every integral double in range is an i64.
+    const LIMIT: f64 = 9_223_372_036_854_775_808.0;
+    (value.fract() == 0.0 && (-LIMIT..LIMIT).contains(&value)).then_some(value as i64)
 }
 
 #[cfg(test)]
@@ -183,7 +179,6 @@ mod tests {
     use super::*;
 
     fn int(value: i64) -> Scalar {
-        assert!(baml_type::int::fits(value));
         Scalar::Int(value)
     }
 
@@ -203,8 +198,12 @@ mod tests {
         );
         // `i64::MAX` is not representable; the saturating cast used to say it was.
         assert_eq!(
-            Rules::Python.fit(&int(i64::MAX >> 1), ScalarSlot::Float),
+            Rules::Python.fit(&int(i64::MAX), ScalarSlot::Float),
             Answer::No
+        );
+        assert_eq!(
+            Rules::Python.fit(&int(i64::MIN), ScalarSlot::Float),
+            Answer::Converted(Scalar::Float(-9_223_372_036_854_775_808.0))
         );
         // `2^63` is beyond the VM's integers and exactly representable.
         let big: BigInt = BigInt::from(1u64) << 63;
@@ -259,6 +258,18 @@ mod tests {
         assert_eq!(
             Rules::JavaScript.fit(&Scalar::BigInt(BigInt::from(1u64) << 63), ScalarSlot::Int),
             Answer::No
+        );
+        // `2^63` is one past `i64::MAX`; the saturating cast used to accept it.
+        assert_eq!(
+            Rules::JavaScript.fit(&Scalar::Float(9_223_372_036_854_775_808.0), ScalarSlot::Int),
+            Answer::No
+        );
+        assert_eq!(
+            Rules::JavaScript.fit(
+                &Scalar::Float(-9_223_372_036_854_775_808.0),
+                ScalarSlot::Int
+            ),
+            Answer::AsIs(int(i64::MIN))
         );
     }
 }

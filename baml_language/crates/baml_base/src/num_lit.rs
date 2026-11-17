@@ -97,12 +97,28 @@ fn validate(text: &str) -> Result<(u32, &str), IntLitError> {
 /// Parse an `INTEGER_LITERAL` token's text (`42`, `1_000`, `0xFF`, `0o755`,
 /// `0b1010`) into its non-negative value. Signs are handled by callers.
 ///
-/// The value is bounded by `i64::MAX`; the VM's stricter i63 `int` range is
-/// enforced later in type inference, where negation context is known.
+/// The value is bounded by `i64::MAX`, the largest `int`.
 pub fn parse_int_literal(text: &str) -> Result<i64, IntLitError> {
+    i64::try_from(parse_int_literal_magnitude(text)?).map_err(|_| IntLitError::TooLarge)
+}
+
+/// Parse an `INTEGER_LITERAL` token written directly under a unary minus into
+/// its negative value. The magnitude may be one past `i64::MAX`, so
+/// `-9223372036854775808` (the smallest `int`) is a literal.
+pub fn parse_negated_int_literal(text: &str) -> Result<i64, IntLitError> {
+    let magnitude = parse_int_literal_magnitude(text)?;
+    match magnitude.cmp(&i64::MIN.unsigned_abs()) {
+        std::cmp::Ordering::Greater => Err(IntLitError::TooLarge),
+        std::cmp::Ordering::Equal => Ok(i64::MIN),
+        std::cmp::Ordering::Less => Ok(-magnitude.cast_signed()),
+    }
+}
+
+/// The unsigned value of an `INTEGER_LITERAL` token's text.
+fn parse_int_literal_magnitude(text: &str) -> Result<u64, IntLitError> {
     let (base, digits) = validate(text)?;
     let cleaned: String = digits.chars().filter(|c| *c != '_').collect();
-    i64::from_str_radix(&cleaned, base).map_err(|_| IntLitError::TooLarge)
+    u64::from_str_radix(&cleaned, base).map_err(|_| IntLitError::TooLarge)
 }
 
 /// Parse a `BIGINT_LITERAL` token's text with the trailing `n` already

@@ -50,8 +50,8 @@ test "shift_left" {
     assert.equal(10 << 3, 80)
 }
 
-// `<<` discards the bits pushed past the 63-bit width instead of overflowing,
-// so bit 62 lands on the sign and anything above it falls off entirely.
+// `<<` discards the bits pushed past the 64-bit width instead of overflowing,
+// so bit 63 lands on the sign and anything above it falls off entirely.
 // `ops_shl` takes its operands at runtime so the VM's shift opcode is
 // exercised; the literal forms next to it go through the constant folder, and
 // the two must agree.
@@ -61,13 +61,16 @@ test "shift_left_truncates" {
     assert.equal(ops_shl(1, 61), 2305843009213693952)
     assert.equal(1 << 61, 2305843009213693952)
 
-    // Bit 62 is the i63 sign bit, so `1 << 62` is `int.min_value()`.
-    assert.equal(ops_shl(1, 62), int.min_value())
-    assert.equal(1 << 62, int.min_value())
+    assert.equal(ops_shl(1, 62), 4611686018427387904)
+    assert.equal(1 << 62, 4611686018427387904)
 
-    // Every bit is gone at 63 and beyond, whatever the left operand.
-    assert.equal(ops_shl(1, 63), 0)
-    assert.equal(1 << 63, 0)
+    // Bit 63 is the sign bit, so `1 << 63` is `int.min_value()`.
+    assert.equal(ops_shl(1, 63), int.min_value())
+    assert.equal(1 << 63, int.min_value())
+
+    // Every bit is gone at 64 and beyond, whatever the left operand.
+    assert.equal(ops_shl(1, 64), 0)
+    assert.equal(1 << 64, 0)
     assert.equal(ops_shl(-1, 100), 0)
     assert.equal((-1) << 100, 0)
 
@@ -82,19 +85,21 @@ test "shift_right" {
 }
 
 // `>>` is arithmetic: it propagates the sign rather than feeding in zeros, so a
-// count at or past the 63-bit width saturates to the sign bit: 0 for a
+// count at or past the 64-bit width saturates to the sign bit: 0 for a
 // non-negative operand, -1 for a negative one. Regression for a VM arm that
 // returned 0 for both, which disagreed with the constant folder.
 function ops_shr(x: int, n: int) -> int { x >> n }
 
 test "shift_right_saturates_to_sign" {
-    assert.equal(ops_shr(-1, 63), -1)
-    assert.equal((-1) >> 63, -1)
+    assert.equal(ops_shr(-1, 64), -1)
+    assert.equal((-1) >> 64, -1)
     assert.equal(ops_shr(-1, 200), -1)
     assert.equal((-1) >> 200, -1)
 
-    assert.equal(ops_shr(1, 63), 0)
-    assert.equal(1 >> 63, 0)
+    assert.equal(ops_shr(1, 64), 0)
+    assert.equal(1 >> 64, 0)
+    assert.equal(ops_shr(int.max_value(), 62), 1)
+    assert.equal(int.max_value() >> 62, 1)
     assert.equal(ops_shr(1, 200), 0)
     assert.equal(1 >> 200, 0)
 

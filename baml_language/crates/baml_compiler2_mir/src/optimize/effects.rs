@@ -406,43 +406,31 @@ impl Facts {
                     (condition.left, left, right),
                     (condition.right, right, left),
                 ] {
+                    // At the edge of the int range there is no neighbour to
+                    // narrow to; leaving the range as it is stays sound.
                     if excluded.lo == excluded.hi {
-                        if range.lo == excluded.lo {
-                            self.constrain(
-                                number,
-                                Range {
-                                    lo: range.lo + 1,
-                                    ..range
-                                },
-                            );
-                        } else if range.hi == excluded.lo {
-                            self.constrain(
-                                number,
-                                Range {
-                                    hi: range.hi - 1,
-                                    ..range
-                                },
-                            );
+                        if range.lo == excluded.lo
+                            && let Some(lo) = range.lo.checked_add(1)
+                        {
+                            self.constrain(number, Range { lo, ..range });
+                        } else if range.hi == excluded.lo
+                            && let Some(hi) = range.hi.checked_sub(1)
+                        {
+                            self.constrain(number, Range { hi, ..range });
                         }
                     }
                 }
             }
             BinOp::Lt | BinOp::Le => {
+                // `x < MIN` and `MAX < x` have no bound to state; leaving the
+                // range as it is stays sound.
                 let strict = i64::from(op == BinOp::Lt);
-                self.constrain(
-                    condition.left,
-                    Range {
-                        lo: MIN,
-                        hi: right.hi - strict,
-                    },
-                );
-                self.constrain(
-                    condition.right,
-                    Range {
-                        lo: left.lo + strict,
-                        hi: MAX,
-                    },
-                );
+                if let Some(hi) = right.hi.checked_sub(strict) {
+                    self.constrain(condition.left, Range { lo: MIN, hi });
+                }
+                if let Some(lo) = left.lo.checked_add(strict) {
+                    self.constrain(condition.right, Range { lo, hi: MAX });
+                }
             }
             BinOp::Gt | BinOp::Ge => self.branch(
                 Condition {

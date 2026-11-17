@@ -9,8 +9,52 @@ function Scalars() -> void {
 }
 
 function Overflow() -> void {
-    let n = 4611686018427387903;
+    let n = 9223372036854775807;
     baml.io.println(`${n + 1}`);
+}
+
+function Int64Op(a: int, b: int, op: string) -> int {
+    match (op) {
+        "+" => a + b,
+        "-" => a - b,
+        "*" => a * b,
+        "/" => a / b,
+        "%" => a % b,
+        "neg" => -a,
+        "<<" => a << b,
+        _ => a >> b,
+    }
+}
+
+function Int64Overflows(a: int, b: int, op: string) -> string {
+    `${Int64Op(a, b, op)}` catch (e) {
+        baml.panics.IntegerOverflow => "overflow",
+    }
+}
+
+// `int` is 64-bit; values of magnitude 2^62 and above are heap-boxed in the
+// VM and raw `i64` in compiled bodies, so both must agree on every edge.
+function Int64Edges() -> void {
+    let max = int.max_value();
+    let min = int.min_value();
+    let inline_max = 4611686018427387903;
+    baml.io.println(
+        `${Int64Overflows(max, 1, "+")}:${Int64Overflows(min, 1, "-")}:${Int64Overflows(min, -1, "*")}:${Int64Overflows(min, -1, "/")}:${Int64Overflows(min, -1, "%")}:${Int64Overflows(min, 0, "neg")}`,
+    );
+    baml.io.println(
+        `${Int64Overflows(1, 63, "<<")}:${Int64Overflows(1, 64, "<<")}:${Int64Overflows(min, 64, ">>")}:${Int64Overflows(max, 64, ">>")}:${-9223372036854775808}`,
+    );
+    let above = inline_max + 1;
+    let keys: map<int, string> = { 9223372036854775807: "max" };
+    keys[above] = "above";
+    let sorted = [max, above, min, -1, inline_max].sort();
+    let state = baml.hash.DefaultHasher.new();
+    above.hash(state);
+    let other = baml.hash.DefaultHasher.new();
+    (4611686018427387904).hash(other);
+    baml.io.println(
+        `${above}:${above == 4611686018427387904}:${above > inline_max}:${keys[max]}:${keys[4611686018427387904]}:${sorted}:${state.finish() == other.finish()}`,
+    );
 }
 
 function Containers() -> void {

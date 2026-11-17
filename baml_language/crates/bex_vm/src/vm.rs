@@ -6111,14 +6111,15 @@ impl BexVm {
     /// for the operand.
     fn pop_bigint_operand(&mut self) -> BigintOperand {
         let v = self.stack.ensure_pop();
-        if let Some(ptr) = v.as_object_ptr() {
+        // An int first: a boxed int is an object pointer too.
+        if let Some(n) = v.as_int() {
+            BigintOperand::Int(n)
+        } else if let Some(ptr) = v.as_object_ptr() {
             debug_assert!(
                 matches!(self.get_object(ptr), Object::Bigint(_)),
                 "pop_bigint_operand: object operand is not a Bigint (specialization bug)"
             );
             BigintOperand::Heap(ptr)
-        } else if let Some(n) = v.as_int() {
-            BigintOperand::Int(n)
         } else {
             verifier_unreachable!()
         }
@@ -6978,9 +6979,9 @@ impl BexVm {
     }
 
     /// The `Value` of a *checked* `int` result `l op r`, or an
-    /// `IntegerOverflow` throw: `checked` is `None` when the operation
-    /// overflowed `i64`, and a result outside the int range overflows too.
-    /// The `l`/`op`/`r` context is formatted only on the cold overflow path.
+    /// `IntegerOverflow` throw when `checked` is `None` (the operation
+    /// overflowed). The `l`/`op`/`r` context is formatted only on the cold
+    /// overflow path.
     #[inline]
     fn int_arith_result(
         &mut self,
@@ -6989,7 +6990,7 @@ impl BexVm {
         op: char,
         r: i64,
     ) -> Result<Value, VmError> {
-        match checked.filter(|v| baml_type::int::fits(*v)) {
+        match checked {
             Some(v) => Ok(self.int_value(v)),
             None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
         }
@@ -7017,13 +7018,32 @@ impl BexVm {
         r: Value,
     ) -> Result<Value, VmError> {
         let (l, r, checked) = Self::int_add_sub(l, op, r);
-        match checked.filter(|v| baml_type::int::fits(*v)) {
+        match checked {
             Some(v) => Ok(self.int_value(v)),
             None => {
-                self.stack.truncate_suffix(2);
+                // SAFETY: the opcode's two operands are the top stack slots.
+                unsafe { self.stack.truncate_suffix(2) };
                 Err(self.integer_overflow(format!("{l} {op} {r} overflows int")))
             }
         }
+    }
+
+    /// `l * r`, `l / r` or `l % r` (`op`) on two ints when the inline path
+    /// declined: a boxed operand, a zero divisor, or a result that overflows
+    /// or needs a box. `MIN / -1` overflows; `MIN % -1` is `0`.
+    #[cold]
+    #[inline(never)]
+    fn int_mul_div_rem_slow(&mut self, l: Value, op: char, r: Value) -> Result<Value, VmError> {
+        let (Some(l), Some(r)) = (l.as_int(), r.as_int()) else {
+            verifier_unreachable!()
+        };
+        let checked = match op {
+            '*' => l.checked_mul(r),
+            _ if r == 0 => return Err(self.division_by_zero(l, r)),
+            '/' => l.checked_div(r),
+            _ => Some(l.wrapping_rem(r)),
+        };
+        self.int_arith_result(checked, l, op, r)
     }
 
     /// The operands of an int `+` / `-` and the checked result.
@@ -7059,9 +7079,6 @@ impl BexVm {
     /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
     fn int_shl(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        if !baml_type::int::fits(l) {
-            verifier_unreachable!()
-        }
         match baml_type::int::shl(l, r) {
             Ok(value) => Ok(self.int_value(value)),
             Err(IntShiftError::NegativeCount(count)) => Err(self.negative_bit_shift(count)),
@@ -7072,9 +7089,6 @@ impl BexVm {
     /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
     fn int_shr(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        if !baml_type::int::fits(l) {
-            verifier_unreachable!()
-        }
         match baml_type::int::shr(l, r) {
             Ok(value) => Ok(self.int_value(value)),
             Err(IntShiftError::NegativeCount(count)) => Err(self.negative_bit_shift(count)),
@@ -13404,45 +13418,43 @@ impl BexVm {
                         // SAFETY: the encoder validates two arithmetic operands.
                         self.stack.replace_top_n::<2>(v);
                     }
+                    // Mul, Div and Mod first test both tags; two inline
+                    // operands take the short path, anything else the cold
+                    // `int_mul_div_rem_slow`.
                     OpCode::MulInt => {
-                        let Some(r) = self.stack.ensure_pop().as_int() else {
-                            verifier_unreachable!()
+                        let r = self.stack.ensure_pop();
+                        let l = self.stack.ensure_pop();
+                        let fast = if Value::both_inline_ints(l, r) {
+                            Self::inline_int_mul(l.inline_int_unchecked(), r.inline_int_unchecked())
+                        } else {
+                            None
                         };
-                        let Some(l) = self.stack.ensure_pop().as_int() else {
-                            verifier_unreachable!()
-                        };
-                        let v = match Self::inline_int_mul(l, r) {
+                        let v = match fast {
                             Some(v) => v,
-                            None => self.int_arith_result(l.checked_mul(r), l, '*', r)?,
+                            None => self.int_mul_div_rem_slow(l, '*', r)?,
                         };
                         self.push_stack(v)?;
                     }
+                    // Two inline ints never overflow `i64` under `/` or `%`;
+                    // only the quotient may need a box.
                     OpCode::DivInt => {
-                        let Some(r) = self.stack.ensure_pop().as_int() else {
-                            verifier_unreachable!()
+                        let r = self.stack.ensure_pop();
+                        let l = self.stack.ensure_pop();
+                        let v = if Value::both_inline_ints(l, r) && r != Value::int(0) {
+                            self.int_value(l.inline_int_unchecked() / r.inline_int_unchecked())
+                        } else {
+                            self.int_mul_div_rem_slow(l, '/', r)?
                         };
-                        let Some(l) = self.stack.ensure_pop().as_int() else {
-                            verifier_unreachable!()
-                        };
-                        if r == 0 {
-                            return Err(self.division_by_zero(l, r));
-                        }
-                        // `MIN / -1` is the one quotient that overflows.
-                        let v = self.int_arith_result(l.checked_div(r), l, '/', r)?;
                         self.push_stack(v)?;
                     }
                     OpCode::ModInt => {
-                        let Some(r) = self.stack.ensure_pop().as_int() else {
-                            verifier_unreachable!()
+                        let r = self.stack.ensure_pop();
+                        let l = self.stack.ensure_pop();
+                        let v = if Value::both_inline_ints(l, r) && r != Value::int(0) {
+                            Value::int(l.inline_int_unchecked() % r.inline_int_unchecked())
+                        } else {
+                            self.int_mul_div_rem_slow(l, '%', r)?
                         };
-                        let Some(l) = self.stack.ensure_pop().as_int() else {
-                            verifier_unreachable!()
-                        };
-                        if r == 0 {
-                            return Err(self.division_by_zero(l, r));
-                        }
-                        // `MIN % -1` is `0`, never an overflow.
-                        let v = self.int_arith_result(Some(l.wrapping_rem(r)), l, '%', r)?;
                         self.push_stack(v)?;
                     }
 
@@ -13686,7 +13698,7 @@ impl BexVm {
                         let val = self.stack.ensure_pop();
                         if let Some(n) = val.as_int() {
                             // Negating the smallest int overflows.
-                            match n.checked_neg().filter(|v| baml_type::int::fits(*v)) {
+                            match n.checked_neg() {
                                 Some(v) => {
                                     let v = self.int_value(v);
                                     self.push_stack(v)?;

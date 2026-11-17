@@ -627,7 +627,7 @@ test "a generic type is written as its shape at each instantiation" {
     );
     assert.equal(
         llm_output_pair_schemas(),
-        `{"type":"array","items":{"type":"integer","minimum":-4611686018427387904,"maximum":4611686018427387903},"description":"Two items, written as a list"}|{"type":"array","items":{"type":["string","null"]},"description":"Two items, written as a list"}`,
+        `{"type":"array","items":{"type":"integer","minimum":-9223372036854775808,"maximum":9223372036854775807},"description":"Two items, written as a list"}|{"type":"array","items":{"type":["string","null"]},"description":"Two items, written as a list"}`,
     );
     assert.equal(
         llm_output_range(`{"ints": [1, 2], "labels": ["a", null], "stamped": {"item": 3, "at": "2026-01-01T00:00:00Z"}}`),
