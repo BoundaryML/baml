@@ -34,16 +34,28 @@ pub const UNVERIFIED_MAX_STACK: usize = usize::MAX / 4;
 /// where no reachable instruction starts.
 pub const NO_DEPTH: u32 = u32::MAX;
 
-/// The values an instruction pops from the operand stack, then pushes.
+/// The values an instruction pops from the operand stack, then pushes, and
+/// how deep the stack must be for it to run: it may read values it leaves in
+/// place (`Copy`, a branch that peeks its condition).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StackEffect {
     pub pops: usize,
     pub pushes: usize,
+    /// The operand depth the instruction needs, at least `pops`.
+    pub reads: usize,
 }
 
 impl StackEffect {
     const fn new(pops: usize, pushes: usize) -> Self {
-        Self { pops, pushes }
+        Self {
+            pops,
+            pushes,
+            reads: pops,
+        }
+    }
+
+    const fn reading(self, reads: usize) -> Self {
+        Self { reads, ..self }
     }
 }
 
@@ -84,11 +96,11 @@ pub enum StackError {
     BadTarget { index: usize, target: isize },
     /// Control runs past the last instruction.
     FallsOffEnd { index: usize },
-    /// The instruction pops more values than the stack holds.
+    /// The instruction needs more operands than the stack holds.
     Underflow {
         index: usize,
         depth: usize,
-        pops: usize,
+        needs: usize,
     },
     /// Two paths reach the instruction with different stack depths.
     Mismatch {
@@ -124,9 +136,13 @@ impl fmt::Display for StackError {
                     "instruction {index}: control runs past the last instruction"
                 )
             }
-            Self::Underflow { index, depth, pops } => write!(
+            Self::Underflow {
+                index,
+                depth,
+                needs,
+            } => write!(
                 f,
-                "instruction {index}: pops {pops} operand(s) from a stack of {depth}"
+                "instruction {index}: needs {needs} operand(s) on a stack of {depth}"
             ),
             Self::Mismatch {
                 index,
@@ -218,9 +234,10 @@ impl Walk {
 impl Bytecode {
     /// The values instruction `index` pops from the operand stack, then
     /// pushes, counted when its frame continues (a call's result, a
-    /// suspension's resumed value). `taken` says whether a conditional
-    /// branch jumps; only the `*OrPop` branches differ, keeping their tested
-    /// value when they jump.
+    /// suspension's resumed value), and the depth it reads. `taken` says
+    /// whether a conditional branch jumps; only the `*OrPop` branches differ,
+    /// keeping their tested value when they jump. Counts from operands
+    /// saturate, so an absurd one asks for more operands than any stack holds.
     ///
     /// This is the VM's one model of stack effects: the load-time check and
     /// the debug-build depth assertion in the dispatch loop both rest on it.
@@ -235,6 +252,7 @@ impl Bytecode {
     ) -> Result<StackEffect, StackError> {
         use Instruction as I;
         let layout = || self.call_layouts.get(&index).map(|layout| layout.0.len());
+        let reading = |effect: StackEffect, reads| Ok(effect.reading(reads));
         let callee_args = |callee: GlobalIndex| {
             layout()
                 .or_else(|| (ctx.global_arity)(callee))
@@ -250,34 +268,36 @@ impl Bytecode {
             | I::LoadDeref(_)
             | I::LoadCapture(_)
             | I::CaptureRef(_)
-            | I::Copy(_)
             | I::LoadVarField(..)
             | I::LoadVarFieldLocal(..)
             | I::ArrayIterNext { .. }
             | I::ArrayIterNextLocal { .. }
             | I::LoadVariant { .. }
             | I::BeginTraceHook(_) => effect(0, 1),
+            // Copies the value `n` below the top.
+            I::Copy(n) => reading(StackEffect::new(0, 1), n.saturating_add(1)),
             I::LoadVar2(..) => effect(0, 2),
-            I::StoreVarLoadVar(_)
-            | I::AddLocalSmall(..)
+            // Peek at the top: store it, or test it.
+            I::StoreVarLoadVar(_) | I::JumpIfFalse(_) => reading(StackEffect::new(0, 0), 1),
+            I::AddLocalSmall(..)
             | I::TraceHookHidden
             | I::TraceHookTiming
             | I::TraceHookSpan
             | I::TraceHookRich
             | I::TraceHookEmptySpan
             | I::Jump(_)
-            | I::JumpIfFalse(_)
             | I::JumpIfLocalsCmp { .. }
             | I::JumpIfLocalConstCmp { .. }
             | I::Unreachable => effect(0, 0),
             I::JumpIfFalseOrPop(_) | I::JumpIfTrueOrPop(_) | I::JumpIfNotNullOrPop(_) => {
-                effect(usize::from(!taken), 0)
+                reading(StackEffect::new(usize::from(!taken), 0), 1)
             }
+            // Pops the source, then copies into the destination below it.
+            I::InitSpread(_) => reading(StackEffect::new(1, 0), 2),
             I::StoreVar(_)
             | I::StoreGlobal(_)
             | I::StoreDeref(_)
             | I::StoreCapture(_)
-            | I::InitSpread(_)
             | I::BindType(_)
             | I::SetCallTrace
             | I::EndTraceHook
@@ -347,9 +367,9 @@ impl Bytecode {
             // The engine resumes a log or event with a null pushed.
             | I::SendEvent => effect(2, 1),
             // The elements, then the declared element type on top.
-            I::AllocArray(n) | I::AllocTuple(n) => effect(n + 1, 1),
+            I::AllocArray(n) | I::AllocTuple(n) => effect(n.saturating_add(1), 1),
             // The keys and values, then the key and value types on top.
-            I::AllocMap(n) => effect(2 * n + 2, 1),
+            I::AllocMap(n) => effect(n.saturating_mul(2).saturating_add(2), 1),
             I::ConcatStrings(n) => effect(n, 1),
             I::AllocInstance { ntypeargs, .. } | I::MakeGenericFunction { ntypeargs, .. } => {
                 effect(usize::from(ntypeargs), 1)
@@ -359,13 +379,13 @@ impl Bytecode {
                     .class_init_plans
                     .get(plan)
                     .ok_or(StackError::BadOperand { index })?;
-                effect(plan.fields.len() + usize::from(plan.ntypeargs), 1)
+                effect(plan.fields.len().saturating_add(usize::from(plan.ntypeargs)), 1)
             }
             I::MakeClosure {
                 capture_count,
                 ntypeargs,
                 ..
-            } => effect(capture_count + ntypeargs, 1),
+            } => effect(capture_count.saturating_add(ntypeargs), 1),
             // The type arguments, then the callable or receiver.
             I::MakeGenericFunctionFromValue { ntypeargs }
             | I::MakeGenericBoundMethod { ntypeargs, .. } => effect(usize::from(ntypeargs) + 1, 1),
@@ -376,7 +396,7 @@ impl Bytecode {
             I::Call { callee, ntypeargs }
             | I::CallLocal { callee, ntypeargs }
             | I::CallHooked { callee, ntypeargs } => {
-                effect(usize::from(ntypeargs) + callee_args(callee)?, 1)
+                effect(usize::from(ntypeargs).saturating_add(callee_args(callee)?), 1)
             }
             I::SysOp(callee) => effect(
                 (ctx.global_arity)(callee).ok_or(StackError::UnknownArity { index })?,
@@ -386,7 +406,7 @@ impl Bytecode {
                 let args = layout()
                     .or(ctx.indirect_args)
                     .ok_or(StackError::UnknownArity { index })?;
-                effect(args + 1, 1)
+                effect(args.saturating_add(1), 1)
             }
             // The arguments, their type arguments, then interface and name.
             I::VirtualCall {
@@ -447,12 +467,20 @@ impl Bytecode {
         while let Some(index) = walk.pending.pop() {
             let depth = walk.depths[index].expect("queued instructions have a depth") as usize;
             let after = |taken: bool| -> Result<usize, StackError> {
-                let StackEffect { pops, pushes } = self.stack_effect(index, taken, ctx)?;
-                let rest =
-                    depth
-                        .checked_sub(pops)
-                        .ok_or(StackError::Underflow { index, depth, pops })?;
-                Ok(rest + pushes)
+                let StackEffect {
+                    pops,
+                    pushes,
+                    reads,
+                } = self.stack_effect(index, taken, ctx)?;
+                let needs = reads.max(pops);
+                if depth < needs {
+                    return Err(StackError::Underflow {
+                        index,
+                        depth,
+                        needs,
+                    });
+                }
+                Ok(depth - pops + pushes)
             };
             let next = || {
                 if index + 1 == count {
@@ -504,7 +532,7 @@ impl Bytecode {
         let layout = self.verify_stack(ctx)?;
         let (mut compact, offsets) = self.lower_with_layout(keep_offsets);
         compact.max_stack = layout.max;
-        compact.frame_slots = locals + layout.max;
+        compact.frame_slots = locals.saturating_add(layout.max);
         #[cfg(debug_assertions)]
         {
             let mut depths = vec![NO_DEPTH; compact.code.len()];
@@ -630,7 +658,7 @@ mod tests {
             Err(StackError::Underflow {
                 index: 0,
                 depth: 0,
-                pops: 2
+                needs: 2
             })
         );
         assert_eq!(
@@ -653,6 +681,61 @@ mod tests {
                 depth: MAX_OPERAND_DEPTH + 1
             })
         );
+    }
+
+    #[test]
+    fn instructions_that_read_without_popping_need_their_operands() {
+        // `Copy(1)` reads two deep, `JumpIfFalse` peeks its condition, and
+        // `InitSpread` writes into the value below the one it pops.
+        for (instructions, index, depth, needs) in [
+            (
+                vec![
+                    Instruction::LoadVar(1),
+                    Instruction::Copy(1),
+                    Instruction::Return,
+                ],
+                1,
+                1,
+                2,
+            ),
+            (
+                vec![
+                    Instruction::JumpIfFalse(1),
+                    Instruction::LoadConst(0),
+                    Instruction::Return,
+                ],
+                0,
+                0,
+                1,
+            ),
+            (
+                vec![
+                    Instruction::LoadVar(1),
+                    Instruction::InitSpread(0),
+                    Instruction::Return,
+                ],
+                1,
+                1,
+                2,
+            ),
+        ] {
+            assert_eq!(
+                verify(&bytecode(instructions)),
+                Err(StackError::Underflow {
+                    index,
+                    depth,
+                    needs
+                })
+            );
+        }
+        // An absurd count asks for more operands than any stack holds.
+        assert!(matches!(
+            verify(&bytecode(vec![
+                Instruction::AllocMap(usize::MAX),
+                Instruction::Return
+            ])),
+            Err(StackError::Underflow { .. })
+        ));
     }
 
     #[test]

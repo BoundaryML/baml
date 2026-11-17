@@ -246,8 +246,18 @@ fn opcodes_the_corpus_never_runs_pass_the_operand_depth_check() {
         instructions.push(Instruction::Return);
         let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             run(probe, "user.Probe", instructions, constants.clone())
-        }));
-        assert!(refused.is_err(), "{op:?} ran");
+        }))
+        .expect_err("a map element handler refuses to run");
+        let message = refused
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| refused.downcast_ref::<&str>().copied())
+            .unwrap_or_default();
+        // The handler's own refusal, not a failed depth check before it.
+        assert!(
+            message.contains("must be lowered through baml.Map"),
+            "{op:?} panicked with {message:?}"
+        );
     }
 
     let executed = crate::opcode_coverage::executed();
