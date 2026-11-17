@@ -596,17 +596,17 @@ function Sandbox({ t }: { t: number }) {
   );
 }
 
-// How far along each status is, as the color of its dot: built, being built, written down, not begun.
+// How far along each status is, as the color of its dot: built, being built, written down, still being
+// researched.
 const STAGE: Record<string, string> = {
   Designing: 'bg-white/50',
   'In progress': 'bg-clover',
-  'Not started': 'border border-white/40',
   Proposed: 'bg-white/50',
+  Researching: 'border border-white/40',
   'Weekend prototype': 'bg-clover',
 };
 
-// Furthest along first. Formal verification hasn't started, and says so plainly
-// and comes last.
+// Furthest along first. Formal verification is still being researched, and comes last.
 const FEATURES: {
   // The rollout chart draws edge to edge, so its tile has no inner padding.
   bleed?: boolean;
@@ -658,7 +658,7 @@ const FEATURES: {
   {
     draw: (t) => <Sandbox t={t} />,
     ms: 4200,
-    name: 'HyperSandboxes',
+    name: 'Sandboxes',
     says: (
       <>
         Milliseconds are too slow, megabytes too big.
@@ -705,7 +705,7 @@ const FEATURES: {
     ms: 4200,
     name: 'Formal verification',
     says: 'Prove a rule holds for every input, not just the ones you tested.',
-    status: { label: 'Not started' },
+    status: { label: 'Researching' },
     tile: 'lg:col-span-3',
   },
 ];

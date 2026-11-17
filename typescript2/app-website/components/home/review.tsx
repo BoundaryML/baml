@@ -1070,7 +1070,7 @@ function Comment({
     // A box like the others in this section, so the story reads as one of them.
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
       <p className="v4-h3 text-head" style={PIXEL}>
-        Our GitHub Action measures code quality on every pull request.
+        Code quality, on every pull request.
       </p>
       <p className="mt-2 text-[18px] text-white/70">
         No model in the loop, so the token bill is $0.
@@ -1081,7 +1081,6 @@ function Comment({
           <span className="text-white/50">- uses: </span>
           <span className="text-clover">BoundaryML/baml-action@v1</span>
         </span>
-        <span className="text-white/50">check, fmt, test and codequality</span>
       </p>
       {steps}
       <div
@@ -1275,12 +1274,6 @@ export default function Review() {
         </div>
         <div className="mt-16">
           <Speed />
-        </div>
-        <div className="mt-16 md:mt-20">
-          <p className="v4-h2 text-head max-w-[22em]">
-            So yes, agents can write high-quality <Hyper>BAML</Hyper>. By
-            design.
-          </p>
         </div>
       </div>
     </section>

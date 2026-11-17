@@ -1513,8 +1513,7 @@ export default function Stack() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         {/* The worry, asked out loud, then answered in the order it's asked: fast, then small
-            (storage, then the multimodal store), then the answer. Like the review section's
-            "Can agents write high-quality BAML?" and its "So yes… By design." */}
+            (storage, then the multimodal store), then the answer. */}
         {/* Given room on both sides, so it reads as a new beat, not a caption on the figure. */}
         <h2 className="v4-h2 text-head max-w-[22em]" id="stack">
           Is <Hyper /> practical?
