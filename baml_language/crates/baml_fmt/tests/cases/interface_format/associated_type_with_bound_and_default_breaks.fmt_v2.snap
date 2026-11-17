@@ -3,7 +3,8 @@ source: crates/baml_fmt/tests/cases.rs
 ---
 function f() -> int {
     let type T extends AaaaaaaaaaaaaaaaaaaA
-        & BbbbbbbbbbbbbbbB = v else {
+        & BbbbbbbbbbbbbbbB = v
+    else {
         return 0;
     };
     0

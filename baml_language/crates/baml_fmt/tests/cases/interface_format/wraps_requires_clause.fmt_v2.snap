@@ -4,7 +4,7 @@ source: crates/baml_fmt/tests/cases.rs
 interface Named requires
     FirstLongInterface,
     SecondLongInterface,
-    ThirdLongInterface
+    ThirdLongInterface,
 {
     function name(self) -> string throws never;
 }

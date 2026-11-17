@@ -9,11 +9,14 @@ use baml_syntax::{
 };
 
 use super::{FormatNode, Formatter};
-use crate::{comments::docs, ir::Doc};
+use crate::{
+    comments::docs::{self, After},
+    ir::Doc,
+};
 
 mod attrs;
 pub(in crate::format) mod control;
-mod exprs;
+pub(in crate::format) mod exprs;
 mod items;
 mod patterns;
 mod stmts;
@@ -35,7 +38,7 @@ impl FormatNode for SourceFile {
             d,
             f.tree,
             f.comments.dangling(f.tree.root_id()),
-            true,
+            After::Token,
         )];
         for (index, &item) in items.iter().enumerate() {
             if index > 0 {
@@ -55,7 +58,7 @@ impl FormatNode for SourceFile {
                     Doc::EMPTY_LINE
                 });
             }
-            parts.push(f.alt(item));
+            parts.push(d.scope(f.alt(item)));
         }
         parts.push(Doc::HARD_LINE);
         d.concat(parts)

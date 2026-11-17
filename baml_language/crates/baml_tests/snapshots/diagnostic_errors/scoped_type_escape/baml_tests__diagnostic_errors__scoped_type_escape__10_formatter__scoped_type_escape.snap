@@ -223,7 +223,9 @@ function outer_list_through_a_class_literal(t: reflect.Type) -> unknown {
     let xs = [];
     {
         let type T = t;
-        xs.push(Cell { value: ident(as_t<T>(1)) })
+        xs.push(Cell {
+            value: ident(as_t<T>(1)),
+        })
     }
     xs
 }

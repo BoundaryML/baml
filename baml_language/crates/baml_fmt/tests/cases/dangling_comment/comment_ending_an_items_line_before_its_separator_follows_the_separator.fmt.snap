@@ -1,0 +1,19 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(a: int) -> int {
+    foo(
+        -a, // c
+        //C2
+        1,
+    );
+    let x = [
+        -a, // c
+        //C2
+        1,
+    ];
+    bar(
+        a, //C3
+        1,
+    )
+}

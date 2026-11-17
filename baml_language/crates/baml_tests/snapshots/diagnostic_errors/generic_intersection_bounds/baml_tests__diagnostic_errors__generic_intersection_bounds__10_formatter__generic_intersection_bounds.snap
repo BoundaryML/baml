@@ -59,7 +59,9 @@ class Holder<T extends Named & Sized> {
 }
 
 function missing_conjunct_in_class_type_arg() -> string {
-    let h = Holder<OnlyNamed> { item: OnlyNamed { name: "n" } };
+    let h = Holder<OnlyNamed> {
+        item: OnlyNamed { name: "n" },
+    };
     h.item.name
 }
 

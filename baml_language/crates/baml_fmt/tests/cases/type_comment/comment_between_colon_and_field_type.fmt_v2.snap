@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+class C {
+    x:
+        // c
+        int,
+    y: // d
+        string,
+}

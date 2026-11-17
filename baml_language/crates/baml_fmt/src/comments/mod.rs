@@ -25,16 +25,20 @@
 //!   trails the preceding child (`a // c`), else dangles after the token
 //!   before it (`{ // c`, `function // c`, `= // c`), which a rule prints
 //!   on that token's line;
-//! * between code on one line (so a `/* */`): it trails the preceding child
-//!   (`a /* c */, b`), else leads the following one (`= /* c */ 2`), else
-//!   dangles after the token before it (`map /* c */ {`).
+//! * between code on one line (so a `/* */`): after a separator it dangles
+//!   after that separator (`a, /* c */ b`); else it trails the preceding
+//!   child (`a /* c */, b`), else leads the following one (`= /* c */ 2`),
+//!   else dangles after the token before it (`map /* c */ {`).
 //!
 //! A comment never crosses a token of the enclosing node to reach a child
 //! on the far side of it, with one exception: a comment on a line that ends
-//! before the enclosing node's terminator (`a // c` then `;` or `,`)
-//! dangles after that terminator, which the rules print right after the
-//! node whatever it was written like, so that re-reading the output
-//! attaches it the same way.
+//! before the enclosing node's terminator (`a // c` then `;` or `,`), a
+//! line comment that ends an item's line before the item's `,` or `;`, or a
+//! comment on a line of its own before such a `,` or `;`, dangles after that
+//! separator, which the rules print right after the node whatever it was
+//! written like, so that re-reading the output attaches it the same way —
+//! and so that the comments between an item and its separator stay in the
+//! order they were written, whichever lines they were on.
 //!
 //! The rules print a token of the source on a new line when a line comment
 //! is pending on the current one ([`Formatter::token`](crate::format::Formatter::token)), so a comment is
@@ -240,6 +244,11 @@ impl Comments {
     }
 }
 
+/// Whether a token is a comment the formatter places: a trivia comment (see `comment_kind`).
+pub fn is_comment(kind: TokenKind) -> bool {
+    comment_kind(kind).is_some()
+}
+
 /// The kind of comment a token is, if it is one the formatter places: the
 /// trivia comments. `///` and `//baml:` lines are syntax a declaration owns,
 /// and a `//#` line is a statement where it is allowed.
@@ -292,6 +301,10 @@ fn len(tokens: &Tokens) -> u32 {
 /// after one belongs to the item before it.
 const SEPARATORS: KindSet =
     KindSet::new(&[TokenKind::Comma, TokenKind::Semicolon, TokenKind::Pipe]);
+
+/// The separators the rules print as text that tucks in before a pending
+/// line comment (`a, // c`); a `|` is a token, which starts a new line then.
+const TUCKED: KindSet = KindSet::new(&[TokenKind::Comma, TokenKind::Semicolon]);
 
 /// A token a node owns, and that node.
 #[derive(Debug, Clone, Copy)]
@@ -367,14 +380,17 @@ impl<'t> Sweep<'t> {
                 (None, None) => {}
             }
         }
+        // Backwards, each token read once: the scan for a comment's next
+        // owned token stops where the scan for the comment after it began.
         let mut next: Option<Owned> = None;
+        let mut scanned_to = len(tokens);
         for comment in found.iter_mut().rev() {
-            let scanned_from = next.map_or(len(tokens), |next| next.token.0);
-            for token in (comment.token.0 + 1..scanned_from).rev().map(TokenIdx) {
+            for token in (comment.token.0 + 1..scanned_to).rev().map(TokenIdx) {
                 if let Some(owned) = self.owned(token) {
                     next = Some(owned);
                 }
             }
+            scanned_to = comment.token.0 + 1;
             comment.next = next;
         }
         found
@@ -434,14 +450,35 @@ impl<'t> Sweep<'t> {
         // terminator — the `;` or `,` that is its last token — dangles
         // after that terminator: a rule prints the terminator and then the
         // comment, and re-reading that output attaches the comment the same
-        // way, so the layout does not change between passes. A comment on
-        // the same line as the terminator stays where it was written.
+        // way, so the layout does not change between passes. So does a line
+        // comment ending an item's line when the item's `,` or `;` follows
+        // on a later one: the rules print those separators as text that
+        // tucks in before a pending line comment, so the output has the
+        // comment after the separator either way. A comment on the same
+        // line as the terminator stays where it was written.
         let terminator = (placement != Placement::SameLine)
             .then(|| {
                 next.filter(|next| {
+                    let separator = tokens.kind(next.token);
+                    let tucks_in = placement == Placement::EndOfLine
+                        && kind == CommentKind::Line
+                        && TUCKED.contains(separator);
                     next.owner == enclosing
-                        && SEPARATORS.contains(tokens.kind(next.token))
-                        && TokenIdx(next.token.0 + 1) == self.tree.arenas().span(enclosing).end()
+                        && SEPARATORS.contains(separator)
+                        && (TokenIdx(next.token.0 + 1) == self.tree.arenas().span(enclosing).end()
+                            || tucks_in)
+                })
+            })
+            .flatten();
+        // A comment on a line of its own directly before an item's `,` or
+        // `;` that the enclosing list owns: printed right after the item,
+        // the separator comes before the comment on re-reading, and a line
+        // comment that ended the item's line (which dangles after the
+        // separator, above) keeps its place before it.
+        let before_tucked = (placement == Placement::OwnLine)
+            .then(|| {
+                next.filter(|next| {
+                    next.owner == enclosing && TUCKED.contains(tokens.kind(next.token))
                 })
             })
             .flatten();
@@ -451,11 +488,11 @@ impl<'t> Sweep<'t> {
                 after: prev.map(|prev| prev.token),
             },
         );
-        let (node, position) = if let Some(terminator) = terminator {
+        let (node, position) = if let Some(separator) = terminator.or(before_tucked) {
             (
                 enclosing,
                 Position::Dangling {
-                    after: Some(terminator.token),
+                    after: Some(separator.token),
                 },
             )
         } else {
@@ -471,10 +508,15 @@ impl<'t> Sweep<'t> {
                     (None, Some(preceding)) => (preceding, Position::Trailing),
                     (None, None) => dangling,
                 },
-                Placement::SameLine => match (preceding, following) {
-                    (Some(preceding), _) => (preceding, Position::Trailing),
-                    (None, Some(following)) => (following, Position::Leading),
-                    (None, None) => match before_separator() {
+                // Directly after a separator it dangles after it, as a
+                // comment that ends the separator's line does: it then stays
+                // on the separator's line when the list breaks, and reads the
+                // same way on the next pass.
+                Placement::SameLine => match (after_separator, preceding, following) {
+                    (Some(after_separator), _, _) => after_separator,
+                    (None, Some(preceding), _) => (preceding, Position::Trailing),
+                    (None, None, Some(following)) => (following, Position::Leading),
+                    (None, None, None) => match before_separator() {
                         Some(preceding) => (preceding, Position::Trailing),
                         None => dangling,
                     },

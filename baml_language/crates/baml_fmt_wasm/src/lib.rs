@@ -33,8 +33,9 @@ pub fn format(source: &str) -> Result<String, JsError> {
     match baml_fmt::format(source, &baml_fmt::FormatOptions::default()) {
         Ok(formatted) => Ok(formatted),
         Err(baml_fmt::FormatterError::ParseErrors(_)) => Ok(source.to_owned()),
-        Err(error @ baml_fmt::FormatterError::Incomplete(_)) => {
-            Err(JsError::new(&error.to_string()))
-        }
+        Err(
+            error @ (baml_fmt::FormatterError::Incomplete(_)
+            | baml_fmt::FormatterError::Violation(_)),
+        ) => Err(JsError::new(&error.to_string())),
     }
 }

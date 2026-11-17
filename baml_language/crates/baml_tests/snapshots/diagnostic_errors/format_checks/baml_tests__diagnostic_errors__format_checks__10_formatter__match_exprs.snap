@@ -65,17 +65,17 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         // 7 first arm leading
         0 // 8 pattern trailing
         // 9 arrow leading
-        => // 10 arrow trailing
-            // 11 body leading
-            "zero", // 12 body trailing
+            => // 10 arrow trailing
+                // 11 body leading
+                "zero", // 12 body trailing
         // 13 comma leading
         // 14 comma trailing
         // 15 second arm leading
         _ // 16 second pattern trailing
         // 17 second arrow leading
-        => // 18 second arrow trailing
-            // 19 second body leading
-            "other", // 20 second body trailing
+            => // 18 second arrow trailing
+                // 19 second body leading
+                "other", // 20 second body trailing
         // 21 close brace leading
     } // 22 close brace trailing
 
@@ -91,16 +91,16 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         /* 7 first arm leading */
         0 /* 8 pattern trailing */
         /* 9 arrow leading */
-        => /* 10 arrow trailing */
-            /* 11 body leading */
-            "zero", /* 12 body trailing */
+            => /* 10 arrow trailing */
+                /* 11 body leading */
+                "zero", /* 12 body trailing */
         /* 13 comma leading */ /* 14 comma trailing */
         /* 15 second arm leading */
         _ /* 16 second pattern trailing */
         /* 17 second arrow leading */
-        => /* 18 second arrow trailing */
-            /* 19 second body leading */
-            "other", /* 20 second body trailing */
+            => /* 18 second arrow trailing */
+                /* 19 second body leading */
+                "other", /* 20 second body trailing */
         /* 21 close brace leading */
     } /* 22 close brace trailing */
 
@@ -111,16 +111,16 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         // 1 arm leading
         let n // 2 name trailing
         : // 3 colon trailing
-        // 4 type leading
-        int // 5 type trailing
+            // 4 type leading
+            int // 5 type trailing
         // 6 if leading
-            if // 7 if trailing
-            // 8 guard leading
-            n > 0 // 9 guard trailing
-            // 10 arrow leading
-        => // 11 arrow trailing
-            // 12 body leading
-            "positive", // 13 body trailing
+        if // 7 if trailing
+        // 8 guard leading
+        n > 0 // 9 guard trailing
+        // 10 arrow leading
+            => // 11 arrow trailing
+                // 12 body leading
+                "positive", // 13 body trailing
         // 14 comma trailing
         _ => "other",
     }
@@ -131,16 +131,16 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     match (x) {
         /* 1 arm leading */
         let n /* 2 name trailing */: /* 3 colon trailing */
-        /* 4 type leading */
-        int /* 5 type trailing */
+            /* 4 type leading */
+            int /* 5 type trailing */
         /* 6 if leading */
-            if /* 7 if trailing */
-            /* 8 guard leading */
-            n > 0 /* 9 guard trailing */
-            /* 10 arrow leading */
-        => /* 11 arrow trailing */
-            /* 12 body leading */
-            "positive", /* 13 body trailing */ /* 14 comma trailing */
+        if /* 7 if trailing */
+        /* 8 guard leading */
+        n > 0 /* 9 guard trailing */
+        /* 10 arrow leading */
+            => /* 11 arrow trailing */
+                /* 12 body leading */
+                "positive", /* 13 body trailing */ /* 14 comma trailing */
         _ => "other",
     }
 
@@ -269,8 +269,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         | 21
         | 22
         | 23
-        | 24 =>
-            "lots of literals",
+        | 24 => "lots of literals",
         _ => "other",
     }
 
@@ -298,16 +297,16 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         // 1 arm leading
         let n // 2 name trailing
         : // 3 colon trailing
-        // 4 type leading
-        int // 5 type trailing
+            // 4 type leading
+            int // 5 type trailing
         // 6 if leading
-            if // 7 if trailing
-            // 8 guard leading
-            n > 0 && n < 100 && n != 42 && n != 13 && n != 7 // 9 guard trailing
-            // 10 arrow leading
-        => // 11 arrow trailing
-            // 12 body leading
-            "acceptable small positive number that passes all the defined filter conditions", // 13 body trailing
+        if // 7 if trailing
+        // 8 guard leading
+        n > 0 && n < 100 && n != 42 && n != 13 && n != 7 // 9 guard trailing
+        // 10 arrow leading
+            => // 11 arrow trailing
+                // 12 body leading
+                "acceptable small positive number that passes all the defined filter conditions", // 13 body trailing
         // 14 comma trailing
         _ => "other",
     }
@@ -316,16 +315,16 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     match (x) {
         /* 1 arm leading */
         let n /* 2 name trailing */: /* 3 colon trailing */
-        /* 4 type leading */
-        int /* 5 type trailing */
+            /* 4 type leading */
+            int /* 5 type trailing */
         /* 6 if leading */
-            if /* 7 if trailing */
-            /* 8 guard leading */
-            n > 0 && n < 100 && n != 42 && n != 13 && n != 7 /* 9 guard trailing */
-            /* 10 arrow leading */
-        => /* 11 arrow trailing */
-            /* 12 body leading */
-            "acceptable small positive number that passes all the defined filter conditions", /* 13 body trailing */ /* 14 comma trailing */
+        if /* 7 if trailing */
+        /* 8 guard leading */
+        n > 0 && n < 100 && n != 42 && n != 13 && n != 7 /* 9 guard trailing */
+        /* 10 arrow leading */
+            => /* 11 arrow trailing */
+                /* 12 body leading */
+                "acceptable small positive number that passes all the defined filter conditions", /* 13 body trailing */ /* 14 comma trailing */
         _ => "other",
     }
 
@@ -412,16 +411,16 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
         /* 5 second leading */
         (
             let /* 6a paren leading */ x /* 6b name trailing */: /* 6c colon trailing */ int
-        ) /* 7 last trailing */ =>
-            x,
+        ) /* 7 last trailing */ => x,
     }
 
     // ===== Bare type union arm with trivia between members =====
     match (s) {
         MatchStatus.Active /* a */
-        | /* b */ MatchStatus.Inactive /* c */
-        | /* d */ MatchStatus.Pending =>
-            "any",
+        | /* b */
+            MatchStatus.Inactive /* c */
+        | /* d */
+            MatchStatus.Pending => "any",
     }
 
     // ===== Single-line short union, comment after first only =====
@@ -453,8 +452,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     match (s) {
         MatchStatus.Active /* 1 */
         | /* 2 */ MatchStatus.Inactive /* 3 */
-        | /* 4 */ MatchStatus.Pending =>
-            "y",
+        | /* 4 */ MatchStatus.Pending => "y",
     }
 
     // ===== Nested Or-of-Or with trivia at outer and inner pipes =====

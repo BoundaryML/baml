@@ -137,8 +137,7 @@ type DeepFnType = (
         y: int,
     ) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never)
         throws never
-)
-    throws never;
+) throws never;
 
 // ===== Function type with many long params exceeding limit =====
 type LongParamFn = (
@@ -191,9 +190,9 @@ type // 2 type keyword trailing
 // 3 name leading
 TriviaAlias // 4 name trailing
 // 5 equals leading
-= // 6 equals trailing
-// 7 type leading
-int; // 8 type trailing
+    = // 6 equals trailing
+        // 7 type leading
+        int; // 8 type trailing
 
 ///////////////////
 
@@ -203,103 +202,103 @@ type /* 2 type keyword trailing */
 /* 3 name leading */
 TriviaAliasBlock /* 4 name trailing */
 /* 5 equals leading */
-= /* 6 equals trailing */
-/* 7 type leading */
-int; /* 8 type trailing */
+    = /* 6 equals trailing */
+        /* 7 type leading */
+        int; /* 8 type trailing */
 
 ///////////////////
 
 // ===== Trivia in union type (line comments) =====
 type TriviaUnion =
-// 1 first member leading
-int // 2 first member trailing
-// 3 pipe leading
-    | // 4 pipe trailing
-    // 5 second member leading
-    string // 6 second member trailing
-    // 7 second pipe leading
-    | // 8 second pipe trailing
-    // 9 third member leading
-    bool; // 10 third member trailing
+    // 1 first member leading
+    int // 2 first member trailing
+        // 3 pipe leading
+        | // 4 pipe trailing
+        // 5 second member leading
+        string // 6 second member trailing
+        // 7 second pipe leading
+        | // 8 second pipe trailing
+        // 9 third member leading
+        bool; // 10 third member trailing
 
 // ===== Trivia in union type (block comments) =====
 type TriviaUnionBlock =
-/* 1 first member leading */
-int /* 2 first member trailing */
-/* 3 pipe leading */
-    | /* 4 pipe trailing */
-    /* 5 second member leading */
-    string /* 6 second member trailing */
-    /* 7 second pipe leading */
-    | /* 8 second pipe trailing */
-    /* 9 third member leading */
-    bool; /* 10 third member trailing */
+    /* 1 first member leading */
+    int /* 2 first member trailing */
+        /* 3 pipe leading */
+        | /* 4 pipe trailing */
+        /* 5 second member leading */
+        string /* 6 second member trailing */
+        /* 7 second pipe leading */
+        | /* 8 second pipe trailing */
+        /* 9 third member leading */
+        bool; /* 10 third member trailing */
 
 // ===== Trivia in long wrapping union (line comments) =====
 type TriviaLongUnion =
-// 1 leading
-"alpha" // 2 trailing
-// 3 leading
-    | // 4 trailing
-    // 5 leading
-    "bravo" // 6 trailing
-    // 7 leading
-    | // 8 trailing
-    // 9 leading
-    "charlie" // 10 trailing
-    // 11 leading
-    | // 12 trailing
-    // 13 leading
-    "delta" // 14 trailing
-    // 15 leading
-    | // 16 trailing
-    // 17 leading
-    "echo" // 18 trailing
-    // 19 leading
-    | // 20 trailing
-    // 21 leading
-    "foxtrot" // 22 trailing
-    // 23 leading
-    | // 24 trailing
-    // 25 leading
-    "golf" // 26 trailing
-    // 27 leading
-    | // 28 trailing
-    // 29 leading
-    "hotel"; // 30 trailing
+    // 1 leading
+    "alpha" // 2 trailing
+        // 3 leading
+        | // 4 trailing
+        // 5 leading
+        "bravo" // 6 trailing
+        // 7 leading
+        | // 8 trailing
+        // 9 leading
+        "charlie" // 10 trailing
+        // 11 leading
+        | // 12 trailing
+        // 13 leading
+        "delta" // 14 trailing
+        // 15 leading
+        | // 16 trailing
+        // 17 leading
+        "echo" // 18 trailing
+        // 19 leading
+        | // 20 trailing
+        // 21 leading
+        "foxtrot" // 22 trailing
+        // 23 leading
+        | // 24 trailing
+        // 25 leading
+        "golf" // 26 trailing
+        // 27 leading
+        | // 28 trailing
+        // 29 leading
+        "hotel"; // 30 trailing
 
 // ===== Trivia in long wrapping union (block comments) =====
 type TriviaLongUnionBlock =
-/* 1 leading */
-"alpha" /* 2 trailing */
-/* 3 leading */
-    | /* 4 trailing */
-    /* 5 leading */
-    "bravo" /* 6 trailing */
-    /* 7 leading */
-    | /* 8 trailing */
-    /* 9 leading */
-    "charlie" /* 10 trailing */
-    /* 11 leading */
-    | /* 12 trailing */
-    /* 13 leading */
-    "delta" /* 14 trailing */
-    /* 15 leading */
-    | /* 16 trailing */
-    /* 17 leading */
-    "echo" /* 18 trailing */
-    /* 19 leading */
-    | /* 20 trailing */
-    /* 21 leading */
-    "foxtrot" /* 22 trailing */
-    /* 23 leading */
-    | /* 24 trailing */
-    /* 25 leading */
-    "golf" /* 26 trailing */
-    /* 27 leading */
-    | /* 28 trailing */
-    /* 29 leading */
-    "hotel"; /* 30 trailing */
+    /* 1 leading */
+    "alpha" /* 2 trailing */
+        /* 3 leading */
+        | /* 4 trailing */
+        /* 5 leading */
+        "bravo" /* 6 trailing */
+        /* 7 leading */
+        | /* 8 trailing */
+        /* 9 leading */
+        "charlie" /* 10 trailing */
+        /* 11 leading */
+        | /* 12 trailing */
+        /* 13 leading */
+        "delta" /* 14 trailing */
+        /* 15 leading */
+        | /* 16 trailing */
+        /* 17 leading */
+        "echo" /* 18 trailing */
+        /* 19 leading */
+        | /* 20 trailing */
+        /* 21 leading */
+        "foxtrot" /* 22 trailing */
+        /* 23 leading */
+        | /* 24 trailing */
+        /* 25 leading */
+        "golf" /* 26 trailing */
+        /* 27 leading */
+        | /* 28 trailing */
+        /* 29 leading */
+        "hotel"; /* 30 trailing */
 
 // ===== Trivia in generic type (line comments) =====
 type TriviaGeneric = map // 1 base type trailing
@@ -353,61 +352,61 @@ type TriviaDeepGeneric = map< // 1 trailing
 
 // ===== Trivia in function type (line comments) =====
 type TriviaFnType =
-// 1 open paren leading
-( // 2 open paren trailing
-    // 3 param leading
-    x // 4 param name trailing
-    : // 5 colon trailing
-    // 6 type leading
-    int, // 7 type trailing
-    // 8 close paren leading
-) // 9 close paren trailing
-// 10 arrow leading
--> // 11 arrow trailing
-// 12 return type leading
-string // 13 return type trailing
-    // 14 throws leading
-    throws // 15 throws trailing
-    // 16 error type leading
-    never; // 17 error type trailing
+    // 1 open paren leading
+    ( // 2 open paren trailing
+        // 3 param leading
+        x // 4 param name trailing
+        : // 5 colon trailing
+            // 6 type leading
+            int, // 7 type trailing
+        // 8 close paren leading
+    ) // 9 close paren trailing
+    // 10 arrow leading
+    -> // 11 arrow trailing
+    // 12 return type leading
+    string // 13 return type trailing
+        // 14 throws leading
+        throws // 15 throws trailing
+            // 16 error type leading
+            never; // 17 error type trailing
 
 // ===== Trivia in function type (block comments) =====
 type TriviaFnTypeBlock =
-/* 1 open paren leading */
-(/* 2 open paren trailing */
-    /* 3 param leading */
-    x /* 4 param name trailing */: /* 5 colon trailing */
-    /* 6 type leading */
-    int /* 7 type trailing */,
-    /* 8 close paren leading */
-) /* 9 close paren trailing */
-/* 10 arrow leading */ -> /* 11 arrow trailing */
-/* 12 return type leading */
-string /* 13 return type trailing */
-    /* 14 throws leading */
-    throws /* 15 throws trailing */
-    /* 16 error type leading */
-    never; /* 17 error type trailing */
+    /* 1 open paren leading */
+    (/* 2 open paren trailing */
+        /* 3 param leading */
+        x /* 4 param name trailing */: /* 5 colon trailing */
+            /* 6 type leading */
+            int /* 7 type trailing */,
+        /* 8 close paren leading */
+    ) /* 9 close paren trailing */
+    /* 10 arrow leading */ -> /* 11 arrow trailing */
+    /* 12 return type leading */
+    string /* 13 return type trailing */
+        /* 14 throws leading */
+        throws /* 15 throws trailing */
+            /* 16 error type leading */
+            never; /* 17 error type trailing */
 
 // ===== Trivia in wrapping function type with many params (line comments) =====
 type TriviaLongFnType = ( // 1 trailing
     // 2 leading
     first_parameter // 3 trailing
     : // 4 trailing
-    // 5 leading
-    map<string, int>, // 6 trailing
+        // 5 leading
+        map<string, int>, // 6 trailing
     // 7 trailing
     // 8 leading
     second_parameter // 9 trailing
     : // 10 trailing
-    // 11 leading
-    (int | string)[], // 12 trailing
+        // 11 leading
+        (int | string)[], // 12 trailing
     // 13 trailing
     // 14 leading
     third_parameter // 15 trailing
     : // 16 trailing
-    // 17 leading
-    map<string, bool>, // 18 trailing
+        // 17 leading
+        map<string, bool>, // 18 trailing
 ) // 19 trailing
 // 20 leading
 -> // 21 trailing
@@ -415,8 +414,8 @@ type TriviaLongFnType = ( // 1 trailing
 string // 23 trailing
     // 24 leading
     throws // 25 trailing
-    // 26 leading
-    never; // 27 trailing
+        // 26 leading
+        never; // 27 trailing
 
 // ===== Trivia in optional type (line comments) =====
 type TriviaOptional = int?; // 1 base type trailing
@@ -424,25 +423,25 @@ type TriviaOptional = int?; // 1 base type trailing
 // 3 question mark trailing
 
 // ===== Trivia in array type (line comments) =====
-type TriviaArray = int[ // 1 base type trailing
+type TriviaArray = int[]; // 1 base type trailing
 // 2 open bracket leading
 // 3 open bracket trailing
 // 4 close bracket leading
-]; // 5 close bracket trailing
+// 5 close bracket trailing
 
 // ===== Trivia in parenthesized type (line comments) =====
 type TriviaParen =
-// 1 open paren leading
-( // 2 open paren trailing
-    // 3 inner leading
-    int // 4 inner trailing
-        | // 5 pipe trailing
-        // 6 second member leading
-        string // 7 second member trailing
-    // 8 close paren leading
-)[ // 9 close paren trailing
+    // 1 open paren leading
+    ( // 2 open paren trailing
+        // 3 inner leading
+        int // 4 inner trailing
+            | // 5 pipe trailing
+            // 6 second member leading
+            string // 7 second member trailing
+        // 8 close paren leading
+    )[]; // 9 close paren trailing
 // 10 array bracket leading
-]; // 11 array trailing
+// 11 array trailing
 
 // ===== Short name =====
 type T = int;

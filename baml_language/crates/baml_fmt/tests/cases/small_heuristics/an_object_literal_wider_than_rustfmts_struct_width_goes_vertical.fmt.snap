@@ -1,0 +1,22 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    let short = Point { x: 1, y: 2 };
+    let wide = Duration {
+        _nanoseconds: 1000000,
+    };
+    let nested = Outer {
+        inner: Point { x: 1, y: 2 },
+    };
+    let args = make(Point { x: 1, y: 2 }, Duration {
+        _nanoseconds: 1000000,
+    });
+    let pattern = match (short) {
+        Point { x: 1, y: 2 } => 1,
+        let Duration {
+            _nanoseconds: nanoseconds,
+        } => 2,
+    };
+    0
+}

@@ -504,8 +504,13 @@ fn a_forced_most_flat_variant_is_left_out_and_the_choice_breaks_its_parent() {
     let bump = Bump::new();
     let d = Docs::new(&bump);
     let forced = d.concat([d.text("a"), Doc::HARD_LINE, d.text("b")]);
+    // The one variant left is the fallback: it prints broken wherever the
+    // choice sits, as a group it is forced to.
     let two = d.best_fitting([forced, d.text("z")]);
-    assert_eq!(two.to_string(), "(concat expand_parent \"z\")");
+    assert_eq!(
+        two.to_string(),
+        "(concat expand_parent (group expanded \"z\"))"
+    );
     let three = d.best_fitting([forced, d.text("y"), d.text("z")]);
     assert_eq!(
         three.to_string(),
@@ -541,7 +546,10 @@ fn consecutive_hard_lines_leave_no_blank_line() {
 }
 
 #[test]
-fn a_pending_suffix_is_not_flushed_inside_multi_line_text() {
+fn a_pending_suffix_ends_the_line_before_multi_line_text() {
+    // Flushed after the text's last line, the comment would follow content
+    // it was written before; flushed inside the text, it would be part of
+    // it. So the line ends first, and the text starts the next.
     let bump = Bump::new();
     let d = Docs::new(&bump);
     let root = d.concat([
@@ -550,7 +558,15 @@ fn a_pending_suffix_is_not_flushed_inside_multi_line_text() {
         d.text("\"a\nb\""),
         d.text(";"),
     ]);
-    assert_eq!(print(root, 80), "x = \"a\nb\"; // c");
+    assert_eq!(print(root, 80), "x = // c\n\"a\nb\";");
+    // A tail line pending ends it too.
+    let tail_line = d.concat([
+        d.text("x = "),
+        d.trailing_line("// c", false),
+        d.text("\"a\nb\""),
+        d.text(";"),
+    ]);
+    assert_eq!(print(tail_line, 80), "x =\n// c\n\"a\nb\";");
 }
 
 #[test]
@@ -806,4 +822,386 @@ fn a_group_after_a_hard_line_inside_flat_content_is_measured_again() {
         print(root, 24),
         "f(x, (y) -> {\n    g(\n        aaaaaaaaaaaaaaaaaaaa\n    )\n})"
     );
+}
+
+#[test]
+fn a_layout_choice_after_a_hard_line_inside_flat_content_is_measured_again() {
+    // As for a group: the hug variant prints flat, but a `let`'s choice of
+    // layouts inside the hugged body comes after a hard line and is decided
+    // for itself — the initialiser moves to a line of its own.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let init = d.text("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    let assigned = d.best_fitting([
+        d.concat([Doc::SPACE, init]).into(),
+        d.indent(d.concat([Doc::HARD_LINE, init])).all_lines(),
+        d.concat([Doc::SPACE, init]).into(),
+    ]);
+    let statement = d.concat([d.text("let x ="), assigned, d.text(";")]);
+    let body = d.group(d.concat([
+        d.text("{"),
+        d.indent(d.concat([Doc::HARD_LINE, statement])),
+        Doc::HARD_LINE,
+        d.text("}"),
+    ]));
+    let hug = d.concat([d.text("f(x, (y) -> "), body, d.text(")")]);
+    let broken = d.concat([
+        d.text("f("),
+        d.indent(d.concat([
+            Doc::HARD_LINE,
+            d.text("x,"),
+            Doc::HARD_LINE,
+            d.text("(y) -> "),
+            body,
+            d.text(","),
+        ])),
+        Doc::HARD_LINE,
+        d.text(")"),
+    ]);
+    let root = d.best_fitting([
+        d.text("f(x, (y) -> { let x = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; })"),
+        hug,
+        broken,
+    ]);
+    assert_eq!(
+        print(root, 40),
+        "f(x, (y) -> {\n    let x =\n        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;\n})"
+    );
+}
+
+#[test]
+fn variants_but_the_last_are_measured_as_they_print_flat() {
+    // The content before a choice is measured with the choice after it. Its
+    // first variant would print flat, so it is measured flat: `(eeeeee` does
+    // not fit after `ab cd`, and the group before the choice breaks for it.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let before = d.group(d.concat([d.text("ab"), Doc::SOFT_LINE_OR_SPACE, d.text("cd")]));
+    let choice = d.best_fitting([
+        d.concat([
+            d.text("("),
+            d.group(d.concat([Doc::SOFT_LINE, d.text("eeeeee")])),
+        ]),
+        d.text("ffffffffffffffffffff"),
+    ]);
+    assert_eq!(print(d.concat([before, choice]), 10), "ab\ncd(eeeeee");
+}
+
+#[test]
+fn measuring_all_lines_goes_on_past_a_text_with_lines_of_its_own() {
+    // The variant on a line of its own is chosen only when every line of it
+    // fits: what follows a multi-line string on its last line counts.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let init = d.concat([
+        d.copy_text("\"a\nb\""),
+        d.text(" + zzzzzzzzzzzzzzzzzzzzzzzz"),
+    ]);
+    let assigned = d.best_fitting([
+        d.concat([Doc::SPACE, init]).into(),
+        d.indent(d.concat([Doc::HARD_LINE, init])).all_lines(),
+        d.concat([Doc::SPACE, init]).into(),
+    ]);
+    let root = d.concat([d.text("let x ="), assigned, d.text(";")]);
+    assert_eq!(
+        print(root, 20),
+        "let x = \"a\nb\" + zzzzzzzzzzzzzzzzzzzzzzzz;"
+    );
+}
+
+#[test]
+fn reindented_lines_keep_their_own_whitespace() {
+    // A literal's lines move with the line it starts on by gaining the
+    // indent; what they had of their own — a tab, two spaces — stays, so the
+    // string's value is what it was. Source text with a source indent loses
+    // exactly that many columns of its leading whitespace, and no more.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let literal = d.literal("`\n  a\n\tb\n\n`");
+    let root = d.indent(d.concat([Doc::HARD_LINE, d.text("x = "), literal]));
+    assert_eq!(print(root, 80), "    x = `\n      a\n    \tb\n\n    `");
+    let code = d.verbatim("f {\n\t\tx\n\t}", 1);
+    let root = d.indent(d.concat([Doc::HARD_LINE, code]));
+    assert_eq!(print(root, 80), "    f {\n    \tx\n    }");
+}
+
+#[test]
+fn nested_layout_choices_are_measured_in_polynomial_time() {
+    // A sole-argument hug nests a choice in a choice at every level; each is
+    // measured once per room, not once per variant of every choice around
+    // it. Deep nesting that used to take minutes prints at once.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let mut inner =
+        d.text("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+    for level in 0..24 {
+        let name = d.copy_text(&format!("f{level}("));
+        let flat = d.concat([name, inner, d.text(")")]);
+        let hug = d.concat([name, d.group(inner), d.text(")")]);
+        let expanded = d.concat([
+            name,
+            d.indent(d.concat([Doc::SOFT_LINE, inner, d.if_break(d.text(","), Doc::NIL)])),
+            Doc::SOFT_LINE,
+            d.text(")"),
+        ]);
+        inner = d.best_fitting([
+            flat.into(),
+            hug.into(),
+            d.group(expanded).all_lines(),
+            d.group(expanded).into(),
+        ]);
+    }
+    let output = print(inner, 100);
+    assert!(output.lines().count() > 1);
+}
+
+#[test]
+fn a_closing_suffix_ends_the_line_when_no_suffix_is_pending() {
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let root = d.concat([d.text("x"), d.closing_suffix("// c"), d.text(";")]);
+    assert_eq!(print(root, 80), "x; // c");
+}
+
+#[test]
+fn a_closing_suffix_takes_a_line_of_its_own_after_a_pending_suffix() {
+    // Two line comments on one line would read as one: the carried comment
+    // gives way to the one written at the end of the line.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let root = d.concat([
+        d.text("x"),
+        d.line_suffix(" // t", SuffixWidth::Ignored),
+        d.closing_suffix("// c"),
+        d.text(";"),
+    ]);
+    assert_eq!(print(root, 80), "x; // t\n// c");
+}
+
+#[test]
+fn a_closing_line_takes_the_level_of_the_item_it_was_carried_out_of() {
+    // Emitted at the continuation indent of `-a`, the comment lands at the
+    // statement's level, where a comment between statements reads as one of
+    // theirs; the item's level holds past a dedent (the last item before
+    // `}`), and gives way to a deeper line break that follows (the body
+    // after a signature).
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let first = d.scope(d.concat([
+        d.text("let x ="),
+        d.indent(d.concat([
+            Doc::HARD_LINE,
+            d.text("-a"),
+            d.closing_line("// c"),
+            d.text(";"),
+        ])),
+    ]));
+    let last = d.scope(d.concat([d.text("-b"), d.closing_line("// d")]));
+    let block = d.concat([
+        d.text("{"),
+        d.indent(d.concat([Doc::HARD_LINE, first, Doc::HARD_LINE, last])),
+        Doc::HARD_LINE,
+        d.text("}"),
+    ]);
+    assert_eq!(
+        print(block, 80),
+        "{\n    let x =\n        -a;\n    // c\n    -b\n    // d\n}"
+    );
+    let signature = d.scope(d.concat([d.text("function f()"), d.closing_line("// e")]));
+    let function = d.concat([
+        signature,
+        d.text(" {"),
+        d.indent(d.concat([Doc::HARD_LINE, d.text("body")])),
+        Doc::HARD_LINE,
+        d.text("}"),
+    ]);
+    assert_eq!(print(function, 80), "function f() {\n    // e\n    body\n}");
+}
+
+#[test]
+fn a_verbatim_text_is_measured_from_the_indent_of_its_line() {
+    // The literal's second line prints at the indent of the line the literal
+    // starts on, not at the indent of the document around it, and is
+    // measured the same way: `cd)` is three columns, not seven.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let whole = d.concat([d.text("("), d.literal("ab\ncd"), d.text(")")]);
+    let root = d.concat([
+        d.text("f("),
+        d.indent(d.best_fitting([whole.all_lines(), d.text("X").into()])),
+    ]);
+    assert_eq!(print(root, 5), "f((ab\ncd)");
+}
+
+#[test]
+fn a_limit_breaks_a_group_wider_than_it_though_the_line_has_room() {
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let args = |items: &[&'static str]| {
+        let mut parts = Vec::new();
+        for (i, item) in items.iter().enumerate() {
+            if i > 0 {
+                parts.extend([d.text(","), Doc::SOFT_LINE_OR_SPACE]);
+            }
+            parts.push(d.text(item));
+        }
+        d.concat(parts)
+    };
+    let call = |max_width: u32, items: &[&'static str]| {
+        let inside = d.concat([
+            Doc::SOFT_LINE,
+            args(items),
+            d.if_break(d.text(","), Doc::NIL),
+        ]);
+        d.group(d.concat([
+            d.text("f("),
+            d.indent(d.limited(inside, max_width)),
+            Doc::SOFT_LINE,
+            d.text(")"),
+        ]))
+    };
+    // `aaa, bbb` is eight columns: within a limit of eight, past one of
+    // seven, whatever the line width.
+    assert_eq!(print(call(8, &["aaa", "bbb"]), 80), "f(aaa, bbb)");
+    assert_eq!(
+        print(call(7, &["aaa", "bbb"]), 80),
+        "f(\n    aaa,\n    bbb,\n)"
+    );
+}
+
+#[test]
+fn a_limit_gives_its_columns_back_to_what_follows_its_content() {
+    // Twenty columns, three of them for `abc` under a limit of three: the
+    // seventeen withheld come back for ` tail`, which fits.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let root = d.group(d.concat([
+        d.limited(d.text("abc"), 3),
+        Doc::SOFT_LINE_OR_SPACE,
+        d.text("tail"),
+    ]));
+    assert_eq!(print(root, 20), "abc tail");
+    assert_eq!(print(root, 7), "abc\ntail");
+}
+
+#[test]
+fn a_limit_measures_only_the_first_line_of_its_content() {
+    // The variant's first line is `ab`, within a limit of two; the long
+    // line after the hard break is not the limit's business. (`layouts`,
+    // since `best_fitting` would drop a most flat variant that is sure to
+    // break.)
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let hugged = |max_width| {
+        let content = d.concat([d.text("ab"), Doc::HARD_LINE, d.text("cccccccccc")]);
+        d.layouts([d.limited(content, max_width), d.text("X")])
+    };
+    assert_eq!(print(hugged(2), 80), "ab\ncccccccccc");
+    assert_eq!(print(hugged(1), 80), "X");
+}
+
+#[test]
+fn a_limit_is_transparent_in_a_broken_group_and_counts_a_space_inside_it() {
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    // Broken anyway, the limit changes nothing about how the content prints.
+    let broken = d.expanded_group(d.concat([
+        d.text("("),
+        d.indent(d.concat([Doc::SOFT_LINE, d.limited(d.text("aaaa"), 2)])),
+        Doc::SOFT_LINE,
+        d.text(")"),
+    ]));
+    assert_eq!(print(broken, 80), "(\n    aaaa\n)");
+    // A space inside the limit counts against it like any column: `{ ab }`
+    // keeps its padding outside the limit, so `ab` is within two.
+    let padded = |max_width| {
+        d.group(d.concat([
+            d.text("{"),
+            d.indent(d.concat([Doc::SOFT_LINE_OR_SPACE, d.limited(d.text("ab"), max_width)])),
+            Doc::SOFT_LINE_OR_SPACE,
+            d.text("}"),
+        ]))
+    };
+    assert_eq!(print(padded(2), 80), "{ ab }");
+    assert_eq!(print(padded(1), 80), "{\n    ab\n}");
+    let padded_inside = d.group(d.concat([
+        d.text("{"),
+        d.indent(d.limited(d.concat([Doc::SOFT_LINE_OR_SPACE, d.text("ab")]), 2)),
+        Doc::SOFT_LINE_OR_SPACE,
+        d.text("}"),
+    ]));
+    assert_eq!(print(padded_inside, 80), "{\n    ab\n}");
+}
+
+#[test]
+fn a_snuggle_joins_a_line_of_closing_brackets_when_its_content_fits() {
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let closing = |operand: &'static str| {
+        d.expanded_group(d.concat([
+            d.text("f("),
+            d.indent(d.concat([Doc::HARD_LINE, d.text("a")])),
+            Doc::HARD_LINE,
+            d.text(")"),
+            d.indent(d.snuggle(d.concat([d.text("+ "), d.text(operand)]))),
+        ]))
+    };
+    // `)` ends at column one, within the four the newline would indent to,
+    // and `+ x` fits after it.
+    assert_eq!(print(closing("x"), 80), "f(\n    a\n) + x");
+    // It would not fit: the newline it is.
+    assert_eq!(print(closing("xxxxx"), 6), "f(\n    a\n)\n    + xxxxx");
+    // A line that reaches past the indent column keeps the newline.
+    let long = d.expanded_group(d.concat([d.text("aaaaaa"), d.indent(d.snuggle(d.text("+ x")))]));
+    assert_eq!(print(long, 80), "aaaaaa\n    + x");
+    // Flat, it is a space like any soft line.
+    let flat = d.group(d.concat([d.text("a"), d.indent(d.snuggle(d.text("+ x")))]));
+    assert_eq!(print(flat, 80), "a + x");
+}
+
+#[test]
+fn a_snuggle_keeps_the_newline_after_a_pending_suffix() {
+    // The `)` line ends with a comment: `+ x` cannot follow it there.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let root = d.expanded_group(d.concat([
+        d.text("f("),
+        d.indent(d.concat([Doc::HARD_LINE, d.text("a")])),
+        Doc::HARD_LINE,
+        d.text(")"),
+        d.line_suffix(" // c", SuffixWidth::Ignored),
+        d.indent(d.snuggle(d.text("+ x"))),
+    ]));
+    assert_eq!(print(root, 80), "f(\n    a\n) // c\n    + x");
+}
+
+#[test]
+fn a_snuggle_counts_the_space_it_would_print() {
+    // `) abc` is five columns: at a width of four the space does not fit,
+    // so the newline it is, though `abc` alone would have fit after `)`.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let root = d.expanded_group(d.concat([
+        d.text("f("),
+        d.indent(d.concat([Doc::HARD_LINE, d.text("a")])),
+        Doc::HARD_LINE,
+        d.text(")"),
+        d.indent(d.snuggle(d.text("abc"))),
+    ]));
+    assert_eq!(print(root, 5), "f(\n    a\n) abc");
+    assert_eq!(print(root, 4), "f(\n    a\n)\n    abc");
+}
+
+#[test]
+fn a_conditional_on_a_group_sure_to_break_is_measured_as_broken_before_the_group_prints() {
+    // The named group holds a hard line, so it prints broken wherever it
+    // is; a variant measured before it printed must count on that, or it
+    // would be chosen for a `NIL` arm that never prints.
+    let bump = Bump::new();
+    let d = Docs::new(&bump);
+    let (group, id) = d.group_with_id(d.concat([d.text("a"), Doc::HARD_LINE, d.text("b")]));
+    let candidate = d.concat([group, d.if_group_breaks(id, d.text("long"), Doc::NIL)]);
+    let root = d.layouts([candidate.all_lines(), d.text("X").into()]);
+    assert_eq!(print(root, 4), "X");
+    assert_eq!(print(root, 5), "a\nblong");
 }

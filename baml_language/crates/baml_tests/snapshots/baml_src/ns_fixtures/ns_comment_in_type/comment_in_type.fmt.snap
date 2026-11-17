@@ -12,8 +12,8 @@ function FunctionWithComments(
 )
 // Comment before arrow
 ->
-// Comment after arrow
-string
+    // Comment after arrow
+    string
 // Comment after return type
 {
     client: TestClient
@@ -22,7 +22,8 @@ string
 
 // Another test - comment immediately after arrow
 function CommentAfterArrow() -> // inline comment
-        string {
+    string
+{
     client: TestClient
     prompt: `test`
 }

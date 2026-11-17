@@ -21,7 +21,9 @@ function let_renamed(person: Person) -> int {
 }
 
 function let_nested(person: Person) -> int {
-    let Missing { address: Address { zip } } = person;
+    let Missing {
+        address: Address { zip },
+    } = person;
     zip;
     zip.missing
 }

@@ -34,7 +34,10 @@ function let_inside_const_list(xs: int[]) -> int {
 }
 
 function let_inside_const_class(p: CdPoint) -> int {
-    const CdPoint { x: let px, y: (const a, let b) } = p;
+    const CdPoint {
+        x: let px,
+        y: (const a, let b),
+    } = p;
     px + a + b
 }
 

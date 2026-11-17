@@ -79,7 +79,9 @@ class BuildError {
 // catch_all must handle every inferred throw from the base expression.
 function GenerateWithBuildError(ok: bool) -> string {
     if (!ok) {
-        throw BuildError { reason: "generate failed" };
+        throw BuildError {
+            reason: "generate failed",
+        };
     };
     if (ok) {
         throw "string";

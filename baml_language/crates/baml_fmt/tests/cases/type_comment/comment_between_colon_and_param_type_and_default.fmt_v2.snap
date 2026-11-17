@@ -1,0 +1,12 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function h(
+    x:
+        // c
+        int,
+    y: int = // d
+        1,
+) -> int {
+    1
+}

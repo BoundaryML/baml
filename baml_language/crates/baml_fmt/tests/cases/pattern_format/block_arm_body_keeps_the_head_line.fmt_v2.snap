@@ -8,7 +8,9 @@ function f(x: int, e: string) -> int {
             y
         },
         0 => {
-            root.sys.panic("a block body too long for the head line, so the block breaks inside")
+            root.sys.panic(
+                "a block body too long for the head line, so the block breaks inside",
+            )
         },
         1 => { root.sys.panic("a block body that fits beside its head stays flat") },
         _ => 0,

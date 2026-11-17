@@ -1,0 +1,30 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+type A = int[] /* c */;
+
+function f(part: Part, c: bool) -> int {
+    if let block: AnthropicContentBlock = _lower_block(
+        part,
+        aaaaaaaaaaaaaaaaaaaaaa,
+        bbbbbbbbbbbbbbbbbbbbbbbbbbb,
+        c,
+    ) {
+        1
+    }
+    let v: int = some_long_function_name(
+        aaaaaaaaaaaaaaaaaaaaaaaa,
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+        c,
+    ) else {
+        return 0;
+    };
+    while let x: int = next_item_please(
+        aaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+        c,
+    ) {
+        1
+    }
+    0
+}

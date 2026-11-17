@@ -8,10 +8,9 @@ source: crates/baml_tests/src/generated_tests.rs
 class OnlyInts {}
 
 implement baml.spawn.Modifier<int, never> for OnlyInts {
-    function apply(
-        self,
-        plan: baml.spawn.Plan<int, never>,
-    ) -> baml.spawn.Plan<int, never> throws never {
+    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, never>
+        throws never
+    {
         plan
     }
 }
@@ -52,7 +51,11 @@ function other_instantiation() -> string {
 // A union operand applies by whichever member it holds, so every member must
 // be a modifier; the one that is not is named.
 function union_operand(flag: bool) -> int {
-    let m = if (flag) { baml.spawn.Root.new() } else { NotAModifier {} };
+    let m = if (flag) {
+        baml.spawn.Root.new()
+    } else {
+        NotAModifier {}
+    };
     let x = spawn with m { 1 };
     await x
 }

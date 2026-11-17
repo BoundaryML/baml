@@ -100,8 +100,7 @@ function DeepFnReturn() -> (
         y: int,
     ) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never)
         throws never
-)
-    throws never {
+) throws never {
     1
 }
 
@@ -122,15 +121,15 @@ TriviaFunc // 4 name trailing
 ( // 6 open paren trailing
     // 7 param leading
     x // 8 param name trailing
-    : // 9 colon trailing
-    // 10 type leading
-    int, // 11 type trailing
+        : // 9 colon trailing
+            // 10 type leading
+            int, // 11 type trailing
     // 12 close paren leading
 ) // 13 close paren trailing
-// 14 arrow leading
--> // 15 arrow trailing
-// 16 return type leading
-int // 17 return type trailing
+    // 14 arrow leading
+    -> // 15 arrow trailing
+        // 16 return type leading
+        int // 17 return type trailing
 // 18 body leading
 { // 19 body open trailing
     x
@@ -147,14 +146,14 @@ TriviaFuncBlock /* 4 name trailing */
 (/* 6 open paren trailing */
     /* 7 param leading */
     x /* 8 param name trailing */: /* 9 colon trailing */
-    /* 10 type leading */
-    int /* 11 type trailing */,
+        /* 10 type leading */
+        int /* 11 type trailing */,
     /* 12 close paren leading */
 ) /* 13 close paren trailing */
 /* 14 arrow leading */
 -> /* 15 arrow trailing */
-/* 16 return type leading */
-int /* 17 return type trailing */
+    /* 16 return type leading */
+    int /* 17 return type trailing */
 /* 18 body leading */
 { /* 19 body open trailing */
     x
@@ -166,15 +165,15 @@ int /* 17 return type trailing */
 function MultiParamTrivia(
     // 1 first param leading
     a // 2 first param trailing
-    : // 3 first colon trailing
-    // 4 first type leading
-    int, // 5 first type trailing
+        : // 3 first colon trailing
+            // 4 first type leading
+            int, // 5 first type trailing
     // 6 comma trailing
     // 7 second param leading
     b // 8 second param trailing
-    : // 9 second colon trailing
-    // 10 second type leading
-    string, // 11 second type trailing
+        : // 9 second colon trailing
+            // 10 second type leading
+            string, // 11 second type trailing
 ) -> int {
     a
 }
@@ -183,12 +182,12 @@ function MultiParamTrivia(
 function MultiParamTriviaBlock(
     /* 1 first param leading */
     a /* 2 first param trailing */: /* 3 first colon trailing */
-    /* 4 first type leading */
-    int /* 5 first type trailing */, /* 6 comma trailing */
+        /* 4 first type leading */
+        int /* 5 first type trailing */, /* 6 comma trailing */
     /* 7 second param leading */
     b /* 8 second param trailing */: /* 9 second colon trailing */
-    /* 10 second type leading */
-    string /* 11 second type trailing */,
+        /* 10 second type leading */
+        string /* 11 second type trailing */,
 ) -> int {
     a
 }
@@ -201,32 +200,32 @@ TriviaWrapParams( // 4 trailing
     // 5 trailing
     // 6 leading
     first_parameter // 7 trailing
-    : // 8 trailing
-    // 9 leading
-    int, // 10 trailing
+        : // 8 trailing
+            // 9 leading
+            int, // 10 trailing
     // 11 trailing
     // 12 leading
     second_parameter // 13 trailing
-    : // 14 trailing
-    // 15 leading
-    string, // 16 trailing
+        : // 14 trailing
+            // 15 leading
+            string, // 16 trailing
     // 17 trailing
     // 18 leading
     third_parameter // 19 trailing
-    : // 20 trailing
-    // 21 leading
-    bool, // 22 trailing
+        : // 20 trailing
+            // 21 leading
+            bool, // 22 trailing
     // 23 trailing
     // 24 leading
     fourth_parameter // 25 trailing
-    : // 26 trailing
-    // 27 leading
-    float, // 28 trailing
+        : // 26 trailing
+            // 27 leading
+            float, // 28 trailing
 ) // 29 trailing
-// 30 leading
--> // 31 trailing
-// 32 leading
-string // 33 trailing
+    // 30 leading
+    -> // 31 trailing
+        // 32 leading
+        string // 33 trailing
 // 34 leading
 { // 35 trailing
     "result"
@@ -241,25 +240,25 @@ function /* 2 trailing */
 TriviaWrapParamsBlock /* 4 trailing */(/* 5 trailing */
     /* 6 leading */
     first_parameter /* 7 trailing */: /* 8 trailing */
-    /* 9 leading */
-    int /* 10 trailing */, /* 11 trailing */
+        /* 9 leading */
+        int /* 10 trailing */, /* 11 trailing */
     /* 12 leading */
     second_parameter /* 13 trailing */: /* 14 trailing */
-    /* 15 leading */
-    string /* 16 trailing */, /* 17 trailing */
+        /* 15 leading */
+        string /* 16 trailing */, /* 17 trailing */
     /* 18 leading */
     third_parameter /* 19 trailing */: /* 20 trailing */
-    /* 21 leading */
-    bool /* 22 trailing */, /* 23 trailing */
+        /* 21 leading */
+        bool /* 22 trailing */, /* 23 trailing */
     /* 24 leading */
     fourth_parameter /* 25 trailing */: /* 26 trailing */
-    /* 27 leading */
-    float /* 28 trailing */,
+        /* 27 leading */
+        float /* 28 trailing */,
 ) /* 29 trailing */
 /* 30 leading */
 -> /* 31 trailing */
-/* 32 leading */
-string /* 33 trailing */
+    /* 32 leading */
+    string /* 33 trailing */
 /* 34 leading */
 { /* 35 trailing */
     "result"
@@ -269,40 +268,41 @@ string /* 33 trailing */
 
 // ===== Trivia on wrapping return type (line comments) =====
 function TriviaWrapReturnType(x: int) ->
-// 1 first member leading
-int // 2 first trailing
-// 3 pipe leading
-    | // 4 pipe trailing
-    // 5 second leading
-    string // 6 second trailing
-    // 7 pipe leading
-    | // 8 pipe trailing
-    // 9 third leading
-    bool // 10 third trailing
-    // 11 pipe leading
-    | // 12 pipe trailing
-    // 13 fourth leading
-    null // 14 fourth trailing
+    // 1 first member leading
+    int // 2 first trailing
+        // 3 pipe leading
+        | // 4 pipe trailing
+        // 5 second leading
+        string // 6 second trailing
+        // 7 pipe leading
+        | // 8 pipe trailing
+        // 9 third leading
+        bool // 10 third trailing
+        // 11 pipe leading
+        | // 12 pipe trailing
+        // 13 fourth leading
+        null // 14 fourth trailing
 {
     x
 }
 
 // ===== Trivia on wrapping return type (block comments) =====
 function TriviaWrapReturnTypeBlock(x: int) ->
-/* 1 first member leading */
-int /* 2 first trailing */
-/* 3 pipe leading */
-    | /* 4 pipe trailing */
-    /* 5 second leading */
-    string /* 6 second trailing */
-    /* 7 pipe leading */
-    | /* 8 pipe trailing */
-    /* 9 third leading */
-    bool /* 10 third trailing */
-    /* 11 pipe leading */
-    | /* 12 pipe trailing */
-    /* 13 fourth leading */
-    null /* 14 fourth trailing */ {
+    /* 1 first member leading */
+    int /* 2 first trailing */
+        /* 3 pipe leading */
+        | /* 4 pipe trailing */
+        /* 5 second leading */
+        string /* 6 second trailing */
+        /* 7 pipe leading */
+        | /* 8 pipe trailing */
+        /* 9 third leading */
+        bool /* 10 third trailing */
+        /* 11 pipe leading */
+        | /* 12 pipe trailing */
+        /* 13 fourth leading */
+        null /* 14 fourth trailing */
+{
     x
 }
 
@@ -316,20 +316,20 @@ TriviaEverythingLong_NameAndParamsAndReturn( // 4 trailing
     // 5 trailing
     // 6 leading
     first_long_param // 7 trailing
-    : // 8 trailing
-    // 9 leading
-    map<string, int>, // 10 trailing
+        : // 8 trailing
+            // 9 leading
+            map<string, int>, // 10 trailing
     // 11 trailing
     // 12 leading
     second_long_param // 13 trailing
-    : // 14 trailing
-    // 15 leading
-    (int | string | bool)[], // 16 trailing
+        : // 14 trailing
+            // 15 leading
+            (int | string | bool)[], // 16 trailing
 ) // 17 trailing
-// 18 leading
--> // 19 trailing
-// 20 leading
-map<string, int | string | bool | float | null> // 21 trailing
+    // 18 leading
+    -> // 19 trailing
+        // 20 leading
+        map<string, int | string | bool | float | null> // 21 trailing
 // 22 leading
 { // 23 trailing
     { "a": 1 }
@@ -344,17 +344,17 @@ function /* 2 trailing */
 TriviaEverythingLong_NameAndParamsAndReturnBlock /* 4 trailing */(/* 5 trailing */
     /* 6 leading */
     first_long_param /* 7 trailing */: /* 8 trailing */
-    /* 9 leading */
-    map<string, int> /* 10 trailing */, /* 11 trailing */
+        /* 9 leading */
+        map<string, int> /* 10 trailing */, /* 11 trailing */
     /* 12 leading */
     second_long_param /* 13 trailing */: /* 14 trailing */
-    /* 15 leading */
-    (int | string | bool)[] /* 16 trailing */,
+        /* 15 leading */
+        (int | string | bool)[] /* 16 trailing */,
 ) /* 17 trailing */
 /* 18 leading */
 -> /* 19 trailing */
-/* 20 leading */
-map<string, int | string | bool | float | null> /* 21 trailing */
+    /* 20 leading */
+    map<string, int | string | bool | float | null> /* 21 trailing */
 /* 22 leading */
 { /* 23 trailing */
     { "a": 1 }

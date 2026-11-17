@@ -1,7 +1,10 @@
 use baml_syntax::{index::TreeIndex, nodes::FileTree, tree::TreeWalk as _};
 use bumpalo::Bump;
 
-use super::{Comments, Gap, Position, SourceComment, docs};
+use super::{
+    Comments, Gap, Position, SourceComment,
+    docs::{self, After},
+};
 use crate::{
     FormatOptions,
     ir::{Doc, Docs},
@@ -160,15 +163,18 @@ fn a_comment_after_an_opening_bracket_dangles_after_it_unless_on_its_own_line() 
 }
 
 #[test]
-fn same_line_block_comments_attach_to_the_child_they_touch() {
+fn same_line_block_comments_attach_to_the_child_they_touch_or_the_separator_before_them() {
+    // After a separator a comment dangles after it, as one ending the
+    // separator's line does: printed right after the `,`, it stays on that
+    // line when the list breaks and is read the same way on the next pass.
     assert_eq!(
         attachments(
             "function f(a: int, b: int) -> int[] {\n    let x = 2;\n    [a /* p */, b, /* q */ x, /* r */]\n}\n"
         ),
         [
             "/* p */ -> Trailing PathExpr [SameLine]",
-            "/* q */ -> Leading PathExpr [SameLine]",
-            "/* r */ -> Trailing PathExpr [SameLine]",
+            "/* q */ -> Dangling(after \",\") ArrayLiteral [SameLine]",
+            "/* r */ -> Dangling(after \",\") ArrayLiteral [SameLine]",
         ]
     );
 }
@@ -296,7 +302,7 @@ fn leading_and_trailing_comments_print_where_they_were_written() {
     let body = d.concat([
         docs::leading(d, &tree, comments.leading(stmt)),
         d.text("g();"),
-        docs::dangling(d, &tree, comments.dangling(stmt), true),
+        docs::dangling(d, &tree, comments.dangling(stmt), After::Token),
     ]);
     let root = d.concat([
         d.text("{"),
@@ -337,7 +343,12 @@ fn dangling_comments_print_after_the_token_they_follow() {
     let d = Docs::new(&bump);
     let root = d.concat([
         d.text("{"),
-        d.indent(docs::dangling(d, &tree, comments.dangling(block), true)),
+        d.indent(docs::dangling(
+            d,
+            &tree,
+            comments.dangling(block),
+            After::Opener { spaced: true },
+        )),
         Doc::HARD_LINE,
         d.text("}"),
     ]);
@@ -360,7 +371,12 @@ fn two_end_of_line_comments_never_merge_into_one() {
         d.text("}"),
         docs::trailing(d, &tree, comments.trailing(then_block)),
         d.text(" else {"),
-        docs::dangling(d, &tree, comments.dangling(else_block), true),
+        docs::dangling(
+            d,
+            &tree,
+            comments.dangling(else_block),
+            After::Opener { spaced: true },
+        ),
         Doc::HARD_LINE,
         d.text("}"),
     ]);

@@ -1,0 +1,29 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(d: int, e: int, state: int) -> int {
+    let c = match (d) {
+        1 => 2,
+        _ => 3,
+    } + match (e) {
+        1 => 2,
+        _ => 3,
+    };
+    let v = self.cache.get(
+        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+    ) ?? throw baml.panics.Unreachable {
+        message: "unreachable",
+    };
+    let ok = conforms(
+        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+    ) && !root.engine.conforms(
+        Seed {
+            state: 4294967296,
+            other: 1,
+        },
+        ccccccccccccccccccccccccccccccccccccccccc,
+    );
+    c
+}

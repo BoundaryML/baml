@@ -1,0 +1,24 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+type V = int
+    /* own */
+    | string
+    // own2
+    | bool;
+
+type Values = int[] /* first */
+    /*C2
+X*/
+    | /* arm */ string?
+    | /* last */ bool;
+
+function f<
+    T extends A
+        /* own */
+        & B
+        // own2
+        & C,
+>(x: T) -> int {
+    1
+}

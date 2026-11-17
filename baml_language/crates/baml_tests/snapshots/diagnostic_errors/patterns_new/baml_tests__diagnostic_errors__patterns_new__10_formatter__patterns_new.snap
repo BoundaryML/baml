@@ -89,7 +89,11 @@ function refutable_for_array_prefix(rows: int[][]) -> int {
 // Refutability propagates through class fields.
 function refutable_for_class_field_array_prefix(teams: Team[]) -> int {
     let total = 0;
-    for (let Team { scores: [let first, ..] } in teams) {
+    for (
+        let Team {
+            scores: [let first, ..],
+        } in teams
+    ) {
         total += first;
     }
     total
@@ -151,9 +155,18 @@ class Pair {
 
 function class_destructure_two_field_union_missing_combination(p: Pair) -> int {
     match (p) {
-        Pair { kind: int, payload: int } => 1,
-        Pair { kind: int, payload: string } => 2,
-        Pair { kind: bool, payload: int } => 3,
+        Pair {
+            kind: int,
+            payload: int,
+        } => 1,
+        Pair {
+            kind: int,
+            payload: string,
+        } => 2,
+        Pair {
+            kind: bool,
+            payload: int,
+        } => 3,
     }
 }
 
@@ -224,8 +237,14 @@ class Flagged {
 
 function class_field_bool_narrowing_missing_true(f: Flagged) -> int {
     match (f) {
-        Flagged { flag: false, note: "zero" } => 1,
-        Flagged { flag: false, note: string } => 2,
+        Flagged {
+            flag: false,
+            note: "zero",
+        } => 1,
+        Flagged {
+            flag: false,
+            note: string,
+        } => 2,
     }
 }
 
@@ -239,9 +258,18 @@ class Box2 {
 
 function nested_class_optional_missing_combination(b: Box2) -> int {
     match (b) {
-        Box2 { first: true, second: null } => 1,
-        Box2 { first: true, second: int[] } => 2,
-        Box2 { first: false, second: null } => 3,
+        Box2 {
+            first: true,
+            second: null,
+        } => 1,
+        Box2 {
+            first: true,
+            second: int[],
+        } => 2,
+        Box2 {
+            first: false,
+            second: null,
+        } => 3,
     }
 }
 

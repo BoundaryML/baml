@@ -914,6 +914,9 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                         baml_fmt::FormatterError::Incomplete(e) => {
                             format!("=== PARSER BUG ===\n{:?}", e)
                         }
+                        baml_fmt::FormatterError::Violation(e) => {
+                            format!("=== FORMATTER BUG ===\n{}", e)
+                        }
                     };
                     panic!(
                         "Formatter rejected compiler-test input that reaches the formatter tier ({}):\n{}",

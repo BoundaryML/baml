@@ -8,7 +8,7 @@
 
 use std::{collections::BTreeSet, path::Path};
 
-use baml_fmt::comments::{Comments, Position};
+use baml_fmt::comments::{CommentKind, Comments, Placement, Position};
 use baml_syntax::{
     index::TreeIndex,
     nodes::FileTree,
@@ -109,7 +109,9 @@ fn every_corpus_comment_is_attached_once_to_a_node_beside_it() {
                             })
                     }
                     // Directly after the token, or on a line that ends before
-                    // the node's terminator, which the comment is moved past.
+                    // the node's terminator or before an item's `,`/`;` (a
+                    // line comment ending the item's line, or a comment on a
+                    // line of its own), which the comment is moved past.
                     Position::Dangling { after: Some(token) } => {
                         index.token_owner(token) == Some(comment.node)
                             && (prev == Some(token)
@@ -118,7 +120,10 @@ fn every_corpus_comment_is_attached_once_to_a_node_beside_it() {
                                         tokens.kind(token),
                                         TokenKind::Comma | TokenKind::Semicolon
                                     )
-                                    && TokenIdx(token.0 + 1) == span.end()))
+                                    && (TokenIdx(token.0 + 1) == span.end()
+                                        || comment.placement == Placement::OwnLine
+                                        || (comment.placement == Placement::EndOfLine
+                                            && comment.kind == CommentKind::Line))))
                     }
                     Position::Dangling { after: None } => {
                         prev.is_none() && comment.node == tree.root_id()

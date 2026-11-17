@@ -2,8 +2,6 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function f() -> int {
-    defer {
-        cleanup()
-    } // bye
+    defer { cleanup() } // bye
     42
 }

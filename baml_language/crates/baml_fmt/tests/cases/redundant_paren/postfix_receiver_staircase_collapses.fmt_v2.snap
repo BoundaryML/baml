@@ -4,7 +4,8 @@ source: crates/baml_fmt/tests/cases.rs
 function f(sections: string[], pet_name: string) -> null {
     assert.is_true(
         (pet_name == `Bella`)
-            && !sections.map((item) -> { item.to_string() })
+            && !sections
+                .map((item) -> { item.to_string() })
                 .join(` `)
                 .includes(`WarningSignsContact`),
     );

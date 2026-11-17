@@ -1,0 +1,25 @@
+function fetch(request: Request, options: Options) -> Response throws NetworkError | TimeoutError | ParseError {
+    x
+}
+
+function long_parameters(first_argument: FirstArgument, second_argument: SecondArgument) -> Response? throws E {
+    x
+}
+
+function both(first_argument: FirstArgument, second_argument: SecondArgument, third: Third) -> Response throws NetworkError | TimeoutError {
+    x
+}
+
+interface Client {
+    function fetch(request: Request, options: Options) -> Response throws NetworkError | TimeoutError | X;
+}
+
+function lambdas() -> int {
+    let f = (request: Request, options: Options) -> Response throws NetworkError | TimeoutError | X {
+        x
+    };
+    consume((request: Request, options: Options) -> Response throws NetworkError | TimeoutError | X {
+        x
+    });
+    0
+}

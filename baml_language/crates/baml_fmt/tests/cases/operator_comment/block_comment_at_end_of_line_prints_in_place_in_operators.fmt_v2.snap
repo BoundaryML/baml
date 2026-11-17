@@ -5,6 +5,5 @@ function f() -> bool {
     (
         a
             && b /* keep */
-    )
-        && c
+    ) && c
 }

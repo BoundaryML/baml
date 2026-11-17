@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function Plan() -> string {
+    client: "openai/gpt-4o-mini" // trailing
+
+    tools: []
+    prompt: `hi`
+    // dangling end
+}

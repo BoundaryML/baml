@@ -44,9 +44,9 @@ function timeout_of_open_function_value(body: () -> int throws unknown) -> int {
 
 // A `catch` that handles the timeout only leaves `string` to the caller, so
 // `throws never` is wrong.
-function timeout_arm_leaves_the_error_of_the_value(
-    body: () -> int throws string,
-) -> int throws never {
+function timeout_arm_leaves_the_error_of_the_value(body: () -> int throws string) -> int
+    throws never
+{
     baml.future.with_timeout(baml.time.Duration.from_seconds(30), body) catch (error) {
         baml.errors.Timeout => 0,
     }
@@ -54,9 +54,12 @@ function timeout_arm_leaves_the_error_of_the_value(
 
 // The same call with a lambda written in place had the right facts before.
 function timeout_of_lambda() -> int {
-    baml.future.with_timeout(baml.time.Duration.from_seconds(30), () -> int throws string {
-        throw "boom";
-    }) catch_all (error) {
+    baml.future.with_timeout(
+        baml.time.Duration.from_seconds(30),
+        () -> int throws string {
+            throw "boom";
+        },
+    ) catch_all (error) {
         _ => {
             let probe: int = error;
             probe
@@ -85,10 +88,8 @@ function relay_of_function_value_behind_a_generic_call(body: () -> int throws st
 function timeout_arm_leaves_the_error_of_a_value_behind_a_generic_call(
     body: () -> int throws string,
 ) -> int throws never {
-    baml.future.with_timeout(
-        baml.time.Duration.from_seconds(30),
-        pass_through(body),
-    ) catch (error) {
-        baml.errors.Timeout => 0,
-    }
+    baml.future
+        .with_timeout(baml.time.Duration.from_seconds(30), pass_through(body)) catch (error) {
+            baml.errors.Timeout => 0,
+        }
 }

@@ -6,7 +6,7 @@ function f() -> int {
     let h = spawn with
         baml.spawn.Limit.new(2),
         another_limit_value,
-        third_one
+        third_one,
     {
         42
     };
@@ -16,7 +16,7 @@ function f() -> int {
 test "name" with
     FixtureNumberOne,
     FixtureNumberTwo,
-    FixtureNumberThree
+    FixtureNumberThree,
 {
     assert.is_true(true);
 }

@@ -165,10 +165,9 @@ function make_effect_box<E>() -> Holder<() -> int throws E> {
     Holder { v: () -> { 1 } }
 }
 
-function take_effect_box<V extends Maker>(
-    b: Holder<() -> int throws V>,
-    v: V?,
-) -> int throws never {
+function take_effect_box<V extends Maker>(b: Holder<() -> int throws V>, v: V?) -> int
+    throws never
+{
     V.make()
 }
 

@@ -5,7 +5,8 @@ type T = // c
     int | string;
 
 function f(a: int) -> // c
-        string {
+    string
+{
     let x = // c
         value;
     x = // c
@@ -17,9 +18,9 @@ function f(a: int) -> // c
     user // c
         ?.profile;
     foo() // c
-    catch (e) {
-        _ => 0,
-    };
+        catch (e) {
+            _ => 0,
+        };
     x // c
         is int;
     return // c

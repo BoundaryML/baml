@@ -53,11 +53,8 @@ class LongAttrField {
 class LongFieldTypes {
     very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[],
     another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>,
-    callback_field: (
-        first_param: int,
-        second_param: string,
-        third_param: bool,
-    ) -> map<string, int> throws never,
+    callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int>
+        throws never,
     deeply_nested: (int | (string | (bool | (float | null))))[]?,
 }
 
@@ -101,9 +98,9 @@ TriviaClass // 4 name trailing
     // 7 field leading
     name // 8 field name trailing
     // 9 colon leading
-    : // 10 colon trailing
-    // 11 type leading
-    string, // 12 type trailing
+        : // 10 colon trailing
+            // 11 type leading
+            string, // 12 type trailing
     // 13 close brace leading
 } // 14 close brace trailing
 
@@ -119,9 +116,9 @@ TriviaClassBlock /* 4 name trailing */
     /* 7 field leading */
     name /* 8 field name trailing */
     /* 9 colon leading */
-    : /* 10 colon trailing */
-    /* 11 type leading */
-    string, /* 12 type trailing */
+        : /* 10 colon trailing */
+            /* 11 type leading */
+            string, /* 12 type trailing */
     /* 13 close brace leading */
 } /* 14 close brace trailing */
 
@@ -132,17 +129,17 @@ class TriviaFieldAttrs {
     // 1 field leading
     name // 2 field name trailing
     // 3 colon leading
-    : // 4 colon trailing
-    // 5 type leading
-    string // 6 type trailing
-        // 7 attr leading
-        @description // 8 attr name trailing
-        // 9 open paren leading
-        ( // 10 open paren trailing
-            // 11 arg leading
-            "the name", // 12 arg trailing
-            // 13 close paren leading
-        ), // 14 close paren trailing
+        : // 4 colon trailing
+            // 5 type leading
+            string // 6 type trailing
+            // 7 attr leading
+            @description // 8 attr name trailing
+            // 9 open paren leading
+            ( // 10 open paren trailing
+                // 11 arg leading
+                "the name", // 12 arg trailing
+                // 13 close paren leading
+            ), // 14 close paren trailing
 }
 
 // ===== Trivia on field with attributes (block comments) =====
@@ -150,17 +147,17 @@ class TriviaFieldAttrsBlock {
     /* 1 field leading */
     name /* 2 field name trailing */
     /* 3 colon leading */
-    : /* 4 colon trailing */
-    /* 5 type leading */
-    string /* 6 type trailing */
-        /* 7 attr leading */
-        @description /* 8 attr name trailing */
-        /* 9 open paren leading */
-        (/* 10 open paren trailing */
-            /* 11 arg leading */
-            "the name" /* 12 arg trailing */,
-            /* 13 close paren leading */
-        ), /* 14 close paren trailing */
+        : /* 4 colon trailing */
+            /* 5 type leading */
+            string /* 6 type trailing */
+            /* 7 attr leading */
+            @description /* 8 attr name trailing */
+            /* 9 open paren leading */
+            (/* 10 open paren trailing */
+                /* 11 arg leading */
+                "the name" /* 12 arg trailing */,
+                /* 13 close paren leading */
+            ), /* 14 close paren trailing */
 }
 
 // ===== Trivia on field with long wrapping type (line comments) =====
@@ -168,34 +165,34 @@ class TriviaLongFieldType {
     // 1 field leading
     data // 2 field name trailing
     // 3 colon leading
-    : // 4 colon trailing
-    // 5 type leading
-    map< // 6 map trailing
-        // 7 open angle trailing
-        // 8 key type leading
-        string, // 9 key type trailing
-        // 10 comma trailing
-        // 11 value type leading
-        int // 12 first trailing
-            | // 13 pipe trailing
-            // 14 second leading
-            string // 15 second trailing
-            | // 16 pipe trailing
-            // 17 third leading
-            bool // 18 third trailing
-            | // 19 pipe trailing
-            // 20 fourth leading
-            float // 21 fourth trailing
-            | // 22 pipe trailing
-            // 23 fifth leading
-            null, // 24 fifth trailing
-    > // 25 close angle trailing
-        // 26 attr leading
-        @description( // 27 attr name trailing
-            // 28 attr open trailing
-            // 29 attr arg leading
-            "a long description", // 30 attr arg trailing
-        ), // 31 attr close trailing
+        : // 4 colon trailing
+            // 5 type leading
+            map< // 6 map trailing
+                // 7 open angle trailing
+                // 8 key type leading
+                string, // 9 key type trailing
+                // 10 comma trailing
+                // 11 value type leading
+                int // 12 first trailing
+                    | // 13 pipe trailing
+                    // 14 second leading
+                    string // 15 second trailing
+                    | // 16 pipe trailing
+                    // 17 third leading
+                    bool // 18 third trailing
+                    | // 19 pipe trailing
+                    // 20 fourth leading
+                    float // 21 fourth trailing
+                    | // 22 pipe trailing
+                    // 23 fifth leading
+                    null, // 24 fifth trailing
+            > // 25 close angle trailing
+            // 26 attr leading
+            @description( // 27 attr name trailing
+                // 28 attr open trailing
+                // 29 attr arg leading
+                "a long description", // 30 attr arg trailing
+            ), // 31 attr close trailing
 }
 
 // ===== Trivia on field with long wrapping type (block comments) =====
@@ -203,31 +200,31 @@ class TriviaLongFieldTypeBlock {
     /* 1 field leading */
     data /* 2 field name trailing */
     /* 3 colon leading */
-    : /* 4 colon trailing */
-    /* 5 type leading */
-    map /* 6 map trailing */</* 7 open angle trailing */
-        /* 8 key type leading */
-        string /* 9 key type trailing */, /* 10 comma trailing */
-        /* 11 value type leading */
-        int /* 12 first trailing */
-            | /* 13 pipe trailing */
-            /* 14 second leading */
-            string /* 15 second trailing */
-            | /* 16 pipe trailing */
-            /* 17 third leading */
-            bool /* 18 third trailing */
-            | /* 19 pipe trailing */
-            /* 20 fourth leading */
-            float /* 21 fourth trailing */
-            | /* 22 pipe trailing */
-            /* 23 fifth leading */
-            null /* 24 fifth trailing */,
-    > /* 25 close angle trailing */
-        /* 26 attr leading */
-        @description /* 27 attr name trailing */(/* 28 attr open trailing */
-            /* 29 attr arg leading */
-            "a long description" /* 30 attr arg trailing */,
-        ), /* 31 attr close trailing */
+        : /* 4 colon trailing */
+            /* 5 type leading */
+            map /* 6 map trailing */</* 7 open angle trailing */
+                /* 8 key type leading */
+                string /* 9 key type trailing */, /* 10 comma trailing */
+                /* 11 value type leading */
+                int /* 12 first trailing */
+                    | /* 13 pipe trailing */
+                    /* 14 second leading */
+                    string /* 15 second trailing */
+                    | /* 16 pipe trailing */
+                    /* 17 third leading */
+                    bool /* 18 third trailing */
+                    | /* 19 pipe trailing */
+                    /* 20 fourth leading */
+                    float /* 21 fourth trailing */
+                    | /* 22 pipe trailing */
+                    /* 23 fifth leading */
+                    null /* 24 fifth trailing */,
+            > /* 25 close angle trailing */
+            /* 26 attr leading */
+            @description /* 27 attr name trailing */(/* 28 attr open trailing */
+                /* 29 attr arg leading */
+                "a long description" /* 30 attr arg trailing */,
+            ), /* 31 attr close trailing */
 }
 
 // ===== Trivia on field with multiple attributes (line comments) =====
@@ -235,23 +232,23 @@ class TriviaMultiAttr {
     // 1 field leading
     name // 2 name trailing
     // 3 colon leading
-    : // 4 colon trailing
-    // 5 type leading
-    string // 6 type trailing
-        // 7 first attr leading
-        @description( // 8 first attr name trailing
-            // 9 first attr open trailing
-            // 10 arg leading
-            "name", // 11 arg trailing
-        ) // 12 first attr close trailing
-        // 13 second attr leading
-        @alias( // 14 second attr name trailing
-            // 15 second attr open trailing
-            // 16 arg leading
-            "user_name", // 17 arg trailing
-        ) // 18 second attr close trailing
-        // 19 third attr leading
-        @stream.done, // 20 third attr trailing
+        : // 4 colon trailing
+            // 5 type leading
+            string // 6 type trailing
+            // 7 first attr leading
+            @description( // 8 first attr name trailing
+                // 9 first attr open trailing
+                // 10 arg leading
+                "name", // 11 arg trailing
+            ) // 12 first attr close trailing
+            // 13 second attr leading
+            @alias( // 14 second attr name trailing
+                // 15 second attr open trailing
+                // 16 arg leading
+                "user_name", // 17 arg trailing
+            ) // 18 second attr close trailing
+            // 19 third attr leading
+            @stream.done, // 20 third attr trailing
 }
 
 // ===== Trivia on field with multiple attributes (block comments) =====
@@ -259,21 +256,21 @@ class TriviaMultiAttrBlock {
     /* 1 field leading */
     name /* 2 name trailing */
     /* 3 colon leading */
-    : /* 4 colon trailing */
-    /* 5 type leading */
-    string /* 6 type trailing */
-        /* 7 first attr leading */
-        @description /* 8 first attr name trailing */(/* 9 first attr open trailing */
-            /* 10 arg leading */
-            "name" /* 11 arg trailing */,
-        ) /* 12 first attr close trailing */
-        /* 13 second attr leading */
-        @alias /* 14 second attr name trailing */(/* 15 second attr open trailing */
-            /* 16 arg leading */
-            "user_name" /* 17 arg trailing */,
-        ) /* 18 second attr close trailing */
-        /* 19 third attr leading */
-        @stream.done, /* 20 third attr trailing */
+        : /* 4 colon trailing */
+            /* 5 type leading */
+            string /* 6 type trailing */
+            /* 7 first attr leading */
+            @description /* 8 first attr name trailing */(/* 9 first attr open trailing */
+                /* 10 arg leading */
+                "name" /* 11 arg trailing */,
+            ) /* 12 first attr close trailing */
+            /* 13 second attr leading */
+            @alias /* 14 second attr name trailing */(/* 15 second attr open trailing */
+                /* 16 arg leading */
+                "user_name" /* 17 arg trailing */,
+            ) /* 18 second attr close trailing */
+            /* 19 third attr leading */
+            @stream.done, /* 20 third attr trailing */
 }
 
 // ===== Short class name =====

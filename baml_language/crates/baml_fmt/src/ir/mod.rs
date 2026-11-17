@@ -35,9 +35,21 @@
 //!   `Doc::HARD_LINE`, `Doc::EMPTY_LINE` — a soft line is nothing when its
 //!   group is flat and a newline when the group breaks; `SOFT_LINE_OR_SPACE`
 //!   is a space when flat; a hard line is always a newline; an empty line
-//!   leaves one blank line.
+//!   leaves one blank line. `Doc::HANG_LINE` is a space unless the line
+//!   being written started deeper than the node's own indent — a
+//!   continuation line — when it is a newline: the `{` after a header stays
+//!   on `) {` and `} {` but never on `    | B {`.
+//! * `snuggle` — content after a `SOFT_LINE_OR_SPACE` that stays a space in
+//!   a broken group when the line so far is only as long as its indentation
+//!   (a closing bracket's) and the content's first line fits — rustfmt's
+//!   orphan rule, `}) + x` — the content then laid out as part of that line.
 //! * `group` — the unit of layout: printed flat if everything in it fits on
 //!   the rest of the current line, otherwise every soft line in it breaks.
+//! * `limited` — content that is flat only when it is no wider than a given
+//!   number of columns, however much room the line has: the group deciding
+//!   the layout breaks otherwise. rustfmt's small heuristics (a call's
+//!   arguments wider than 60% of the line go one per line) without any rule
+//!   computing a width itself.
 //! * `indent` — one indent level deeper for the lines that start inside it.
 //! * `if_break` / `if_group_breaks` — content that exists only in one of the
 //!   two layouts (a trailing comma, say), judged by the enclosing group or by
@@ -68,8 +80,9 @@
 //! an `expanded_group`, an `if_break` with one in the arm that prints when
 //! its group is flat) always prints broken, so `if (c) { … }` with a block body breaks its enclosing group
 //! without the rule saying so. The flag does not cross into `best_fitting`
-//! variants: a forced break inside a variant is that variant's own business,
-//! and the most flat variant never has one.
+//! variants: a forced break inside a variant is that variant's own business
+//! (`best_fitting` drops a most flat variant that has one and forces the
+//! parent instead; `layouts` keeps it for a tail every variant shares).
 //!
 //! The printer recurses over the document, passing each node the layout and
 //! indent it is printed in and, borrowed from the enclosing concats, what

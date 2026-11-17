@@ -35,15 +35,13 @@ function for_in_continue_is_an_exit(a: int, xs: int[]) -> int {
 // `while let` scrutinee or a `for` update expression (rustc's E0590 rule).
 function break_in_a_while_condition(a: int) -> int {
     let n = 0;
-    while (
-        {
-            n += 1;
-            if (n > a) {
-                break;
-            }
-            true
+    while ({
+        n += 1;
+        if (n > a) {
+            break;
         }
-    ) {}
+        true
+    }) {}
     n
 }
 
@@ -54,8 +52,7 @@ function break_in_a_while_let_scrutinee(a: int) -> int {
             break;
         }
         n
-    }
-    {
+    } {
         n += 1;
     }
     n
@@ -63,31 +60,25 @@ function break_in_a_while_let_scrutinee(a: int) -> int {
 
 function break_in_the_update_expression(a: int) -> int {
     let i = 0;
-    for (
-        let j = 0;
-        i < 3;
-        i = {
+    for (let j = 0; i < 3; i = {
             if (a > 0) {
                 break;
             }
             i + 1
-        }
-    ) {}
+        })
+    {}
     i
 }
 
 function continue_in_the_update_expression(a: int) -> int {
     let i = 0;
-    for (
-        let j = 0;
-        i < 3;
-        i = {
+    for (let j = 0; i < 3; i = {
             if (a > 0) {
                 continue;
             }
             i + 1
-        }
-    ) {}
+        })
+    {}
     i
 }
 
@@ -167,12 +158,11 @@ function break_inside_a_defer_with_no_loop(a: int) -> int {
     a
 }
 
-function break_in_a_parameter_default(
-    a: int = {
+function break_in_a_parameter_default(a: int = {
         break;
         1
-    },
-) -> int {
+    }) -> int
+{
     a
 }
 
@@ -185,11 +175,9 @@ const break_in_a_global_initializer: int = {
 // after it dead.
 function for_over_a_diverging_collection() -> int {
     for (
-        let v in (
-            {
-                return 2;
-            }
-        )
+        let v in ({
+            return 2;
+        })
     ) {}
     5
 }

@@ -2,8 +2,9 @@
 //! `spawn`.
 //!
 //! An `if … { tail } else { tail }` in expression position may stay on one
-//! line when it fits; every other `if` chain breaks every block, the chain
-//! as a whole, as rustfmt lays an `if` out. A block's tail is statement
+//! line when it fits within the width rustfmt allows a one-line `if`; every
+//! other `if` chain breaks every block, the chain as a whole, as rustfmt
+//! lays an `if` out. A block's tail is statement
 //! position, as it is for rustfmt: an `if` that is a function's value
 //! breaks. A `match` always breaks, one arm
 //! per line with a trailing comma. An arm's body goes after the `=>` as a
@@ -15,15 +16,15 @@
 //! line when it is only a tail.
 
 use baml_syntax::{
+    Token,
     nodes::{
-        AnyElse, AnyExpr, AnyMatchScrutinee, Block, CatchArm, CatchClause, CatchExpr, ElseBranch,
-        IfExpr, IfLetExpr, LambdaExpr, MatchArm, MatchExpr, MatchParen, SpawnExpr,
+        AnyElse, AnyExpr, AnyMatchScrutinee, AnyPattern, Block, CatchArm, CatchClause, CatchExpr,
+        ElseBranch, IfExpr, IfLetExpr, LambdaExpr, MatchArm, MatchExpr, MatchParen, SpawnExpr,
     },
-    token::{Token, punct},
     tree::{AnyNodeId, Id, NodeUnion as _},
 };
 
-use super::{exprs::with_tail, items::signature_tail, stmts::parenthesised};
+use super::{exprs::with_tail, patterns::union_pattern, stmts::parenthesised};
 use crate::{
     comments::docs,
     format::{FormatNode, Formatter, layout::braced},
@@ -50,13 +51,12 @@ impl IfHead {
     }
 
     /// The header up to the `{`, the block after it, and the `else` if any.
-    /// An `if let` header is a named group, so that the `{` can take a line
-    /// of its own when the scrutinee broke over several lines (an `if`'s
-    /// condition has its parentheses for that).
-    fn parts<'a>(
-        self,
-        f: &Formatter<'a>,
-    ) -> (Doc<'a>, Option<GroupId<'a>>, Id<Block>, Option<ElseBranch>) {
+    /// The `{` follows the header after a [`Doc::HANG_LINE`]: on its last
+    /// line when that is the header's own (`) {`, `} {`), on a line of its
+    /// own when the scrutinee's last line is a continuation line. In an `if
+    /// let` header, a comment that ends the pattern's line puts the `=` and
+    /// the scrutinee one level in.
+    fn parts<'a>(self, f: &Formatter<'a>) -> (Doc<'a>, Id<Block>, Option<ElseBranch>) {
         let d = f.docs;
         match self {
             Self::If(id) => {
@@ -66,39 +66,39 @@ impl IfHead {
                     Doc::SPACE,
                     parenthesised(f, f.tree.present(node.cond)),
                 ]);
-                (
-                    header,
-                    None,
-                    f.tree.present(node.then_branch),
-                    node.else_branch,
-                )
+                (header, f.tree.present(node.then_branch), node.else_branch)
             }
             Self::IfLet(id) => {
                 let node = f.tree.get(id);
-                let (header, group) = d.group_with_id(d.concat([
+                let pattern = f.tree.present(node.pattern);
+                let header = d.group(d.concat([
                     f.token(node.kw),
                     Doc::SPACE,
                     f.token(node.introducer),
                     Doc::SPACE,
-                    f.alt(f.tree.present(node.pattern)),
-                    Doc::SPACE,
-                    f.token(f.tree.present(node.eq)),
-                    Doc::SPACE,
-                    f.alt(f.tree.present(node.scrutinee)),
+                    f.alt(pattern),
+                    f.continuation(
+                        pattern.node_id(),
+                        d.concat([
+                            Doc::SPACE,
+                            f.token(f.tree.present(node.eq)),
+                            Doc::SPACE,
+                            f.alt(f.tree.present(node.scrutinee)),
+                        ]),
+                    ),
                 ]));
-                (
-                    header,
-                    Some(group),
-                    f.tree.present(node.then_branch),
-                    node.else_branch,
-                )
+                (header, f.tree.present(node.then_branch), node.else_branch)
             }
         }
     }
 
     /// Whether the chain is `if … { tail } else { tail }` — one `else`, a
-    /// block, both only a tail — the shape that may stay on one line.
+    /// block, both only a tail, no comment anywhere in it — the shape that
+    /// may stay on one line.
     fn is_short(self, f: &Formatter<'_>) -> bool {
+        if f.has_comments_inside(self.node_id()) {
+            return false;
+        }
         let (then_branch, else_branch) = match self {
             Self::If(id) => {
                 let node = f.tree.get(id);
@@ -120,7 +120,9 @@ impl IfHead {
 }
 
 /// The chain from `head`, laid out as one: with `flat`, on one line when it
-/// is short (see [`IfHead::is_short`]) and fits, else every block broken.
+/// is short (see [`IfHead::is_short`]) and fits within the width for a
+/// one-line `if` (see [`Heuristics`](crate::format::Heuristics)), else
+/// every block broken.
 /// The `if`s after the first are not printed as nodes of their own, so
 /// their leading and trailing comments are placed here.
 pub(super) fn if_chain<'a>(f: &Formatter<'a>, head: IfHead, flat: bool) -> Doc<'a> {
@@ -138,15 +140,15 @@ pub(super) fn if_chain<'a>(f: &Formatter<'a>, head: IfHead, flat: bool) -> Doc<'
                 f.comments.trailing(link.node_id()),
             ));
         }
-        let (header, header_group, then_branch, else_branch) = link.parts(f);
+        let (header, then_branch, else_branch) = link.parts(f);
         parts.extend([
             header,
-            f.brace_after(header_group),
+            Doc::HANG_LINE,
             f.with_comments(then_branch, f.block_parts(then_branch, flat)),
         ]);
         next = None;
         if let Some(else_branch) = else_branch {
-            parts.extend([Doc::SPACE, f.token(else_branch.kw), Doc::SPACE]);
+            parts.extend([Doc::SPACE, f.keyword(else_branch.kw), Doc::SPACE]);
             match f.tree.present(else_branch.body) {
                 AnyElse::Block(block) => {
                     parts.push(f.with_comments(block, f.block_parts(block, flat)));
@@ -159,7 +161,11 @@ pub(super) fn if_chain<'a>(f: &Formatter<'a>, head: IfHead, flat: bool) -> Doc<'
     }
     parts.extend(trailing.into_iter().rev());
     let doc = d.concat(parts);
-    if flat { d.group(doc) } else { doc }
+    if flat {
+        d.group(d.limited(doc, f.heuristics.if_else))
+    } else {
+        doc
+    }
 }
 
 /// Whether an expression never yields a value: `return`, `throw`, `break`,
@@ -243,10 +249,12 @@ impl FormatNode for MatchParen {
         let d = f.docs;
         d.group(
             d.concat([
-                f.token(node.l),
+                Doc::LINE_SUFFIX_BOUNDARY,
+                d.text("("),
+                f.comments_inside(node.l.idx),
                 d.indent(
                     d.concat([
-                        Doc::SOFT_LINE,
+                        f.line_after_opener(node.l.idx),
                         f.alt(f.tree.present(node.expr)),
                         node.ascription
                             .map_or(Doc::NIL, |ascription| f.node(ascription)),
@@ -259,65 +267,88 @@ impl FormatNode for MatchParen {
     }
 }
 
-/// `head => body,` — the comma is canonical. `head` is the pattern, and a
-/// guard if there is one, as one group: while it is on one line the body
-/// goes after the `=>` as an initialiser goes after a `=`; once the head
-/// broke over several lines (a long guard, a union pattern) the body takes a
-/// line of its own under it, indented, so that the pattern's lines and the
-/// body's are told apart. A braced body (a block, an `if`, a `match`, …)
-/// breaks inside its own braces instead and stays on the head's last line,
-/// `=> {`, as rustfmt keeps it after a multi-line pattern.
+/// `head => body,` — the comma is canonical. The body goes after the `=>`
+/// as an initialiser goes after a `=`, whether or not the pattern broke over
+/// several lines (a union's alternatives, a destructure's fields): the
+/// `=>` is on the pattern's last line either way, as rustfmt keeps it.
+/// Only a guard that broke under its pattern (`guard`, the named group)
+/// sends a non-braced body to a line of its own under the head, indented,
+/// so that the guard's lines and the body's are told apart. A braced body
+/// (a block, an `if`, a `match`, …) breaks inside its own braces instead
+/// and stays on the head's last line, `=> {`.
 fn arm<'a>(
     f: &Formatter<'a>,
     head: Doc<'a>,
-    arrow: Token<punct::FatArrow>,
+    head_ends_line: bool,
+    guard: Option<GroupId<'a>>,
+    arrow: Token!["=>"],
     body: AnyExpr,
-    comma: Option<Token<punct::Comma>>,
+    comma: Option<Token![","]>,
 ) -> Doc<'a> {
     let d = f.docs;
-    let (head, head_group) = d.group_with_id(head);
     let body_id = body.node_id();
     let body_doc = f.alt(body);
     let assigned = f.assigned_doc([arrow.idx], body_id, body_doc);
-    let after_arrow = if braced(body_id) {
-        assigned
-    } else {
-        d.if_group_breaks(
-            head_group,
+    let after_arrow = match guard {
+        Some(guard) if !braced(body_id) => d.if_group_breaks(
+            guard,
             d.indent(d.concat([Doc::HARD_LINE, body_doc])),
             assigned,
-        )
+        ),
+        Some(_) | None => assigned,
     };
-    d.concat([
-        head,
-        Doc::SPACE,
-        f.token(arrow),
-        after_arrow,
-        f.separator(comma, ","),
-    ])
+    // After a comment that ends the head's line, the `=>` starts the next
+    // one level in.
+    let rest = d.concat([Doc::SPACE, f.token(arrow), after_arrow]);
+    let rest = if head_ends_line { d.indent(rest) } else { rest };
+    d.concat([head, rest, f.separator(comma, ",")])
 }
 
 impl FormatNode for MatchArm {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
         let d = f.docs;
-        let pattern = f.alt(f.tree.present(node.pattern));
-        // A guard that does not fit beside the pattern goes under it.
-        let guard = node.guard.map_or(Doc::NIL, |guard| {
-            d.indent(d.concat([
-                Doc::SOFT_LINE_OR_SPACE,
-                f.token(guard.kw),
-                Doc::SPACE,
-                f.alt(f.tree.present(guard.cond)),
-            ]))
-        });
+        let pattern_id = f.tree.present(node.pattern).node_id();
+        let pattern = arm_pattern(f, f.tree.present(node.pattern));
+        // A guard stays beside the pattern while its `if cond` starts there
+        // (the condition breaking inside itself, as rustfmt keeps `1 if a`);
+        // only when even that does not fit does it go under the pattern.
+        // The condition is the named group: a body that is not braced
+        // moves to a line of its own under the head once it broke.
+        let (guard, guard_group, guard_ends_line) = match node.guard {
+            Some(guard) => {
+                let cond = f.tree.present(guard.cond);
+                let (cond_doc, group) = d.group_with_id(f.alt(cond));
+                let clause = d.concat([f.token(guard.kw), Doc::SPACE, cond_doc]);
+                // The beside-the-pattern variant is measured up to the
+                // condition's first line break, the condition laying itself
+                // out.
+                let doc = d.layouts([
+                    d.concat([Doc::SPACE, clause]).broken(),
+                    d.indent(d.concat([Doc::HARD_LINE, clause])).into(),
+                ]);
+                (doc, Some(group), f.trailing_of(cond.node_id()).will_break())
+            }
+            None => (Doc::NIL, None, false),
+        };
         arm(
             f,
             d.concat([pattern, guard]),
+            f.trailing_of(pattern_id).will_break() || guard_ends_line,
+            guard_group,
             f.tree.present(node.arrow),
             f.tree.present(node.body),
             node.comma,
         )
+    }
+}
+
+/// An arm's whole pattern: a union's alternatives break at the arm's
+/// indent, as rustfmt lays them out.
+fn arm_pattern<'a>(f: &Formatter<'a>, pattern: AnyPattern) -> Doc<'a> {
+    match pattern {
+        AnyPattern::Union(union) => f.with_comments(union, union_pattern(f, union, false)),
+        other => f.alt(other),
     }
 }
 
@@ -349,9 +380,12 @@ impl FormatNode for CatchClause {
             .map(|&arm| AnyNodeId::of(arm))
             .collect();
         d.concat([
-            f.token(node.kw),
+            f.keyword(node.kw),
             Doc::SPACE,
-            f.token(f.tree.present(node.l)),
+            Doc::LINE_SUFFIX_BOUNDARY,
+            d.text("("),
+            f.comments_inside(f.tree.present(node.l).idx),
+            f.space_after_opener(f.tree.present(node.l).idx),
             f.node(f.tree.present(node.binding)),
             node.trace.map_or(Doc::NIL, |trace| {
                 d.concat([
@@ -360,7 +394,9 @@ impl FormatNode for CatchClause {
                     f.node(f.tree.present(trace.name)),
                 ])
             }),
-            f.token(f.tree.present(node.r)),
+            // After a line comment on the `)`'s line the `{` lines up with
+            // its `}`, as after `else`.
+            f.keyword(f.tree.present(node.r)),
             Doc::SPACE,
             f.braced(
                 AnyNodeId::of(id),
@@ -376,9 +412,12 @@ impl FormatNode for CatchClause {
 impl FormatNode for CatchArm {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
+        let pattern = f.tree.present(node.pattern);
         arm(
             f,
-            f.alt(f.tree.present(node.pattern)),
+            arm_pattern(f, pattern),
+            f.trailing_of(pattern.node_id()).will_break(),
+            None,
             f.tree.present(node.arrow),
             f.tree.present(node.body),
             node.comma,
@@ -400,29 +439,35 @@ pub(super) struct Forms<'a> {
 }
 
 /// `(params) -> R throws E { body }`; a `=>` written for the arrow is
-/// printed as `->`. The signature breaks like a function's: parameters
-/// first, then `throws` under the return type, the `{` on a line of its own
-/// when that happened (see [`signature`](super::items::signature)).
+/// printed as `->`. The signature breaks like a function's: `throws` under
+/// the return type first, then the parameters, the `{` on a line of its own
+/// when the signature's last line is a continuation line (see
+/// [`signature`](super::items::signature)); the body breaks once the
+/// signature did.
 pub(super) fn lambda<'a>(f: &Formatter<'a>, id: Id<LambdaExpr>) -> Forms<'a> {
     let node = f.tree.get(id);
     let d = f.docs;
     if let Some(generics) = node.rejected_generics {
         f.tree.absent(generics);
     }
-    let arrow = d.indent(f.spelled("->", f.tree.present(node.arrow).idx));
+    let arrow = f.spelled("->", f.tree.present(node.arrow).idx);
     let ret = match node.ret {
         Some(ty) => d.concat([arrow, Doc::SPACE, f.alt(ty)]),
         None => arrow,
     };
-    let (tail, tail_group) = signature_tail(f, ret, node.throws);
-    let header = node.throws.map(|_| tail_group);
-    let head = d.concat([
-        super::items::signature(f, f.node(node.params), tail),
-        f.brace_after(header),
-    ]);
+    let params = AnyNodeId::of(node.params);
+    let (signature, group) = super::items::signature(
+        f,
+        d.concat([f.leading_of(params), f.bare(params)]),
+        f.trailing_of(params),
+        ret,
+        Doc::NIL,
+        node.throws,
+    );
+    let head = d.concat([signature, Doc::HANG_LINE]);
     let (flat, broken) = f.block_forms(f.tree.present(node.body));
     Forms {
-        flat: d.concat([head, f.body_after(header, flat, broken)]),
+        flat: d.concat([head, f.body_after(Some(group), flat, broken)]),
         hugged: d.concat([head, broken]),
     }
 }
@@ -435,26 +480,39 @@ impl FormatNode for LambdaExpr {
 
 /// `spawn name with a, b { body }`: the `with` items break one per line
 /// under the keyword when they do not fit, and the `{` then takes a line of
-/// its own (see [`Formatter::separated`]).
+/// its own (see [`Formatter::separated`] and [`Doc::HANG_LINE`]).
 pub(super) fn spawn<'a>(f: &Formatter<'a>, id: Id<SpawnExpr>) -> Forms<'a> {
     let node = f.tree.get(id);
     let d = f.docs;
     let (with, with_group) = match node.with {
         Some(with) => {
-            let (with, group) = super::items::with_clause(f, with);
-            (d.concat([Doc::SPACE, with]), Some(group))
+            let (clause, group) = super::items::with_clause(f, with);
+            let clause = d.concat([Doc::SPACE, clause]);
+            // After a comment that ends the name's line, `with` starts the
+            // next one level in.
+            let clause = match node.name {
+                Some(name) => f.continuation(name.node_id(), clause),
+                None => clause,
+            };
+            (clause, Some(group))
         }
         None => (Doc::NIL, None),
     };
-    // A comment that ends the keyword's line puts the name one level in.
+    // A comment that ends the keyword's line puts the name one level in; a
+    // bare `spawn` has only its block after it, which stays flush.
+    let kw = if node.name.is_none() && node.with.is_none() {
+        f.keyword(node.kw)
+    } else {
+        f.token(node.kw)
+    };
     let head = d.concat([
-        f.token(node.kw),
+        kw,
         d.indent(
             node.name
                 .map_or(Doc::NIL, |name| d.concat([Doc::SPACE, f.alt(name)])),
         ),
         with,
-        f.brace_after(with_group),
+        Doc::HANG_LINE,
     ]);
     let (flat, broken) = f.block_forms(f.tree.present(node.body));
     Forms {

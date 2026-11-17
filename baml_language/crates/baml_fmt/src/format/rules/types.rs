@@ -9,11 +9,12 @@
 
 use baml_syntax::{
     nodes::{
-        AnyLiteralTypeValue, ArrayType, AssocTypeBinding, FunctionType, FunctionTypeParam,
+        AnyLiteralTypeValue, AnyType, ArrayType, AssocTypeBinding, FunctionType, FunctionTypeParam,
         GenericArgs, GenericParam, GenericParamBounds, GenericParamList, LiteralType, OptionalType,
         ParenType, PathType, QualifiedPath, TupleType, TypeArgs, UnionType,
     },
-    tree::Id,
+    token::TokenIdx,
+    tree::{AnyNodeId, Id, NodeUnion as _},
 };
 
 use crate::{
@@ -56,8 +57,13 @@ impl FormatNode for ParenType {
         let node = f.tree.get(id);
         let d = f.docs;
         d.group(d.concat([
-            f.token(node.l),
-            d.indent(d.concat([Doc::SOFT_LINE, f.alt(f.tree.present(node.inner))])),
+            Doc::LINE_SUFFIX_BOUNDARY,
+            d.text("("),
+            f.comments_inside(node.l.idx),
+            d.indent(d.concat([
+                f.line_after_opener(node.l.idx),
+                f.alt(f.tree.present(node.inner)),
+            ])),
             Doc::SOFT_LINE,
             f.token(f.tree.present(node.r)),
         ]))
@@ -74,35 +80,33 @@ impl FormatNode for TupleType {
             node.l,
             f.tree.list(node.elements),
             f.tree.present(node.r),
+            |ty| ty.node_id(),
             |ty| f.alt(ty),
         )
     }
 }
 
-/// `(params) -> R throws E`, laid out like a signature: the parameters
-/// break first, then `throws E` moves under the return type.
+/// `(params) -> R throws E`, laid out as a function's signature is: `throws
+/// E` moves under the return type first, then the parameters break (see
+/// `signature` in the declaration rules).
 impl FormatNode for FunctionType {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
         let d = f.docs;
-        let tail = d.group(d.concat([
-            Doc::SPACE,
+        let params = f.delimited_parts(
+            node.l,
+            f.tree.list(node.params),
+            f.tree.present(node.r),
+            None,
+            AnyNodeId::of,
+            |param| f.node(param),
+        );
+        let ret = d.concat([
             f.token(node.arrow),
             Doc::SPACE,
             f.alt(f.tree.present(node.ret)),
-            node.throws.map_or(Doc::NIL, |throws| {
-                d.indent(d.concat([Doc::SOFT_LINE_OR_SPACE, f.node(throws)]))
-            }),
-        ]));
-        d.group(d.concat([
-            f.delimited_parts(
-                node.l,
-                f.tree.list(node.params),
-                f.tree.present(node.r),
-                |param| f.node(param),
-            ),
-            tail,
-        ]))
+        ]);
+        super::items::signature(f, params, Doc::NIL, ret, Doc::NIL, node.throws).0
     }
 }
 
@@ -111,55 +115,99 @@ impl FormatNode for FunctionTypeParam {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
         let d = f.docs;
-        d.concat([
-            node.name.map_or(Doc::NIL, |name| {
-                d.concat([
-                    f.node(name.name),
-                    name.question.map_or(Doc::NIL, |question| f.token(question)),
-                    f.token(name.colon),
-                    Doc::SPACE,
-                ])
-            }),
-            f.alt(f.tree.present(node.ty)),
-        ])
+        let ty = f.tree.present(node.ty);
+        match node.name {
+            Some(name) => d.concat([
+                f.node(name.name),
+                name.question.map_or(Doc::NIL, |question| f.token(question)),
+                f.token(name.colon),
+                f.after_operator([name.colon.idx], ty),
+            ]),
+            None => f.alt(ty),
+        }
     }
 }
 
-/// `T?`
+/// `T?` and `T[]` — neither `?` nor a bracket can start a line, so a suffix
+/// is text glued to its type, and the comments written between the type and
+/// the suffix, or inside the brackets, follow it: `T[] // c`. Suffixes on a
+/// suffix (`T[]?`) are printed by the outermost as one run, their comments
+/// after the last of them, so that a comment is carried past all of them
+/// on the first pass rather than past one more on each.
+fn suffixed<'a>(f: &Formatter<'a>, ty: AnyType) -> Doc<'a> {
+    let d = f.docs;
+    // From the outermost suffix inward: the type the suffix applies to and
+    // the suffix's tokens.
+    let mut layers: Vec<(AnyNodeId, TokenIdx, Option<TokenIdx>)> = Vec::new();
+    let mut inner = ty;
+    loop {
+        inner = match inner {
+            AnyType::Optional(id) => {
+                let node = f.tree.get(id);
+                layers.push((node.inner.node_id(), node.q.idx, None));
+                node.inner
+            }
+            AnyType::Array(id) => {
+                let node = f.tree.get(id);
+                let r = f.tree.present(node.r);
+                layers.push((node.inner.node_id(), node.l.idx, Some(r.idx)));
+                node.inner
+            }
+            AnyType::Path(_)
+            | AnyType::Literal(_)
+            | AnyType::Paren(_)
+            | AnyType::Tuple(_)
+            | AnyType::Function(_)
+            | AnyType::Union(_)
+            | AnyType::Qualified(_)
+            | AnyType::Bogus(_) => break,
+        };
+    }
+    debug_assert!(!layers.is_empty(), "a suffix type has a suffix");
+    let base = inner.node_id();
+    let suffixes = layers
+        .iter()
+        .rev()
+        .flat_map(|&(_, first, second)| std::iter::once(first).chain(second))
+        .map(|token| d.text(f.tree.token_text(token)));
+    let carried = layers.iter().rev().flat_map(|&(inner, first, second)| {
+        f.comments
+            .trailing(inner)
+            .iter()
+            .chain(f.dangling_after(first))
+            .chain(second.into_iter().flat_map(|token| f.dangling_after(token)))
+            .copied()
+    });
+    d.concat(
+        layers
+            .iter()
+            .map(|&(inner, ..)| f.leading_of(inner))
+            .chain([f.bare(base)])
+            .chain(suffixes)
+            .chain([f.comments_past(carried)]),
+    )
+}
+
 impl FormatNode for OptionalType {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
-        let node = f.tree.get(id);
-        // `?` cannot start a line: it tucks in before a pending comment.
-        let d = f.docs;
-        d.concat([
-            f.alt(node.inner),
-            d.text(f.tree.token_text(node.q.idx)),
-            f.comments_after(node.q.idx),
-        ])
+        suffixed(f, AnyType::Optional(id))
     }
 }
 
-/// `T[]` — the `[` cannot start a line, so it is text that tucks in before
-/// a pending comment.
 impl FormatNode for ArrayType {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
-        let node = f.tree.get(id);
-        let d = f.docs;
-        d.concat([
-            f.alt(node.inner),
-            d.text(f.tree.token_text(node.l.idx)),
-            f.comments_after(node.l.idx),
-            f.token(f.tree.present(node.r)),
-        ])
+        suffixed(f, AnyType::Array(id))
     }
 }
 
 /// `A | B | C`; when it does not fit, `A` stays and each `| B` takes a line
-/// of its own, indented.
+/// of its own, indented. The first member's trailing comments go inside
+/// that indentation, with the `|` lines they precede.
 impl FormatNode for UnionType {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
         let d = f.docs;
+        let first = node.first.node_id();
         let arms = f.tree.list(node.arms.as_list()).iter().map(|arm| {
             d.concat([
                 Doc::SOFT_LINE_OR_SPACE,
@@ -168,7 +216,11 @@ impl FormatNode for UnionType {
                 f.alt(f.tree.present(arm.ty)),
             ])
         });
-        d.group(d.concat([f.alt(node.first), d.indent(d.concat(arms))]))
+        d.group(d.concat([
+            f.leading_of(first),
+            f.bare(first),
+            d.indent(d.concat(std::iter::once(f.trailing_of(first)).chain(arms))),
+        ]))
     }
 }
 
@@ -198,6 +250,8 @@ impl FormatNode for GenericParamList {
             node.l,
             f.tree.list(node.params),
             f.tree.present(node.r),
+            None,
+            AnyNodeId::of,
             |param| f.node(param),
         )
     }
@@ -221,6 +275,7 @@ impl FormatNode for GenericParamBounds {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
         let d = f.docs;
+        let first = f.tree.present(node.first).node_id();
         let rest = f.tree.list(node.rest).iter().map(|arm| {
             d.concat([
                 Doc::SOFT_LINE_OR_SPACE,
@@ -232,8 +287,9 @@ impl FormatNode for GenericParamBounds {
         d.group(d.concat([
             f.token(node.kw),
             Doc::SPACE,
-            f.alt(f.tree.present(node.first)),
-            d.indent(d.concat(rest)),
+            f.leading_of(first),
+            f.bare(first),
+            d.indent(d.concat(std::iter::once(f.trailing_of(first)).chain(rest))),
         ]))
     }
 }
@@ -246,6 +302,8 @@ impl FormatNode for GenericArgs {
             node.l,
             f.tree.list(node.args),
             f.tree.present(node.r),
+            None,
+            |arg| arg.node_id(),
             |arg| f.alt(arg),
         )
     }
@@ -259,21 +317,28 @@ impl FormatNode for TypeArgs {
             node.l,
             f.tree.list(node.args),
             f.tree.present(node.r),
+            None,
+            |arg| arg.node_id(),
             |arg| f.alt(arg),
         )
     }
 }
 
-/// `Item = T`
+/// `Item = T`; after a comment that ends the name's line, the `=` starts
+/// the next one level in.
 impl FormatNode for AssocTypeBinding {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
         f.docs.concat([
             f.node(node.name),
-            Doc::SPACE,
-            f.token(node.eq),
-            Doc::SPACE,
-            f.alt(f.tree.present(node.ty)),
+            f.continuation(
+                AnyNodeId::of(node.name),
+                f.docs.concat([
+                    Doc::SPACE,
+                    f.token(node.eq),
+                    f.after_operator([node.eq.idx], f.tree.present(node.ty)),
+                ]),
+            ),
         ])
     }
 }

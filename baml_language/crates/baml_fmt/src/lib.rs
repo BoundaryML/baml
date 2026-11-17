@@ -31,7 +31,9 @@ use crate::{comments::Comments, format::Formatter, ir::Docs};
 /// Also see [`format_salsa`] if you already have a [`salsa::Database`] with the source files in it.
 ///
 /// # Errors
-/// Errors can occur if the source code is invalid: the parser or AST errors will be returned.
+/// The parser's errors when the source does not parse; see
+/// [`FormatterError`] for the two formatter faults that are reported rather
+/// than written out.
 pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
     let (db, source_file) = single_file_db("file.baml", source);
     Ok(format_salsa(&db, source_file, *options)?.apply_to(source))
@@ -79,7 +81,6 @@ impl Formatted {
 
 /// Formats `file` as the database holds it.
 #[salsa::tracked(returns(clone))]
-#[allow(clippy::drop_non_drop)] // salsa macro expands to drop() of the args tuple
 pub fn format_salsa(
     db: &dyn salsa::Database,
     file: baml_db::SourceFile,
@@ -106,19 +107,11 @@ pub fn format_salsa(
     let index = baml_parser::tree_index(db, file);
     let comments = Comments::from_tree(&tree, &index);
     let bump = Bump::new();
-    let formatter = Formatter::new(
-        Docs::new(&bump),
-        &complete,
-        &index,
-        &comments,
-        options.indent_width,
-    );
+    let formatter = Formatter::new(Docs::new(&bump), &complete, &index, &comments, options);
     let output = formatter.file().print(options);
-    if cfg!(debug_assertions)
-        && let Err(violation) = oracle::check(&tree, &output)
-    {
-        panic!("the formatter broke its oracle: {violation}\n--- output ---\n{output}");
-    }
+    // Correct or an error, never a changed program: the output is checked
+    // against the input in every build before it is handed out.
+    oracle::check(&tree, &output).map_err(FormatterError::Violation)?;
     Ok(Formatted {
         output: Some(output),
     })
@@ -148,7 +141,9 @@ fn comment_contains_ignore_directive(comment: &str) -> bool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FormatOptions {
-    /// Maximum line width before wrapping kicks in. Default: `100`
+    /// Maximum line width before wrapping kicks in. Default: `100`. The
+    /// widths past which a construct breaks though it would fit — rustfmt's
+    /// small heuristics, see [`format::Heuristics`] — are shares of it.
     pub line_width: usize,
     /// Indent width. Default: `4`
     pub indent_width: usize,
@@ -173,6 +168,11 @@ pub enum FormatterError {
     /// bug, reported rather than formatted around.
     #[error("the parse reported no errors but {} is incomplete", .0.node.kind().name())]
     Incomplete(Incomplete),
+    /// The output failed the [`oracle`]: it would not parse, or would parse
+    /// to a different tree, or has a comment missing, duplicated or moved —
+    /// a formatter bug, reported rather than written out.
+    #[error("the formatter broke its oracle: {0}")]
+    Violation(oracle::Violation),
 }
 
 #[cfg(test)]
@@ -193,6 +193,24 @@ mod format_options_tests {
         let options = FormatOptions::default();
         assert_eq!(CANONICAL_INDENT_WIDTH, 4);
         assert_eq!(options.indent_width, CANONICAL_INDENT_WIDTH);
+        let formatted = format("function f() -> int {\n  result\n}\n", &options).unwrap();
+        assert_eq!(formatted, "function f() -> int {\n    result\n}\n");
+    }
+
+    /// A chain of operators nests one level per operator in the tree; the
+    /// rule walks that spine with a loop, so a generated chain of any
+    /// length formats, and in time proportional to it.
+    #[test]
+    fn a_long_operator_chain_formats() {
+        let terms = vec!["a"; 20_000].join(" + ");
+        let source = format!("function f() -> int {{\n    {terms}\n}}\n");
+        let options = FormatOptions::default();
+        let formatted = format(&source, &options).expect("the chain formats");
+        // One operand per line (the first line is `a`, which ends in no
+        // closing bracket, so rustfmt's orphan rule joins nothing to it),
+        // between the function's braces.
+        assert_eq!(formatted.lines().count(), 20_000 + 2);
+        assert_eq!(format(&formatted, &options).unwrap(), formatted);
     }
 
     /// The layout a file already has is kept: items one blank line apart.

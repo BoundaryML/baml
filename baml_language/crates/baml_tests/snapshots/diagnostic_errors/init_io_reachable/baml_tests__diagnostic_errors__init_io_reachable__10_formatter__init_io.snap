@@ -81,7 +81,9 @@ function pick_eager(
 
 client StoredThunk = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
-    api_key = pick_eager("literal-key", () -> { baml.env.get_or_panic("OPENAI_API_KEY") }),
+    api_key = pick_eager("literal-key", () -> {
+        baml.env.get_or_panic("OPENAI_API_KEY")
+    }),
 );
 
 // ── CLEAN: a plain literal, the baseline ─────────────────────────────────────

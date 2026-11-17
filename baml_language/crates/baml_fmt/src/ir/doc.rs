@@ -10,7 +10,7 @@ use std::{
 use bumpalo::Bump;
 use unicode_width::UnicodeWidthStr;
 
-use super::printer;
+use super::printer::{self, Mode};
 use crate::FormatOptions;
 
 /// How a line node prints in each layout of its enclosing group.
@@ -20,6 +20,13 @@ pub(crate) enum LineMode {
     Soft,
     /// A space when flat, a newline when broken.
     SoftOrSpace,
+    /// A space when the line being written started at the node's own
+    /// indent or left of it; else a newline to that indent — in either
+    /// layout. The `{` after a header stays on the header's last line only
+    /// when that line is the header's own (`) {`, `} {`), never on a
+    /// continuation line indented deeper (`    | B {`): a brace never goes
+    /// on a line that starts more indented than the item it closes.
+    Hang,
     /// Always a newline.
     Hard,
     /// Always a newline followed by exactly one blank line.
@@ -27,7 +34,7 @@ pub(crate) enum LineMode {
 }
 
 /// How much of a [`Docs::best_fitting`] variant a fits-check measures.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Measure {
     /// Its first line, with what follows it on that line; the lines after a
     /// break inside it are its own business. A hugged last argument is
@@ -39,6 +46,29 @@ pub enum Measure {
     /// — a right-hand side moved to a line of its own, a member chain broken
     /// so that its last call's arguments stay on one line.
     AllLines,
+    /// Every line of it, with every layout inside it that is not forced to
+    /// break kept on one line: the variant of a call whose arguments break
+    /// one per line is chosen only when each argument then fits on its line
+    /// whole — rustfmt breaks the outer of two nested calls when the inner
+    /// fits on a line of its own, and lets the inner overflow otherwise.
+    AllLinesFlat,
+    /// Its first line, with the variant laid out broken — measured, and
+    /// then printed, in break mode, its groups deciding for themselves: for
+    /// content that ends in brackets of its own, where `let x = if (c) {`
+    /// is what must fit and the branches are the braces' business. Unlike
+    /// a group forced to break, it forces nothing on what encloses it.
+    Broken,
+}
+
+impl Measure {
+    /// The mode a [`Docs::best_fitting`] variant with this measure is
+    /// measured and printed in when it is not the most expanded one.
+    pub(crate) fn mode(self) -> Mode {
+        match self {
+            Self::FirstLine | Self::AllLines | Self::AllLinesFlat => Mode::Flat,
+            Self::Broken => Mode::Break,
+        }
+    }
 }
 
 /// One layout of a [`Docs::best_fitting`], with how it is measured. A `Doc`
@@ -78,7 +108,7 @@ pub enum VerbatimPiece<'a> {
 }
 
 impl<'a> VerbatimPiece<'a> {
-    fn text(self) -> &'a str {
+    pub(crate) fn text(self) -> &'a str {
         match self {
             Self::Moved(text) | Self::Exact(text) => text,
         }
@@ -119,6 +149,18 @@ pub(crate) enum Node<'a> {
     },
     Space,
     Line(LineMode),
+    /// `content` after a line that is a space when flat and, when broken, a
+    /// newline — unless the line so far ends in a closing bracket and
+    /// reaches no further than the column the newline would indent to (a
+    /// closing delimiter's line, `})`) and the content's first line fits on
+    /// it: then a space, and the content continues that line at its own
+    /// level, rustfmt's orphan rule, which keeps `}) + x` together rather
+    /// than leaving the closing line on its own, and lays `x` out as part of
+    /// that line.
+    Snuggle {
+        content: Doc<'a>,
+        forced: bool,
+    },
     Concat {
         children: &'a [Doc<'a>],
         forced: bool,
@@ -132,6 +174,24 @@ pub(crate) enum Node<'a> {
     },
     Indent {
         content: Doc<'a>,
+        forced: bool,
+    },
+    /// The content is one item of a list — a statement, a member, an
+    /// argument, a top-level item (see [`Docs::scope`]): a comment carried
+    /// out of it to a line of its own ([`Docs::closing_line`]) takes the
+    /// item's level, not the level the comment was emitted at.
+    Scope {
+        content: Doc<'a>,
+        forced: bool,
+    },
+    /// The content, flat only when it is no wider than `max_width` columns,
+    /// however much room the line has: the group deciding the layout breaks
+    /// otherwise. rustfmt's small heuristics: a call's arguments wider than
+    /// 60% of the line go one per line even when they would fit beside the
+    /// call. Transparent in a broken layout.
+    Limited {
+        content: Doc<'a>,
+        max_width: u32,
         forced: bool,
     },
     IfBreak {
@@ -149,28 +209,40 @@ pub(crate) enum Node<'a> {
     /// Text for a line of its own after the current line ends: a comment
     /// that follows the last item of a block on its own line is printed
     /// after whatever the enclosing nodes still put on the item's line. The
-    /// line break it carries makes it a forced break.
+    /// line break it carries makes it a forced break when `forced`: a
+    /// comment printed where it was written breaks the group around it so
+    /// that nothing slips in before it; one a type suffix carried past itself
+    /// (see [`Docs::closing_line`]) has given up its place and breaks nothing.
     TrailingLine {
         text: &'a str,
         blank_before: bool,
+        forced: bool,
+    },
+    /// Text for the end of the current line when no suffix is pending there
+    /// yet, else for a line of its own after it (see
+    /// [`Docs::closing_suffix`]). Never a forced break: a comment carried
+    /// past the construct it was written in has given up its place.
+    ClosingSuffix {
+        text: &'a str,
     },
     LineSuffixBoundary,
     ExpandParent,
     /// Two or more layouts, most flat first and most expanded last; the
     /// last is printed when no other fits. A forced break inside a variant
     /// is resolved when that variant is chosen, not by breaking what encloses
-    /// it, so this never counts as forced — and the most flat variant never
-    /// contains one: [`Docs::best_fitting`], the only way to make one, drops
-    /// such a variant and puts an `EXPAND_PARENT` before the choice instead,
-    /// since every layout of content that is sure to break is multi-line.
+    /// it, so this never counts as forced. [`Docs::best_fitting`] drops a
+    /// most flat variant that contains one and puts an `EXPAND_PARENT`
+    /// before the choice instead, since every layout of content that is
+    /// sure to break is multi-line; [`Docs::layouts`] keeps such a variant
+    /// for a forced tail every layout shares, and its caller does the same.
     BestFitting {
         variants: &'a nunny::Slice<Variant<'a>>,
     },
 }
 
-// Four words on a 64-bit target (and no more than that anywhere): the
-// payloads are at most two words plus two `u32`s or a word, a `u32` and two
-// flags, with the tag in the padding.
+// Four words on a 64-bit target, 32 bytes anywhere: the payloads are at
+// most two words plus two `u32`s or a word, a `u32` and two flags, with the
+// tag in the padding.
 const _: () = assert!(size_of::<Node<'_>>() <= 32);
 
 /// Whether a line suffix's columns count in the fits-check of the groups
@@ -200,7 +272,7 @@ impl<'a> GroupId<'a> {
     }
 
     /// Whether the group always prints broken.
-    fn is_forced(self) -> bool {
+    pub(crate) fn is_forced(self) -> bool {
         matches!(self.0, Node::Group { forced: true, .. })
     }
 }
@@ -224,6 +296,12 @@ impl<'a> Doc<'a> {
         *self.0
     }
 
+    /// The node's address: its identity, for a measurement memo. Two
+    /// handles to one allocation measure the same.
+    pub(crate) fn addr(self) -> usize {
+        std::ptr::from_ref(self.0) as usize
+    }
+
     /// Whether the node is sure to print a line break: [`Self::forced`],
     /// looking into a `best_fitting` as well — at the variant it prints when
     /// flat, which is a broken layout once every flatter one is ruled out
@@ -235,9 +313,11 @@ impl<'a> Doc<'a> {
         match self.node() {
             Node::BestFitting { variants } => variants.first().doc.will_break(),
             Node::Concat { children, .. } => children.iter().any(|child| child.will_break()),
-            Node::Group { content, .. } | Node::Indent { content, .. } => {
-                self.forced() || content.will_break()
-            }
+            Node::Group { content, .. }
+            | Node::Indent { content, .. }
+            | Node::Scope { content, .. }
+            | Node::Snuggle { content, .. }
+            | Node::Limited { content, .. } => self.forced() || content.will_break(),
             Node::IfBreak {
                 group,
                 breaks,
@@ -254,17 +334,20 @@ impl<'a> Doc<'a> {
     pub(crate) fn forced(self) -> bool {
         match self.node() {
             Node::Space
-            | Node::Line(LineMode::Soft | LineMode::SoftOrSpace)
+            | Node::Line(LineMode::Soft | LineMode::SoftOrSpace | LineMode::Hang)
             | Node::LineSuffixBoundary
+            | Node::ClosingSuffix { .. }
             | Node::BestFitting { .. } => false,
-            Node::Line(LineMode::Hard | LineMode::Empty)
-            | Node::ExpandParent
-            | Node::TrailingLine { .. } => true,
+            Node::Line(LineMode::Hard | LineMode::Empty) | Node::ExpandParent => true,
+            Node::TrailingLine { forced, .. } => forced,
             Node::Text { forced, .. }
             | Node::Verbatim { forced, .. }
             | Node::Concat { forced, .. }
             | Node::Group { forced, .. }
             | Node::Indent { forced, .. }
+            | Node::Scope { forced, .. }
+            | Node::Snuggle { forced, .. }
+            | Node::Limited { forced, .. }
             | Node::IfBreak { forced, .. }
             | Node::LineSuffix { forced, .. } => forced,
         }
@@ -281,10 +364,14 @@ impl<'a> Doc<'a> {
             Node::Verbatim { .. } => true,
             Node::BestFitting { variants } => variants.first().doc.spans_lines(),
             Node::Concat { children, .. } => children.iter().any(|child| child.spans_lines()),
-            Node::Group { content, .. } | Node::Indent { content, .. } => {
-                self.forced() || content.spans_lines()
+            Node::Group { content, .. }
+            | Node::Indent { content, .. }
+            | Node::Scope { content, .. }
+            | Node::Snuggle { content, .. }
+            | Node::Limited { content, .. } => self.forced() || content.spans_lines(),
+            Node::IfBreak { breaks, flat, .. } => {
+                self.will_break() || (breaks.spans_lines() && flat.spans_lines())
             }
-            Node::IfBreak { .. } => self.will_break(),
             _ => self.forced(),
         }
     }
@@ -300,6 +387,25 @@ impl<'a> Doc<'a> {
         Variant {
             doc: self,
             measure: Measure::AllLines,
+        }
+    }
+
+    /// This document as a [`Docs::best_fitting`] variant measured and
+    /// printed broken, chosen when its first line fits ([`Measure::Broken`]).
+    pub fn broken(self) -> Variant<'a> {
+        Variant {
+            doc: self,
+            measure: Measure::Broken,
+        }
+    }
+
+    /// This document as a [`Docs::best_fitting`] variant chosen only when
+    /// every line of it fits with nothing inside it broken that is not
+    /// forced to be ([`Measure::AllLinesFlat`]).
+    pub fn all_lines_flat(self) -> Variant<'a> {
+        Variant {
+            doc: self,
+            measure: Measure::AllLinesFlat,
         }
     }
 }
@@ -334,6 +440,10 @@ impl Doc<'static> {
     pub const SOFT_LINE: Self = Doc(&Node::Line(LineMode::Soft));
     /// A space when the enclosing group is flat, a newline when it breaks.
     pub const SOFT_LINE_OR_SPACE: Self = Doc(&Node::Line(LineMode::SoftOrSpace));
+    /// A space, or a newline when the line being written started deeper
+    /// than this node's indent — a continuation line: the `{` after a
+    /// header stays on `) {` and `} {`, never on `    | B {`.
+    pub const HANG_LINE: Self = Doc(&Node::Line(LineMode::Hang));
     /// Always a newline; the enclosing group breaks. On a line with nothing
     /// on it yet it only sets the next line's indent, so two in a row leave
     /// no blank line.
@@ -504,6 +614,41 @@ impl<'a> Docs<'a> {
         })
     }
 
+    /// `content` on the line before it when that line is only closing
+    /// delimiters and the content's first line fits there, else on a line
+    /// of its own; a space before it when flat (rustfmt's orphan rule).
+    pub fn snuggle(self, content: Doc<'a>) -> Doc<'a> {
+        self.alloc(Node::Snuggle {
+            content,
+            forced: content.forced(),
+        })
+    }
+
+    /// `content`, one item of a list: a statement, a member, an argument, a
+    /// top-level item. Nothing in the layout changes; a comment carried out
+    /// of the item to a line of its own ([`Self::closing_line`]) is printed
+    /// at the level of the line the item started on (or deeper, when the
+    /// line break that ends the line is), where a comment on a line of its
+    /// own between items reads as one of theirs.
+    pub fn scope(self, content: Doc<'a>) -> Doc<'a> {
+        self.alloc(Node::Scope {
+            content,
+            forced: content.forced(),
+        })
+    }
+
+    /// `content`, flat only when it is no wider than `max_width` columns;
+    /// the group deciding the layout breaks otherwise, however much room the
+    /// line has — rustfmt's small heuristics. Nothing changes once that
+    /// group is broken.
+    pub fn limited(self, content: Doc<'a>, max_width: u32) -> Doc<'a> {
+        self.alloc(Node::Limited {
+            content,
+            max_width,
+            forced: content.forced(),
+        })
+    }
+
     /// `breaks` when the enclosing group is broken, `flat` when it is flat.
     /// A forced break in `flat` forces the group, which then prints
     /// `breaks`; one in `breaks` alone forces nothing.
@@ -555,7 +700,36 @@ impl<'a> Docs<'a> {
     /// from the line it follows. Its later lines, if any, keep their own
     /// columns, as with a multi-line [`Self::text`].
     pub fn trailing_line(self, text: &'a str, blank_before: bool) -> Doc<'a> {
-        self.alloc(Node::TrailingLine { text, blank_before })
+        self.alloc(Node::TrailingLine {
+            text,
+            blank_before,
+            forced: true,
+        })
+    }
+
+    /// [`Self::trailing_line`] that breaks no group and takes the indent of
+    /// the line break that ends the line it follows rather than this node's:
+    /// for a comment printed past the construct it was written in, whose
+    /// place in the layout is given up already, and which belongs to what
+    /// that construct is part of — the statement's block, the list.
+    pub fn closing_line(self, text: &'a str) -> Doc<'a> {
+        self.alloc(Node::TrailingLine {
+            text,
+            blank_before: false,
+            forced: false,
+        })
+    }
+
+    /// A line comment at the end of the current line, as a
+    /// [`Self::line_suffix`] with its leading space — unless a tail is
+    /// pending there already (a suffix, two line comments on one line
+    /// reading as one, or a tail line, which it must not overtake), in which
+    /// case on a line of its own after it, as a [`Self::closing_line`].
+    /// Breaks no group either way: the comment layer adds an
+    /// [`EXPAND_PARENT`](Doc::EXPAND_PARENT) for a comment printed where it
+    /// was written, and none for one carried past its construct.
+    pub fn closing_suffix(self, text: &'a str) -> Doc<'a> {
+        self.alloc(Node::ClosingSuffix { text })
     }
 
     /// Ordered layouts, most flat first and most expanded last: the first
@@ -584,8 +758,10 @@ impl<'a> Docs<'a> {
             [_, rest @ ..] => (rest, true),
             [] => unreachable!("two or more variants"),
         };
+        // One variant left is printed as the most expanded one would be,
+        // broken, whatever layout surrounds it: it was the fallback.
         let choice = match kept {
-            [only] => only.doc,
+            [only] => self.expanded_group(only.doc),
             kept => self.choice(kept),
         };
         if sure_to_break {
@@ -626,6 +802,7 @@ fn collect_referenced_groups<'a>(doc: Doc<'a>, referenced: &mut Vec<GroupId<'a>>
         | Node::Line(_)
         | Node::LineSuffix { .. }
         | Node::TrailingLine { .. }
+        | Node::ClosingSuffix { .. }
         | Node::LineSuffixBoundary
         | Node::ExpandParent => {}
         Node::Concat { children, .. } => {
@@ -638,7 +815,11 @@ fn collect_referenced_groups<'a>(doc: Doc<'a>, referenced: &mut Vec<GroupId<'a>>
                 collect_referenced_groups(variant.doc, referenced);
             }
         }
-        Node::Group { content, .. } | Node::Indent { content, .. } => {
+        Node::Group { content, .. }
+        | Node::Indent { content, .. }
+        | Node::Scope { content, .. }
+        | Node::Snuggle { content, .. }
+        | Node::Limited { content, .. } => {
             collect_referenced_groups(content, referenced);
         }
         Node::IfBreak {
@@ -702,6 +883,12 @@ impl<'a> Display<'a> {
             Node::Space => self.out.push_str("space"),
             Node::Line(LineMode::Soft) => self.out.push_str("softline"),
             Node::Line(LineMode::SoftOrSpace) => self.out.push_str("line"),
+            Node::Line(LineMode::Hang) => self.out.push_str("hang"),
+            Node::Snuggle { content, .. } => {
+                self.out.push_str("(snuggle ");
+                self.doc(content);
+                self.out.push(')');
+            }
             Node::Line(LineMode::Hard) => self.out.push_str("hardline"),
             Node::Line(LineMode::Empty) => self.out.push_str("emptyline"),
             Node::Concat { children, .. } => {
@@ -737,6 +924,18 @@ impl<'a> Display<'a> {
                 self.doc(content);
                 self.out.push(')');
             }
+            Node::Scope { content, .. } => {
+                self.out.push_str("(scope ");
+                self.doc(content);
+                self.out.push(')');
+            }
+            Node::Limited {
+                content, max_width, ..
+            } => {
+                write!(self.out, "(limited {max_width} ").unwrap_or_else(never);
+                self.doc(content);
+                self.out.push(')');
+            }
             Node::IfBreak {
                 group,
                 breaks,
@@ -760,9 +959,21 @@ impl<'a> Display<'a> {
                 };
                 write!(self.out, "(line_suffix{fit} {text:?})").unwrap_or_else(never);
             }
-            Node::TrailingLine { text, blank_before } => {
+            Node::TrailingLine {
+                text,
+                blank_before,
+                forced,
+            } => {
                 let blank = if blank_before { " blank" } else { "" };
-                write!(self.out, "(trailing_line{blank} {text:?})").unwrap_or_else(never);
+                let kind = if forced {
+                    "trailing_line"
+                } else {
+                    "closing_line"
+                };
+                write!(self.out, "({kind}{blank} {text:?})").unwrap_or_else(never);
+            }
+            Node::ClosingSuffix { text } => {
+                write!(self.out, "(closing_suffix {text:?})").unwrap_or_else(never);
             }
             Node::LineSuffixBoundary => self.out.push_str("line_suffix_boundary"),
             Node::ExpandParent => self.out.push_str("expand_parent"),
@@ -770,10 +981,16 @@ impl<'a> Display<'a> {
                 self.out.push_str("(best_fitting");
                 for variant in variants {
                     self.out.push(' ');
-                    match variant.measure {
-                        Measure::FirstLine => self.doc(variant.doc),
-                        Measure::AllLines => {
-                            self.out.push_str("(all_lines ");
+                    let label = match variant.measure {
+                        Measure::FirstLine => None,
+                        Measure::AllLines => Some("(all_lines "),
+                        Measure::AllLinesFlat => Some("(all_lines_flat "),
+                        Measure::Broken => Some("(broken "),
+                    };
+                    match label {
+                        None => self.doc(variant.doc),
+                        Some(label) => {
+                            self.out.push_str(label);
                             self.doc(variant.doc);
                             self.out.push(')');
                         }
@@ -785,7 +1002,8 @@ impl<'a> Display<'a> {
     }
 }
 
-/// Display width in terminal columns of text with no newline in it. A
+/// Display width in terminal columns of `text` — of its first line, when it
+/// has lines of its own; the printer measures a multi-line text by that. A
 /// control character (a tab inside a string, say) counts as one column: the
 /// printer never emits tabs itself, and treating them as wide would only
 /// make unrelated lines break early.

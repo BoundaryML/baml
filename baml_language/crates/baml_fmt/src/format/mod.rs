@@ -29,7 +29,11 @@ use baml_syntax::{
 use text_size::TextSize;
 
 use crate::{
-    comments::{Comments, SourceComment, docs},
+    FormatOptions,
+    comments::{
+        CommentKind, Comments, SourceComment,
+        docs::{self, After},
+    },
     ir::{Doc, Docs, VerbatimPiece, display_width},
 };
 
@@ -37,7 +41,7 @@ mod layout;
 mod rules;
 
 pub use layout::ListItem;
-pub(crate) use rules::control::diverges;
+pub(crate) use rules::{control::diverges, exprs::ends_optional_chain};
 
 /// What a rule builds its document with.
 #[derive(Debug, Clone, Copy)]
@@ -49,6 +53,64 @@ pub struct Formatter<'a> {
     /// One level of indentation, for a rule that lays out a literal's lines
     /// itself.
     pub indent_width: usize,
+    /// The widths past which a construct breaks though it would fit.
+    pub heuristics: Heuristics,
+}
+
+/// The widths past which a construct that would fit on its line breaks
+/// anyway: rustfmt's small heuristics (`use_small_heuristics = Default`),
+/// each the share of the line width that rustfmt takes of its `max_width`,
+/// and measured as rustfmt measures them — the items between the brackets,
+/// the chain, the whole `if … else`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Heuristics {
+    /// `fn_call_width`: a call's, or a tuple's, arguments.
+    pub call_args: u32,
+    /// `attr_fn_like_width`: an attribute's arguments.
+    pub attr_args: u32,
+    /// `struct_lit_width`: an object literal's, or a class pattern's,
+    /// fields.
+    pub object_fields: u32,
+    /// `array_width`: an array's elements — and a map's entries, a literal
+    /// rustfmt has no counterpart of.
+    pub array_elements: u32,
+    /// `chain_width`: a member chain of two or more calls.
+    pub chain: u32,
+    /// `single_line_if_else_max_width`: an `if … else` kept on one line.
+    pub if_else: u32,
+}
+
+impl Heuristics {
+    pub fn of(options: FormatOptions) -> Self {
+        let share = |percent: u64| {
+            let width = u64::try_from(options.line_width).unwrap_or(u64::MAX);
+            u32::try_from(width.saturating_mul(percent) / 100).unwrap_or(u32::MAX)
+        };
+        Self {
+            call_args: share(60),
+            attr_args: share(70),
+            object_fields: share(18),
+            array_elements: share(60),
+            chain: share(60),
+            if_else: share(50),
+        }
+    }
+}
+
+/// `comments`, a run between two tokens, split into the ones on the first
+/// token's line and the ones on lines of their own after it, before the
+/// second. A run of comments on one line goes together, so the split is
+/// before the first comment with a line break before it — not a partition
+/// by that gap, which the second comment of a run on a line of its own
+/// lacks.
+pub(crate) fn split_at_line_break(
+    comments: &[SourceComment],
+) -> (&[SourceComment], &[SourceComment]) {
+    let own_line = comments
+        .iter()
+        .position(|comment| comment.before.is_line_break())
+        .unwrap_or(comments.len());
+    comments.split_at(own_line)
 }
 
 /// The layout of one node type.
@@ -65,14 +127,15 @@ impl<'a> Formatter<'a> {
         tree: &'a CompleteTree<'a>,
         index: &'a TreeIndex,
         comments: &'a Comments,
-        indent_width: usize,
+        options: FormatOptions,
     ) -> Self {
         Self {
             docs,
             tree,
             index,
             comments,
-            indent_width,
+            indent_width: options.indent_width,
+            heuristics: Heuristics::of(options),
         }
     }
 
@@ -133,14 +196,94 @@ impl<'a> Formatter<'a> {
     /// The comments dangling after `token`, for a rule that does not print
     /// the token itself to put where it would have been.
     pub fn comments_after(&self, token: TokenIdx) -> Doc<'a> {
-        docs::dangling(self.docs, self.tree, self.dangling_after(token), true)
+        docs::dangling(
+            self.docs,
+            self.tree,
+            self.dangling_after(token),
+            After::Token,
+        )
     }
 
     /// [`Self::comments_after`] for an opening bracket nothing is spaced
     /// from — `(`, `[`, `<` — so a block comment inside it is not either:
     /// `f(/* c */)`.
     pub fn comments_inside(&self, token: TokenIdx) -> Doc<'a> {
-        docs::dangling(self.docs, self.tree, self.dangling_after(token), false)
+        docs::dangling(
+            self.docs,
+            self.tree,
+            self.dangling_after(token),
+            After::Opener { spaced: false },
+        )
+    }
+
+    /// `comments`, in source order, carried past the construct they were
+    /// written in, as one run after it (see [`docs::closing`]): a type
+    /// suffix's, which cannot start a line, or a prefix operator's, which
+    /// must not end one. One run, so that each comment is carried past the
+    /// whole construct on the first pass.
+    pub fn comments_past(&self, comments: impl IntoIterator<Item = SourceComment>) -> Doc<'a> {
+        let comments: Vec<SourceComment> = comments.into_iter().collect();
+        docs::closing(self.docs, self.tree, &comments)
+    }
+
+    /// Whether the comments dangling after an opening bracket end with a
+    /// block comment that ended its line in the source — printed in place
+    /// after the bracket, it needs separating from what follows, which the
+    /// bracket's layout supplies (see [`Self::line_after_opener`]).
+    pub fn opener_comment_ended_line(&self, token: TokenIdx) -> bool {
+        self.dangling_after(token).last().is_some_and(|comment| {
+            comment.kind == CommentKind::Block && comment.after.is_line_break()
+        })
+    }
+
+    /// The soft line between an unspaced opening bracket's comments and the
+    /// first thing inside the bracket: a space when flat if a block comment
+    /// there ended its line in the source (`g(/* c */ 1)`), else nothing.
+    pub fn line_after_opener(&self, token: TokenIdx) -> Doc<'a> {
+        if self.opener_comment_ended_line(token) {
+            Doc::SOFT_LINE_OR_SPACE
+        } else {
+            Doc::SOFT_LINE
+        }
+    }
+
+    /// [`Self::line_after_opener`] where the bracket's contents never break
+    /// from it: a space or nothing.
+    pub fn space_after_opener(&self, token: TokenIdx) -> Doc<'a> {
+        if self.opener_comment_ended_line(token) {
+            Doc::SPACE
+        } else {
+            Doc::NIL
+        }
+    }
+
+    /// [`Self::comments_after`] for an opening brace, whose contents are
+    /// spaced from it: `{ /* c */ }`.
+    pub fn comments_after_opener(&self, token: TokenIdx) -> Doc<'a> {
+        docs::dangling(
+            self.docs,
+            self.tree,
+            self.dangling_after(token),
+            After::Opener { spaced: true },
+        )
+    }
+
+    /// [`Self::token`] for a keyword directly before a brace or a
+    /// parenthesised head of its own — `else`, `defer`, `catch`, a bare
+    /// `spawn`: after a line comment on the keyword's line what follows
+    /// starts at the keyword's indent, so the body's `{` lines up with its
+    /// `}`.
+    pub fn keyword<S: TokenSet>(&self, token: Token<S>) -> Doc<'a> {
+        self.docs.concat([
+            Doc::LINE_SUFFIX_BOUNDARY,
+            self.docs.text(self.tree.token_text(token.idx)),
+            docs::dangling(
+                self.docs,
+                self.tree,
+                self.dangling_after(token.idx),
+                After::Keyword,
+            ),
+        ])
     }
 
     /// The leading comments of node `id`, for a rule that prints the node
@@ -154,6 +297,41 @@ impl<'a> Formatter<'a> {
         docs::trailing(self.docs, self.tree, self.comments.trailing(id))
     }
 
+    /// The trailing comments of node `id` in two documents: those on its
+    /// line, and those on lines of their own after it. A rule that prints
+    /// the node somewhere other than where it was written keeps the first
+    /// with it and leaves the second where the node was.
+    pub fn trailing_split(&self, id: AnyNodeId) -> (Doc<'a>, Doc<'a>) {
+        let (on_line, own_line) = split_at_line_break(self.comments.trailing(id));
+        (
+            docs::trailing(self.docs, self.tree, on_line),
+            docs::trailing(self.docs, self.tree, own_line),
+        )
+    }
+
+    /// `doc`, which follows node `before` in its construct, one level in
+    /// when `before`'s trailing comments end its line: a `requires` clause
+    /// or a `-> R` tail that cannot follow a line comment on its line then
+    /// starts the next one under the construct it continues, and what it
+    /// hangs under itself goes one level further.
+    pub fn continuation(&self, before: AnyNodeId, doc: Doc<'a>) -> Doc<'a> {
+        if self.trailing_of(before).will_break() {
+            self.docs.indent(doc)
+        } else {
+            doc
+        }
+    }
+
+    /// Whether a comment lies anywhere inside node `id`.
+    pub fn has_comments_inside(&self, id: AnyNodeId) -> bool {
+        let tokens = self.tree.tokens();
+        self.tree
+            .arenas()
+            .span(id)
+            .iter()
+            .any(|token| crate::comments::is_comment(tokens.kind(token)))
+    }
+
     /// The source text of node `id`, its comments included.
     pub fn node_text(&self, id: AnyNodeId) -> &'a str {
         let span = self.tree.arenas().span(id);
@@ -165,7 +343,9 @@ impl<'a> Formatter<'a> {
         !self.dangling_after(token).is_empty()
     }
 
-    fn dangling_after(&self, token: TokenIdx) -> &'a [SourceComment] {
+    /// The comments dangling after `token`, for a rule that prints them
+    /// itself (see [`Self::comments_after`]).
+    pub fn dangling_after(&self, token: TokenIdx) -> &'a [SourceComment] {
         self.index
             .token_owner(token)
             .map_or(&[][..], |owner| self.comments.dangling_after(owner, token))

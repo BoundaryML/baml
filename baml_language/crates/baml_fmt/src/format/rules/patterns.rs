@@ -17,13 +17,13 @@ use crate::{
     ir::Doc,
 };
 
-/// `: pattern`
+/// `: pattern`; comments between the `:` and the pattern put it one level
+/// in, as after a type ascription's `:`.
 fn ascription<'a>(f: &Formatter<'a>, ascription: Option<PatternAscription>) -> Doc<'a> {
     ascription.map_or(Doc::NIL, |ascription| {
         f.docs.concat([
             f.token(ascription.colon),
-            Doc::SPACE,
-            f.alt(f.tree.present(ascription.pattern)),
+            f.after_operator([ascription.colon.idx], f.tree.present(ascription.pattern)),
         ])
     })
 }
@@ -82,6 +82,7 @@ impl FormatNode for DestructurePattern {
                 &items,
                 f.tree.present(node.r).idx,
                 true,
+                f.heuristics.object_fields,
             )),
         ])
     }
@@ -121,6 +122,7 @@ impl FormatNode for ArrayPattern {
                 &items,
                 f.tree.present(node.r).idx,
                 false,
+                f.heuristics.array_elements,
             )),
             node.ascription
                 .map_or(Doc::NIL, |ascription| f.node(ascription)),
@@ -145,13 +147,19 @@ impl FormatNode for TypePattern {
     }
 }
 
+/// `(inner)`, the inside on a line of its own when it does not fit.
 impl FormatNode for ParenPattern {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
         let node = f.tree.get(id);
         let d = f.docs;
         d.group(d.concat([
-            f.token(node.l),
-            d.indent(d.concat([Doc::SOFT_LINE, f.alt(f.tree.present(node.inner))])),
+            Doc::LINE_SUFFIX_BOUNDARY,
+            d.text("("),
+            f.comments_inside(node.l.idx),
+            d.indent(d.concat([
+                f.line_after_opener(node.l.idx),
+                f.alt(f.tree.present(node.inner)),
+            ])),
             Doc::SOFT_LINE,
             f.token(f.tree.present(node.r)),
         ]))
@@ -167,25 +175,33 @@ impl FormatNode for TuplePattern {
             node.l,
             f.tree.list(node.elements),
             f.tree.present(node.r),
+            |element| element.node_id(),
             |element| f.alt(element),
         )
     }
 }
 
-/// `A | B | C`; when it does not fit, each `| B` takes a line of its own at
-/// the pattern's indent, as rustfmt lays out a match arm's alternatives.
+/// `A | B | C`; when it does not fit, each `| B` takes a line of its own,
+/// one level in under the first alternative — except as a match or catch
+/// arm's whole pattern, where the `|` lines sit at the arm's indent, as
+/// rustfmt lays out an arm's alternatives (`indent` false).
+pub(super) fn union_pattern<'a>(f: &Formatter<'a>, id: Id<UnionPattern>, indent: bool) -> Doc<'a> {
+    let node = f.tree.get(id);
+    let d = f.docs;
+    let arms = d.concat(f.tree.list(node.arms.as_list()).iter().map(|arm| {
+        d.concat([
+            Doc::SOFT_LINE_OR_SPACE,
+            f.token(arm.pipe),
+            Doc::SPACE,
+            f.alt(f.tree.present(arm.pattern)),
+        ])
+    }));
+    let arms = if indent { d.indent(arms) } else { arms };
+    d.group(d.concat([f.alt(node.first), arms]))
+}
+
 impl FormatNode for UnionPattern {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
-        let node = f.tree.get(id);
-        let d = f.docs;
-        let arms = f.tree.list(node.arms.as_list()).iter().map(|arm| {
-            d.concat([
-                Doc::SOFT_LINE_OR_SPACE,
-                f.token(arm.pipe),
-                Doc::SPACE,
-                f.alt(f.tree.present(arm.pattern)),
-            ])
-        });
-        d.group(d.concat([f.alt(node.first), d.concat(arms)]))
+        union_pattern(f, id, true)
     }
 }
