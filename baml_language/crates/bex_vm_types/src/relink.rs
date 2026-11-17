@@ -68,6 +68,7 @@ macro_rules! visit_bytecode_index_operands {
             // ── object-pool operands ─────────────────────────────────────
             I::AllocInstance { class_obj: obj, .. }
             | I::AllocVariant(obj)
+            | I::LoadVariant { enum_obj: obj, .. }
             | I::MakeClosure { obj_idx: obj, .. } => {
                 $visit($operand::Object(obj));
             }

@@ -2375,23 +2375,24 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 // never a `Null` where a variant belongs.
                 let enum_obj_idx = self.refs.enum_(*enum_ref);
 
-                // The discriminant travels in the constant; the name is
+                // The discriminant travels in the instruction; the name is
                 // rendered from the declaration only for operand metadata.
+                let variant = usize::try_from(*index).expect("u32 fits usize");
                 let variant_str = layout::enum_variants(self.db, *enum_ref)
-                    .get(usize::try_from(*index).expect("u32 fits usize"))
+                    .get(variant)
                     .map(ToString::to_string)
                     .unwrap_or_else(|| {
                         panic!("internal error: `{enum_name_str}` declares no variant #{index}")
                     });
 
-                let idx = self.add_constant(ConstValue::Int(i64::from(*index)));
-                let lc_inst = self.emit(Instruction::LoadConst(idx));
+                let inst = self.emit(Instruction::LoadVariant {
+                    enum_obj: enum_obj_idx,
+                    variant,
+                });
                 self.set_operand(
-                    lc_inst,
+                    inst,
                     OperandMeta::Const(format!("{enum_name_str}.{variant_str}")),
                 );
-                let inst = self.emit(Instruction::AllocVariant(enum_obj_idx));
-                self.set_operand(inst, OperandMeta::Object(enum_name_str));
             }
         }
     }

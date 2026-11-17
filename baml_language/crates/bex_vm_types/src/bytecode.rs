@@ -1200,6 +1200,18 @@ pub enum Instruction {
     AllocTuple(usize),
 
     LoadTupleField(usize),
+
+    /// `Status.X`: pushes variant `variant` of the enum at object index
+    /// `enum_obj`, in one step rather than `LoadConst` of the variant index
+    /// followed by [`Self::AllocVariant`]. A compile-time enum hands out its
+    /// shared variant object (`Enum::shared_variants`); an enum created at
+    /// runtime has none and allocates one, exactly as `AllocVariant` does.
+    ///
+    /// Stack: `[]` -> `[variant]`
+    LoadVariant {
+        enum_obj: ObjectIndex,
+        variant: usize,
+    },
 }
 
 /// Compact bytecode opcodes.
@@ -1463,6 +1475,9 @@ pub enum OpCode {
     /// Appended last to keep every earlier opcode byte stable.
     AllocTuple,
     LoadTupleField,
+    // `Status.X` in one step: u32 enum object index + u32 variant index.
+    // Appended to preserve discriminants.
+    LoadVariant,
 }
 
 impl OpCode {
@@ -1640,7 +1655,8 @@ impl OpCode {
             | Self::ArrayIterNext
             | Self::ArrayIterNextLocal
             | Self::LoadVarField
-            | Self::LoadVarFieldLocal => 9,
+            | Self::LoadVarFieldLocal
+            | Self::LoadVariant => 9,
 
             // 10-byte: opcode + u32 + u32 + i8
             Self::AddLocalSmall => 10,
@@ -1820,6 +1836,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
             x if x == Self::AllocTuple as u8 => Ok(Self::AllocTuple),
             x if x == Self::LoadTupleField as u8 => Ok(Self::LoadTupleField),
+            x if x == Self::LoadVariant as u8 => Ok(Self::LoadVariant),
             _ => Err(byte),
         }
     }
@@ -1960,6 +1977,7 @@ impl std::fmt::Display for OpCode {
             Self::AllocInstance => "ALLOC_INSTANCE",
             Self::InitInstance => "INIT_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
+            Self::LoadVariant => "LOAD_VARIANT",
             Self::SysOp => "SYS_OP",
 
             Self::Spawn => "SPAWN",
@@ -2195,6 +2213,9 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::InitInstance(i) => write!(f, "INIT_INSTANCE {i}"),
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
+            Instruction::LoadVariant { enum_obj, variant } => {
+                write!(f, "LOAD_VARIANT {enum_obj} {variant}")
+            }
             Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
 
             Instruction::Spawn => write!(f, "SPAWN"),
@@ -2355,6 +2376,7 @@ pub enum OperandMeta {
     /// `LoadGlobal`, `StoreGlobal` — display value.
     Global(String),
     /// `AllocInstance`, `AllocVariant` — class/enum name.
+    /// `LoadVariant` carries [`Self::Const`] with `Enum.Variant` instead.
     Object(String),
     /// `LoadConst` — display value.
     Const(String),
@@ -3012,6 +3034,20 @@ impl Bytecode {
                     );
                 }
 
+                // ── LoadVariant: u32 enum object + u32 variant ──────
+                Instruction::LoadVariant { enum_obj, variant } => {
+                    code.extend_from_slice(
+                        &u32::try_from(enum_obj.into_raw())
+                            .expect("object index fits u32")
+                            .to_le_bytes(),
+                    );
+                    code.extend_from_slice(
+                        &u32::try_from(*variant)
+                            .expect("variant index fits u32")
+                            .to_le_bytes(),
+                    );
+                }
+
                 // ── AllocInstance: u32 class_obj + u16 ntypeargs ────
                 Instruction::AllocInstance {
                     class_obj,
@@ -3399,6 +3435,7 @@ impl Bytecode {
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,
             Instruction::InitInstance(_) => OpCode::InitInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
+            Instruction::LoadVariant { .. } => OpCode::LoadVariant,
             Instruction::SysOp(_) => OpCode::SysOp,
             Instruction::IsNull => OpCode::IsNull,
             Instruction::IsNotNull => OpCode::IsNotNull,
@@ -3967,6 +4004,13 @@ mod compact_tests {
             ),
             (Instruction::AllocTuple(2), OpCode::AllocTuple),
             (Instruction::LoadTupleField(1), OpCode::LoadTupleField),
+            (
+                Instruction::LoadVariant {
+                    enum_obj: ObjectIndex::from_raw(3),
+                    variant: 2,
+                },
+                OpCode::LoadVariant,
+            ),
         ] {
             let bc = make_bytecode(vec![instruction], Vec::new());
             let op = bc.instruction_to_opcode(&instruction);
