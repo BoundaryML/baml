@@ -330,6 +330,7 @@ fn has_shaped(value: &BamlValueWithFlags<'_, '_, '_, NamedTy>) -> bool {
     match &value.value {
         BamlValue::Shaped(_) => true,
         BamlValue::Array(array) => array.value.iter().any(has_shaped),
+        BamlValue::Tuple(tuple) => tuple.value.iter().any(has_shaped),
         BamlValue::Map(map) => map.value.values().any(has_shaped),
         BamlValue::Class(class) => class.value.values().any(has_shaped),
         _ => false,
