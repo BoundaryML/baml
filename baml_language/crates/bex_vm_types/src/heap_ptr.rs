@@ -133,11 +133,17 @@ impl HeapPtr {
     /// a collection), as for [`Self::get`]; null names no cell.
     #[inline]
     pub fn is_instance(self) -> bool {
-        if self.is_null() {
-            return false;
-        }
-        // SAFETY: a non-null `HeapPtr` names a cell, whose first word is its
-        // header; the allocator writes it before the pointer escapes.
+        !self.is_null() && unsafe { self.names_instance() }
+    }
+
+    /// [`Self::is_instance`] for a pointer known to name a cell.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::get`].
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    unsafe fn names_instance(self) -> bool {
         let header = unsafe { (*self.ptr.cast::<AtomicU64>()).load(Ordering::Relaxed) };
         header & OBJECT_BODY == 0
     }
@@ -170,7 +176,7 @@ impl HeapPtr {
     /// - With `heap_debug`: epoch must match current heap epoch
     #[inline]
     pub unsafe fn get(self) -> &'static Object {
-        if self.is_instance() {
+        if unsafe { self.names_instance() } {
             return &INSTANCE;
         }
         // SAFETY: Caller guarantees pointer validity and aliasing rules

@@ -170,7 +170,7 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
 }
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod,
-    CLEANED, Class, ClassField, ClassLayout, ClassMethodDef, ConstValue, DeclPath, DeclarationName,
+    CLEANED, Class, ClassField, ClassLayout, ClassMethodDef, ClassShape, ConstValue, DeclPath, DeclarationName,
     EntryId, Enum, EnumVariant, FORWARDED, Field, FieldRef, FnPath, Function, FunctionKind,
     FunctionMeta, FunctionOrigin, Future, FutureRead, GenericFunction, HEADER_FLAGS, HostClosure,
     ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, InstanceRef, InterfaceBound, InterfaceKey,

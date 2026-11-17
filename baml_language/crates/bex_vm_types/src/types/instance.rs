@@ -60,13 +60,13 @@ impl SlotKind {
 /// instance's layout, read by the runtime, the collector and the Rust
 /// emitter alike.
 ///
-/// A generic class's instances carry their class type args in a hidden
-/// [`SlotKind::Value`] slot after the header, naming an [`Object::Type`] of
-/// the instantiated class.
+/// Field `i` is always word `1 + i`. A generic class's instances carry their
+/// class type args in a hidden [`SlotKind::Value`] slot after the last
+/// field, naming an [`Object::Type`] of the instantiated class.
 #[derive(Clone, Copy)]
 pub struct ClassLayout<'a> {
     fields: &'a [ClassField],
-    first_field: usize,
+    generic: bool,
 }
 
 impl<'a> ClassLayout<'a> {
@@ -75,7 +75,7 @@ impl<'a> ClassLayout<'a> {
     pub fn of(class: &'a Class) -> Self {
         Self {
             fields: &class.fields,
-            first_field: 1 + usize::from(class.generic_param_count > 0),
+            generic: class.generic_param_count > 0,
         }
     }
 
@@ -83,7 +83,7 @@ impl<'a> ClassLayout<'a> {
     #[must_use]
     #[inline(always)]
     pub fn words(self) -> usize {
-        self.first_field + self.fields.len()
+        1 + self.fields.len() + usize::from(self.generic)
     }
 
     #[must_use]
@@ -102,13 +102,13 @@ impl<'a> ClassLayout<'a> {
     #[must_use]
     #[inline(always)]
     pub fn slot(self, field: usize) -> usize {
-        self.first_field + field
+        1 + field
     }
 
     /// The word holding the class type args, for a generic class.
     #[must_use]
     pub fn type_args_slot(self) -> Option<usize> {
-        (self.first_field > 1).then_some(1)
+        self.generic.then_some(1 + self.fields.len())
     }
 
     /// Every word holding a [`Value`]: what the collector traces.
@@ -117,6 +117,54 @@ impl<'a> ClassLayout<'a> {
             .filter(move |&field| self.kind(field) == SlotKind::Value)
             .map(move |field| self.slot(field));
         self.type_args_slot().into_iter().chain(fields)
+    }
+}
+
+/// A class layout packed into one word, for a class of at most
+/// [`ClassShape::MAX_FIELDS`] fields: the field count and each field's
+/// [`SlotKind`] in two bits. What the interpreter
+/// caches per class so a field access reads no class metadata.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClassShape(u64);
+
+impl ClassShape {
+    pub const MAX_FIELDS: usize = 28;
+    pub const EMPTY: Self = Self(0);
+    const KINDS_SHIFT: u32 = 8;
+
+    #[must_use]
+    pub fn of(layout: ClassLayout<'_>) -> Option<Self> {
+        let count = layout.field_count();
+        if count > Self::MAX_FIELDS {
+            return None;
+        }
+        let kinds = (0..count).fold(0u64, |bits, field| {
+            let kind = match layout.kind(field) {
+                SlotKind::Int => 0,
+                SlotKind::Float => 1,
+                SlotKind::Bool => 2,
+                SlotKind::Value => 3,
+            };
+            bits | kind << (Self::KINDS_SHIFT as usize + 2 * field)
+        });
+        Some(Self(count as u64 | kinds))
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub fn field_count(self) -> usize {
+        (self.0 & 0x3f) as usize
+    }
+
+    #[must_use]
+    #[inline(always)]
+    pub fn kind(self, field: usize) -> SlotKind {
+        match (self.0 >> (Self::KINDS_SHIFT as usize + 2 * field)) & 0b11 {
+            0 => SlotKind::Int,
+            1 => SlotKind::Float,
+            2 => SlotKind::Bool,
+            _ => SlotKind::Value,
+        }
     }
 }
 
@@ -165,6 +213,39 @@ impl InstanceRef {
         // SAFETY: the caller guarantees the cell is live.
         ptr.is_instance()
             .then(|| unsafe { Self::from_cell(ptr.cell()) })
+    }
+
+    /// The instance `ptr` names and its header's class bits, from one header
+    /// read, or `None` when it names an [`Object`].
+    ///
+    /// # Safety
+    ///
+    /// As for [`HeapPtr::get`]: the cell must be live.
+    #[must_use]
+    #[inline(always)]
+    pub unsafe fn with_class_bits(ptr: HeapPtr) -> Option<(Self, u64)> {
+        let cell = ptr.cell_start();
+        let header = unsafe { (*cell).load(Ordering::Relaxed) };
+        (header & crate::OBJECT_BODY == 0)
+            .then(|| (unsafe { Self::from_cell(cell) }, header & !HEADER_FLAGS))
+    }
+
+    /// Field `field` placed by `shape`.
+    ///
+    /// # Safety
+    ///
+    /// `shape` is the [`ClassShape`] of this instance's class.
+    #[must_use]
+    #[inline(always)]
+    pub unsafe fn field_in(self, shape: ClassShape, field: usize) -> Option<FieldRef> {
+        if field >= shape.field_count() {
+            return None;
+        }
+        Some(FieldRef {
+            field,
+            kind: shape.kind(field),
+            word: unsafe { self.word(1 + field) },
+        })
     }
 
     /// The instance whose cell starts at `cell`.

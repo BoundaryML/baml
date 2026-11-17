@@ -951,6 +951,7 @@ pub(crate) mod tests {
             early_yield: early_yield_for_test(),
             dispatch_fast_path: true,
             tlab: Tlab::new(heap),
+            shapes: super::shape_cache::ShapeCache::new(),
             globals: VmGlobals::Owned(GlobalPool::new()),
             pending_globals: None,
             error_class_ptrs: Arc::from(Vec::new()),
@@ -2154,6 +2155,7 @@ struct ContextTransfer {
 #[doc(hidden)]
 pub mod compiled_rt;
 mod error_evidence;
+mod shape_cache;
 use error_evidence::RaiseEntry;
 
 /// The parameter list a callable value executes with; see
@@ -2346,6 +2348,8 @@ pub struct BexVm {
 
     /// Thread-local allocation buffer (exclusive to this VM).
     pub tlab: Tlab,
+
+    shapes: shape_cache::ShapeCache,
 
     /// Global variables.
     ///
@@ -3248,6 +3252,7 @@ impl BexVm {
             early_yield,
             dispatch_fast_path: true,
             tlab,
+            shapes: shape_cache::ShapeCache::new(),
             globals,
             pending_globals: None,
             error_class_ptrs,
@@ -7699,6 +7704,17 @@ impl BexVm {
     )]
     #[inline(always)]
     fn checked_field(&mut self, value: Value, index: usize) -> Result<FieldRef, VmError> {
+        if let Some(ptr) = value.as_object_ptr()
+            && let Some(field) = unsafe { self.shapes.field(ptr, index) }
+        {
+            return Ok(field);
+        }
+        self.checked_field_slow(value, index)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn checked_field_slow(&mut self, value: Value, index: usize) -> Result<FieldRef, VmError> {
         let Some(instance) = value.as_object_ptr().and_then(|ptr| self.get_instance(ptr)) else {
             return Err(self.not_an_instance(value));
         };
@@ -9906,7 +9922,7 @@ impl BexVm {
                 .store_relaxed(field, value)
                 .map_err(|mismatch| self.slot_kind_error(mismatch))?;
         }
-        Ok(Value::object(instance.ptr()))
+        Ok(Value::object(self.tlab.instance_ptr(instance)))
     }
 
     /// Load the function object for the given frame.
@@ -11414,7 +11430,7 @@ impl BexVm {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     fn instance_field(&self, value: Value, index: usize, relaxed: bool) -> Option<Value> {
-        let field = self.get_instance(value.as_object_ptr()?)?.field(index)?;
+        let field = unsafe { self.shapes.field(value.as_object_ptr()?, index) }?;
         match field.load(load_order(relaxed)) {
             Field::Value(value) => Some(value),
             Field::Float(float) => Value::try_inline_float(float),
@@ -12735,10 +12751,8 @@ impl BexVm {
                             }
                             .into());
                         }
-                        let instance_ptr = self
-                            .tlab
-                            .alloc_instance_zeroed(class_ptr, class_type_args)
-                            .ptr();
+                        let instance = self.tlab.alloc_instance_zeroed(class_ptr, class_type_args);
+                        let instance_ptr = self.tlab.instance_ptr(instance);
                         push_operand!(Value::object(instance_ptr));
                     }
 
@@ -15036,6 +15050,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             virtual_call_memo,
             static_virtual_field_cache,
             enum_equals_memo: _,
+            shapes: _,
         } = self;
         if let Some(prepared) = hotswap_prepared {
             prepared.visit_roots(visitor);
@@ -15147,6 +15162,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // fresh chunk. Drop them so the next allocation refills from the
         // post-GC cursor.
         self.tlab.invalidate();
+        self.shapes.clear();
     }
 }
 
