@@ -619,8 +619,8 @@ const POST = {
   slug: 'teaching-agents-to-write-maintainable-code',
 };
 
-/** The post behind the section's answer, under the question: its before-and-after drawing, then the
- *  claim and a link to the post. */
+/** The post behind the section's answer, under the question: its before-and-after drawing and a link
+ *  to the post. */
 function Research() {
   return (
     <a
@@ -633,18 +633,12 @@ function Research() {
         slug={POST.slug}
       />
       <div className="px-3 pb-3 md:px-2 md:pb-0">
-        <p className="v4-body text-ink">
-          There's no bad BAML in the training data to learn from. And we make
-          sure the only BAML that gets checked in is great BAML.
-        </p>
-        <p className="mt-5 text-[15px] text-clover">
-          <span className="text-muted">Blog:</span> Teaching Agents to Write
-          Maintainable Code{' '}
+        <p className="v4-body text-clover">
+          Read the blog{' '}
           <span className="inline-block transition-transform group-hover:translate-x-1">
             →
           </span>
         </p>
-        <p className="mt-1 text-[14px] text-muted">Avery Townsend</p>
       </div>
     </a>
   );
@@ -1257,11 +1251,6 @@ export default function Review() {
         <h2 className="v4-h2 text-head max-w-[22em]" id="review">
           Can agents write high-quality <Hyper>BAML</Hyper>?
         </h2>
-        <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-          BAML isn't even close to a mainstream language, so we overcompensate
-          by building amazing <span className="text-clover">backpressure</span>{' '}
-          into the toolchain.
-        </p>
         <Research />
         <div className="mt-16">
           <Errors />
