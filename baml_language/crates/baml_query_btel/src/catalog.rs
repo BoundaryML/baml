@@ -224,7 +224,7 @@ SELECT __btel_hex(n.node_id) AS profiler_node_id,
 FROM main.profile_node n",
 };
 
-const SPAN_STATUS_DOC: &str = "return, user_error, panic_error (a panic other than a cancellation), cancel_error (cancelled, or unwound by baml.sys.exit), or closed (an explicit operation ended without an outcome)";
+const SPAN_STATUS_DOC: &str = "return, user_error, panic_error (a panic other than a cancellation), cancel_error (cancelled, or unwound by baml.sys.exit), abandoned (a network response released unread or finalized at shutdown: cancelled with a drop event), or closed (an explicit operation ended without an outcome)";
 
 const TYPE_ARGS_DOC: &str = "the type arguments a generic function was called with, by type-parameter name: type_args['T'] is {\"$type\": {\"type\": \"class\", \"name\": \"user.Resume\"}}, and a list of them {\"$type\": {\"type\": \"list\", \"item\": …}}. A method's include its class's (Box<int>.map<string>: {T: int, U: string}), an interface method's its Self, a lambda's its enclosing function's. Captured exactly when input_args is. NULL for a non-generic function, a span whose inputs aren't captured, a future or a network span";
 
@@ -410,7 +410,9 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   __btel_hex(p.node_id) AS profiler_node_id,
   __btel_pubid(r.recording_id, n.parent_id) AS parent_span_id,
   CASE n.outcome WHEN 1 THEN 'return' WHEN 2 THEN IIF(n.panicked, 'panic_error', 'user_error')
-    WHEN 3 THEN 'cancel_error' END AS status,
+    WHEN 3 THEN IIF(EXISTS (SELECT 1 FROM main.network_event d
+      WHERE d.rec = n.rec AND d.span_id = n.span_id AND d.name = 'drop'),
+      'abandoned', 'cancel_error') END AS status,
   NULL AS scheduled_time,
   __btel_utc(n.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS start_time,

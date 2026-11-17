@@ -8414,6 +8414,17 @@ impl BexVm {
     }
 
     /// Record an event of an open request, at an instant the IO side read.
+    pub fn complete_network_io(
+        &mut self,
+        span: btel_types::TelemetryId,
+        at: ClockInstant,
+        error: Option<&sys_types::network::NetworkError>,
+    ) {
+        if let Some(state) = self.telemetry.as_mut() {
+            state.complete_network_io(span, at, error);
+        }
+    }
+
     pub fn network_event(
         &mut self,
         span: btel_types::TelemetryId,

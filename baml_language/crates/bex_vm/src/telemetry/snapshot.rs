@@ -308,6 +308,23 @@ fn network(b: &mut Builder, payload: &NetworkPayload<'_>) -> SnapshotValue {
                 &[("status", status), ("headers", headers)],
             )
         }
+        NetworkPayload::Error { message, timeout } => {
+            let message = text(&mut b.leaves(), message);
+            let kind = text(
+                &mut b.leaves(),
+                if timeout {
+                    "baml.errors.Timeout"
+                } else {
+                    "baml.errors.Io"
+                },
+            );
+            let error = map(
+                b,
+                OwnedType::Unknown,
+                &[("message", message), ("type", kind)],
+            );
+            map(b, OwnedType::Unknown, &[("error", error)])
+        }
         NetworkPayload::Body(bytes) => body(b, bytes),
         NetworkPayload::SseEvent { event, data, id } => {
             let mut leaves = b.leaves();

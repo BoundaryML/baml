@@ -1,15 +1,11 @@
 //! Network spans around the HTTP sys-ops.
 //!
-//! The VM thread writes every record; the IO side only timestamps what
-//! happens to a request and queues it. Before `_send`, `_fetch` or
-//! `_send_sse` the engine opens the request's span and hands the op a
-//! `NetworkContext`. After every sys-op it drains the queue on the VM thread.
-//!
-//! A span ends when the program finishes reading its response (`text()`,
-//! `bytes()`, the `next()` that finds a stream done), closes a stream, or when
-//! the op fails or is cancelled: the span then ends with the thrown value, in
-//! `inject_sysop_throw`. A response discarded unread ends as cancelled, with
-//! a `drop` event rather than a successful body read.
+//! The VM opens spans and supplies IO with a `NetworkContext`. Native body
+//! readers record through an engine-owned producer without needing a live VM;
+//! other platforms drain owned metadata at VM-safe boundaries. Small fetch/send
+//! bodies finish at EOF/error, and application reads independently emit await.
+//! SSE keeps its existing read/close lifecycle. Unfinished responses end with
+//! a drop and cancelled outcome on ownership loss or engine shutdown.
 
 use std::sync::Arc;
 
@@ -146,6 +142,10 @@ impl BexEngine {
         for event in telemetry.network.drain() {
             if let Some(span) = TelemetryId::from_raw(event.span) {
                 let at = ClockInstant::from_ticks(event.at_ticks);
+                if let NetworkEventKind::Complete { error } = &event.kind {
+                    vm.complete_network_io(span, at, error.as_ref());
+                    continue;
+                }
                 vm.network_event(span, at, &event.kind);
                 if event.kind == NetworkEventKind::Drop {
                     vm.close_network_span(span, at, InvocationOutcome::Cancelled, None, &[]);
@@ -155,13 +155,14 @@ impl BexEngine {
     }
 
     /// Drain the final GC drops and abandon responses still rooted by host handles
-    /// or globals before the recorder seals. Never reads or waits for a body.
+    /// or globals after native body readers have stopped and joined.
     pub(crate) fn finish_network_spans(&self) {
         let Some(telemetry) = &self.telemetry else {
             return;
         };
         telemetry.network.abandon_open();
         let events = telemetry.network.drain();
+        telemetry.network.seal();
         if events.is_empty() {
             return;
         }
@@ -175,6 +176,10 @@ impl BexEngine {
         for event in events {
             if let Some(span) = TelemetryId::from_raw(event.span) {
                 let at = ClockInstant::from_ticks(event.at_ticks);
+                if let NetworkEventKind::Complete { error } = &event.kind {
+                    state.complete_network_io(span, at, error.as_ref());
+                    continue;
+                }
                 state.network_event(span, at, &event.kind);
                 if event.kind == NetworkEventKind::Drop {
                     // SAFETY: a dropped response has no heap-backed error to capture.
@@ -203,6 +208,14 @@ impl BexEngine {
             NetworkOp::Reads {
                 operation, traced, ..
             } => {
+                if matches!(
+                    operation,
+                    SysOp::BamlHttpResponseText | SysOp::BamlHttpResponseBytes
+                ) {
+                    if let Some(traced) = NetworkTraced::of(traced.as_ref()) {
+                        traced.network().application_await();
+                    }
+                }
                 let end = match operation {
                     SysOp::BamlHttpSseStreamClose => NetworkEventKind::Close,
                     // A stream is read to its end when `next()` finds it done.

@@ -653,6 +653,36 @@ impl TelemetryState {
         )));
     }
 
+    /// Record a native reader's terminal outcome using only owned metadata.
+    pub fn complete_network_io(
+        &mut self,
+        span: TelemetryId,
+        at: ClockInstant,
+        error: Option<&sys_types::network::NetworkError>,
+    ) {
+        self.start_thread();
+        let captured = error
+            .filter(|_| self.policies.http_bodies())
+            .and_then(|error| {
+                self.capture(snapshot::Input::Network(&network::NetworkPayload::Error {
+                    message: &error.message,
+                    timeout: error.timeout,
+                }))
+            });
+        self.write_span(SpanRecord::NetworkSpanCompletion(Box::new(
+            btel_records::NetworkCompletion {
+                span,
+                completed_at: at,
+                outcome: if error.is_some() {
+                    InvocationOutcome::Errored
+                } else {
+                    InvocationOutcome::Ok
+                },
+                error: captured,
+            },
+        )));
+    }
+
     #[inline(always)]
     pub fn active_id(&self) -> TelemetryId {
         self.thread.active_id

@@ -47,7 +47,7 @@ use sys_ops::io::{SysOpOutput, VmBamlError, owned};
 use sys_types::{
     AsBexExternalValue, BexExternalValue, BexRustData, CancellationToken, Handle, RustDataArc as _,
     VmInternalError, VmRustFnError, VmSpawner,
-    network::{NetworkContext, NetworkEventKind, NetworkTraced},
+    network::{NetworkContext, NetworkTraced},
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -73,7 +73,7 @@ use crate::io_impls::timeout_from_nanos;
 
 /// The response body carried by `baml.http.Response._body`.
 ///
-/// A client response (from `fetch`/`send`) holds a lazy `reqwest` body; a
+/// A client response (from `fetch`/`send`) shares a native buffered reader; a
 /// server response built with `Response.new` holds buffered bytes. Keeping both
 /// behind one `$rust_type` lets `Response.text()`/`bytes()` and the server's
 /// response writer accept either — including proxying a fetched response
@@ -82,10 +82,7 @@ use crate::io_impls::timeout_from_nanos;
 pub(crate) enum HttpBody {
     /// A streaming client response body, consumed at most once, with the
     /// deadlines its request runs under (they keep running while it is read).
-    Client(
-        tokio::sync::Mutex<Option<reqwest::Response>>,
-        crate::io_impls::HttpTimeoutOptions,
-    ),
+    Client(crate::http_client_body::ClientBody),
     /// A fully-buffered body.
     Bytes(Bytes),
     /// A server response body written incrementally by the handler via
@@ -107,9 +104,9 @@ pub(crate) struct StreamingBody {
 impl BexRustData for HttpBody {
     fn measure(&self, meter: &mut sys_types::Meter) {
         match self {
-            // The response lock is shared with the reader task, and an unread
-            // body lives in the socket's buffers, not here.
-            HttpBody::Client(..) | HttpBody::Streaming(_) => {}
+            // Include eager prefix allocation and any received overflow.
+            HttpBody::Client(body) => meter.bytes(body.retained()),
+            HttpBody::Streaming(_) => {}
             HttpBody::Bytes(bytes) => meter.bytes(bytes.len()),
         }
     }
@@ -120,35 +117,26 @@ impl HttpBody {
     pub(crate) fn client(
         response: reqwest::Response,
         timeout_options: crate::io_impls::HttpTimeoutOptions,
+        network: Option<NetworkContext>,
+        readers: &sys_types::http_readers::HttpReaders,
     ) -> Arc<dyn BexRustData> {
-        Arc::new(HttpBody::Client(
-            tokio::sync::Mutex::new(Some(response)),
+        Arc::new(HttpBody::Client(crate::http_client_body::ClientBody::new(
+            response,
             timeout_options,
-        ))
+            network,
+            readers,
+        )))
     }
 
     /// Consume the body and return it as bytes (reading the network if needed).
     /// A client body read off the network is queued on its request's span.
     pub(crate) async fn read_bytes(
         &self,
-        network: Option<&NetworkContext>,
+        _network: Option<&NetworkContext>,
     ) -> Result<Bytes, VmBamlError> {
         match self {
             HttpBody::Bytes(b) => Ok(b.clone()),
-            HttpBody::Client(slot, timeout_options) => {
-                let resp = Self::take_client(slot)?;
-                let bytes = resp.bytes().await.map_err(|e| {
-                    crate::io_impls::http_transport_error(
-                        "failed to read response body",
-                        &e,
-                        *timeout_options,
-                    )
-                })?;
-                if let Some(network) = network {
-                    network.push(NetworkEventKind::Body(bytes.clone()));
-                }
-                Ok(bytes)
-            }
+            HttpBody::Client(body) => body.read().await,
             HttpBody::Streaming(_) => Err(VmBamlError::Io {
                 message: "a streaming response body cannot be read with bytes()/text(); \
                           it is written with write()/end()"
@@ -220,19 +208,6 @@ impl HttpBody {
                     .to_string(),
             }),
         }
-    }
-
-    fn take_client(
-        slot: &tokio::sync::Mutex<Option<reqwest::Response>>,
-    ) -> Result<reqwest::Response, VmBamlError> {
-        slot.try_lock()
-            .ok()
-            .and_then(|mut guard| guard.take())
-            // Both callers (`text()`/`bytes()`) declare `throws root.errors.Io`,
-            // so a double-consume surfaces as `Io` to stay catchable in-contract.
-            .ok_or_else(|| VmBamlError::Io {
-                message: "Response body has already been consumed".to_string(),
-            })
     }
 }
 

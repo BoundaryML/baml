@@ -1,16 +1,15 @@
 //! The runtime's side of HTTP request tracing.
 //!
-//! Each request the runtime makes is a span, opened and written by the VM
-//! thread. The IO side only timestamps what happens to the request and queues
-//! it with [`NetworkContext::push`]; the engine drains the queue on the VM
-//! thread, which sanitizes and records each event. Raw header values pass
-//! through the queue in memory, so it stays private to the engine.
+//! Each request is opened by the VM. Native readers publish owned metadata to
+//! an engine-owned, heap-free recording producer, including when BAML is idle.
+//! Platforms without that producer queue events for the next VM-safe drain.
+//! Raw values stay private to the engine and are sanitized before capture.
 
 use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex, Weak,
-        atomic::{AtomicU8, Ordering},
+        atomic::{AtomicBool, AtomicU8, Ordering},
     },
 };
 
@@ -50,6 +49,15 @@ pub enum NetworkEventKind {
     Close,
     /// The response was collected, or the engine shut down, before a full read.
     Drop,
+    /// Internal terminal notification; never encoded as a network event.
+    Complete { error: Option<NetworkError> },
+}
+
+/// Owned transport failure, safe to record without a VM heap.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NetworkError {
+    pub message: String,
+    pub timeout: bool,
 }
 
 /// One queued event: its span, and when it happened on the issuing run's clock.
@@ -60,25 +68,29 @@ pub struct NetworkEvent {
     pub kind: NetworkEventKind,
 }
 
-/// Events the IO side queued, waiting for the engine to drain them on a VM
-/// thread. One per engine.
+/// Serialized native recording (or a VM-safe fallback queue), one per engine.
 #[derive(Debug, Default)]
 pub struct NetworkQueue(Mutex<Queue>);
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 struct Queue {
     events: Vec<Queued>,
     // Weak ownership: tracing must not keep a response or its reader alive.
     active: HashMap<u64, Weak<Lifecycle>>,
+    recorder: Option<Arc<dyn Fn(NetworkEvent) + Send + Sync>>,
+    sealed: bool,
 }
 
 const OPEN: u8 = 0;
 const CLOSED: u8 = 1;
 const ABANDONED: u8 = 2;
+const COMPLETED: u8 = 3;
 
 struct Lifecycle {
     state: AtomicU8,
     now: Arc<dyn Fn() -> u64 + Send + Sync>,
+    owner_lost: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+    awaited: AtomicBool,
 }
 
 impl std::fmt::Debug for Lifecycle {
@@ -97,9 +109,50 @@ struct Queued {
     open: Option<Arc<Lifecycle>>,
 }
 
+impl std::fmt::Debug for Queue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Queue")
+            .field("events", &self.events)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Queue {
+    fn emit(&mut self, queued: Queued) {
+        if self.sealed {
+            return;
+        }
+        if let Some(record) = &self.recorder {
+            record(queued.event);
+        } else {
+            self.events.push(queued);
+        }
+    }
+}
+
 impl NetworkQueue {
+    /// Native recording accepts only owned metadata, under the queue lock so
+    /// connection/data/drop/completion ordering survives concurrent producers.
+    pub fn set_recorder(&self, record: Arc<dyn Fn(NetworkEvent) + Send + Sync>) {
+        let mut queue = self.queue();
+        for queued in std::mem::take(&mut queue.events) {
+            record(queued.event);
+        }
+        queue.recorder = Some(record);
+    }
+
+    /// Called only after all native readers have joined and spans are terminal.
+    pub fn seal(&self) {
+        let record = {
+            let mut queue = self.queue();
+            queue.sealed = true;
+            queue.recorder.take()
+        };
+        drop(record);
+    }
+
     pub fn push(&self, event: NetworkEvent) {
-        self.queue().events.push(Queued { event, open: None });
+        self.queue().emit(Queued { event, open: None });
     }
 
     /// Everything queued so far, in the order it was pushed, except the
@@ -141,7 +194,7 @@ impl NetworkQueue {
             .compare_exchange(OPEN, ABANDONED, Ordering::AcqRel, Ordering::Acquire)
             .is_ok()
         {
-            queue.events.push(Queued {
+            queue.emit(Queued {
                 event: NetworkEvent {
                     span,
                     at_ticks: (life.now)(),
@@ -184,6 +237,8 @@ impl NetworkContext {
         let open = Arc::new(Lifecycle {
             state: AtomicU8::new(OPEN),
             now: Arc::clone(&now),
+            owner_lost: Mutex::new(None),
+            awaited: AtomicBool::new(false),
         });
         sink.queue().active.insert(span, Arc::downgrade(&open));
         Self {
@@ -201,7 +256,7 @@ impl NetworkContext {
         if !self.is_open() {
             return;
         }
-        queue.events.push(Queued {
+        queue.emit(Queued {
             event: NetworkEvent {
                 span: self.span,
                 at_ticks: (self.now)(),
@@ -209,6 +264,72 @@ impl NetworkContext {
             },
             open: Some(Arc::clone(&self.open)),
         });
+    }
+
+    /// Delegate ownership loss to a native reader, which may drain the rest of
+    /// its small window before choosing EOF, transport error, or abandonment.
+    pub fn on_owner_lost(&self, notify: Arc<dyn Fn() + Send + Sync>) {
+        *self
+            .open
+            .owner_lost
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(notify);
+    }
+
+    pub fn abandon(&self) {
+        NetworkQueue::abandon(&mut self.sink.queue(), self.span, &self.open);
+    }
+
+    /// Atomically preserve the observed outcome and time before GC/shutdown.
+    pub fn complete(&self, body: Option<Bytes>, error: Option<NetworkError>) {
+        // Claim the observed outcome before waiting for the recording lock;
+        // GC and shutdown cannot replace a known EOF/error with abandonment.
+        let at_ticks = (self.now)();
+        if self
+            .open
+            .state
+            .compare_exchange(OPEN, COMPLETED, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return;
+        }
+        let mut queue = self.sink.queue();
+        if let Some(body) = body {
+            queue.emit(Queued {
+                event: NetworkEvent {
+                    span: self.span,
+                    at_ticks,
+                    kind: NetworkEventKind::Body(body),
+                },
+                open: None,
+            });
+        }
+        queue.emit(Queued {
+            event: NetworkEvent {
+                span: self.span,
+                at_ticks,
+                kind: NetworkEventKind::Complete { error },
+            },
+            open: None,
+        });
+    }
+
+    /// An application read remains observable even when eager EOF already
+    /// completed the transfer. It never changes the terminal outcome/time.
+    pub fn application_await(&self) {
+        let mut queue = self.sink.queue();
+        if self.open.state.load(Ordering::Acquire) == COMPLETED
+            && !self.open.awaited.swap(true, Ordering::AcqRel)
+        {
+            queue.emit(Queued {
+                event: NetworkEvent {
+                    span: self.span,
+                    at_ticks: (self.now)(),
+                    kind: NetworkEventKind::Await,
+                },
+                open: None,
+            });
+        }
     }
 
     pub fn is_open(&self) -> bool {
@@ -247,11 +368,18 @@ pub struct NetworkTraced {
 
 impl Drop for NetworkTraced {
     fn drop(&mut self) {
-        NetworkQueue::abandon(
-            &mut self.network.sink.queue(),
-            self.network.span,
-            &self.network.open,
-        );
+        let notify = self
+            .network
+            .open
+            .owner_lost
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if let Some(notify) = notify {
+            notify();
+        } else {
+            self.network.abandon();
+        }
     }
 }
 
@@ -413,6 +541,40 @@ mod tests {
         drop(body);
         sink.abandon_open();
         assert!(sink.drain().is_empty());
+    }
+
+    #[test]
+    fn native_completion_records_immediately_and_survives_drop_and_shutdown() {
+        let sink = Arc::new(NetworkQueue::default());
+        let recorded = Arc::new(Mutex::new(Vec::new()));
+        let output = Arc::clone(&recorded);
+        sink.set_recorder(Arc::new(move |event| output.lock().unwrap().push(event)));
+        let network = context(&sink);
+        let body = NetworkTraced::wrap(network.clone(), Arc::new(TestRustData(0)));
+        network.push(NetworkEventKind::Connection {
+            status: 500,
+            headers: vec![],
+        });
+        network.complete(Some(Bytes::from_static(b"error body")), None);
+        network.complete(
+            None,
+            Some(NetworkError {
+                message: "late".into(),
+                timeout: true,
+            }),
+        );
+        drop(body);
+        sink.abandon_open();
+        assert!(!network.close());
+        let events = recorded.lock().unwrap();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[1].at_ticks, events[2].at_ticks);
+        assert_eq!(events[2].kind, NetworkEventKind::Complete { error: None });
+        drop(events);
+        assert!(sink.drain().is_empty());
+        sink.seal();
+        network.application_await();
+        assert_eq!(recorded.lock().unwrap().len(), 3);
     }
 
     #[test]

@@ -159,12 +159,16 @@ async fn network_responses_discarded_or_host_retained_complete_in_both_query_vie
         let broken = name.ends_with("/broken");
         assert_eq!(
             row[1],
-            if consumed {
+            if consumed
+                || ["/200", "/500", "/504"]
+                    .iter()
+                    .any(|path| name.ends_with(path))
+            {
                 json!("return")
             } else if broken {
                 json!("user_error")
             } else {
-                json!("cancel_error")
+                json!("abandoned")
             }
         );
         let status = if name.ends_with("/500") {
@@ -184,6 +188,11 @@ async fn network_responses_discarded_or_host_retained_complete_in_both_query_vie
             names,
             if consumed {
                 vec!["connection", "data", "await"]
+            } else if ["/200", "/500", "/504"]
+                .iter()
+                .any(|path| name.ends_with(path))
+            {
+                vec!["connection", "data"]
             } else if broken {
                 vec!["connection"]
             } else if name.ends_with("/sse-pending") {

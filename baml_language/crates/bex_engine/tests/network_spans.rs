@@ -392,7 +392,7 @@ async fn each_request_records_its_span_events_and_end() {
     let done = span.completion.as_ref().unwrap();
     assert!(done.error_cas_id.is_none());
     assert!(announcement.started_at_ticks <= done.completed_at_ticks);
-    assert_eq!(done.completed_at_ticks, span.event("await").at_ticks);
+    assert!(done.completed_at_ticks <= span.event("await").at_ticks);
 
     // bytes() reads the same way.
     let span = &spans["bytes"];
@@ -448,19 +448,19 @@ async fn each_request_records_its_span_events_and_end() {
     assert_eq!(span.written, ["connection", "close", "completion"]);
     assert_eq!(outcome(span), ok);
 
-    // Unread bodies retain their HTTP statuses, with no invented successful
-    // read or transport failure. The recording completes before engine drop.
+    // Small unread bodies finish at EOF, independently of status or app reads.
+    // No await is invented, and the buffered bytes remain capturable.
     for (path, status) in [("never", 200), ("unread-500", 500), ("unread-504", 504)] {
         let span = &spans[path];
-        assert_eq!(span.names(), ["connection", "drop"]);
+        assert_eq!(span.names(), ["connection", "data"]);
         assert_eq!(
             load(span.event("connection").payload_cas_id)["status"],
             status
         );
-        assert_eq!(outcome(span), (proto::InvocationOutcome::Cancelled, false));
+        assert_eq!(outcome(span), ok);
         let done = span.completion.as_ref().unwrap();
         assert!(done.error_cas_id.is_none());
-        assert_eq!(done.completed_at_ticks, span.event("drop").at_ticks);
+        assert_eq!(done.completed_at_ticks, span.event("data").at_ticks);
     }
     // Even wire-complete SSE data is abandoned until the program reads EOF.
     let span = &spans["sse-partial"];
@@ -488,13 +488,106 @@ async fn each_request_records_its_span_events_and_end() {
             .count()
     };
     assert!(!files.is_empty());
-    for secret in [
-        "sk-query",
-        "sk-norm",
-        "sk-header",
-        "sk-cookie",
-        "private-unread-error",
-    ] {
+    for secret in ["sk-query", "sk-norm", "sk-header", "sk-cookie"] {
         assert_eq!(holding(secret), 0, "{secret} reached the disk");
+    }
+}
+
+// Only the native recording can show when an unread transfer completed while
+// BAML was idle, and whether artifact permissions suppressed the body capture.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn eager_eof_precedes_host_read_and_respects_body_capture_permissions() {
+    use bex_engine::EngineConfig;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    for omit_http_bodies in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/idle", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0; 4096];
+            assert!(socket.read(&mut request).await.unwrap() > 0);
+            socket
+                .write_all(b"HTTP/1.1 500 Error\r\nContent-Length: 14\r\n\r\neager-private!")
+                .await
+                .unwrap();
+        });
+        let engine = Arc::new(
+            BexEngine::new_with_config(
+                baml_test_support::compile_source(
+                    r#"
+                function get(url: string) -> baml.http.Response { baml.http.fetch(url) }
+                function text(response: baml.http.Response) -> int { response.text().length() }
+            "#,
+                ),
+                Arc::new(sys_native::SysOps::native()),
+                vec![],
+                EngineConfig {
+                    clock_mode: btel_clock::ClockMode::Monotonic,
+                    artifact_telemetry: Some(btel_settings::artifact::ArtifactTelemetry {
+                        omit_http_bodies,
+                        ..Default::default()
+                    }),
+                    recording: Some(TelemetryRecording::local_files_in(
+                        directory.path(),
+                        RecordingConfig::default(),
+                    )),
+                    ..Default::default()
+                },
+            )
+            .unwrap(),
+        );
+        let response = engine
+            .call_function(
+                "get",
+                vec![BexExternalValue::String(url.into())],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .unwrap();
+        server.await.unwrap();
+        // No BAML execution or GC drives recording during this interval.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let result = engine
+            .call_function(
+                "text",
+                vec![response],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result, BexExternalValue::Int(14));
+        engine.shutdown().await;
+        let (spans, cas) = read(directory.path(), &engine);
+        let span = &spans["idle"];
+        // File sections from different OS producers may interleave; queries
+        // order the owned event timestamps, while terminal time stays at EOF.
+        assert_eq!(span.names(), ["connection", "data", "await"]);
+        let done = span.completion.as_ref().unwrap();
+        assert_eq!(done.outcome, proto::InvocationOutcome::Ok as i32);
+        assert_eq!(done.completed_at_ticks, span.event("data").at_ticks);
+        assert!(done.completed_at_ticks < span.event("await").at_ticks);
+        assert_eq!(
+            span.event("data").payload_cas_id.is_none(),
+            omit_http_bodies
+        );
+        if !omit_http_bodies {
+            assert_eq!(
+                load(&cas, span.event("data").payload_cas_id),
+                json!("eager-private!")
+            );
+        } else {
+            let mut files = Vec::new();
+            files_under(directory.path(), &mut files);
+            assert!(files.iter().all(|file| {
+                !std::fs::read(file)
+                    .unwrap()
+                    .windows(b"eager-private!".len())
+                    .any(|bytes| bytes == b"eager-private!")
+            }));
+        }
     }
 }

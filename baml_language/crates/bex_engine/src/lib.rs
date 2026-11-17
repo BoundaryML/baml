@@ -2100,6 +2100,11 @@ impl BexEngine {
             })
             .transpose()?;
 
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(telemetry) = &telemetry {
+            telemetry.start_network_recording();
+        }
+
         // No VM runs outside a heap permit, `$init` included: the permit
         // manager exists before the first VM does, and each package's `$init`
         // runs as an ordinary permit holder, so its roots (its stack and the
@@ -2310,6 +2315,7 @@ impl BexEngine {
         );
 
         let sys_op_ctx = sys_types::EngineSysOpContext {
+            http_readers: Arc::default(),
             llm_functions: Arc::new(llm_functions),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
@@ -2992,6 +2998,11 @@ impl BexEngine {
         }
 
         self.collect_garbage_with_reason("shutdown").await;
+        #[cfg(not(target_arch = "wasm32"))]
+        self.sys_op_ctx
+            .http_readers
+            .shutdown(std::time::Duration::from_millis(100))
+            .await;
         self.finish_network_spans();
         #[cfg(not(target_arch = "wasm32"))]
         {
