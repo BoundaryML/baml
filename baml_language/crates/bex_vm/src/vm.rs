@@ -7728,16 +7728,7 @@ impl BexVm {
             return None;
         }
         let bits = unsafe { instance.word(1 + index) }.load(load_order(thread_local));
-        let kind = shape.kind(index);
-        if kind == SlotKind::Value {
-            Some(unsafe { Value::from_bits(bits) })
-        } else if kind == SlotKind::Int {
-            Some(Value::int(bits.cast_signed()))
-        } else if kind == SlotKind::Bool {
-            Some(Value::bool(bits != 0))
-        } else {
-            Value::try_inline_float(f64::from_bits(bits))
-        }
+        shape.value_of(index, bits)
     }
 
     /// Store `new_value` into field `index` through the class's cached
@@ -7745,7 +7736,13 @@ impl BexVm {
     /// must decide or report.
     #[allow(clippy::inline_always, reason = "every interpreted field write")]
     #[inline(always)]
-    fn shaped_store(&self, value: Value, index: usize, new_value: Value, thread_local: bool) -> bool {
+    fn shaped_store(
+        &self,
+        value: Value,
+        index: usize,
+        new_value: Value,
+        thread_local: bool,
+    ) -> bool {
         let Some((instance, shape)) = value
             .as_object_ptr()
             .and_then(|ptr| unsafe { self.shapes.shape(ptr) })
