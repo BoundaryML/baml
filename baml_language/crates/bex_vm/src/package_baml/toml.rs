@@ -58,12 +58,7 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
 fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmRustFnError> {
     match value {
         toml::Value::String(s) => Ok(Value::object(vm.alloc_string(s))),
-        toml::Value::Integer(i) => Value::try_inline_int(i).ok_or_else(|| {
-            VmRustFnError::thrown_fresh(make_toml_parse_error(
-                vm,
-                "BAML `int` is 63 bits. It is unable to parse 64-bit TOML integers.".to_string(),
-            ))
-        }),
+        toml::Value::Integer(i) => Ok(vm.int_value(i)),
         toml::Value::Float(f) => Ok(vm.float_value(f)),
         toml::Value::Boolean(b) => Ok(Value::bool(b)),
         toml::Value::Datetime(datetime) => convert_toml_datetime(vm, datetime),

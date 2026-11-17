@@ -48,18 +48,15 @@ fn string_map_entries(
 
 /// Convert a `serde_json::Value` into a VM `Value`.
 ///
-/// JSON numbers: i63-representable integers become integers, larger integral
-/// tokens become bigints, and tokens with a fraction or exponent become
-/// floats.
+/// JSON numbers: integers that fit `i64` become ints, larger integral tokens
+/// become bigints, and tokens with a fraction or exponent become floats.
 pub(in crate::package_baml) fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
     match v {
         serde_json::Value::Null => Value::NULL,
         serde_json::Value::Bool(b) => Value::bool(*b),
         serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64()
-                && let Some(v) = Value::try_inline_int(i)
-            {
-                v
+            if let Some(i) = n.as_i64() {
+                vm.int_value(i)
             } else if let Some(bigint) = parse_json_bigint(v) {
                 // `parse_json_bigint` already enforces the VM's bit limit.
                 Value::object(vm.tlab.alloc(Object::Bigint(Arc::new(bigint))))

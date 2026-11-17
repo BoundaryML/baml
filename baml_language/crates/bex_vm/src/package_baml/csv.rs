@@ -17,7 +17,7 @@
 // - `struct_excessive_bools`: the option structs mirror `ReaderOptions` /
 //   `WriterOptions`, whose independent boolean knobs are fixed by BEP-060.
 // - `cast_possible_wrap`: every `usize as i64` here is a cell/record/byte
-//   count bounded far below 2^62 (BAML int range checks would fail first).
+//   count bounded far below 2^62, so it is an inline int.
 // - `result_large_err`: error values are cold-path BAML exception payloads;
 //   boxing them would only add noise on the hot Ok path.
 // - `used_underscore_items`: the codegen names `$rust_type` accessors and
@@ -1427,9 +1427,9 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
             if !is_plain_int_text(text) {
                 return Ok(Conv::Bad(format!("cannot convert {text:?} to int")));
             }
-            match text.parse::<i64>().ok().and_then(Value::try_inline_int) {
-                Some(v) => Conv::Ok(v),
-                None => Conv::Bad(format!("integer {text:?} is outside the BAML int range")),
+            match text.parse::<i64>() {
+                Ok(v) => Conv::Ok(vm.int_value(v)),
+                Err(_) => Conv::Bad(format!("integer {text:?} is outside the BAML int range")),
             }
         }
         Target::Bigint => {

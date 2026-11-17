@@ -49,7 +49,6 @@ internal static unsafe class Program
         VerifyOptional();
         VerifyNullable();
         VerifyUnions();
-        VerifyIntegerBoundary();
         VerifyProtocolSurfaceIsPrivate();
         VerifyGeneratedContract();
         VerifyPrimitiveProtocol();
@@ -310,22 +309,6 @@ internal static unsafe class Program
         Require(!omitted.IsSet, "optional union omission changed");
         Require(supplied.IsSet && supplied.Value == text, "optional union value changed");
         Require(nullable is null, "nullable union null changed");
-    }
-
-    private static void VerifyIntegerBoundary()
-    {
-        Require(BamlInteger.Require(BamlInteger.Minimum, "$.min") == BamlInteger.Minimum, "min rejected");
-        Require(BamlInteger.Require(BamlInteger.Maximum, "$.max") == BamlInteger.Maximum, "max rejected");
-        foreach (long value in new[]
-                 {
-                     BamlInteger.Minimum - 1,
-                     BamlInteger.Maximum + 1,
-                     long.MinValue,
-                     long.MaxValue,
-                 })
-        {
-            Expect<BamlProtocolException>(() => _ = BamlInteger.Require(value, "$.value"));
-        }
     }
 
     private static void VerifyProtocolSurfaceIsPrivate()
@@ -748,8 +731,8 @@ internal static unsafe class Program
         [
             BamlGeneratedValue.CreateNull(),
             BamlGeneratedValue.CreateBool(true),
-            BamlGeneratedValue.CreateInt(BamlInteger.Minimum),
-            BamlGeneratedValue.CreateInt(BamlInteger.Maximum),
+            BamlGeneratedValue.CreateInt(long.MinValue),
+            BamlGeneratedValue.CreateInt(long.MaxValue),
             BamlGeneratedValue.CreateFloat(1.25),
             BamlGeneratedValue.CreateString("héllo\0雪"),
             BamlGeneratedValue.CreateBytes([0, 1, 254, 255]),
@@ -798,20 +781,15 @@ internal static unsafe class Program
         Expect<BamlProtocolException>(() =>
             _ = stringRegistry.Encode(stringType, "\ud800"));
 
+        // A BAML int is 64-bit: every long crosses unchanged.
         Require(
-            PrimitiveProtocol.Decode(new BamlOutboundValue { IntValue = BamlInteger.Minimum }).ReadInt()
-                == BamlInteger.Minimum,
+            PrimitiveProtocol.Decode(new BamlOutboundValue { IntValue = long.MinValue }).ReadInt()
+                == long.MinValue,
             "minimum outbound BAML integer changed");
         Require(
-            PrimitiveProtocol.Decode(new BamlOutboundValue { IntValue = BamlInteger.Maximum }).ReadInt()
-                == BamlInteger.Maximum,
+            PrimitiveProtocol.Decode(new BamlOutboundValue { IntValue = long.MaxValue }).ReadInt()
+                == long.MaxValue,
             "maximum outbound BAML integer changed");
-        Expect<BamlProtocolException>(() =>
-            _ = PrimitiveProtocol.Decode(
-                new BamlOutboundValue { IntValue = BamlInteger.Minimum - 1 }));
-        Expect<BamlProtocolException>(() =>
-            _ = PrimitiveProtocol.Decode(
-                new BamlOutboundValue { IntValue = BamlInteger.Maximum + 1 }));
         Expect<BamlProtocolException>(() =>
             _ = PrimitiveProtocol.Decode(
                 new BamlOutboundValue { FloatValue = double.PositiveInfinity }));
@@ -1648,7 +1626,7 @@ internal static unsafe class Program
 
         BamlValue explicitNull = BamlValue.Null;
         BamlValue boolValue = BamlValue.Bool(true);
-        BamlValue intValue = BamlValue.Int(BamlInteger.Maximum);
+        BamlValue intValue = BamlValue.Int(long.MaxValue);
         BamlValue floatValue = BamlValue.Float(1.5);
         BamlValue bigIntValue = BamlValue.BigInt(
             BigInteger.Parse("123456789012345678901234567890", CultureInfo.InvariantCulture));
@@ -1665,8 +1643,8 @@ internal static unsafe class Program
             explicitNull.Kind == BamlValueKind.Null
                 && explicitNull.Type.Kind == BamlTypeDescriptorKind.Null
                 && boolValue.As<bool>()
-                && intValue.As<long>() == BamlInteger.Maximum
-                && intValue.As<long?>() == BamlInteger.Maximum
+                && intValue.As<long>() == long.MaxValue
+                && intValue.As<long?>() == long.MaxValue
                 && floatValue.As<double>() == 1.5
                 && bigIntValue.As<BigInteger>()
                     == BigInteger.Parse(
@@ -1698,7 +1676,6 @@ internal static unsafe class Program
         Expect<BamlTypeMappingException>(() => _ = BamlValue.From<string?>(null));
         Expect<BamlTypeMappingException>(() => _ = explicitNull.As<string>());
         Expect<BamlTypeMismatchException>(() => _ = stringValue.As<long>());
-        Expect<BamlTypeMappingException>(() => _ = BamlValue.Int(BamlInteger.Maximum + 1));
         Expect<BamlTypeMappingException>(() => _ = BamlValue.Float(double.PositiveInfinity));
         Expect<BamlTypeMappingException>(() => _ = BamlValue.List([null!]));
         Expect<BamlTypeMappingException>(() => _ = BamlValue.Map(

@@ -1097,9 +1097,7 @@ impl<'s> Parsed<'s> {
     }
 }
 
-/// Allocate `value`: the same value the parser produced, on the heap. A
-/// value the heap cannot hold (the parser's integer is wider than the VM's)
-/// raises `mode`'s mismatch.
+/// Allocate `value`: the same value the parser produced, on the heap.
 fn to_heap(
     vm: &mut BexVm,
     value: &BamlValueWithFlags<'_, '_, '_, NamedTy>,
@@ -1108,7 +1106,7 @@ fn to_heap(
 ) -> Result<Value, VmRustFnError> {
     Ok(match &value.value {
         BamlValue::String(s) => Value::object(vm.alloc_string(s.value.as_ref())),
-        BamlValue::Int(i) => heap_int(i.value, mode)?,
+        BamlValue::Int(i) => vm.int_value(i.value),
         BamlValue::Bigint(b) => vm.try_alloc_bigint(Arc::new(b.value.clone()))?,
         BamlValue::Float(f) => vm.float_value(f.value),
         BamlValue::Bool(b) => Value::bool(b.value),
@@ -1187,7 +1185,7 @@ fn parsed_to_heap(
 ) -> Result<Value, VmRustFnError> {
     Ok(match value {
         Parsed::String(s) => Value::object(vm.alloc_string(s.as_ref())),
-        Parsed::Int(i) => heap_int(*i, mode)?,
+        Parsed::Int(i) => vm.int_value(*i),
         Parsed::Bigint(b) => vm.try_alloc_bigint(Arc::new(b.clone()))?,
         Parsed::Float(f) => vm.float_value(*f),
         Parsed::Bool(b) => Value::bool(*b),
@@ -1227,17 +1225,6 @@ fn parsed_to_heap(
             )));
         }
         Parsed::Built(value) => *value,
-    })
-}
-
-/// The parser's integer, if the VM's `int` holds it.
-fn heap_int(value: i64, mode: Mode) -> Result<Value, VmRustFnError> {
-    Value::try_inline_int(value).ok_or_else(|| {
-        mode.mismatch(format!(
-            "integer {value} is outside the BAML integer range [{}, {}]",
-            Value::INT_MIN,
-            Value::INT_MAX
-        ))
     })
 }
 

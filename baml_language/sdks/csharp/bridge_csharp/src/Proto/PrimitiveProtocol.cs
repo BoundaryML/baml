@@ -603,7 +603,7 @@ internal static class PrimitiveProtocol
             PrimitiveCarrierKind.Bool => new InboundValue { BoolValue = value.ReadBool() },
             PrimitiveCarrierKind.Int => new InboundValue
             {
-                IntValue = BamlInteger.Require(value.ReadInt(), "generated argument"),
+                IntValue = value.ReadInt(),
             },
             PrimitiveCarrierKind.Float => EncodeFloat(value.ReadFloat()),
             PrimitiveCarrierKind.String => new InboundValue { StringValue = value.ReadString() },
@@ -687,9 +687,7 @@ internal static class PrimitiveProtocol
             BamlOutboundValue.ValueOneofCase.BoolValue =>
                 BamlGeneratedValue.CreateBool(value.BoolValue, path),
             BamlOutboundValue.ValueOneofCase.IntValue =>
-                BamlGeneratedValue.CreateInt(
-                    BamlInteger.Require(value.IntValue, path),
-                    path),
+                BamlGeneratedValue.CreateInt(value.IntValue, path),
             BamlOutboundValue.ValueOneofCase.FloatValue =>
                 FiniteFloat(value.FloatValue, path),
             BamlOutboundValue.ValueOneofCase.StringValue =>
@@ -1245,7 +1243,7 @@ internal static class PrimitiveProtocol
             BamlLiteralValue.LiteralOneofCase.StringValue =>
                 BamlGeneratedValue.CreateString(literal.StringValue, path),
             BamlLiteralValue.LiteralOneofCase.IntValue =>
-                BamlGeneratedValue.CreateInt(BamlInteger.Require(literal.IntValue, path), path),
+                BamlGeneratedValue.CreateInt(literal.IntValue, path),
             BamlLiteralValue.LiteralOneofCase.BoolValue =>
                 BamlGeneratedValue.CreateBool(literal.BoolValue, path),
             BamlLiteralValue.LiteralOneofCase.FloatValue =>

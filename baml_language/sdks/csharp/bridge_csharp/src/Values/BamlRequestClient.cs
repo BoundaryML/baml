@@ -141,7 +141,7 @@ public sealed class BamlRetryPolicy : IEquatable<BamlRetryPolicy>
 
     private static void RequireNonnegative(long value, string parameterName)
     {
-        if (value is < BamlInteger.Minimum or > BamlInteger.Maximum || value < 0)
+        if (value < 0)
         {
             throw new ArgumentOutOfRangeException(parameterName, value, "Value is outside the nonnegative BAML integer domain.");
         }
@@ -163,10 +163,6 @@ public sealed class BamlClient : IEquatable<BamlClient>
         if (!Enum.IsDefined(clientType))
         {
             throw new ArgumentOutOfRangeException(nameof(clientType));
-        }
-        if (counter is < BamlInteger.Minimum or > BamlInteger.Maximum)
-        {
-            throw new ArgumentOutOfRangeException(nameof(counter));
         }
 
         Name = name;

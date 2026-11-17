@@ -484,10 +484,10 @@ fn copy_leaf(vm: &mut BexVm, value: Value, ptr: HeapPtr) -> Value {
     let name = match vm.get_object(ptr) {
         Object::Float(_) | Object::Int(_) | Object::String(_) => return value,
         Object::Bigint(b) => {
-            return i64::try_from(&**b)
-                .ok()
-                .and_then(Value::try_inline_int)
-                .unwrap_or(value);
+            return match i64::try_from(&**b) {
+                Ok(int) => vm.int_value(int),
+                Err(_) => value,
+            };
         }
         Object::Variant(variant) => match vm.get_object(variant.enm) {
             Object::Enum(e) => e.variants.get(variant.index).map(|v| v.name.clone()),

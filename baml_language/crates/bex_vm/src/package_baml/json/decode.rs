@@ -1515,10 +1515,10 @@ impl<'p> Structural<'p> {
                 if !node.is_number() {
                     return Err(self.fail(vm, || "expected integer".into()));
                 }
-                match node.as_i64().and_then(Value::try_inline_int) {
-                    Some(int) => Ok(int),
+                match node.as_i64() {
+                    Some(int) => Ok(vm.int_value(int)),
                     None => Err(self.fail(vm, || {
-                        "expected integer in the BAML int range [-2^62, 2^62 - 1]".into()
+                        "expected integer in the BAML int range [-2^63, 2^63 - 1]".into()
                     })),
                 }
             }

@@ -130,8 +130,7 @@ where
                     return Err(ctx.error_integer_out_of_bounds(n));
                 } else if let Some(f) = n.as_f64() {
                     let rounded = f.round();
-                    #[allow(clippy::cast_precision_loss)]
-                    if rounded.is_nan() || rounded > i64::MAX as f64 || rounded < i64::MIN as f64 {
+                    if rounded.is_nan() || !fits_i64(rounded) {
                         return Err(ctx.error_integer_out_of_bounds(n));
                     }
                     flags.add_flag(Flag::FloatToInt(f));
@@ -165,8 +164,7 @@ where
                         return Err(ctx.error_unexpected_type(target, &value));
                     }
                     let rounded = n.round();
-                    #[allow(clippy::cast_precision_loss)]
-                    if rounded < (i64::MIN as f64) || (i64::MAX as f64) < rounded {
+                    if !fits_i64(rounded) {
                         return Err(ctx.error_integer_out_of_bounds(
                             &serde_json::Number::from_f64(rounded).unwrap_or_else(|| {
                                 unreachable!(
@@ -241,6 +239,14 @@ where
             },
         ))
     }
+}
+
+/// Whether the integral double `rounded` is an `i64`: `[-2^63, 2^63)`. The
+/// upper bound is strict because `i64::MAX as f64` rounds up to `2^63`, which
+/// `as i64` would then saturate.
+fn fits_i64(rounded: f64) -> bool {
+    const LIMIT: f64 = 9_223_372_036_854_775_808.0;
+    (-LIMIT..LIMIT).contains(&rounded)
 }
 
 /// Parses a `serde_json::Number` that exceeded `i64`/`u64` range as a `BigInt`.
