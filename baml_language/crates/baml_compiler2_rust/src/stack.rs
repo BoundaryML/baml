@@ -65,6 +65,10 @@ use crate::{
     operands::{walk_statement_operands, walk_terminator_operands},
 };
 
+/// The most stack variants one function gets; past it, callers keep
+/// those arguments on the heap.
+const MAX_STACK_VARIANTS: usize = 8;
+
 /// Whether parameter mask `mask` takes parameter `i` (0-based) as a stack
 /// struct. A parameter beyond the mask's width never is.
 pub(crate) fn takes_param(mask: u64, i: usize) -> bool {
@@ -271,6 +275,15 @@ impl Fixpoint<'_, '_> {
             return Some(reason);
         }
         let variant = (callee, mask);
+        if !self.states.contains_key(&variant) {
+            let variants = self.states.range((callee, 1)..=(callee, u64::MAX)).count();
+            if variants >= MAX_STACK_VARIANTS {
+                return Some(passed(
+                    self.index.display(callee),
+                    &format!(", which has its {MAX_STACK_VARIANTS} stack variants"),
+                ));
+            }
+        }
         if let Entry::Vacant(entry) = self.states.entry(variant) {
             entry.insert(State::new(&self.facts[&callee], mask));
             self.changed = true;

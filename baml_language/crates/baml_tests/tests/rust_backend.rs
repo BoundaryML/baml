@@ -1025,6 +1025,55 @@ function main() -> string {
 }
 
 #[test]
+fn a_function_gets_a_bounded_number_of_stack_variants() {
+    let calls: String = (1..16u32)
+        .map(|mask| {
+            let args: Vec<String> = (0..4)
+                .map(|i| {
+                    if mask & (1 << i) == 0 {
+                        "h".to_string()
+                    } else {
+                        format!("Vec {{ x: {i}, y: {mask} }}")
+                    }
+                })
+                .collect();
+            format!("  t += f({});\n", args.join(", "))
+        })
+        .collect();
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function f(a: Vec, b: Vec, c: Vec, d: Vec) -> int {{ a.x + b.x + c.x + d.x }}
+function main() -> int {{
+  let kept: Vec[] = [];
+  let h = Vec {{ x: 0, y: 0 }};
+  kept.push(h);
+  let t = 0;
+{calls}  t
+}}"
+    ));
+    let f = symbol_of(&module, "user.f");
+    let variants = module.source.matches(&format!("pub fn {f}_stack")).count();
+    assert_eq!(variants, 8, "{}", body_of(&module, "user.main"));
+    let report = module
+        .stack
+        .iter()
+        .find(|report| report.function == "user.main")
+        .expect("main's sites");
+    assert!(
+        report.sites.iter().any(|site| site
+            .heap_because
+            .as_deref()
+            .is_some_and(|why| why.ends_with("which has its 8 stack variants"))),
+        "{:?}",
+        report
+            .sites
+            .iter()
+            .map(|site| &site.heap_because)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn objects_past_the_64th_parameter_stay_on_the_heap() {
     // Parameter masks are 64 bits wide: a parameter beyond them is never a
     // stack parameter, and analysing it must not overflow a shift.
